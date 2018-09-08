@@ -14,7 +14,7 @@ from .base_models import *
 
 class TestModelSQL(ModelDatabaseTestCase):
     database = get_in_memory_db()
-    requires = [Category, Note, Person, Relationship]
+    requires = [Category, Note, Person, Relationship, User]
 
     def test_select(self):
         query = (Person
@@ -280,6 +280,19 @@ class TestModelSQL(ModelDatabaseTestCase):
             'INSERT INTO "note" ("author_id", "content") '
             'VALUES (?, ?), (?, ?)'),
             [1, 'note-1', 2, 'note-2'])
+
+    def test_insert_many_list_with_fields(self):
+        data = [(i,) for i in ('charlie', 'huey', 'zaizee')]
+        query = User.insert_many(data, fields=[User.username])
+        self.assertSQL(query, (
+            'INSERT INTO "users" ("username") VALUES (?), (?), (?)'),
+            ['charlie', 'huey', 'zaizee'])
+
+        # Use field name instead of field obj.
+        query = User.insert_many(data, fields=['username'])
+        self.assertSQL(query, (
+            'INSERT INTO "users" ("username") VALUES (?), (?), (?)'),
+            ['charlie', 'huey', 'zaizee'])
 
     def test_insert_query(self):
         select = (Person

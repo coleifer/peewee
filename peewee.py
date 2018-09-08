@@ -2208,8 +2208,17 @@ class Insert(_WriteQuery):
             columns = sorted(accum, key=lambda obj: obj.get_sort_key(ctx))
             rows_iter = itertools.chain(iter((row,)), rows_iter)
         else:
-            columns = list(columns)
-            value_lookups = dict((column, column) for column in columns)
+            clean_columns = []
+            value_lookups = {}
+            for column in columns:
+                if isinstance(column, basestring):
+                    column_obj = getattr(self.table, column)
+                else:
+                    column_obj = column
+                value_lookups[column_obj] = column
+                clean_columns.append(column_obj)
+
+            columns = clean_columns
             for col in sorted(defaults, key=lambda obj: obj.get_sort_key(ctx)):
                 if col not in value_lookups:
                     columns.append(col)

@@ -509,6 +509,19 @@ class TestInsertQuery(BaseTestCase):
             'INSERT INTO "person" ("name") VALUES (?), (?), (?)'),
             ['charlie', 'huey', 'zaizee'])
 
+    def test_insert_list_with_columns(self):
+        data = [(i,) for i in ('charlie', 'huey', 'zaizee')]
+        query = Person.insert(data, columns=[Person.name])
+        self.assertSQL(query, (
+            'INSERT INTO "person" ("name") VALUES (?), (?), (?)'),
+            ['charlie', 'huey', 'zaizee'])
+
+        # Use column name instead of column instance.
+        query = Person.insert(data, columns=['name'])
+        self.assertSQL(query, (
+            'INSERT INTO "person" ("name") VALUES (?), (?), (?)'),
+            ['charlie', 'huey', 'zaizee'])
+
     def test_insert_query(self):
         source = User.select(User.c.username).where(User.c.admin == False)
         query = Person.insert(source, columns=[Person.name])
