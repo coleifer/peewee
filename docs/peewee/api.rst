@@ -2962,13 +2962,17 @@ Fields
     ``Husband.wife`` is automatically resolved and turned into a regular
     :py:class:`ForeignKeyField`.
 
-.. py:class:: ManyToManyField(model[, backref=None[, through_model=None]])
+.. py:class:: ManyToManyField(model[, backref=None[, through_model=None[, on_delete=None[, on_update=None]]]])
 
     :param Model model: Model to create relationship with.
     :param str backref: Accessor name for back-reference
     :param Model through_model: :py:class:`Model` to use for the intermediary
         table. If not provided, a simple through table will be automatically
         created.
+    :param str on_delete: ON DELETE action, e.g. ``'CASCADE'``. Will be used
+        for foreign-keys in through model.
+    :param str on_update: ON UPDATE action. Will be used for foreign-keys in
+        through model.
 
     The :py:class:`ManyToManyField` provides a simple interface for working
     with many-to-many relationships, inspired by Django. A many-to-many

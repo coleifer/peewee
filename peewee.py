@@ -4605,16 +4605,21 @@ class ManyToManyFieldAccessor(FieldAccessor):
 class ManyToManyField(MetaField):
     accessor_class = ManyToManyFieldAccessor
 
-    def __init__(self, model, backref=None, through_model=None,
-                 _is_backref=False):
-        if through_model is not None and not (
-                isinstance(through_model, DeferredThroughModel) or
-                is_model(through_model)):
-            raise TypeError('Unexpected value for through_model. Expected '
-                            'Model or DeferredThroughModel.')
+    def __init__(self, model, backref=None, through_model=None, on_delete=None,
+                 on_update=None, _is_backref=False):
+        if through_model is not None:
+            if not (isinstance(through_model, DeferredThroughModel) or
+                    is_model(through_model)):
+                raise TypeError('Unexpected value for through_model. Expected '
+                                'Model or DeferredThroughModel.')
+            if on_delete is not None or on_update is not None:
+                raise ValueError('Cannot specify on_delete or on_update when '
+                                 'through_model is specified.')
         self.rel_model = model
         self.backref = backref
         self.through_model = through_model
+        self._on_delete = on_delete
+        self._on_update = on_update
         self._is_backref = _is_backref
 
     def _get_descriptor(self):
@@ -4630,8 +4635,10 @@ class ManyToManyField(MetaField):
         if not self._is_backref:
             many_to_many_field = ManyToManyField(
                 self.model,
-                through_model=self.through_model,
                 backref=name,
+                through_model=self.through_model,
+                on_delete=self._on_delete,
+                on_update=self._on_update,
                 _is_backref=True)
             self.backref = self.backref or model._meta.name + 's'
             self.rel_model._meta.add_field(self.backref, many_to_many_field)
@@ -4655,8 +4662,10 @@ class ManyToManyField(MetaField):
                      True),)
 
             attrs = {
-                lhs._meta.name: ForeignKeyField(lhs),
-                rhs._meta.name: ForeignKeyField(rhs)}
+                lhs._meta.name: ForeignKeyField(lhs, on_delete=self._on_delete,
+                                                on_update=self._on_update),
+                rhs._meta.name: ForeignKeyField(rhs, on_delete=self._on_delete,
+                                                on_update=self._on_update)}
             attrs['Meta'] = Meta
 
             self.through_model = type(
