@@ -743,6 +743,27 @@ class TestModelAPIs(ModelTestCase):
         self.assertEqual(query.tuples()[:], expected)
 
     @requires_models(User, Tweet)
+    def test_subquery_alias_selection(self):
+        data = (
+            ('huey', ('meow', 'hiss', 'purr')),
+            ('mickey', ('woof', 'bark')),
+            ('zaizee', ()))
+        with self.database.atomic():
+            for username, tweets in data:
+                user = User.create(username=username)
+                for tweet in tweets:
+                    Tweet.create(user=user, content=tweet)
+
+        subq = Tweet.select(fn.COUNT(Tweet.id)).where(Tweet.user == User.id)
+        query = (User
+                 .select(User.username, subq.alias('tweet_count'))
+                 .order_by(User.id))
+        self.assertEqual([(u.username, u.tweet_count) for u in query], [
+            ('huey', 3),
+            ('mickey', 2),
+            ('zaizee', 0)])
+
+    @requires_models(User, Tweet)
     def test_insert_query_value(self):
         huey = self.add_user('huey')
         query = User.select(User.id).where(User.username == 'huey')
