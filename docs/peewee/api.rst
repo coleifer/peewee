@@ -2962,7 +2962,7 @@ Fields
     ``Husband.wife`` is automatically resolved and turned into a regular
     :py:class:`ForeignKeyField`.
 
-.. py:class:: ManyToManyField(model[, backref=None[, through_model=None]])
+.. py:class:: ManyToManyField(model[, backref=None[, through_model=None[, on_delete=None]]])
 
     :param Model model: Model to create relationship with.
     :param str backref: Accessor name for back-reference
