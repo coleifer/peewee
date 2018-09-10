@@ -6,6 +6,7 @@ from .base import TestModel
 from .base import get_in_memory_db
 from .base import requires_models
 from .base import requires_mysql
+from .base_models import Tweet
 from .base_models import User
 
 
@@ -266,3 +267,31 @@ class TestCrossJoin(ModelTestCase):
                  .where(C.id.is_null())
                  .order_by(A.id, B.id))
         self.assertEqual(list(query.tuples()), [(2, 2), (3, 1), (3, 2)])
+
+
+class TestSubqueryInSelect(ModelTestCase):
+    requires = [User, Tweet]
+
+    def setUp(self):
+        super(TestSubqueryInSelect, self).setUp()
+        data = (
+            ('huey', ('meow', 'hiss', 'purr')),
+            ('mickey', ('woof', 'bark')),
+            ('zaizee', ()))
+        with self.database.atomic():
+            for username, tweets in data:
+                user = User.create(username=username)
+                for tweet in tweets:
+                    Tweet.create(user=user, content=tweet)
+
+    def test_subquery_in_select(self):
+        subq = User.select().where(User.username == 'huey')
+        query = (Tweet
+                 .select(Tweet.content, Tweet.user.in_(subq).alias('is_huey'))
+                 .order_by(Tweet.content))
+        self.assertEqual([(r.content, r.is_huey) for r in query], [
+            ('bark', False),
+            ('hiss', True),
+            ('meow', True),
+            ('purr', True),
+            ('woof', False)])

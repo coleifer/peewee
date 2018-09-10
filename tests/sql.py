@@ -28,6 +28,30 @@ class TestSelectQuery(BaseTestCase):
             'FROM "users" AS "t1" '
             'WHERE ("t1"."username" = ?)'), ['foo'])
 
+    def test_select_extend(self):
+        query = User.select(User.c.id, User.c.username)
+        self.assertSQL(query, (
+            'SELECT "t1"."id", "t1"."username" FROM "users" AS "t1"'), [])
+
+        query = query.select(User.c.username, User.c.is_admin)
+        self.assertSQL(query, (
+            'SELECT "t1"."username", "t1"."is_admin" FROM "users" AS "t1"'),
+            [])
+
+        query = query.select_extend(User.c.is_active, User.c.id)
+        self.assertSQL(query, (
+            'SELECT "t1"."username", "t1"."is_admin", "t1"."is_active", '
+            '"t1"."id" FROM "users" AS "t1"'), [])
+
+    def test_select_explicit_columns(self):
+        query = (Person
+                 .select()
+                 .where(Person.dob < datetime.date(1980, 1, 1)))
+        self.assertSQL(query, (
+            'SELECT "t1"."id", "t1"."name", "t1"."dob" '
+            'FROM "person" AS "t1" '
+            'WHERE ("t1"."dob" < ?)'), [datetime.date(1980, 1, 1)])
+
     def test_select_subselect_function(self):
         # For functions whose only argument is a subquery, we do not need to
         # include additional parentheses -- in fact, some databases will report
@@ -53,29 +77,23 @@ class TestSelectQuery(BaseTestCase):
             'SELECT SUM("sa"."val") AS "val_sum" FROM "stat" AS "sa"'
             '), ?) FROM "stat" AS "t1"'), [0])
 
-    def test_select_extend(self):
-        query = User.select(User.c.id, User.c.username)
+    def test_subquery_in_select_sql(self):
+        subq = User.select(User.c.id).where(User.c.username == 'huey')
+        query = Tweet.select(Tweet.c.content,
+                             Tweet.c.user_id.in_(subq).alias('is_huey'))
         self.assertSQL(query, (
-            'SELECT "t1"."id", "t1"."username" FROM "users" AS "t1"'), [])
+            'SELECT "t1"."content", ("t1"."user_id" IN ('
+            'SELECT "t2"."id" FROM "users" AS "t2" WHERE ("t2"."username" = ?)'
+            ')) AS "is_huey" FROM "tweets" AS "t1"'), ['huey'])
 
-        query = query.select(User.c.username, User.c.is_admin)
+        # If we explicitly specify an alias, it will be included.
+        subq = subq.alias('sq')
+        query = Tweet.select(Tweet.c.content,
+                             Tweet.c.user_id.in_(subq).alias('is_huey'))
         self.assertSQL(query, (
-            'SELECT "t1"."username", "t1"."is_admin" FROM "users" AS "t1"'),
-            [])
-
-        query = query.select_extend(User.c.is_active, User.c.id)
-        self.assertSQL(query, (
-            'SELECT "t1"."username", "t1"."is_admin", "t1"."is_active", '
-            '"t1"."id" FROM "users" AS "t1"'), [])
-
-    def test_select_explicit_columns(self):
-        query = (Person
-                 .select()
-                 .where(Person.dob < datetime.date(1980, 1, 1)))
-        self.assertSQL(query, (
-            'SELECT "t1"."id", "t1"."name", "t1"."dob" '
-            'FROM "person" AS "t1" '
-            'WHERE ("t1"."dob" < ?)'), [datetime.date(1980, 1, 1)])
+            'SELECT "t1"."content", ("t1"."user_id" IN ('
+            'SELECT "t2"."id" FROM "users" AS "t2" WHERE ("t2"."username" = ?)'
+            ') AS "sq") AS "is_huey" FROM "tweets" AS "t1"'), ['huey'])
 
     def test_from_clause(self):
         query = (Note

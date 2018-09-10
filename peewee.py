@@ -1273,6 +1273,12 @@ class Expression(ColumnBase):
         else:
             overrides['converter'] = None
 
+        op_in = self.op == OP.IN or self.op == OP.NOT_IN
+        if op_in:
+            overrides['op_in'] = True
+        elif ctx.state.op_in:
+            overrides['op_in'] = False
+
         if ctx.state.operations:
             op_sql = ctx.state.operations.get(self.op, self.op)
         else:
@@ -1281,8 +1287,7 @@ class Expression(ColumnBase):
         with ctx(**overrides):
             # Postgresql reports an error for IN/NOT IN (), so convert to
             # the equivalent boolean expression.
-            if (self.op == OP.IN or self.op == OP.NOT_IN) and \
-               Context().parse(self.rhs)[0] == '()':
+            if op_in and Context().parse(self.rhs)[0] == '()':
                 return ctx.literal('0 = 1' if self.op == OP.IN else '1 = 1')
 
             return (ctx
@@ -2047,9 +2052,13 @@ class Select(SelectBase):
                 ctx.literal(' ')
                 ctx.sql(SQL(self._for_update))
 
-        if not ctx.state.in_function:
-            ctx = self.apply_alias(ctx)
-        return ctx
+        # If the subquery is inside a function -or- we are evaluating a
+        # subquery on either side of an IN expression w/o an explicit alias, do
+        # not generate an alias + AS clause.
+        if ctx.state.in_function or (ctx.state.op_in and self._alias is None):
+            return ctx
+
+        return self.apply_alias(ctx)
 
 
 class _WriteQuery(Query):
