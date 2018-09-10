@@ -4597,7 +4597,7 @@ class ManyToManyField(MetaField):
     accessor_class = ManyToManyFieldAccessor
 
     def __init__(self, model, backref=None, through_model=None,
-                 _is_backref=False):
+                 _is_backref=False, on_delete=None):
         if through_model is not None and not (
                 isinstance(through_model, DeferredThroughModel) or
                 is_model(through_model)):
@@ -4607,6 +4607,7 @@ class ManyToManyField(MetaField):
         self.backref = backref
         self.through_model = through_model
         self._is_backref = _is_backref
+        self.on_delete = on_delete
 
     def _get_descriptor(self):
         return ManyToManyFieldAccessor(self)
@@ -4646,8 +4647,8 @@ class ManyToManyField(MetaField):
                      True),)
 
             attrs = {
-                lhs._meta.name: ForeignKeyField(lhs),
-                rhs._meta.name: ForeignKeyField(rhs)}
+                lhs._meta.name: ForeignKeyField(lhs, on_delete=self.on_delete),
+                rhs._meta.name: ForeignKeyField(rhs, on_delete=self.on_delete)}
             attrs['Meta'] = Meta
 
             self.through_model = type(
