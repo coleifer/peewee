@@ -178,7 +178,8 @@ class FlaskDB(object):
         return self._model_class
 
     def connect_db(self):
-        self.database.connect()
+        if self.database.is_closed():
+            self.database.connect()
 
     def close_db(self, exc):
         if not self.database.is_closed():
