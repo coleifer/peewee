@@ -4612,7 +4612,7 @@ class ManyToManyField(MetaField):
                     is_model(through_model)):
                 raise TypeError('Unexpected value for through_model. Expected '
                                 'Model or DeferredThroughModel.')
-            if on_delete is not None or on_update is not None:
+            if not _is_backref and (on_delete is not None or on_update is not None):
                 raise ValueError('Cannot specify on_delete or on_update when '
                                  'through_model is specified.')
         self.rel_model = model
