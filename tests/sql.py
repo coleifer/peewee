@@ -52,6 +52,24 @@ class TestSelectQuery(BaseTestCase):
             'FROM "person" AS "t1" '
             'WHERE ("t1"."dob" < ?)'), [datetime.date(1980, 1, 1)])
 
+    def test_select_in_list_of_values(self):
+        names_vals = [
+            ['charlie', 'huey'],
+            ('charlie', 'huey'),
+            set(('charlie', 'huey')),
+            frozenset(('charlie', 'huey'))]
+
+        for names in names_vals:
+            query = (Person
+                     .select()
+                     .where(Person.name.in_(names)))
+            sql, params = Context().sql(query).query()
+            self.assertEqual(sql, (
+                'SELECT "t1"."id", "t1"."name", "t1"."dob" '
+                'FROM "person" AS "t1" '
+                'WHERE ("t1"."name" IN (?, ?))'))
+            self.assertEqual(sorted(params), ['charlie', 'huey'])
+
     def test_select_subselect_function(self):
         # For functions whose only argument is a subquery, we do not need to
         # include additional parentheses -- in fact, some databases will report
