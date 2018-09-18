@@ -1198,7 +1198,8 @@ class Value(ColumnBase):
     def __init__(self, value, converter=None, unpack=True):
         self.value = value
         self.converter = converter
-        self.multi = isinstance(self.value, (list, set, tuple)) and unpack
+        multi_types = (list, set, frozenset, tuple)
+        self.multi = isinstance(self.value, multi_types) and unpack
         if self.multi:
             self.values = []
             for item in self.value:
