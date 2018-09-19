@@ -151,6 +151,8 @@ except ImportError:
             return path[0].join(quote_chars)
         return '.'.join([part.join(quote_chars) for part in path])
 
+# Iterable types for IN and NOT IN operations.
+multi_types = (list, tuple, frozenset, set)
 
 if sys.version_info[0] == 2:
     text_type = unicode
@@ -165,6 +167,7 @@ else:
     import builtins
     from collections import Callable
     from functools import reduce
+    from _collections_abc import dict_keys, dict_values
     callable = lambda c: isinstance(c, Callable)
     text_type = str
     bytes_type = bytes
@@ -173,6 +176,7 @@ else:
     long = int
     print_ = getattr(builtins, 'print')
     izip_longest = itertools.zip_longest
+    multi_types += (dict_keys, dict_values)
     def reraise(tp, value, tb=None):
         if value.__traceback__ is not tb:
             raise value.with_traceback(tb)
@@ -1195,12 +1199,11 @@ class BitwiseNegated(BitwiseMixin, WrappedNode):
 
 
 class Value(ColumnBase):
-    _multi_types = (list, tuple, frozenset, set)
 
     def __init__(self, value, converter=None, unpack=True):
         self.value = value
         self.converter = converter
-        self.multi = isinstance(self.value, self._multi_types) and unpack
+        self.multi = unpack and isinstance(self.value, multi_types)
         if self.multi:
             self.values = []
             for item in self.value:

@@ -53,11 +53,14 @@ class TestSelectQuery(BaseTestCase):
             'WHERE ("t1"."dob" < ?)'), [datetime.date(1980, 1, 1)])
 
     def test_select_in_list_of_values(self):
+        dict_ = {'charlie': 'charlie', 'huey': 'huey'}
         names_vals = [
             ['charlie', 'huey'],
             ('charlie', 'huey'),
             set(('charlie', 'huey')),
-            frozenset(('charlie', 'huey'))]
+            frozenset(('charlie', 'huey')),
+            dict_.keys(),
+            dict_.values()]
 
         for names in names_vals:
             query = (Person
