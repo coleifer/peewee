@@ -377,6 +377,7 @@ class SqliteMetadata(Metadata):
         'smallint unsigned': IntegerField,
         'text': TextField,
         'time': TimeField,
+        'varchar': CharField,
     }
 
     begin = '(?:["\[\(]+)?'
