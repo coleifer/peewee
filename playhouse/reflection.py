@@ -367,6 +367,7 @@ class SqliteMetadata(Metadata):
         'date': DateField,
         'datetime': DateTimeField,
         'decimal': DecimalField,
+        'float': FloatField,
         'integer': IntegerField,
         'integer unsigned': IntegerField,
         'int': IntegerField,
@@ -387,7 +388,11 @@ class SqliteMetadata(Metadata):
         '{begin}(.+?){end}\s+(?:.+\s+)?'
         'references\s+{begin}(.+?){end}'
         '\s*\(["|\[]?(.+?)["|\]]?\)').format(begin=begin, end=end)
-    re_varchar = r'^\s*(?:var)?char\s*\(\s*(\d+)\s*\)\s*$'
+    # valid varchar pattern examples:
+    # varchar(50)
+    # char [ 49  ]
+    # ...
+    re_varchar = r'^\s*(?:var)?char\s*[\(\[]\s*(\d+)\s*[\)\]]\s*$'
 
     def _map_col(self, column_type):
         raw_column_type = column_type.lower()
