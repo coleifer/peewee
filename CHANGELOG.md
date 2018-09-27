@@ -7,6 +7,14 @@ https://github.com/coleifer/peewee/releases
 
 ## master
 
+**Bugfixes**
+
+* Fixed incorrect SQL generation for Postgresql ON CONFLICT clause when the
+  conflict_target is a named constraint (rather than an index expression). This
+  introduces a new keyword-argument to the `on_conflict()` method:
+  `conflict_constraint`, which is currently only supported by Postgresql. Refs
+  issue #1737.
+
 [View commits](https://github.com/coleifer/peewee/compare/3.7.0...master)
 
 ## 3.7.0
