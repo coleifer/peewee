@@ -1620,13 +1620,15 @@ Query-builder
     Represent a SQL row tuple.
 
 
-.. py:class:: OnConflict([action=None[, update=None[, preserve=None[, where=None[, conflict_target=None]]]]])
+.. py:class:: OnConflict([action=None[, update=None[, preserve=None[, where=None[, conflict_target=None[, conflict_constraint=None]]]]]])
 
     :param str action: Action to take when resolving conflict.
     :param update: A dictionary mapping column to new value.
     :param preserve: A list of columns whose values should be preserved from the original INSERT.
     :param where: Expression to restrict the conflict resolution.
-    :param conflict_target: Name of column or constraint to check.
+    :param conflict_target: Column(s) to check.
+    :param str conflict_constraint: Name of constraint to use for conflict
+        resolution. Currently only supported by Postgres.
 
     Represent a conflict resolution clause for a data-modification query.
 
@@ -1652,8 +1654,12 @@ Query-builder
 
     .. py:method:: conflict_target(*constraints)
 
-        :param constraints: Name(s) of columns/constraints that are the target
-            of the conflict resolution.
+        :param constraints: Column(s) to use as target for conflict resolution.
+
+    .. py:method:: conflict_constraint(constraint)
+
+        :param str constraint: Name of constraints to use as target for
+            conflict resolution. Currently only supported by Postgres.
 
 
 .. py:class:: BaseQuery()
@@ -2315,14 +2321,16 @@ Query-builder
 
         Specify REPLACE conflict resolution strategy.
 
-    .. py:method:: on_conflict([action=None[, update=None[, preserve=None[, where=None[, conflict_target=None]]]]])
+    .. py:method:: on_conflict([action=None[, update=None[, preserve=None[, where=None[, conflict_target=None[, conflict_constraint=None]]]]]])
 
         :param str action: Action to take when resolving conflict. If blank,
             action is assumed to be "update".
         :param update: A dictionary mapping column to new value.
         :param preserve: A list of columns whose values should be preserved from the original INSERT.
         :param where: Expression to restrict the conflict resolution.
-        :param conflict_target: Name of column or constraint to check.
+        :param conflict_target: Column(s) to check.
+        :param str conflict_constraint: Name of constraint to use for conflict
+            resolution. Currently only supported by Postgres.
 
         Specify the parameters for an :py:class:`OnConflict` clause to use for
         conflict resolution.

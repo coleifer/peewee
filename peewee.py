@@ -1546,12 +1546,16 @@ class QualifiedNames(WrappedNode):
 
 class OnConflict(Node):
     def __init__(self, action=None, update=None, preserve=None, where=None,
-                 conflict_target=None):
+                 conflict_target=None, conflict_constraint=None):
         self._action = action
         self._update = update
         self._preserve = ensure_tuple(preserve)
         self._where = where
+        if conflict_target is not None and conflict_constraint is not None:
+            raise ValueError('only one of "conflict_target" and '
+                             '"conflict_constraint" may be specified.')
         self._conflict_target = ensure_tuple(conflict_target)
+        self._conflict_constraint = conflict_constraint
 
     def get_conflict_statement(self, ctx):
         return ctx.state.conflict_statement(self)
@@ -1581,7 +1585,13 @@ class OnConflict(Node):
 
     @Node.copy
     def conflict_target(self, *constraints):
+        self._conflict_constraint = None
         self._conflict_target = constraints
+
+    @Node.copy
+    def conflict_constraint(self, constraint):
+        self._conflict_constraint = constraint
+        self._conflict_target = None
 
 
 def database_required(method):
@@ -2712,9 +2722,16 @@ class Database(_callable_context_manager):
         raise NotImplementedError
 
     def _build_on_conflict_update(self, on_conflict):
-        target = EnclosedNodeList([
-            Entity(col) if isinstance(col, basestring) else col
-            for col in on_conflict._conflict_target])
+        if on_conflict._conflict_target:
+            stmt = SQL('ON CONFLICT')
+            target = EnclosedNodeList([
+                Entity(col) if isinstance(col, basestring) else col
+                for col in on_conflict._conflict_target])
+        else:
+            stmt = SQL('ON CONFLICT ON CONSTRAINT')
+            target = on_conflict._conflict_constraint
+            if isinstance(target, basestring):
+                target = Entity(target)
 
         updates = []
         if on_conflict._preserve:
@@ -2734,10 +2751,7 @@ class Database(_callable_context_manager):
                     v = QualifiedNames(v)
                 updates.append(NodeList((ensure_entity(k), SQL('='), v)))
 
-        parts = [SQL('ON CONFLICT'),
-                 target,
-                 SQL('DO UPDATE SET'),
-                 CommaNodeList(updates)]
+        parts = [stmt, target, SQL('DO UPDATE SET'), CommaNodeList(updates)]
         if on_conflict._where:
             parts.extend((SQL('WHERE'), QualifiedNames(on_conflict._where)))
 
@@ -3182,30 +3196,33 @@ class SqliteDatabase(Database):
         if action and action not in ('nothing', 'update'):
             return SQL('INSERT OR %s' % on_conflict._action.upper())
 
-    def conflict_update(self, on_conflict):
+    def conflict_update(self, oc):
         # Sqlite prior to 3.24.0 does not support Postgres-style upsert.
         if self._sqlite_version < (3, 24, 0) and \
-           any((on_conflict._preserve, on_conflict._update, on_conflict._where,
-                on_conflict._conflict_target)):
+           any((oc._preserve, oc._update, oc._where, oc._conflict_target,
+                oc._conflict_constraint)):
             raise ValueError('SQLite does not support specifying which values '
                              'to preserve or update.')
 
-        action = on_conflict._action.lower() if on_conflict._action else ''
+        action = oc._action.lower() if oc._action else ''
         if action and action not in ('nothing', 'update', ''):
             return
 
         if action == 'nothing':
             return SQL('ON CONFLICT DO NOTHING')
-        elif not on_conflict._update and not on_conflict._preserve:
+        elif not oc._update and not oc._preserve:
             raise ValueError('If you are not performing any updates (or '
                              'preserving any INSERTed values), then the '
                              'conflict resolution action should be set to '
                              '"NOTHING".')
-        elif not on_conflict._conflict_target:
+        elif oc._conflict_constraint:
+            raise ValueError('SQLite does not support specifying named '
+                             'constraints for conflict resolution.')
+        elif not oc._conflict_target:
             raise ValueError('SQLite requires that a conflict target be '
                              'specified when doing an upsert.')
 
-        return self._build_on_conflict_update(on_conflict)
+        return self._build_on_conflict_update(oc)
 
     def extract_date(self, date_part, date_field):
         return fn.date_part(date_part, date_field)
@@ -3356,24 +3373,24 @@ class PostgresqlDatabase(Database):
     def conflict_statement(self, on_conflict):
         return
 
-    def conflict_update(self, on_conflict):
-        action = on_conflict._action.lower() if on_conflict._action else ''
+    def conflict_update(self, oc):
+        action = oc._action.lower() if oc._action else ''
         if action in ('ignore', 'nothing'):
             return SQL('ON CONFLICT DO NOTHING')
         elif action and action != 'update':
             raise ValueError('The only supported actions for conflict '
                              'resolution with Postgresql are "ignore" or '
                              '"update".')
-        elif not on_conflict._update and not on_conflict._preserve:
+        elif not oc._update and not oc._preserve:
             raise ValueError('If you are not performing any updates (or '
                              'preserving any INSERTed values), then the '
                              'conflict resolution action should be set to '
                              '"IGNORE".')
-        elif not on_conflict._conflict_target:
+        elif not (oc._conflict_target or oc._conflict_constraint):
             raise ValueError('Postgres requires that a conflict target be '
                              'specified when doing an upsert.')
 
-        return self._build_on_conflict_update(on_conflict)
+        return self._build_on_conflict_update(oc)
 
     def extract_date(self, date_part, date_field):
         return fn.EXTRACT(NodeList((date_part, SQL('FROM'), date_field)))
@@ -3494,7 +3511,8 @@ class MySQLDatabase(Database):
                              'MySQL supports REPLACE, IGNORE and UPDATE.')
 
     def conflict_update(self, on_conflict):
-        if on_conflict._where or on_conflict._conflict_target:
+        if on_conflict._where or on_conflict._conflict_target or \
+           on_conflict._conflict_constraint:
             raise ValueError('MySQL does not support the specification of '
                              'where clauses or conflict targets for conflict '
                              'resolution.')

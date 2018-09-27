@@ -1252,6 +1252,30 @@ class TestOnConflictPostgresql(BaseTestCase):
         with self.assertRaisesCtx(ValueError):
             self.database.get_sql_context().parse(query)
 
+    def test_conflict_target_or_constraint(self):
+        KV = Table('kv', ('key', 'value', 'extra'), _database=self.database)
+
+        query = (KV.insert(key='k1', value='v1', extra='e1')
+                 .on_conflict(conflict_target=[KV.key, KV.value],
+                              preserve=[KV.extra]))
+        self.assertSQL(query, (
+            'INSERT INTO "kv" ("extra", "key", "value") VALUES (?, ?, ?) '
+            'ON CONFLICT ("key", "value") DO UPDATE '
+            'SET "extra" = EXCLUDED."extra"'), ['e1', 'k1', 'v1'])
+
+        query = (KV.insert(key='k1', value='v1', extra='e1')
+                 .on_conflict(conflict_constraint='kv_key_value',
+                              preserve=[KV.extra]))
+        self.assertSQL(query, (
+            'INSERT INTO "kv" ("extra", "key", "value") VALUES (?, ?, ?) '
+            'ON CONFLICT ON CONSTRAINT "kv_key_value" DO UPDATE '
+            'SET "extra" = EXCLUDED."extra"'), ['e1', 'k1', 'v1'])
+
+        query = KV.insert(key='k1', value='v1', extra='e1')
+        self.assertRaises(ValueError, query.on_conflict,
+                          conflict_target=[KV.key, KV.value],
+                          conflict_constraint='kv_key_value')
+
     def test_update(self):
         dob = datetime.date(2010, 1, 1)
         query = (Person

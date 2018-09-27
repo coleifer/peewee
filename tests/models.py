@@ -3080,8 +3080,57 @@ class TestUpsertSqlite(OnConflictTestCase):
         self.assertData(list(self.test_data))
 
 
+class UKV(TestModel):
+    key = TextField()
+    value = TextField()
+    extra = TextField(default='')
+
+    class Meta:
+        constraints = [
+            SQL('constraint ukv_key_value unique(key, value)'),
+        ]
+
+
 @requires_postgresql
 class TestUpsertPostgresql(OnConflictTestCase):
+    @requires_models(UKV)
+    def test_conflict_target_constraint(self):
+        u1 = UKV.create(key='k1', value='v1')
+        u2 = UKV.create(key='k2', value='v2')
+
+        ret = (UKV.insert(key='k1', value='v1', extra='e1')
+               .on_conflict(conflict_target=(UKV.key, UKV.value),
+                            preserve=(UKV.extra,))
+               .execute())
+        self.assertEqual(ret, u1.id)
+
+        # Changes were saved successfully.
+        u1_db = UKV.get(UKV.key == 'k1')
+        self.assertEqual(u1_db.key, 'k1')
+        self.assertEqual(u1_db.value, 'v1')
+        self.assertEqual(u1_db.extra, 'e1')
+        self.assertEqual(UKV.select().count(), 2)
+
+        ret = (UKV.insert(key='k2', value='v2', extra='e2')
+               .on_conflict(conflict_constraint='ukv_key_value',
+                            preserve=(UKV.extra,))
+               .execute())
+        self.assertEqual(ret, u2.id)
+
+        # Changes were saved successfully.
+        u2_db = UKV.get(UKV.key == 'k2')
+        self.assertEqual(u2_db.key, 'k2')
+        self.assertEqual(u2_db.value, 'v2')
+        self.assertEqual(u2_db.extra, 'e2')
+        self.assertEqual(UKV.select().count(), 2)
+
+        ret = (UKV.insert(key='k3', value='v3', extra='e3')
+               .on_conflict(conflict_target=[UKV.key, UKV.value],
+                            preserve=[UKV.extra])
+               .execute())
+        self.assertTrue(ret > u2_db.id)
+        self.assertEqual(UKV.select().count(), 3)
+
     def test_update(self):
         # Conflict on empno - we'll preserve name and update the ID. This will
         # overwrite the previous row and set a new ID.
