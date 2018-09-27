@@ -67,6 +67,9 @@ Fields
 Querying
 ^^^^^^^^
 
+``JOIN_INNER``, ``JOIN_LEFT_OUTER``, etc are now ``JOIN.INNER``,
+``JOIN.LEFT_OUTER``, etc.
+
 The C extension that contained implementations of the query result wrappers has
 been removed.
 
