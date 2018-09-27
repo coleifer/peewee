@@ -42,7 +42,9 @@ Models
 
 * :py:class:`BaseModel` has been renamed to :py:class:`ModelBase`
 * Accessing raw model data is now done using ``__data__`` instead of ``_data``
-* The `_prepare_instance()` Model method has been removed.
+* The ``_prepare_instance()`` Model method has been removed.
+* The ``sqlall()`` method, which output the DDL statements to generate a model
+  and its associated indexes, has been removed.
 
 Fields
 ^^^^^^
