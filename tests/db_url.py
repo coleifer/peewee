@@ -29,6 +29,23 @@ class TestDBUrl(BaseTestCase):
         self.assertEqual(cfg['baz'], '3.4.5')
         self.assertEqual(cfg['boolz'], False)
 
+        # default is to ignore escape sequence
+        cfg = parse('mysql://usr%23:pwd%23@hst:123/db')
+        self.assertEqual(cfg['user'], 'usr%23')
+        self.assertEqual(cfg['passwd'], 'pwd%23')
+        self.assertEqual(cfg['host'], 'hst')
+        self.assertEqual(cfg['database'], 'db')
+        self.assertEqual(cfg['port'], 123)
+
+        # unquote_creds=True interprets escape
+        cfg = parse('mysql://usr%23:pwd%23@hst:123/db', unquote_creds=True)
+        self.assertEqual(cfg['user'], 'usr#')
+        self.assertEqual(cfg['passwd'], 'pwd#')
+        self.assertEqual(cfg['host'], 'hst')
+        self.assertEqual(cfg['database'], 'db')
+        self.assertEqual(cfg['port'], 123)
+
+
     def test_db_url(self):
         db = connect('sqlite:///:memory:')
         self.assertTrue(isinstance(db, SqliteDatabase))
