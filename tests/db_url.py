@@ -29,6 +29,21 @@ class TestDBUrl(BaseTestCase):
         self.assertEqual(cfg['baz'], '3.4.5')
         self.assertEqual(cfg['boolz'], False)
 
+        cfg = parse('mysql://usr:pwd@hst:123/db'
+                    '?foobar=92'
+                    '&ssl_cert=%2Fcerts%2Fcert.pem'
+                    '&ssl_check_hostname=false')
+        self.assertEqual(cfg['user'], 'usr')
+        self.assertEqual(cfg['passwd'], 'pwd')
+        self.assertEqual(cfg['host'], 'hst')
+        self.assertEqual(cfg['database'], 'db')
+        self.assertEqual(cfg['port'], 123)
+        self.assertEqual(cfg["foobar"], 92)
+        self.assertEqual(cfg["ssl"], {
+            "cert": "/certs/cert.pem",
+            "check_hostname": False,
+        })
+
     def test_db_url(self):
         db = connect('sqlite:///:memory:')
         self.assertTrue(isinstance(db, SqliteDatabase))
