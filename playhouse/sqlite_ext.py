@@ -624,7 +624,6 @@ class FTS5Model(BaseFTSModel):
             columns.append(Entity(key))
             values.append(value)
 
-        inner_clause = EnclosedNodeList((tbl,))
         return NodeList((
             SQL('INSERT INTO'),
             cls._meta.entity,
