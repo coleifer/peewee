@@ -1,7 +1,7 @@
 try:
-    from urlparse import urlparse, parse_qsl
+    from urlparse import urlparse, parse_qsl, unquote
 except ImportError:
-    from urllib.parse import urlparse, parse_qsl
+    from urllib.parse import urlparse, parse_qsl, unquote
 
 from peewee import *
 from playhouse.pool import PooledMySQLDatabase
@@ -29,7 +29,7 @@ def register_database(db_class, *names):
     for name in names:
         schemes[name] = db_class
 
-def parseresult_to_dict(parsed):
+def parseresult_to_dict(parsed, unquote_creds=False):
 
     # urlparse in python 2.6 is broken so query will be empty and instead
     # appended to path complete with '?'
@@ -41,9 +41,15 @@ def parseresult_to_dict(parsed):
 
     connect_kwargs = {'database': path_parts[0]}
     if parsed.username:
-        connect_kwargs['user'] = parsed.username
+        if unquote_creds:
+            connect_kwargs['user'] = unquote(parsed.username)
+        else:
+            connect_kwargs['user'] = parsed.username
     if parsed.password:
-        connect_kwargs['password'] = parsed.password
+        if unquote_creds:
+            connect_kwargs['password'] = unquote(parsed.password)
+        else:
+            connect_kwargs['password'] = parsed.password
     if parsed.hostname:
         connect_kwargs['host'] = parsed.hostname
     if parsed.port:
@@ -76,13 +82,13 @@ def parseresult_to_dict(parsed):
 
     return connect_kwargs
 
-def parse(url):
+def parse(url, unquote_creds=False):
     parsed = urlparse(url)
-    return parseresult_to_dict(parsed)
+    return parseresult_to_dict(parsed, unquote_creds)
 
-def connect(url, **connect_params):
+def connect(url, unquote_creds=False, **connect_params):
     parsed = urlparse(url)
-    connect_kwargs = parseresult_to_dict(parsed)
+    connect_kwargs = parseresult_to_dict(parsed, unquote_creds)
     connect_kwargs.update(connect_params)
     database_class = schemes.get(parsed.scheme)
 
