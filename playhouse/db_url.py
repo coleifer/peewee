@@ -74,6 +74,9 @@ def parseresult_to_dict(parsed):
 
         connect_kwargs[key] = value
 
+    if parsed.scheme == "mysql":
+        _nest_by_prefix(connect_kwargs, prefix="ssl_", new_key="ssl")
+
     return connect_kwargs
 
 def parse(url):
@@ -95,6 +98,24 @@ def connect(url, **connect_params):
                                parsed.scheme)
 
     return database_class(**connect_kwargs)
+
+
+def _nest_by_prefix(connect_kwargs, prefix, new_key):
+    """
+    Mutates connect_kwargs
+
+    Example:
+        connect_kwargs = {"ssl_cert": "foo"}
+        _nest_by_prefix(connect_kwargs, prefix="ssl_", new_key="ssl")
+        print connect_kwargs  # {"ssl": {"cert": "foo"}}
+    """
+    nested = {}
+    for key in set(connect_kwargs.keys()):  # iterate over copy to mutate
+        if key.startswith(prefix):
+            nested[key[len(prefix):]] = connect_kwargs.pop(key)
+    if nested:
+        connect_kwargs[new_key] = nested
+
 
 # Conditionally register additional databases.
 try:
