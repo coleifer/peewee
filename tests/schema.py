@@ -150,6 +150,22 @@ class TestModelDDL(ModelDatabaseTestCase):
             ('CREATE INDEX "article_foo" ON "article" ("flags" & 3)', []),
         ])
 
+    def test_model_indexes_custom_tablename(self):
+        class KV(TestModel):
+            key = TextField()
+            value = TextField()
+            timestamp = TimestampField(index=True)
+            class Meta:
+                indexes = (
+                    (('key', 'value'), True),
+                )
+                table_name = 'kvs'
+
+        self.assertIndexes(KV, [
+            ('CREATE INDEX "kvs_timestamp" ON "kvs" ("timestamp")', []),
+            ('CREATE UNIQUE INDEX "kvs_key_value" ON "kvs" ("key", "value")',
+             [])])
+
     def test_model_indexes_complex_columns(self):
         class Taxonomy(TestModel):
             name = CharField()
