@@ -58,6 +58,17 @@ class CacheData(TestModel):
         schema = 'cache'
 
 
+class KV(TestModel):
+    key = TextField()
+    value = TextField()
+    timestamp = TimestampField(index=True)
+    class Meta:
+        indexes = (
+            (('key', 'value'), True),
+        )
+        table_name = 'kvs'
+
+
 class Article(TestModel):
     name = TextField(unique=True)
     timestamp = TimestampField()
@@ -76,7 +87,7 @@ Article.add_index(SQL('CREATE INDEX "article_foo" ON "article" ("flags" & 3)'))
 
 class TestModelDDL(ModelDatabaseTestCase):
     database = get_in_memory_db()
-    requires = [Article, Category, Note, Person, Relationship, TMUnique,
+    requires = [Article, Category, KV, Note, Person, Relationship, TMUnique,
                 TMSequence, TMIndexes, TMConstraints, User, CacheData]
 
     def test_database_required(self):
@@ -151,16 +162,6 @@ class TestModelDDL(ModelDatabaseTestCase):
         ])
 
     def test_model_indexes_custom_tablename(self):
-        class KV(TestModel):
-            key = TextField()
-            value = TextField()
-            timestamp = TimestampField(index=True)
-            class Meta:
-                indexes = (
-                    (('key', 'value'), True),
-                )
-                table_name = 'kvs'
-
         self.assertIndexes(KV, [
             ('CREATE INDEX "kvs_timestamp" ON "kvs" ("timestamp")', []),
             ('CREATE UNIQUE INDEX "kvs_key_value" ON "kvs" ("key", "value")',
