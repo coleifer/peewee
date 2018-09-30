@@ -110,7 +110,7 @@ def _nest_by_prefix(connect_kwargs, prefix, new_key):
         print connect_kwargs  # {"ssl": {"cert": "foo"}}
     """
     nested = {}
-    for key in connect_kwargs.keys():  # iterate over keys to permit mutation
+    for key in set(connect_kwargs.keys()):  # iterate over copy to mutate
         if key.startswith(prefix):
             nested[key[len(prefix):]] = connect_kwargs.pop(key)
     if nested:
