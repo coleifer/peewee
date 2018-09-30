@@ -616,7 +616,7 @@ class FTS5Model(BaseFTSModel):
                 .order_by(order_by))
 
     @classmethod
-    def _fts_cmd(cls, cmd, **extra_params):
+    def _fts_cmd_sql(cls, cmd, **extra_params):
         tbl = cls._meta.entity
         columns = [tbl]
         values = [cmd]
@@ -624,14 +624,18 @@ class FTS5Model(BaseFTSModel):
             columns.append(Entity(key))
             values.append(value)
 
-        inner_clause = EnclosedClause(tbl)
-        clause = Clause(
+        inner_clause = EnclosedNodeList((tbl,))
+        return NodeList((
             SQL('INSERT INTO'),
             cls._meta.entity,
-            EnclosedClause(*columns),
+            EnclosedNodeList(columns),
             SQL('VALUES'),
-            EnclosedClause(*values))
-        return cls._meta.database.execute(clause)
+            EnclosedNodeList(values)))
+
+    @classmethod
+    def _fts_cmd(cls, cmd, **extra_params):
+        query = cls._fts_cmd_sql(cmd, **extra_params)
+        return cls._meta.database.execute(query)
 
     @classmethod
     def automerge(cls, level):

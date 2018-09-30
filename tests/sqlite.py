@@ -1364,6 +1364,13 @@ class TestFTS5(ModelTestCase):
             'CREATE VIRTUAL TABLE IF NOT EXISTS "fts5_test" USING fts5 '
             '("title", "data", "misc" UNINDEXED)'), [])
 
+    def test_custom_fts5_command(self):
+        merge_sql = FTS5Test._fts_cmd_sql('merge', rank=4)
+        self.assertSQL(merge_sql, (
+            'INSERT INTO "fts5_test" ("fts5_test", "rank") VALUES (?, ?)'),
+            ['merge', 4])
+        FTS5Test.merge(4)  # Runs without error.
+
     def test_create_table_options(self):
         class Test1(FTS5Model):
             f1 = SearchField()
