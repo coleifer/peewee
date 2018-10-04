@@ -85,10 +85,19 @@ Article.add_index(idx)
 Article.add_index(SQL('CREATE INDEX "article_foo" ON "article" ("flags" & 3)'))
 
 
+class FuncIdx(TestModel):
+    a = IntegerField()
+    b = IntegerField()
+
+idx = FuncIdx.index(FuncIdx.a, FuncIdx.b, fn.SUM(FuncIdx.a + FuncIdx.b))
+FuncIdx.add_index(idx)
+
+
 class TestModelDDL(ModelDatabaseTestCase):
     database = get_in_memory_db()
-    requires = [Article, Category, KV, Note, Person, Relationship, TMUnique,
-                TMSequence, TMIndexes, TMConstraints, User, CacheData]
+    requires = [Article, CacheData, Category, FuncIdx, KV, Note, Person,
+                Relationship, TMUnique, TMSequence, TMIndexes, TMConstraints,
+                User]
 
     def test_database_required(self):
         class MissingDB(Model):
@@ -166,6 +175,12 @@ class TestModelDDL(ModelDatabaseTestCase):
             ('CREATE INDEX "kvs_timestamp" ON "kvs" ("timestamp")', []),
             ('CREATE UNIQUE INDEX "kvs_key_value" ON "kvs" ("key", "value")',
              [])])
+
+    def test_model_indexes_computed_columns(self):
+        self.assertIndexes(FuncIdx, [
+            ('CREATE INDEX "func_idx_a_b" ON "func_idx" '
+             '("a", "b", SUM("a" + "b"))', []),
+        ])
 
     def test_model_indexes_complex_columns(self):
         class Taxonomy(TestModel):
