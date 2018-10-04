@@ -14,6 +14,8 @@ https://github.com/coleifer/peewee/releases
   introduces a new keyword-argument to the `on_conflict()` method:
   `conflict_constraint`, which is currently only supported by Postgresql. Refs
   issue #1737.
+* Fixed incorrect SQL generation for Model indexes which contain SQL functions
+  as indexed columns.
 
 [View commits](https://github.com/coleifer/peewee/compare/3.7.0...master)
 
