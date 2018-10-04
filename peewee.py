@@ -2416,7 +2416,7 @@ class ModelIndex(Index):
             name = self._generate_name_from_fields(model, fields)
         if using is None:
             for field in fields:
-                if getattr(field, 'index_type', None):
+                if isinstance(field, Field) and hasattr(field, 'index_type'):
                     using = field.index_type
         super(ModelIndex, self).__init__(
             name=name,
