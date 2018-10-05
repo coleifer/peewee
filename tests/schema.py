@@ -69,6 +69,17 @@ class KV(TestModel):
         table_name = 'kvs'
 
 
+class UKV(TestModel):
+    key = TextField()
+    value = TextField()
+    status = IntegerField()
+    class Meta:
+        constraints = [
+            SQL('CONSTRAINT ukv_kv_uniq UNIQUE (key, value)'),
+            Check('status > 0')]
+        table_name = 'ukv'
+
+
 class Article(TestModel):
     name = TextField(unique=True)
     timestamp = TimestampField()
@@ -97,7 +108,7 @@ class TestModelDDL(ModelDatabaseTestCase):
     database = get_in_memory_db()
     requires = [Article, CacheData, Category, FuncIdx, KV, Note, Person,
                 Relationship, TMUnique, TMSequence, TMIndexes, TMConstraints,
-                User]
+                UKV, User]
 
     def test_database_required(self):
         class MissingDB(Model):
@@ -318,6 +329,16 @@ class TestModelDDL(ModelDatabaseTestCase):
 
         sql, params = User._schema._drop_table(restrict=True).query()
         self.assertEqual(sql, 'DROP TABLE IF EXISTS "users" RESTRICT')
+
+    def test_table_constraints(self):
+        self.assertCreateTable(UKV, [
+            ('CREATE TABLE "ukv" ('
+             '"id" INTEGER NOT NULL PRIMARY KEY, '
+             '"key" TEXT NOT NULL, '
+             '"value" TEXT NOT NULL, '
+             '"status" INTEGER NOT NULL, '
+             'CONSTRAINT ukv_kv_uniq UNIQUE (key, value), '
+             'CHECK (status > 0))')])
 
     def test_table_and_index_creation(self):
         self.assertCreateTable(Person, [
