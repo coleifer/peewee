@@ -729,6 +729,7 @@ Option                  Meaning                                                I
 ``schema``              the database schema for the model                      yes
 ``only_save_dirty``     when calling model.save(), only save dirty fields      yes
 ``options``             dictionary of options for create table extensions      yes
+``table_settings``      list of setting strings to go after close parentheses  yes
 ``temporary``           indicate temporary table                               yes
 ``legacy_table_names``  use legacy table name generation (enabled by default)  yes
 ``table_alias``         an alias to use for the table in queries               no

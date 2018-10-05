@@ -80,6 +80,14 @@ class UKV(TestModel):
         table_name = 'ukv'
 
 
+class KVSettings(TestModel):
+    key = TextField(primary_key=True)
+    value = TextField()
+    timestamp = TimestampField()
+    class Meta:
+        table_settings = ('PARTITION BY RANGE (timestamp)', 'WITHOUT ROWID')
+
+
 class Article(TestModel):
     name = TextField(unique=True)
     timestamp = TimestampField()
@@ -106,9 +114,9 @@ FuncIdx.add_index(idx)
 
 class TestModelDDL(ModelDatabaseTestCase):
     database = get_in_memory_db()
-    requires = [Article, CacheData, Category, FuncIdx, KV, Note, Person,
-                Relationship, TMUnique, TMSequence, TMIndexes, TMConstraints,
-                UKV, User]
+    requires = [Article, CacheData, Category, FuncIdx, KV, KVSettings, Note,
+                Person, Relationship, TMUnique, TMSequence, TMIndexes,
+                TMConstraints, UKV, User]
 
     def test_database_required(self):
         class MissingDB(Model):
@@ -339,6 +347,15 @@ class TestModelDDL(ModelDatabaseTestCase):
              '"status" INTEGER NOT NULL, '
              'CONSTRAINT ukv_kv_uniq UNIQUE (key, value), '
              'CHECK (status > 0))')])
+
+    def test_table_settings(self):
+        self.assertCreateTable(KVSettings, [
+            ('CREATE TABLE "kv_settings" ('
+             '"key" TEXT NOT NULL PRIMARY KEY, '
+             '"value" TEXT NOT NULL, '
+             '"timestamp" INTEGER NOT NULL) '
+             'PARTITION BY RANGE (timestamp) '
+             'WITHOUT ROWID')])
 
     def test_table_and_index_creation(self):
         self.assertCreateTable(Person, [
