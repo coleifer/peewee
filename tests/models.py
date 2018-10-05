@@ -1628,7 +1628,7 @@ class TestWindowFunctionIntegration(ModelTestCase):
     def test_empty_over(self):
         query = (Sample
                  .select(Sample.counter, Sample.value,
-                         fn.LAG(Sample.counter, 1).over())
+                         fn.LAG(Sample.counter, 1).over(order_by=[Sample.id]))
                  .order_by(Sample.id)
                  .tuples())
         self.assertEqual(list(query), [
