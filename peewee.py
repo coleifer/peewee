@@ -4872,7 +4872,7 @@ class SchemaManager(object):
                 if is_model(value):
                     value = value._meta.table
                 else:
-                    value = SQL(value)
+                    value = SQL(str(value))
             accum.append(NodeList((SQL(key), value), glue='='))
         return accum
 

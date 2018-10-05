@@ -35,57 +35,12 @@ class TMConstraints(TestModel):
     value = TextField(collation='NOCASE')
 
 
-class NoRowid(TestModel):
-    key = TextField(primary_key=True)
-    value = TextField()
-
-    class Meta:
-        without_rowid = True
-
-
-class NoPK(TestModel):
-    data = TextField()
-
-    class Meta:
-        primary_key = False
-
-
 class CacheData(TestModel):
     key = TextField(unique=True)
     value = TextField()
 
     class Meta:
         schema = 'cache'
-
-
-class KV(TestModel):
-    key = TextField()
-    value = TextField()
-    timestamp = TimestampField(index=True)
-    class Meta:
-        indexes = (
-            (('key', 'value'), True),
-        )
-        table_name = 'kvs'
-
-
-class UKV(TestModel):
-    key = TextField()
-    value = TextField()
-    status = IntegerField()
-    class Meta:
-        constraints = [
-            SQL('CONSTRAINT ukv_kv_uniq UNIQUE (key, value)'),
-            Check('status > 0')]
-        table_name = 'ukv'
-
-
-class KVSettings(TestModel):
-    key = TextField(primary_key=True)
-    value = TextField()
-    timestamp = TimestampField()
-    class Meta:
-        table_settings = ('PARTITION BY RANGE (timestamp)', 'WITHOUT ROWID')
 
 
 class Article(TestModel):
@@ -104,19 +59,10 @@ Article.add_index(idx)
 Article.add_index(SQL('CREATE INDEX "article_foo" ON "article" ("flags" & 3)'))
 
 
-class FuncIdx(TestModel):
-    a = IntegerField()
-    b = IntegerField()
-
-idx = FuncIdx.index(FuncIdx.a, FuncIdx.b, fn.SUM(FuncIdx.a + FuncIdx.b))
-FuncIdx.add_index(idx)
-
-
 class TestModelDDL(ModelDatabaseTestCase):
     database = get_in_memory_db()
-    requires = [Article, CacheData, Category, FuncIdx, KV, KVSettings, Note,
-                Person, Relationship, TMUnique, TMSequence, TMIndexes,
-                TMConstraints, UKV, User]
+    requires = [Article, CacheData, Category, Note, Person, Relationship,
+                TMUnique, TMSequence, TMIndexes, TMConstraints, User]
 
     def test_database_required(self):
         class MissingDB(Model):
@@ -190,12 +136,32 @@ class TestModelDDL(ModelDatabaseTestCase):
         ])
 
     def test_model_indexes_custom_tablename(self):
+        class KV(TestModel):
+            key = TextField()
+            value = TextField()
+            timestamp = TimestampField(index=True)
+            class Meta:
+                database = self.database
+                indexes = (
+                    (('key', 'value'), True),
+                )
+                table_name = 'kvs'
+
         self.assertIndexes(KV, [
             ('CREATE INDEX "kvs_timestamp" ON "kvs" ("timestamp")', []),
             ('CREATE UNIQUE INDEX "kvs_key_value" ON "kvs" ("key", "value")',
              [])])
 
     def test_model_indexes_computed_columns(self):
+        class FuncIdx(TestModel):
+            a = IntegerField()
+            b = IntegerField()
+            class Meta:
+                database = self.database
+
+        i = FuncIdx.index(FuncIdx.a, FuncIdx.b, fn.SUM(FuncIdx.a + FuncIdx.b))
+        FuncIdx.add_index(i)
+
         self.assertIndexes(FuncIdx, [
             ('CREATE INDEX "func_idx_a_b" ON "func_idx" '
              '("a", "b", SUM("a" + "b"))', []),
@@ -266,12 +232,23 @@ class TestModelDDL(ModelDatabaseTestCase):
             ('CREATE UNIQUE INDEX "foobar2_data" ON "foobar2_tbl" ("data")')])
 
     def test_without_pk(self):
-        NoPK._meta.database = self.database
+        class NoPK(TestModel):
+            data = TextField()
+            class Meta:
+                database = self.database
+                primary_key = False
         self.assertCreateTable(NoPK, [
             ('CREATE TABLE "no_pk" ("data" TEXT NOT NULL)')])
 
     def test_without_rowid(self):
-        NoRowid._meta.database = self.database
+        class NoRowid(TestModel):
+            key = TextField(primary_key=True)
+            value = TextField()
+
+            class Meta:
+                database = self.database
+                without_rowid = True
+
         self.assertCreateTable(NoRowid, [
             ('CREATE TABLE "no_rowid" ('
              '"key" TEXT NOT NULL PRIMARY KEY, '
@@ -284,8 +261,6 @@ class TestModelDDL(ModelDatabaseTestCase):
             ('CREATE TABLE "sub_no_rowid" ('
              '"key" TEXT NOT NULL PRIMARY KEY, '
              '"value" TEXT NOT NULL)')])
-
-        NoRowid._meta.database = None
 
     def test_db_table(self):
         class A(TestModel):
@@ -339,6 +314,17 @@ class TestModelDDL(ModelDatabaseTestCase):
         self.assertEqual(sql, 'DROP TABLE IF EXISTS "users" RESTRICT')
 
     def test_table_constraints(self):
+        class UKV(TestModel):
+            key = TextField()
+            value = TextField()
+            status = IntegerField()
+            class Meta:
+                constraints = [
+                    SQL('CONSTRAINT ukv_kv_uniq UNIQUE (key, value)'),
+                    Check('status > 0')]
+                database = self.database
+                table_name = 'ukv'
+
         self.assertCreateTable(UKV, [
             ('CREATE TABLE "ukv" ('
              '"id" INTEGER NOT NULL PRIMARY KEY, '
@@ -349,6 +335,14 @@ class TestModelDDL(ModelDatabaseTestCase):
              'CHECK (status > 0))')])
 
     def test_table_settings(self):
+        class KVSettings(TestModel):
+            key = TextField(primary_key=True)
+            value = TextField()
+            timestamp = TimestampField()
+            class Meta:
+                database = self.database
+                table_settings = ('PARTITION BY RANGE (timestamp)',
+                                  'WITHOUT ROWID')
         self.assertCreateTable(KVSettings, [
             ('CREATE TABLE "kv_settings" ('
              '"key" TEXT NOT NULL PRIMARY KEY, '
@@ -356,6 +350,21 @@ class TestModelDDL(ModelDatabaseTestCase):
              '"timestamp" INTEGER NOT NULL) '
              'PARTITION BY RANGE (timestamp) '
              'WITHOUT ROWID')])
+
+    def test_table_options(self):
+        class TOpts(TestModel):
+            key = TextField()
+            class Meta:
+                database = self.database
+                options = {
+                    'CHECKSUM': 1,
+                    'COMPRESSION': 'lz4'}
+
+        self.assertCreateTable(TOpts, [
+            ('CREATE TABLE "t_opts" ('
+             '"id" INTEGER NOT NULL PRIMARY KEY, '
+             '"key" TEXT NOT NULL, '
+             'CHECKSUM=1, COMPRESSION=lz4)')])
 
     def test_table_and_index_creation(self):
         self.assertCreateTable(Person, [
