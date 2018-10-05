@@ -7,6 +7,18 @@ https://github.com/coleifer/peewee/releases
 
 ## master
 
+[View commits](https://github.com/coleifer/peewee/compare/3.7.1...master)
+
+## 3.7.1
+
+**New features**
+
+* Added `table_settings` model `Meta` option, which should be a list of strings
+  specifying additional options for `CREATE TABLE`, which are placed *after*
+  the closing parentheses.
+* Allow specification of `on_update` and `on_delete` behavior for many-to-many
+  relationships when using `ManyToManyField`.
+
 **Bugfixes**
 
 * Fixed incorrect SQL generation for Postgresql ON CONFLICT clause when the
@@ -14,10 +26,18 @@ https://github.com/coleifer/peewee/releases
   introduces a new keyword-argument to the `on_conflict()` method:
   `conflict_constraint`, which is currently only supported by Postgresql. Refs
   issue #1737.
+* Fixed incorrect SQL for sub-selects used on the right side of `IN`
+  expressions. Previously the query would be assigned an alias, even though an
+  alias was not needed.
 * Fixed incorrect SQL generation for Model indexes which contain SQL functions
   as indexed columns.
+* Fixed bug in the generation of special queries used to perform operations on
+  SQLite FTS5 virtual tables.
+* Allow `frozenset` to be correctly parameterized as a list of values.
+* Allow multi-value INSERT queries to specify `columns` as a list of strings.
+* Support `CROSS JOIN` for model select queries.
 
-[View commits](https://github.com/coleifer/peewee/compare/3.7.0...master)
+[View commits](https://github.com/coleifer/peewee/compare/3.7.0...3.7.1)
 
 ## 3.7.0
 
