@@ -20,6 +20,10 @@ import threading
 import time
 import uuid
 import warnings
+try:
+    from collections.abc import Mapping
+except ImportError:
+    from collections import Mapping
 
 try:
     from pysqlite3 import dbapi2 as pysq3
@@ -2253,7 +2257,7 @@ class Insert(_WriteQuery):
         all_values = []
         for row in rows_iter:
             values = []
-            is_dict = isinstance(row, collections.Mapping)
+            is_dict = isinstance(row, Mapping)
             for i, (column, converter) in enumerate(columns_converters):
                 try:
                     if is_dict:
