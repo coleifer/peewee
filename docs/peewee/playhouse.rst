@@ -1010,10 +1010,10 @@ changes:
 
 .. code-block:: python
 
-    def blog_search(query):
+    def blog_search(search_term):
         return Blog.select().where(
             (Blog.status == Blog.STATUS_PUBLISHED) &
-            Match(Blog.content, query))
+            Match(Blog.content, search_term))
 
 The :py:func:`Match` function will automatically convert the left-hand operand
 to a ``tsvector``, and the right-hand operand to a ``tsquery``. For better
@@ -1514,10 +1514,10 @@ postgres_ext API notes
 
     .. code-block:: python
 
-        def blog_search(query):
+        def blog_search(search_term):
             return Blog.select().where(
                 (Blog.status == Blog.STATUS_PUBLISHED) &
-                Match(Blog.content, query))
+                Match(Blog.content, search_term))
 
 .. py:class:: TSVectorField
 
