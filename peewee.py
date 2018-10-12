@@ -1980,8 +1980,8 @@ class Select(SelectBase):
                 grouping.append(column)
         self._group_by = grouping
 
-    @Node.copy
     def group_by_extend(self, *values):
+        """@Node.copy used from group_by() call"""
         group_by = tuple(self._group_by or ()) + values
         return self.group_by(*group_by)
 
