@@ -320,7 +320,7 @@ entire related object, e.g.:
     tweets = (Tweet
               .select(Tweet, User)
               .join(User)
-              .order_by(Tweet.create_date.desc()))
+              .order_by(Tweet.created_date.desc()))
     for tweet in tweets:
         print(tweet.user.username, tweet.message)
 
