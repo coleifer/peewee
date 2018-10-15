@@ -132,23 +132,23 @@ We will perform the aggregation in a non-correlated subquery, so we can be confi
     # a secondary reference to the table.
     TweetAlias = Tweet.alias()
 
-    # Create a subquery that will calculate the maximum Tweet create_date for each
+    # Create a subquery that will calculate the maximum Tweet created_date for each
     # user.
     subquery = (TweetAlias
                 .select(
                     TweetAlias.user,
-                    fn.MAX(TweetAlias.create_date).alias('max_ts'))
+                    fn.MAX(TweetAlias.created_date).alias('max_ts'))
                 .group_by(TweetAlias.user)
                 .alias('tweet_max_subquery'))
 
     # Query for tweets and join using the subquery to match the tweet's user
-    # and create_date.
+    # and created_date.
     query = (Tweet
              .select(Tweet, User)
              .join(User)
              .switch(Tweet)
              .join(subquery, on=(
-                 (Tweet.create_date == subquery.c.max_ts) &
+                 (Tweet.created_date == subquery.c.max_ts) &
                  (Tweet.user == subquery.c.user_id))))
 
 SQLite and MySQL are a bit more lax and permit grouping by a subset of the columns that are selected. This means we can do away with the subquery and express it quite concisely:
@@ -159,7 +159,7 @@ SQLite and MySQL are a bit more lax and permit grouping by a subset of the colum
              .select(Tweet, User)
              .join(User)
              .group_by(Tweet.user)
-             .having(Tweet.create_date == fn.MAX(Tweet.create_date)))
+             .having(Tweet.created_date == fn.MAX(Tweet.created_date)))
 
 .. _top_n_per_group:
 
@@ -182,10 +182,10 @@ The desired SQL is:
     SELECT * FROM
       (SELECT t2.id, t2.username FROM user AS t2) AS uq
        LEFT JOIN LATERAL
-      (SELECT t2.message, t2.create_date
+      (SELECT t2.message, t2.created_date
        FROM tweet AS t2
        WHERE (t2.user_id = uq.id)
-       ORDER BY t2.create_date DESC LIMIT 3)
+       ORDER BY t2.created_date DESC LIMIT 3)
       AS pq ON true
 
 To accomplish this with peewee we'll need to express the lateral join as a :py:class:`Clause`, which gives us greater flexibility than the :py:meth:`~Query.join` method.
@@ -203,9 +203,9 @@ To accomplish this with peewee we'll need to express the lateral join as a :py:c
     # outer loop via the WHERE clause. Note that we are using a
     # LIMIT clause.
     tweet_query = (TweetAlias
-                   .select(TweetAlias.message, TweetAlias.create_date)
+                   .select(TweetAlias.message, TweetAlias.created_date)
                    .where(TweetAlias.user == user_query.c.id)
-                   .order_by(TweetAlias.create_date.desc())
+                   .order_by(TweetAlias.created_date.desc())
                    .limit(3)
                    .alias('pq'))
 
@@ -221,7 +221,7 @@ To accomplish this with peewee we'll need to express the lateral join as a :py:c
     # Finally, we'll wrap these up and SELECT from the result.
     query = (Tweet
              .select(user_query.c.username, tweet_query.c.message,
-                     tweet_query.c.create_date)
+                     tweet_query.c.created_date)
              .from_(join_clause))
 
 Window functions
@@ -240,7 +240,7 @@ The desired SQL is:
             t3.username,
             RANK() OVER (
                 PARTITION BY t2.user_id
-                ORDER BY t2.create_date DESC
+                ORDER BY t2.created_date DESC
             ) AS rnk
         FROM tweet AS t2
         INNER JOIN user AS t3 ON (t2.user_id = t3.id)
@@ -262,7 +262,7 @@ To accomplish this with peewee, we will wrap the ranked Tweets in an outer query
                     User.username,
                     fn.RANK().over(
                         partition_by=[TweetAlias.user],
-                        order_by=[TweetAlias.create_date.desc()]).alias('rnk'))
+                        order_by=[TweetAlias.created_date.desc()]).alias('rnk'))
                 .join(User, on=(TweetAlias.user == User.id))
                 .alias('subq'))
 
@@ -290,7 +290,7 @@ Using ``COUNT``, we can get all tweets where there exist less than *N* tweets wi
     subquery = (TweetAlias
                 .select(fn.COUNT(TweetAlias.id))
                 .where(
-                    (TweetAlias.create_date >= Tweet.create_date) &
+                    (TweetAlias.created_date >= Tweet.created_date) &
                     (TweetAlias.user == Tweet.user)))
 
     # Wrap the subquery and filter on the count.
@@ -313,7 +313,7 @@ We can achieve similar results by doing a self-join and performing the filtering
              .switch(Tweet)
              .join(TweetAlias, on=(
                  (TweetAlias.user == Tweet.user) &
-                 (TweetAlias.create_date >= Tweet.create_date)))
+                 (TweetAlias.created_date >= Tweet.created_date)))
              .group_by(Tweet.id, Tweet.content, Tweet.user, User.username)
              .having(fn.COUNT(Tweet.id) <= 3))
 
@@ -334,7 +334,7 @@ The last example uses a ``LIMIT`` clause in a correlated subquery.
                  TweetAlias
                  .select(TweetAlias.id)
                  .where(TweetAlias.user == Tweet.user)
-                 .order_by(TweetAlias.create_date.desc())
+                 .order_by(TweetAlias.created_date.desc())
                  .limit(3))))
 
 

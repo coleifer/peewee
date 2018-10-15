@@ -21,6 +21,7 @@ connection and model classes.
 
 .. code-block:: python
 
+    import datetime
     from peewee import *
 
     db = SqliteDatabase('my_app.db')
@@ -319,7 +320,7 @@ entire related object, e.g.:
     tweets = (Tweet
               .select(Tweet, User)
               .join(User)
-              .order_by(Tweet.create_date.desc()))
+              .order_by(Tweet.created_date.desc()))
     for tweet in tweets:
         print(tweet.user.username, tweet.message)
 
@@ -332,7 +333,7 @@ issued to fetch the associated ``User`` data:
 
 .. code-block:: python
 
-    tweets = Tweet.select().order_by(Tweet.create_date.desc())
+    tweets = Tweet.select().order_by(Tweet.created_date.desc())
     for tweet in tweets:
         # WARNING: an additional query will be issued for EACH tweet
         # to fetch the associated User data.
