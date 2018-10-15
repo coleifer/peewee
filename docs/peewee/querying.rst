@@ -711,6 +711,21 @@ dictionaries, namedtuples or tuples. The following methods can be used on any
 * :py:meth:`~BaseQuery.namedtuples`
 * :py:meth:`~BaseQuery.tuples`
 
+Don't forget to append the :py:meth:`~BaseQuery.iterator` method call to also
+reduce memory consumption. For example, the above code might look like:
+
+.. code-block:: python
+
+    # Let's assume we've got 10 million stat objects to dump to a csv file.
+    stats = Stat.select()
+
+    # Our imaginary serializer class
+    serializer = CSVSerializer()
+
+    # Loop over all the stats (rendered as tuples, without caching) and serialize.
+    for stat_tuple in stats.tuples().iterator():
+        serializer.serialize_tuple(stat_tuple)
+
 When iterating over a large number of rows that contain columns from multiple
 tables, peewee will reconstruct the model graph for each row returned. This
 operation can be slow for complex graphs. For example, if we were selecting a
