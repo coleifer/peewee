@@ -333,7 +333,7 @@ issued to fetch the associated ``User`` data:
 
 .. code-block:: python
 
-    tweets = Tweet.select().order_by(Tweet.create_date.desc())
+    tweets = Tweet.select().order_by(Tweet.created_date.desc())
     for tweet in tweets:
         # WARNING: an additional query will be issued for EACH tweet
         # to fetch the associated User data.
