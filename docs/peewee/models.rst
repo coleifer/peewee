@@ -21,6 +21,7 @@ connection and model classes.
 
 .. code-block:: python
 
+    import datetime-
     from peewee import *
 
     db = SqliteDatabase('my_app.db')
