@@ -174,6 +174,12 @@ class TestPrefetch(ModelTestCase):
                  .select(Like, LikePerson.name)
                  .join(LikePerson, on=(Like.person == LikePerson.id)))
 
+        # Five queries:
+        # - person (outermost query)
+        # - notes for people
+        # - items for notes
+        # - flags for notes
+        # - likes for notes (includes join to person)
         with self.assertQueryCount(5):
             query = prefetch(people, notes, items, flags, likes)
             accum = []

@@ -4266,6 +4266,7 @@ Model
 
         :param subqueries: A list of :py:class:`Model` classes or select
             queries to prefetch.
+        :returns: a list of models with selected relations prefetched.
 
         Execute the query, prefetching the given additional resources.
 
@@ -4288,6 +4289,7 @@ Model
     :param sq: Query to use as starting-point.
     :param subqueries: One or more models or :py:class:`ModelSelect` queries
         to eagerly fetch.
+    :returns: a list of models with selected relations prefetched.
 
     Eagerly fetch related objects, allowing efficient querying of multiple
     tables when a 1-to-many relationship exists.

@@ -6720,4 +6720,4 @@ def prefetch(sq, *subqueries):
                 for rel in rel_map[query_model]:
                     rel.populate_instance(instance, deps[rel.model])
 
-    return pq.query
+    return list(pq.query)
