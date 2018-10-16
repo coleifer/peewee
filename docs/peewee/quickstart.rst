@@ -368,6 +368,11 @@ a *JOIN* and using a SQL function to aggregate the results.
     # Grandma L. 0 pets
     # Herb 1 pets
 
+.. note::
+    Peewee provides a magical helper :py:func:`fn`, which can be used to call
+    any SQL function. In the above example, ``fn.COUNT(Pet.id).alias('pet_count')``
+    would be translated into ``COUNT(pet.id) AS pet_count``.
+
 Now let's list all the people and the names of all their pets. As you may have
 guessed, this could easily turn into another :ref:`N+1 <nplusone>` situation if
 we're not careful.
