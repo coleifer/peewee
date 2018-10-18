@@ -1378,12 +1378,14 @@ Query-builder
     Represent a CHECK constraint.
 
 
-.. py:class:: Function(name, arguments[, coerce=True])
+.. py:class:: Function(name, arguments[, coerce=True[, python_value=None]])
 
     :param str name: Function name.
     :param tuple arguments: Arguments to function.
     :param bool coerce: Whether to coerce the function result to a particular
         data-type when reading function return values from the cursor.
+    :param callable python_value: Function to use for converting the return
+        value from the cursor.
 
     Represent an arbitrary SQL function call.
 
@@ -1455,7 +1457,41 @@ Query-builder
 
     .. py:method:: coerce([coerce=True])
 
-        :param bool coerce: Whether to coerce function-call result.
+        :param bool coerce: Whether to attempt to coerce function-call result
+            to a Python data-type.
+
+        When coerce is ``True``, the target data-type is inferred using several
+        heuristics. Read the source for ``BaseModelCursorWrapper._initialize_columns``
+        method to see how this works.
+
+    .. py:method:: python_value([func=None])
+
+        :param callable python_value: Function to use for converting the return
+            value from the cursor.
+
+        Specify a particular function to use when converting values returned by
+        the database cursor. For example:
+
+        .. code-block:: python
+
+            # Get user and a list of their tweet IDs. The tweet IDs are
+            # returned as a comma-separated string by the db, so we'll split
+            # the result string and convert the values to python ints.
+            tweet_ids = (fn
+                         .GROUP_CONCAT(Tweet.id)
+                         .python_value(lambda idlist: [int(i) for i in idlist]))
+
+            query = (User
+                     .select(User.username, tweet_ids.alias('tweet_ids'))
+                     .group_by(User.username))
+
+            for user in query:
+                print(user.username, user.tweet_ids)
+
+            # e.g.,
+            # huey [1, 4, 5, 7]
+            # mickey [2, 3, 6]
+            # zaizee []
 
 .. py:function:: fn()
 

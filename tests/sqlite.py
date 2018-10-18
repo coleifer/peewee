@@ -403,6 +403,55 @@ class TestJSONField(ModelTestCase):
     def assertData(self, key, expected):
         self.assertEqual(KeyData.get(KeyData.key == key).data, expected)
 
+    def test_json_group_functions(self):
+        with self.database.atomic():
+            KeyData.delete().execute()
+            for i in range(10):
+                # e.g., {v: 0, v0: {items: []}}, {v: 2, v2: {items: [0, 1]}}
+                KeyData.create(key='k%s' % i, data={'v': i, 'v%s' % i: {
+                    'items': list(range(i))}})
+
+        jga_key = fn.json_group_array(KeyData.key)
+        query = (KeyData
+                 .select(jga_key)
+                 .where(KeyData.data['v'] < 4)
+                 .order_by(KeyData.key))
+        self.assertEqual(json.loads(query.scalar()), ['k0', 'k1', 'k2', 'k3'])
+
+        # Can specify json.loads as the converter for the function.
+        query = (KeyData
+                 .select(jga_key.python_value(json.loads))
+                 .where(KeyData.data['v'] > 6)
+                 .order_by(KeyData.key))
+        self.assertEqual(query.scalar(), ['k7', 'k8', 'k9'])
+
+        # Aggregating a list of ints?
+        jga_id = fn.json_group_array(KeyData.id)
+        query = (KeyData
+                 .select(jga_id)
+                 .where(KeyData.data['v'] < 4)
+                 .order_by(KeyData.id))
+        self.assertEqual(json.loads(query.scalar()), [1, 2, 3, 4])
+
+        query = (KeyData
+                 .select(jga_id.python_value(json.loads))
+                 .where(KeyData.data['v'] > 6)
+                 .order_by(KeyData.id))
+        self.assertEqual(query.scalar(), [8, 9, 10])
+
+        # Using json_group_object.
+        jgo_key = fn.json_group_object(KeyData.key, KeyData.data['v'])
+        res = (KeyData
+               .select(jgo_key)
+               .where(KeyData.data['v'] < 4)
+               .scalar())
+        self.assertEqual(json.loads(res), {'k0': 0, 'k1': 1, 'k2': 2, 'k3': 3})
+
+        query = (KeyData
+                 .select(jgo_key.python_value(json.loads))
+                 .where(KeyData.data['v'] < 4))
+        self.assertEqual(query.scalar(), {'k0': 0, 'k1': 1, 'k2': 2, 'k3': 3})
+
     def test_schema(self):
         self.assertSQL(KeyData._schema._create_table(), (
             'CREATE TABLE IF NOT EXISTS "key_data" ('

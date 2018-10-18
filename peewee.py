@@ -1344,10 +1344,11 @@ def Check(constraint):
 
 
 class Function(ColumnBase):
-    def __init__(self, name, arguments, coerce=True):
+    def __init__(self, name, arguments, coerce=True, python_value=None):
         self.name = name
         self.arguments = arguments
         self._filter = None
+        self._python_value = python_value
         if name and name.lower() in ('sum', 'count', 'cast'):
             self._coerce = False
         else:
@@ -1361,6 +1362,10 @@ class Function(ColumnBase):
     @Node.copy
     def filter(self, where=None):
         self._filter = where
+
+    @Node.copy
+    def python_value(self, func=None):
+        self._python_value = func
 
     def over(self, partition_by=None, order_by=None, start=None, end=None,
              frame_type=None, window=None):
@@ -6372,6 +6377,15 @@ class ManyToManyQuery(ModelSelect):
                 .execute())
 
 
+def safe_python_value(conv_func):
+    def validate(value):
+        try:
+            return conv_func(value)
+        except (TypeError, ValueError):
+            return value
+    return validate
+
+
 class BaseModelCursorWrapper(DictCursorWrapper):
     def __init__(self, cursor, model, columns):
         super(BaseModelCursorWrapper, self).__init__(cursor)
@@ -6416,27 +6430,26 @@ class BaseModelCursorWrapper(DictCursorWrapper):
                 if (column == node.name or column == node.column_name) and \
                    not raw_node.is_alias():
                     self.columns[idx] = node.name
+            elif isinstance(node, Function) and node._coerce:
+                if node._python_value is not None:
+                    converters[idx] = node._python_value
+                elif node.arguments and isinstance(node.arguments[0], Node):
+                    # If the first argument is a field or references a column
+                    # on a Model, try using that field's conversion function.
+                    # This usually works, but we use "safe_python_value()" so
+                    # that if a TypeError or ValueError occurs during
+                    # conversion we can just fall-back to the raw cursor value.
+                    first = node.arguments[0].unwrap()
+                    if isinstance(first, Entity):
+                        path = first._path[-1]  # Try to look-up by name.
+                        first = combined.get(path)
+                    if isinstance(first, Field):
+                        converters[idx] = safe_python_value(first.python_value)
             elif column in combined:
-                if raw_node._coerce:
-                    # Unlikely, but if a function was aliased to a column,
-                    # don't use that column's converter if coerce is False.
+                if node._coerce:
                     converters[idx] = combined[column].python_value
                 if isinstance(node, Column) and node.source == table:
                     fields[idx] = combined[column]
-            elif (isinstance(node, Function) and node.arguments and
-                  node._coerce):
-                # Try to special-case functions calling fields.
-                first = node.arguments[0]
-                if isinstance(first, Node):
-                    first = first.unwrap()
-
-                if isinstance(first, Field):
-                    converters[idx] = first.python_value
-                elif isinstance(first, Entity):
-                    path = first._path[-1]
-                    field = combined.get(path)
-                    if field is not None:
-                        converters[idx] = field.python_value
 
     initialize = _initialize_columns
 

@@ -4,6 +4,7 @@ import time
 import unittest
 
 from peewee import *
+from peewee import Entity
 from peewee import NodeList
 from peewee import QualifiedNames
 from peewee import sort_models
@@ -1323,6 +1324,38 @@ class TestFunctionCoerce(ModelTestCase):
 
         query = Sample.select(counter_group.alias('counter_group'))
         self.assertEqual(query.get().counter_group, '0,1,2')
+
+        query = Sample.select(counter_group)
+        self.assertEqual(query.scalar(), '0,1,2')
+
+    def test_safe_python_value(self):
+        for i in range(3):
+            Sample.create(counter=i, value=i)
+
+        counter_group = fn.GROUP_CONCAT(Sample.counter)
+        query = Sample.select(counter_group.alias('counter'))
+        self.assertEqual(query.get().counter, '0,1,2')
+        self.assertEqual(query.scalar(), '0,1,2')
+
+        query = Sample.select(counter_group.alias('counter_group'))
+        self.assertEqual(query.get().counter_group, '0,1,2')
+        self.assertEqual(query.scalar(), '0,1,2')
+
+    def test_conv_using_python_value(self):
+        for i in range(3):
+            Sample.create(counter=i, value=i)
+
+        counter = (fn
+                   .GROUP_CONCAT(Sample.counter)
+                   .python_value(lambda x: [int(i) for i in x.split(',')]))
+        query = Sample.select(counter.alias('counter'))
+        self.assertEqual(query.get().counter, [0, 1, 2])
+
+        query = Sample.select(counter.alias('counter_group'))
+        self.assertEqual(query.get().counter_group, [0, 1, 2])
+
+        query = Sample.select(counter)
+        self.assertEqual(query.scalar(), [0, 1, 2])
 
     @requires_models(Category)
     def test_no_coerce_count(self):
