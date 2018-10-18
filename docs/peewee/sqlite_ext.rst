@@ -481,7 +481,7 @@ APIs
 
         Remove the data stored in the :py:class:`JSONField`.
 
-        Uses the `json_type <https://www.sqlite.org/json1.html#jrm>`_ function
+        Uses the `json_remove <https://www.sqlite.org/json1.html#jrm>`_ function
         from the json1 extension.
 
     .. py:method:: json_type()
