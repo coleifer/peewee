@@ -3650,6 +3650,7 @@ class Product(TestModel):
     name = TextField()
     price = IntegerField()
     flags = IntegerField(constraints=[SQL('DEFAULT 99')])
+    status = CharField(constraints=[Check("status IN ('a', 'b', 'c')")])
 
     class Meta:
         constraints = [Check('price > 0')]
@@ -3660,13 +3661,14 @@ class TestModelConstraints(ModelTestCase):
 
     @skip_if(IS_MYSQL)  # MySQL fails intermittently on Travis-CI (?).
     def test_model_constraints(self):
-        p = Product.create(name='p1', price=1)
+        p = Product.create(name='p1', price=1, status='a')
         self.assertTrue(p.flags is None)
 
         # Price was saved successfully, flags got server-side default value.
         p_db = Product.get(Product.id == p.id)
         self.assertEqual(p_db.price, 1)
         self.assertEqual(p_db.flags, 99)
+        self.assertEqual(p_db.status, 'a')
 
         # Cannot update price with invalid value, must be > 0.
         with self.database.atomic():
@@ -3676,7 +3678,18 @@ class TestModelConstraints(ModelTestCase):
         # Nor can we create a new product with an invalid price.
         with self.database.atomic():
             self.assertRaises(IntegrityError, Product.create, name='p2',
-                              price=0)
+                              price=0, status='a')
+
+        # Cannot set status to a value other than 1, 2 or 3.
+        with self.database.atomic():
+            p.price = 1
+            p.status = 'd'
+            self.assertRaises(IntegrityError, p.save)
+
+        # Cannot create a new product with invalid status.
+        with self.database.atomic():
+            self.assertRaises(IntegrityError, Product.create, name='p3',
+                              price=1, status='x')
 
 
 class TestModelFieldReprs(BaseTestCase):
