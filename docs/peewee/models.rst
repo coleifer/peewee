@@ -160,7 +160,7 @@ Field Type              Sqlite              Postgresql          MySQL
 ``DecimalField``        decimal             numeric             numeric
 ``CharField``           varchar             varchar             varchar
 ``FixedCharField``      char                char                char
-``TextField``           text                text                longtext
+``TextField``           text                text                text
 ``BlobField``           blob                bytea               blob
 ``BitField``            integer             bigint              bigint
 ``BigBitField``         blob                bytea               blob
