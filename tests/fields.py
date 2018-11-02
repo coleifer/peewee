@@ -703,6 +703,20 @@ class TestUUIDField(ModelTestCase):
         u_db2 = UUIDModel.get(UUIDModel.data == uu)
         self.assertEqual(u_db2.id, u.id)
 
+        # Verify we can use hex string.
+        uu = uuid.uuid4()
+        u = UUIDModel.create(data=uu.hex)
+        u_db = UUIDModel.get(UUIDModel.data == uu.hex)
+        self.assertEqual(u.id, u_db.id)
+        self.assertEqual(u_db.data, uu)
+
+        # Verify we can use raw binary representation.
+        uu = uuid.uuid4()
+        u = UUIDModel.create(data=uu.bytes)
+        u_db = UUIDModel.get(UUIDModel.data == uu.bytes)
+        self.assertEqual(u.id, u_db.id)
+        self.assertEqual(u_db.data, uu)
+
     def test_binary_uuid_field(self):
         uu = uuid.uuid4()
         u = UUIDModel.create(bdata=uu)
@@ -713,6 +727,20 @@ class TestUUIDField(ModelTestCase):
 
         u_db2 = UUIDModel.get(UUIDModel.bdata == uu)
         self.assertEqual(u_db2.id, u.id)
+
+        # Verify we can use hex string.
+        uu = uuid.uuid4()
+        u = UUIDModel.create(bdata=uu.hex)
+        u_db = UUIDModel.get(UUIDModel.bdata == uu.hex)
+        self.assertEqual(u.id, u_db.id)
+        self.assertEqual(u_db.bdata, uu)
+
+        # Verify we can use raw binary representation.
+        uu = uuid.uuid4()
+        u = UUIDModel.create(bdata=uu.bytes)
+        u_db = UUIDModel.get(UUIDModel.bdata == uu.bytes)
+        self.assertEqual(u.id, u_db.id)
+        self.assertEqual(u_db.bdata, uu)
 
 
 class TSModel(TestModel):

@@ -4248,6 +4248,12 @@ class UUIDField(Field):
     field_type = 'UUID'
 
     def db_value(self, value):
+        if isinstance(value, basestring) and len(value) == 32:
+            # Hex string. No transformation is necessary.
+            return value
+        elif isinstance(value, bytes) and len(value) == 16:
+            # Allow raw binary representation.
+            value = uuid.UUID(bytes=value)
         if isinstance(value, uuid.UUID):
             return value.hex
         try:
@@ -4265,10 +4271,17 @@ class BinaryUUIDField(BlobField):
     field_type = 'UUIDB'
 
     def db_value(self, value):
+        if isinstance(value, bytes) and len(value) == 16:
+            # Raw binary value. No transformation is necessary.
+            return self._constructor(value)
+        elif isinstance(value, basestring) and len(value) == 32:
+            # Allow hex string representation.
+            value = uuid.UUID(hex=value.decode('utf-8'))
         if isinstance(value, uuid.UUID):
             return self._constructor(value.bytes)
         elif value is not None:
-            raise ValueError('value for binary UUID field must be UUID().')
+            raise ValueError('value for binary UUID field must be UUID(), '
+                             'a hexadecimal string, or a bytes object.')
 
     def python_value(self, value):
         if isinstance(value, uuid.UUID):
