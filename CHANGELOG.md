@@ -8,6 +8,9 @@ https://github.com/coleifer/peewee/releases
 ## master
 
 * Fixed bug in `order_by_extend()`, thanks @nhatHero.
+* Allow `UUIDField` and `BinaryUUIDField` to accept hexadecimal UUID strings as
+  well as raw binary UUID bytestrings (in addition to `UUID` instances, which
+  are already supported).
 
 [View commits](https://github.com/coleifer/peewee/compare/3.7.1...master)
 
