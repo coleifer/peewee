@@ -4276,7 +4276,7 @@ class BinaryUUIDField(BlobField):
             return self._constructor(value)
         elif isinstance(value, basestring) and len(value) == 32:
             # Allow hex string representation.
-            value = uuid.UUID(hex=value.decode('utf-8'))
+            value = uuid.UUID(hex=value)
         if isinstance(value, uuid.UUID):
             return self._constructor(value.bytes)
         elif value is not None:
