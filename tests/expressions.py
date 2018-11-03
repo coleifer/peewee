@@ -80,7 +80,7 @@ class TestValueConversion(ModelTestCase):
                   .update({UpperModel.name: 'zaizee'})
                   .where(UpperModel.id == uid))
         self.assertSQL(update, (
-            'UPDATE "upper_model" SET "name" = UPPER(?) WHERE ("id" = ?)'),
+            'UPDATE "upper_model" SET "name" = UPPER(?) WHERE ("upper_model"."id" = ?)'),
             ['zaizee', uid])
         update.execute()
 
