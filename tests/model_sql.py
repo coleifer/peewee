@@ -394,16 +394,16 @@ class TestModelSQL(ModelDatabaseTestCase):
                           Stat.timestamp: datetime.datetime(2017, 1, 1)})
                  .where(Stat.url == '/peewee'))
         self.assertSQL(query, (
-            'UPDATE "stat" SET "count" = ("stat"."count" + ?), "timestamp" = ? '
-            'WHERE ("stat"."url" = ?)'),
+            'UPDATE "stat" SET "count" = ("count" + ?), "timestamp" = ? '
+            'WHERE ("url" = ?)'),
             [1, 1483228800, '/peewee'])
 
         query = (Stat
                  .update(count=Stat.count + 1)
                  .where(Stat.url == '/peewee'))
         self.assertSQL(query, (
-            'UPDATE "stat" SET "count" = ("stat"."count" + ?) '
-            'WHERE ("stat"."url" = ?)'),
+            'UPDATE "stat" SET "count" = ("count" + ?) '
+            'WHERE ("url" = ?)'),
             [1, '/peewee'])
 
     def test_update_from(self):
@@ -423,10 +423,10 @@ class TestModelSQL(ModelDatabaseTestCase):
                  .where(Account.sales == SalesPerson.id))
         self.assertSQL(query, (
             'UPDATE "account" SET '
-            '"contact_first" = "t1"."first", '
-            '"contact_last" = "t1"."last" '
+            '"contact_first" = "first", '
+            '"contact_last" = "last" '
             'FROM "sales_person" AS "t1" '
-            'WHERE ("account"."sales_id" = "t1"."id")'), [])
+            'WHERE ("sales_id" = "id")'), [])
 
         query = (User
                  .update({User.username: QualifiedNames(Tweet.content)})
@@ -434,7 +434,7 @@ class TestModelSQL(ModelDatabaseTestCase):
                  .where(Tweet.content == 'tx'))
         self.assertSQL(query, (
             'UPDATE "users" SET "username" = "t1"."content" '
-            'FROM "tweet" AS "t1" WHERE ("t1"."content" = ?)'), ['tx'])
+            'FROM "tweet" AS "t1" WHERE ("content" = ?)'), ['tx'])
 
     def test_update_from_qualnames(self):
         data = [(1, 'u1-x'), (2, 'u2-x')]
@@ -577,7 +577,7 @@ class TestStringsForFieldsa(ModelDatabaseTestCase):
         qliteral = Person.update({'last': 'kitty'}).where(Person.last == 'cat')
         for query in (qkwargs, qliteral):
             self.assertSQL(query, (
-                'UPDATE "person" SET "last" = ? WHERE ("person"."last" = ?)'),
+                'UPDATE "person" SET "last" = ? WHERE ("last" = ?)'),
                 ['kitty', 'cat'])
 
 

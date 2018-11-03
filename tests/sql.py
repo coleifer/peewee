@@ -619,9 +619,9 @@ class TestUpdateQuery(BaseTestCase):
         self.assertSQL(query, (
             'UPDATE "users" SET '
             '"admin" = ?, '
-            '"counter" = ("users"."counter" + ?), '
+            '"counter" = ("counter" + ?), '
             '"username" = ? '
-            'WHERE ("users"."username" = ?)'), [False, 1, 'nuggie', 'nugz'])
+            'WHERE ("username" = ?)'), [False, 1, 'nuggie', 'nugz'])
 
     def test_update_subquery(self):
         count = fn.COUNT(Tweet.c.id).alias('ct')
@@ -639,7 +639,7 @@ class TestUpdateQuery(BaseTestCase):
             'UPDATE "users" SET '
             '"counter" = ?, '
             '"muted" = ? '
-            'WHERE ("users"."id" IN ('
+            'WHERE ("id" IN ('
             'SELECT "users"."id", COUNT("t1"."id") AS "ct" '
             'FROM "users" AS "users" '
             'INNER JOIN "tweets" AS "t1" '
@@ -676,7 +676,7 @@ class TestUpdateQuery(BaseTestCase):
                  .where(User.c.username == 'charlie')
                  .returning(User.c.id))
         self.assertSQL(query, (
-            'UPDATE "users" SET "is_admin" = ? WHERE ("users"."username" = ?) '
+            'UPDATE "users" SET "is_admin" = ? WHERE ("username" = ?) '
             'RETURNING "id"'), [True, 'charlie'])
 
 
