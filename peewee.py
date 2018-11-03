@@ -2150,7 +2150,7 @@ class Update(_WriteQuery):
                 if not isinstance(v, Node):
                     converter = k.db_value if isinstance(k, Field) else None
                     v = Value(v, converter=converter, unpack=False)
-                expressions.append(NodeList((k, SQL('='), v)))
+                expressions.append(NodeList((k, SQL('='), QualifiedNames(v))))
 
             (ctx
              .sql(self.table)
@@ -2162,7 +2162,8 @@ class Update(_WriteQuery):
                     ctx.literal(' FROM ').sql(CommaNodeList(self._from))
 
             if self._where:
-                ctx.literal(' WHERE ').sql(self._where)
+                with ctx.scope_normal():
+                    ctx.literal(' WHERE ').sql(self._where)
             self._apply_ordering(ctx)
             return self.apply_returning(ctx)
 

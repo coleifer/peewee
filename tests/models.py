@@ -1147,7 +1147,7 @@ class TestDeleteInstance(ModelTestCase):
             ('DELETE FROM "favorite" WHERE ("user_id" = ?)', [huey.id]),
             ('DELETE FROM "tweet" WHERE ("user_id" = ?)', [huey.id]),
             ('DELETE FROM "users" WHERE ("id" = ?)', [huey.id]),
-            ('UPDATE "account" SET "user_id" = ? WHERE ("user_id" = ?)',
+            ('UPDATE "account" SET "user_id" = ? WHERE ("account"."user_id" = ?)',
              [None, huey.id]),
         ])
 
@@ -1964,7 +1964,7 @@ class TestReturningIntegration(ModelTestCase):
                  .returning(User.id, User.username))
         self.assertSQL(query, (
             'UPDATE "users" SET "username" = ? '
-            'WHERE ("username" = ?) '
+            'WHERE ("users"."username" = ?) '
             'RETURNING "id", "username"'), ['ziggy', 'zaizee'])
         data = query.execute()
         user = data[0]
