@@ -1,11 +1,14 @@
 from peewee import *
 
 from .base import BaseTestCase
+from .base import IS_MYSQL
 from .base import ModelTestCase
 from .base import TestModel
 from .base import get_in_memory_db
 from .base import requires_models
 from .base import requires_mysql
+from .base import skip_if
+from .base_models import Sample
 from .base_models import Tweet
 from .base_models import User
 
@@ -269,20 +272,24 @@ class TestCrossJoin(ModelTestCase):
         self.assertEqual(list(query.tuples()), [(2, 2), (3, 1), (3, 2)])
 
 
+def _create_users_tweets(db):
+    data = (
+        ('huey', ('meow', 'hiss', 'purr')),
+        ('mickey', ('woof', 'bark')),
+        ('zaizee', ()))
+    with db.atomic():
+        for username, tweets in data:
+            user = User.create(username=username)
+            for tweet in tweets:
+                Tweet.create(user=user, content=tweet)
+
+
 class TestSubqueryInSelect(ModelTestCase):
     requires = [User, Tweet]
 
     def setUp(self):
         super(TestSubqueryInSelect, self).setUp()
-        data = (
-            ('huey', ('meow', 'hiss', 'purr')),
-            ('mickey', ('woof', 'bark')),
-            ('zaizee', ()))
-        with self.database.atomic():
-            for username, tweets in data:
-                user = User.create(username=username)
-                for tweet in tweets:
-                    Tweet.create(user=user, content=tweet)
+        _create_users_tweets(self.database)
 
     def test_subquery_in_select(self):
         subq = User.select().where(User.username == 'huey')
@@ -295,3 +302,77 @@ class TestSubqueryInSelect(ModelTestCase):
             ('meow', True),
             ('purr', True),
             ('woof', False)])
+
+
+class TestUpdateIntegrationRegressions(ModelTestCase):
+    requires = [User, Tweet, Sample]
+
+    def setUp(self):
+        super(TestUpdateIntegrationRegressions, self).setUp()
+        _create_users_tweets(self.database)
+        for i in range(4):
+            Sample.create(counter=i, value=i)
+
+    @skip_if(IS_MYSQL)
+    def test_update_examples(self):
+        # Do a simple update.
+        res = (User
+               .update(username=(User.username + '-cat'))
+               .where(User.username != 'mickey')
+               .execute())
+
+        users = User.select().order_by(User.username)
+        self.assertEqual([u.username for u in users.clone()],
+                         ['huey-cat', 'mickey', 'zaizee-cat'])
+
+        # Do an update using a subquery..
+        subq = User.select(User.username).where(User.username == 'mickey')
+        res = (User
+               .update(username=(User.username + '-dog'))
+               .where(User.username.in_(subq))
+               .execute())
+        self.assertEqual([u.username for u in users.clone()],
+                         ['huey-cat', 'mickey-dog', 'zaizee-cat'])
+
+        # Subquery referring to a different table.
+        subq = User.select().where(User.username == 'mickey-dog')
+        res = (Tweet
+               .update(content=(Tweet.content + '-x'))
+               .where(Tweet.user.in_(subq))
+               .execute())
+
+        self.assertEqual(
+            [t.content for t in Tweet.select().order_by(Tweet.id)],
+            ['meow', 'hiss', 'purr', 'woof-x', 'bark-x'])
+
+        # Subquery on the right-hand of the assignment.
+        subq = Tweet.select(fn.COUNT(Tweet.id)).where(Tweet.user == User.id)
+        res = User.update(username=(User.username + '-' + subq)).execute()
+
+        self.assertEqual([u.username for u in users.clone()],
+                         ['huey-cat-3', 'mickey-dog-2', 'zaizee-cat-0'])
+
+    def test_update_examples_2(self):
+        SA = Sample.alias()
+        subq = (SA
+                .select(SA.value)
+                .where(SA.value.in_([1.0, 3.0])))
+        res = (Sample
+               .update(counter=(Sample.counter + Sample.value))
+               .where(Sample.value.in_(subq))
+               .execute())
+
+        query = (Sample
+                 .select(Sample.counter, Sample.value)
+                 .order_by(Sample.id)
+                 .tuples())
+        self.assertEqual(list(query.clone()), [(0, 0.), (2, 1.), (2, 2.),
+                                               (6, 3.)])
+
+        subq = SA.select(SA.counter - SA.value).where(SA.value == Sample.value)
+        res = (Sample
+               .update(counter=subq)
+               .where(Sample.value.in_([1., 3.]))
+               .execute())
+        self.assertEqual(list(query.clone()), [(0, 0.), (1, 1.), (2, 2.),
+                                               (3, 3.)])
