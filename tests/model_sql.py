@@ -395,7 +395,7 @@ class TestModelSQL(ModelDatabaseTestCase):
                  .where(Stat.url == '/peewee'))
         self.assertSQL(query, (
             'UPDATE "stat" SET "count" = ("count" + ?), "timestamp" = ? '
-            'WHERE ("url" = ?)'),
+            'WHERE ("stat"."url" = ?)'),
             [1, 1483228800, '/peewee'])
 
         query = (Stat
@@ -403,7 +403,7 @@ class TestModelSQL(ModelDatabaseTestCase):
                  .where(Stat.url == '/peewee'))
         self.assertSQL(query, (
             'UPDATE "stat" SET "count" = ("count" + ?) '
-            'WHERE ("url" = ?)'),
+            'WHERE ("stat"."url" = ?)'),
             [1, '/peewee'])
 
     def test_update_from(self):
@@ -426,7 +426,7 @@ class TestModelSQL(ModelDatabaseTestCase):
             '"contact_first" = "first", '
             '"contact_last" = "last" '
             'FROM "sales_person" AS "t1" '
-            'WHERE ("sales_id" = "id")'), [])
+            'WHERE ("account"."sales_id" = "t1"."id")'), [])
 
         query = (User
                  .update({User.username: QualifiedNames(Tweet.content)})
@@ -434,7 +434,7 @@ class TestModelSQL(ModelDatabaseTestCase):
                  .where(Tweet.content == 'tx'))
         self.assertSQL(query, (
             'UPDATE "users" SET "username" = "t1"."content" '
-            'FROM "tweet" AS "t1" WHERE ("content" = ?)'), ['tx'])
+            'FROM "tweet" AS "t1" WHERE ("t1"."content" = ?)'), ['tx'])
 
     def test_update_from_qualnames(self):
         data = [(1, 'u1-x'), (2, 'u2-x')]
@@ -468,13 +468,13 @@ class TestModelSQL(ModelDatabaseTestCase):
                  .where(Note.author << (Person.select(Person.id)
                                         .where(Person.last == 'cat'))))
         self.assertSQL(query, ('DELETE FROM "note" '
-                               'WHERE ("author_id" IN ('
+                               'WHERE ("note"."author_id" IN ('
                                'SELECT "t1"."id" FROM "person" AS "t1" '
                                'WHERE ("t1"."last" = ?)))'), ['cat'])
 
         query = Note.delete().where(Note.author == Person(id=123))
-        self.assertSQL(query, 'DELETE FROM "note" WHERE ("author_id" = ?)',
-                       [123])
+        self.assertSQL(query, (
+            'DELETE FROM "note" WHERE ("note"."author_id" = ?)'), [123])
 
     def test_delete_recursive(self):
         class User(TestModel):
@@ -497,13 +497,15 @@ class TestModelSQL(ModelDatabaseTestCase):
 
         self.assertEqual(sorted(accum), [
             ('DELETE FROM "like" WHERE ('
-             '"tweet_id" IN ('
+             '"like"."tweet_id" IN ('
              'SELECT "t1"."id" FROM "tweet" AS "t1" WHERE ('
              '"t1"."user_id" = ?)))', [1]),
-            ('DELETE FROM "like" WHERE ("user_id" = ?)', [1]),
-            ('DELETE FROM "relationship" WHERE ("from_user_id" = ?)', [1]),
-            ('DELETE FROM "relationship" WHERE ("to_user_id" = ?)', [1]),
-            ('DELETE FROM "tweet" WHERE ("user_id" = ?)', [1]),
+            ('DELETE FROM "like" WHERE ("like"."user_id" = ?)', [1]),
+            ('DELETE FROM "relationship" '
+             'WHERE ("relationship"."from_user_id" = ?)', [1]),
+            ('DELETE FROM "relationship" '
+             'WHERE ("relationship"."to_user_id" = ?)', [1]),
+            ('DELETE FROM "tweet" WHERE ("tweet"."user_id" = ?)', [1]),
         ])
 
     def test_aliases(self):
@@ -577,7 +579,7 @@ class TestStringsForFieldsa(ModelDatabaseTestCase):
         qliteral = Person.update({'last': 'kitty'}).where(Person.last == 'cat')
         for query in (qkwargs, qliteral):
             self.assertSQL(query, (
-                'UPDATE "person" SET "last" = ? WHERE ("last" = ?)'),
+                'UPDATE "person" SET "last" = ? WHERE ("person"."last" = ?)'),
                 ['kitty', 'cat'])
 
 

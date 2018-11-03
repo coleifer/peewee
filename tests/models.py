@@ -1142,12 +1142,15 @@ class TestDeleteInstance(ModelTestCase):
         queries = [logrecord.msg for logrecord in self._qh.queries[-5:]]
         self.assertEqual(sorted(queries), [
             ('DELETE FROM "favorite" WHERE ('
-             '"tweet_id" IN (SELECT "t1"."id" FROM "tweet" AS "t1" WHERE ('
+             '"favorite"."tweet_id" IN ('
+             'SELECT "t1"."id" FROM "tweet" AS "t1" WHERE ('
              '"t1"."user_id" = ?)))', [huey.id]),
-            ('DELETE FROM "favorite" WHERE ("user_id" = ?)', [huey.id]),
-            ('DELETE FROM "tweet" WHERE ("user_id" = ?)', [huey.id]),
-            ('DELETE FROM "users" WHERE ("id" = ?)', [huey.id]),
-            ('UPDATE "account" SET "user_id" = ? WHERE ("user_id" = ?)',
+            ('DELETE FROM "favorite" WHERE ("favorite"."user_id" = ?)',
+             [huey.id]),
+            ('DELETE FROM "tweet" WHERE ("tweet"."user_id" = ?)', [huey.id]),
+            ('DELETE FROM "users" WHERE ("users"."id" = ?)', [huey.id]),
+            ('UPDATE "account" SET "user_id" = ? '
+             'WHERE ("account"."user_id" = ?)',
              [None, huey.id]),
         ])
 
@@ -1178,13 +1181,16 @@ class TestDeleteInstance(ModelTestCase):
         # Get the last 5 delete queries.
         queries = [logrecord.msg for logrecord in self._qh.queries[-5:]]
         self.assertEqual(sorted(queries), [
-            ('DELETE FROM "account" WHERE ("user_id" = ?)', [huey.id]),
+            ('DELETE FROM "account" WHERE ("account"."user_id" = ?)',
+             [huey.id]),
             ('DELETE FROM "favorite" WHERE ('
-             '"tweet_id" IN (SELECT "t1"."id" FROM "tweet" AS "t1" WHERE ('
+             '"favorite"."tweet_id" IN ('
+             'SELECT "t1"."id" FROM "tweet" AS "t1" WHERE ('
              '"t1"."user_id" = ?)))', [huey.id]),
-            ('DELETE FROM "favorite" WHERE ("user_id" = ?)', [huey.id]),
-            ('DELETE FROM "tweet" WHERE ("user_id" = ?)', [huey.id]),
-            ('DELETE FROM "users" WHERE ("id" = ?)', [huey.id]),
+            ('DELETE FROM "favorite" WHERE ("favorite"."user_id" = ?)',
+             [huey.id]),
+            ('DELETE FROM "tweet" WHERE ("tweet"."user_id" = ?)', [huey.id]),
+            ('DELETE FROM "users" WHERE ("users"."id" = ?)', [huey.id]),
         ])
 
         self.assertEqual(User.select().count(), 1)
@@ -1964,7 +1970,7 @@ class TestReturningIntegration(ModelTestCase):
                  .returning(User.id, User.username))
         self.assertSQL(query, (
             'UPDATE "users" SET "username" = ? '
-            'WHERE ("username" = ?) '
+            'WHERE ("users"."username" = ?) '
             'RETURNING "id", "username"'), ['ziggy', 'zaizee'])
         data = query.execute()
         user = data[0]
@@ -1981,7 +1987,7 @@ class TestReturningIntegration(ModelTestCase):
                  .where(User.username == 'zaizee')
                  .returning(User.id, User.username))
         self.assertSQL(query, (
-            'DELETE FROM "users" WHERE ("username" = ?) '
+            'DELETE FROM "users" WHERE ("users"."username" = ?) '
             'RETURNING "id", "username"'), ['zaizee'])
         data = query.execute()
         user = data[0]

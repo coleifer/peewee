@@ -2162,7 +2162,8 @@ class Update(_WriteQuery):
                     ctx.literal(' FROM ').sql(CommaNodeList(self._from))
 
             if self._where:
-                ctx.literal(' WHERE ').sql(self._where)
+                with ctx.scope_normal():
+                    ctx.literal(' WHERE ').sql(self._where)
             self._apply_ordering(ctx)
             return self.apply_returning(ctx)
 
@@ -2352,7 +2353,8 @@ class Delete(_WriteQuery):
         with ctx.scope_values(subquery=True):
             ctx.literal('DELETE FROM ').sql(self.table)
             if self._where is not None:
-                ctx.literal(' WHERE ').sql(self._where)
+                with ctx.scope_normal():
+                    ctx.literal(' WHERE ').sql(self._where)
 
             self._apply_ordering(ctx)
             return self.apply_returning(ctx)

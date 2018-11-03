@@ -621,7 +621,7 @@ class TestUpdateQuery(BaseTestCase):
             '"admin" = ?, '
             '"counter" = ("counter" + ?), '
             '"username" = ? '
-            'WHERE ("username" = ?)'), [False, 1, 'nuggie', 'nugz'])
+            'WHERE ("users"."username" = ?)'), [False, 1, 'nuggie', 'nugz'])
 
     def test_update_subquery(self):
         count = fn.COUNT(Tweet.c.id).alias('ct')
@@ -639,7 +639,7 @@ class TestUpdateQuery(BaseTestCase):
             'UPDATE "users" SET '
             '"counter" = ?, '
             '"muted" = ? '
-            'WHERE ("id" IN ('
+            'WHERE ("users"."id" IN ('
             'SELECT "users"."id", COUNT("t1"."id") AS "ct" '
             'FROM "users" AS "users" '
             'INNER JOIN "tweets" AS "t1" '
@@ -676,7 +676,7 @@ class TestUpdateQuery(BaseTestCase):
                  .where(User.c.username == 'charlie')
                  .returning(User.c.id))
         self.assertSQL(query, (
-            'UPDATE "users" SET "is_admin" = ? WHERE ("username" = ?) '
+            'UPDATE "users" SET "is_admin" = ? WHERE ("users"."username" = ?) '
             'RETURNING "id"'), [True, 'charlie'])
 
 
@@ -686,9 +686,8 @@ class TestDeleteQuery(BaseTestCase):
                  .delete()
                  .where(User.c.username != 'charlie')
                  .limit(3))
-        self.assertSQL(
-            query,
-            'DELETE FROM "users" WHERE ("username" != ?) LIMIT ?',
+        self.assertSQL(query, (
+            'DELETE FROM "users" WHERE ("users"."username" != ?) LIMIT ?'),
             ['charlie', 3])
 
     def test_delete_subquery(self):
@@ -703,7 +702,7 @@ class TestDeleteQuery(BaseTestCase):
                  .where(User.c.id << subquery))
         self.assertSQL(query, (
             'DELETE FROM "users" '
-            'WHERE ("id" IN ('
+            'WHERE ("users"."id" IN ('
             'SELECT "users"."id", COUNT("t1"."id") AS "ct" '
             'FROM "users" AS "users" '
             'INNER JOIN "tweets" AS "t1" ON ("t1"."user_id" = "users"."id") '
@@ -723,7 +722,7 @@ class TestDeleteQuery(BaseTestCase):
             'WITH "u" AS '
             '(SELECT "t1"."id" FROM "users" AS "t1" WHERE ("t1"."admin" = ?)) '
             'DELETE FROM "users" '
-            'WHERE ("id" IN (SELECT "u"."id" FROM "u"))'), [True])
+            'WHERE ("users"."id" IN (SELECT "u"."id" FROM "u"))'), [True])
 
     def test_delete_returning(self):
         query = (User
@@ -732,13 +731,13 @@ class TestDeleteQuery(BaseTestCase):
                  .returning(User.c.username))
         self.assertSQL(query, (
             'DELETE FROM "users" '
-            'WHERE ("id" > ?) '
+            'WHERE ("users"."id" > ?) '
             'RETURNING "username"'), [2])
 
         query = query.returning(User.c.id, User.c.username, SQL('1'))
         self.assertSQL(query, (
             'DELETE FROM "users" '
-            'WHERE ("id" > ?) '
+            'WHERE ("users"."id" > ?) '
             'RETURNING "id", "username", 1'), [2])
 
 

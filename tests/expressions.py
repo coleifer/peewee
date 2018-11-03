@@ -80,7 +80,8 @@ class TestValueConversion(ModelTestCase):
                   .update({UpperModel.name: 'zaizee'})
                   .where(UpperModel.id == uid))
         self.assertSQL(update, (
-            'UPDATE "upper_model" SET "name" = UPPER(?) WHERE ("id" = ?)'),
+            'UPDATE "upper_model" SET "name" = UPPER(?) '
+            'WHERE ("upper_model"."id" = ?)'),
             ['zaizee', uid])
         update.execute()
 
@@ -95,7 +96,8 @@ class TestValueConversion(ModelTestCase):
         # Ensure it works with DELETE.
         delete = UpperModel.delete().where(UpperModel.name == 'zaizee')
         self.assertSQL(delete, (
-            'DELETE FROM "upper_model" WHERE ("name" = UPPER(?))'), ['zaizee'])
+            'DELETE FROM "upper_model" '
+            'WHERE ("upper_model"."name" = UPPER(?))'), ['zaizee'])
         self.assertEqual(delete.execute(), 1)
 
     def test_value_conversion_mixed(self):
