@@ -2150,7 +2150,7 @@ class Update(_WriteQuery):
                 if not isinstance(v, Node):
                     converter = k.db_value if isinstance(k, Field) else None
                     v = Value(v, converter=converter, unpack=False)
-                expressions.append(NodeList((k, SQL('='), v)))
+                expressions.append(NodeList((k, SQL('='), QualifiedNames(v))))
 
             (ctx
              .sql(self.table)

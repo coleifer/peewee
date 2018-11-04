@@ -619,7 +619,7 @@ class TestUpdateQuery(BaseTestCase):
         self.assertSQL(query, (
             'UPDATE "users" SET '
             '"admin" = ?, '
-            '"counter" = ("counter" + ?), '
+            '"counter" = ("users"."counter" + ?), '
             '"username" = ? '
             'WHERE ("users"."username" = ?)'), [False, 1, 'nuggie', 'nugz'])
 

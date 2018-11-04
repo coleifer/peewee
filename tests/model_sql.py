@@ -394,7 +394,7 @@ class TestModelSQL(ModelDatabaseTestCase):
                           Stat.timestamp: datetime.datetime(2017, 1, 1)})
                  .where(Stat.url == '/peewee'))
         self.assertSQL(query, (
-            'UPDATE "stat" SET "count" = ("count" + ?), "timestamp" = ? '
+            'UPDATE "stat" SET "count" = ("stat"."count" + ?), "timestamp" = ? '
             'WHERE ("stat"."url" = ?)'),
             [1, 1483228800, '/peewee'])
 
@@ -402,7 +402,7 @@ class TestModelSQL(ModelDatabaseTestCase):
                  .update(count=Stat.count + 1)
                  .where(Stat.url == '/peewee'))
         self.assertSQL(query, (
-            'UPDATE "stat" SET "count" = ("count" + ?) '
+            'UPDATE "stat" SET "count" = ("stat"."count" + ?) '
             'WHERE ("stat"."url" = ?)'),
             [1, '/peewee'])
 
@@ -423,8 +423,8 @@ class TestModelSQL(ModelDatabaseTestCase):
                  .where(Account.sales == SalesPerson.id))
         self.assertSQL(query, (
             'UPDATE "account" SET '
-            '"contact_first" = "first", '
-            '"contact_last" = "last" '
+            '"contact_first" = "t1"."first", '
+            '"contact_last" = "t1"."last" '
             'FROM "sales_person" AS "t1" '
             'WHERE ("account"."sales_id" = "t1"."id")'), [])
 
