@@ -387,6 +387,19 @@ class _callable_context_manager(object):
         return inner
 
 
+def qualify_expression(node):
+    if isinstance(node, Expression):
+        return node.__class__(
+            lhs=qualify_expression(node.lhs),
+            rhs=qualify_expression(node.rhs),
+            op=node.op,
+            flat=node.flat)
+    elif isinstance(node, ColumnBase):
+        return QualifiedNames(node)
+    else:
+        return node
+
+
 class Proxy(object):
     """
     Create a proxy or placeholder for another object.
@@ -2150,7 +2163,8 @@ class Update(_WriteQuery):
                 if not isinstance(v, Node):
                     converter = k.db_value if isinstance(k, Field) else None
                     v = Value(v, converter=converter, unpack=False)
-                expressions.append(NodeList((k, SQL('='), QualifiedNames(v))))
+                expressions.append(
+                    NodeList((k, SQL('='), qualify_expression(v))))
 
             (ctx
              .sql(self.table)
