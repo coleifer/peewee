@@ -394,7 +394,8 @@ class TestModelSQL(ModelDatabaseTestCase):
                           Stat.timestamp: datetime.datetime(2017, 1, 1)})
                  .where(Stat.url == '/peewee'))
         self.assertSQL(query, (
-            'UPDATE "stat" SET "count" = ("count" + ?), "timestamp" = ? '
+            'UPDATE "stat" SET "count" = ("stat"."count" + ?), '
+            '"timestamp" = ? '
             'WHERE ("stat"."url" = ?)'),
             [1, 1483228800, '/peewee'])
 
@@ -402,7 +403,7 @@ class TestModelSQL(ModelDatabaseTestCase):
                  .update(count=Stat.count + 1)
                  .where(Stat.url == '/peewee'))
         self.assertSQL(query, (
-            'UPDATE "stat" SET "count" = ("count" + ?) '
+            'UPDATE "stat" SET "count" = ("stat"."count" + ?) '
             'WHERE ("stat"."url" = ?)'),
             [1, '/peewee'])
 
@@ -423,13 +424,13 @@ class TestModelSQL(ModelDatabaseTestCase):
                  .where(Account.sales == SalesPerson.id))
         self.assertSQL(query, (
             'UPDATE "account" SET '
-            '"contact_first" = "first", '
-            '"contact_last" = "last" '
+            '"contact_first" = "t1"."first", '
+            '"contact_last" = "t1"."last" '
             'FROM "sales_person" AS "t1" '
             'WHERE ("account"."sales_id" = "t1"."id")'), [])
 
         query = (User
-                 .update({User.username: QualifiedNames(Tweet.content)})
+                 .update({User.username: Tweet.content})
                  .from_(Tweet)
                  .where(Tweet.content == 'tx'))
         self.assertSQL(query, (
@@ -440,9 +441,9 @@ class TestModelSQL(ModelDatabaseTestCase):
         data = [(1, 'u1-x'), (2, 'u2-x')]
         vl = ValuesList(data, columns=('id', 'username'), alias='tmp')
         query = (User
-                 .update({User.username: QualifiedNames(vl.c.username)})
+                 .update({User.username: vl.c.username})
                  .from_(vl)
-                 .where(QualifiedNames(User.id == vl.c.id)))
+                 .where(User.id == vl.c.id))
         self.assertSQL(query, (
             'UPDATE "users" SET "username" = "tmp"."username" '
             'FROM (VALUES (?, ?), (?, ?)) AS "tmp"("id", "username") '
@@ -453,9 +454,9 @@ class TestModelSQL(ModelDatabaseTestCase):
         vl = ValuesList(data, columns=('id', 'username'), alias='tmp')
         subq = vl.select(vl.c.id, vl.c.username)
         query = (User
-                 .update({User.username: QualifiedNames(subq.c.username)})
+                 .update({User.username: subq.c.username})
                  .from_(subq)
-                 .where(QualifiedNames(User.id == subq.c.id)))
+                 .where(User.id == subq.c.id))
         self.assertSQL(query, (
             'UPDATE "users" SET "username" = "t1"."username" FROM ('
             'SELECT "tmp"."id", "tmp"."username" '

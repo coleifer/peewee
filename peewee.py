@@ -1553,6 +1553,17 @@ class QualifiedNames(WrappedNode):
             return ctx.sql(self.node)
 
 
+def qualify_names(node):
+    # Search a node heirarchy to ensure that any column-like objects are
+    # referenced using fully-qualified names.
+    if isinstance(node, Expression):
+        return node.__class__(qualify_names(node.lhs), node.op,
+                              qualify_names(node.rhs), node.flat)
+    elif isinstance(node, ColumnBase):
+        return QualifiedNames(node)
+    return node
+
+
 class OnConflict(Node):
     def __init__(self, action=None, update=None, preserve=None, where=None,
                  conflict_target=None, conflict_constraint=None):
@@ -2150,6 +2161,8 @@ class Update(_WriteQuery):
                 if not isinstance(v, Node):
                     converter = k.db_value if isinstance(k, Field) else None
                     v = Value(v, converter=converter, unpack=False)
+                if not isinstance(v, Value):
+                    v = qualify_names(v)
                 expressions.append(NodeList((k, SQL('='), v)))
 
             (ctx

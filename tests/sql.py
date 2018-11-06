@@ -619,7 +619,7 @@ class TestUpdateQuery(BaseTestCase):
         self.assertSQL(query, (
             'UPDATE "users" SET '
             '"admin" = ?, '
-            '"counter" = ("counter" + ?), '
+            '"counter" = ("users"."counter" + ?), '
             '"username" = ? '
             'WHERE ("users"."username" = ?)'), [False, 1, 'nuggie', 'nugz'])
 
@@ -651,9 +651,9 @@ class TestUpdateQuery(BaseTestCase):
         data = [(1, 'u1-x'), (2, 'u2-x')]
         vl = ValuesList(data, columns=('id', 'username'), alias='tmp')
         query = (User
-                 .update(username=QualifiedNames(vl.c.username))
+                 .update(username=vl.c.username)
                  .from_(vl)
-                 .where(QualifiedNames(User.c.id == vl.c.id)))
+                 .where(User.c.id == vl.c.id))
         self.assertSQL(query, (
             'UPDATE "users" SET "username" = "tmp"."username" '
             'FROM (VALUES (?, ?), (?, ?)) AS "tmp"("id", "username") '
@@ -661,9 +661,9 @@ class TestUpdateQuery(BaseTestCase):
 
         subq = vl.select(vl.c.id, vl.c.username)
         query = (User
-                 .update({User.c.username: QualifiedNames(subq.c.username)})
+                 .update({User.c.username: subq.c.username})
                  .from_(subq)
-                 .where(QualifiedNames(User.c.id == subq.c.id)))
+                 .where(User.c.id == subq.c.id))
         self.assertSQL(query, (
             'UPDATE "users" SET "username" = "t1"."username" FROM ('
             'SELECT "tmp"."id", "tmp"."username" '

@@ -6,7 +6,6 @@ import unittest
 from peewee import *
 from peewee import Entity
 from peewee import NodeList
-from peewee import QualifiedNames
 from peewee import sort_models
 
 from .base import db
@@ -3503,9 +3502,9 @@ class TestUpdateFromIntegration(ModelTestCase):
         data = [(u1.id, 'u1-x'), (u2.id, 'u2-x')]
         vl = ValuesList(data, columns=('id', 'username'), alias='tmp')
         (User
-         .update({User.username: QualifiedNames(vl.c.username)})
+         .update({User.username: vl.c.username})
          .from_(vl)
-         .where(QualifiedNames(User.id == vl.c.id))
+         .where(User.id == vl.c.id)
          .execute())
 
         usernames = [u.username for u in User.select().order_by(User.username)]
@@ -3517,9 +3516,9 @@ class TestUpdateFromIntegration(ModelTestCase):
         vl = ValuesList(data, columns=('id', 'username'), alias='tmp')
         subq = vl.select(vl.c.id, vl.c.username)
         (User
-         .update({User.username: QualifiedNames(subq.c.username)})
+         .update({User.username: subq.c.username})
          .from_(subq)
-         .where(QualifiedNames(User.id == subq.c.id))
+         .where(User.id == subq.c.id)
          .execute())
 
         usernames = [u.username for u in User.select().order_by(User.username)]
@@ -3532,7 +3531,7 @@ class TestUpdateFromIntegration(ModelTestCase):
         t2 = Tweet.create(user=u, content='t2')
 
         (User
-         .update({User.username: QualifiedNames(Tweet.content)})
+         .update({User.username: Tweet.content})
          .from_(Tweet)
          .where(Tweet.content == 't2')
          .execute())
