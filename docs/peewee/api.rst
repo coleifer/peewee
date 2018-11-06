@@ -2313,9 +2313,9 @@ Query-builder
             # Here we'll update the "is_admin" status of the above users,
             # "joining" the VALUES() on the "username" column.
             query = (User
-                     .update(is_admin=QualifiedNames(vl.c.is_admin))
+                     .update(is_admin=vl.c.is_admin)
                      .from_(vl)
-                     .where(QualifiedNames(User.username == vl.c.username)))
+                     .where(User.username == vl.c.username))
 
         The above query produces the following SQL:
 
@@ -2326,14 +2326,6 @@ Query-builder
                 VALUES ('huey', t), ('mickey', f), ('zaizee', t))
                 AS "vl"("username", "is_admin")
             WHERE ("users"."username" = "vl"."username")
-
-        .. note::
-            Note the usage of :py:class:`QualifiedNames`, which wraps the
-            "is_admin" value in the assignment portion of the query, and which
-            wraps both tables in the join condition. Ordinarily,
-            fully-qualified names are not supported in UPDATE queries, so we
-            must explicitly tell Peewee that we wish to use qualified names
-            when using the UPDATE ... FROM syntax.
 
 
 .. py:class:: Insert(table[, insert=None[, columns=None[, on_conflict=None[, **kwargs]]]])
