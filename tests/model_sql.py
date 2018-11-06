@@ -366,7 +366,7 @@ class TestModelSQL(ModelDatabaseTestCase):
         query = User.insert({User.username: 'zaizee'})
         self.assertSQL(query, (
             'INSERT INTO "user" ("username") '
-            'VALUES (?) RETURNING "id"'), ['zaizee'])
+            'VALUES (?) RETURNING "user"."id"'), ['zaizee'])
 
         class Person(Model):
             name = CharField()
@@ -377,7 +377,7 @@ class TestModelSQL(ModelDatabaseTestCase):
         query = Person.insert({Person.name: 'charlie', Person.ssn: '123'})
         self.assertSQL(query, (
             'INSERT INTO "person" ("ssn", "name") VALUES (?, ?) '
-            'RETURNING "ssn"'), ['123', 'charlie'])
+            'RETURNING "person"."ssn"'), ['123', 'charlie'])
 
         query = Person.insert({Person.name: 'huey'}).returning()
         self.assertSQL(query, (

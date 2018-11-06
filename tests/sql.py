@@ -593,7 +593,8 @@ class TestInsertQuery(BaseTestCase):
                  .returning(Person.id, Person.name, Person.dob))
         self.assertSQL(query, (
             'INSERT INTO "person" ("dob", "name") '
-            'VALUES (?, ?) RETURNING "id", "name", "dob"'),
+            'VALUES (?, ?) '
+            'RETURNING "person"."id", "person"."name", "person"."dob"'),
             [datetime.date(2000, 1, 2), 'zaizee'])
 
     def test_empty(self):
@@ -602,7 +603,7 @@ class TestInsertQuery(BaseTestCase):
         if isinstance(db, MySQLDatabase):
             sql = 'INSERT INTO "empty" () VALUES ()'
         elif isinstance(db, PostgresqlDatabase):
-            sql = 'INSERT INTO "empty" DEFAULT VALUES RETURNING "id"'
+            sql = 'INSERT INTO "empty" DEFAULT VALUES RETURNING "empty"."id"'
         else:
             sql = 'INSERT INTO "empty" DEFAULT VALUES'
         self.assertSQL(query, sql, [])
@@ -647,6 +648,19 @@ class TestUpdateQuery(BaseTestCase):
             'GROUP BY "users"."id" '
             'HAVING ("ct" > ?)))'), [0, True, 100])
 
+    def test_update_value_subquery(self):
+        subquery = (Tweet
+                    .select(fn.MAX(Tweet.c.id))
+                    .where(Tweet.c.user_id == User.c.id))
+        query = (User
+                 .update({User.c.last_tweet_id: subquery})
+                 .where(User.c.last_tweet_id.is_null(True)))
+        self.assertSQL(query, (
+            'UPDATE "users" SET '
+            '"last_tweet_id" = (SELECT MAX("t1"."id") FROM "tweets" AS "t1" '
+            'WHERE ("t1"."user_id" = "users"."id")) '
+            'WHERE ("users"."last_tweet_id" IS ?)'), [None])
+
     def test_update_from(self):
         data = [(1, 'u1-x'), (2, 'u2-x')]
         vl = ValuesList(data, columns=('id', 'username'), alias='tmp')
@@ -677,7 +691,7 @@ class TestUpdateQuery(BaseTestCase):
                  .returning(User.c.id))
         self.assertSQL(query, (
             'UPDATE "users" SET "is_admin" = ? WHERE ("users"."username" = ?) '
-            'RETURNING "id"'), [True, 'charlie'])
+            'RETURNING "users"."id"'), [True, 'charlie'])
 
 
 class TestDeleteQuery(BaseTestCase):
@@ -732,13 +746,13 @@ class TestDeleteQuery(BaseTestCase):
         self.assertSQL(query, (
             'DELETE FROM "users" '
             'WHERE ("users"."id" > ?) '
-            'RETURNING "username"'), [2])
+            'RETURNING "users"."username"'), [2])
 
         query = query.returning(User.c.id, User.c.username, SQL('1'))
         self.assertSQL(query, (
             'DELETE FROM "users" '
             'WHERE ("users"."id" > ?) '
-            'RETURNING "id", "username", 1'), [2])
+            'RETURNING "users"."id", "users"."username", 1'), [2])
 
 
 Register = Table('register', ('id', 'value', 'category'))

@@ -7,6 +7,7 @@ from .base import TestModel
 from .base import get_in_memory_db
 from .base import requires_models
 from .base import requires_mysql
+from .base import requires_postgresql
 from .base import skip_if
 from .base_models import Sample
 from .base_models import Tweet
@@ -302,6 +303,25 @@ class TestSubqueryInSelect(ModelTestCase):
             ('meow', True),
             ('purr', True),
             ('woof', False)])
+
+
+@requires_postgresql
+class TestReturningIntegrationRegressions(ModelTestCase):
+    requires = [User, Tweet]
+
+    def test_returning_integration(self):
+        _create_users_tweets(self.database)
+
+        # We can use a correlated subquery in the RETURNING clause.
+        subq = (Tweet
+                .select(fn.COUNT(Tweet.id).alias('ct'))
+                .where(Tweet.user == User.id))
+        query = (User
+                 .update(username=(User.username + '-x'))
+                 .returning(subq, User.username))
+        result = query.execute()
+        self.assertEqual(sorted([(r.ct, r.username) for r in result]), [
+            (0, 'zaizee-x'), (2, 'mickey-x'), (3, 'huey-x')])
 
 
 class TestUpdateIntegrationRegressions(ModelTestCase):

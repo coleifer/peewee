@@ -2107,7 +2107,8 @@ class _WriteQuery(Query):
 
     def apply_returning(self, ctx):
         if self._returning:
-            ctx.literal(' RETURNING ').sql(CommaNodeList(self._returning))
+            with ctx.scope_normal():
+                ctx.literal(' RETURNING ').sql(CommaNodeList(self._returning))
         return ctx
 
     def _execute(self, database):

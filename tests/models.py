@@ -1846,7 +1846,8 @@ class TestReturningIntegration(ModelTestCase):
     def test_simple_returning(self):
         query = User.insert(username='charlie')
         self.assertSQL(query, (
-            'INSERT INTO "users" ("username") VALUES (?) RETURNING "id"'),
+            'INSERT INTO "users" ("username") VALUES (?) '
+            'RETURNING "users"."id"'),
             ['charlie'])
 
         self.assertEqual(query.execute(), 1)
@@ -1861,7 +1862,7 @@ class TestReturningIntegration(ModelTestCase):
                  .dicts())
         self.assertSQL(query, (
             'INSERT INTO "users" ("username") VALUES (?) '
-            'RETURNING "id", "username"'), ['zaizee'])
+            'RETURNING "users"."id", "users"."username"'), ['zaizee'])
 
         cursor = query.execute()
         row, = list(cursor)
@@ -1873,7 +1874,7 @@ class TestReturningIntegration(ModelTestCase):
                  .objects())
         self.assertSQL(query, (
             'INSERT INTO "users" ("username") VALUES (?) '
-            'RETURNING "id", "username"'), ['mickey'])
+            'RETURNING "users"."id", "users"."username"'), ['mickey'])
         cursor = query.execute()
         row, = list(cursor)
         self.assertEqual(row.id, 4)
@@ -1887,7 +1888,8 @@ class TestReturningIntegration(ModelTestCase):
         self.assertSQL(query, (
             'INSERT INTO "server_default" '
             'DEFAULT VALUES '
-            'RETURNING "id", "timestamp"'), [])
+            'RETURNING "server_default"."id", "server_default"."timestamp"'),
+            [])
 
         with self.assertQueryCount(1):
             cursor = query.dicts().execute()
@@ -1910,8 +1912,8 @@ class TestReturningIntegration(ModelTestCase):
     def test_non_int_pk_returning(self):
         query = Category.insert(name='root')
         self.assertSQL(query, (
-            'INSERT INTO "category" ("name") VALUES (?) RETURNING "name"'),
-            ['root'])
+            'INSERT INTO "category" ("name") VALUES (?) '
+            'RETURNING "category"."name"'), ['root'])
 
         self.assertEqual(query.execute(), 'root')
 
@@ -1919,8 +1921,8 @@ class TestReturningIntegration(ModelTestCase):
         data = [{'username': 'huey'}, {'username': 'mickey'}]
         query = User.insert_many(data)
         self.assertSQL(query, (
-            'INSERT INTO "users" ("username") VALUES (?), (?) RETURNING "id"'),
-            ['huey', 'mickey'])
+            'INSERT INTO "users" ("username") VALUES (?), (?) '
+            'RETURNING "users"."id"'), ['huey', 'mickey'])
 
         data = query.execute()
 
@@ -1950,7 +1952,7 @@ class TestReturningIntegration(ModelTestCase):
         self.assertSQL(query, (
             'INSERT INTO "users" ("username") '
             'SELECT "t1"."name" FROM "category" AS "t1" ORDER BY "t1"."name" '
-            'RETURNING "id"'), [])
+            'RETURNING "users"."id"'), [])
 
         data = query.execute()
 
@@ -1970,7 +1972,7 @@ class TestReturningIntegration(ModelTestCase):
         self.assertSQL(query, (
             'UPDATE "users" SET "username" = ? '
             'WHERE ("users"."username" = ?) '
-            'RETURNING "id", "username"'), ['ziggy', 'zaizee'])
+            'RETURNING "users"."id", "users"."username"'), ['ziggy', 'zaizee'])
         data = query.execute()
         user = data[0]
         self.assertEqual(user.username, 'ziggy')
@@ -1987,7 +1989,7 @@ class TestReturningIntegration(ModelTestCase):
                  .returning(User.id, User.username))
         self.assertSQL(query, (
             'DELETE FROM "users" WHERE ("users"."username" = ?) '
-            'RETURNING "id", "username"'), ['zaizee'])
+            'RETURNING "users"."id", "users"."username"'), ['zaizee'])
         data = query.execute()
         user = data[0]
         self.assertEqual(user.username, 'zaizee')
@@ -3208,7 +3210,7 @@ class TestUpsertPostgresql(OnConflictTestCase):
         self.assertSQL(query, (
             'INSERT INTO "oc_test" ("a", "b", "c") VALUES (?, ?, ?) '
             'ON CONFLICT ("a") DO UPDATE SET "b" = ("oc_test"."b" + ?) '
-            'RETURNING "id"'), ['foo', 1, 0, 2])
+            'RETURNING "oc_test"."id"'), ['foo', 1, 0, 2])
 
         # First execution returns rowid=1. Second execution hits the conflict-
         # resolution, and will update the value in "b" from 1 -> 3.
@@ -3243,7 +3245,7 @@ class TestUpsertPostgresql(OnConflictTestCase):
             'INSERT INTO "oc_test" ("a", "b", "c") VALUES (?, ?, ?) '
             'ON CONFLICT ("a") DO UPDATE SET "b" = ("oc_test"."b" + ?) '
             'WHERE ("oc_test"."b" < ?) '
-            'RETURNING "id"'), ['foo', 1, 0, 2, 3])
+            'RETURNING "oc_test"."id"'), ['foo', 1, 0, 2, 3])
 
         # First execution returns rowid=1. Second execution hits the conflict-
         # resolution, and will update the value in "b" from 1 -> 3.
