@@ -309,7 +309,7 @@ class TestSubqueryInSelect(ModelTestCase):
 class TestReturningIntegrationRegressions(ModelTestCase):
     requires = [User, Tweet]
 
-    def test_returning_integration(self):
+    def test_returning_integration_subqueries(self):
         _create_users_tweets(self.database)
 
         # We can use a correlated subquery in the RETURNING clause.
@@ -322,6 +322,21 @@ class TestReturningIntegrationRegressions(ModelTestCase):
         result = query.execute()
         self.assertEqual(sorted([(r.ct, r.username) for r in result]), [
             (0, 'zaizee-x'), (2, 'mickey-x'), (3, 'huey-x')])
+
+        # We can use a correlated subquery via UPDATE...FROM, and reference the
+        # FROM table in both the update and the RETURNING clause.
+        subq = (User
+                .select(User.id, fn.COUNT(Tweet.id).alias('ct'))
+                .join(Tweet, JOIN.LEFT_OUTER)
+                .group_by(User.id))
+        query = (User
+                 .update(username=User.username + subq.c.ct)
+                 .from_(subq)
+                 .where(User.id == subq.c.id)
+                 .returning(subq.c.ct, User.username))
+        result = query.execute()
+        self.assertEqual(sorted([(r.ct, r.username) for r in result]), [
+            (0, 'zaizee-x0'), (2, 'mickey-x2'), (3, 'huey-x3')])
 
 
 class TestUpdateIntegrationRegressions(ModelTestCase):
