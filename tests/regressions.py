@@ -338,6 +338,25 @@ class TestReturningIntegrationRegressions(ModelTestCase):
         self.assertEqual(sorted([(r.ct, r.username) for r in result]), [
             (0, 'zaizee-x0'), (2, 'mickey-x2'), (3, 'huey-x3')])
 
+    def test_returning_integration(self):
+        query = (User
+                 .insert_many([('huey',), ('mickey',), ('zaizee',)],
+                              fields=[User.username])
+                 .returning(User.id, User.username)
+                 .objects())
+        result = query.execute()
+        self.assertEqual([(r.id, r.username) for r in result], [
+            (1, 'huey'), (2, 'mickey'), (3, 'zaizee')])
+
+        query = (User
+                 .delete()
+                 .where(~User.username.startswith('h'))
+                 .returning(User.id, User.username)
+                 .objects())
+        result = query.execute()
+        self.assertEqual(sorted([(r.id, r.username) for r in result]), [
+            (2, 'mickey'), (3, 'zaizee')])
+
 
 class TestUpdateIntegrationRegressions(ModelTestCase):
     requires = [User, Tweet, Sample]
