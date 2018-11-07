@@ -3426,6 +3426,12 @@ class PostgresqlDatabase(Database):
     def get_noop_select(self, ctx):
         return ctx.sql(Select().columns(SQL('0')).where(SQL('false')))
 
+    def is_closed(self):
+        conn_is_closed = not (self._state.conn is not None and self._state.conn.closed == 0)
+        if not self._state.closed and conn_is_closed:
+            self._state.reset()
+        return super(PostgresqlDatabase, self).is_closed()
+
 
 class MySQLDatabase(Database):
     field_types = {
