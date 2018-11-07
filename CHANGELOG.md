@@ -7,7 +7,14 @@ https://github.com/coleifer/peewee/releases
 
 ## master
 
+* Better support for UPDATE ... FROM queries, and more generally, more robust
+  support for UPDATE and RETURNING clauses. This means that the
+  `QualifiedNames` helper is no longer needed for certain types of queries.
+* Add `python_value()` method to the SQL-function helper `fn`, to allow
+  specifying a custom function for mapping database values to Python values.
 * Fixed bug in `order_by_extend()`, thanks @nhatHero.
+* Fixed bug where the `DataSet` CSV import/export did not support non-ASCII
+  characters in Python 3.x.
 * Allow `UUIDField` and `BinaryUUIDField` to accept hexadecimal UUID strings as
   well as raw binary UUID bytestrings (in addition to `UUID` instances, which
   are already supported).
