@@ -2827,7 +2827,8 @@ class Database(_callable_context_manager):
         return self._state.conn.commit()
 
     def rollback(self):
-        return self._state.conn.rollback()
+        if not self.is_closed():
+            return self._state.conn.rollback()
 
     def batch_commit(self, it, n):
         for group in chunked(it, n):
