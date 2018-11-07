@@ -3,6 +3,8 @@ import datetime
 import json
 import operator
 import os
+import sys
+import tempfile
 try:
     from StringIO import StringIO
 except ImportError:
@@ -13,6 +15,7 @@ from playhouse.dataset import DataSet
 from playhouse.dataset import Table
 
 from .base import db_loader
+from .base import skip_if
 from .base import ModelTestCase
 from .base import TestModel
 
@@ -316,6 +319,32 @@ class TestDataSet(ModelTestCase):
             'username',
             'charlie',
             'huey'])
+
+    @skip_if(sys.version_info[0] < 3, 'requires python 3.x')
+    def test_freeze_thaw_csv_utf8(self):
+        self._test_freeze_thaw_utf8('csv')
+
+    def test_freeze_thaw_json_utf8(self):
+        self._test_freeze_thaw_utf8('json')
+
+    def _test_freeze_thaw_utf8(self, fmt):
+        username_bytes = b'\xd0\x92obby'  # Bobby with cyrillic "B".
+        username_str = username_bytes.decode('utf8')
+        u = User.create(username=username_str)
+
+        # Freeze the data as a the given format.
+        user = self.dataset['user']
+        filename = tempfile.mktemp()  # Get a filename.
+        self.dataset.freeze(user.all(), fmt, filename)
+
+        # Clear out the table and reload.
+        User.delete().execute()
+        self.assertEqual(list(user.all()), [])
+
+        # Thaw the frozen data.
+        n = user.thaw(format=fmt, filename=filename)
+        self.assertEqual(n, 1)
+        self.assertEqual(list(user.all()), [{'username': username_str}])
 
     def test_freeze_thaw(self):
         user = self.dataset['user']
