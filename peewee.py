@@ -1871,8 +1871,9 @@ class SelectBase(_HashableSource, Source, SelectQuery):
         if clear_limit:
             clone._limit = clone._offset = None
         try:
-            if clone._having is None and clone._windows is None and \
-               clone._distinct is None and clone._simple_distinct is not True:
+            if clone._having is None and clone._group_by is None and \
+               clone._windows is None and clone._distinct is None and \
+               clone._simple_distinct is not True:
                 clone = clone.select(SQL('1'))
         except AttributeError:
             pass
