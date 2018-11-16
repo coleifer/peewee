@@ -117,6 +117,8 @@ cdef extern from "sqlite3.h" nogil:
     cdef int sqlite3_create_module(sqlite3 *db, const char *zName,
                                    const sqlite3_module *p, void *pClientData)
 
+    cdef const char sqlite3_version[]
+
     # Encoding.
     cdef int SQLITE_UTF8 = 1
 
@@ -289,6 +291,10 @@ cdef extern from "_pysqlite/connection.h":
         PyObject* isolation_level
         char* begin_statement
 
+
+cdef int SQLITE_CONSTRAINT = 19  # Abort due to constraint violation.
+
+USE_SQLITE_CONSTRAINT = sqlite3_version[:4] >= b'3.26'
 
 # The peewee_vtab struct embeds the base sqlite3_vtab struct, and adds a field
 # to store a reference to the Python implementation.
@@ -576,6 +582,8 @@ cdef int pwBestIndex(sqlite3_vtab *pBase, sqlite3_index_info *pIdxInfo) \
         idxStr[len(joinedCols)] = '\x00'
         pIdxInfo.idxStr = idxStr
         pIdxInfo.needToFreeIdxStr = 0
+    elif USE_SQLITE_CONSTRAINT:
+        return SQLITE_CONSTRAINT
     else:
         pIdxInfo.estimatedCost = DBL_MAX
         pIdxInfo.estimatedRows = 100000
