@@ -6362,7 +6362,7 @@ class BaseModelCursorWrapper(DictCursorWrapper):
                 if (column == node.name or column == node.column_name) and \
                    not raw_node.is_alias():
                     self.columns[idx] = node.name
-            elif column in combined:
+            elif column in combined and not raw_node.is_alias():
                 if raw_node._coerce:
                     # Unlikely, but if a function was aliased to a column,
                     # don't use that column's converter if coerce is False.
