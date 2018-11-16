@@ -102,6 +102,7 @@ def model_to_dict(model, recurse=True, backrefs=False, only=None,
 
     if backrefs and recurse:
         for foreign_key, rel_model in model._meta.backrefs.items():
+            if foreign_key.backref == '+': continue
             descriptor = getattr(model_class, foreign_key.backref)
             if descriptor in exclude or foreign_key in exclude:
                 continue

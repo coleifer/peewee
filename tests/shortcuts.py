@@ -60,6 +60,17 @@ class StudentCourse(TestModel):
 
 StudentCourseProxy.set_model(StudentCourse)
 
+class Host(TestModel):
+    name = TextField()
+
+class Service(TestModel):
+    host = ForeignKeyField(Host, backref='services')
+    name = TextField()
+
+class Device(TestModel):
+    host = ForeignKeyField(Host, backref='+')
+    name = TextField()
+
 
 class TestModelToDict(ModelTestCase):
     database = get_in_memory_db()
@@ -419,6 +430,20 @@ class TestModelToDict(ModelTestCase):
                 {'content': '0'},
                 {'content': '1'},
                 {'content': '2'}]})
+
+    @requires_models(Host, Service, Device)
+    def test_model_to_dict_disabled_backref(self):
+        host = Host.create(name='pi')
+        Device.create(host=host, name='raspberry pi')
+        Service.create(host=host, name='ssh')
+        Service.create(host=host, name='vpn')
+
+        data = model_to_dict(host, recurse=True, backrefs=True)
+        services = sorted(data.pop('services'), key=operator.itemgetter('id'))
+        self.assertEqual(data, {'id': 1, 'name': 'pi'})
+        self.assertEqual(services, [
+            {'id': 1, 'name': 'ssh'},
+            {'id': 2, 'name': 'vpn'}])
 
 
 class TestDictToModel(ModelTestCase):
