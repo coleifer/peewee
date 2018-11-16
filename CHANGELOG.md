@@ -15,6 +15,8 @@ https://github.com/coleifer/peewee/releases
 * Fixed bug in `order_by_extend()`, thanks @nhatHero.
 * Fixed bug where the `DataSet` CSV import/export did not support non-ASCII
   characters in Python 3.x.
+* Fixed bug where `model_to_dict` would attempt to traverse explicitly disabled
+  foreign-key backrefs (#1785).
 * Allow `UUIDField` and `BinaryUUIDField` to accept hexadecimal UUID strings as
   well as raw binary UUID bytestrings (in addition to `UUID` instances, which
   are already supported).
