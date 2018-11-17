@@ -25,11 +25,11 @@ database = SqliteExtDatabase(':memory:', c_extensions=False, timeout=100)
 
 CLOSURE_EXTENSION = os.environ.get('PEEWEE_CLOSURE_EXTENSION')
 if not CLOSURE_EXTENSION and os.path.exists('closure.so'):
-    CLOSURE_EXTENSION = 'closure.so'
+    CLOSURE_EXTENSION = './closure.so'
 
 LSM_EXTENSION = os.environ.get('LSM_EXTENSION')
 if not LSM_EXTENSION and os.path.exists('lsm.so'):
-    LSM_EXTENSION = 'lsm.so'
+    LSM_EXTENSION = './lsm.so'
 
 try:
     from playhouse._sqlite_ext import peewee_rank
