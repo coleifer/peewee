@@ -1,11 +1,6 @@
-import sys
-
 from peewee import *
 from peewee import Alias
-
-if sys.version_info[0] == 3:
-    from collections import Callable
-    callable = lambda c: isinstance(c, Callable)
+from peewee import callable_
 
 
 _clone_set = lambda s: set(s) if s else set()
@@ -95,7 +90,7 @@ def model_to_dict(model, recurse=True, backrefs=False, only=None,
     if extra_attrs:
         for attr_name in extra_attrs:
             attr = getattr(model, attr_name)
-            if callable(attr):
+            if callable_(attr):
                 data[attr_name] = attr()
             else:
                 data[attr_name] = attr

@@ -128,6 +128,7 @@ from peewee import Expression
 from peewee import Node
 from peewee import NodeList
 from peewee import OP
+from peewee import callable_
 from peewee import sort_models
 
 
@@ -199,7 +200,7 @@ class SchemaMigrator(object):
     @operation
     def apply_default(self, table, column_name, field):
         default = field.default
-        if callable(default):
+        if callable_(default):
             default = default()
 
         return (self.make_context()

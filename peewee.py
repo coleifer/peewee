@@ -161,15 +161,19 @@ if sys.version_info[0] == 2:
     bytes_type = str
     buffer_type = buffer
     izip_longest = itertools.izip_longest
+    callable_ = callable
     exec('def reraise(tp, value, tb=None): raise tp, value, tb')
     def print_(s):
         sys.stdout.write(s)
         sys.stdout.write('\n')
 else:
     import builtins
-    from collections import Callable
+    try:
+        from collections.abc import Callable
+    except ImportError:
+        from collections import Callable
     from functools import reduce
-    callable = lambda c: isinstance(c, Callable)
+    callable_ = lambda c: isinstance(c, Callable)
     text_type = str
     bytes_type = bytes
     buffer_type = memoryview
@@ -2288,7 +2292,7 @@ class Insert(_WriteQuery):
                 except (KeyError, IndexError):
                     if column in defaults:
                         val = defaults[column]
-                        if callable(val):
+                        if callable_(val):
                             val = val()
                     else:
                         raise ValueError('Missing value for "%s".' % column)
@@ -4557,7 +4561,7 @@ class ForeignKeyField(Field):
         # calling declared_backref() (if callable).
         super(ForeignKeyField, self).bind(model, name, set_attribute)
 
-        if callable(self.declared_backref):
+        if callable_(self.declared_backref):
             self.backref = self.declared_backref(self)
         else:
             self.backref, self.declared_backref = self.declared_backref, None
@@ -5218,7 +5222,7 @@ class Metadata(object):
             if field.default is not None:
                 # This optimization helps speed up model instance construction.
                 self.defaults[field] = field.default
-                if callable(field.default):
+                if callable_(field.default):
                     self._default_callables[field] = field.default
                     self._default_callable_list.append((field.name,
                                                         field.default))
