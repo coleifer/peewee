@@ -21,9 +21,9 @@ import time
 import uuid
 import warnings
 try:
-    from collections.abc import Mapping
+    from collections.abc import Mapping, Callable
 except ImportError:
-    from collections import Mapping
+    from collections import Mapping, Callable
 
 try:
     from pysqlite3 import dbapi2 as pysq3
@@ -155,6 +155,7 @@ except ImportError:
             return path[0].join(quote_chars)
         return '.'.join([part.join(quote_chars) for part in path])
 
+callable_ = lambda c: isinstance(c, Callable)
 
 if sys.version_info[0] == 2:
     text_type = unicode
@@ -167,9 +168,7 @@ if sys.version_info[0] == 2:
         sys.stdout.write('\n')
 else:
     import builtins
-    from collections import Callable
     from functools import reduce
-    callable = lambda c: isinstance(c, Callable)
     text_type = str
     bytes_type = bytes
     buffer_type = memoryview
@@ -2288,7 +2287,7 @@ class Insert(_WriteQuery):
                 except (KeyError, IndexError):
                     if column in defaults:
                         val = defaults[column]
-                        if callable(val):
+                        if callable_(val):
                             val = val()
                     else:
                         raise ValueError('Missing value for "%s".' % column)
@@ -4557,7 +4556,7 @@ class ForeignKeyField(Field):
         # calling declared_backref() (if callable).
         super(ForeignKeyField, self).bind(model, name, set_attribute)
 
-        if callable(self.declared_backref):
+        if callable_(self.declared_backref):
             self.backref = self.declared_backref(self)
         else:
             self.backref, self.declared_backref = self.declared_backref, None
@@ -5218,7 +5217,7 @@ class Metadata(object):
             if field.default is not None:
                 # This optimization helps speed up model instance construction.
                 self.defaults[field] = field.default
-                if callable(field.default):
+                if callable_(field.default):
                     self._default_callables[field] = field.default
                     self._default_callable_list.append((field.name,
                                                         field.default))
