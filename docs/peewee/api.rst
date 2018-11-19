@@ -2927,7 +2927,8 @@ Fields
         self-referential foreign key.
     :param Field field: Field to reference on ``model`` (default is primary
         key).
-    :param str backref: Accessor name for back-reference.
+    :param str backref: Accessor name for back-reference, or "+" to disable
+        the back-reference accessor.
     :param str on_delete: ON DELETE action, e.g. ``'CASCADE'``..
     :param str on_update: ON UPDATE action.
     :param str deferrable: Control when constraint is enforced, e.g. ``'INITIALLY DEFERRED'``.
