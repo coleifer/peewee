@@ -3131,6 +3131,17 @@ class UKV(TestModel):
         ]
 
 
+class UKVRel(TestModel):
+    key = TextField()
+    value = TextField()
+    extra = TextField()
+
+    class Meta:
+        indexes = (
+            (('key', 'value'), True),
+        )
+
+
 @requires_postgresql
 class TestUpsertPostgresql(OnConflictTestCase):
     @requires_models(UKV)
@@ -3267,6 +3278,37 @@ class TestUpsertPostgresql(OnConflictTestCase):
         obj = OCTest.get()
         self.assertEqual(obj.a, 'foo')
         self.assertEqual(obj.b, 3)
+
+    @requires_models(UKV, UKVRel)
+    def test_conflict_ambiguous_column(self):
+        # k1/v1/e1, k2/v2/e0, k3/v3/e1
+        for i in [1, 2, 3]:
+            UKV.create(key='k%s' % i, value='v%s' % i, extra='e%s' % (i % 2))
+
+        UKVRel.create(key='k1', value='v1', extra='x1')
+        UKVRel.create(key='k2', value='v2', extra='x2')
+
+        subq = UKV.select(UKV.key, UKV.value, UKV.extra)
+        query = (UKVRel
+                 .insert_from(subq, [UKVRel.key, UKVRel.value, UKVRel.extra])
+                 .on_conflict(conflict_target=[UKVRel.key, UKVRel.value],
+                              preserve=[UKVRel.extra],
+                              where=(UKVRel.key != 'k2')))
+        self.assertSQL(query, (
+            'INSERT INTO "ukv_rel" ("key", "value", "extra") '
+            'SELECT "t1"."key", "t1"."value", "t1"."extra" FROM "ukv" AS "t1" '
+            'ON CONFLICT ("key", "value") DO UPDATE '
+            'SET "extra" = EXCLUDED."extra" '
+            'WHERE ("ukv_rel"."key" != ?) RETURNING "ukv_rel"."id"'), ['k2'])
+
+        query.execute()
+        query = (UKVRel
+                 .select(UKVRel.key, UKVRel.value, UKVRel.extra)
+                 .order_by(UKVRel.key))
+        self.assertEqual(list(query.tuples()), [
+            ('k1', 'v1', 'e1'),
+            ('k2', 'v2', 'x2'),
+            ('k3', 'v3', 'e1')])
 
 
 class TestJoinSubquery(ModelTestCase):
