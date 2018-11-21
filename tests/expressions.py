@@ -131,6 +131,13 @@ class TestValueConversion(ModelTestCase):
             'WHERE ("t1"."name" = ?)'), ['huey'])
         self.assertRaises(UpperModel.DoesNotExist, sq.get)
 
+        # Function arguments are not coerced.
+        sq = UpperModel.select().where(UpperModel.name == fn.LOWER('huey'))
+        self.assertSQL(sq, (
+            'SELECT "t1"."id", "t1"."name" FROM "upper_model" AS "t1" '
+            'WHERE ("t1"."name" = LOWER(?))'), ['huey'])
+        self.assertRaises(UpperModel.DoesNotExist, sq.get)
+
     def test_value_conversion_query(self):
         um = UpperModel.create(name='huey')
         UM = UpperModel.alias()

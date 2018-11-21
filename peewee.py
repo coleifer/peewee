@@ -1391,7 +1391,7 @@ class Function(ColumnBase):
             with ctx(in_function=True, function_arg_count=len(self.arguments)):
                 ctx.sql(EnclosedNodeList([
                     (argument if isinstance(argument, Node)
-                     else Value(argument))
+                     else Value(argument, False))
                     for argument in self.arguments]))
 
         if self._filter:
