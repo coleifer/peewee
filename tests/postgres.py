@@ -588,6 +588,10 @@ def pg93():
     with db:
         return db.connection().server_version >= 90300
 
+def pg10():
+    with db:
+        return db.connection().server_version >= 100000
+
 JSON_SUPPORT = (JsonModel is not None) and pg93()
 
 
@@ -739,6 +743,7 @@ class TestBinaryJsonField(BaseJsonFieldTestCase, ModelTestCase):
         self.assertObjects(D['k3'].has_key('k4'), 0)
         self.assertObjects(D['k4'].has_key('i2'), 2)
 
+    @skip_unless(pg10, 'jsonb remove support requires pg >= 10')
     def test_remove_data(self):
         BJson.delete().execute()  # Clear out db.
         BJson.create(data={
