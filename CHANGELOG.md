@@ -10,6 +10,8 @@ https://github.com/coleifer/peewee/releases
 * Better support for UPDATE ... FROM queries, and more generally, more robust
   support for UPDATE and RETURNING clauses. This means that the
   `QualifiedNames` helper is no longer needed for certain types of queries.
+* Postgres `BinaryJSONField` now supports `has_key()`, `concat()` and
+  `remove()` methods (though remove may require pg10+).
 * Add `python_value()` method to the SQL-function helper `fn`, to allow
   specifying a custom function for mapping database values to Python values.
 * Fixed bug in `order_by_extend()`, thanks @nhatHero.
