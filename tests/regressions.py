@@ -444,7 +444,7 @@ class TestSelectValueConversion(ModelTestCase):
         u1 = User.create(username='u1')
         cte = User.select(User.id.cast('text')).cte('tmp', columns=('id',))
 
-        query = User.select(cte.c.id).with_cte(cte).from_(cte)
+        query = User.select(cte.c.id.alias('id')).with_cte(cte).from_(cte)
         u1_id, = [user.id for user in query]
         self.assertEqual(u1_id, u1.id)
 
