@@ -1278,7 +1278,7 @@ class Expression(ColumnBase):
 
     def __sql__(self, ctx):
         overrides = {'parentheses': not self.flat}
-        if isinstance(self.lhs, Field):
+        if isinstance(self.lhs, Field) and not isinstance(self.rhs, Function):
             overrides['converter'] = self.lhs.db_value
         else:
             overrides['converter'] = None
