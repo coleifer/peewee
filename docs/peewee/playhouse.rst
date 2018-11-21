@@ -1503,6 +1503,19 @@ postgres_ext API notes
             APIResponse.select().where(
                 APIResponse.data.contained_by(big_doc))
 
+    .. py:method:: concat(data)
+
+        Concatentate two field data and the provided data. Note that this
+        operation does not merge or do a "deep concat".
+
+    .. py:method:: has_key(key)
+
+        Test whether the key exists at the top-level of the JSON object.
+
+    .. py:method:: remove(*keys)
+
+        Remove one or more keys from the top-level of the JSON object.
+
 
 .. py:function:: Match(field, query)
 

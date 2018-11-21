@@ -41,9 +41,11 @@ ACONTAINS_ANY = '&&'
 TS_MATCH = '@@'
 JSONB_CONTAINS = '@>'
 JSONB_CONTAINED_BY = '<@'
+JSONB_CONTAINS_KEY = '?'
 JSONB_CONTAINS_ANY_KEY = '?|'
 JSONB_CONTAINS_ALL_KEYS = '?&'
 JSONB_EXISTS = '?'
+JSONB_REMOVE = '-'
 
 
 class _LookupNode(ColumnBase):
@@ -68,6 +70,9 @@ class _JsonLookupBase(_LookupNode):
     def as_json(self, as_json=True):
         self._as_json = as_json
 
+    def concat(self, rhs):
+        return Expression(self.as_json(True), OP.CONCAT, Json(rhs))
+
     def contains(self, other):
         clone = self.as_json(True)
         if isinstance(other, (list, dict)):
@@ -85,6 +90,9 @@ class _JsonLookupBase(_LookupNode):
             self.as_json(True),
             JSONB_CONTAINS_ALL_KEYS,
             Value(list(keys), unpack=False))
+
+    def has_key(self, key):
+        return Expression(self.as_json(True), JSONB_CONTAINS_KEY, key)
 
 
 class JsonLookup(_JsonLookupBase):
@@ -322,6 +330,15 @@ class BinaryJSONField(IndexedFieldMixin, JSONField):
         return Expression(
             cast_jsonb(self),
             JSONB_CONTAINS_ALL_KEYS,
+            Value(list(items), unpack=False))
+
+    def has_key(self, key):
+        return Expression(cast_jsonb(self), JSONB_CONTAINS_KEY, key)
+
+    def remove(self, *items):
+        return Expression(
+            cast_jsonb(self),
+            JSONB_REMOVE,
             Value(list(items), unpack=False))
 
 

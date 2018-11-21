@@ -730,6 +730,64 @@ class TestBinaryJsonField(BaseJsonFieldTestCase, ModelTestCase):
         self.assertObjects(D.contains_all('k1', 'k2', 'k3'), 0)
         self.assertObjects(D.contains_all('k1', 'k2', 'k3', 'k4'))
 
+        # Has key.
+        self.assertObjects(D.has_key('a1'), 1, 2)
+        self.assertObjects(D.has_key('k1'), 0, 5)
+        self.assertObjects(D.has_key('k4'), 2, 5)
+        self.assertObjects(D.has_key('a3'))
+
+        self.assertObjects(D['k3'].has_key('k4'), 0)
+        self.assertObjects(D['k4'].has_key('i2'), 2)
+
+    def test_remove_data(self):
+        BJson.delete().execute()  # Clear out db.
+        BJson.create(data={
+            'k1': 'v1',
+            'k2': 'v2',
+            'k3': {'x1': 'z1', 'x2': 'z2'},
+            'k4': [0, 1, 2]})
+
+        def assertData(exp_list, expected_data):
+            query = BJson.select(BJson.data.remove(*exp_list)).tuples()
+            data = query[:][0][0]
+            self.assertEqual(data, expected_data)
+
+        D = BJson.data
+        assertData(['k3'], {'k1': 'v1', 'k2': 'v2', 'k4': [0, 1, 2]})
+        assertData(['k1', 'k3'], {'k2': 'v2', 'k4': [0, 1, 2]})
+        assertData(['k1', 'kx', 'ky', 'k3'], {'k2': 'v2', 'k4': [0, 1, 2]})
+        assertData(['k4', 'k3'], {'k1': 'v1', 'k2': 'v2'})
+
+    def test_concat_data(self):
+        BJson.delete().execute()
+        BJson.create(data={'k1': {'x1': 'y1'}, 'k2': 'v2', 'k3': [0, 1]})
+
+        def assertData(exp, expected_data):
+            query = BJson.select(BJson.data.concat(exp)).tuples()
+            data = query[:][0][0]
+            self.assertEqual(data, expected_data)
+
+        D = BJson.data
+        assertData({'k2': 'v2-x', 'k1': {'x2': 'y2'}, 'k4': 'v4'}, {
+            'k1': {'x2': 'y2'},  # NB: not merged/patched!!
+            'k2': 'v2-x',
+            'k3': [0, 1],
+            'k4': 'v4'})
+        assertData({'k1': 'v1-x', 'k3': [2, 3, 4], 'k4': {'x4': 'y4'}}, {
+            'k1': 'v1-x',
+            'k2': 'v2',
+            'k3': [2, 3, 4],
+            'k4': {'x4': 'y4'}})
+
+        # We can update sub-keys.
+        query = BJson.select(BJson.data['k1'].concat({'x2': 'y2', 'x3': 'y3'}))
+        self.assertEqual(query.tuples()[0][0],
+                         {'x1': 'y1', 'x2': 'y2', 'x3': 'y3'})
+
+        # Concat can be used to extend JSON arrays.
+        query = BJson.select(BJson.data['k3'].concat([2, 3]))
+        self.assertEqual(query.tuples()[0][0], [0, 1, 2, 3])
+
     def test_integer_index_weirdness(self):
         self._create_test_data()
 
