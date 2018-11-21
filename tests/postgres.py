@@ -743,7 +743,7 @@ class TestBinaryJsonField(BaseJsonFieldTestCase, ModelTestCase):
         self.assertObjects(D['k3'].has_key('k4'), 0)
         self.assertObjects(D['k4'].has_key('i2'), 2)
 
-    @skip_unless(pg10, 'jsonb remove support requires pg >= 10')
+    @skip_unless(pg10(), 'jsonb remove support requires pg >= 10')
     def test_remove_data(self):
         BJson.delete().execute()  # Clear out db.
         BJson.create(data={
