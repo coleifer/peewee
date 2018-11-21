@@ -140,7 +140,7 @@ class ObjectSlice(_LookupNode):
 
 
 class IndexedFieldMixin(object):
-    default_index_type = 'GiST'
+    default_index_type = 'GIN'
 
     def __init__(self, index_type=None, *args, **kwargs):
         kwargs.setdefault('index', True)  # By default, use an index.
@@ -152,7 +152,6 @@ class IndexedFieldMixin(object):
 
 
 class ArrayField(IndexedFieldMixin, Field):
-    default_index_type = 'GIN'
     passthrough = True
 
     def __init__(self, field_class=IntegerField, field_kwargs=None,
@@ -309,7 +308,6 @@ def cast_jsonb(node):
 
 class BinaryJSONField(IndexedFieldMixin, JSONField):
     field_type = 'JSONB'
-    default_index_type = 'GIN'
     __hash__ = Field.__hash__
 
     def contains(self, other):
@@ -344,7 +342,6 @@ class BinaryJSONField(IndexedFieldMixin, JSONField):
 
 class TSVectorField(IndexedFieldMixin, TextField):
     field_type = 'TSVECTOR'
-    default_index_type = 'GIN'
     __hash__ = Field.__hash__
 
     def match(self, query, language=None):
