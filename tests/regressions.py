@@ -435,11 +435,9 @@ class TestUpdateIntegrationRegressions(ModelTestCase):
 
 
 class TestSelectValueConversion(ModelTestCase):
-    database = get_in_memory_db()
     requires = [User]
 
-    @skip_if(IS_SQLITE_OLD)
-    @requires_models(User)
+    @skip_if(IS_SQLITE_OLD or IS_MYSQL)
     def test_select_value_conversion(self):
         u1 = User.create(username='u1')
         cte = User.select(User.id.cast('text')).cte('tmp', columns=('id',))
