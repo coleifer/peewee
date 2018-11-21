@@ -2,6 +2,8 @@ from peewee import *
 
 from .base import BaseTestCase
 from .base import IS_MYSQL
+from .base import IS_MYSQL_ADVANCED_FEATURES
+from .base import IS_SQLITE_OLD
 from .base import ModelTestCase
 from .base import TestModel
 from .base import get_in_memory_db
@@ -430,3 +432,22 @@ class TestUpdateIntegrationRegressions(ModelTestCase):
                .execute())
         self.assertEqual(list(query.clone()), [(0, 0.), (1, 1.), (2, 2.),
                                                (3, 3.)])
+
+
+class TestSelectValueConversion(ModelTestCase):
+    database = get_in_memory_db()
+    requires = [User]
+
+    @skip_if(IS_SQLITE_OLD)
+    @requires_models(User)
+    def test_select_value_conversion(self):
+        u1 = User.create(username='u1')
+        cte = User.select(User.id.cast('text')).cte('tmp', columns=('id',))
+
+        query = User.select(cte.c.id).with_cte(cte).from_(cte)
+        u1_id, = [user.id for user in query]
+        self.assertEqual(u1_id, u1.id)
+
+        query2 = User.select(cte.c.id.coerce(False)).with_cte(cte).from_(cte)
+        u1_id, = [user.id for user in query2]
+        self.assertEqual(u1_id, str(u1.id))
