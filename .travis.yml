@@ -1,21 +1,50 @@
 language: python
 python:
-  - "2.6"
-  - "2.7"
-  - "3.4"
-  - "3.5"
-  - "3.6"
+  - 2.7
+  - 3.4
+  - 3.5
+  - 3.6
 dist: trusty
 env:
   - PEEWEE_TEST_BACKEND=sqlite
   - PEEWEE_TEST_BACKEND=postgresql
   - PEEWEE_TEST_BACKEND=mysql
+matrix:
+  include:
+    - python: 3.7
+      dist: xenial
+      sudo: true
+      env: PEEWEE_TEST_BACKEND=sqlite
+    - python: 3.7
+      dist: xenial
+      sudo: true
+      env: PEEWEE_TEST_BACKEND=postgresql
+    - python: 3.7
+      dist: xenial
+      sudo: true
+      env: PEEWEE_TEST_BACKEND=mysql
+    - python: 3.8-dev
+      dist: xenial
+      sudo: true
+    - python: 3.7
+      dist: xenial
+      sudo: true
+      env:
+      - PEEWEE_TEST_BUILD_SQLITE=1
+      - PEEWEE_CLOSURE_EXTENSION=/usr/local/lib/closure.so
+      - LSM_EXTENSION=/usr/local/lib/lsm.so
+      before_install:
+        - sudo apt-get install -y tcl-dev
+        - ./.travis_deps.sh
+        - sudo ldconfig
+      script: "python runtests.py -v2"
 addons:
   postgresql: "9.6"
+  mariadb: "10.3"
 services:
   - postgresql
-  - mysql
-install: "pip install psycopg2 Cython pymysql"
+  - mariadb
+install: "pip install psycopg2-binary Cython pymysql apsw mysql-connector"
 before_script:
   - python setup.py build_ext -i
   - psql -c 'drop database if exists peewee_test;' -U postgres
@@ -24,4 +53,4 @@ before_script:
   - mysql -e 'drop database if exists peewee_test;'
   - mysql -e 'create database peewee_test;'
   - mysql -e 'grant all on *.* to travis@localhost;'
-script: "python runtests.py -a"
+script: "python runtests.py"

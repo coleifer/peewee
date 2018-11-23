@@ -26,8 +26,7 @@ import datetime
 import os
 from urlparse import parse_qsl, urlparse
 
-from flask import Flask, Response, abort, request
-from peewee import create_model_tables
+from flask import Flask, Response, abort, request, g
 from peewee import *
 from playhouse.postgres_ext import HStoreField
 from playhouse.postgres_ext import PostgresqlExtDatabase
@@ -51,6 +50,7 @@ app.config.from_object(__name__)
 
 database = PostgresqlExtDatabase(
     DATABASE_NAME,
+    register_hstore=True,
     user='postgres')
 
 class BaseModel(Model):
@@ -66,7 +66,7 @@ class Account(BaseModel):
         return self.domain == url_domain
 
 class PageView(BaseModel):
-    account = ForeignKeyField(Account, related_name='pageviews')
+    account = ForeignKeyField(Account, backref='pageviews')
     url = TextField()
     timestamp = DateTimeField(default=datetime.datetime.now)
     title = TextField(default='')
@@ -131,7 +131,7 @@ def not_found(e):
 @app.before_request
 def before_request():
     g.db = database
-    g.db.connect()
+    g.db.connection()
 
 @app.after_request
 def after_request(response):
@@ -140,5 +140,5 @@ def after_request(response):
 
 
 if __name__ == '__main__':
-    create_model_tables([Account, PageView], fail_silently=True)
+    database.create_tables([Account, PageView], safe=True)
     app.run(debug=True)

@@ -1,9 +1,8 @@
-
-.. image:: http://media.charlesleifer.com/blog/photos/p1423749536.32.png
+.. image:: http://media.charlesleifer.com/blog/photos/peewee3-logo.png
 
 peewee
 ======
-This is just `peewee-2.10.2 <https://github.com/coleifer/peewee>` with some changes we need:
+This is just `peewee-3.6.4 <https://github.com/coleifer/peewee>` with some changes we need:
 
 * Simple LEFT JOIN LATERAL. No need make subquery, just join to model.
 .. code-block:: python

@@ -39,27 +39,30 @@ class User(BaseModel):
     email = CharField()
     join_date = DateTimeField()
 
-    class Meta:
-        order_by = ('username',)
-
     # it often makes sense to put convenience methods on model instances, for
     # example, "give me all the users this user is following":
     def following(self):
         # query other users through the "relationship" table
-        return User.select().join(
-            Relationship, on=Relationship.to_user,
-        ).where(Relationship.from_user == self)
+        return (User
+                .select()
+                .join(Relationship, on=Relationship.to_user)
+                .where(Relationship.from_user == self)
+                .order_by(User.username))
 
     def followers(self):
-        return User.select().join(
-            Relationship, on=Relationship.from_user,
-        ).where(Relationship.to_user == self)
+        return (User
+                .select()
+                .join(Relationship, on=Relationship.from_user)
+                .where(Relationship.to_user == self)
+                .order_by(User.username))
 
     def is_following(self, user):
-        return Relationship.select().where(
-            (Relationship.from_user == self) &
-            (Relationship.to_user == user)
-        ).count() > 0
+        return (Relationship
+                .select()
+                .where(
+                    (Relationship.from_user == self) &
+                    (Relationship.to_user == user))
+                .exists())
 
     def gravatar_url(self, size=80):
         return 'http://www.gravatar.com/avatar/%s?d=identicon&s=%d' % \
@@ -71,8 +74,8 @@ class User(BaseModel):
 # on different columns we can expose who a user is "related to" and who is
 # "related to" a given user
 class Relationship(BaseModel):
-    from_user = ForeignKeyField(User, related_name='relationships')
-    to_user = ForeignKeyField(User, related_name='related_to')
+    from_user = ForeignKeyField(User, backref='relationships')
+    to_user = ForeignKeyField(User, backref='related_to')
 
     class Meta:
         indexes = (
@@ -85,18 +88,15 @@ class Relationship(BaseModel):
 # the foreign key.  because we didn't specify, a users messages will be accessible
 # as a special attribute, User.message_set
 class Message(BaseModel):
-    user = ForeignKeyField(User)
+    user = ForeignKeyField(User, backref='messages')
     content = TextField()
     pub_date = DateTimeField()
-
-    class Meta:
-        order_by = ('-pub_date',)
 
 
 # simple utility function to create tables
 def create_tables():
-    database.connect()
-    database.create_tables([User, Relationship, Message])
+    with database:
+        database.create_tables([User, Relationship, Message])
 
 # flask provides a "session" object, which allows us to store information across
 # requests (stored by default in a secure cookie).  this function allows us to
@@ -128,8 +128,7 @@ def login_required(f):
 def object_list(template_name, qr, var_name='object_list', **kwargs):
     kwargs.update(
         page=int(request.args.get('page', 1)),
-        pages=qr.count() / 20 + 1
-    )
+        pages=qr.count() / 20 + 1)
     kwargs[var_name] = qr.paginate(kwargs['page'])
     return render_template(template_name, **kwargs)
 
@@ -178,20 +177,23 @@ def private_timeline():
     # messages where the person who created the message is someone the current
     # user is following.  these messages are then ordered newest-first.
     user = get_current_user()
-    messages = Message.select().where(Message.user << user.following())
+    messages = (Message
+                .select()
+                .where(Message.user << user.following())
+                .order_by(Message.pub_date.desc()))
     return object_list('private_messages.html', messages, 'message_list')
 
 @app.route('/public/')
 def public_timeline():
     # simply display all messages, newest first
-    messages = Message.select()
+    messages = Message.select().order_by(Message.pub_date.desc())
     return object_list('public_messages.html', messages, 'message_list')
 
 @app.route('/join/', methods=['GET', 'POST'])
 def join():
     if request.method == 'POST' and request.form['username']:
         try:
-            with database.transaction():
+            with database.atomic():
                 # Attempt to create the user. If the username is taken, due to the
                 # unique constraint, the database will raise an IntegrityError.
                 user = User.create(
@@ -213,9 +215,10 @@ def join():
 def login():
     if request.method == 'POST' and request.form['username']:
         try:
+            pw_hash = md5(request.form['password'].encode('utf-8')).hexdigest()
             user = User.get(
-                username=request.form['username'],
-                password=md5((request.form['password']).encode('utf-8')).hexdigest())
+                (User.username == request.form['username']) &
+                (User.password == pw_hash))
         except User.DoesNotExist:
             flash('The password entered is incorrect')
         else:
@@ -244,7 +247,7 @@ def followers():
 
 @app.route('/users/')
 def user_list():
-    users = User.select()
+    users = User.select().order_by(User.username)
     return object_list('user_list.html', users, 'user_list')
 
 @app.route('/users/<username>/')
@@ -255,8 +258,8 @@ def user_detail(username):
 
     # get all the users messages ordered newest-first -- note how we're accessing
     # the messages -- user.message_set.  could also have written it as:
-    # Message.select().where(user=user).order_by(('pub_date', 'desc'))
-    messages = user.message_set
+    # Message.select().where(Message.user == user)
+    messages = user.messages.order_by(Message.pub_date.desc())
     return object_list('user_detail.html', messages, 'message_list', user=user)
 
 @app.route('/users/<username>/follow/', methods=['POST'])
@@ -264,7 +267,7 @@ def user_detail(username):
 def user_follow(username):
     user = get_object_or_404(User, User.username == username)
     try:
-        with database.transaction():
+        with database.atomic():
             Relationship.create(
                 from_user=get_current_user(),
                 to_user=user)
@@ -278,10 +281,12 @@ def user_follow(username):
 @login_required
 def user_unfollow(username):
     user = get_object_or_404(User, User.username == username)
-    Relationship.delete().where(
-        (Relationship.from_user == get_current_user()) &
-        (Relationship.to_user == user)
-    ).execute()
+    (Relationship
+     .delete()
+     .where(
+         (Relationship.from_user == get_current_user()) &
+         (Relationship.to_user == user))
+     .execute())
     flash('You are no longer following %s' % user.username)
     return redirect(url_for('user_detail', username=user.username))
 
@@ -305,4 +310,5 @@ def _inject_user():
 
 # allow running from the command line
 if __name__ == '__main__':
+    create_tables()
     app.run()

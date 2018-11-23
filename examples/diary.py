@@ -21,7 +21,7 @@ class Entry(Model):
 
 def initialize(passphrase):
     db.init('diary.db', passphrase=passphrase, kdf_iter=64000)
-    Entry.create_table(fail_silently=True)
+    db.create_tables([Entry])
 
 def menu_loop():
     choice = None
@@ -77,6 +77,10 @@ if __name__ == '__main__':
 
     if not passphrase:
         sys.stderr.write('Passphrase required to access diary.\n')
+        sys.stderr.flush()
+        sys.exit(1)
+    elif len(passphrase) < 8:
+        sys.stderr.write('Passphrase must be at least 8 characters.\n')
         sys.stderr.flush()
         sys.exit(1)
 

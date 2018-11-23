@@ -3,14 +3,15 @@ try:
 except ImportError:
     OrderedDict = dict
 from collections import namedtuple
+from inspect import isclass
 import re
 
 from peewee import *
 try:
-    from MySQLdb.constants import FIELD_TYPE
+    from pymysql.constants import FIELD_TYPE
 except ImportError:
     try:
-        from pymysql.constants import FIELD_TYPE
+        from MySQLdb.constants import FIELD_TYPE
     except ImportError:
         FIELD_TYPE = None
 try:
@@ -34,18 +35,21 @@ class Column(object):
     """
     Store metadata about a database column.
     """
-    primary_key_types = (IntegerField, PrimaryKeyField)
+    primary_key_types = (IntegerField, AutoField)
 
     def __init__(self, name, field_class, raw_column_type, nullable,
-                 primary_key=False, db_column=None, index=False, unique=False):
+                 primary_key=False, column_name=None, index=False,
+                 unique=False, default=None, extra_parameters=None):
         self.name = name
         self.field_class = field_class
         self.raw_column_type = raw_column_type
         self.nullable = nullable
         self.primary_key = primary_key
-        self.db_column = db_column
+        self.column_name = column_name
         self.index = index
         self.unique = unique
+        self.default = default
+        self.extra_parameters = extra_parameters
 
         # Foreign key metadata.
         self.rel_model = None
@@ -58,7 +62,7 @@ class Column(object):
             'raw_column_type',
             'nullable',
             'primary_key',
-            'db_column']
+            'column_name']
         keyword_args = ', '.join(
             '%s=%s' % (attr, getattr(self, attr))
             for attr in attrs)
@@ -66,22 +70,26 @@ class Column(object):
 
     def get_field_parameters(self):
         params = {}
+        if self.extra_parameters is not None:
+            params.update(self.extra_parameters)
 
         # Set up default attributes.
         if self.nullable:
             params['null'] = True
-        if self.field_class is ForeignKeyField or self.name != self.db_column:
-            params['db_column'] = "'%s'" % self.db_column
-        if self.primary_key and self.field_class is not PrimaryKeyField:
+        if self.field_class is ForeignKeyField or self.name != self.column_name:
+            params['column_name'] = "'%s'" % self.column_name
+        if self.primary_key and not issubclass(self.field_class, AutoField):
             params['primary_key'] = True
+        if self.default is not None:
+            params['default'] =  self.default
 
         # Handle ForeignKeyField-specific attributes.
         if self.is_foreign_key():
-            params['rel_model'] = self.rel_model
+            params['model'] = self.rel_model
             if self.to_field:
-                params['to_field'] = "'%s'" % self.to_field
+                params['field'] = "'%s'" % self.to_field
             if self.related_name:
-                params['related_name'] = "'%s'" % self.related_name
+                params['backref'] = "'%s'" % self.related_name
 
         # Handle indexes on column.
         if not self.is_primary_key():
@@ -93,7 +101,7 @@ class Column(object):
         return params
 
     def is_primary_key(self):
-        return self.field_class is PrimaryKeyField or self.primary_key
+        return self.field_class is AutoField or self.primary_key
 
     def is_foreign_key(self):
         return self.field_class is ForeignKeyField
@@ -115,7 +123,12 @@ class Column(object):
 
     def get_field(self):
         # Generate the field definition for this column.
-        field_params = self.get_field_parameters()
+        field_params = {}
+        for key, value in self.get_field_parameters().items():
+            if isclass(value) and issubclass(value, Field):
+                value = value.__name__
+            field_params[key] = value
+
         param_str = ', '.join('%s=%s' % (k, v)
                               for k, v in sorted(field_params.items()))
         field = '%s = %s(%s)' % (
@@ -146,29 +159,42 @@ class Metadata(object):
             for metadata in self.database.get_columns(table, schema))
 
         # Look up the actual column type for each column.
-        column_types = self.get_column_types(table, schema)
+        column_types, extra_params = self.get_column_types(table, schema)
 
         # Look up the primary keys.
         pk_names = self.get_primary_keys(table, schema)
         if len(pk_names) == 1:
             pk = pk_names[0]
             if column_types[pk] is IntegerField:
-                column_types[pk] = PrimaryKeyField
+                column_types[pk] = AutoField
+            elif column_types[pk] is BigIntegerField:
+                column_types[pk] = BigAutoField
 
         columns = OrderedDict()
         for name, column_data in metadata.items():
+            field_class = column_types[name]
+            default = self._clean_default(field_class, column_data.default)
+
             columns[name] = Column(
                 name,
-                field_class=column_types[name],
+                field_class=field_class,
                 raw_column_type=column_data.data_type,
                 nullable=column_data.null,
                 primary_key=column_data.primary_key,
-                db_column=name)
+                column_name=name,
+                default=default,
+                extra_parameters=extra_params.get(name))
 
         return columns
 
     def get_column_types(self, table, schema=None):
         raise NotImplementedError
+
+    def _clean_default(self, field_class, default):
+        if default is None or field_class in (AutoField, BigAutoField) or \
+           default.lower() == 'null':
+            return
+        return default or "''"
 
     def get_foreign_keys(self, table, schema=None):
         return self.database.get_foreign_keys(table, schema)
@@ -200,6 +226,19 @@ class PostgresqlMetadata(Metadata):
         1700: DecimalField,
         2950: TextField, # UUID
     }
+    array_types = {
+        1000: BooleanField,
+        1001: BlobField,
+        1005: SmallIntegerField,
+        1007: IntegerField,
+        1009: TextField,
+        1014: CharField,
+        1015: CharField,
+        1016: BigIntegerField,
+        1115: DateTimeField,
+        1182: DateField,
+        1183: TimeField,
+    }
     extension_import = 'from playhouse.postgres_ext import *'
 
     def __init__(self, database):
@@ -207,20 +246,29 @@ class PostgresqlMetadata(Metadata):
 
         if postgres_ext is not None:
             # Attempt to add types like HStore and JSON.
-            cursor = self.execute('select oid, typname from pg_type;')
+            cursor = self.execute('select oid, typname, format_type(oid, NULL)'
+                                  ' from pg_type;')
             results = cursor.fetchall()
 
-            for oid, typname in results:
-                if 'json' in typname:
+            for oid, typname, formatted_type in results:
+                if typname == 'json':
                     self.column_map[oid] = postgres_ext.JSONField
-                elif 'hstore' in typname:
+                elif typname == 'jsonb':
+                    self.column_map[oid] = postgres_ext.BinaryJSONField
+                elif typname == 'hstore':
                     self.column_map[oid] = postgres_ext.HStoreField
-                elif 'tsvector' in typname:
+                elif typname == 'tsvector':
                     self.column_map[oid] = postgres_ext.TSVectorField
+
+            for oid in self.array_types:
+                self.column_map[oid] = postgres_ext.ArrayField
 
     def get_column_types(self, table, schema):
         column_types = {}
+        extra_params = {}
         extension_types = set((
+            postgres_ext.ArrayField,
+            postgres_ext.BinaryJSONField,
             postgres_ext.JSONField,
             postgres_ext.TSVectorField,
             postgres_ext.HStoreField)) if postgres_ext is not None else set()
@@ -231,13 +279,15 @@ class PostgresqlMetadata(Metadata):
 
         # Store column metadata in dictionary keyed by column name.
         for column_description in cursor.description:
-            column_types[column_description.name] = self.column_map.get(
-                column_description.type_code,
-                UnknownField)
-            if column_types[column_description.name] in extension_types:
+            name = column_description.name
+            oid = column_description.type_code
+            column_types[name] = self.column_map.get(oid, UnknownField)
+            if column_types[name] in extension_types:
                 self.requires_extension = True
+            if oid in self.array_types:
+                extra_params[name] = {'field_class': self.array_types[oid]}
 
-        return column_types
+        return column_types, extra_params
 
     def get_columns(self, table, schema=None):
         schema = schema or 'public'
@@ -299,7 +349,7 @@ class MySQLMetadata(Metadata):
             name, type_code = column_description[:2]
             column_types[name] = self.column_map.get(type_code, UnknownField)
 
-        return column_types
+        return column_types, {}
 
 
 class SqliteMetadata(Metadata):
@@ -351,7 +401,7 @@ class SqliteMetadata(Metadata):
         for column in columns:
             column_types[column.name] = self._map_col(column.data_type)
 
-        return column_types
+        return column_types, {}
 
 
 _DatabaseMetadata = namedtuple('_DatabaseMetadata', (
@@ -382,7 +432,7 @@ class DatabaseMetadata(_DatabaseMetadata):
 
 
 class Introspector(object):
-    pk_classes = [PrimaryKeyField, IntegerField]
+    pk_classes = [AutoField, IntegerField]
 
     def __init__(self, metadata, schema=None):
         self.metadata = metadata
@@ -397,8 +447,10 @@ class Introspector(object):
             metadata = PostgresqlMetadata(database)
         elif isinstance(database, MySQLDatabase):
             metadata = MySQLMetadata(database)
-        else:
+        elif isinstance(database, SqliteDatabase):
             metadata = SqliteMetadata(database)
+        else:
+            raise ValueError('Introspection not supported for %r' % database)
         return cls(metadata, schema=schema)
 
     def get_database_class(self):
@@ -408,7 +460,7 @@ class Introspector(object):
         return self.metadata.database.database
 
     def get_database_kwargs(self):
-        return self.metadata.database.connect_kwargs
+        return self.metadata.database.connect_params
 
     def get_additional_imports(self):
         if self.metadata.requires_extension:
@@ -431,15 +483,17 @@ class Introspector(object):
             column = '_' + column
         return column
 
-    def introspect(self, table_names=None, literal_column_names=False):
+    def introspect(self, table_names=None, literal_column_names=False,
+                   include_views=False):
         # Retrieve all the tables in the database.
-        if self.schema:
-            tables = self.metadata.database.get_tables(schema=self.schema)
-        else:
-            tables = self.metadata.database.get_tables()
+        tables = self.metadata.database.get_tables(schema=self.schema)
+        if include_views:
+            views = self.metadata.database.get_views(schema=self.schema)
+            tables.extend([view.name for view in views])
 
         if table_names is not None:
             tables = [table for table in tables if table in table_names]
+        table_set = set(tables)
 
         # Store a mapping of table name -> dictionary of columns.
         columns = {}
@@ -466,6 +520,14 @@ class Introspector(object):
             except ValueError as exc:
                 err(*exc.args)
                 foreign_keys[table] = []
+            else:
+                # If there is a possibility we could exclude a dependent table,
+                # ensure that we introspect it so FKs will work.
+                if table_names is not None:
+                    for foreign_key in foreign_keys[table]:
+                        if foreign_key.dest_table not in table_set:
+                            tables.append(foreign_key.dest_table)
+                            table_set.add(foreign_key.dest_table)
 
             model_names[table] = self.make_model_name(table)
 
@@ -474,10 +536,8 @@ class Introspector(object):
 
             for col_name, column in table_columns.items():
                 if literal_column_names:
-                    # Simply try to make a valid Python identifier.
                     new_name = re.sub('[^\w]+', '_', col_name)
                 else:
-                    # Snak-ify the name, stripping "_id" suffixes as well.
                     new_name = self.make_column_name(col_name)
 
                 # If we have two columns, "parent" and "parent_id", ensure
@@ -545,14 +605,16 @@ class Introspector(object):
             indexes)
 
     def generate_models(self, skip_invalid=False, table_names=None,
-                        literal_column_names=False):
-        database = self.introspect(table_names=table_names,
-                                   literal_column_names=literal_column_names)
+                        literal_column_names=False, bare_fields=False,
+                        include_views=False):
+        database = self.introspect(table_names, literal_column_names,
+                                   include_views)
         models = {}
 
         class BaseModel(Model):
             class Meta:
                 database = self.metadata.database
+                schema = self.schema
 
         def _create_model(table, models):
             for foreign_key in database.foreign_keys[table]:
@@ -563,7 +625,7 @@ class Introspector(object):
 
             primary_keys = []
             columns = database.columns[table]
-            for db_column, column in columns.items():
+            for column_name, column in columns.items():
                 if column.primary_key:
                     primary_keys.append(column.name)
 
@@ -572,6 +634,7 @@ class Introspector(object):
 
             class Meta:
                 indexes = multi_column_indexes
+                table_name = table
 
             # Fix models with multi-column primary keys.
             composite_key = False
@@ -584,33 +647,41 @@ class Introspector(object):
                 composite_key = True
 
             attrs = {'Meta': Meta}
-            for db_column, column in columns.items():
+            for column_name, column in columns.items():
                 FieldClass = column.field_class
-                if FieldClass is UnknownField:
+                if FieldClass is not ForeignKeyField and bare_fields:
+                    FieldClass = BareField
+                elif FieldClass is UnknownField:
                     FieldClass = BareField
 
                 params = {
-                    'db_column': db_column,
+                    'column_name': column_name,
                     'null': column.nullable}
                 if column.primary_key and composite_key:
-                    if FieldClass is PrimaryKeyField:
+                    if FieldClass is AutoField:
                         FieldClass = IntegerField
                     params['primary_key'] = False
-                elif column.primary_key and FieldClass is not PrimaryKeyField:
+                elif column.primary_key and FieldClass is not AutoField:
                     params['primary_key'] = True
                 if column.is_foreign_key():
                     if column.is_self_referential_fk():
-                        params['rel_model'] = 'self'
+                        params['model'] = 'self'
                     else:
                         dest_table = column.foreign_key.dest_table
-                        params['rel_model'] = models[dest_table]
+                        params['model'] = models[dest_table]
                     if column.to_field:
-                        params['to_field'] = column.to_field
+                        params['field'] = column.to_field
 
                     # Generate a unique related name.
-                    params['related_name'] = '%s_%s_rel' % (table, db_column)
-                if db_column in column_indexes and not column.is_primary_key():
-                    if column_indexes[db_column]:
+                    params['backref'] = '%s_%s_rel' % (table, column_name)
+
+                if column.default is not None:
+                    constraint = SQL('DEFAULT %s' % column.default)
+                    params['constraints'] = [constraint]
+
+                if column_name in column_indexes and not \
+                   column.is_primary_key():
+                    if column_indexes[column_name]:
                         params['unique'] = True
                     elif not column.is_foreign_key():
                         params['index'] = True
