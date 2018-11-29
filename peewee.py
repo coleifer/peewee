@@ -4598,8 +4598,8 @@ class ForeignKeyField(Field):
             raise AttributeError('Cannot look-up non-existant "__" methods.')
         if attr in self.rel_model._meta.fields:
             return self.rel_model._meta.fields[attr]
-        raise AttributeError('%r has no attribute %s, nor is it a valid field '
-                             'on %s.' % (self, attr, self.rel_model))
+        raise AttributeError('Foreign-key has no attribute %s, nor is it a '
+                             'valid field on the related model.' % attr)
 
 
 class DeferredForeignKey(Field):
