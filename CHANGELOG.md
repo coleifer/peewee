@@ -22,6 +22,8 @@ https://github.com/coleifer/peewee/releases
 * Allow `UUIDField` and `BinaryUUIDField` to accept hexadecimal UUID strings as
   well as raw binary UUID bytestrings (in addition to `UUID` instances, which
   are already supported).
+* Allow `ForeignKeyField` to be created without an index.
+* Allow multiple calls to `cast()` to be chained (#1795).
 
 [View commits](https://github.com/coleifer/peewee/compare/3.7.1...master)
 
