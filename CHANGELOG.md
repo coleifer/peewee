@@ -24,6 +24,8 @@ https://github.com/coleifer/peewee/releases
   are already supported).
 * Allow `ForeignKeyField` to be created without an index.
 * Allow multiple calls to `cast()` to be chained (#1795).
+* Add logic to ensure foreign-key constraint names that exceed 64 characters
+  are truncated using the same logic as is currently in place for long indexes.
 
 [View commits](https://github.com/coleifer/peewee/compare/3.7.1...master)
 
