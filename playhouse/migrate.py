@@ -130,6 +130,7 @@ from peewee import NodeList
 from peewee import OP
 from peewee import callable_
 from peewee import sort_models
+from peewee import _truncate_constraint_name
 
 
 class Operation(object):
@@ -283,7 +284,7 @@ class SchemaMigrator(object):
                .literal('ALTER TABLE ')
                .sql(Entity(table))
                .literal(' ADD CONSTRAINT ')
-               .sql(Entity(constraint))
+               .sql(Entity(_truncate_constraint_name(constraint)))
                .literal(' FOREIGN KEY ')
                .sql(EnclosedNodeList((Entity(column_name),)))
                .literal(' REFERENCES ')

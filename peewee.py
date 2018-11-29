@@ -2475,11 +2475,14 @@ class ModelIndex(Index):
         clean_field_names = re.sub('[^\w]+', '', '_'.join(accum))
         meta = model._meta
         prefix = meta.name if meta.legacy_table_names else meta.table_name
-        index_name = '_'.join((prefix, clean_field_names))
-        if len(index_name) > 64:
-            index_hash = hashlib.md5(index_name.encode('utf-8')).hexdigest()
-            index_name = '%s_%s' % (index_name[:56], index_hash[:7])
-        return index_name
+        return _truncate_constraint_name('_'.join((prefix, clean_field_names)))
+
+
+def _truncate_constraint_name(constraint, maxlen=64):
+    if len(constraint) > maxlen:
+        name_hash = hashlib.md5(constraint.encode('utf-8')).hexdigest()
+        constraint = '%s_%s' % (constraint[:(maxlen - 8)], name_hash[:7])
+    return constraint
 
 
 # DB-API 2.0 EXCEPTIONS.
@@ -5020,7 +5023,7 @@ class SchemaManager(object):
                 .literal('ALTER TABLE ')
                 .sql(field.model)
                 .literal(' ADD CONSTRAINT ')
-                .sql(Entity(name))
+                .sql(Entity(_truncate_constraint_name(name)))
                 .literal(' ')
                 .sql(field.foreign_key_constraint()))
 

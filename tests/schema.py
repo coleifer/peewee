@@ -527,6 +527,31 @@ class TestModelDDL(ModelDatabaseTestCase):
             '"fk_language_selected_snippet_id_refs_snippet" '
             'FOREIGN KEY ("selected_snippet_id") REFERENCES "snippet" ("id")'))
 
+        class SnippetComment(TestModel):
+            snippet_long_foreign_key_identifier = ForeignKeyField(Snippet)
+            comment = TextField()
+            class Meta:
+                database = self.database
+
+        sql, params = SnippetComment._schema._create_table(safe=True).query()
+        self.assertEqual(sql, (
+            'CREATE TABLE IF NOT EXISTS "snippet_comment" ('
+            '"id" INTEGER NOT NULL PRIMARY KEY, '
+            '"snippet_long_foreign_key_identifier_id" INTEGER NOT NULL, '
+            '"comment" TEXT NOT NULL, '
+            'FOREIGN KEY ("snippet_long_foreign_key_identifier_id") '
+            'REFERENCES "snippet" ("id"))'))
+
+        sql, params = (SnippetComment._schema
+                       ._create_foreign_key(
+                           SnippetComment.snippet_long_foreign_key_identifier)
+                       .query())
+        self.assertEqual(sql, (
+            'ALTER TABLE "snippet_comment" ADD CONSTRAINT "'
+            'fk_snippet_comment_snippet_long_foreign_key_identifier_i_2a8b87d"'
+            ' FOREIGN KEY ("snippet_long_foreign_key_identifier_id") '
+            'REFERENCES "snippet" ("id")'))
+
     def test_identity_field(self):
         class PG10Identity(TestModel):
             id = IdentityField()
