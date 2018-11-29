@@ -1232,14 +1232,14 @@ def AsIs(value):
 class Cast(WrappedNode):
     def __init__(self, node, cast):
         super(Cast, self).__init__(node)
-        self.cast = cast
+        self._cast = cast
         self._coerce = False
 
     def __sql__(self, ctx):
         return (ctx
                 .literal('CAST(')
                 .sql(self.node)
-                .literal(' AS %s)' % self.cast))
+                .literal(' AS %s)' % self._cast))
 
 
 class Ordering(WrappedNode):
