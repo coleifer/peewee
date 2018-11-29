@@ -4489,6 +4489,7 @@ class ForeignKeyField(Field):
                  on_update=None, deferrable=None, _deferred=None,
                  rel_model=None, to_field=None, object_id_name=None,
                  related_name=None, *args, **kwargs):
+        kwargs.setdefault('index', True)
         super(ForeignKeyField, self).__init__(*args, **kwargs)
         if rel_model is not None:
             __deprecated__('"rel_model" has been deprecated in favor of '
@@ -5292,7 +5293,7 @@ class Metadata(object):
         for f in self.sorted_fields:
             if f.primary_key:
                 continue
-            if f.index or f.unique or isinstance(f, ForeignKeyField):
+            if f.index or f.unique:
                 indexes.append(ModelIndex(self.model, (f,), unique=f.unique))
 
         for index_obj in self.indexes:

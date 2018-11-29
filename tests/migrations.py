@@ -692,6 +692,8 @@ class TestSchemaMigration(ModelTestCase):
         self.assertEqual(queries, [
             ('ALTER TABLE "category" ADD COLUMN "parent_id" '
              'INTEGER REFERENCES "category" ("id") ON DELETE SET NULL', []),
+            ('CREATE INDEX "category_parent_id" ON "category" ("parent_id")',
+             []),
         ])
 
     @requires_sqlite
@@ -797,6 +799,7 @@ class TestSchemaMigration(ModelTestCase):
             # Add new foreign-key field with appropriate constraint.
             ('ALTER TABLE "page" ADD COLUMN "user_id" VARCHAR(20) '
              'REFERENCES "users" ("id") ON DELETE CASCADE', []),
+            ('CREATE INDEX "page_user_id" ON "page" ("user_id")', []),
         ])
 
         self.database.pragma('foreign_keys', 1)
