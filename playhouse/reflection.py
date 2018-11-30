@@ -482,8 +482,10 @@ class Introspector(object):
             model_name = 'T' + model_name
         return model_name
 
-    def make_column_name(self, column):
-        column = re.sub('_id$', '', column.lower().strip()) or column.lower()
+    def make_column_name(self, column, is_foreign_key=True):
+        column = column.lower().strip() or column.lower()
+        if is_foreign_key:
+            column = re.sub('_id$', '', column) or column
         column = re.sub('[^\w]+', '_', column)
         if column in RESERVED_WORDS:
             column += '_'
@@ -546,7 +548,8 @@ class Introspector(object):
                 if literal_column_names:
                     new_name = re.sub('[^\w]+', '_', col_name)
                 else:
-                    new_name = self.make_column_name(col_name)
+                    is_foreign_key = any(fk_col.column == col_name for fk_col in foreign_keys[table])
+                    new_name = self.make_column_name(col_name, is_foreign_key)
 
                 # If we have two columns, "parent" and "parent_id", ensure
                 # that when we don't introduce naming conflicts.
