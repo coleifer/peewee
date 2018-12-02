@@ -14,6 +14,8 @@ https://github.com/coleifer/peewee/releases
   `remove()` methods (though remove may require pg10+).
 * Add `python_value()` method to the SQL-function helper `fn`, to allow
   specifying a custom function for mapping database values to Python values.
+* Introspection will now, by default, only strip "_id" from introspected column
+  names if those columns are foreign-keys. See #1799 for discussion.
 * Fixed bug in `order_by_extend()`, thanks @nhatHero.
 * Fixed bug where the `DataSet` CSV import/export did not support non-ASCII
   characters in Python 3.x.

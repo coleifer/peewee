@@ -482,8 +482,14 @@ class Introspector(object):
             model_name = 'T' + model_name
         return model_name
 
-    def make_column_name(self, column):
-        column = re.sub('_id$', '', column.lower().strip()) or column.lower()
+    def make_column_name(self, column, is_foreign_key=False):
+        column = column.lower().strip()
+        if is_foreign_key:
+            # Strip "_id" from foreign keys, unless the foreign-key happens to
+            # be named "_id", in which case the name is retained.
+            column = re.sub('_id$', '', column) or column
+
+        # Remove characters that are invalid for Python identifiers.
         column = re.sub('[^\w]+', '_', column)
         if column in RESERVED_WORDS:
             column += '_'
@@ -539,14 +545,17 @@ class Introspector(object):
 
             model_names[table] = self.make_model_name(table)
 
+            # Collect sets of all the column names as well as all the
+            # foreign-key column names.
             lower_col_names = set(column_name.lower()
                                   for column_name in table_columns)
+            fks = set(fk_col.column for fk_col in foreign_keys[table])
 
             for col_name, column in table_columns.items():
                 if literal_column_names:
                     new_name = re.sub('[^\w]+', '_', col_name)
                 else:
-                    new_name = self.make_column_name(col_name)
+                    new_name = self.make_column_name(col_name, col_name in fks)
 
                 # If we have two columns, "parent" and "parent_id", ensure
                 # that when we don't introduce naming conflicts.

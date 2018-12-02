@@ -175,8 +175,25 @@ class TestReflection(BaseReflectionTestCase):
             ))
 
     def test_make_column_name(self):
+        # Tests for is_foreign_key=False.
         tests = (
             ('Column', 'column'),
+            ('Foo_iD', 'foo_id'),
+            ('foo_id', 'foo_id'),
+            ('foo_id_id', 'foo_id_id'),
+            ('foo', 'foo'),
+            ('_id', '_id'),
+            ('a123', 'a123'),
+            ('and', 'and_'),
+            ('Class', 'class_'),
+            ('Class_ID', 'class_id'),
+        )
+        for col_name, expected in tests:
+            self.assertEqual(
+                self.introspector.make_column_name(col_name), expected)
+
+        # Tests for is_foreign_key=True.
+        tests = (
             ('Foo_iD', 'foo'),
             ('foo_id', 'foo'),
             ('foo_id_id', 'foo_id'),
@@ -189,7 +206,7 @@ class TestReflection(BaseReflectionTestCase):
         )
         for col_name, expected in tests:
             self.assertEqual(
-                self.introspector.make_column_name(col_name), expected)
+                self.introspector.make_column_name(col_name, True), expected)
 
     def test_make_model_name(self):
         tests = (
