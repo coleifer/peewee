@@ -301,6 +301,9 @@ class JSONField(Field):
     def path(self, *keys):
         return JsonPath(self, keys)
 
+    def concat(self, value):
+        return super(JSONField, self).concat(Json(value))
+
 
 def cast_jsonb(node):
     return NodeList((node, SQL('::jsonb')), glue='')

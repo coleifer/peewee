@@ -793,6 +793,16 @@ class TestBinaryJsonField(BaseJsonFieldTestCase, ModelTestCase):
         query = BJson.select(BJson.data['k3'].concat([2, 3]))
         self.assertEqual(query.tuples()[0][0], [0, 1, 2, 3])
 
+    def test_update_data_inplace(self):
+        BJson.delete().execute()
+        b = BJson.create(data={'k1': {'x1': 'y1'}, 'k2': 'v2'})
+
+        BJson.update(data=BJson.data.concat({
+            'k1': {'x2': 'y2'},
+            'k3': 'v3'})).execute()
+        b2 = BJson.get(BJson.id == b.id)
+        self.assertEqual(b2.data, {'k1': {'x2': 'y2'}, 'k2': 'v2', 'k3': 'v3'})
+
     def test_integer_index_weirdness(self):
         self._create_test_data()
 
