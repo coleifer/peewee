@@ -117,13 +117,13 @@ class TestSelectQuery(BaseTestCase):
         Point = Table('point', ('x', 'y'))
         PA = Point.alias('pa')
 
-        subq = PA.select(fn.SUM(PA.y)).where(PA.x == Point.x)
+        subq = PA.select(fn.SUM(PA.y).alias('sa')).where(PA.x == Point.x)
         query = (Point
                  .select(Point.x, Point.y, subq.alias('sy'))
                  .order_by(Point.x, Point.y))
         self.assertSQL(query, (
             'SELECT "t1"."x", "t1"."y", ('
-            'SELECT SUM("pa"."y") FROM "point" AS "pa" '
+            'SELECT SUM("pa"."y") AS "sa" FROM "point" AS "pa" '
             'WHERE ("pa"."x" = "t1"."x")) AS "sy" '
             'FROM "point" AS "t1" '
             'ORDER BY "t1"."x", "t1"."y"'), [])
