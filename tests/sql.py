@@ -521,6 +521,27 @@ class TestSelectQuery(BaseTestCase):
             'SELECT COUNT("t1"."id") FROM "stats" AS "t1" '
             'WHERE (("t1"."index" % ?) = ?)'), [10, 0])
 
+    def test_order_by_in_aggregation(self):
+        query = (User.select(fn.array_agg(User.c.name)
+                             .order_by(User.c.name.asc())
+                             .alias('users')))
+        self.assertSQL(query, (
+            'SELECT array_agg("t1"."name" ORDER BY "t1"."name" ASC) '
+            'AS "users" '
+            'FROM "users" AS "t1"'), [])
+
+    def test_order_by_extend_in_aggregation(self):
+        agg_field = (fn.array_agg(User.c.name)
+                     .order_by(User.c.name.asc())
+                     .order_by_extend(User.c.created_at.desc())
+                     .alias('users'))
+        query = User.select(agg_field)
+        self.assertSQL(query, (
+            'SELECT array_agg('
+            '"t1"."name" ORDER BY "t1"."name" ASC, "t1"."created_at" DESC'
+            ') AS "users" '
+            'FROM "users" AS "t1"'), [])
+
 
 class TestInsertQuery(BaseTestCase):
     def test_insert_simple(self):

@@ -1351,6 +1351,7 @@ class Function(ColumnBase):
     def __init__(self, name, arguments, coerce=True, python_value=None):
         self.name = name
         self.arguments = arguments
+        self._order_by = None
         self._filter = None
         self._python_value = python_value
         if name and name.lower() in ('sum', 'count', 'cast'):
@@ -1371,6 +1372,14 @@ class Function(ColumnBase):
     def python_value(self, func=None):
         self._python_value = func
 
+    @Node.copy
+    def order_by(self, *values):
+        self._order_by = values
+
+    @Node.copy
+    def order_by_extend(self, *values):
+        self._order_by = ((self._order_by or ()) + values) or None
+
     def over(self, partition_by=None, order_by=None, start=None, end=None,
              frame_type=None, window=None):
         if isinstance(partition_by, Window) and window is None:
@@ -1385,14 +1394,23 @@ class Function(ColumnBase):
 
     def __sql__(self, ctx):
         ctx.literal(self.name)
-        if not len(self.arguments):
-            ctx.literal('()')
-        else:
+        ctx.literal('(')
+        if len(self.arguments):
             with ctx(in_function=True, function_arg_count=len(self.arguments)):
-                ctx.sql(EnclosedNodeList([
+                # Use EnclosedNodeList then reset parens to False
+                # instead of using CommaNodeList to reuse double-parens
+                # workaround
+                nl = EnclosedNodeList([
                     (argument if isinstance(argument, Node)
                      else Value(argument, False))
-                    for argument in self.arguments]))
+                    for argument in self.arguments])
+                nl.parens = False
+                ctx.sql(nl)
+        if self._order_by:
+            (ctx
+             .literal(' ORDER BY ')
+             .sql(CommaNodeList(self._order_by)))
+        ctx.literal(')')
 
         if self._filter:
             ctx.literal(' FILTER (WHERE ').sql(self._filter).literal(')')
