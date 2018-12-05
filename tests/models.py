@@ -968,6 +968,22 @@ class TestModelAPIs(ModelTestCase):
             self.assertEqual([t['username'] for t in query],
                              ['huey', 'huey', 'huey'])
 
+    @requires_models(Point)
+    def test_subquery_in_select_expression(self):
+        for x, y in ((1, 1), (1, 2), (10, 10), (10, 20)):
+            Point.create(x=x, y=y)
+
+        PA = Point.alias('pa')
+        subq = PA.select(fn.SUM(PA.y)).where(PA.x == Point.x)
+        query = (Point
+                 .select(Point.x, Point.y, subq.alias('sy'))
+                 .order_by(Point.x, Point.y))
+        self.assertEqual(list(query.tuples()), [
+            (1, 1, 3),
+            (1, 2, 3),
+            (10, 10, 30),
+            (10, 20, 30)])
+
     @requires_models(User, Tweet)
     def test_filtering(self):
         with self.database.atomic():
