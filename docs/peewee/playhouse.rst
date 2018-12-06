@@ -564,10 +564,6 @@ Sqlcipher backend
 
 * Although this extention's code is short, it has not been properly
   peer-reviewed yet and may have introduced vulnerabilities.
-* The code contains minimum values for `passphrase` length and
-  `kdf_iter`, as well as a default value for the later.
-  **Do not** regard these numbers as advice. Consult the docs at
-  http://sqlcipher.net/sqlcipher-api/ and security experts.
 
 Also note that this code relies on pysqlcipher_ and sqlcipher_, and
 the code there might have vulnerabilities as well, but since these
@@ -579,7 +575,7 @@ are widely used crypto modules, we can expect "short zero days" there.
 sqlcipher_ext API notes
 ^^^^^^^^^^^^^^^^^^^^^^^
 
-.. py:class:: SqlCipherDatabase(database, passphrase, kdf_iter=64000, **kwargs)
+.. py:class:: SqlCipherDatabase(database, passphrase, **kwargs)
 
     Subclass of :py:class:`SqliteDatabase` that stores the database
     encrypted. Instead of the standard ``sqlite3`` backend, it uses pysqlcipher_:
@@ -591,13 +587,13 @@ sqlcipher_ext API notes
     :param passphrase: Database encryption passphrase: should be at least 8 character
         long (or an error is raised), but it is *strongly advised* to enforce better
         `passphrase strength`_ criteria in your implementation.
-    :param kdf_iter: [Optional] number of PBKDF2_ iterations.
 
     * If the ``database`` file doesn't exist, it will be *created* with
-      encryption by a key derived from ``passhprase`` with ``kdf_iter``
-      PBKDF2_ iterations.
-    * When trying to open an existing database, ``passhprase`` and ``kdf_iter``
-      should be *identical* to the ones used when it was created.
+      encryption by a key derived from ``passhprase``.
+    * When trying to open an existing database, ``passhprase`` should be
+      identical to the ones used when it was created. If the passphrase is
+      incorrect, an error will be raised when first attempting to access the
+      database.
 
     .. py:method:: rekey(passphrase)
 
@@ -605,7 +601,6 @@ sqlcipher_ext API notes
 
         Change the passphrase for database.
 
-.. _PBKDF2: https://en.wikipedia.org/wiki/PBKDF2
 .. _passphrase strength: https://en.wikipedia.org/wiki/Password_strength
 
 Notes:
