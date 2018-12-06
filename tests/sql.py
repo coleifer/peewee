@@ -1080,6 +1080,18 @@ class TestValuesList(BaseTestCase):
             'FROM (VALUES (?, ?), (?, ?)) AS "v"("idx", "name")'),
             [1, 'first', 2, 'second'])
 
+    def test_join_on_valueslist(self):
+        vl = ValuesList([('huey',), ('zaizee',)], columns=['username'])
+        query = (User
+                 .select(vl.c.username)
+                 .join(vl, on=(User.c.username == vl.c.username))
+                 .order_by(vl.c.username.desc()))
+        self.assertSQL(query, (
+            'SELECT "t1"."username" FROM "users" AS "t2" '
+            'INNER JOIN (VALUES (?), (?)) AS "t1"("username") '
+            'ON ("t2"."username" = "t1"."username") '
+            'ORDER BY "t1"."username" DESC'), ['huey', 'zaizee'])
+
 
 class TestCaseFunction(BaseTestCase):
     def test_case_function(self):

@@ -900,11 +900,11 @@ class Join(BaseTable):
         return ctx
 
 
-class ValuesList(BaseTable):
+class ValuesList(_HashableSource, BaseTable):
     def __init__(self, values, columns=None, alias=None):
-        super(ValuesList, self).__init__(alias=alias)
         self._values = values
         self._columns = columns
+        super(ValuesList, self).__init__(alias=alias)
 
     def _get_hash(self):
         return hash((self.__class__, id(self._values), self._alias))

@@ -763,6 +763,19 @@ class TestModelAPIs(ModelTestCase):
             ('mickey', 2),
             ('zaizee', 0)])
 
+    @requires_postgresql
+    @requires_models(User)
+    def test_join_on_valueslist(self):
+        for username in ('huey', 'mickey', 'zaizee'):
+            User.create(username=username)
+
+        vl = ValuesList([('huey',), ('zaizee',)], columns=['username'])
+        query = (User
+                 .select(vl.c.username)
+                 .join(vl, on=(User.username == vl.c.username))
+                 .order_by(vl.c.username.desc()))
+        self.assertEqual([user.username for user in query], ['zaizee', 'huey'])
+
     @requires_models(User, Tweet)
     def test_insert_query_value(self):
         huey = self.add_user('huey')
