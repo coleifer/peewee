@@ -569,7 +569,7 @@ Also note that this code relies on pysqlcipher_ and sqlcipher_, and
 the code there might have vulnerabilities as well, but since these
 are widely used crypto modules, we can expect "short zero days" there.
 
-..  _pysqlcipher: https://pypi.python.org/pypi/pysqlcipher
+..  _pysqlcipher: https://pypi.python.org/pypi/pysqlcipher3
 ..  _sqlcipher: http://sqlcipher.net
 
 sqlcipher_ext API notes
@@ -603,26 +603,28 @@ sqlcipher_ext API notes
 
 .. _passphrase strength: https://en.wikipedia.org/wiki/Password_strength
 
-Notes:
+.. note::
+    SQLCipher can be configured using a number of extension PRAGMAs. The list
+    of PRAGMAs and their descriptions can be found in the `SQLCipher documentation <https://www.zetetic.net/sqlcipher/sqlcipher-api/>`_.
 
-    * [Hopefully] there's no way to tell whether the passphrase is wrong
-      or the file is corrupt.
-      In both cases -- *the first time we try to access the database* -- a
-      :py:class:`DatabaseError` error is raised,
-      with the *exact* message: ``"file is encrypted or is not a database"``.
+    For example to specify the number of PBKDF2 iterations for the key
+    derivation (64K in SQLCipher 3.x, 256K in SQLCipher 4.x by default):
 
-      As mentioned above, this only happens when you *access* the database,
-      so if you need to know *right away* whether the passphrase was correct,
-      you can trigger this check by calling [e.g.]
-      :py:meth:`~Database.get_tables()` (see example below).
+    .. code-block:: python
 
-    * Most applications can expect failed attempts to open the database
-      (common case: prompting the user for ``passphrase``), so
-      the database can't be hardwired into the :py:class:`Meta` of
-      model classes. To defer initialization, pass `None` in to the
-      database.
+        # Use 1,000,000 iterations.
+        db = SqlCipherDatabase('my_app.db', pragmas={'kdf_iter': 1000000})
 
-Example:
+    To use a cipher page-size of 16KB and a cache-size of 10,000 pages:
+
+    .. code-block:: python
+
+        db = SqlCipherDatabase('my_app.db', passphrase='secret!!!', pragmas={
+            'cipher_page_size': 1024 * 16,
+            'cache_size': 10000})  # 10,000 16KB pages, or 160MB.
+
+
+Example of prompting the user for a passphrase:
 
 .. code-block:: python
 
