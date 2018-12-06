@@ -2420,6 +2420,12 @@ helpers for serializing models to dictionaries and vice-versa.
         >>> model_to_dict(t2, recurse=False)
         {'id': 1, 'message': 'tweet-2', 'user': 1}
 
+    The implementation of ``model_to_dict`` is fairly complex, owing to the
+    various usages it attempts to support. If you have a special usage, I
+    strongly advise that you do **not** attempt to shoe-horn some crazy
+    combination of parameters into this function. Just write a simple function
+    that accomplishes exactly what you're attempting to do.
+
 .. py:function:: dict_to_model(model_class, data[, ignore_unknown=False])
 
     :param Model model_class: The model class to construct.
