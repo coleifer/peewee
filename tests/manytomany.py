@@ -11,21 +11,17 @@ from .base_models import User
 class User(TestModel):
     username = TextField(unique=True)
 
-
 class Note(TestModel):
     text = TextField()
     users = ManyToManyField(User)
-
 
 NoteUserThrough = Note.users.get_through_model()
 
 AltThroughDeferred = DeferredThroughModel()
 
-
 class AltNote(TestModel):
     text = TextField()
     users = ManyToManyField(User, through_model=AltThroughDeferred)
-
 
 class AltThroughModel(TestModel):
     user = ForeignKeyField(User, backref='_xx_rel')
@@ -34,8 +30,69 @@ class AltThroughModel(TestModel):
     class Meta:
         primary_key = CompositeKey('user', 'note')
 
-
 AltThroughDeferred.set_model(AltThroughModel)
+
+class Student(TestModel):
+    name = TextField()
+
+CourseStudentDeferred = DeferredThroughModel()
+
+class Course(TestModel):
+    name = TextField()
+    students = ManyToManyField(Student, backref='+')
+    students2 = ManyToManyField(Student, through_model=CourseStudentDeferred)
+
+CourseStudent = Course.students.get_through_model()
+
+class CourseStudent2(TestModel):
+    course = ForeignKeyField(Course, backref='+')
+    student = ForeignKeyField(Student, backref='+')
+
+CourseStudentDeferred.set_model(CourseStudent2)
+
+
+class TestManyToManyBackrefBehavior(ModelTestCase):
+    database = get_in_memory_db()
+    requires = [Student, Course, CourseStudent, CourseStudent2]
+
+    def setUp(self):
+        super(TestManyToManyBackrefBehavior, self).setUp()
+        math = Course.create(name='math')
+        engl = Course.create(name='engl')
+        huey, mickey, zaizee = [Student.create(name=name)
+                                for name in ('huey', 'mickey', 'zaizee')]
+        # Set up relationships.
+        math.students.add([huey, zaizee])
+        engl.students.add([mickey])
+        math.students2.add([mickey])
+        engl.students2.add([huey, zaizee])
+
+    def test_manytomanyfield_disabled_backref(self):
+        math = Course.get(name='math')
+        query = math.students.order_by(Student.name)
+        self.assertEqual([s.name for s in query], ['huey', 'zaizee'])
+
+        huey = Student.get(name='huey')
+        math.students.remove(huey)
+        self.assertEqual([s.name for s in math.students], ['zaizee'])
+
+        # The backref is via the CourseStudent2 through-model.
+        self.assertEqual([c.name for c in huey.courses], ['engl'])
+
+    def test_through_model_disabled_backrefs(self):
+        # Here we're testing the case where the many-to-many field does not
+        # explicitly disable back-references, but the foreign-keys on the
+        # through model have disabled back-references.
+        engl = Course.get(name='engl')
+        query = engl.students2.order_by(Student.name)
+        self.assertEqual([s.name for s in query], ['huey', 'zaizee'])
+
+        zaizee = Student.get(Student.name == 'zaizee')
+        engl.students2.remove(zaizee)
+        self.assertEqual([s.name for s in engl.students2], ['huey'])
+
+        math = Course.get(name='math')
+        self.assertEqual([s.name for s in math.students2], ['mickey'])
 
 
 class TestManyToMany(ModelTestCase):

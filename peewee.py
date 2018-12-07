@@ -4655,13 +4655,16 @@ class ManyToManyFieldAccessor(FieldAccessor):
 
     def __get__(self, instance, instance_type=None, force_query=False):
         if instance is not None:
-            if not force_query and isinstance(getattr(instance, self.src_fk.backref), list):
-                return [getattr(obj, self.dest_fk.name) for obj in getattr(instance, self.src_fk.backref)]
-            else:
-                return (ManyToManyQuery(instance, self, self.rel_model)
-                        .join(self.through_model)
-                        .join(self.model)
-                        .where(self.src_fk == instance))
+            if not force_query and self.src_fk.backref != '+':
+                backref = getattr(instance, self.src_fk.backref)
+                if isinstance(backref, list):
+                    return [getattr(obj, self.dest_fk.name) for obj in backref]
+
+            return (ManyToManyQuery(instance, self, self.rel_model)
+                    .join(self.through_model)
+                    .join(self.model)
+                    .where(self.src_fk == instance))
+
         return self.field
 
     def __set__(self, instance, value):
