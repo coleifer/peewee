@@ -4660,10 +4660,11 @@ class ManyToManyFieldAccessor(FieldAccessor):
                 if isinstance(backref, list):
                     return [getattr(obj, self.dest_fk.name) for obj in backref]
 
+            src_id = getattr(instance, self.src_fk.rel_field.name)
             return (ManyToManyQuery(instance, self, self.rel_model)
                     .join(self.through_model)
                     .join(self.model)
-                    .where(self.src_fk == instance))
+                    .where(self.src_fk == src_id))
 
         return self.field
 
@@ -6362,11 +6363,13 @@ class ManyToManyQuery(ModelSelect):
     def __init__(self, instance, accessor, rel, *args, **kwargs):
         self._instance = instance
         self._accessor = accessor
+        self._src_attr = accessor.src_fk.rel_field.name
+        self._dest_attr = accessor.dest_fk.rel_field.name
         super(ManyToManyQuery, self).__init__(rel, (rel,), *args, **kwargs)
 
     def _id_list(self, model_or_id_list):
         if isinstance(model_or_id_list[0], Model):
-            return [obj._pk for obj in model_or_id_list]
+            return [getattr(obj, self._dest_attr) for obj in model_or_id_list]
         return model_or_id_list
 
     def add(self, value, clear_existing=False):
@@ -6374,31 +6377,34 @@ class ManyToManyQuery(ModelSelect):
             self.clear()
 
         accessor = self._accessor
+        src_id = getattr(self._instance, self._src_attr)
         if isinstance(value, SelectQuery):
             query = value.columns(
-                SQL(str(self._instance._pk)),
-                accessor.rel_model._meta.primary_key)
+                Value(src_id),
+                accessor.dest_fk.rel_field)
             accessor.through_model.insert_from(
                 fields=[accessor.src_fk, accessor.dest_fk],
                 query=query).execute()
         else:
             value = ensure_tuple(value)
-            if not value:
-                return
+            if not value: return
+
             inserts = [{
-                accessor.src_fk.name: self._instance._pk,
+                accessor.src_fk.name: src_id,
                 accessor.dest_fk.name: rel_id}
                 for rel_id in self._id_list(value)]
             accessor.through_model.insert_many(inserts).execute()
 
     def remove(self, value):
+        src_id = getattr(self._instance, self._src_attr)
         if isinstance(value, SelectQuery):
-            subquery = value.columns(value.model._meta.primary_key)
+            column = getattr(value.model, self._dest_attr)
+            subquery = value.columns(column)
             return (self._accessor.through_model
                     .delete()
                     .where(
                         (self._accessor.dest_fk << subquery) &
-                        (self._accessor.src_fk == self._instance._pk))
+                        (self._accessor.src_fk == src_id))
                     .execute())
         else:
             value = ensure_tuple(value)
@@ -6408,13 +6414,14 @@ class ManyToManyQuery(ModelSelect):
                     .delete()
                     .where(
                         (self._accessor.dest_fk << self._id_list(value)) &
-                        (self._accessor.src_fk == self._instance._pk))
+                        (self._accessor.src_fk == src_id))
                     .execute())
 
     def clear(self):
+        src_id = getattr(self._instance, self._src_attr)
         return (self._accessor.through_model
                 .delete()
-                .where(self._accessor.src_fk == self._instance)
+                .where(self._accessor.src_fk == src_id)
                 .execute())
 
 

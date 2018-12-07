@@ -51,6 +51,92 @@ class CourseStudent2(TestModel):
 CourseStudentDeferred.set_model(CourseStudent2)
 
 
+class Color(TestModel):
+    name = TextField(unique=True)
+
+LogoColorDeferred = DeferredThroughModel()
+
+class Logo(TestModel):
+    name = TextField(unique=True)
+    colors = ManyToManyField(Color, through_model=LogoColorDeferred)
+
+class LogoColor(TestModel):
+    logo = ForeignKeyField(Logo, field=Logo.name)
+    color = ForeignKeyField(Color, field=Color.name)  # FK to non-PK column.
+
+LogoColorDeferred.set_model(LogoColor)
+
+
+class TestManyToManyFKtoNonPK(ModelTestCase):
+    database = get_in_memory_db()
+    requires = [Color, Logo, LogoColor]
+
+    def test_manytomany_fk_to_non_pk(self):
+        red = Color.create(name='red')
+        green = Color.create(name='green')
+        blue = Color.create(name='blue')
+        lrg = Logo.create(name='logo-rg')
+        lrb = Logo.create(name='logo-rb')
+        lrgb = Logo.create(name='logo-rgb')
+        lrg.colors.add([red, green])
+        lrb.colors.add([red, blue])
+        lrgb.colors.add([red, green, blue])
+
+        def assertColors(logo, expected):
+            colors = [c.name for c in logo.colors.order_by(Color.name)]
+            self.assertEqual(colors, expected)
+
+        assertColors(lrg, ['green', 'red'])
+        assertColors(lrb, ['blue', 'red'])
+        assertColors(lrgb, ['blue', 'green', 'red'])
+
+        def assertLogos(color, expected):
+            logos = [l.name for l in color.logos.order_by(Logo.name)]
+            self.assertEqual(logos, expected)
+
+        assertLogos(red, ['logo-rb', 'logo-rg', 'logo-rgb'])
+        assertLogos(green, ['logo-rg', 'logo-rgb'])
+        assertLogos(blue, ['logo-rb', 'logo-rgb'])
+
+        # Verify we can delete data as well.
+        lrg.colors.remove(red)
+        self.assertEqual([c.name for c in lrg.colors], ['green'])
+
+        blue.logos.remove(lrb)
+        self.assertEqual([c.name for c in lrb.colors], ['red'])
+
+        # Verify we can insert using a SELECT query.
+        lrg.colors.add(Color.select().where(Color.name != 'blue'), True)
+        assertColors(lrg, ['green', 'red'])
+
+        lrb.colors.add(Color.select().where(Color.name == 'blue'))
+        assertColors(lrb, ['blue', 'red'])
+
+        # Verify we can insert logos using a SELECT query.
+        black = Color.create(name='black')
+        black.logos.add(Logo.select().where(Logo.name != 'logo-rgb'))
+        assertLogos(black, ['logo-rb', 'logo-rg'])
+        assertColors(lrb, ['black', 'blue', 'red'])
+        assertColors(lrg, ['black', 'green', 'red'])
+        assertColors(lrgb, ['blue', 'green', 'red'])
+
+        # Verify we can delete using a SELECT query.
+        lrg.colors.remove(Color.select().where(Color.name == 'red'))
+        assertColors(lrg, ['black', 'green'])
+
+        black.logos.remove(Logo.select().where(Logo.name == 'logo-rg'))
+        assertLogos(black, ['logo-rb'])
+
+        # Verify we can clear.
+        lrg.colors.clear()
+        assertColors(lrg, [])
+        assertColors(lrb, ['black', 'blue', 'red'])  # Not affected.
+
+        black.logos.clear()
+        assertLogos(black, [])
+        assertLogos(red, ['logo-rb', 'logo-rgb'])
+
+
 class TestManyToManyBackrefBehavior(ModelTestCase):
     database = get_in_memory_db()
     requires = [Student, Course, CourseStudent, CourseStudent2]
