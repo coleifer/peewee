@@ -10,6 +10,7 @@ from .base import IS_SQLITE
 from .base import ModelTestCase
 from .base import TestModel
 from .base import db
+from .base import get_in_memory_db
 from .base import requires_models
 from .base import requires_postgresql
 from .base import requires_sqlite
@@ -411,6 +412,8 @@ class TestSchemaMigration(ModelTestCase):
                 Tag.create,
                 tag='t3')
 
+        self.database.execute_sql('drop table tag_asdf')
+
     def test_add_index(self):
         # Create a unique index on first and last names.
         columns = ('first_name', 'last_name')
@@ -521,6 +524,8 @@ class TestSchemaMigration(ModelTestCase):
                 PersonNugg.create,
                 last='Leifer',
                 field_default='bazer')
+
+        self.database.execute_sql('drop table person_nugg;')
 
     def test_add_foreign_key(self):
         if hasattr(Person, 'newtag_set'):
@@ -823,3 +828,50 @@ class TestSchemaMigration(ModelTestCase):
         ]
         name = make_index_name('very_long_table_name', columns)
         self.assertEqual(len(name), 64)
+
+
+class BadNames(TestModel):
+    primary_data = TextField()
+    foreign_data = TextField()
+    data = TextField()
+
+    class Meta:
+        constraints = [
+            SQL('CONSTRAINT const1 UNIQUE (primary_data)'),
+            SQL('CONSTRAINT const2 UNIQUE (foreign_data)')]
+
+
+class TestSqliteColumnNameRegression(ModelTestCase):
+    database = get_in_memory_db()
+    requires = [BadNames]
+
+    def test_sqlite_column_name_regression(self):
+        BadNames.create(primary_data='pd', foreign_data='fd', data='d')
+
+        migrator = SchemaMigrator.from_database(self.database)
+        new_data = TextField(default='foo')
+        migrate(migrator.add_column('bad_names', 'new_data', new_data),
+                migrator.drop_column('bad_names', 'data'))
+
+        columns = self.database.get_columns('bad_names')
+        column_names = [column.name for column in columns]
+        self.assertEqual(column_names, ['id', 'primary_data', 'foreign_data',
+                                        'new_data'])
+
+        BNT = Table('bad_names', ('id', 'primary_data', 'foreign_data',
+                                  'new_data')).bind(self.database)
+        self.assertEqual([row for row in BNT.select()], [{
+            'id': 1,
+            'primary_data': 'pd',
+            'foreign_data': 'fd',
+            'new_data': 'foo'}])
+
+        # Verify constraints were carried over.
+        data = {'primary_data': 'pd', 'foreign_data': 'xx', 'new_data': 'd'}
+        self.assertRaises(IntegrityError, BNT.insert(data).execute)
+
+        data.update(primary_data='px', foreign_data='fd')
+        self.assertRaises(IntegrityError, BNT.insert(data).execute)
+
+        data.update(foreign_data='fx')
+        self.assertTrue(BNT.insert(data).execute())
