@@ -4613,6 +4613,9 @@ class DeferredForeignKey(Field):
 
     __hash__ = object.__hash__
 
+    def __deepcopy__(self, memo=None):
+        return DeferredForeignKey(self.rel_model_name, **self.field_kwargs)
+
     def set_model(self, rel_model):
         field = ForeignKeyField(rel_model, _deferred=True, **self.field_kwargs)
         self.model._meta.add_field(self.name, field)

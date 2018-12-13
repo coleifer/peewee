@@ -552,6 +552,34 @@ class TestModelDDL(ModelDatabaseTestCase):
             ' FOREIGN KEY ("snippet_long_foreign_key_identifier_id") '
             'REFERENCES "snippet" ("id")'))
 
+    def test_deferred_foreign_key_inheritance(self):
+        class Base(TestModel):
+            class Meta:
+                database = self.database
+        class WithTimestamp(Base):
+            timestamp = TimestampField()
+        class Tweet(Base):
+            user = DeferredForeignKey('DUser')
+            content = TextField()
+        class TimestampTweet(Tweet, WithTimestamp): pass
+        class DUser(Base):
+            username = TextField()
+
+        sql, params = Tweet._schema._create_table(safe=False).query()
+        self.assertEqual(sql, (
+            'CREATE TABLE "tweet" ('
+            '"id" INTEGER NOT NULL PRIMARY KEY, '
+            '"content" TEXT NOT NULL, '
+            '"user_id" INTEGER NOT NULL)'))
+
+        sql, params = TimestampTweet._schema._create_table(safe=False).query()
+        self.assertEqual(sql, (
+            'CREATE TABLE "timestamp_tweet" ('
+            '"id" INTEGER NOT NULL PRIMARY KEY, '
+            '"timestamp" INTEGER NOT NULL, '
+            '"content" TEXT NOT NULL, '
+            '"user_id" INTEGER NOT NULL)'))
+
     def test_identity_field(self):
         class PG10Identity(TestModel):
             id = IdentityField()
