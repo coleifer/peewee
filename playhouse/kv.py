@@ -140,6 +140,13 @@ class KeyValue(object):
         except KeyError:
             return default
 
+    def setdefault(self, key, default=None):
+        try:
+            return self[key]
+        except KeyError:
+            self[key] = default
+            return default
+
     def pop(self, key, default=Sentinel):
         with self._database.atomic():
             try:
