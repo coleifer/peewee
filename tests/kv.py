@@ -57,6 +57,11 @@ class TestKeyValue(DatabaseTestCase):
         self.assertTrue(KV.get('kx') is None)
         self.assertEqual(KV.get('kx', 'vx'), 'vx')
 
+        self.assertTrue(KV.get('k4') is None)
+        self.assertEqual(KV.setdefault('k4', 'v4'), 'v4')
+        self.assertEqual(KV.get('k4'), 'v4')
+        self.assertEqual(KV.get('k4', 'v5'),  'v4')
+
         KV.clear()
         self.assertEqual(len(KV), 0)
 
