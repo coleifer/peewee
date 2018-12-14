@@ -997,6 +997,13 @@ class TestModelAPIs(ModelTestCase):
             (10, 10, 30),
             (10, 20, 30)])
 
+        query = (Point
+                 .select(Point.x, (Point.y + subq).alias('sy'))
+                 .order_by(Point.x, Point.y))
+        self.assertEqual(list(query.tuples()), [
+            (1, 4), (1, 5),
+            (10, 40), (10, 50)])
+
     @requires_models(User, Tweet)
     def test_filtering(self):
         with self.database.atomic():
