@@ -975,10 +975,9 @@ class CTE(_HashableSource, Source):
 
             if self._columns:
                 ctx.literal(' ').sql(EnclosedNodeList(self._columns))
-            ctx.literal(' AS (')
-            with ctx.scope_normal():
+            ctx.literal(' AS ')
+            with ctx.scope_normal(parentheses=True):
                 ctx.sql(self._query)
-            ctx.literal(')')
         return ctx
 
 
@@ -1277,17 +1276,11 @@ class Expression(ColumnBase):
         self.flat = flat
 
     def __sql__(self, ctx):
-        overrides = {'parentheses': not self.flat}
+        overrides = {'parentheses': not self.flat, 'in_expr': True}
         if isinstance(self.lhs, Field):
             overrides['converter'] = self.lhs.db_value
         else:
             overrides['converter'] = None
-
-        op_in = self.op == OP.IN or self.op == OP.NOT_IN
-        if op_in:
-            overrides['op_in'] = True
-        elif ctx.state.op_in:
-            overrides['op_in'] = False
 
         if ctx.state.operations:
             op_sql = ctx.state.operations.get(self.op, self.op)
@@ -1297,6 +1290,7 @@ class Expression(ColumnBase):
         with ctx(**overrides):
             # Postgresql reports an error for IN/NOT IN (), so convert to
             # the equivalent boolean expression.
+            op_in = self.op == OP.IN or self.op == OP.NOT_IN
             if op_in and Context().parse(self.rhs)[0] == '()':
                 return ctx.literal('0 = 1' if self.op == OP.IN else '1 = 1')
 
@@ -2090,9 +2084,10 @@ class Select(SelectBase):
                 ctx.sql(SQL(self._for_update))
 
         # If the subquery is inside a function -or- we are evaluating a
-        # subquery on either side of an IN expression w/o an explicit alias, do
+        # subquery on either side of an expression w/o an explicit alias, do
         # not generate an alias + AS clause.
-        if ctx.state.in_function or (ctx.state.op_in and self._alias is None):
+        if ctx.state.in_function or (ctx.state.in_expr and
+                                     self._alias is None):
             return ctx
 
         return self.apply_alias(ctx)

@@ -248,6 +248,18 @@ class TestSelectQuery(BaseTestCase):
             'WHERE ("t2"."user" = "t1"."id")) AS "iq" '
             'FROM "users" AS "t1" ORDER BY "t1"."username"'), [])
 
+    def test_subquery_in_expr(self):
+        Team = Table('team')
+        Challenge = Table('challenge')
+        subq = Team.select(fn.COUNT(Team.c.id) + 1)
+        query = (Challenge
+                 .select((Challenge.c.points / subq).alias('score'))
+                 .order_by(SQL('score')))
+        self.assertSQL(query, (
+            'SELECT ("t1"."points" / ('
+            'SELECT (COUNT("t2"."id") + ?) FROM "team" AS "t2")) AS "score" '
+            'FROM "challenge" AS "t1" ORDER BY score'), [1])
+
     def test_user_defined_alias(self):
         UA = User.alias('alt')
         query = (User
