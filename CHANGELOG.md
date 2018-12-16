@@ -7,23 +7,27 @@ https://github.com/coleifer/peewee/releases
 
 ## master
 
-* Better support for UPDATE ... FROM queries, and more generally, more robust
-  support for UPDATE and RETURNING clauses. This means that the
-  `QualifiedNames` helper is no longer needed for certain types of queries.
+[View commits](https://github.com/coleifer/peewee/compare/3.8.0...master)
+
+## 3.8.0
+
+**New features**
+
 * Postgres `BinaryJSONField` now supports `has_key()`, `concat()` and
   `remove()` methods (though remove may require pg10+).
 * Add `python_value()` method to the SQL-function helper `fn`, to allow
   specifying a custom function for mapping database values to Python values.
-* Introspection will now, by default, only strip "_id" from introspected column
-  names if those columns are foreign-keys. See #1799 for discussion.
+
+**Changes**
+
+* Better support for UPDATE ... FROM queries, and more generally, more robust
+  support for UPDATE and RETURNING clauses. This means that the
+  `QualifiedNames` helper is no longer needed for certain types of queries.
 * The `SqlCipherDatabase` no longer accepts a `kdf_iter` parameter. To
   configure the various SQLCipher encryption settings, specify the setting
   values as `pragmas` when initializing the database.
-* Fixed bug in `order_by_extend()`, thanks @nhatHero.
-* Fixed bug where the `DataSet` CSV import/export did not support non-ASCII
-  characters in Python 3.x.
-* Fixed bug where `model_to_dict` would attempt to traverse explicitly disabled
-  foreign-key backrefs (#1785).
+* Introspection will now, by default, only strip "_id" from introspected column
+  names if those columns are foreign-keys. See #1799 for discussion.
 * Allow `UUIDField` and `BinaryUUIDField` to accept hexadecimal UUID strings as
   well as raw binary UUID bytestrings (in addition to `UUID` instances, which
   are already supported).
@@ -31,8 +35,24 @@ https://github.com/coleifer/peewee/releases
 * Allow multiple calls to `cast()` to be chained (#1795).
 * Add logic to ensure foreign-key constraint names that exceed 64 characters
   are truncated using the same logic as is currently in place for long indexes.
+* `ManyToManyField` supports foreign-keys to fields other than primary-keys.
+* When linked against SQLite 3.26 or newer, support `SQLITE_CONSTRAINT` to
+  designate invalid queries against virtual tables.
+* SQL-generation changes to aid in supporting using queries within expressions
+  following the SELECT statement.
 
-[View commits](https://github.com/coleifer/peewee/compare/3.7.1...master)
+**Bugfixes**
+
+* Fixed bug in `order_by_extend()`, thanks @nhatHero.
+* Fixed bug where the `DataSet` CSV import/export did not support non-ASCII
+  characters in Python 3.x.
+* Fixed bug where `model_to_dict` would attempt to traverse explicitly disabled
+  foreign-key backrefs (#1785).
+* Fixed bug when attempting to migrate SQLite tables that have a field whose
+  column-name begins with "primary_".
+* Fixed bug with inheriting deferred foreign-keys.
+
+[View commits](https://github.com/coleifer/peewee/compare/3.7.1...3.8.0)
 
 ## 3.7.1
 
