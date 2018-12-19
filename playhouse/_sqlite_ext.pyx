@@ -1,6 +1,5 @@
 import hashlib
 import zlib
-from random import randint
 
 cimport cython
 from cpython cimport datetime
@@ -8,8 +7,6 @@ from cpython.bytes cimport PyBytes_AsStringAndSize
 from cpython.bytes cimport PyBytes_Check
 from cpython.bytes cimport PyBytes_FromStringAndSize
 from cpython.bytes cimport PyBytes_AS_STRING
-from cpython.mem cimport PyMem_Free
-from cpython.mem cimport PyMem_Malloc
 from cpython.object cimport PyObject
 from cpython.ref cimport Py_INCREF, Py_DECREF
 from cpython.unicode cimport PyUnicode_AsUTF8String
