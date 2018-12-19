@@ -63,24 +63,18 @@ sqlcipher.register_adapter(datetime.time, str)
 class _SqlCipherDatabase(object):
     def _connect(self):
         params = dict(self.connect_params)
-        passphrase = params.pop('passphrase', '')
-
-        if len(passphrase) < 8:
-            raise ImproperlyConfigured(
-                'SqlCipherDatabase passphrase should be at least eight '
-                'character long.')
+        passphrase = params.pop('passphrase', '').replace("'", "''")
 
         conn = sqlcipher.connect(self.database, **params)
         conn.isolation_level = None
         try:
-            conn.execute(
-                'PRAGMA key=\'{0}\''.format(passphrase.replace("'", "''")))
+            if passphrase:
+                conn.execute("PRAGMA key='%s'" % passphrase)
             self._add_conn_hooks(conn)
         except:
             conn.close()
             raise
-        else:
-            return conn
+        return conn
 
     def set_passphrase(self, passphrase):
         if not self.is_closed():
@@ -91,16 +85,10 @@ class _SqlCipherDatabase(object):
         self.connect_params['passphrase'] = passphrase
 
     def rekey(self, passphrase):
-        if len(passphrase) < 8:
-            raise ImproperlyConfigured(
-                'SqlCipherDatabase passphrase should be at least eight '
-                'character long.')
-
         if self.is_closed():
             self.connect()
 
-        self.execute_sql(
-            'PRAGMA rekey=\'{0}\''.format(passphrase.replace("'", "''")))
+        self.execute_sql("PRAGMA rekey='%s'" % passphrase.replace("'", "''"))
         self.connect_params['passphrase'] = passphrase
         return True
 

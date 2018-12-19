@@ -585,8 +585,8 @@ sqlcipher_ext API notes
 
     :param database: Path to encrypted database filename to open [or create].
     :param passphrase: Database encryption passphrase: should be at least 8 character
-        long (or an error is raised), but it is *strongly advised* to enforce better
-        `passphrase strength`_ criteria in your implementation.
+        long, but it is *strongly advised* to enforce better `passphrase strength`_
+        criteria in your implementation.
 
     * If the ``database`` file doesn't exist, it will be *created* with
       encryption by a key derived from ``passhprase``.

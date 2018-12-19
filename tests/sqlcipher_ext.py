@@ -80,12 +80,20 @@ class SqlCipherTestCase(CleanUpModelTestCase):
         # Re-set to the original passphrase.
         self.database.rekey(PASSPHRASE)
 
-    def test_passphrase_length(self):
-        db = SqlCipherDatabase(':memory:', passphrase='x')
-        self.assertRaises(ImproperlyConfigured, db.connect)
-
+    def test_empty_passphrase(self):
         db = SqlCipherDatabase(':memory:')
-        self.assertRaises(ImproperlyConfigured, db.connect)
+
+        class CM(TestModel):
+            data = TextField()
+            class Meta:
+                database = db
+
+        db.connect()
+        db.create_tables([CM])
+        cm = CM.create(data='foo')
+        cm_db = CM.get(CM.data == 'foo')
+        self.assertEqual(cm_db.id, cm.id)
+        self.assertEqual(cm_db.data, 'foo')
 
 
 config_db = SqlCipherDatabase('peewee_test.dbc', pragmas={
