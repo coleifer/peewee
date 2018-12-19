@@ -843,6 +843,18 @@ class TestBinaryJsonField(BaseJsonFieldTestCase, ModelTestCase):
             (5, 7),
             ('k4', None)])
 
+    def test_conflict_update(self):
+        b1 = BJson.create(data={'k1': 'v1'})
+        iq = (BJson
+              .insert(id=b1.id, data={'k1': 'v1-x'})
+              .on_conflict('update', conflict_target=[BJson.id],
+                           update={BJson.data: {'k1': 'v1-z'}}))
+        b1_id_db = iq.execute()
+        self.assertEqual(b1.id, b1_id_db)
+
+        b1_db = BJson.get(BJson.id == b1.id)
+        self.assertEqual(BJson.data, {'k1': 'v1-z'})
+
 
 class TestIntervalField(ModelTestCase):
     database = db
