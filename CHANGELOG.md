@@ -7,6 +7,12 @@ https://github.com/coleifer/peewee/releases
 
 ## master
 
+**Bugfixes**
+
+* Support string field-names in data dictionary when performing an ON CONFLICT
+  ... UPDATE query, which allows field-specific conversions to be applied.
+  References #1815.
+
 [View commits](https://github.com/coleifer/peewee/compare/3.8.0...master)
 
 ## 3.8.0
