@@ -1575,11 +1575,11 @@ class OnConflict(Node):
         self._conflict_target = ensure_tuple(conflict_target)
         self._conflict_constraint = conflict_constraint
 
-    def get_conflict_statement(self, ctx):
-        return ctx.state.conflict_statement(self)
+    def get_conflict_statement(self, ctx, query):
+        return ctx.state.conflict_statement(self, query)
 
-    def get_conflict_update(self, ctx):
-        return ctx.state.conflict_update(self)
+    def get_conflict_update(self, ctx, query):
+        return ctx.state.conflict_update(self, query)
 
     @Node.copy
     def preserve(self, *columns):
@@ -2315,12 +2315,12 @@ class Insert(_WriteQuery):
     def __sql__(self, ctx):
         super(Insert, self).__sql__(ctx)
         with ctx.scope_values():
-            statement = None
+            stmt = None
             if self._on_conflict is not None:
-                statement = self._on_conflict.get_conflict_statement(ctx)
+                stmt = self._on_conflict.get_conflict_statement(ctx, self)
 
             (ctx
-             .sql(statement or SQL('INSERT'))
+             .sql(stmt or SQL('INSERT'))
              .literal(' INTO ')
              .sql(self.table)
              .literal(' '))
@@ -2342,7 +2342,7 @@ class Insert(_WriteQuery):
                 self._query_type = Insert.MULTI
 
             if self._on_conflict is not None:
-                update = self._on_conflict.get_conflict_update(ctx)
+                update = self._on_conflict.get_conflict_update(ctx, self)
                 if update is not None:
                     ctx.literal(' ').sql(update)
 
@@ -2743,13 +2743,13 @@ class Database(_callable_context_manager):
             context.update(context_options)
         return self.context_class(**context)
 
-    def conflict_statement(self, on_conflict):
+    def conflict_statement(self, on_conflict, query):
         raise NotImplementedError
 
-    def conflict_update(self, on_conflict):
+    def conflict_update(self, on_conflict, query):
         raise NotImplementedError
 
-    def _build_on_conflict_update(self, on_conflict):
+    def _build_on_conflict_update(self, on_conflict, query):
         if on_conflict._conflict_target:
             stmt = SQL('ON CONFLICT')
             target = EnclosedNodeList([
@@ -2773,6 +2773,10 @@ class Database(_callable_context_manager):
         if on_conflict._update:
             for k, v in on_conflict._update.items():
                 if not isinstance(v, Node):
+                    # Attempt to resolve string field-names to their respective
+                    # field object, to apply data-type conversions.
+                    if isinstance(k, basestring):
+                        k = getattr(query.table, k)
                     converter = k.db_value if isinstance(k, Field) else None
                     v = Value(v, converter=converter, unpack=False)
                 else:
@@ -3219,12 +3223,12 @@ class SqliteDatabase(Database):
     def get_binary_type(self):
         return sqlite3.Binary
 
-    def conflict_statement(self, on_conflict):
+    def conflict_statement(self, on_conflict, query):
         action = on_conflict._action.lower() if on_conflict._action else ''
         if action and action not in ('nothing', 'update'):
             return SQL('INSERT OR %s' % on_conflict._action.upper())
 
-    def conflict_update(self, oc):
+    def conflict_update(self, oc, query):
         # Sqlite prior to 3.24.0 does not support Postgres-style upsert.
         if self._sqlite_version < (3, 24, 0) and \
            any((oc._preserve, oc._update, oc._where, oc._conflict_target,
@@ -3250,7 +3254,7 @@ class SqliteDatabase(Database):
             raise ValueError('SQLite requires that a conflict target be '
                              'specified when doing an upsert.')
 
-        return self._build_on_conflict_update(oc)
+        return self._build_on_conflict_update(oc, query)
 
     def extract_date(self, date_part, date_field):
         return fn.date_part(date_part, date_field)
@@ -3398,10 +3402,10 @@ class PostgresqlDatabase(Database):
     def get_binary_type(self):
         return psycopg2.Binary
 
-    def conflict_statement(self, on_conflict):
+    def conflict_statement(self, on_conflict, query):
         return
 
-    def conflict_update(self, oc):
+    def conflict_update(self, oc, query):
         action = oc._action.lower() if oc._action else ''
         if action in ('ignore', 'nothing'):
             return SQL('ON CONFLICT DO NOTHING')
@@ -3418,7 +3422,7 @@ class PostgresqlDatabase(Database):
             raise ValueError('Postgres requires that a conflict target be '
                              'specified when doing an upsert.')
 
-        return self._build_on_conflict_update(oc)
+        return self._build_on_conflict_update(oc, query)
 
     def extract_date(self, date_part, date_field):
         return fn.EXTRACT(NodeList((date_part, SQL('FROM'), date_field)))
@@ -3526,7 +3530,7 @@ class MySQLDatabase(Database):
     def get_binary_type(self):
         return mysql.Binary
 
-    def conflict_statement(self, on_conflict):
+    def conflict_statement(self, on_conflict, query):
         if not on_conflict._action: return
 
         action = on_conflict._action.lower()
@@ -3538,7 +3542,7 @@ class MySQLDatabase(Database):
             raise ValueError('Un-supported action for conflict resolution. '
                              'MySQL supports REPLACE, IGNORE and UPDATE.')
 
-    def conflict_update(self, on_conflict):
+    def conflict_update(self, on_conflict, query):
         if on_conflict._where or on_conflict._conflict_target or \
            on_conflict._conflict_constraint:
             raise ValueError('MySQL does not support the specification of '
@@ -3558,6 +3562,10 @@ class MySQLDatabase(Database):
         if on_conflict._update:
             for k, v in on_conflict._update.items():
                 if not isinstance(v, Node):
+                    # Attempt to resolve string field-names to their respective
+                    # field object, to apply data-type conversions.
+                    if isinstance(k, basestring):
+                        k = getattr(query.table, k)
                     converter = k.db_value if isinstance(k, Field) else None
                     v = Value(v, converter=converter, unpack=False)
                 updates.append(NodeList((ensure_entity(k), SQL('='), v)))
