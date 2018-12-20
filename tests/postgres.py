@@ -334,14 +334,15 @@ class TestArrayFieldConvertValues(ModelTestCase):
     database = db
     requires = [ArrayTSModel]
 
+    def dt(self, day, hour=0, minute=0, second=0):
+        return datetime.datetime(2018, 1, day, hour, minute, second)
+
     def test_value_conversion(self):
-        def dt(day, hour=0, minute=0, second=0):
-            return datetime.datetime(2018, 1, day, hour, minute, second)
 
         data = {
-            'k1': [dt(1), dt(2), dt(3)],
+            'k1': [self.dt(1), self.dt(2), self.dt(3)],
             'k2': [],
-            'k3': [dt(4, 5, 6, 7), dt(10, 11, 12, 13)],
+            'k3': [self.dt(4, 5, 6, 7), self.dt(10, 11, 12, 13)],
         }
         for key in sorted(data):
             ArrayTSModel.create(key=key, timestamps=data[key])
@@ -351,14 +352,37 @@ class TestArrayFieldConvertValues(ModelTestCase):
             self.assertEqual(am.timestamps, data[key])
 
         # Perform lookup using timestamp values.
-        ts = ArrayTSModel.get(ArrayTSModel.timestamps.contains(dt(3)))
+        ts = ArrayTSModel.get(ArrayTSModel.timestamps.contains(self.dt(3)))
         self.assertEqual(ts.key, 'k1')
 
-        ts = ArrayTSModel.get(ArrayTSModel.timestamps.contains(dt(4, 5, 6, 7)))
+        ts = ArrayTSModel.get(
+            ArrayTSModel.timestamps.contains(self.dt(4, 5, 6, 7)))
         self.assertEqual(ts.key, 'k3')
 
         self.assertRaises(ArrayTSModel.DoesNotExist, ArrayTSModel.get,
-                          ArrayTSModel.timestamps.contains(dt(4, 5, 6)))
+                          ArrayTSModel.timestamps.contains(self.dt(4, 5, 6)))
+
+    def test_get_with_array_values(self):
+        a1 = ArrayTSModel.create(key='k1', timestamps=[self.dt(1)])
+        a2 = ArrayTSModel.create(key='k2', timestamps=[self.dt(2), self.dt(3)])
+
+        query = (ArrayTSModel
+                 .select()
+                 .where(ArrayTSModel.timestamps == [self.dt(1)]))
+        a1_db = query.get()
+        self.assertEqual(a1_db.id, a1.id)
+
+        query = (ArrayTSModel
+                 .select()
+                 .where(ArrayTSModel.timestamps == [self.dt(2), self.dt(3)]))
+        a2_db = query.get()
+        self.assertEqual(a2_db.id, a2.id)
+
+        a1_db = ArrayTSModel.get(timestamps=[self.dt(1)])
+        self.assertEqual(a1_db.id, a1.id)
+
+        a2_db = ArrayTSModel.get(timestamps=[self.dt(2), self.dt(3)])
+        self.assertEqual(a2_db.id, a2.id)
 
 
 class TestArrayUUIDField(ModelTestCase):

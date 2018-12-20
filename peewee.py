@@ -284,17 +284,18 @@ OP = attrdict(
 # To support "django-style" double-underscore filters, create a mapping between
 # operation name and operation code, e.g. "__eq" == OP.EQ.
 DJANGO_MAP = attrdict({
-    'eq': OP.EQ,
-    'lt': OP.LT,
-    'lte': OP.LTE,
-    'gt': OP.GT,
-    'gte': OP.GTE,
-    'ne': OP.NE,
-    'in': OP.IN,
-    'is': OP.IS,
-    'like': OP.LIKE,
-    'ilike': OP.ILIKE,
-    'regexp': OP.REGEXP})
+    'eq': operator.eq,
+    'lt': operator.lt,
+    'lte': operator.le,
+    'gt': operator.gt,
+    'gte': operator.ge,
+    'ne': operator.ne,
+    'in': operator.lshift,
+    'is': lambda l, r: Expression(l, OP.IS, r),
+    'like': lambda l, r: Expression(l, OP.LIKE, r),
+    'ilike': lambda l, r: Expression(l, OP.ILIKE, r),
+    'regexp': lambda l, r: Expression(l, OP.REGEXP, r),
+})
 
 #: Mapping of field type to the data-type supported by the database. Databases
 #: may override or add to this list.
@@ -6246,9 +6247,9 @@ class ModelSelect(BaseModelSelect, Select):
                 key, op = key.rsplit('__', 1)
                 op = DJANGO_MAP[op]
             elif value is None:
-                op = OP.IS
+                op = DJANGO_MAP['is']
             else:
-                op = OP.EQ
+                op = DJANGO_MAP['eq']
 
             if '__' not in key:
                 # Handle simplest case. This avoids joining over-eagerly when a
@@ -6266,7 +6267,7 @@ class ModelSelect(BaseModelSelect, Select):
                         if value is not None and isinstance(model_attr, fks):
                             curr = model_attr.rel_model
                             joins.append(model_attr)
-            accum.append(Expression(model_attr, op, value))
+            accum.append(op(model_attr, value))
         return accum, joins
 
     def filter(self, *args, **kwargs):
