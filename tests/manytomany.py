@@ -181,6 +181,28 @@ class TestManyToManyBackrefBehavior(ModelTestCase):
         self.assertEqual([s.name for s in math.students2], ['mickey'])
 
 
+class TestManyToManyInheritance(ModelTestCase):
+    def test_manytomany_inheritance(self):
+        class BaseModel(TestModel):
+            class Meta:
+                database = self.database
+        class User(BaseModel):
+            username = TextField()
+        class Project(BaseModel):
+            name = TextField()
+            users = ManyToManyField(User, backref='projects')
+        class VProject(Project):
+            pass
+
+        PThrough = Project.users.through_model
+        self.assertTrue(PThrough.project.rel_model is Project)
+        self.assertTrue(PThrough.user.rel_model is User)
+
+        VPThrough = VProject.users.through_model
+        self.assertTrue(VPThrough.vproject.rel_model is VProject)
+        self.assertTrue(VPThrough.user.rel_model is User)
+
+
 class TestManyToMany(ModelTestCase):
     database = get_in_memory_db()
     requires = [User, Note, NoteUserThrough, AltNote, AltThroughModel]

@@ -4695,17 +4695,24 @@ class ManyToManyField(MetaField):
                                  'through_model is specified.')
         self.rel_model = model
         self.backref = backref
-        self.through_model = through_model
+        self._user_through_model = through_model
+        self._through_model = None
         self._on_delete = on_delete
         self._on_update = on_update
         self._is_backref = _is_backref
+
+    def __deepcopy__(self, memo=None):
+        return type(self)(self.rel_model, self.backref,
+                          self._user_through_model, self._on_delete,
+                          self._on_update, self._is_backref)
 
     def _get_descriptor(self):
         return ManyToManyFieldAccessor(self)
 
     def bind(self, model, name, set_attribute=True):
-        if isinstance(self.through_model, DeferredThroughModel):
-            self.through_model.set_field(model, self, name)
+        if self._user_through_model is not None and \
+           isinstance(self._user_through_model, DeferredThroughModel):
+            self._user_through_model.set_field(model, self, name)
             return
 
         super(ManyToManyField, self).bind(model, name, set_attribute)
@@ -4726,31 +4733,41 @@ class ManyToManyField(MetaField):
             (self._is_backref, self.model),
             (not self._is_backref, self.rel_model)))]
 
+    @property
+    def through_model(self):
+        if self._user_through_model is not None:
+            return self._user_through_model
+        elif self._through_model is None:
+            self._through_model = self._create_through_model()
+        return self._through_model
+
+    @through_model.setter
+    def through_model(self, value):
+        self._user_through_model = value
+
+    def _create_through_model(self):
+        lhs, rhs = self.get_models()
+        tables = [model._meta.table_name for model in (lhs, rhs)]
+
+        class Meta:
+            database = self.model._meta.database
+            schema = self.model._meta.schema
+            table_name = '%s_%s_through' % tuple(tables)
+            indexes = (
+                ((lhs._meta.name, rhs._meta.name),
+                 True),)
+
+        attrs = {
+            lhs._meta.name: ForeignKeyField(lhs, on_delete=self._on_delete,
+                                            on_update=self._on_update),
+            rhs._meta.name: ForeignKeyField(rhs, on_delete=self._on_delete,
+                                            on_update=self._on_update)}
+        attrs['Meta'] = Meta
+
+        klass_name = '%s%sThrough' % (lhs.__name__, rhs.__name__)
+        return type(klass_name, (Model,), attrs)
+
     def get_through_model(self):
-        if not self.through_model:
-            lhs, rhs = self.get_models()
-            tables = [model._meta.table_name for model in (lhs, rhs)]
-
-            class Meta:
-                database = self.model._meta.database
-                schema = self.model._meta.schema
-                table_name = '%s_%s_through' % tuple(tables)
-                indexes = (
-                    ((lhs._meta.name, rhs._meta.name),
-                     True),)
-
-            attrs = {
-                lhs._meta.name: ForeignKeyField(lhs, on_delete=self._on_delete,
-                                                on_update=self._on_update),
-                rhs._meta.name: ForeignKeyField(rhs, on_delete=self._on_delete,
-                                                on_update=self._on_update)}
-            attrs['Meta'] = Meta
-
-            self.through_model = type(
-                '%s%sThrough' % (lhs.__name__, rhs.__name__),
-                (Model,),
-                attrs)
-
         return self.through_model
 
 
