@@ -738,6 +738,42 @@ APIs
             tags = SearchField()
             timestamp = SearchField(unindexed=True)
 
+    .. py:method:: match(term)
+
+        :param str term: full-text search query/terms
+        :return: a :py:class:`Expression` corresponding to the ``MATCH``
+            operator.
+
+        Sqlite's full-text search supports searching either the full table,
+        including all indexed columns, **or** searching individual columns. The
+        :py:meth:`~SearchField.match` method can be used to restrict search to
+        a single column:
+
+        .. code-block:: python
+
+            class SearchIndex(FTSModel):
+                title = SearchField()
+                body = SearchField()
+
+            # Search *only* the title field and return results ordered by
+            # relevance, using bm25.
+            query = (SearchIndex
+                     .select(SearchIndex, SearchIndex.bm25().alias('score'))
+                     .where(SearchIndex.title.match('python'))
+                     .order_by(SearchIndex.bm25()))
+
+        To instead search *all* indexed columns, use the
+        :py:meth:`FTSModel.match` method:
+
+        .. code-block:: python
+
+            # Searches *both* the title and body and return results ordered by
+            # relevance, using bm25.
+            query = (SearchIndex
+                     .select(SearchIndex, SearchIndex.bm25().alias('score'))
+                     .where(SearchIndex.match('python'))
+                     .order_by(SearchIndex.bm25()))
+
 
 .. py:class:: VirtualModel()
 

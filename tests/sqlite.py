@@ -101,9 +101,9 @@ class Document(FTSModel, TestModel):
 
 
 class MultiColumn(FTSModel, TestModel):
-    c1 = TextField()
-    c2 = TextField()
-    c3 = TextField()
+    c1 = SearchField()
+    c2 = SearchField()
+    c3 = SearchField()
     c4 = IntegerField()
     class Meta:
         options = {'tokenize': 'porter'}
@@ -880,6 +880,60 @@ class TestFullTextSearch(ModelTestCase):
         assertResults(MultiColumn.search_bm25, 'bbbbb', [1., -1., 0.], [
             (1, -0.),
             (2, 0.85)])
+
+    def test_fts_match_single_column(self):
+        data = (
+            ('m1c1 aaaa', 'm1c2 bbbb', 'm1c3 cccc'),
+            ('m2c1 dddd', 'm2c2 eeee', 'm2c3 ffff'),
+            ('m3c1 cccc', 'm3c2 bbbb', 'm3c3 aaaa'),
+        )
+        for c1, c2, c3 in data:
+            MultiColumn.create(c1=c1, c2=c2, c3=c3, c4=0)
+
+        def assertSearch(field, value, expected):
+            query = (MultiColumn
+                     .select()
+                     .where(field.match(value))
+                     .order_by(MultiColumn.c1))
+            self.assertEqual([mc.c1[:2] for mc in query], expected)
+
+        assertSearch(MultiColumn.c1, 'aaaa', ['m1'])
+        assertSearch(MultiColumn.c1, 'bbbb', [])
+        assertSearch(MultiColumn.c1, 'cccc', ['m3'])
+        assertSearch(MultiColumn.c2, 'bbbb', ['m1', 'm3'])
+        assertSearch(MultiColumn.c2, 'eeee', ['m2'])
+        assertSearch(MultiColumn.c3, 'cccc', ['m1'])
+        assertSearch(MultiColumn.c3, 'aaaa', ['m3'])
+
+    def test_fts_score_single_column(self):
+        data = (
+            ('m1c1 aaaa', 'm1c2 bbbb', 'm1c3 cccc'),
+            ('m2c1 dddd', 'm2c2 eeee', 'm2c3 ffff'),
+            ('m3c1 cccc', 'm3c2 bbbb aaaa', 'm3c3 aaaa aaaa'),
+        )
+        for c1, c2, c3 in data:
+            MultiColumn.create(c1=c1, c2=c2, c3=c3, c4=0)
+
+        def assertQueryScore(field, search_term, expected, *weights):
+            rank = MultiColumn.bm25(*weights)
+            query = (MultiColumn
+                     .select(MultiColumn, rank.alias('score'))
+                     .where(field.match(search_term))
+                     .order_by(rank))
+            results = [(r.c1[:2], round(r.score, 2)) for r in query]
+            self.assertEqual(results, expected)
+
+        assertQueryScore(MultiColumn.c1, 'aaaa', [('m1', -0.51)])
+        assertQueryScore(MultiColumn.c1, 'dddd', [('m2', -0.51)])
+        assertQueryScore(MultiColumn.c2, 'bbbb', [('m1', -0.), ('m3', -0.)])
+        assertQueryScore(MultiColumn.c2, 'eeee', [('m2', -0.51)])
+        assertQueryScore(MultiColumn.c3, 'aaaa', [('m3', -0.62)])
+
+        assertQueryScore(MultiColumn.c1, 'aaaa', [('m1', -1.02)], 2., 0., 0.)
+        assertQueryScore(MultiColumn.c2, 'bbbb', [('m1', -0.), ('m3', -0.)],
+                         0., 1.0, 0.)
+        assertQueryScore(MultiColumn.c2, 'eeee', [('m2', -1.02)], 0., 2., 0.)
+        assertQueryScore(MultiColumn.c3, 'aaaa', [('m3', -0.31)], 0., 1., 0.5)
 
 
 @skip_unless(CYTHON_EXTENSION, 'requires sqlite c extension')

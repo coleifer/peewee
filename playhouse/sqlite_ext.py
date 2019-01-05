@@ -175,6 +175,9 @@ class SearchField(Field):
         super(SearchField, self).__init__(unindexed=unindexed,
                                           column_name=column_name, null=True)
 
+    def match(self, term):
+        return match(self, term)
+
 
 class VirtualTableSchemaManager(SchemaManager):
     def _create_virtual_table(self, safe=True, **options):
