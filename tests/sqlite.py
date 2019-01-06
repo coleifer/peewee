@@ -965,9 +965,9 @@ class TestFullTextSearchCython(TestFullTextSearch):
         # No column specified, use the first text field.
         query = MultiColumn.search_bm25f('aaaaa OR fffff', [1., 3., 0, 0], 1)
         self.assertEqual([(mc.c4, round(mc.score, 2)) for mc in query], [
-            (1, -14.46),
+            (1, -14.18),
             (5, -12.01),
-            (3, -11.16)])
+            (3, -11.48)])
 
     def test_lucene(self):
         for message in self.messages:

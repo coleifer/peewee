@@ -815,7 +815,7 @@ def peewee_lucene(py_match_info, *raw_weights):
             if weight == 0:
                 continue
             doc_length = match_info[L_O + j]
-            x = X_O + (3 * j * (i + 1))
+            x = X_O + (3 * (j + i * col_count))
             term_frequency = match_info[x]
             docs_with_term = match_info[x + 2]
             idf = log(total_docs / (docs_with_term + 1.))
@@ -849,6 +849,16 @@ def peewee_bm25(py_match_info, *raw_weights):
         double score = 0.0
 
     match_info = <unsigned int *>match_info_buf
+    # PCNALX = matchinfo format.
+    # P = 1 = phrase count within query.
+    # C = 1 = searchable columns in table.
+    # N = 1 = total rows in table.
+    # A = c = for each column, avg number of tokens
+    # L = c = for each column, length of current row (in tokens)
+    # X = 3 * c * p = for each phrase and table column,
+    # * phrase count within column for current row.
+    # * phrase count within column for all rows.
+    # * total rows for which column contains phrase.
     term_count = match_info[P_O]
     col_count = match_info[C_O]
     total_docs = match_info[N_O]
@@ -877,7 +887,7 @@ def peewee_bm25(py_match_info, *raw_weights):
             else:
                 D = 1 - B + (B * (doc_length / avg_length))
 
-            x = X_O + (3 * j * (i + 1))
+            x = X_O + (3 * (j + i * col_count))
             term_frequency = match_info[x]
             docs_with_term = match_info[x + 2]
             idf = max(
@@ -946,7 +956,7 @@ def peewee_bm25f(py_match_info, *raw_weights):
             weight = weights[j]
             if weight == 0:
                 continue
-            current_x = X_O + (3 * j * (i + 1))
+            current_x = X_O + (3 * (j + i * col_count))
             term_frequency = match_info[current_x]
             docs_with_term = match_info[current_x + 2]
             idf = log(

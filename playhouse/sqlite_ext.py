@@ -1173,7 +1173,7 @@ def bm25(raw_match_info, *args):
             else:
                 D = 1 - B + (B * (doc_length / avg_length))
 
-            x = X_O + (3 * j * (i + 1))
+            x = X_O + (3 * (j + i * col_count))
             term_frequency = float(match_info[x])
             docs_with_term = float(match_info[x + 2])
 
