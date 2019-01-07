@@ -1102,6 +1102,15 @@ def _parse_match_info(buf):
     bufsize = len(buf)  # Length in bytes.
     return [struct.unpack('@I', buf[i:i+4])[0] for i in range(0, bufsize, 4)]
 
+def get_weights(ncol, raw_weights):
+    if not raw_weights:
+        return [1] * ncol
+    else:
+        weights = [0] * ncol
+        for i, weight in enumerate(raw_weights):
+            weights[i] = weight
+    return weights
+
 # Ranking implementation, which parse matchinfo.
 def rank(raw_match_info, *raw_weights):
     # Handle match_info called w/default args 'pcx' - based on the example rank
@@ -1110,12 +1119,7 @@ def rank(raw_match_info, *raw_weights):
     score = 0.0
 
     p, c = match_info[:2]
-    if not raw_weights:
-        weights = [1] * c
-    else:
-        weights = [0] * c
-        for i, weight in enumerate(raw_weights):
-            weights[i] = weight
+    weights = get_weights(c, raw_weights)
 
     # matchinfo X value corresponds to, for each phrase in the search query, a
     # list of 3 values for each column in the search table.
@@ -1165,12 +1169,7 @@ def bm25(raw_match_info, *args):
     L_O = A_O + col_count
     X_O = L_O + col_count
 
-    if not args:
-        weights = [1] * col_count
-    else:
-        weights = [0] * col_count
-        for i, weight in enumerate(args):
-            weights[i] = args[i]
+    weights = get_weights(col_count, args)
 
     for i in range(term_count):
         for j in range(col_count):
