@@ -7,13 +7,26 @@ https://github.com/coleifer/peewee/releases
 
 ## master
 
+Nothing to see yet!
+
+[View commits](https://github.com/coleifer/peewee/compare/3.8.1...master)
+
+## 3.8.1
+
+**Changes**
+
+* Remove minimum passphrase restrictions in SQLCipher integration.
+
 **Bugfixes**
 
+* Support inheritance of `ManyToManyField` instances.
+* Ensure operator overloads are invoked when generating filter expressions.
+* Fix incorrect scoring in Sqlite BM25, BM25f and Lucene ranking algorithms.
 * Support string field-names in data dictionary when performing an ON CONFLICT
   ... UPDATE query, which allows field-specific conversions to be applied.
   References #1815.
 
-[View commits](https://github.com/coleifer/peewee/compare/3.8.0...master)
+[View commits](https://github.com/coleifer/peewee/compare/3.8.0...3.8.1)
 
 ## 3.8.0
 
