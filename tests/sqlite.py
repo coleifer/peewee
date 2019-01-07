@@ -717,17 +717,14 @@ class TestFullTextSearch(ModelTestCase):
         ])
 
         # `zzzzz` appears three times in c3.
-        assertResults('zzzzz', [
-            (1, -.67),
-            (2, -.33),
-        ])
+        assertResults('zzzzz', [(1, -.67), (2, -.33)])
 
         self.assertEqual(
             [x.score for x in MultiColumn.search('ddddd', with_score=True)],
             [-.25, -.25, -.25, -.25])
 
     def test_bm25(self):
-        def assertResults(term, col_idx, expected):
+        def assertResults(term, expected):
             query = MultiColumn.search_bm25(term, [1.0, 0, 0, 0], True)
             self.assertEqual(
                 [(mc.c4, round(mc.score, 2)) for mc in query],
@@ -736,13 +733,9 @@ class TestFullTextSearch(ModelTestCase):
         self._create_multi_column()
         MultiColumn.create(c1='aaaaa fffff', c4=5)
 
-        assertResults('aaaaa', 1, [
-            (5, -0.39),
-            (1, -0.3)])
-        assertResults('fffff', 1, [
-            (5, -0.39),
-            (3, -0.3)])
-        assertResults('eeeee', 1, [(2, -0.97)])
+        assertResults('aaaaa', [(5, -0.39), (1, -0.3)])
+        assertResults('fffff', [(5, -0.39), (3, -0.3)])
+        assertResults('eeeee', [(2, -0.97)])
 
         # No column specified, use the first text field.
         query = MultiColumn.search_bm25('fffff', [1.0, 0, 0, 0], True)
@@ -761,6 +754,16 @@ class TestFullTextSearch(ModelTestCase):
             (5, -0.39),
             (1, -0.3)])
 
+        def assertAllColumns(term, expected):
+            query = MultiColumn.search_bm25(term, with_score=True)
+            self.assertEqual(
+                [(mc.c4, round(mc.score, 2)) for mc in query],
+                expected)
+
+        assertAllColumns('aaaaa ddddd', [(1, -1.08)])
+        assertAllColumns('zzzzz ddddd', [(1, -0.36), (2, -0.34)])
+        assertAllColumns('ccccc bbbbb ddddd', [(2, -1.39), (1, -0.3)])
+
     def test_bm25_alt_corpus(self):
         for message in self.messages:
             Document.create(message=message)
@@ -772,9 +775,7 @@ class TestFullTextSearch(ModelTestCase):
                 for doc in query]
             self.assertEqual(cleaned, expected)
 
-        assertResults('things', [
-            (-0.45, 'Faith has'),
-            (-0.36, 'Be faithful')])
+        assertResults('things', [(-0.45, 'Faith has'), (-0.36, 'Be faithful')])
 
         # Indeterminate order since all are 0.0. All phrases contain the word
         # faith, so there is no meaningful score.
@@ -945,7 +946,7 @@ class TestFullTextSearchCython(TestFullTextSearch):
         self.assertTrue(Post._meta.database._c_extensions)
 
     def test_bm25f(self):
-        def assertResults(term, col_idx, expected):
+        def assertResults(term, expected):
             query = MultiColumn.search_bm25f(term, [1.0, 0, 0, 0], True)
             self.assertEqual(
                 [(mc.c4, round(mc.score, 2)) for mc in query],
@@ -954,13 +955,9 @@ class TestFullTextSearchCython(TestFullTextSearch):
         self._create_multi_column()
         MultiColumn.create(c1='aaaaa fffff', c4=5)
 
-        assertResults('aaaaa', 1, [
-            (5, -0.76),
-            (1, -0.62)])
-        assertResults('fffff', 1, [
-            (5, -0.76),
-            (3, -0.65)])
-        assertResults('eeeee', 1, [(2, -2.13)])
+        assertResults('aaaaa', [(5, -0.76), (1, -0.62)])
+        assertResults('fffff', [(5, -0.76), (3, -0.65)])
+        assertResults('eeeee', [(2, -2.13)])
 
         # No column specified, use the first text field.
         query = MultiColumn.search_bm25f('aaaaa OR fffff', [1., 3., 0, 0], 1)

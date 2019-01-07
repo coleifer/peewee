@@ -1117,6 +1117,12 @@ def rank(raw_match_info, *raw_weights):
         for i, weight in enumerate(raw_weights):
             weights[i] = weight
 
+    # matchinfo X value corresponds to, for each phrase in the search query, a
+    # list of 3 values for each column in the search table.
+    # So if we have a two-phrase search query and three columns of data, the
+    # following would be the layout:
+    # p0 : c0=[0, 1, 2],   c1=[3, 4, 5],    c2=[6, 7, 8]
+    # p1 : c0=[9, 10, 11], c1=[12, 13, 14], c2=[15, 16, 17]
     for phrase_num in range(p):
         phrase_info_idx = 2 + (phrase_num * c * 3)
         for col_num in range(c):
@@ -1125,9 +1131,15 @@ def rank(raw_match_info, *raw_weights):
                 continue
 
             col_idx = phrase_info_idx + (col_num * 3)
-            x1, x2 = match_info[col_idx:col_idx + 2]
-            if x1 > 0:
-                score += weight * (float(x1) / x2)
+
+            # The idea is that we count the number of times the phrase appears
+            # in this column of the current row, compared to how many times it
+            # appears in this column across all rows. The ratio of these values
+            # provides a rough way to score based on "high value" terms.
+            row_hits = match_info[col_idx]
+            all_rows_hits = match_info[col_idx + 1]
+            if row_hits > 0:
+                score += weight * (float(row_hits) / all_rows_hits)
 
     return -score
 

@@ -752,19 +752,33 @@ def peewee_rank(py_match_info, *raw_weights):
     nphrase = match_info[P_O]
     ncol = match_info[C_O]
 
+    # Normalize weights and load them into an array of weight for each column.
     weights = <double *>malloc(sizeof(double) * ncol)
     for icol in range(ncol):
-        if icol < argc:
+        if argc == 0:
+            weights[icol] = 1.0
+        elif icol < argc:
             weights[icol] = <double>raw_weights[icol]
         else:
-            weights[icol] = 1.0
+            weights[icol] = 0.0
 
+    # matchinfo X value corresponds to, for each phrase in the search query, a
+    # list of 3 values for each column in the search table.
+    # So if we have a two-phrase search query and three columns of data, the
+    # following would be the layout:
+    # p0 : c0=[0, 1, 2],   c1=[3, 4, 5],    c2=[6, 7, 8]
+    # p1 : c0=[9, 10, 11], c1=[12, 13, 14], c2=[15, 16, 17]
     for iphrase in range(nphrase):
         phrase_info = &match_info[X_O + iphrase * ncol * 3]
         for icol in range(ncol):
             weight = weights[icol]
             if weight == 0:
                 continue
+
+            # The idea is that we count the number of times the phrase appears
+            # in this column of the current row, compared to how many times it
+            # appears in this column across all rows. The ratio of these values
+            # provides a rough way to score based on "high value" terms.
             hits = phrase_info[3 * icol]
             global_hits = phrase_info[3 * icol + 1]
             if hits > 0:
