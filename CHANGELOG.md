@@ -13,6 +13,11 @@ Nothing to see yet!
 
 ## 3.8.1
 
+**New features**
+
+* Sqlite `SearchField` now supports the `match()` operator, allowing full-text
+  search to be performed on a single column (as opposed to the whole table).
+
 **Changes**
 
 * Remove minimum passphrase restrictions in SQLCipher integration.
