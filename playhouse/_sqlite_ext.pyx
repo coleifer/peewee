@@ -845,10 +845,10 @@ def peewee_bm25(py_match_info, *raw_weights):
         bytes _match_info_buf = bytes(py_match_info)
         char *match_info_buf = _match_info_buf
         int nphrase, ncol
-        double B = 0.75, K = 1.2, D
+        double B = 0.75, K = 1.2
         double total_docs, term_frequency
         double doc_length, docs_with_term, avg_length
-        double idf, weight, rhs, denom
+        double idf, weight, ratio, num, b_part, denom, pc_score
         double *weights
         int P_O = 0, C_O = 1, N_O = 2, A_O = 3, L_O, X_O
         int iphrase, icol, x
@@ -865,9 +865,9 @@ def peewee_bm25(py_match_info, *raw_weights):
     # * phrase count within column for current row.
     # * phrase count within column for all rows.
     # * total rows for which column contains phrase.
-    nphrase = match_info[P_O]
+    nphrase = match_info[P_O]  # n
     ncol = match_info[C_O]
-    total_docs = match_info[N_O]
+    total_docs = match_info[N_O]  # N
 
     L_O = A_O + ncol
     X_O = L_O + ncol
@@ -878,28 +878,28 @@ def peewee_bm25(py_match_info, *raw_weights):
             weight = weights[icol]
             if weight == 0:
                 continue
-            avg_length = match_info[A_O + icol]
-            doc_length = match_info[L_O + icol]
-            if avg_length == 0:
-                D = 0
-            else:
-                D = 1 - B + (B * (doc_length / avg_length))
 
             x = X_O + (3 * (icol + iphrase * ncol))
-            term_frequency = match_info[x]
-            docs_with_term = match_info[x + 2]
-            idf = max(
-                log(
-                    (total_docs - docs_with_term + 0.5) /
-                    (docs_with_term + 0.5)),
-                0)
-            denom = term_frequency + (K * D)
-            if denom == 0:
-                rhs = 0
-            else:
-                rhs = (term_frequency * (K + 1)) / denom
+            term_frequency = match_info[x]  # f(qi, D)
+            docs_with_term = match_info[x + 2]  # n(qi)
 
-            score += (idf * rhs) * weight
+            # log( (N - n(qi) + 0.5) / (n(qi) + 0.5) )
+            idf = log(
+                    (total_docs - docs_with_term + 0.5) /
+                    (docs_with_term + 0.5))
+            if idf <= 0.0:
+                idf = 1e-6
+
+            doc_length = match_info[L_O + icol]  # |D|
+            avg_length = match_info[A_O + icol]  # avgdl
+            ratio = doc_length / avg_length
+
+            num = term_frequency * (K + 1)
+            b_part = 1 - B + (B * ratio)
+            denom = term_frequency + (K * b_part)
+
+            pc_score = idf * (num / denom)
+            score += (pc_score * weight)
 
     free(weights)
     return -1 * score
@@ -914,19 +914,19 @@ def peewee_bm25f(py_match_info, *raw_weights):
         bytes _match_info_buf = bytes(py_match_info)
         char *match_info_buf = _match_info_buf
         int nphrase, ncol
-        double B = 0.75, K1 = 1.2, D, epsilon
+        double B = 0.75, K = 1.2, epsilon
         double total_docs, term_frequency, docs_with_term
         double doc_length = 0.0, avg_length = 0.0
-        double idf, weight, rhs, denom
+        double idf, weight, ratio, num, b_part, denom, pc_score
         double *weights
         int P_O = 0, C_O = 1, N_O = 2, A_O = 3, L_O, X_O
-        int iphrase, icol, current_x
+        int iphrase, icol, x
         double score = 0.0
 
     match_info = <unsigned int *>match_info_buf
-    nphrase = match_info[P_O]
+    nphrase = match_info[P_O]  # n
     ncol = match_info[C_O]
-    total_docs = match_info[N_O]
+    total_docs = match_info[N_O]  # N
 
     L_O = A_O + ncol
     X_O = L_O + ncol
@@ -936,6 +936,7 @@ def peewee_bm25f(py_match_info, *raw_weights):
         doc_length += match_info[L_O + icol]
 
     epsilon = 1.0 / (total_docs * avg_length)
+    ratio = doc_length / avg_length
     weights = get_weights(ncol, raw_weights)
 
     for iphrase in range(nphrase):
@@ -943,20 +944,23 @@ def peewee_bm25f(py_match_info, *raw_weights):
             weight = weights[icol]
             if weight == 0:
                 continue
-            current_x = X_O + (3 * (icol + iphrase * ncol))
-            term_frequency = match_info[current_x]
-            docs_with_term = match_info[current_x + 2]
+
+            x = X_O + (3 * (icol + iphrase * ncol))
+            term_frequency = match_info[x]  # f(qi, D)
+            docs_with_term = match_info[x + 2]  # n(qi)
+
+            # log( (N - n(qi) + 0.5) / (n(qi) + 0.5) )
             idf = log(
                 (total_docs - docs_with_term + 0.5) /
                 (docs_with_term + 0.5))
-            idf = epsilon if idf < 0 else idf
+            idf = epsilon if idf <= 0 else idf
 
-            D = (term_frequency +
-                 (K1 * (1 - B + (B * (doc_length / avg_length)))))
-            rhs = (term_frequency * (K1 + 1)) / D
-            rhs += 1.
+            num = term_frequency * (K + 1)
+            b_part = 1 - B + (B * ratio)
+            denom = term_frequency + (K * b_part)
 
-            score += (idf * rhs) * weight
+            pc_score = idf * ((num / denom) + 1.)
+            score += (pc_score * weight)
 
     free(weights)
     return -1 * score

@@ -1162,10 +1162,10 @@ def bm25(raw_match_info, *args):
     B = 0.75
     score = 0.0
 
-    P_O, C_O, N_O, A_O = range(4)
-    term_count = match_info[P_O]
+    P_O, C_O, N_O, A_O = range(4)  # Offsets into the matchinfo buffer.
+    term_count = match_info[P_O]  # n
     col_count = match_info[C_O]
-    total_docs = match_info[N_O]
+    total_docs = match_info[N_O]  # N
     L_O = A_O + col_count
     X_O = L_O + col_count
 
@@ -1177,29 +1177,27 @@ def bm25(raw_match_info, *args):
             if weight == 0:
                 continue
 
-            avg_length = float(match_info[A_O + j])
-            doc_length = float(match_info[L_O + j])
-            if avg_length == 0:
-                D = 0
-            else:
-                D = 1 - B + (B * (doc_length / avg_length))
-
             x = X_O + (3 * (j + i * col_count))
-            term_frequency = float(match_info[x])
-            docs_with_term = float(match_info[x + 2])
+            term_frequency = float(match_info[x])  # f(qi, D)
+            docs_with_term = float(match_info[x + 2])  # n(qi)
 
-            idf = max(
-                math.log(
+            # log( (N - n(qi) + 0.5) / (n(qi) + 0.5) )
+            idf = math.log(
                     (total_docs - docs_with_term + 0.5) /
-                    (docs_with_term + 0.5)),
-                0)
-            denom = term_frequency + (K * D)
-            if denom == 0:
-                rhs = 0
-            else:
-                rhs = (term_frequency * (K + 1)) / denom
+                    (docs_with_term + 0.5))
+            if idf <= 0.0:
+                idf = 1e-6
 
-            score += (idf * rhs) * weight
+            doc_length = float(match_info[L_O + j])  # |D|
+            avg_length = float(match_info[A_O + j])  # avgdl
+            ratio = doc_length / avg_length
+
+            num = term_frequency * (K + 1)
+            b_part = 1 - B + (B * ratio)
+            denom = term_frequency + (K * b_part)
+
+            pc_score = idf * (num / denom)
+            score += (pc_score * weight)
 
     return -score
 

@@ -134,6 +134,12 @@ class FTS5Test(FTS5Model):
         legacy_table_names = False
 
 
+class FTS5Document(FTS5Model):
+    message = SearchField()
+    class Meta:
+        options = {'tokenize': 'porter'}
+
+
 class Series(TableFunction):
     columns = ['value']
     params = ['start', 'stop', 'step']
@@ -607,15 +613,7 @@ class TestSqliteExtensions(BaseTestCase):
             '"data" TEXT NOT NULL)'), [])
 
 
-class TestFullTextSearch(ModelTestCase):
-    database = database
-    requires = [
-        Post,
-        ContentPost,
-        ContentPostMessage,
-        Document,
-        MultiColumn]
-
+class BaseFTSTestCase(object):
     messages = (
         ('A faith is a necessity to a man. Woe to him who believes in '
          'nothing.'),
@@ -638,6 +636,17 @@ class TestFullTextSearch(ModelTestCase):
         self.assertEqual([obj.message for obj in query],
                          [self.messages[idx] for idx in indexes])
 
+
+class TestFullTextSearch(BaseFTSTestCase, ModelTestCase):
+    database = database
+    requires = [
+        Post,
+        ContentPost,
+        ContentPostMessage,
+        Document,
+        MultiColumn]
+
+    @requires_models(Document)
     def test_fts_manual(self):
         messages = [Document.create(message=message)
                     for message in self.messages]
@@ -650,10 +659,32 @@ class TestFullTextSearch(ModelTestCase):
         query = Document.search('believe')
         self.assertMessages(query, [3, 0])
 
+        # Test peewee's "rank" algorithm, as presented in the SQLite FTS3 docs.
         query = Document.search('things', with_score=True)
         self.assertEqual([(row.message, row.score) for row in query], [
             (self.messages[4], -2. / 3),
             (self.messages[2], -1. / 3)])
+
+        # Test peewee's bm25 ranking algorithm.
+        query = Document.search_bm25('things', with_score=True)
+        self.assertEqual([(d.message, round(d.score, 2)) for d in query], [
+            (self.messages[4], -0.45),
+            (self.messages[2], -0.36)])
+
+        # Another test of bm25 ranking.
+        query = Document.search_bm25('believe', with_score=True)
+        self.assertEqual([(d.message, round(d.score, 2)) for d in query], [
+            (self.messages[3], -0.49),
+            (self.messages[0], -0.35)])
+
+        query = Document.search_bm25('god faith', with_score=True)
+        self.assertEqual([(d.message, round(d.score, 2)) for d in query], [
+            (self.messages[1], -0.92)])
+
+        query = Document.search_bm25('"it is"', with_score=True)
+        self.assertEqual([(d.message, round(d.score, 2)) for d in query], [
+            (self.messages[2], -0.36),
+            (self.messages[3], -0.36)])
 
     def test_fts_delete_row(self):
         posts = [Post.create(message=msg) for msg in self.messages]
@@ -697,6 +728,7 @@ class TestFullTextSearch(ModelTestCase):
         for c1, c2, c3, c4 in self.values:
             MultiColumn.create(c1=c1, c2=c2, c3=c3, c4=c4)
 
+    @requires_models(MultiColumn)
     def test_fts_multi_column(self):
         def assertResults(term, expected):
             results = [(x.c4, round(x.score, 2))
@@ -723,6 +755,7 @@ class TestFullTextSearch(ModelTestCase):
             [x.score for x in MultiColumn.search('ddddd', with_score=True)],
             [-.25, -.25, -.25, -.25])
 
+    @requires_models(MultiColumn)
     def test_bm25(self):
         def assertResults(term, expected):
             query = MultiColumn.search_bm25(term, [1.0, 0, 0, 0], True)
@@ -764,24 +797,25 @@ class TestFullTextSearch(ModelTestCase):
         assertAllColumns('zzzzz ddddd', [(1, -0.36), (2, -0.34)])
         assertAllColumns('ccccc bbbbb ddddd', [(2, -1.39), (1, -0.3)])
 
+    @requires_models(Document)
     def test_bm25_alt_corpus(self):
         for message in self.messages:
             Document.create(message=message)
 
-        def assertResults(term, expected):
-            query = Document.search_bm25(term, with_score=True)
-            cleaned = [
-                (round(doc.score, 2), ' '.join(doc.message.split()[:2]))
-                for doc in query]
-            self.assertEqual(cleaned, expected)
+        query = Document.search_bm25('things', with_score=True)
+        self.assertEqual([(d.message, round(d.score, 2)) for d in query], [
+            (self.messages[4], -0.45),
+            (self.messages[2], -0.36)])
 
-        assertResults('things', [(-0.45, 'Faith has'), (-0.36, 'Be faithful')])
+        query = Document.search_bm25('believe', with_score=True)
+        self.assertEqual([(d.message, round(d.score, 2)) for d in query], [
+            (self.messages[3], -0.49),
+            (self.messages[0], -0.35)])
 
         # Indeterminate order since all are 0.0. All phrases contain the word
         # faith, so there is no meaningful score.
-        results = [round(x.score, 2)
-                   for x in Document.search_bm25('faith', with_score=True)]
-        self.assertEqual(results, [-0., -0., -0., -0., -0.])
+        query = Document.search_bm25('faith', with_score=True)
+        self.assertEqual([round(d.score, 2) for d in query], [-0.] * 5)
 
     def _test_fts_auto(self, ModelClass):
         posts = []
@@ -989,6 +1023,110 @@ class TestFullTextSearchCython(TestFullTextSearch):
             (0.047, 'A faith'),
             (0.049, 'Be faithful'),
             (0.049, 'Faith consists')], sort_cleaned=True)
+
+
+@skip_unless(FTS5Model.fts5_installed(), 'requires fts5')
+class TestFTS5(BaseFTSTestCase, ModelTestCase):
+    database = database
+    requires = [FTS5Test]
+    test_corpus = (
+        ('foo aa bb', 'aa bb cc ' * 10, 1),
+        ('bar bb cc', 'bb cc dd ' * 9, 2),
+        ('baze cc dd', 'cc dd ee ' * 8, 3),
+        ('nug aa dd', 'bb cc ' * 7, 4))
+
+    def setUp(self):
+        super(TestFTS5, self).setUp()
+        for title, data, misc in self.test_corpus:
+            FTS5Test.create(title=title, data=data, misc=misc)
+
+    def test_create_table(self):
+        query = FTS5Test._schema._create_table()
+        self.assertSQL(query, (
+            'CREATE VIRTUAL TABLE IF NOT EXISTS "fts5_test" USING fts5 '
+            '("title", "data", "misc" UNINDEXED)'), [])
+
+    def test_custom_fts5_command(self):
+        merge_sql = FTS5Test._fts_cmd_sql('merge', rank=4)
+        self.assertSQL(merge_sql, (
+            'INSERT INTO "fts5_test" ("fts5_test", "rank") VALUES (?, ?)'),
+            ['merge', 4])
+        FTS5Test.merge(4)  # Runs without error.
+
+    def test_create_table_options(self):
+        class Test1(FTS5Model):
+            f1 = SearchField()
+            f2 = SearchField(unindexed=True)
+            f3 = SearchField()
+
+            class Meta:
+                database = self.database
+                options = {
+                    'prefix': (2, 3),
+                    'tokenize': 'porter unicode61',
+                    'content': Post,
+                    'content_rowid': Post.id}
+
+        query = Test1._schema._create_table()
+        self.assertSQL(query, (
+            'CREATE VIRTUAL TABLE IF NOT EXISTS "test1" USING fts5 ('
+            '"f1", "f2" UNINDEXED, "f3", '
+            'content="post", content_rowid="id", '
+            'prefix=\'2,3\', tokenize="porter unicode61")'), [])
+
+    def assertResults(self, query, expected, scores=False, alias='score'):
+        if scores:
+            results = [(obj.title, round(getattr(obj, alias), 7))
+                       for obj in query]
+        else:
+            results = [obj.title for obj in query]
+        self.assertEqual(results, expected)
+
+    def test_search(self):
+        query = FTS5Test.search('bb')
+        self.assertSQL(query, (
+            'SELECT "t1"."rowid", "t1"."title", "t1"."data", "t1"."misc" '
+            'FROM "fts5_test" AS "t1" '
+            'WHERE ("fts5_test" MATCH ?) ORDER BY rank'), ['bb'])
+        self.assertResults(query, ['nug aa dd', 'foo aa bb', 'bar bb cc'])
+
+        self.assertResults(FTS5Test.search('baze OR dd'),
+                           ['baze cc dd', 'bar bb cc', 'nug aa dd'])
+
+    @requires_models(FTS5Document)
+    def test_fts_manual(self):
+        messages = [FTS5Document.create(message=message)
+                    for message in self.messages]
+        query = (FTS5Document
+                 .select()
+                 .where(FTS5Document.match('believe'))
+                 .order_by(FTS5Document.rowid))
+        self.assertMessages(query, [0, 3])
+
+        query = FTS5Document.search('believe')
+        self.assertMessages(query, [3, 0])
+
+        # Test SQLite's built-in ranking algorithm (bm25). The results should
+        # be comparable to our user-defined implementation.
+        query = FTS5Document.search('things', with_score=True)
+        self.assertEqual([(d.message, round(d.score, 2)) for d in query], [
+            (self.messages[4], -0.45),
+            (self.messages[2], -0.37)])
+
+        # Another test of bm25 ranking.
+        query = FTS5Document.search_bm25('believe', with_score=True)
+        self.assertEqual([(d.message, round(d.score, 2)) for d in query], [
+            (self.messages[3], -0.49),
+            (self.messages[0], -0.36)])
+
+        query = FTS5Document.search_bm25('god faith', with_score=True)
+        self.assertEqual([(d.message, round(d.score, 2)) for d in query], [
+            (self.messages[1], -0.93)])
+
+        query = FTS5Document.search_bm25('"it is"', with_score=True)
+        self.assertEqual([(d.message, round(d.score, 2)) for d in query], [
+            (self.messages[2], -0.37),
+            (self.messages[3], -0.37)])
 
 
 @skip_unless(CYTHON_EXTENSION, 'requires sqlite c extension')
@@ -1441,72 +1579,6 @@ class TestTransitiveClosureIntegration(BaseTestCase):
         self.assertEqual(sorted([(n.id, n.name) for n in query]),
                          [(c1.id, 'c1'), (c2.id, 'c2')])
         database.drop_tables([Node, NodeClosure])
-
-
-@skip_unless(FTS5Model.fts5_installed(), 'requires fts5')
-class TestFTS5(ModelTestCase):
-    database = database
-    requires = [FTS5Test]
-    test_corpus = (
-        ('foo aa bb', 'aa bb cc ' * 10, 1),
-        ('bar bb cc', 'bb cc dd ' * 9, 2),
-        ('baze cc dd', 'cc dd ee ' * 8, 3),
-        ('nug aa dd', 'bb cc ' * 7, 4))
-
-    def setUp(self):
-        super(TestFTS5, self).setUp()
-        for title, data, misc in self.test_corpus:
-            FTS5Test.create(title=title, data=data, misc=misc)
-
-    def test_create_table(self):
-        query = FTS5Test._schema._create_table()
-        self.assertSQL(query, (
-            'CREATE VIRTUAL TABLE IF NOT EXISTS "fts5_test" USING fts5 '
-            '("title", "data", "misc" UNINDEXED)'), [])
-
-    def test_custom_fts5_command(self):
-        merge_sql = FTS5Test._fts_cmd_sql('merge', rank=4)
-        self.assertSQL(merge_sql, (
-            'INSERT INTO "fts5_test" ("fts5_test", "rank") VALUES (?, ?)'),
-            ['merge', 4])
-        FTS5Test.merge(4)  # Runs without error.
-
-    def test_create_table_options(self):
-        class Test1(FTS5Model):
-            f1 = SearchField()
-            f2 = SearchField(unindexed=True)
-            f3 = SearchField()
-
-            class Meta:
-                database = self.database
-                options = {
-                    'prefix': (2, 3),
-                    'tokenize': 'porter unicode61',
-                    'content': Post,
-                    'content_rowid': Post.id}
-
-        query = Test1._schema._create_table()
-        self.assertSQL(query, (
-            'CREATE VIRTUAL TABLE IF NOT EXISTS "test1" USING fts5 ('
-            '"f1", "f2" UNINDEXED, "f3", '
-            'content="post", content_rowid="id", '
-            'prefix=\'2,3\', tokenize="porter unicode61")'), [])
-
-    def assertResults(self, query, expected, scores=False, alias='score'):
-        if scores:
-            results = [(obj.title, round(getattr(obj, alias), 7))
-                       for obj in query]
-        else:
-            results = [obj.title for obj in query]
-        self.assertEqual(results, expected)
-
-    def test_search(self):
-        query = FTS5Test.search('bb')
-        self.assertSQL(query, (
-            'SELECT "t1"."rowid", "t1"."title", "t1"."data", "t1"."misc" '
-            'FROM "fts5_test" AS "t1" '
-            'WHERE ("fts5_test" MATCH ?) ORDER BY rank'), ['bb'])
-        self.assertResults(query, ['nug aa dd', 'foo aa bb', 'bar bb cc'])
 
 
 class KV(LSMTable):
