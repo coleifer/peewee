@@ -1375,7 +1375,8 @@ class Function(ColumnBase):
             node = WindowAlias(window)
         else:
             node = Window(partition_by=partition_by, order_by=order_by,
-                          start=start, end=end, frame_type=frame_type)
+                          start=start, end=end, frame_type=frame_type,
+                          _inline=True)
         return NodeList((self, SQL('OVER'), node))
 
     def __sql__(self, ctx):
@@ -1403,7 +1404,7 @@ class Window(Node):
     ROWS = 'ROWS'
 
     def __init__(self, partition_by=None, order_by=None, start=None, end=None,
-                 frame_type=None, alias=None):
+                 frame_type=None, alias=None, _inline=False):
         super(Window, self).__init__()
         if start is not None and not isinstance(start, SQL):
             start = SQL(start)
@@ -1417,6 +1418,7 @@ class Window(Node):
         if self.start is None and self.end is not None:
             raise ValueError('Cannot specify WINDOW end without start.')
         self._alias = alias or 'w'
+        self._inline = _inline
         self.frame_type = frame_type
 
     def alias(self, alias=None):
@@ -1444,7 +1446,7 @@ class Window(Node):
         return SQL('%d PRECEDING' % value)
 
     def __sql__(self, ctx):
-        if ctx.scope != SCOPE_SOURCE:
+        if ctx.scope != SCOPE_SOURCE and not self._inline:
             ctx.literal(self._alias)
             ctx.literal(' AS ')
 

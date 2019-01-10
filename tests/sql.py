@@ -1041,6 +1041,27 @@ class TestWindowFunctions(BaseTestCase):
             'FROM "register" AS "t1" '
             'ORDER BY "t1"."category"'), [1])
 
+    def test_window_in_orderby(self):
+        Register = Table('register', ['id', 'value'])
+        w = Window(partition_by=[Register.value], order_by=[Register.id])
+        query = (Register
+                 .select()
+                 .window(w)
+                 .order_by(fn.FIRST_VALUE(Register.id).over(w)))
+        self.assertSQL(query, (
+            'SELECT "t1"."id", "t1"."value" FROM "register" AS "t1" '
+            'WINDOW w AS (PARTITION BY "t1"."value" ORDER BY "t1"."id") '
+            'ORDER BY FIRST_VALUE("t1"."id") OVER w'), [])
+
+        fv = fn.FIRST_VALUE(Register.id).over(
+            partition_by=[Register.value],
+            order_by=[Register.id])
+        query = Register.select().order_by(fv)
+        self.assertSQL(query, (
+            'SELECT "t1"."id", "t1"."value" FROM "register" AS "t1" '
+            'ORDER BY FIRST_VALUE("t1"."id") '
+            'OVER (PARTITION BY "t1"."value" ORDER BY "t1"."id")'), [])
+
 
 class TestValuesList(BaseTestCase):
     _data = [(1, 'one'), (2, 'two'), (3, 'three')]
