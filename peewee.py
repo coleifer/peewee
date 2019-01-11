@@ -4658,9 +4658,17 @@ class ManyToManyFieldAccessor(FieldAccessor):
         super(ManyToManyFieldAccessor, self).__init__(model, field, name)
         self.model = field.model
         self.rel_model = field.rel_model
-        self.through_model = field.get_through_model()
-        self.src_fk = self.through_model._meta.model_refs[self.model][0]
-        self.dest_fk = self.through_model._meta.model_refs[self.rel_model][0]
+        self.through_model = field.through_model
+        src_fks = self.through_model._meta.model_refs[self.model]
+        dest_fks = self.through_model._meta.model_refs[self.rel_model]
+        if not src_fks:
+            raise ValueError('Cannot find foreign-key to "%s" on "%s" model.' %
+                             (self.model, self.through_model))
+        elif not dest_fks:
+            raise ValueError('Cannot find foreign-key to "%s" on "%s" model.' %
+                             (self.rel_model, self.through_model))
+        self.src_fk = src_fks[0]
+        self.dest_fk = dest_fks[0]
 
     def __get__(self, instance, instance_type=None, force_query=False):
         if instance is not None:
@@ -4697,24 +4705,17 @@ class ManyToManyField(MetaField):
                                  'through_model is specified.')
         self.rel_model = model
         self.backref = backref
-        self._user_through_model = through_model
-        self._through_model = None
+        self._through_model = through_model
         self._on_delete = on_delete
         self._on_update = on_update
         self._is_backref = _is_backref
-
-    def __deepcopy__(self, memo=None):
-        return type(self)(self.rel_model, self.backref,
-                          self._user_through_model, self._on_delete,
-                          self._on_update, self._is_backref)
 
     def _get_descriptor(self):
         return ManyToManyFieldAccessor(self)
 
     def bind(self, model, name, set_attribute=True):
-        if self._user_through_model is not None and \
-           isinstance(self._user_through_model, DeferredThroughModel):
-            self._user_through_model.set_field(model, self, name)
+        if isinstance(self._through_model, DeferredThroughModel):
+            self._through_model.set_field(model, self, name)
             return
 
         super(ManyToManyField, self).bind(model, name, set_attribute)
@@ -4737,15 +4738,13 @@ class ManyToManyField(MetaField):
 
     @property
     def through_model(self):
-        if self._user_through_model is not None:
-            return self._user_through_model
-        elif self._through_model is None:
+        if self._through_model is None:
             self._through_model = self._create_through_model()
         return self._through_model
 
     @through_model.setter
     def through_model(self, value):
-        self._user_through_model = value
+        self._through_model = value
 
     def _create_through_model(self):
         lhs, rhs = self.get_models()
@@ -4770,6 +4769,7 @@ class ManyToManyField(MetaField):
         return type(klass_name, (Model,), attrs)
 
     def get_through_model(self):
+        # XXX: Deprecated. Just use the "through_model" property.
         return self.through_model
 
 

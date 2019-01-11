@@ -191,16 +191,19 @@ class TestManyToManyInheritance(ModelTestCase):
         class Project(BaseModel):
             name = TextField()
             users = ManyToManyField(User, backref='projects')
-        class VProject(Project):
-            pass
 
+        def subclass_project():
+            class VProject(Project):
+                pass
+
+        # We cannot subclass Project, because the many-to-many field "users"
+        # will be inherited, but the through-model does not contain a
+        # foreign-key to VProject. The through-model in this case is
+        # ProjectUsers, which has foreign-keys to project and user.
+        self.assertRaises(ValueError, subclass_project)
         PThrough = Project.users.through_model
         self.assertTrue(PThrough.project.rel_model is Project)
         self.assertTrue(PThrough.user.rel_model is User)
-
-        VPThrough = VProject.users.through_model
-        self.assertTrue(VPThrough.vproject.rel_model is VProject)
-        self.assertTrue(VPThrough.user.rel_model is User)
 
 
 class TestManyToMany(ModelTestCase):
