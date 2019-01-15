@@ -5970,6 +5970,11 @@ class _ModelQueryHelper(object):
         if not self._database:
             self._database = self.model._meta.database
 
+    @Node.copy
+    def objects(self, constructor=None):
+        self._row_type = ROW.CONSTRUCTOR
+        self._constructor = self.model if constructor is None else constructor
+
     def _get_cursor_wrapper(self, cursor):
         row_type = self._row_type or self.default_row_type
         if row_type == ROW.MODEL:
@@ -6028,11 +6033,6 @@ class BaseModelSelect(_ModelQueryHelper):
         if not self._cursor_wrapper:
             self.execute()
         return iter(self._cursor_wrapper)
-
-    @Node.copy
-    def objects(self, constructor=None):
-        self._row_type = ROW.CONSTRUCTOR
-        self._constructor = self.model if constructor is None else constructor
 
     def prefetch(self, *subqueries):
         return prefetch(self, *subqueries)
@@ -6370,12 +6370,22 @@ class ModelUpdate(_ModelWriteQueryHelper, Update):
 
 
 class ModelInsert(_ModelWriteQueryHelper, Insert):
+    default_row_type = ROW.TUPLE
+
     def __init__(self, *args, **kwargs):
         super(ModelInsert, self).__init__(*args, **kwargs)
         if self._returning is None and self.model._meta.database is not None:
             if self.model._meta.database.returning_clause:
                 self._returning = self.model._meta.get_primary_keys()
-                self._row_type = ROW.TUPLE
+
+    def returning(self, *returning):
+        # By default ModelInsert will yield a `tuple` containing the
+        # primary-key of the newly inserted row. But if we are explicitly
+        # specifying a returning clause and have not set a row type, we will
+        # default to returning model instances instead.
+        if returning and self._row_type is None:
+            self._row_type = ROW.MODEL
+        return super(ModelInsert, self).returning(*returning)
 
     def get_default_data(self):
         return self.model._meta.defaults

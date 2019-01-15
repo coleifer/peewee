@@ -1888,9 +1888,15 @@ class TestReturningIntegration(ModelTestCase):
 
         self.assertEqual(query.execute(), 1)
 
+        # By default returns a tuple.
         query = User.insert(username='huey')
         self.assertEqual(query.execute(), 2)
         self.assertEqual(list(query), [(2,)])
+
+        # If we specify a returning clause we get user instances.
+        query = User.insert(username='snoobie').returning(User)
+        query.execute()
+        self.assertEqual([x.username for x in query], ['snoobie'])
 
         query = (User
                  .insert(username='zaizee')
@@ -1902,7 +1908,7 @@ class TestReturningIntegration(ModelTestCase):
 
         cursor = query.execute()
         row, = list(cursor)
-        self.assertEqual(row, {'id': 3, 'username': 'zaizee'})
+        self.assertEqual(row, {'id': 4, 'username': 'zaizee'})
 
         query = (User
                  .insert(username='mickey')
@@ -1913,8 +1919,45 @@ class TestReturningIntegration(ModelTestCase):
             'RETURNING "users"."id", "users"."username"'), ['mickey'])
         cursor = query.execute()
         row, = list(cursor)
-        self.assertEqual(row.id, 4)
+        self.assertEqual(row.id, 5)
         self.assertEqual(row.username, 'mickey')
+
+    def test_simple_returning_insert_update_delete(self):
+        res = User.insert(username='charlie').returning(User).execute()
+        self.assertEqual([u.username for u in res], ['charlie'])
+
+        res = (User
+               .update(username='charlie2')
+               .where(User.id == 1)
+               .returning(User)
+               .execute())
+        # Subsequent iterations are cached.
+        for _ in range(2):
+            self.assertEqual([u.username for u in res], ['charlie2'])
+
+        res = (User
+               .delete()
+               .where(User.id == 1)
+               .returning(User)
+               .execute())
+        # Subsequent iterations are cached.
+        for _ in range(2):
+            self.assertEqual([u.username for u in res], ['charlie2'])
+
+    def test_simple_insert_update_delete_no_returning(self):
+        query = User.insert(username='charlie')
+        self.assertEqual(query.execute(), 1)
+
+        query = User.insert(username='huey')
+        self.assertEqual(query.execute(), 2)
+
+        query = User.update(username='huey2').where(User.username == 'huey')
+        self.assertEqual(query.execute(), 1)
+        self.assertEqual(query.execute(), 0)  # No rows updated!
+
+        query = User.delete().where(User.username == 'huey2')
+        self.assertEqual(query.execute(), 1)
+        self.assertEqual(query.execute(), 0)  # No rows updated!
 
     @requires_models(ServerDefault)
     def test_returning_server_defaults(self):

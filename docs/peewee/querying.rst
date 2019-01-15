@@ -1577,6 +1577,20 @@ Returning Clause
 ``INSERT`` and ``DELETE`` queries. Specifying a ``RETURNING`` clause allows you
 to iterate over the rows accessed by the query.
 
+By default, the return values upon execution of the different queries are:
+
+* ``INSERT`` - auto-incrementing primary key value of the newly-inserted row.
+  When not using an auto-incrementing primary key, Postgres will return the new
+  row's primary key, but SQLite and MySQL will not.
+* ``UPDATE`` - number of rows modified
+* ``DELETE`` - number of rows deleted
+
+When a returning clause is used the return value upon executing a query will be
+an iterable cursor object.
+
+Postgresql allows, via the ``RETURNING`` clause, to return data from the rows
+inserted or modified by a query.
+
 For example, let's say you have an :py:class:`Update` that deactivates all
 user accounts whose registration has expired. After deactivating them, you want
 to send each user an email letting them know their account was deactivated.
@@ -1592,7 +1606,7 @@ this in a single ``UPDATE`` query with a ``RETURNING`` clause:
 
     # Send an email to every user that was deactivated.
     for deactivate_user in query.execute():
-        send_deactivation_email(deactivated_user)
+        send_deactivation_email(deactivated_user.email)
 
 The ``RETURNING`` clause is also available on :py:class:`Insert` and
 :py:class:`Delete`. When used with ``INSERT``, the newly-created rows will be
@@ -1602,6 +1616,45 @@ The only limitation of the ``RETURNING`` clause is that it can only consist of
 columns from tables listed in the query's ``FROM`` clause. To select all
 columns from a particular table, you can simply pass in the :py:class:`Model`
 class.
+
+As another example, let's add a user and set their creation-date to the
+server-generated current timestamp. We'll create and retrieve the new user's
+ID, Email and the creation timestamp in a single query:
+
+.. code-block:: python
+
+    query = (User
+             .insert(email='foo@bar.com', created=fn.now())
+             .returning(User))  # Shorthand for all columns on User.
+
+    # When using RETURNING, execute() returns a cursor.
+    cursor = query.execute()
+
+    # Get the user object we just inserted and log the data:
+    user = cursor[0]
+    logger.info('Created user %s (id=%s) at %s', user.email, user.id, user.created)
+
+By default the cursor will return :py:class:`Model` instances, but you can
+specify a different row type:
+
+.. code-block:: python
+
+    data = [{'name': 'charlie'}, {'name': 'huey'}, {'name': 'mickey'}]
+    query = (User
+             .insert_many(data)
+             .returning(User.id, User.username)
+             .dicts())
+
+    for new_user in query.execute():
+        print('Added user "%s", id=%s' % (new_user['username'], new_user['id']))
+
+Just as with :py:class:`Select` queries, you can specify the following result
+row types:
+
+* :py:meth:`~ModelSelect.objects` (returns :py:class:`Model` instances)
+* :py:meth:`~BaseQuery.dicts`
+* :py:meth:`~BaseQuery.namedtuples`
+* :py:meth:`~BaseQuery.tuples`
 
 .. _cte:
 

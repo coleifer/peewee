@@ -7,6 +7,14 @@ https://github.com/coleifer/peewee/releases
 
 ## master
 
+**Backwards-incompatible changes**
+
+* The default row-type for `INSERT` queries executed with a non-default
+  `RETURNING` clause has changed from `tuple` to `Model` instances. This makes
+  `INSERT` behavior consistent with `UPDATE` and `DELETE` queries that specify
+  a `RETURNING` clause. To revert back to the old behavior, just append a call
+  to `.tuples()` to your `INSERT ... RETURNING` query.
+
 **Bugfixes**
 
 * Fix SQL generation bug when using an inline window function in the `ORDER BY`
