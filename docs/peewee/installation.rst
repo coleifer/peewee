@@ -109,7 +109,7 @@ If, however, you receive errors like the following when attempting to install
 Peewee, you can explicitly disable the compilation of the SQLite C extensions
 by settings the ``NO_SQLITE`` environment variable.
 
-.. code-block::
+.. code-block:: console
 
     fatal error: sqlite3.h: No such file or directory
 

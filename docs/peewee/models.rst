@@ -47,7 +47,7 @@ connection and model classes.
 
     The ``db`` object will be used to manage the connections to the Sqlite
     database. In this example we're using :py:class:`SqliteDatabase`, but you
-    could also use one of the other :ref:`database engines <databases>`.
+    could also use one of the other :ref:`database engines <database>`.
 
 2. Create a base model class which specifies our database.
 
