@@ -14,6 +14,12 @@ https://github.com/coleifer/peewee/releases
   `INSERT` behavior consistent with `UPDATE` and `DELETE` queries that specify
   a `RETURNING` clause. To revert back to the old behavior, just append a call
   to `.tuples()` to your `INSERT ... RETURNING` query.
+* Removing support for the `table_alias` model `Meta` option. Previously, this
+  attribute could be used to specify a "vanity" alias for a model class in the
+  generated SQL. As a result of some changes to support more robust UPDATE and
+  DELETE queries, supporting this feature will require some re-working. As of
+  the 3.8.0 release, it was broken and resulted in incorrect SQL for UPDATE
+  queries, so now it is removed.
 
 **Bugfixes**
 
