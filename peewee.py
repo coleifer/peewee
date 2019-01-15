@@ -5086,10 +5086,10 @@ class SchemaManager(object):
 class Metadata(object):
     def __init__(self, model, database=None, table_name=None, indexes=None,
                  primary_key=None, constraints=None, schema=None,
-                 only_save_dirty=False, table_alias=None, depends_on=None,
-                 options=None, db_table=None, table_function=None,
-                 table_settings=None, without_rowid=False, temporary=False,
-                 legacy_table_names=True, **kwargs):
+                 only_save_dirty=False, depends_on=None, options=None,
+                 db_table=None, table_function=None, table_settings=None,
+                 without_rowid=False, temporary=False, legacy_table_names=True,
+                 **kwargs):
         if db_table is not None:
             __deprecated__('"db_table" has been deprecated in favor of '
                            '"table_name" for Models.')
@@ -5127,7 +5127,6 @@ class Metadata(object):
         self.primary_key = primary_key
         self.composite_key = self.auto_increment = None
         self.only_save_dirty = only_save_dirty
-        self.table_alias = table_alias
         self.depends_on = depends_on
         self.table_settings = table_settings
         self.without_rowid = without_rowid
@@ -5203,7 +5202,6 @@ class Metadata(object):
                 self.table_name,
                 [field.column_name for field in self.sorted_fields],
                 schema=self.schema,
-                alias=self.table_alias,
                 _model=self.model,
                 _database=self.database)
         return self._table

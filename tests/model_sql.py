@@ -512,8 +512,6 @@ class TestModelSQL(ModelDatabaseTestCase):
     def test_aliases(self):
         class A(TestModel):
             a = CharField()
-            class Meta:
-                table_alias = 'a_tbl'
         class B(TestModel):
             b = CharField()
             a_link = ForeignKeyField(A)
@@ -523,8 +521,6 @@ class TestModelSQL(ModelDatabaseTestCase):
         class D(TestModel):
             d = CharField()
             c_link = ForeignKeyField(C)
-            class Meta:
-                table_alias = 'd_tbl'
 
         query = (D
                  .select(D.d, C.c)
@@ -532,13 +528,13 @@ class TestModelSQL(ModelDatabaseTestCase):
                  .where(C.b_link << (
                      B.select(B.id).join(A).where(A.a == 'a'))))
         self.assertSQL(query, (
-            'SELECT "d_tbl"."d", "t1"."c" '
-            'FROM "d" AS "d_tbl" '
-            'INNER JOIN "c" AS "t1" ON ("d_tbl"."c_link_id" = "t1"."id") '
-            'WHERE ("t1"."b_link_id" IN ('
-            'SELECT "t2"."id" FROM "b" AS "t2" '
-            'INNER JOIN "a" AS "a_tbl" ON ("t2"."a_link_id" = "a_tbl"."id") '
-            'WHERE ("a_tbl"."a" = ?)))'), ['a'])
+            'SELECT "t1"."d", "t2"."c" '
+            'FROM "d" AS "t1" '
+            'INNER JOIN "c" AS "t2" ON ("t1"."c_link_id" = "t2"."id") '
+            'WHERE ("t2"."b_link_id" IN ('
+            'SELECT "t3"."id" FROM "b" AS "t3" '
+            'INNER JOIN "a" AS "t4" ON ("t3"."a_link_id" = "t4"."id") '
+            'WHERE ("t4"."a" = ?)))'), ['a'])
 
     def test_schema(self):
         class WithSchema(TestModel):

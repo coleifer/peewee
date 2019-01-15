@@ -2706,7 +2706,6 @@ class TestMetaInheritance(BaseTestCase):
                 only_save_dirty = True
                 options = {'key': 'value'}
                 schema = 'magic'
-                table_alias = 'ba'
 
         class Child(Base): pass
         class GrandChild(Child): pass
@@ -2718,7 +2717,6 @@ class TestMetaInheritance(BaseTestCase):
             self.assertEqual(ModelClass._meta.options, {'key': 'value'})
             self.assertTrue(ModelClass._meta.only_save_dirty)
             self.assertEqual(ModelClass._meta.schema, 'magic')
-            self.assertTrue(ModelClass._meta.table_alias is None)
 
         class Overrides(Base):
             class Meta:

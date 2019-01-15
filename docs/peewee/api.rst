@@ -3394,7 +3394,7 @@ Schema Manager
 Model
 -----
 
-.. py:class:: Metadata(model[, database=None[, table_name=None[, indexes=None[, primary_key=None[, constraints=None[, schema=None[, only_save_dirty=False[, table_alias=None[, depends_on=None[, options=None[, without_rowid=False[, **kwargs]]]]]]]]]]]])
+.. py:class:: Metadata(model[, database=None[, table_name=None[, indexes=None[, primary_key=None[, constraints=None[, schema=None[, only_save_dirty=False[, depends_on=None[, options=None[, without_rowid=False[, **kwargs]]]]]]]]]]]])
 
     :param Model model: Model class.
     :param Database database: database model is bound to.
@@ -3406,7 +3406,6 @@ Model
     :param str schema: Schema table exists in.
     :param bool only_save_dirty: When :py:meth:`~Model.save` is called, only
         save the fields which have been modified.
-    :param str table_alias: Specify preferred alias for table in queries.
     :param dict options: Arbitrary options for the model.
     :param bool without_rowid: Specify WITHOUT ROWID (sqlite only).
     :param kwargs: Arbitrary setting attributes and values.
