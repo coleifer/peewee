@@ -1530,6 +1530,8 @@ Peewee uses these rules for determining what frame-type to use:
     `postgresql docs <http://www.postgresql.org/docs/9.1/static/tutorial-window.html>`_.
     have a good overview.
 
+.. _rowtypes:
+
 Retrieving row tuples / dictionaries / namedtuples
 --------------------------------------------------
 
@@ -1648,13 +1650,7 @@ specify a different row type:
     for new_user in query.execute():
         print('Added user "%s", id=%s' % (new_user['username'], new_user['id']))
 
-Just as with :py:class:`Select` queries, you can specify the following result
-row types:
-
-* :py:meth:`~ModelSelect.objects` (returns :py:class:`Model` instances)
-* :py:meth:`~BaseQuery.dicts`
-* :py:meth:`~BaseQuery.namedtuples`
-* :py:meth:`~BaseQuery.tuples`
+Just as with :py:class:`Select` queries, you can specify various :ref:`result row types <rowtypes>`.
 
 .. _cte:
 
