@@ -481,8 +481,8 @@ class TestIntrospection(ModelTestCase):
                                       'WHERE status = 9 ORDER BY id DESC')
             try:
                 views = self.database.get_views()
-                self.assertEqual([normalize_view_meta(v) for v in views],
-                                 expected)
+                normalized = sorted([normalize_view_meta(v) for v in views])
+                self.assertEqual(normalized, expected)
 
                 # Ensure that we can use get_columns to introspect views.
                 columns = self.database.get_columns('notes_deleted')
