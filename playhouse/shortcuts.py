@@ -1,5 +1,6 @@
 from peewee import *
 from peewee import Alias
+from peewee import SENTINEL
 from peewee import callable_
 
 
@@ -166,3 +167,57 @@ def update_model_from_dict(instance, data, ignore_unknown=False):
 
 def dict_to_model(model_class, data, ignore_unknown=False):
     return update_model_from_dict(model_class(), data, ignore_unknown)
+
+
+class ReconnectMixin(object):
+    """
+    Mixin class that attempts to automatically reconnect to the database under
+    certain error conditions.
+
+    For example, MySQL servers will typically close connections that are idle
+    for 28800 seconds ("wait_timeout" setting). If your application makes use
+    of long-lived connections, you may find your connections are closed after
+    a period of no activity. This mixin will attempt to reconnect automatically
+    when these errors occur.
+
+    This mixin class probably should not be used with Postgres (unless you
+    REALLY know what you are doing) and definitely has no business being used
+    with Sqlite. If you wish to use with Postgres, you will need to adapt the
+    `reconnect_errors` attribute to something appropriate for Postgres.
+    """
+    reconnect_errors = (
+        # Error class, error message fragment (or empty string for all).
+        (OperationalError, '2006'),  # MySQL server has gone away.
+        (OperationalError, '2013'),  # Lost connection to MySQL server.
+        (OperationalError, '2014'),  # Commands out of sync.
+    )
+
+    def __init__(self, *args, **kwargs):
+        super(ReconnectMixin, self).__init__(*args, **kwargs)
+
+        # Normalize the reconnect errors to a more efficient data-structure.
+        self._reconnect_errors = {}
+        for exc_class, err_fragment in self.reconnect_errors:
+            self._reconnect_errors.setdefault(exc_class, [])
+            self._reconnect_errors[exc_class].append(err_fragment.lower())
+
+    def execute_sql(self, sql, params=None, commit=SENTINEL):
+        try:
+            return super(ReconnectMixin, self).execute_sql(sql, params, commit)
+        except Exception as exc:
+            exc_class = type(exc)
+            if exc_class not in self._reconnect_errors:
+                raise exc
+
+            exc_repr = str(exc).lower()
+            for err_fragment in self._reconnect_errors[exc_class]:
+                if err_fragment in exc_repr:
+                    break
+            else:
+                raise exc
+
+            if not self.is_closed():
+                self.close()
+                self.connect()
+
+            return super(ReconnectMixin, self).execute_sql(sql, params, commit)

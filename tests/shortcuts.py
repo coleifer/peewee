@@ -3,10 +3,13 @@ import operator
 from peewee import *
 from playhouse.shortcuts import *
 
+from .base import DatabaseTestCase
 from .base import ModelTestCase
 from .base import TestModel
+from .base import db_loader
 from .base import get_in_memory_db
 from .base import requires_models
+from .base import requires_mysql
 from .base_models import Category
 
 
@@ -530,3 +533,52 @@ class TestDictToModel(ModelTestCase):
 
         inst = dict_to_model(User, data, ignore_unknown=True)
         self.assertEqual(inst.xx, 'does not exist')
+
+
+class ReconnectMySQLDatabase(ReconnectMixin, MySQLDatabase):
+    def cursor(self, commit):
+        cursor = super(ReconnectMySQLDatabase, self).cursor(commit)
+
+        # The first (0th) query fails, as do all queries after the 2nd (1st).
+        if self._query_counter != 1:
+            def _fake_execute(self, _):
+                raise OperationalError('2006')
+            cursor.execute = _fake_execute
+        self._query_counter += 1
+        return cursor
+
+    def close(self):
+        self._close_counter += 1
+        return super(ReconnectMySQLDatabase, self).close()
+
+    def _reset_mock(self):
+        self._close_counter = 0
+        self._query_counter = 0
+
+
+@requires_mysql
+class TestReconnectMixin(DatabaseTestCase):
+    database = db_loader('mysql', db_class=ReconnectMySQLDatabase)
+
+    def test_reconnect_mixin(self):
+        # Verify initial state.
+        self.database._reset_mock()
+        self.assertEqual(self.database._close_counter, 0)
+
+        sql = 'select 1 + 1'
+        curs = self.database.execute_sql(sql)
+        self.assertEqual(curs.fetchone(), (2,))
+        self.assertEqual(self.database._close_counter, 1)
+
+        # Due to how we configured our mock, our queries are now failing and we
+        # can verify a reconnect is occuring *AND* the exception is propagated.
+        self.assertRaises(OperationalError, self.database.execute_sql, sql)
+        self.assertEqual(self.database._close_counter, 2)
+
+        # We reset the mock counters. The first query we execute will fail. The
+        # second query will succeed (which happens automatically, thanks to the
+        # retry logic).
+        self.database._reset_mock()
+        curs = self.database.execute_sql(sql)
+        self.assertEqual(curs.fetchone(), (2,))
+        self.assertEqual(self.database._close_counter, 1)
