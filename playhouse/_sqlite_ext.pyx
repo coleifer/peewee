@@ -892,6 +892,8 @@ def peewee_bm25(py_match_info, *raw_weights):
 
             doc_length = match_info[L_O + icol]  # |D|
             avg_length = match_info[A_O + icol]  # avgdl
+            if avg_length == 0:
+                avg_length = 1
             ratio = doc_length / avg_length
 
             num = term_frequency * (K + 1)
@@ -936,6 +938,8 @@ def peewee_bm25f(py_match_info, *raw_weights):
         doc_length += match_info[L_O + icol]
 
     epsilon = 1.0 / (total_docs * avg_length)
+    if avg_length == 0:
+        avg_length = 1
     ratio = doc_length / avg_length
     weights = get_weights(ncol, raw_weights)
 

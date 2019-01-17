@@ -1189,7 +1189,7 @@ def bm25(raw_match_info, *args):
                 idf = 1e-6
 
             doc_length = float(match_info[L_O + j])  # |D|
-            avg_length = float(match_info[A_O + j])  # avgdl
+            avg_length = float(match_info[A_O + j]) or 1.  # avgdl
             ratio = doc_length / avg_length
 
             num = term_frequency * (K + 1)
