@@ -826,7 +826,7 @@ def peewee_lucene(py_match_info, *raw_weights):
             doc_length = match_info[L_O + icol]
             x = X_O + (3 * (icol + iphrase * ncol))
             term_frequency = match_info[x]  # f(qi)
-            docs_with_term = match_info[x + 2]  # n(qi)
+            docs_with_term = match_info[x + 2] or 1. # n(qi)
             idf = log(total_docs / (docs_with_term + 1.))
             tf = sqrt(term_frequency)
             fieldNorms = 1.0 / sqrt(doc_length)

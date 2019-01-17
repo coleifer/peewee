@@ -25,6 +25,8 @@ https://github.com/coleifer/peewee/releases
 
 * Fix SQL generation bug when using an inline window function in the `ORDER BY`
   clause of a query.
+* Fix possible zero-division in user-defined implementation of BM25 ranking
+  algorithm for SQLite full-text search.
 
 [View commits](https://github.com/coleifer/peewee/compare/3.8.1...master)
 
