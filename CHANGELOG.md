@@ -7,6 +7,10 @@ https://github.com/coleifer/peewee/releases
 
 ## master
 
+[View commits](https://github.com/coleifer/peewee/compare/3.8.2...master)
+
+## 3.8.2
+
 **Backwards-incompatible changes**
 
 * The default row-type for `INSERT` queries executed with a non-default
@@ -21,6 +25,12 @@ https://github.com/coleifer/peewee/releases
   the 3.8.0 release, it was broken and resulted in incorrect SQL for UPDATE
   queries, so now it is removed.
 
+**New features**
+
+* Added `playhouse.shortcuts.ReconnectMixin`, which can be used to implement
+  automatic reconnect under certain error conditions (notably the MySQL error
+  2006 - server has gone away).
+
 **Bugfixes**
 
 * Fix SQL generation bug when using an inline window function in the `ORDER BY`
@@ -28,7 +38,7 @@ https://github.com/coleifer/peewee/releases
 * Fix possible zero-division in user-defined implementation of BM25 ranking
   algorithm for SQLite full-text search.
 
-[View commits](https://github.com/coleifer/peewee/compare/3.8.1...master)
+[View commits](https://github.com/coleifer/peewee/compare/3.8.1...3.8.2)
 
 ## 3.8.1
 
