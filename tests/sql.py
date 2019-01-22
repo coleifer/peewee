@@ -1267,6 +1267,10 @@ class TestOnConflictSqlite(BaseTestCase):
 class TestOnConflictMySQL(BaseTestCase):
     database = MySQLDatabase(None)
 
+    def setUp(self):
+        super(TestOnConflictMySQL, self).setUp()
+        self.database._server_version = None
+
     def test_replace(self):
         query = Person.insert(name='huey').on_conflict('replace')
         self.assertSQL(query, (
@@ -1293,6 +1297,24 @@ class TestOnConflictMySQL(BaseTestCase):
         query = (Person
                  .insert(name='huey', dob=dob)
                  .on_conflict(preserve='dob'))
+        self.assertSQL(query, (
+            'INSERT INTO "person" ("dob", "name") VALUES (?, ?) '
+            'ON DUPLICATE KEY '
+            'UPDATE "dob" = VALUES("dob")'), [dob, 'huey'])
+
+    def test_update_use_value_mariadb(self):
+        # Verify that we use "VALUE" (not "VALUES") for MariaDB 10.3.3.
+        dob = datetime.date(2010, 1, 1)
+        query = (Person
+                 .insert(name='huey', dob=dob)
+                 .on_conflict(preserve=(Person.dob,)))
+        self.database._server_version = (10, 3, 3)
+        self.assertSQL(query, (
+            'INSERT INTO "person" ("dob", "name") VALUES (?, ?) '
+            'ON DUPLICATE KEY '
+            'UPDATE "dob" = VALUE("dob")'), [dob, 'huey'])
+
+        self.database._server_version = (10, 3, 2)
         self.assertSQL(query, (
             'INSERT INTO "person" ("dob", "name") VALUES (?, ?) '
             'ON DUPLICATE KEY '

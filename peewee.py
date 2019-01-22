@@ -3461,6 +3461,7 @@ class MySQLDatabase(Database):
     limit_max = 2 ** 64 - 1
     safe_create_index = False
     safe_drop_index = False
+    _server_version = None
 
     def init(self, database, **kwargs):
         params = {'charset': 'utf8', 'use_unicode': True}
@@ -3472,7 +3473,23 @@ class MySQLDatabase(Database):
     def _connect(self):
         if mysql is None:
             raise ImproperlyConfigured('MySQL driver not installed!')
-        return mysql.connect(db=self.database, **self.connect_params)
+        conn = mysql.connect(db=self.database, **self.connect_params)
+        if self._server_version is None:
+            version_raw = conn.server_version
+            self._server_version = self._extract_server_version(version_raw)
+        return conn
+
+    def _extract_server_version(self, version):
+        version = version.lower()
+        if 'maria' in version:
+            match_obj = re.search(r'(1\d\.\d+\.\d+)')
+        else:
+            match_obj = re.search(r'(\d\.\d+\.\d+)')
+        if match_obj is not None:
+            return tuple(int(num) for num in match_obj.groups()[0].split('.'))
+
+        warnings.warn('Unable to determine MySQL version: "%s"' % version)
+        return (0, 0, 0)  # Unable to determine version!
 
     def default_values_insert(self, ctx):
         return ctx.literal('() VALUES ()')
@@ -3554,12 +3571,21 @@ class MySQLDatabase(Database):
 
         updates = []
         if on_conflict._preserve:
+            # Here we need to determine which function to use, which varies
+            # depending on the MySQL server version. MySQL and MariaDB prior to
+            # 10.3.3 use "VALUES", while MariaDB 10.3.3+ use "VALUE".
+            version = self._server_version or (0,)
+            if version[0] == 10 and version >= (10, 3, 3):
+                VALUE_FN = fn.VALUE
+            else:
+                VALUE_FN = fn.VALUES
+
             for column in on_conflict._preserve:
                 entity = ensure_entity(column)
                 expression = NodeList((
                     ensure_entity(column),
                     SQL('='),
-                    fn.VALUES(entity)))
+                    VALUE_FN(entity)))
                 updates.append(expression)
 
         if on_conflict._update:

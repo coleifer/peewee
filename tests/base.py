@@ -88,20 +88,12 @@ IS_SQLITE_25 = IS_SQLITE and sqlite3.sqlite_version_info >= (3, 25)
 IS_SQLITE_9 = IS_SQLITE and sqlite3.sqlite_version_info >= (3, 9)
 IS_MYSQL_ADVANCED_FEATURES = False
 if IS_MYSQL:
-    conn = db.connection()
-    try:
-        # pymysql
-        server_info = conn.server_version
-        if re.search('(8\.\d+\.\d+|10\.[2-9]\.)', server_info):
-            IS_MYSQL_ADVANCED_FEATURES = True
-    except AttributeError:
-        try:
-            # mysql-connector
-            server_info = conn.get_server_version()
-            IS_MYSQL_ADVANCED_FEATURES = (server_info[0] == 8 or
-                                          server_info[:2] >= (10, 2))
-        except AttributeError:
-            logger.warning('Could not determine mysql server version.')
+    db.connect()
+    server_info = conn._server_version
+    if server_info[0] == 8 or server_info[:2] >= (10, 2):
+        IS_MYSQL_ADVANCED_FEATURES = True
+    elif server_info[0] == 0:
+        logger.warning('Could not determine mysql server version.')
     db.close()
     if not IS_MYSQL_ADVANCED_FEATURES:
         logger.warning('MySQL too old to test certain advanced features.')
