@@ -7,6 +7,10 @@ https://github.com/coleifer/peewee/releases
 
 ## master
 
+* MariaDB 10.3.3 introduces backwards-incompatible changes to the SQL used for
+  upsert. Peewee now introspects the MySQL server version at connection time to
+  ensure proper handling of version-specific features. See #1834 for details.
+
 [View commits](https://github.com/coleifer/peewee/compare/3.8.2...master)
 
 ## 3.8.2
