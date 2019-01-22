@@ -3482,9 +3482,9 @@ class MySQLDatabase(Database):
     def _extract_server_version(self, version):
         version = version.lower()
         if 'maria' in version:
-            match_obj = re.search(r'(1\d\.\d+\.\d+)')
+            match_obj = re.search(r'(1\d\.\d+\.\d+)', version)
         else:
-            match_obj = re.search(r'(\d\.\d+\.\d+)')
+            match_obj = re.search(r'(\d\.\d+\.\d+)', version)
         if match_obj is not None:
             return tuple(int(num) for num in match_obj.groups()[0].split('.'))
 

@@ -89,7 +89,7 @@ IS_SQLITE_9 = IS_SQLITE and sqlite3.sqlite_version_info >= (3, 9)
 IS_MYSQL_ADVANCED_FEATURES = False
 if IS_MYSQL:
     db.connect()
-    server_info = conn._server_version
+    server_info = db._server_version
     if server_info[0] == 8 or server_info[:2] >= (10, 2):
         IS_MYSQL_ADVANCED_FEATURES = True
     elif server_info[0] == 0:
