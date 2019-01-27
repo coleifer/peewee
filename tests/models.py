@@ -192,6 +192,11 @@ class TestModelAPIs(ModelTestCase):
         mickey = self.add_user('mickey')
         self.add_tweets(mickey, 'woof', 'yip')
 
+        # Lookup using just the ID.
+        huey_db = User.get(huey.id)
+        self.assertEqual(huey.id, huey_db.id)
+
+        # Lookup using an expression.
         huey_db = User.get(User.username == 'huey')
         self.assertEqual(huey.id, huey_db.id)
         mickey_db = User.get(User.username == 'mickey')

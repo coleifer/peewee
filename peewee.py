@@ -5664,7 +5664,11 @@ class Model(with_metaclass(ModelBase, Node)):
     def get(cls, *query, **filters):
         sq = cls.select()
         if query:
-            sq = sq.where(*query)
+            # Handle simple lookup using just the primary key.
+            if len(query) == 1 and isinstance(query[0], int):
+                sq = sq.where(cls._meta.primary_key == query[0])
+            else:
+                sq = sq.where(*query)
         if filters:
             sq = sq.filter(**filters)
         return sq.get()
