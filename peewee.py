@@ -1808,7 +1808,7 @@ class Query(BaseQuery):
             # The CTE scope is only used at the very beginning of the query,
             # when we are describing the various CTEs we will be using.
             recursive = any(cte._recursive for cte in self._cte_list)
-            with ctx.scope_cte():
+            with ctx.scope_cte(subquery=False):
                 (ctx
                  .literal('WITH RECURSIVE ' if recursive else 'WITH ')
                  .sql(CommaNodeList(self._cte_list))
@@ -2032,7 +2032,6 @@ class Select(SelectBase):
         return ctx.sql(CommaNodeList(self._returning))
 
     def __sql__(self, ctx):
-        super(Select, self).__sql__(ctx)
         if ctx.scope == SCOPE_COLUMN:
             return self.apply_column(ctx)
 
@@ -2047,6 +2046,8 @@ class Select(SelectBase):
             state['parentheses'] = False
 
         with ctx.scope_normal(**state):
+            super(Select, self).__sql__(ctx)
+
             ctx.literal('SELECT ')
             if self._simple_distinct or self._distinct is not None:
                 ctx.literal('DISTINCT ')
