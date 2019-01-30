@@ -346,6 +346,43 @@ class TestSelectQuery(BaseTestCase):
             'SELECT "fibonacci"."n", "fibonacci"."fib_n" '
             'FROM "fibonacci"'), [1, 0, 1, 1, 10])
 
+    def test_cte_with_count(self):
+        cte = User.select(User.c.id).cte('user_ids')
+        query = (User
+                 .select(User.c.username)
+                 .join(cte, on=(User.c.id == cte.c.id))
+                 .with_cte(cte))
+        count = Select([query], [fn.COUNT(SQL('1'))])
+        self.assertSQL(count, (
+            'SELECT COUNT(1) FROM ('
+            'WITH "user_ids" AS (SELECT "t1"."id" FROM "users" AS "t1") '
+            'SELECT "t2"."username" FROM "users" AS "t2" '
+            'INNER JOIN "user_ids" ON ("t2"."id" = "user_ids"."id")) '
+            'AS "t3"'), [])
+
+    def test_cte_subquery_in_expression(self):
+        Order = Table('order', ('id', 'description'))
+        Item = Table('item', ('id', 'order_id', 'description'))
+
+        cte = Order.select(fn.MAX(Order.id).alias('max_id')).cte('max_order')
+        qexpr = (Order
+                 .select(Order.id)
+                 .join(cte, on=(Order.id == cte.c.max_id))
+                 .with_cte(cte))
+        query = (Item
+                 .select(Item.id, Item.order_id, Item.description)
+                 .where(Item.order_id.in_(qexpr)))
+        self.assertSQL(query, (
+            'SELECT "t1"."id", "t1"."order_id", "t1"."description" '
+            'FROM "item" AS "t1" '
+            'WHERE ("t1"."order_id" IN ('
+            'WITH "max_order" AS ('
+            'SELECT MAX("t2"."id") AS "max_id" FROM "order" AS "t2") '
+            'SELECT "t3"."id" '
+            'FROM "order" AS "t3" '
+            'INNER JOIN "max_order" '
+            'ON ("t3"."id" = "max_order"."max_id")))'), [])
+
     def test_complex_select(self):
         Order = Table('orders', columns=(
             'region',
