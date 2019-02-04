@@ -1653,7 +1653,8 @@ Query-builder
 
 .. py:class:: Tuple(*args)
 
-    Represent a SQL row tuple.
+    Represent a SQL `row value <https://www.sqlite.org/rowvalue.html>`_.
+    Row-values are supported by most databases.
 
 
 .. py:class:: OnConflict([action=None[, update=None[, preserve=None[, where=None[, conflict_target=None[, conflict_constraint=None]]]]]])

@@ -421,6 +421,8 @@ selected and reconstructed the model graph:
     zaizee liked meow by huey
     zaizee liked purr by huey
 
+.. _join-subquery:
+
 Subqueries
 ----------
 
