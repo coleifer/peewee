@@ -83,6 +83,7 @@ __all__ = [
     'Context',
     'Database',
     'DatabaseError',
+    'DatabaseProxy',
     'DataError',
     'DateField',
     'DateTimeField',
@@ -431,6 +432,22 @@ class Proxy(object):
         if attr not in self.__slots__:
             raise AttributeError('Cannot set attribute on proxy.')
         return super(Proxy, self).__setattr__(attr, value)
+
+
+class DatabaseProxy(Proxy):
+    """
+    Proxy implementation specifically for proxying `Database` objects.
+    """
+    def connection_context(self):
+        return ConnectionContext(self)
+    def atomic(self):
+        return _atomic(self)
+    def manual_commit(self):
+        return _manual(self)
+    def transaction(self):
+        return _transaction(self)
+    def savepoint(self):
+        return _savepoint(self)
 
 
 # SQL Generation.
