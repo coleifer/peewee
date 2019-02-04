@@ -422,6 +422,9 @@ class Proxy(object):
     __enter__ = passthrough('__enter__')
     __exit__ = passthrough('__exit__')
 
+    def connection_context(self):
+        return ConnectionContext(self)
+
     def __getattr__(self, attr):
         if self.obj is None:
             raise AttributeError('Cannot use uninitialized Proxy.')

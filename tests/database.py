@@ -599,6 +599,27 @@ class TestDBProxy(BaseTestCase):
         self.assertFalse(Tweet._meta.database.is_closed())
         sqlite_db.close()
 
+    def test_db_proxy_connection_context(self):
+        db = Proxy()
+
+        class BaseModel(Model):
+            class Meta:
+                database = db
+
+        class User(BaseModel):
+            username = TextField()
+
+        sqlite_db = SqliteDatabase(':memory:')
+
+        @db.connection_context()
+        def count_users():
+            return User.select().count()
+
+        db.initialize(sqlite_db)
+        db.create_tables([User])
+        User.create(username='test')
+        assert count_users() == 1
+
 
 class Data(TestModel):
     key = TextField()
