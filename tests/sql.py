@@ -547,6 +547,21 @@ class TestSelectQuery(BaseTestCase):
                  .where(name_dob == Tuple('foo', '2017-01-01')))
         self.assertSQL(query, expected, ['foo', '2017-01-01'])
 
+    def test_tuple_comparison_subquery(self):
+        PA = Person.alias('pa')
+        subquery = (PA
+                    .select(PA.name, PA.id)
+                    .where(PA.name != 'huey'))
+
+        query = (Person
+                 .select(Person.name)
+                 .where(Tuple(Person.name, Person.id).in_(subquery)))
+        self.assertSQL(query, (
+            'SELECT "t1"."name" FROM "person" AS "t1" '
+            'WHERE (("t1"."name", "t1"."id") IN ('
+            'SELECT "pa"."name", "pa"."id" FROM "person" AS "pa" '
+            'WHERE ("pa"."name" != ?)))'), ['huey'])
+
     def test_empty_in(self):
         query = User.select(User.c.id).where(User.c.username.in_([]))
         self.assertSQL(query, (

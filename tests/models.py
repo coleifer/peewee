@@ -2363,6 +2363,19 @@ class TestTupleComparison(ModelTestCase):
         obj = query.get()
         self.assertEqual(obj, ub)
 
+    def test_tuple_subquery(self):
+        ua, ub, uc = [User.create(username=username) for username in 'abc']
+        UA = User.alias()
+        subquery = (UA
+                    .select(UA.username, UA.id)
+                    .where(UA.username != 'b'))
+
+        query = (User
+                 .select(User.username)
+                 .where(Tuple(User.username, User.id).in_(subquery))
+                 .order_by(User.username))
+        self.assertEqual([u.username for u in query], ['a', 'c'])
+
 
 class TestModelGraph(BaseTestCase):
     def test_bind_model_database(self):

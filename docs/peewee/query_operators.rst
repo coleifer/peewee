@@ -333,7 +333,7 @@ correlate incidents with certain events:
     # incidents that occured today.
     events = (EventLog
               .select()
-              .where(Tuple(EventLog.event_type, EventLog.source) == incidents)
+              .where(Tuple(EventLog.event_type, EventLog.source).in_(incidents))
               .order_by(EventLog.timestamp))
 
 Other ways to express this type of query would be to use a :ref:`join <relationships>`
