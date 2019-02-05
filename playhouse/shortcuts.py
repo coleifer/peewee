@@ -32,6 +32,7 @@ def model_to_dict(model, recurse=True, backrefs=False, only=None,
 
     only = _clone_set(only)
     extra_attrs = _clone_set(extra_attrs)
+    should_skip = lambda n: (n in exclude) or (only and (n not in only))
 
     if fields_from_query is not None:
         for item in fields_from_query._returning:
@@ -48,7 +49,7 @@ def model_to_dict(model, recurse=True, backrefs=False, only=None,
 
     if manytomany:
         for name, m2m in model._meta.manytomany.items():
-            if (name in exclude) or (only and (name not in only)):
+            if should_skip(name):
                 continue
 
             exclude.update((m2m, m2m.rel_model._meta.manytomany[m2m.backref]))
@@ -67,7 +68,7 @@ def model_to_dict(model, recurse=True, backrefs=False, only=None,
             data[name] = accum
 
     for field in model._meta.sorted_fields:
-        if field in exclude or (only and (field not in only)):
+        if should_skip(field):
             continue
 
         field_data = model.__data__.get(field.name)
