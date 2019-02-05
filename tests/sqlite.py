@@ -574,6 +574,18 @@ class TestJSONField(ModelTestCase):
             '$.x1.y1',
             '$.x1.y2'])
 
+    def test_json_unicode(self):
+        with self.database.atomic():
+            KeyData.delete().execute()
+
+        # Two Chinese characters.
+        unicode_str = b'\xe4\xb8\xad\xe6\x96\x87'.decode('utf8')
+        data = {'foo': unicode_str}
+        kd = KeyData.create(key='k1', data=data)
+
+        kd_db = KeyData.get(KeyData.key == 'k1')
+        self.assertEqual(kd_db.data, {'foo': unicode_str})
+
 
 class TestSqliteExtensions(BaseTestCase):
     def test_virtual_model(self):
