@@ -88,11 +88,11 @@ class JSONPath(ColumnBase):
 
     def set(self, value, as_json=None):
         if as_json or isinstance(value, (list, dict)):
-            value = fn.json(json.dumps(value))
+            value = fn.json(self._field._json_dumps(value))
         return fn.json_set(self._field, self.path, value)
 
     def update(self, value):
-        return self.set(fn.json_patch(self, json.dumps(value)))
+        return self.set(fn.json_patch(self, self._field._json_dumps(value)))
 
     def remove(self):
         return fn.json_remove(self._field, self.path)
@@ -117,16 +117,36 @@ class JSONPath(ColumnBase):
 class JSONField(TextField):
     field_type = 'JSON'
 
+    def __init__(self, json_dumps=None, json_loads=None, **kwargs):
+        self._json_dumps = json_dumps or json.dumps
+        self._json_loads = json_loads or json.loads
+        super(JSONField, self).__init__(**kwargs)
+
     def python_value(self, value):
         if value is not None:
             try:
-                return json.loads(value)
+                return self._json_loads(value)
             except (TypeError, ValueError):
                 return value
 
     def db_value(self, value):
         if value is not None:
-            return json.dumps(value)
+            if not isinstance(value, Node):
+                value = fn.json(self._json_dumps(value))
+            return value
+
+    def _e(op):
+        def inner(self, rhs):
+            if isinstance(rhs, (list, dict)):
+                rhs = Value(rhs, converter=self.db_value, unpack=False)
+            return Expression(self, op, rhs)
+        return inner
+    __eq__ = _e(OP.EQ)
+    __ne__ = _e(OP.NE)
+    __gt__ = _e(OP.GT)
+    __ge__ = _e(OP.GTE)
+    __lt__ = _e(OP.LT)
+    __le__ = _e(OP.LTE)
 
     def __getitem__(self, item):
         return JSONPath(self)[item]

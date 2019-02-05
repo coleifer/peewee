@@ -387,6 +387,80 @@ class TestTableFunction(BaseTestCase):
 class TestJSONField(ModelTestCase):
     database = database
     requires = [KeyData]
+
+    def test_schema(self):
+        self.assertSQL(KeyData._schema._create_table(), (
+            'CREATE TABLE IF NOT EXISTS "key_data" ('
+            '"id" INTEGER NOT NULL PRIMARY KEY, '
+            '"key" TEXT NOT NULL, '
+            '"data" JSON NOT NULL)'), [])
+
+    def test_create_read_update(self):
+        test_values = (
+            'simple string',
+            '',
+            1337,
+            0.0,
+            True,
+            False,
+            ['foo', 'bar', ['baz', 'nug']],
+            {'k1': 'v1', 'k2': {'x1': 'y1', 'x2': 'y2'}},
+            {'a': 1, 'b': 0.0, 'c': True, 'd': False, 'e': None, 'f': [0, 1],
+             'g': {'h': 'ijkl'}},
+        )
+
+        # Create a row using the given test value. Verify we can read the value
+        # back from the database, and also that we can query for the row using
+        # the value in the WHERE clause.
+        for i, value in enumerate(test_values):
+            # We can create and re-read values.
+            KeyData.create(key='k%s' % i, data=value)
+            kd_db = KeyData.get(KeyData.key == 'k%s' % i)
+            self.assertEqual(kd_db.data, value)
+
+            # We can read the data back using the value in the WHERE clause.
+            kd_db = KeyData.get(KeyData.data == value)
+            self.assertEqual(kd_db.key, 'k%s' % i)
+
+        # Verify we can use values in UPDATE query.
+        kd = KeyData.create(key='kx', data='')
+        for value in test_values:
+            nrows = (KeyData
+                     .update(data=value)
+                     .where(KeyData.key == 'kx')
+                     .execute())
+            self.assertEqual(nrows, 1)
+            kd_db = KeyData.get(KeyData.key == 'kx')
+            self.assertEqual(kd_db.data, value)
+
+    def test_json_unicode(self):
+        with self.database.atomic():
+            KeyData.delete().execute()
+
+        # Two Chinese characters.
+        unicode_str = b'\xe4\xb8\xad\xe6\x96\x87'.decode('utf8')
+        data = {'foo': unicode_str}
+        kd = KeyData.create(key='k1', data=data)
+
+        kd_db = KeyData.get(KeyData.key == 'k1')
+        self.assertEqual(kd_db.data, {'foo': unicode_str})
+
+    def test_json_to_json(self):
+        kd1 = KeyData.create(key='k1', data={'k1': 'v1', 'k2': 'v2'})
+        subq = (KeyData
+                .select(KeyData.data)
+                .where(KeyData.key == 'k1'))
+
+        # Assign value using a subquery.
+        KeyData.create(key='k2', data=subq)
+        kd2_db = KeyData.get(KeyData.key == 'k2')
+        self.assertEqual(kd2_db.data, {'k1': 'v1', 'k2': 'v2'})
+
+
+@skip_unless(json_installed(), 'requires sqlite json1')
+class TestJSONFieldFunctions(ModelTestCase):
+    database = database
+    requires = [KeyData]
     test_data = [
         ('a', {'k1': 'v1', 'x1': {'y1': 'z1'}}),
         ('b', {'k2': 'v2', 'x2': {'y2': 'z2'}}),
@@ -396,7 +470,7 @@ class TestJSONField(ModelTestCase):
     ]
 
     def setUp(self):
-        super(TestJSONField, self).setUp()
+        super(TestJSONFieldFunctions, self).setUp()
         with self.database.atomic():
             for key, data in self.test_data:
                 KeyData.create(key=key, data=data)
@@ -457,13 +531,6 @@ class TestJSONField(ModelTestCase):
                  .select(jgo_key.python_value(json.loads))
                  .where(KeyData.data['v'] < 4))
         self.assertEqual(query.scalar(), {'k0': 0, 'k1': 1, 'k2': 2, 'k3': 3})
-
-    def test_schema(self):
-        self.assertSQL(KeyData._schema._create_table(), (
-            'CREATE TABLE IF NOT EXISTS "key_data" ('
-            '"id" INTEGER NOT NULL PRIMARY KEY, '
-            '"key" TEXT NOT NULL, '
-            '"data" JSON NOT NULL)'), [])
 
     def test_extract(self):
         self.assertRows((KeyData.data['k1'] == 'v1'), ['a', 'c'])
@@ -573,18 +640,6 @@ class TestJSONField(ModelTestCase):
             '$.x1',
             '$.x1.y1',
             '$.x1.y2'])
-
-    def test_json_unicode(self):
-        with self.database.atomic():
-            KeyData.delete().execute()
-
-        # Two Chinese characters.
-        unicode_str = b'\xe4\xb8\xad\xe6\x96\x87'.decode('utf8')
-        data = {'foo': unicode_str}
-        kd = KeyData.create(key='k1', data=data)
-
-        kd_db = KeyData.get(KeyData.key == 'k1')
-        self.assertEqual(kd_db.data, {'foo': unicode_str})
 
 
 class TestSqliteExtensions(BaseTestCase):

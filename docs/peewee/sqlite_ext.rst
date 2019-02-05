@@ -284,7 +284,7 @@ APIs
 
 .. _sqlite-json1:
 
-.. py:class:: JSONField()
+.. py:class:: JSONField(json_dumps=None, json_loads=None, ...)
 
     Field class suitable for storing JSON data, with special methods designed
     to work with the `json1 extension <https://sqlite.org/json1.html>`_.
@@ -297,6 +297,27 @@ APIs
     To access or modify specific object keys or array indexes in a JSON
     structure, you can treat the :py:class:`JSONField` as if it were a
     dictionary/list.
+
+    :param json_dumps: (optional) function for serializing data to JSON
+        strings. If not provided, will use the stdlib ``json.dumps``.
+    :param json_loads: (optional) function for de-serializing JSON to Python
+        objects. If not provided, will use the stdlib ``json.loads``.
+
+    .. note::
+        To customize the JSON serialization or de-serialization, you can
+        specify a custom ``json_dumps`` and ``json_loads`` callables. These
+        functions should accept a single paramter: the object to serialize, and
+        the JSON string, respectively. To modify the parameters of the stdlib
+        JSON functions, you can use ``functools.partial``:
+
+        .. code-block:: python
+
+            # Do not escape unicode code-points.
+            my_json_dumps = functools.partial(json.dumps, ensure_ascii=False)
+
+            class SomeModel(Model):
+                # Specify our custom serialization function.
+                json_data = JSONField(json_dumps=my_json_dumps)
 
     Let's look at some examples of using the SQLite json1 extension with
     Peewee. Here we'll prepare a database and a simple model for testing the
