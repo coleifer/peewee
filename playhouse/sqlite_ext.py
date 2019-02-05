@@ -147,6 +147,7 @@ class JSONField(TextField):
     __ge__ = _e(OP.GTE)
     __lt__ = _e(OP.LT)
     __le__ = _e(OP.LTE)
+    __hash__ = Field.__hash__
 
     def __getitem__(self, item):
         return JSONPath(self)[item]
