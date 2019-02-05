@@ -10,6 +10,9 @@ https://github.com/coleifer/peewee/releases
 * MariaDB 10.3.3 introduces backwards-incompatible changes to the SQL used for
   upsert. Peewee now introspects the MySQL server version at connection time to
   ensure proper handling of version-specific features. See #1834 for details.
+* Improvements to `sqlite_ext.JSONField` regarding the serialization of data,
+  as well as the addition of options to override the JSON serialization and
+  de-serialization functions.
 * Added `DatabaseProxy`, which allows one to use database-specific decorators
   with an uninitialized `Proxy` object. See #1842 for discussion.
 
