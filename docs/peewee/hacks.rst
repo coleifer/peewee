@@ -32,6 +32,8 @@ class that you can use as a starting point:
 
     from peewee import *
 
+    class ConflictDetectedException(Exception): pass
+
     class BaseVersionedModel(Model):
         version = IntegerField(default=1, index=True)
 
@@ -44,7 +46,7 @@ class that you can use as a starting point:
                 return self.save()
 
             # Update any data that has changed and bump the version counter.
-            field_data = dict(self._data)
+            field_data = dict(self.__data__)
             current_version = field_data.pop('version', 1)
             field_data = self._prune_fields(field_data, self.dirty_fields)
             if not field_data:
