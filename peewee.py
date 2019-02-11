@@ -3973,13 +3973,14 @@ class Field(ColumnBase):
     _order = 0
     accessor_class = FieldAccessor
     auto_increment = False
+    default_index_type = None
     field_type = 'DEFAULT'
 
     def __init__(self, null=False, index=False, unique=False, column_name=None,
                  default=None, primary_key=False, constraints=None,
                  sequence=None, collation=None, unindexed=False, choices=None,
-                 help_text=None, verbose_name=None, db_column=None,
-                 _hidden=False):
+                 help_text=None, verbose_name=None, index_type=None,
+                 db_column=None, _hidden=False):
         if db_column is not None:
             __deprecated__('"db_column" has been deprecated in favor of '
                            '"column_name" for Field objects.')
@@ -3998,6 +3999,7 @@ class Field(ColumnBase):
         self.choices = choices
         self.help_text = help_text
         self.verbose_name = verbose_name
+        self.index_type = index_type or self.default_index_type
         self._hidden = _hidden
 
         # Used internally for recovering the order in which Fields were defined
@@ -5375,7 +5377,8 @@ class Metadata(object):
             if f.primary_key:
                 continue
             if f.index or f.unique:
-                indexes.append(ModelIndex(self.model, (f,), unique=f.unique))
+                indexes.append(ModelIndex(self.model, (f,), unique=f.unique,
+                                          using=f.index_type))
 
         for index_obj in self.indexes:
             if isinstance(index_obj, Node):

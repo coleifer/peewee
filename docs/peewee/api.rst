@@ -2430,7 +2430,7 @@ Query-builder
     :param bool unique: Whether index is UNIQUE.
     :param bool safe: Whether to add IF NOT EXISTS clause.
     :param Expression where: Optional WHERE clause for index.
-    :param str using: Index algorithm.
+    :param str using: Index algorithm or type, e.g. 'BRIN', 'GiST' or 'GIN'.
     :param str name: Optional index name.
 
     Expressive method for declaring an index on a model.
@@ -2482,7 +2482,7 @@ Query-builder
 Fields
 ------
 
-.. py:class:: Field([null=False[, index=False[, unique=False[, column_name=None[, default=None[, primary_key=False[, constraints=None[, sequence=None[, collation=None[, unindexed=False[, choices=None[, help_text=None[, verbose_name=None]]]]]]]]]]]]])
+.. py:class:: Field([null=False[, index=False[, unique=False[, column_name=None[, default=None[, primary_key=False[, constraints=None[, sequence=None[, collation=None[, unindexed=False[, choices=None[, help_text=None[, verbose_name=None[, index_type=None]]]]]]]]]]]]]])
 
     :param bool null: Field allows NULLs.
     :param bool index: Create an index on field.
@@ -2500,6 +2500,7 @@ Fields
         displaying a dropdown of choices for field values, for example.
     :param str help_text: Help-text for field, metadata purposes only.
     :param str verbose_name: Verbose name for field, metadata purposes only.
+    :param str index_type: Specify index type (postgres only), e.g. 'BRIN'.
 
     Fields on a :py:class:`Model` are analogous to columns on a table.
 

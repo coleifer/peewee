@@ -135,6 +135,17 @@ class TestModelDDL(ModelDatabaseTestCase):
             ('CREATE INDEX "article_foo" ON "article" ("flags" & 3)', []),
         ])
 
+    def test_model_index_types(self):
+        class Event(TestModel):
+            key = TextField()
+            timestamp = TimestampField(index=True, index_type='BRIN')
+            class Meta:
+                database = self.database
+
+        self.assertIndexes(Event, [
+            ('CREATE INDEX "event_timestamp" ON "event" '
+             'USING BRIN ("timestamp")', [])])
+
     def test_model_indexes_custom_tablename(self):
         class KV(TestModel):
             key = TextField()

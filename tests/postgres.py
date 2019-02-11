@@ -916,7 +916,6 @@ class TestIndexedField(BaseTestCase):
     def test_indexed_field_ddl(self):
         class FakeIndexedField(IndexedFieldMixin, CharField):
             default_index_type = 'GiST'
-            index_type = 'FAKE'
 
         class IndexedModel(TestModel):
             array_index = ArrayField(CharField)
