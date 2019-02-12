@@ -3477,7 +3477,7 @@ class MySQLDatabase(Database):
     quote = '``'
 
     commit_select = True
-    compound_select_parentheses = True
+    #compound_select_parentheses = True  # XXX: work out compatibility.
     for_update = True
     limit_max = 2 ** 64 - 1
     safe_create_index = False
