@@ -506,6 +506,47 @@ class TestSelectQuery(BaseTestCase):
             'WHERE ("t2"."is_editor" = ?) ORDER BY "t2"."id" DESC LIMIT ?)'),
             ['admin', 1, 3, 'editor', 1, 5], compound_select_parentheses=True)
 
+        Reg = Table('register', ('value',))
+        lhs = Reg.select().where(Reg.value < 2)
+        rhs = Reg.select().where(Reg.value > 7)
+        compound = lhs | rhs
+
+        for csq_setting in (1, 2):
+            self.assertSQL(compound, (
+                '(SELECT "t1"."value" FROM "register" AS "t1" '
+                'WHERE ("t1"."value" < ?)) '
+                'UNION '
+                '(SELECT "t2"."value" FROM "register" AS "t2" '
+                'WHERE ("t2"."value" > ?))'),
+                [2, 7], compound_select_parentheses=csq_setting)
+
+        rhs2 = Reg.select().where(Reg.value == 5)
+        c2 = compound | rhs2
+
+        # CSQ = always, we get nested parentheses.
+        self.assertSQL(c2, (
+            '((SELECT "t1"."value" FROM "register" AS "t1" '
+            'WHERE ("t1"."value" < ?)) '
+            'UNION '
+            '(SELECT "t2"."value" FROM "register" AS "t2" '
+            'WHERE ("t2"."value" > ?))) '
+            'UNION '
+            '(SELECT "t2"."value" FROM "register" AS "t2" '
+            'WHERE ("t2"."value" = ?))'),
+            [2, 7, 5], compound_select_parentheses=1)  # Always.
+
+        # CSQ = unnested, no nesting but all individual queries have parens.
+        self.assertSQL(c2, (
+            '(SELECT "t1"."value" FROM "register" AS "t1" '
+            'WHERE ("t1"."value" < ?)) '
+            'UNION '
+            '(SELECT "t2"."value" FROM "register" AS "t2" '
+            'WHERE ("t2"."value" > ?)) '
+            'UNION '
+            '(SELECT "t2"."value" FROM "register" AS "t2" '
+            'WHERE ("t2"."value" = ?))'),
+            [2, 7, 5], compound_select_parentheses=2)  # Un-nested.
+
     def test_join_on_query(self):
         inner = User.select(User.c.id).alias('j1')
         query = (Tweet

@@ -337,6 +337,11 @@ SCOPE_VALUES = 4
 SCOPE_CTE = 8
 SCOPE_COLUMN = 16
 
+# Rules for parentheses around subqueries in compound select.
+CSQ_PARENTHESES_NEVER = 0
+CSQ_PARENTHESES_ALWAYS = 1
+CSQ_PARENTHESES_UNNESTED = 2
+
 # Regular expressions used to convert class names to snake-case table names.
 # First regex handles acronym followed by word or initial lower-word followed
 # by a capitalized word. e.g. APIResponse -> API_Response / fooBar -> foo_Bar.
@@ -1929,20 +1934,31 @@ class CompoundSelectQuery(SelectBase):
     def _get_query_key(self):
         return (self.lhs.get_query_key(), self.rhs.get_query_key())
 
+    def _wrap_parens(self, ctx, subq):
+        csq_setting = ctx.state.compound_select_parentheses
+
+        if not csq_setting or csq_setting == CSQ_PARENTHESES_NEVER:
+            return False
+        elif csq_setting == CSQ_PARENTHESES_ALWAYS:
+            return True
+        elif csq_setting == CSQ_PARENTHESES_UNNESTED:
+            return not isinstance(subq, CompoundSelectQuery)
+
     def __sql__(self, ctx):
         if ctx.scope == SCOPE_COLUMN:
             return self.apply_column(ctx)
 
-        parens_around_query = ctx.state.compound_select_parentheses
         outer_parens = ctx.subquery or (ctx.scope == SCOPE_SOURCE)
         with ctx(parentheses=outer_parens):
-            with ctx.scope_normal(parentheses=parens_around_query,
-                                  subquery=False):
+            # Should the left-hand query be wrapped in parentheses?
+            lhs_parens = self._wrap_parens(ctx, self.lhs)
+            with ctx.scope_normal(parentheses=lhs_parens, subquery=False):
                 ctx.sql(self.lhs)
             ctx.literal(' %s ' % self.op)
             with ctx.push_alias():
-                with ctx.scope_normal(parentheses=parens_around_query,
-                                      subquery=False):
+                # Should the right-hand query be wrapped in parentheses?
+                rhs_parens = self._wrap_parens(ctx, self.rhs)
+                with ctx.scope_normal(parentheses=rhs_parens, subquery=False):
                     ctx.sql(self.rhs)
 
             # Apply ORDER BY, LIMIT, OFFSET.
@@ -2600,7 +2616,7 @@ class Database(_callable_context_manager):
 
     # Feature toggles.
     commit_select = False
-    compound_select_parentheses = False
+    compound_select_parentheses = CSQ_PARENTHESES_NEVER
     for_update = False
     index_schema_prefix = False
     limit_max = None
@@ -3301,7 +3317,7 @@ class PostgresqlDatabase(Database):
     param = '%s'
 
     commit_select = True
-    compound_select_parentheses = True
+    compound_select_parentheses = CSQ_PARENTHESES_ALWAYS
     for_update = True
     returning_clause = True
     safe_create_index = False
@@ -3477,7 +3493,7 @@ class MySQLDatabase(Database):
     quote = '``'
 
     commit_select = True
-    #compound_select_parentheses = True  # XXX: work out compatibility.
+    compound_select_parentheses = CSQ_PARENTHESES_UNNESTED
     for_update = True
     limit_max = 2 ** 64 - 1
     safe_create_index = False
