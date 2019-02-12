@@ -486,6 +486,26 @@ class TestSelectQuery(BaseTestCase):
             'FROM "users" AS "t2" '
             'WHERE ("t2"."is_admin" = ?)'), ['editor', 1, 'admin', 1])
 
+    def test_compound_parentheses_handling(self):
+        admin = (User
+                 .select(User.c.username, Value('admin').alias('role'))
+                 .where(User.c.is_admin == True)
+                 .order_by(User.c.id.desc())
+                 .limit(3))
+        editors = (User
+                   .select(User.c.username, Value('editor').alias('role'))
+                   .where(User.c.is_editor == True)
+                   .order_by(User.c.id.desc())
+                   .limit(5))
+
+        self.assertSQL((admin | editors), (
+            '(SELECT "t1"."username", ? AS "role" FROM "users" AS "t1" '
+            'WHERE ("t1"."is_admin" = ?) ORDER BY "t1"."id" DESC LIMIT ?) '
+            'UNION '
+            '(SELECT "t2"."username", ? AS "role" FROM "users" AS "t2" '
+            'WHERE ("t2"."is_editor" = ?) ORDER BY "t2"."id" DESC LIMIT ?)'),
+            ['admin', 1, 3, 'editor', 1, 5], compound_select_parentheses=True)
+
     def test_join_on_query(self):
         inner = User.select(User.c.id).alias('j1')
         query = (Tweet
