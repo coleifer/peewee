@@ -1961,8 +1961,12 @@ class CompoundSelectQuery(SelectBase):
                 with ctx.scope_normal(parentheses=rhs_parens, subquery=False):
                     ctx.sql(self.rhs)
 
-            # Apply ORDER BY, LIMIT, OFFSET.
-            self._apply_ordering(ctx)
+            # Apply ORDER BY, LIMIT, OFFSET. We use the "values" scope so that
+            # entity names are not fully-qualified. This is a bit of a hack, as
+            # we're relying on the logic in Column.__sql__() to not fully
+            # qualify column names.
+            with ctx.scope_values():
+                self._apply_ordering(ctx)
 
         return self.apply_alias(ctx)
 

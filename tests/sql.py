@@ -547,6 +547,29 @@ class TestSelectQuery(BaseTestCase):
             'WHERE ("t2"."value" = ?))'),
             [2, 7, 5], compound_select_parentheses=2)  # Un-nested.
 
+    def test_compound_select_order_limit(self):
+        A = Table('a', ('col_a',))
+        B = Table('b', ('col_b',))
+        C = Table('c', ('col_c',))
+        q1 = A.select(A.col_a.alias('foo'))
+        q2 = B.select(B.col_b.alias('foo'))
+        q3 = C.select(C.col_c.alias('foo'))
+        qc = (q1 | q2 | q3)
+        qc = qc.order_by(qc.c.foo.desc()).limit(3)
+
+        self.assertSQL(qc, (
+            'SELECT "t1"."col_a" AS "foo" FROM "a" AS "t1" UNION '
+            'SELECT "t2"."col_b" AS "foo" FROM "b" AS "t2" UNION '
+            'SELECT "t3"."col_c" AS "foo" FROM "c" AS "t3" '
+            'ORDER BY "foo" DESC LIMIT ?'), [3])
+
+        self.assertSQL(qc, (
+            '((SELECT "t1"."col_a" AS "foo" FROM "a" AS "t1") UNION '
+            '(SELECT "t2"."col_b" AS "foo" FROM "b" AS "t2")) UNION '
+            '(SELECT "t3"."col_c" AS "foo" FROM "c" AS "t3") '
+            'ORDER BY "foo" DESC LIMIT ?'),
+            [3], compound_select_parentheses=1)
+
     def test_join_on_query(self):
         inner = User.select(User.c.id).alias('j1')
         query = (Tweet
