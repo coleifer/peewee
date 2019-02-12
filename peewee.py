@@ -147,15 +147,6 @@ except ImportError:
 logger = logging.getLogger('peewee')
 logger.addHandler(NullHandler())
 
-# Import any speedups or provide alternate implementations.
-try:
-    from playhouse._speedups import quote
-except ImportError:
-    def quote(path, quote_chars):
-        if len(path) == 1:
-            return path[0].join(quote_chars)
-        return '.'.join([part.join(quote_chars) for part in path])
-
 
 if sys.version_info[0] == 2:
     text_type = unicode
@@ -364,6 +355,11 @@ def merge_dict(source, overrides):
     if overrides:
         merged.update(overrides)
     return merged
+
+def quote(path, quote_chars):
+    if len(path) == 1:
+        return path[0].join(quote_chars)
+    return '.'.join([part.join(quote_chars) for part in path])
 
 is_model = lambda o: isclass(o) and issubclass(o, Model)
 

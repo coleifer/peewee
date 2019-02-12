@@ -41,9 +41,6 @@ else:
     src_ext = '.c'
     cythonize = lambda obj: obj
 
-speedups_ext_module = Extension(
-    'playhouse._speedups',
-    ['playhouse/_speedups' + src_ext])
 sqlite_udf_module = Extension(
     'playhouse._sqlite_udf',
     ['playhouse/_sqlite_udf' + src_ext])
@@ -117,10 +114,8 @@ class _PeeweeBuildExt(build_ext):
             raise BuildFailure()
 
 def _do_setup(c_extensions, sqlite_extensions):
-    if c_extensions:
-        ext_modules = [speedups_ext_module]
-        if sqlite_extensions:
-            ext_modules.extend([sqlite_udf_module, sqlite_ext_module])
+    if c_extensions and sqlite_extensions:
+        ext_modules = [sqlite_udf_module, sqlite_ext_module]
     else:
         ext_modules = None
 
