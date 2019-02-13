@@ -714,6 +714,26 @@ class TestFullTextSearch(BaseFTSTestCase, ModelTestCase):
         MultiColumn]
 
     @requires_models(Document)
+    def test_fts_insert_or_replace(self):
+        # We can use replace to create a new row.
+        n = Document.replace(docid=100, message='m100').execute()
+        self.assertEqual(n, 100)
+        self.assertEqual(Document.select().count(), 1)
+
+        # We can use replace to update an existing row.
+        n = Document.replace(docid=100, message='x100').execute()
+        self.assertEqual(n, 100)
+        self.assertEqual(Document.select().count(), 1)
+
+        # Adds a new row.
+        n = Document.replace(docid=101, message='x101').execute()
+        self.assertEqual(n, 101)
+        self.assertEqual(Document.select().count(), 2)
+
+        query = Document.select().order_by(Document.message)
+        self.assertEqual(list(query.tuples()), [(100, 'x100'), (101, 'x101')])
+
+    @requires_models(Document)
     def test_fts_manual(self):
         messages = [Document.create(message=message)
                     for message in self.messages]
