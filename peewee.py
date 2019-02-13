@@ -1858,6 +1858,17 @@ class SelectQuery(Query):
     def cte(self, name, recursive=False, columns=None):
         return CTE(name, self, recursive=recursive, columns=columns)
 
+    def select_from(self, *columns):
+        if not columns:
+            raise ValueError('select_from() must specify one or more columns.')
+
+        query = (Select((self,), columns)
+                 .bind(self._database))
+        if getattr(self, 'model', None) is not None:
+            # Bind to the sub-select's model type, if defined.
+            query = query.objects(self.model)
+        return query
+
 
 class SelectBase(_HashableSource, Source, SelectQuery):
     def _get_hash(self):

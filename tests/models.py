@@ -876,6 +876,34 @@ class TestModelAPIs(ModelTestCase):
                 (3, 'u2-t1', 'u2')])
 
     @requires_models(User, Tweet)
+    def test_compound_select_as_subquery(self):
+        with self.database.atomic():
+            for i in range(5):
+                user = User.create(username='u%s' % i)
+                for j in range(i * 2):
+                    Tweet.create(user=user, content='t%s-%s' % (i, j))
+
+        q1 = (Tweet
+              .select(Tweet.id, Tweet.content, User.username)
+              .join(User)
+              .where(User.username == 'u3'))
+        q2 = (Tweet
+              .select(Tweet.id, Tweet.content, User.username)
+              .join(User)
+              .where(User.username.in_(['u2', 'u4'])))
+        union = (q1 | q2)
+
+        q = (union
+             .select_from(union.c.username, fn.COUNT(union.c.id).alias('ct'))
+             .group_by(union.c.username)
+             .order_by(fn.COUNT(union.c.id).desc())
+             .dicts())
+        self.assertEqual(list(q), [
+            {'username': 'u4', 'ct': 8},
+            {'username': 'u3', 'ct': 6},
+            {'username': 'u2', 'ct': 4}])
+
+    @requires_models(User, Tweet)
     def test_union_with_join(self):
         u1, u2 = [User.create(username='u%s' % i) for i in (1, 2)]
         for u, ts in ((u1, ('t1', 't2')), (u2, ('t1',))):

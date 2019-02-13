@@ -1944,6 +1944,56 @@ Query-builder
 
         For more examples of CTEs, see :ref:`cte`.
 
+    .. py:method:: select_from(*columns)
+
+        :param columns: one or more columns to select from the inner query.
+        :return: a new query that wraps the calling query.
+
+        Create a new query that wraps the current (calling) query. For example,
+        suppose you have a simple ``UNION`` query, and need to apply an
+        aggregation on the union result-set. To do this, you need to write
+        something like:
+
+        .. code-block:: sql
+
+            SELECT "u"."owner", COUNT("u"."id") AS "ct"
+            FROM (
+                SELECT "id", "owner", ... FROM "cars"
+                UNION
+                SELECT "id", "owner", ... FROM "motorcycles"
+                UNION
+                SELECT "id", "owner", ... FROM "boats") AS "u"
+            GROUP BY "u"."owner"
+
+        The :py:meth:`~SelectQuery.select_from` method is designed to simplify
+        constructing this type of query.
+
+        Example peewee code:
+
+        .. code-block:: python
+
+              class Car(Model):
+                  owner = ForeignKeyField(Owner, backref='cars')
+                  # ... car-specific fields, etc ...
+
+              class Motorcycle(Model):
+                  owner = ForeignKeyField(Owner, backref='motorcycles')
+                  # ... motorcycle-specific fields, etc ...
+
+              class Boat(Model):
+                  owner = ForeignKeyField(Owner, backref='boats')
+                  # ... boat-specific fields, etc ...
+
+              cars = Car.select(Car.owner)
+              motorcycles = Motorcycle.select(Motorcycle.owner)
+              boats = Boat.select(Boat.owner)
+
+              union = cars | motorcycles | boats
+
+              query = (union
+                       .select_from(union.c.owner, fn.COUNT(union.c.id))
+                       .group_by(union.c.owner))
+
     .. py:method:: union_all(dest)
 
         Create a UNION ALL query with ``dest``.

@@ -570,6 +570,23 @@ class TestSelectQuery(BaseTestCase):
             'ORDER BY "foo" DESC LIMIT ?'),
             [3], compound_select_parentheses=1)
 
+    def test_compound_select_as_subquery(self):
+        A = Table('a', ('col_a',))
+        B = Table('b', ('col_b',))
+        q1 = A.select(A.col_a.alias('foo'))
+        q2 = B.select(B.col_b.alias('foo'))
+        union = q1 | q2
+
+        # Create an outer query and do grouping.
+        outer = (union
+                 .select_from(union.c.foo, fn.COUNT(union.c.foo).alias('ct'))
+                 .group_by(union.c.foo))
+        self.assertSQL(outer, (
+            'SELECT "t1"."foo", COUNT("t1"."foo") AS "ct" FROM ('
+            'SELECT "t2"."col_a" AS "foo" FROM "a" AS "t2" UNION '
+            'SELECT "t3"."col_b" AS "foo" FROM "b" AS "t3") AS "t1" '
+            'GROUP BY "t1"."foo"'), [])
+
     def test_join_on_query(self):
         inner = User.select(User.c.id).alias('j1')
         query = (Tweet
