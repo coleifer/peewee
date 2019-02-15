@@ -535,6 +535,9 @@ class Context(object):
         self.alias_manager = AliasManager()
         self.state = State(**settings)
 
+    def as_new(self):
+        return Context(**self.state.settings)
+
     def column_sort_key(self, item):
         return item[0].get_sort_key(self)
 
@@ -1310,7 +1313,7 @@ class Expression(ColumnBase):
             # Postgresql reports an error for IN/NOT IN (), so convert to
             # the equivalent boolean expression.
             op_in = self.op == OP.IN or self.op == OP.NOT_IN
-            if op_in and Context().parse(self.rhs)[0] == '()':
+            if op_in and ctx.as_new().parse(self.rhs)[0] == '()':
                 return ctx.literal('0 = 1' if self.op == OP.IN else '1 = 1')
 
             return (ctx

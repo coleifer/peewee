@@ -1373,6 +1373,19 @@ class TestSelectFeatures(BaseTestCase):
             'WHERE ("t1"."name" = ?) '
             'FOR SHARE NOWAIT'), ['charlie'], for_update=True)
 
+    def test_for_update_nested(self):
+        PA = Person.alias('pa')
+        subq = PA.select(PA.id).where(PA.name == 'charlie').for_update()
+        query = (Person
+                 .delete()
+                 .where(Person.id.in_(subq)))
+        self.assertSQL(query, (
+            'DELETE FROM "person" WHERE ("person"."id" IN ('
+            'SELECT "pa"."id" FROM "person" AS "pa" '
+            'WHERE ("pa"."name" = ?) FOR UPDATE))'),
+            ['charlie'],
+            for_update=True)
+
     def test_parentheses(self):
         query = (Person
                  .select(fn.MAX(
