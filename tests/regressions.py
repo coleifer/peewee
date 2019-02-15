@@ -433,7 +433,6 @@ class TestUpdateIntegrationRegressions(ModelTestCase):
         self.assertEqual(list(query.clone()), [(0, 0.), (1, 1.), (2, 2.),
                                                (3, 3.)])
 
-
 class TestSelectValueConversion(ModelTestCase):
     requires = [User]
 
@@ -449,3 +448,89 @@ class TestSelectValueConversion(ModelTestCase):
         query2 = User.select(cte.c.id.coerce(False)).with_cte(cte).from_(cte)
         u1_id, = [user.id for user in query2]
         self.assertEqual(u1_id, str(u1.id))
+
+
+class ConflictDetectedException(Exception): pass
+
+class BaseVersionedModel(TestModel):
+    version = IntegerField(default=1, index=True)
+
+    def save_optimistic(self):
+        if not self.id:
+            # This is a new record, so the default logic is to perform an
+            # INSERT. Ideally your model would also have a unique
+            # constraint that made it impossible for two INSERTs to happen
+            # at the same time.
+            return self.save()
+
+        # Update any data that has changed and bump the version counter.
+        field_data = dict(self.__data__)
+        current_version = field_data.pop('version', 1)
+        self._populate_unsaved_relations(field_data)
+        field_data = self._prune_fields(field_data, self.dirty_fields)
+        if not field_data:
+            raise ValueError('No changes have been made.')
+
+        ModelClass = type(self)
+        field_data['version'] = ModelClass.version + 1  # Atomic increment.
+
+        query = ModelClass.update(**field_data).where(
+            (ModelClass.version == current_version) &
+            (ModelClass.id == self.id))
+        if query.execute() == 0:
+            # No rows were updated, indicating another process has saved
+            # a new version. How you handle this situation is up to you,
+            # but for simplicity I'm just raising an exception.
+            raise ConflictDetectedException()
+        else:
+            # Increment local version to match what is now in the db.
+            self.version += 1
+            return True
+
+class VUser(BaseVersionedModel):
+    username = TextField()
+
+class VTweet(BaseVersionedModel):
+    user = ForeignKeyField(VUser, null=True)
+    content = TextField()
+
+
+class TestOptimisticLockingDemo(ModelTestCase):
+    requires = [VUser, VTweet]
+
+    def test_optimistic_locking(self):
+        vu = VUser(username='u1')
+        vu.save_optimistic()
+        vt = VTweet(user=vu, content='t1')
+        vt.save_optimistic()
+
+        # Update the "vt" row in the db, which bumps the version counter.
+        vt2 = VTweet.get(VTweet.id == vt.id)
+        vt2.content = 't1-x'
+        vt2.save_optimistic()
+
+        # Since no data was modified, this returns a ValueError.
+        self.assertRaises(ValueError, vt.save_optimistic)
+
+        # If we do make an update and attempt to save, a conflict is detected.
+        vt.content = 't1-y'
+        self.assertRaises(ConflictDetectedException, vt.save_optimistic)
+        self.assertEqual(vt.version, 1)
+
+        vt_db = VTweet.get(VTweet.content == 't1')
+        self.assertEqual(vt_db.content, 't1-x')
+        self.assertEqual(vt_db.version, 2)
+        self.assertEqual(vt_db.user.username, 'u1')
+
+    def test_optimistic_locking_populate_fks(self):
+        vt = VTweet(content='t1')
+        vt.save_optimistic()
+
+        vu = VUser(username='u1')
+        vt.user = vu
+
+        vu.save_optimistic()
+        vt.save_optimistic()
+        vt_db = VTweet.get(VTweet.content == 't1')
+        self.assertEqual(vt_db.version, 2)
+        self.assertEqual(vt_db.user.username, 'u1')
