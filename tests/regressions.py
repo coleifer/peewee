@@ -517,7 +517,7 @@ class TestOptimisticLockingDemo(ModelTestCase):
         self.assertRaises(ConflictDetectedException, vt.save_optimistic)
         self.assertEqual(vt.version, 1)
 
-        vt_db = VTweet.get(VTweet.content == 't1')
+        vt_db = VTweet.get(VTweet.id == vt.id)
         self.assertEqual(vt_db.content, 't1-x')
         self.assertEqual(vt_db.version, 2)
         self.assertEqual(vt_db.user.username, 'u1')
