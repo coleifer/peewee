@@ -1588,7 +1588,8 @@ def qualify_names(node):
 
 class OnConflict(Node):
     def __init__(self, action=None, update=None, preserve=None, where=None,
-                 conflict_target=None, conflict_constraint=None):
+                 conflict_target=None, conflict_where=None,
+                 conflict_constraint=None):
         self._action = action
         self._update = update
         self._preserve = ensure_tuple(preserve)
@@ -1597,6 +1598,7 @@ class OnConflict(Node):
             raise ValueError('only one of "conflict_target" and '
                              '"conflict_constraint" may be specified.')
         self._conflict_target = ensure_tuple(conflict_target)
+        self._conflict_where = conflict_where
         self._conflict_constraint = conflict_constraint
 
     def get_conflict_statement(self, ctx, query):
@@ -1629,6 +1631,12 @@ class OnConflict(Node):
     def conflict_target(self, *constraints):
         self._conflict_constraint = None
         self._conflict_target = constraints
+
+    @Node.copy
+    def conflict_where(self, *expressions):
+        if self._conflict_where is not None:
+            expressions = (self._conflict_where,) + expressions
+        self._conflict_where = reduce(operator.and_, expressions)
 
     @Node.copy
     def conflict_constraint(self, constraint):
@@ -2812,6 +2820,9 @@ class Database(_callable_context_manager):
             target = EnclosedNodeList([
                 Entity(col) if isinstance(col, basestring) else col
                 for col in on_conflict._conflict_target])
+            if on_conflict._conflict_where is not None:
+                target = NodeList([target, SQL('WHERE'),
+                                   on_conflict._conflict_where])
         else:
             stmt = SQL('ON CONFLICT ON CONSTRAINT')
             target = on_conflict._conflict_constraint

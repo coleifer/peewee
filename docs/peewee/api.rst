@@ -1657,13 +1657,14 @@ Query-builder
     Row-values are supported by most databases.
 
 
-.. py:class:: OnConflict([action=None[, update=None[, preserve=None[, where=None[, conflict_target=None[, conflict_constraint=None]]]]]])
+.. py:class:: OnConflict([action=None[, update=None[, preserve=None[, where=None[, conflict_target=None[, conflict_where=None[, conflict_constraint=None]]]]]]])
 
     :param str action: Action to take when resolving conflict.
     :param update: A dictionary mapping column to new value.
     :param preserve: A list of columns whose values should be preserved from the original INSERT.
     :param where: Expression to restrict the conflict resolution.
-    :param conflict_target: Column(s) to check.
+    :param conflict_target: Column(s) that comprise the constraint.
+    :param conflict_where: Expressions needed to match the constraint target if it is a partial index (index with a WHERE clause).
     :param str conflict_constraint: Name of constraint to use for conflict
         resolution. Currently only supported by Postgres.
 
@@ -1692,6 +1693,11 @@ Query-builder
     .. py:method:: conflict_target(*constraints)
 
         :param constraints: Column(s) to use as target for conflict resolution.
+
+    .. py:method:: conflict_where(*expressions)
+
+        :param expressions: Expressions that match the conflict target index,
+            in the case the conflict target is a partial index.
 
     .. py:method:: conflict_constraint(constraint)
 
@@ -2400,14 +2406,15 @@ Query-builder
 
         Specify REPLACE conflict resolution strategy.
 
-    .. py:method:: on_conflict([action=None[, update=None[, preserve=None[, where=None[, conflict_target=None[, conflict_constraint=None]]]]]])
+    .. py:method:: on_conflict([action=None[, update=None[, preserve=None[, where=None[, conflict_target=None[, conflict_where=None[, conflict_constraint=None]]]]]]])
 
         :param str action: Action to take when resolving conflict. If blank,
             action is assumed to be "update".
         :param update: A dictionary mapping column to new value.
         :param preserve: A list of columns whose values should be preserved from the original INSERT.
         :param where: Expression to restrict the conflict resolution.
-        :param conflict_target: Column(s) to check.
+        :param conflict_target: Column(s) that comprise the constraint.
+        :param conflict_where: Expressions needed to match the constraint target if it is a partial index (index with a WHERE clause).
         :param str conflict_constraint: Name of constraint to use for conflict
             resolution. Currently only supported by Postgres.
 

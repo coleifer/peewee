@@ -2932,7 +2932,7 @@ class OCTest(TestModel):
     c = IntegerField(default=0)
 
 
-class OnConflictTestCase(ModelTestCase):
+class OnConflictTests(object):
     requires = [Emp]
     test_data = (
         ('huey', 'cat', '123'),
@@ -2941,7 +2941,7 @@ class OnConflictTestCase(ModelTestCase):
     )
 
     def setUp(self):
-        super(OnConflictTestCase, self).setUp()
+        super(OnConflictTests, self).setUp()
         for first, last, empno in self.test_data:
             Emp.create(first=first, last=last, empno=empno)
 
@@ -2961,7 +2961,7 @@ class OnConflictTestCase(ModelTestCase):
 
 
 @requires_mysql
-class TestUpsertMySQL(OnConflictTestCase):
+class TestUpsertMySQL(OnConflictTests, ModelTestCase):
     def test_replace(self):
         # Unique constraint on first/last would fail - replace.
         query = (Emp
@@ -3048,7 +3048,20 @@ class TestUpsertMySQL(OnConflictTestCase):
         self.assertEqual(oc.c, 6)
 
 
-class TestUpsertSqlite(OnConflictTestCase):
+class UKVP(TestModel):
+    key = TextField()
+    value = IntegerField()
+    extra = IntegerField()
+
+    class Meta:
+        # Partial index, the WHERE clause must be reflected in the conflict
+        # target.
+        indexes = [
+            SQL('CREATE UNIQUE INDEX "ukvp_kve" ON "ukvp" ("key", "value") '
+                'WHERE "extra" > 1')]
+
+
+class TestUpsertSqlite(OnConflictTests, ModelTestCase):
     database = get_in_memory_db()
 
     def test_replace(self):
@@ -3247,6 +3260,48 @@ class TestUpsertSqlite(OnConflictTestCase):
         query.execute()  # Conflict occurs with empno='123'.
         self.assertData(list(self.test_data))
 
+    @requires_models(UKVP)
+    def test_conflict_target_constraint_where(self):
+        u1 = UKVP.create(key='k1', value=1, extra=1)
+        u2 = UKVP.create(key='k2', value=2, extra=2)
+
+        fields = [UKVP.key, UKVP.value, UKVP.extra]
+        data = [('k1', 1, 2), ('k2', 2, 3)]
+        # XXX: SQLite does not seem to accept parameterized values for the
+        # conflict target WHERE clause (e.g., the partial index). So we have to
+        # express this literally as ("extra" > 1) rather than using an
+        # expression which will be parameterized. Hopefully SQLite's authors
+        # decide this is a bug and fix it.
+        query = (UKVP.insert_many(data, fields)
+                 .on_conflict(conflict_target=(UKVP.key, UKVP.value),
+                              conflict_where=SQL('("extra" > 1)'),
+                              preserve=(UKVP.extra,)))
+        self.assertSQL(query, (
+            'INSERT INTO "ukvp" ("key", "value", "extra") '
+            'VALUES (?, ?, ?), (?, ?, ?) '
+            'ON CONFLICT ("key", "value") WHERE ("extra" > 1) '
+            'DO UPDATE SET "extra" = EXCLUDED."extra"'),
+            ['k1', 1, 2, 'k2', 2, 3])
+
+        query.execute()
+
+        # How many rows exist? The first one would not have triggered the
+        # conflict resolution, since the existing k1/1 row's "extra" value was
+        # not greater than 1, thus it did not satisfy the index condition.
+        # The second row (k2/2/3) would have triggered the resolution.
+        self.assertEqual(UKVP.select().count(), 3)
+
+        self.assertTrue(results[0] != u1.id)
+        self.assertEqual(results[1], u2.id)
+
+        # Verify changes.
+        self.assertEqual(UKVP.select().where(UKVP.key == 'k1').count(), 2)
+
+        u2_db = UKVP.get(UKVP.key == 'k2')
+        self.assertEqual(u2_db.id, u2.id)
+        self.assertEqual(u2_db.value, 2)
+        self.assertEqual(u2_db.extra, 3)
+
 
 class UKV(TestModel):
     key = TextField()
@@ -3271,7 +3326,7 @@ class UKVRel(TestModel):
 
 
 @requires_postgresql
-class TestUpsertPostgresql(OnConflictTestCase):
+class TestUpsertPostgresql(OnConflictTests, ModelTestCase):
     @requires_models(UKV)
     def test_conflict_target_constraint(self):
         u1 = UKV.create(key='k1', value='v1')
@@ -3437,6 +3492,42 @@ class TestUpsertPostgresql(OnConflictTestCase):
             ('k1', 'v1', 'e1'),
             ('k2', 'v2', 'x2'),
             ('k3', 'v3', 'e1')])
+
+    @requires_models(UKVP)
+    def test_conflict_target_constraint_where(self):
+        u1 = UKVP.create(key='k1', value=1, extra=1)
+        u2 = UKVP.create(key='k2', value=2, extra=2)
+
+        fields = [UKVP.key, UKVP.value, UKVP.extra]
+        data = [('k1', 1, 2), ('k2', 2, 3)]
+        query = (UKVP.insert_many(data, fields)
+                 .on_conflict(conflict_target=(UKVP.key, UKVP.value),
+                              conflict_where=(UKVP.extra > 1),
+                              preserve=(UKVP.extra,)))
+        self.assertSQL(query, (
+            'INSERT INTO "ukvp" ("key", "value", "extra") '
+            'VALUES (?, ?, ?), (?, ?, ?) '
+            'ON CONFLICT ("key", "value") WHERE ("extra" > ?) '
+            'DO UPDATE SET "extra" = EXCLUDED."extra" '
+            'RETURNING "ukvp"."id"'), ['k1', 1, 2, 'k2', 2, 3, 1])
+        results = [pk for pk, in query.execute()]
+
+        # How many rows exist? The first one would not have triggered the
+        # conflict resolution, since the existing k1/1 row's "extra" value was
+        # not greater than 1, thus it did not satisfy the index condition.
+        # The second row (k2/2/3) would have triggered the resolution.
+        self.assertEqual(UKVP.select().count(), 3)
+
+        self.assertTrue(results[0] != u1.id)
+        self.assertEqual(results[1], u2.id)
+
+        # Verify changes.
+        self.assertEqual(UKVP.select().where(UKVP.key == 'k1').count(), 2)
+
+        u2_db = UKVP.get(UKVP.key == 'k2')
+        self.assertEqual(u2_db.id, u2.id)
+        self.assertEqual(u2_db.value, 2)
+        self.assertEqual(u2_db.extra, 3)
 
 
 class TestJoinSubquery(ModelTestCase):

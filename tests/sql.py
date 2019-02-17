@@ -1576,6 +1576,26 @@ class TestOnConflictPostgresql(BaseTestCase):
             '"name" = ("person"."name" || ?) '
             'WHERE ("person"."name" != ?)'), ['huey', '-x', 'zaizee'])
 
+    def test_conflict_target_partial_index(self):
+        KVE = Table('kve', ('key', 'value', 'extra'))
+        data = [('k1', 1, 2), ('k2', 2, 3)]
+        columns = [KVE.key, KVE.value, KVE.extra]
+
+        query = (KVE
+                 .insert(data, columns)
+                 .on_conflict(
+                     conflict_target=(KVE.key, KVE.value),
+                     conflict_where=(KVE.extra > 1),
+                     preserve=(KVE.extra,),
+                     where=(KVE.key != 'kx')))
+        self.assertSQL(query, (
+            'INSERT INTO "kve" ("key", "value", "extra") '
+            'VALUES (?, ?, ?), (?, ?, ?) '
+            'ON CONFLICT ("key", "value") WHERE ("extra" > ?) '
+            'DO UPDATE SET "extra" = EXCLUDED."extra" '
+            'WHERE ("kve"."key" != ?)'),
+            ['k1', 1, 2, 'k2', 2, 3, 1, 'kx'])
+
 
 #Person = Table('person', ['id', 'name', 'dob'])
 #Note = Table('note', ['id', 'person_id', 'content'])
