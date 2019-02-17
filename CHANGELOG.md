@@ -15,6 +15,10 @@ https://github.com/coleifer/peewee/releases
   de-serialization functions.
 * Added `DatabaseProxy`, which allows one to use database-specific decorators
   with an uninitialized `Proxy` object. See #1842 for discussion.
+* Added support for `INSERT ... ON CONFLICT` when the conflict target is a
+  partial index (e.g., contains a WHERE clause). The `OnConflict` and
+  `on_conflict()` APIs now take an additional `conflict_where` parameter to
+  represent the WHERE clause of the partial index in question. See #1860.
 
 [View commits](https://github.com/coleifer/peewee/compare/3.8.2...master)
 
