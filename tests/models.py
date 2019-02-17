@@ -2915,23 +2915,6 @@ class TestModelAliasFieldProperties(ModelTestCase):
         self.assertSQL(query, expected_sql, expected_params)
 
 
-class Emp(TestModel):
-    first = CharField()
-    last = CharField()
-    empno = CharField(unique=True)
-
-    class Meta:
-        indexes = (
-            (('first', 'last'), True),
-        )
-
-
-class OCTest(TestModel):
-    a = CharField(unique=True)
-    b = IntegerField(default=0)
-    c = IntegerField(default=0)
-
-
 class OnConflictTests(object):
     requires = [Emp]
     test_data = (
@@ -2958,6 +2941,151 @@ class OnConflictTests(object):
                  .on_conflict('ignore')
                  .execute())
         self.assertData(list(self.test_data))
+
+
+def requires_upsert(m):
+    return skip_unless(IS_SQLITE_24 or IS_POSTGRESQL, 'requires upsert')(m)
+
+
+class PGOnConflictTests(OnConflictTests):
+    @requires_upsert
+    def test_update(self):
+        # Conflict on empno - we'll preserve name and update the ID. This will
+        # overwrite the previous row and set a new ID.
+        res = (Emp
+               .insert(first='foo', last='bar', empno='125')
+               .on_conflict(
+                   conflict_target=(Emp.empno,),
+                   preserve=(Emp.first, Emp.last),
+                   update={Emp.empno: '125.1'})
+               .execute())
+        self.assertData([
+            ('huey', 'cat', '123'),
+            ('zaizee', 'cat', '124'),
+            ('foo', 'bar', '125.1')])
+
+        # Conflicts on first/last name. The first name is preserved while the
+        # last-name is updated. The new empno is thrown out.
+        res = (Emp
+               .insert(first='foo', last='bar', empno='126')
+               .on_conflict(
+                   conflict_target=(Emp.first, Emp.last),
+                   preserve=(Emp.first,),
+                   update={Emp.last: 'baze'})
+               .execute())
+        self.assertData([
+            ('huey', 'cat', '123'),
+            ('zaizee', 'cat', '124'),
+            ('foo', 'baze', '125.1')])
+
+    @requires_upsert
+    @requires_models(OCTest)
+    def test_update_atomic(self):
+        # Add a new row with the given "a" value. If a conflict occurs,
+        # re-insert with b=b+2.
+        query = OCTest.insert(a='foo', b=1).on_conflict(
+            conflict_target=(OCTest.a,),
+            update={OCTest.b: OCTest.b + 2})
+
+        # First execution returns rowid=1. Second execution hits the conflict-
+        # resolution, and will update the value in "b" from 1 -> 3.
+        rowid1 = query.execute()
+        rowid2 = query.clone().execute()
+        self.assertEqual(rowid1, rowid2)
+
+        obj = OCTest.get()
+        self.assertEqual(obj.a, 'foo')
+        self.assertEqual(obj.b, 3)
+
+        query = OCTest.insert(a='foo', b=4, c=5).on_conflict(
+            conflict_target=[OCTest.a],
+            preserve=[OCTest.c],
+            update={OCTest.b: OCTest.b + 100})
+        self.assertEqual(query.execute(), rowid2)
+
+        obj = OCTest.get()
+        self.assertEqual(obj.a, 'foo')
+        self.assertEqual(obj.b, 103)
+        self.assertEqual(obj.c, 5)
+
+    @requires_upsert
+    @requires_models(OCTest)
+    def test_update_where_clause(self):
+        # Add a new row with the given "a" value. If a conflict occurs,
+        # re-insert with b=b+2 so long as the original b < 3.
+        query = OCTest.insert(a='foo', b=1).on_conflict(
+            conflict_target=(OCTest.a,),
+            update={OCTest.b: OCTest.b + 2},
+            where=(OCTest.b < 3))
+
+        # First execution returns rowid=1. Second execution hits the conflict-
+        # resolution, and will update the value in "b" from 1 -> 3.
+        rowid1 = query.execute()
+        rowid2 = query.clone().execute()
+        self.assertEqual(rowid1, rowid2)
+
+        obj = OCTest.get()
+        self.assertEqual(obj.a, 'foo')
+        self.assertEqual(obj.b, 3)
+
+        # Third execution also returns rowid=1. The WHERE clause prevents us
+        # from updating "b" again. If this is SQLite, we get the rowid back, if
+        # this is Postgresql we get None (since nothing happened).
+        rowid3 = query.clone().execute()
+        if IS_SQLITE:
+            self.assertEqual(rowid1, rowid3)
+        else:
+            self.assertTrue(rowid3 is None)
+
+        # Because we didn't satisfy the WHERE clause, the value in "b" is
+        # not incremented again.
+        obj = OCTest.get()
+        self.assertEqual(obj.a, 'foo')
+        self.assertEqual(obj.b, 3)
+
+    @requires_upsert
+    @requires_models(UKVP)
+    def test_conflict_target_constraint_where(self):
+        u1 = UKVP.create(key='k1', value=1, extra=1)
+        u2 = UKVP.create(key='k2', value=2, extra=2)
+
+        fields = [UKVP.key, UKVP.value, UKVP.extra]
+        data = [('k1', 1, 2), ('k2', 2, 3)]
+
+        # XXX: SQLite does not seem to accept parameterized values for the
+        # conflict target WHERE clause (e.g., the partial index). So we have to
+        # express this literally as ("extra" > 1) rather than using an
+        # expression which will be parameterized. Hopefully SQLite's authors
+        # decide this is a bug and fix it.
+        if IS_SQLITE:
+            conflict_where = SQL('("extra" > 1)')
+        else:
+            conflict_where = (UKVP.extra > 1)
+
+        res = (UKVP.insert_many(data, fields)
+               .on_conflict(conflict_target=(UKVP.key, UKVP.value),
+                            conflict_where=conflict_where,
+                            preserve=(UKVP.extra,))
+               .execute())
+
+        # How many rows exist? The first one would not have triggered the
+        # conflict resolution, since the existing k1/1 row's "extra" value was
+        # not greater than 1, thus it did not satisfy the index condition.
+        # The second row (k2/2/3) would have triggered the resolution.
+        self.assertEqual(UKVP.select().count(), 3)
+        query = (UKVP
+                 .select(UKVP.key, UKVP.value, UKVP.extra)
+                 .order_by(UKVP.key, UKVP.value, UKVP.extra)
+                 .tuples())
+
+        self.assertEqual(list(query), [
+            ('k1', 1, 1),
+            ('k1', 1, 2),
+            ('k2', 2, 3)])
+
+        # Verify the primary-key of k2 did not change.
+        u2_db = UKVP.get(UKVP.key == 'k2')
+        self.assertEqual(u2_db.id, u2.id)
 
 
 @requires_mysql
@@ -3048,20 +3176,7 @@ class TestUpsertMySQL(OnConflictTests, ModelTestCase):
         self.assertEqual(oc.c, 6)
 
 
-class UKVP(TestModel):
-    key = TextField()
-    value = IntegerField()
-    extra = IntegerField()
-
-    class Meta:
-        # Partial index, the WHERE clause must be reflected in the conflict
-        # target.
-        indexes = [
-            SQL('CREATE UNIQUE INDEX "ukvp_kve" ON "ukvp" ("key", "value") '
-                'WHERE "extra" > 1')]
-
-
-class TestUpsertSqlite(OnConflictTests, ModelTestCase):
+class TestUpsertSqlite(PGOnConflictTests, ModelTestCase):
     database = get_in_memory_db()
 
     def test_replace(self):
@@ -3148,107 +3263,6 @@ class TestUpsertSqlite(OnConflictTests, ModelTestCase):
         self.assertRaises(ValueError, no_conflict_target.execute)
 
     @skip_unless(IS_SQLITE_24, 'requires sqlite >= 3.24')
-    def test_update(self):
-        # Conflict on empno - we'll preserve name and update the ID. This will
-        # overwrite the previous row and set a new ID.
-        res = (Emp
-               .insert(first='foo', last='bar', empno='125')
-               .on_conflict(
-                   conflict_target=(Emp.empno,),
-                   preserve=(Emp.first, Emp.last),
-                   update={Emp.empno: '125.1'})
-               .execute())
-        self.assertData([
-            ('huey', 'cat', '123'),
-            ('zaizee', 'cat', '124'),
-            ('foo', 'bar', '125.1')])
-
-        # Conflicts on first/last name. The first name is preserved while the
-        # last-name is updated. The new empno is thrown out.
-        res = (Emp
-               .insert(first='foo', last='bar', empno='126')
-               .on_conflict(
-                   conflict_target=(Emp.first, Emp.last),
-                   preserve=(Emp.first,),
-                   update={Emp.last: 'baze'})
-               .execute())
-        self.assertData([
-            ('huey', 'cat', '123'),
-            ('zaizee', 'cat', '124'),
-            ('foo', 'baze', '125.1')])
-
-    @skip_unless(IS_SQLITE_24, 'requires sqlite >= 3.24')
-    @requires_models(OCTest)
-    def test_update_atomic(self):
-        # Add a new row with the given "a" value. If a conflict occurs,
-        # re-insert with b=b+2.
-        query = OCTest.insert(a='foo', b=1).on_conflict(
-            conflict_target=(OCTest.a,),
-            update={OCTest.b: OCTest.b + 2})
-
-        # Sanity-check the SQL.
-        self.assertSQL(query, (
-            'INSERT INTO "oc_test" ("a", "b", "c") VALUES (?, ?, ?) '
-            'ON CONFLICT ("a") '
-            'DO UPDATE SET "b" = ("oc_test"."b" + ?)'), ['foo', 1, 0, 2])
-
-        # First execution returns rowid=1. Second execution hits the conflict-
-        # resolution, and will update the value in "b" from 1 -> 3.
-        rowid1 = query.execute()
-        rowid2 = query.clone().execute()
-        self.assertEqual(rowid1, rowid2)
-
-        obj = OCTest.get()
-        self.assertEqual(obj.a, 'foo')
-        self.assertEqual(obj.b, 3)
-
-        query = OCTest.insert(a='foo', b=4, c=5).on_conflict(
-            conflict_target=[OCTest.a],
-            preserve=[OCTest.c],
-            update={OCTest.b: OCTest.b + 100})
-        self.assertEqual(query.execute(), rowid2)
-
-        obj = OCTest.get()
-        self.assertEqual(obj.a, 'foo')
-        self.assertEqual(obj.b, 103)
-        self.assertEqual(obj.c, 5)
-
-    @skip_unless(IS_SQLITE_24, 'requires sqlite >= 3.24')
-    @requires_models(OCTest)
-    def test_update_where_clause(self):
-        # Add a new row with the given "a" value. If a conflict occurs,
-        # re-insert with b=b+2 so long as the original b < 3.
-        query = OCTest.insert(a='foo', b=1).on_conflict(
-            conflict_target=(OCTest.a,),
-            update={OCTest.b: OCTest.b + 2},
-            where=(OCTest.b < 3))
-        self.assertSQL(query, (
-            'INSERT INTO "oc_test" ("a", "b", "c") VALUES (?, ?, ?) '
-            'ON CONFLICT ("a") DO UPDATE SET "b" = ("oc_test"."b" + ?) '
-            'WHERE ("oc_test"."b" < ?)'), ['foo', 1, 0, 2, 3])
-
-        # First execution returns rowid=1. Second execution hits the conflict-
-        # resolution, and will update the value in "b" from 1 -> 3.
-        rowid1 = query.execute()
-        rowid2 = query.clone().execute()
-        self.assertEqual(rowid1, rowid2)
-
-        obj = OCTest.get()
-        self.assertEqual(obj.a, 'foo')
-        self.assertEqual(obj.b, 3)
-
-        # Third execution also returns rowid=1. The WHERE clause prevents us
-        # from updating "b" again, so it remains 3.
-        rowid3 = query.clone().execute()
-        self.assertEqual(rowid1, rowid3)
-
-        # Because we didn't satisfy the WHERE clause, the value in "b" is
-        # not incremented again.
-        obj = OCTest.get()
-        self.assertEqual(obj.a, 'foo')
-        self.assertEqual(obj.b, 3)
-
-    @skip_unless(IS_SQLITE_24, 'requires sqlite >= 3.24')
     def test_do_nothing(self):
         query = (Emp
                  .insert(first='foo', last='bar', empno='123')
@@ -3259,48 +3273,6 @@ class TestUpsertSqlite(OnConflictTests, ModelTestCase):
 
         query.execute()  # Conflict occurs with empno='123'.
         self.assertData(list(self.test_data))
-
-    @requires_models(UKVP)
-    def test_conflict_target_constraint_where(self):
-        u1 = UKVP.create(key='k1', value=1, extra=1)
-        u2 = UKVP.create(key='k2', value=2, extra=2)
-
-        fields = [UKVP.key, UKVP.value, UKVP.extra]
-        data = [('k1', 1, 2), ('k2', 2, 3)]
-        # XXX: SQLite does not seem to accept parameterized values for the
-        # conflict target WHERE clause (e.g., the partial index). So we have to
-        # express this literally as ("extra" > 1) rather than using an
-        # expression which will be parameterized. Hopefully SQLite's authors
-        # decide this is a bug and fix it.
-        query = (UKVP.insert_many(data, fields)
-                 .on_conflict(conflict_target=(UKVP.key, UKVP.value),
-                              conflict_where=SQL('("extra" > 1)'),
-                              preserve=(UKVP.extra,)))
-        self.assertSQL(query, (
-            'INSERT INTO "ukvp" ("key", "value", "extra") '
-            'VALUES (?, ?, ?), (?, ?, ?) '
-            'ON CONFLICT ("key", "value") WHERE ("extra" > 1) '
-            'DO UPDATE SET "extra" = EXCLUDED."extra"'),
-            ['k1', 1, 2, 'k2', 2, 3])
-
-        query.execute()
-
-        # How many rows exist? The first one would not have triggered the
-        # conflict resolution, since the existing k1/1 row's "extra" value was
-        # not greater than 1, thus it did not satisfy the index condition.
-        # The second row (k2/2/3) would have triggered the resolution.
-        self.assertEqual(UKVP.select().count(), 3)
-
-        self.assertTrue(results[0] != u1.id)
-        self.assertEqual(results[1], u2.id)
-
-        # Verify changes.
-        self.assertEqual(UKVP.select().where(UKVP.key == 'k1').count(), 2)
-
-        u2_db = UKVP.get(UKVP.key == 'k2')
-        self.assertEqual(u2_db.id, u2.id)
-        self.assertEqual(u2_db.value, 2)
-        self.assertEqual(u2_db.extra, 3)
 
 
 class UKV(TestModel):
@@ -3326,7 +3298,7 @@ class UKVRel(TestModel):
 
 
 @requires_postgresql
-class TestUpsertPostgresql(OnConflictTests, ModelTestCase):
+class TestUpsertPostgresql(PGOnConflictTests, ModelTestCase):
     @requires_models(UKV)
     def test_conflict_target_constraint(self):
         u1 = UKV.create(key='k1', value='v1')
@@ -3365,103 +3337,6 @@ class TestUpsertPostgresql(OnConflictTests, ModelTestCase):
         self.assertTrue(ret > u2_db.id)
         self.assertEqual(UKV.select().count(), 3)
 
-    def test_update(self):
-        # Conflict on empno - we'll preserve name and update the ID. This will
-        # overwrite the previous row and set a new ID.
-        res = (Emp
-               .insert(first='foo', last='bar', empno='125')
-               .on_conflict(
-                   conflict_target=(Emp.empno,),
-                   preserve=(Emp.first, Emp.last),
-                   update={Emp.empno: '125.1'})
-               .execute())
-        self.assertData([
-            ('huey', 'cat', '123'),
-            ('zaizee', 'cat', '124'),
-            ('foo', 'bar', '125.1')])
-
-        # Conflicts on first/last name. The first name is preserved while the
-        # last-name is updated. The new empno is thrown out.
-        res = (Emp
-               .insert(first='foo', last='bar', empno='126')
-               .on_conflict(
-                   conflict_target=(Emp.first, Emp.last),
-                   preserve=(Emp.first,),
-                   update={Emp.last: 'baze'})
-               .execute())
-        self.assertData([
-            ('huey', 'cat', '123'),
-            ('zaizee', 'cat', '124'),
-            ('foo', 'baze', '125.1')])
-
-    @requires_models(OCTest)
-    def test_update_atomic(self):
-        # Add a new row with the given "a" value. If a conflict occurs,
-        # re-insert with b=b+2.
-        query = OCTest.insert(a='foo', b=1).on_conflict(
-            conflict_target=(OCTest.a,),
-            update={OCTest.b: OCTest.b + 2})
-        self.assertSQL(query, (
-            'INSERT INTO "oc_test" ("a", "b", "c") VALUES (?, ?, ?) '
-            'ON CONFLICT ("a") DO UPDATE SET "b" = ("oc_test"."b" + ?) '
-            'RETURNING "oc_test"."id"'), ['foo', 1, 0, 2])
-
-        # First execution returns rowid=1. Second execution hits the conflict-
-        # resolution, and will update the value in "b" from 1 -> 3.
-        rowid1 = query.execute()
-        rowid2 = query.clone().execute()
-        self.assertEqual(rowid1, rowid2)
-
-        obj = OCTest.get()
-        self.assertEqual(obj.a, 'foo')
-        self.assertEqual(obj.b, 3)
-
-        query = OCTest.insert(a='foo', b=4, c=5).on_conflict(
-            conflict_target=[OCTest.a],
-            preserve=[OCTest.c],
-            update={OCTest.b: OCTest.b + 100})
-        self.assertEqual(query.execute(), rowid2)
-
-        obj = OCTest.get()
-        self.assertEqual(obj.a, 'foo')
-        self.assertEqual(obj.b, 103)
-        self.assertEqual(obj.c, 5)
-
-    @requires_models(OCTest)
-    def test_update_where_clause(self):
-        # Add a new row with the given "a" value. If a conflict occurs,
-        # re-insert with b=b+2 so long as the original b < 3.
-        query = OCTest.insert(a='foo', b=1).on_conflict(
-            conflict_target=(OCTest.a,),
-            update={OCTest.b: OCTest.b + 2},
-            where=(OCTest.b < 3))
-        self.assertSQL(query, (
-            'INSERT INTO "oc_test" ("a", "b", "c") VALUES (?, ?, ?) '
-            'ON CONFLICT ("a") DO UPDATE SET "b" = ("oc_test"."b" + ?) '
-            'WHERE ("oc_test"."b" < ?) '
-            'RETURNING "oc_test"."id"'), ['foo', 1, 0, 2, 3])
-
-        # First execution returns rowid=1. Second execution hits the conflict-
-        # resolution, and will update the value in "b" from 1 -> 3.
-        rowid1 = query.execute()
-        rowid2 = query.clone().execute()
-        self.assertEqual(rowid1, rowid2)
-
-        obj = OCTest.get()
-        self.assertEqual(obj.a, 'foo')
-        self.assertEqual(obj.b, 3)
-
-        # Third execution returns rowid=None. The WHERE clause prevents us
-        # from updating "b" again, so nothing happened.
-        rowid3 = query.clone().execute()
-        self.assertTrue(rowid3 is None)
-
-        # Because we didn't satisfy the WHERE clause, the value in "b" is
-        # not incremented again.
-        obj = OCTest.get()
-        self.assertEqual(obj.a, 'foo')
-        self.assertEqual(obj.b, 3)
-
     @requires_models(UKV, UKVRel)
     def test_conflict_ambiguous_column(self):
         # k1/v1/e1, k2/v2/e0, k3/v3/e1
@@ -3492,42 +3367,6 @@ class TestUpsertPostgresql(OnConflictTests, ModelTestCase):
             ('k1', 'v1', 'e1'),
             ('k2', 'v2', 'x2'),
             ('k3', 'v3', 'e1')])
-
-    @requires_models(UKVP)
-    def test_conflict_target_constraint_where(self):
-        u1 = UKVP.create(key='k1', value=1, extra=1)
-        u2 = UKVP.create(key='k2', value=2, extra=2)
-
-        fields = [UKVP.key, UKVP.value, UKVP.extra]
-        data = [('k1', 1, 2), ('k2', 2, 3)]
-        query = (UKVP.insert_many(data, fields)
-                 .on_conflict(conflict_target=(UKVP.key, UKVP.value),
-                              conflict_where=(UKVP.extra > 1),
-                              preserve=(UKVP.extra,)))
-        self.assertSQL(query, (
-            'INSERT INTO "ukvp" ("key", "value", "extra") '
-            'VALUES (?, ?, ?), (?, ?, ?) '
-            'ON CONFLICT ("key", "value") WHERE ("extra" > ?) '
-            'DO UPDATE SET "extra" = EXCLUDED."extra" '
-            'RETURNING "ukvp"."id"'), ['k1', 1, 2, 'k2', 2, 3, 1])
-        results = [pk for pk, in query.execute()]
-
-        # How many rows exist? The first one would not have triggered the
-        # conflict resolution, since the existing k1/1 row's "extra" value was
-        # not greater than 1, thus it did not satisfy the index condition.
-        # The second row (k2/2/3) would have triggered the resolution.
-        self.assertEqual(UKVP.select().count(), 3)
-
-        self.assertTrue(results[0] != u1.id)
-        self.assertEqual(results[1], u2.id)
-
-        # Verify changes.
-        self.assertEqual(UKVP.select().where(UKVP.key == 'k1').count(), 2)
-
-        u2_db = UKVP.get(UKVP.key == 'k2')
-        self.assertEqual(u2_db.id, u2.id)
-        self.assertEqual(u2_db.value, 2)
-        self.assertEqual(u2_db.extra, 3)
 
 
 class TestJoinSubquery(ModelTestCase):
