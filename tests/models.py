@@ -15,6 +15,7 @@ from .base import new_connection
 from .base import requires_models
 from .base import requires_mysql
 from .base import requires_postgresql
+from .base import requires_sqlite
 from .base import skip_if
 from .base import skip_unless
 from .base import BaseTestCase
@@ -3176,7 +3177,7 @@ class TestUpsertMySQL(OnConflictTests, ModelTestCase):
         self.assertEqual(oc.c, 6)
 
 
-class TestUpsertSqlite(PGOnConflictTests, ModelTestCase):
+class TestReplaceSqlite(OnConflictTests, ModelTestCase):
     database = get_in_memory_db()
 
     def test_replace(self):
@@ -3234,6 +3235,11 @@ class TestUpsertSqlite(PGOnConflictTests, ModelTestCase):
             ('h', 'cat', '123'),
             ('z', 'cat', '124'),
             ('b', 'cat', '125')])
+
+
+@requires_sqlite
+class TestUpsertSqlite(PGOnConflictTests, ModelTestCase):
+    database = get_in_memory_db()
 
     @skip_if(IS_SQLITE_24, 'requires sqlite < 3.24')
     def test_no_preserve_update_where(self):
