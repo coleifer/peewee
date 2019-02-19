@@ -3059,9 +3059,9 @@ class PGOnConflictTests(OnConflictTests):
         # expression which will be parameterized. Hopefully SQLite's authors
         # decide this is a bug and fix it.
         if IS_SQLITE:
-            conflict_where = SQL('("extra" > 1)')
+            conflict_where = UKVP.extra > SQL('1')
         else:
-            conflict_where = (UKVP.extra > 1)
+            conflict_where = UKVP.extra > 1
 
         res = (UKVP.insert_many(data, fields)
                .on_conflict(conflict_target=(UKVP.key, UKVP.value),
