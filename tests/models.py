@@ -787,6 +787,27 @@ class TestModelAPIs(ModelTestCase):
                  .order_by(vl.c.username.desc()))
         self.assertEqual([user.username for user in query], ['zaizee', 'huey'])
 
+    @skip_if(IS_SQLITE_OLD or IS_MYSQL)
+    @requires_models(User)
+    def test_multi_update(self):
+        data = [(i, 'u%s' % i) for i in range(1, 4)]
+        User.insert_many(data, fields=[User.id, User.username]).execute()
+
+        data = [(i, 'u%sx' % i) for i in range(1, 3)]
+        vl = ValuesList(data)
+        cte = vl.select().cte('uv', columns=('id', 'username'))
+        subq = cte.select(cte.c.username).where(cte.c.id == User.id)
+        res = (User
+               .update(username=subq)
+               .where(User.id.in_(cte.select(cte.c.id)))
+               .with_cte(cte)
+               .execute())
+        query = User.select().order_by(User.id)
+        self.assertEqual([(u.id, u.username) for u in query], [
+            (1, 'u1x'),
+            (2, 'u2x'),
+            (3, 'u3')])
+
     @requires_models(User, Tweet)
     def test_insert_query_value(self):
         huey = self.add_user('huey')

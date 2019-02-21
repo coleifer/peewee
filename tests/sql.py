@@ -383,6 +383,24 @@ class TestSelectQuery(BaseTestCase):
             'INNER JOIN "max_order" '
             'ON ("t3"."id" = "max_order"."max_id")))'), [])
 
+    def test_multi_update_cte(self):
+        data = [(i, 'u%sx' % i) for i in range(1, 3)]
+        vl = ValuesList(data)
+        cte = vl.select().cte('uv', columns=('id', 'username'))
+        subq = cte.select(cte.c.username).where(cte.c.id == User.c.id)
+        query = (User
+                 .update(username=subq)
+                 .where(User.c.id.in_(cte.select(cte.c.id)))
+                 .with_cte(cte))
+        self.assertSQL(query, (
+            'WITH "uv" ("id", "username") AS ('
+            'SELECT * FROM (VALUES (?, ?), (?, ?)) AS "t1") '
+            'UPDATE "users" SET "username" = ('
+            'SELECT "uv"."username" FROM "uv" '
+            'WHERE ("uv"."id" = "users"."id")) '
+            'WHERE ("users"."id" IN (SELECT "uv"."id" FROM "uv"))'),
+            [1, 'u1x', 2, 'u2x'])
+
     def test_complex_select(self):
         Order = Table('orders', columns=(
             'region',
