@@ -702,6 +702,8 @@ class Source(Node):
         self._alias = name
 
     def select(self, *columns):
+        if not columns:
+            columns = (SQL('*'),)
         return Select((self,), columns)
 
     def join(self, dest, join_type='INNER', on=None):
