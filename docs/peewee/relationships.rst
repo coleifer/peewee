@@ -806,8 +806,7 @@ Modeling students and courses using :py:class:`ManyToManyField`:
 .. code-block:: python
 
     from peewee import *
-    from playhouse.fields import ManyToManyField
-
+    
     db = SqliteDatabase('school.db')
 
     class BaseModel(Model):
