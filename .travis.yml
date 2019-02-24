@@ -4,7 +4,6 @@ python:
   - 3.4
   - 3.5
   - 3.6
-dist: trusty
 env:
   - PEEWEE_TEST_BACKEND=sqlite
   - PEEWEE_TEST_BACKEND=postgresql
@@ -13,22 +12,17 @@ matrix:
   include:
     - python: 3.7
       dist: xenial
-      sudo: true
       env: PEEWEE_TEST_BACKEND=sqlite
     - python: 3.7
       dist: xenial
-      sudo: true
       env: PEEWEE_TEST_BACKEND=postgresql
     - python: 3.7
       dist: xenial
-      sudo: true
       env: PEEWEE_TEST_BACKEND=mysql
     - python: 3.8-dev
       dist: xenial
-      sudo: true
     - python: 3.7
       dist: xenial
-      sudo: true
       env:
       - PEEWEE_TEST_BUILD_SQLITE=1
       - PEEWEE_CLOSURE_EXTENSION=/usr/local/lib/closure.so
