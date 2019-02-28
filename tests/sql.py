@@ -220,6 +220,17 @@ class TestSelectQuery(BaseTestCase):
             'WHERE (("t1"."dob" < ?) AND ("t1"."dob" > ?))'),
             [datetime.date(1980, 1, 1), datetime.date(1950, 1, 1)])
 
+    def test_orwhere(self):
+        query = (Person
+                 .select(Person.name)
+                 .orwhere(Person.dob > datetime.date(1980, 1, 1))
+                 .orwhere(Person.dob < datetime.date(1950, 1, 1)))
+        self.assertSQL(query, (
+            'SELECT "t1"."name" '
+            'FROM "person" AS "t1" '
+            'WHERE (("t1"."dob" > ?) OR ("t1"."dob" < ?))'),
+            [datetime.date(1980, 1, 1), datetime.date(1950, 1, 1)])
+
     def test_simple_join(self):
         query = (User
                  .select(
