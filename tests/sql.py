@@ -3,6 +3,7 @@ import re
 
 from peewee import *
 from peewee import Expression
+from peewee import query_to_string
 
 from .base import BaseTestCase
 from .base import TestModel
@@ -1630,8 +1631,6 @@ class TestOnConflictPostgresql(BaseTestCase):
 #Note = Table('note', ['id', 'person_id', 'content'])
 
 class TestIndex(BaseTestCase):
-    database = SqliteDatabase(None)
-
     def test_simple_index(self):
         pidx = Index('person_name', Person, (Person.name,), unique=True)
         self.assertSQL(pidx, (
@@ -1662,3 +1661,44 @@ class TestIndex(BaseTestCase):
         uidx = Index('users_info', User, ('username DESC', 'id'))
         self.assertSQL(uidx, (
             'CREATE INDEX "users_info" ON "users" (username DESC, id)'), [])
+
+
+class TestSqlToString(BaseTestCase):
+    def _test_sql_to_string(self, _param):
+        class FakeDB(SqliteDatabase):
+            param = _param
+
+        db = FakeDB(None)
+        T = Table('tbl', ('id', 'val')).bind(db)
+
+        query = (T.select()
+                 .where((T.val == 'foo') |
+                        (T.val == b'bar') |
+                        (T.val == True) | (T.val == False) |
+                        (T.val == 2) |
+                        (T.val == -3.14) |
+                        (T.val == datetime.datetime(2018, 1, 1)) |
+                        (T.val == datetime.date(2018, 1, 2)) |
+                        T.val.is_null() |
+                        T.val.is_null(False) |
+                        T.val.in_(['aa', 'bb', 'cc'])))
+
+        self.assertEqual(query_to_string(query), (
+            'SELECT "t1"."id", "t1"."val" FROM "tbl" AS "t1" WHERE ((((((((((('
+            '"t1"."val" = \'foo\') OR '
+            '("t1"."val" = \'bar\')) OR '
+            '("t1"."val" = 1)) OR '
+            '("t1"."val" = 0)) OR '
+            '("t1"."val" = 2)) OR '
+            '("t1"."val" = -3.14)) OR '
+            '("t1"."val" = \'2018-01-01 00:00:00\')) OR '
+            '("t1"."val" = \'2018-01-02\')) OR '
+            '("t1"."val" IS NULL)) OR '
+            '("t1"."val" IS NOT NULL)) OR '
+            '("t1"."val" IN (\'aa\', \'bb\', \'cc\')))'))
+
+    def test_sql_to_string_qmark(self):
+        self._test_sql_to_string('?')
+
+    def test_sql_to_string_default(self):
+        self._test_sql_to_string('%s')
