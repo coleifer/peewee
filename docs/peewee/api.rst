@@ -1867,6 +1867,16 @@ Query-builder
             :py:meth:`~Query.where` calls are chainable.  Multiple calls will
             be "AND"-ed together.
 
+    .. py:method:: orwhere(*expressions)
+
+        :param expressions: zero or more expressions to include in the WHERE
+            clause.
+
+        Include the given expressions in the WHERE clause of the query. This
+        method is the same as the :py:meth:`Query.where` method, except that
+        the expressions will be OR-ed together with any previously-specified
+        WHERE expressions.
+
     .. py:method:: order_by(*values)
 
         :param values: zero or more Column-like objects to order by.

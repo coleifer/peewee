@@ -1800,6 +1800,12 @@ class Query(BaseQuery):
         self._where = reduce(operator.and_, expressions)
 
     @Node.copy
+    def orwhere(self, *expressions):
+        if self._where is not None:
+            expressions = (self._where,) + expressions
+        self._where = reduce(operator.or_, expressions)
+
+    @Node.copy
     def order_by(self, *values):
         self._order_by = values
 
