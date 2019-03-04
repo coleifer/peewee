@@ -4556,9 +4556,7 @@ class TimestampField(BigIntegerField):
 
     def python_value(self, value):
         if value is not None and isinstance(value, (int, float, long)):
-            if value == 0:
-                return
-            elif self.resolution > 1:
+            if self.resolution > 1:
                 ticks_to_microsecond = 1000000 // self.resolution
                 value, ticks = divmod(value, self.resolution)
                 microseconds = int(ticks * ticks_to_microsecond)
