@@ -369,6 +369,38 @@ class TestPrefetch(ModelTestCase):
                 ('huey', 'charlie'),
                 ('zaizee', 'charlie')])
 
+        m = Person.create(name='mickey')
+        RC(h, m)
+
+        def assertNames(p, ns):
+            self.assertEqual([r.to_person.name for r in p.relationships], ns)
+
+        # Use prefetch to go Person -> Relationship <- Person (PA).
+        with self.assertQueryCount(3):
+            people = (Person
+                      .select()
+                      .where(Person.name != 'mickey')
+                      .order_by(Person.name))
+            relationships = Relationship.select().order_by(Relationship.id)
+            PA = Person.alias()
+            query = prefetch(people, relationships, PA)
+            cp, hp, zp = list(query)
+            assertNames(cp, ['huey', 'zaizee'])
+            assertNames(hp, ['charlie', 'mickey'])
+            assertNames(zp, ['charlie'])
+
+        # User prefetch to go Person -> Relationship+Person (PA).
+        with self.assertQueryCount(2):
+            rels = (Relationship
+                    .select(Relationship, PA)
+                    .join(PA, on=(Relationship.to_person == PA.id))
+                    .order_by(Relationship.id))
+            query = prefetch(people, rels)
+            cp, hp, zp = list(query)
+            assertNames(cp, ['huey', 'zaizee'])
+            assertNames(hp, ['charlie', 'mickey'])
+            assertNames(zp, ['charlie'])
+
     def test_prefetch_through_manytomany(self):
         Like.create(note=Note.get(Note.content == 'meow'),
                     person=Person.get(Person.name == 'zaizee'))
