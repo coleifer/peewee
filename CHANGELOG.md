@@ -19,6 +19,10 @@ https://github.com/coleifer/peewee/releases
   partial index (e.g., contains a WHERE clause). The `OnConflict` and
   `on_conflict()` APIs now take an additional `conflict_where` parameter to
   represent the WHERE clause of the partial index in question. See #1860.
+* Enhanced the `playhouse.kv` extension to use efficient upsert for *all*
+  database engines. Previously upsert was only supported for sqlite and mysql.
+* Fixed bug where `TimestampField` would treat zero values as `None` when
+  reading from the database.
 
 [View commits](https://github.com/coleifer/peewee/compare/3.8.2...master)
 
