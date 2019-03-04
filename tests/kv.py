@@ -65,13 +65,15 @@ class TestKeyValue(DatabaseTestCase):
         KV.clear()
         self.assertEqual(len(KV), 0)
 
-    @skip_if(IS_POSTGRESQL, 'requires replace support')
     def test_update(self):
         KV = self.create_kv()
-        KV.update(k1='v1', k2='v2', k3='v3')
+        with self.assertQueryCount(1):
+            KV.update(k1='v1', k2='v2', k3='v3')
+
         self.assertEqual(len(KV), 3)
 
-        KV.update(k1='v1-x', k3='v3-x', k4='v4')
+        with self.assertQueryCount(1):
+            KV.update(k1='v1-x', k3='v3-x', k4='v4')
         self.assertEqual(len(KV), 4)
 
         self.assertEqual(dict(KV), {

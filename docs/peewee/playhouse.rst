@@ -2160,6 +2160,9 @@ dictionary.
     Table is created automatically (if it doesn't exist) when the ``KeyValue``
     is instantiated.
 
+    Uses efficient upsert implementation for setting and updating/overwriting
+    key/value pairs.
+
     Basic examples:
 
     .. code-block:: python
@@ -2171,7 +2174,7 @@ dictionary.
         # Set (or overwrite) the value for "k1".
         KV['k1'] = 'v1'
 
-        # Set (or update) multiple keys at once.
+        # Set (or update) multiple keys at once (uses an efficient upsert).
         KV.update(k2='v2', k3='v3')
 
         # Getting values works as you'd expect.
@@ -2330,11 +2333,6 @@ dictionary.
 
             >>> dict(KV)
             {'k1': 1, 'k2': -2, 'k3': 3, 'k4': 4}
-
-        .. attention::
-            Because Postgresql does not support INSERT + REPLACE, the
-            :py:meth:`KeyValue.update` method is not supported for Postgresql
-            databases (as it cannot be implemented efficiently).
 
     .. py:method:: get(expr[, default=None])
 
