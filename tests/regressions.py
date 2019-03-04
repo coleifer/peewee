@@ -1,3 +1,5 @@
+import datetime
+
 from peewee import *
 
 from .base import BaseTestCase
@@ -534,3 +536,23 @@ class TestOptimisticLockingDemo(ModelTestCase):
         vt_db = VTweet.get(VTweet.content == 't1')
         self.assertEqual(vt_db.version, 2)
         self.assertEqual(vt_db.user.username, 'u1')
+
+
+class TS(TestModel):
+    key = TextField(primary_key=True)
+    timestamp = TimestampField(utc=True)
+
+
+class TestZeroTimestamp(ModelTestCase):
+    requires = [TS]
+
+    def test_zero_timestamp(self):
+        t0 = TS.create(key='t0', timestamp=0)
+        t1 = TS.create(key='t1', timestamp=1)
+
+        t0_db = TS.get(TS.key == 't0')
+        self.assertEqual(t0_db.timestamp, datetime.datetime(1970, 1, 1))
+
+        t1_db = TS.get(TS.key == 't1')
+        self.assertEqual(t1_db.timestamp,
+                         datetime.datetime(1970, 1, 1, 0, 0, 1))
