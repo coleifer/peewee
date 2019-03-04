@@ -287,6 +287,48 @@ class TestPrefetch(ModelTestCase):
             ('p2-2', []),
         ])
 
+    @requires_models(Category)
+    def test_prefetch_adjacency_list(self):
+        def cc(name, parent=None):
+            return Category.create(name=name, parent=parent)
+
+        tree = ('root', (
+            ('n1', (
+                ('c11', ()),
+                ('c12', ()))),
+            ('n2', (
+                ('c21', ()),
+                ('c22', (
+                    ('g221', ()),
+                    ('g222', ()))),
+                ('c23', ()),
+                ('c24', (
+                    ('g241', ()),
+                    ('g242', ()),
+                    ('g243', ())))))))
+        stack = [(None, tree)]
+        while stack:
+            parent, (name, children) = stack.pop()
+            node = cc(name, parent)
+            for child_tree in children:
+                stack.insert(0, (node, child_tree))
+
+        C = Category.alias('c')
+        G = Category.alias('g')
+        GG = Category.alias('gg')
+        GGG = Category.alias('ggg')
+        query = Category.select().where(Category.name == 'root')
+        with self.assertQueryCount(5):
+            pf = prefetch(query, C, (G, C), (GG, G), (GGG, GG))
+            def gather(c):
+                children = sorted([gather(ch) for ch in c.children])
+                return (c.name, tuple(children))
+            nodes = list(pf)
+            self.assertEqual(len(nodes), 1)
+            pf_tree = gather(nodes[0])
+
+        self.assertEqual(tree, pf_tree)
+
     def test_prefetch_specific_model(self):
         # Person -> Note
         #        -> Like (has fks to both person and note)

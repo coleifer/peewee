@@ -5336,6 +5336,13 @@ class Metadata(object):
         self.sorted_fields = list(self._sorted_field_list)
         self.sorted_field_names = [f.name for f in self.sorted_fields]
 
+    def get_rel_for_model(self, model):
+        if isinstance(model, ModelAlias):
+            model = model.model
+        forwardrefs = self.model_refs.get(model, [])
+        backrefs = self.model_backrefs.get(model, [])
+        return (forwardrefs, backrefs)
+
     def add_field(self, field_name, field, set_attribute=True):
         if field_name in self.fields:
             self.remove_field(field_name)
@@ -6811,10 +6818,12 @@ class PrefetchQuery(collections.namedtuple('_PrefetchQuery', (
                 field_to_name=None, model=None):
         if fields:
             if is_backref:
-                rel_models = [field.model for field in fields]
+                if rel_models is None:
+                    rel_models = [field.model for field in fields]
                 foreign_key_attrs = [field.rel_field.name for field in fields]
             else:
-                rel_models = [field.rel_model for field in fields]
+                if rel_models is None:
+                    rel_models = [field.rel_model for field in fields]
                 foreign_key_attrs = [field.name for field in fields]
             field_to_name = list(zip(fields, foreign_key_attrs))
         model = query.model
@@ -6863,14 +6872,16 @@ def prefetch_add_subquery(sq, subqueries):
         for j in reversed(range(i + 1)):
             fixed = fixed_queries[j]
             last_query = fixed.query
-            last_model = fixed.model
+            last_model = last_obj = fixed.model
+            if isinstance(last_model, ModelAlias):
+                last_model = last_model.model
             rels = subquery_model._meta.model_refs.get(last_model, [])
             if rels:
                 fks = [getattr(subquery_model, fk.name) for fk in rels]
-                pks = [getattr(last_model, fk.rel_field.name) for fk in rels]
+                pks = [getattr(last_obj, fk.rel_field.name) for fk in rels]
             else:
                 backrefs = subquery_model._meta.model_backrefs.get(last_model)
-            if (fks or backrefs) and ((target_model is last_model) or
+            if (fks or backrefs) and ((target_model is last_obj) or
                                       (target_model is None)):
                 break
 
@@ -6879,20 +6890,22 @@ def prefetch_add_subquery(sq, subqueries):
             raise AttributeError('Error: unable to find foreign key for '
                                  'query: %s%s' % (subquery, tgt_err))
 
+        dest = (target_model,) if target_model else None
+
         if fks:
             expr = reduce(operator.or_, [
                 (fk << last_query.select(pk))
                 for (fk, pk) in zip(fks, pks)])
             subquery = subquery.where(expr)
-            fixed_queries.append(PrefetchQuery(subquery, fks, False))
+            fixed_queries.append(PrefetchQuery(subquery, fks, False, dest))
         elif backrefs:
             expressions = []
             for backref in backrefs:
                 rel_field = getattr(subquery_model, backref.rel_field.name)
-                fk_field = getattr(last_model, backref.name)
+                fk_field = getattr(last_obj, backref.name)
                 expressions.append(rel_field << last_query.select(fk_field))
             subquery = subquery.where(reduce(operator.or_, expressions))
-            fixed_queries.append(PrefetchQuery(subquery, backrefs, True))
+            fixed_queries.append(PrefetchQuery(subquery, backrefs, True, dest))
 
     return fixed_queries
 
