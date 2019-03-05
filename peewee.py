@@ -528,6 +528,8 @@ def __scope_context__(scope):
 
 
 class Context(object):
+    __slots__ = ('stack', '_sql', '_values', 'alias_manager', 'state')
+
     def __init__(self, **settings):
         self.stack = []
         self._sql = []
