@@ -539,7 +539,7 @@ class TestOptimisticLockingDemo(ModelTestCase):
 
 
 class TS(TestModel):
-    key = TextField(primary_key=True)
+    key = CharField(primary_key=True)
     timestamp = TimestampField(utc=True)
 
 
