@@ -9,6 +9,8 @@ import re
 from peewee import *
 from peewee import _StringField
 from peewee import _query_val_transform
+from peewee import CommaNodeList
+from peewee import SCOPE_VALUES
 from peewee import text_type
 try:
     from pymysql.constants import FIELD_TYPE
@@ -730,19 +732,54 @@ def generate_models(database, schema=None, **options):
     return introspector.generate_models(**options)
 
 
-def print_model(model):
+def print_model(model, indexes=True, inline_indexes=False):
     print(model._meta.name)
     for field in model._meta.sorted_fields:
-        print('  %s %s' % (field.name, field.field_type))
+        parts = ['  %s %s' % (field.name, field.field_type)]
+        if field.primary_key:
+            parts.append(' PK')
+        elif inline_indexes:
+            if field.unique:
+                parts.append(' UNIQUE')
+            elif field.index:
+                parts.append(' INDEX')
+        if isinstance(field, ForeignKeyField):
+            parts.append(' FK: %s.%s' % (field.rel_model.__name__,
+                                         field.rel_field.name))
+        print(''.join(parts))
+
+    if indexes and model._meta.indexes:
+        print('\nindex(es)')
+        for index in model._meta.fields_to_index():
+            parts = ['  ']
+            ctx = model._meta.database.get_sql_context()
+            with ctx.scope_values(param='%s', quote='""'):
+                ctx.sql(CommaNodeList(index._expressions))
+                if index._where:
+                    ctx.literal(' WHERE ')
+                    ctx.sql(index._where)
+                sql, params = ctx.query()
+
+            clean = sql % tuple(map(_query_val_transform, params))
+            parts.append(clean.replace('"', ''))
+
+            if index._unique:
+                parts.append(' UNIQUE')
+            print(''.join(parts))
 
 
 def get_table_sql(model):
     sql, params = model._schema._create_table().query()
-    if not params:
-        return sql
-    elif model._meta.database.param != '%s':
+    if model._meta.database.param != '%s':
         sql = sql.replace(model._meta.database.param, '%s')
-    return sql % tuple(map(_query_val_transform, params))
+
+    # Format and indent the table declaration, simplest possible approach.
+    match_obj = re.match('^(.+?\()(.+)(\).*)', sql)
+    create, columns, extra = match_obj.groups()
+    indented = ',\n'.join('  %s' % column for column in columns.split(', '))
+
+    clean = '\n'.join((create, indented, extra)).strip()
+    return clean % tuple(map(_query_val_transform, params))
 
 def print_table_sql(model):
     print(get_table_sql(model))
