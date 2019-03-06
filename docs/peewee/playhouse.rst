@@ -3062,6 +3062,34 @@ The reflection module contains helpers for introspecting existing databases.
 This module is used internally by several other modules in the playhouse,
 including :ref:`dataset` and :ref:`pwiz`.
 
+.. py:func:: generate_models(database[, schema=None[, **options]])
+
+    :param Database database: database instance to introspect.
+    :param str schema: optional schema to introspect.
+    :param options: arbitrary options, see :py:meth:`Introspector.generate_models` for details.
+    :returns: a ``dict`` mapping table names to model classes.
+
+    Generate models for the tables in the given database. For an example of how
+    to use this function, see the section :ref:`interactive`.
+
+.. py:func:: print_model(model)
+
+    :param Model model: model class to print
+    :returns: no return value
+
+    Print a user-friendly description of a model class, useful for debugging or
+    interactive use. Currently this prints the table name, and all fields along
+    with their data-types. The :ref:`interactive` section contains an example.
+
+.. py:func:: print_table_sql(model)
+
+    :param Model model: model to print
+    :returns: no return value
+
+    Prints the SQL ``CREATE TABLE`` for the given model class, which may be
+    useful for debugging or interactive use. See the :ref:`interactive` section
+    for example usage.
+
 .. py:class:: Introspector(metadata[, schema=None])
 
     Metadata can be extracted from a database by instantiating an

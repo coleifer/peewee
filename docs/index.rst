@@ -48,6 +48,7 @@ Contents:
    peewee/installation
    peewee/quickstart
    peewee/example
+   peewee/interactive
    peewee/contributing
    peewee/database
    peewee/models

@@ -8,6 +8,7 @@ import re
 
 from peewee import *
 from peewee import _StringField
+from peewee import _query_val_transform
 from peewee import text_type
 try:
     from pymysql.constants import FIELD_TYPE
@@ -722,3 +723,26 @@ class Introspector(object):
 def introspect(database, schema=None):
     introspector = Introspector.from_database(database, schema=schema)
     return introspector.introspect()
+
+
+def generate_models(database, schema=None, **options):
+    introspector = Introspector.from_database(database, schema=schema)
+    return introspector.generate_models(**options)
+
+
+def print_model(model):
+    print(model._meta.name)
+    for field in model._meta.sorted_fields:
+        print('  %s %s' % (field.name, field.field_type))
+
+
+def get_table_sql(model):
+    sql, params = model._schema._create_table().query()
+    if not params:
+        return sql
+    elif model._meta.database.param != '%s':
+        sql = sql.replace(model._meta.database.param, '%s')
+    return sql % tuple(map(_query_val_transform, params))
+
+def print_table_sql(model):
+    print(get_table_sql(model))

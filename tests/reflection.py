@@ -566,3 +566,30 @@ class TestReflectViews(BaseReflectionTestCase):
         self.assertEqual([(np.content, np.timestamp) for np in NP.select()], [
             ('n3', datetime.datetime(2018, 1, 3)),
             ('n1', datetime.datetime(2018, 1, 1))])
+
+
+class Event(TestModel):
+    key = TextField()
+    timestamp = DateTimeField(index=True)
+    metadata = TextField(default='')
+
+
+class TestInteractiveHelpers(ModelTestCase):
+    requires = [Category, Event]
+
+    def test_generate_models(self):
+        M = generate_models(self.database)
+        self.assertTrue('category' in M)
+        self.assertTrue('event' in M)
+
+        def assertFields(m, expected):
+            actual = [(f.name, f.field_type) for f in m._meta.sorted_fields]
+            self.assertEqual(actual, expected)
+
+        assertFields(M['category'], [('id', 'AUTO'), ('name', 'VARCHAR'),
+                                     ('parent', 'INT')])
+        assertFields(M['event'], [
+            ('id', 'AUTO'),
+            ('key', 'TEXT'),
+            ('timestamp', 'DATETIME'),
+            ('metadata', 'TEXT')])
