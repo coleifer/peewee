@@ -626,6 +626,45 @@ class Context(object):
         return ''.join(self._sql), self._values
 
 
+def query_to_string(query):
+    # NOTE: this function is not exported by default as it might be misused --
+    # and this misuse could lead to sql injection vulnerabilities. This
+    # function is intended for debugging or logging purposes ONLY.
+    db = getattr(query, '_database', None)
+    if db is not None:
+        ctx = db.get_sql_context()
+    else:
+        ctx = Context()
+
+    sql, params = ctx.sql(query).query()
+    if not params:
+        return sql
+
+    param = ctx.state.param or '?'
+    if param == '?':
+        sql = sql.replace('?', '%s')
+
+    # Interpolate parameters.
+    def transform(v):
+        if isinstance(v, (text_type, datetime.datetime, datetime.date,
+                          datetime.time)):
+            v = "'%s'" % v
+        elif isinstance(v, bytes_type):
+            try:
+                v = v.decode('utf8')
+            except UnicodeDecodeError:
+                v = v.decode('raw_unicode_escape')
+            v = "'%s'" % v
+        elif isinstance(v, int):
+            v = '%s' % int(v)  # Also handles booleans -> 1 or 0.
+        elif v is None:
+            v = 'NULL'
+        else:
+            v = str(v)
+        return v
+    return sql % tuple(map(transform, params))
+
+
 # AST.
 
 
