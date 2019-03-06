@@ -94,11 +94,12 @@ can run some queries on the generated ``event`` model:
     60
 
 For more information about these APIs and other similar reflection utilities,
-see the :ref:`reflection` section of the :ref:`playhouse` document.
+see the :ref:`reflection` section of the :ref:`playhouse extensions <playhouse>`
+document.
 
 To generate an actual Python module containing model definitions for an
-existing database, you can use the command-line :ref:`pwiz` tool. Here is a
-quick example:
+existing database, you can use the command-line :ref:`pwiz <pwiz>` tool. Here
+is a quick example:
 
 .. code-block:: console
 
@@ -109,6 +110,12 @@ instance (referencing the ``events.db``) along with model definitions for any
 tables found in the database. ``pwiz`` does some additional nice things like
 introspecting indexes and adding proper flags for ``NULL``/``NOT NULL``
 constraints, etc.
+
+The APIs discussed in this section:
+
+* :py:func:`generate_models`
+* :py:func:`print_model`
+* :py:func:`print_table_sql`
 
 More low-level APIs are also available on the :py:class:`Database` instance:
 
