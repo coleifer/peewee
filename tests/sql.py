@@ -1465,7 +1465,7 @@ class TestOnConflictMySQL(BaseTestCase):
 
     def setUp(self):
         super(TestOnConflictMySQL, self).setUp()
-        self.database._server_version = None
+        self.database.server_version = None
 
     def test_replace(self):
         query = Person.insert(name='huey').on_conflict('replace')
@@ -1504,13 +1504,13 @@ class TestOnConflictMySQL(BaseTestCase):
         query = (Person
                  .insert(name='huey', dob=dob)
                  .on_conflict(preserve=(Person.dob,)))
-        self.database._server_version = (10, 3, 3)
+        self.database.server_version = (10, 3, 3)
         self.assertSQL(query, (
             'INSERT INTO "person" ("dob", "name") VALUES (?, ?) '
             'ON DUPLICATE KEY '
             'UPDATE "dob" = VALUE("dob")'), [dob, 'huey'])
 
-        self.database._server_version = (10, 3, 2)
+        self.database.server_version = (10, 3, 2)
         self.assertSQL(query, (
             'INSERT INTO "person" ("dob", "name") VALUES (?, ?) '
             'ON DUPLICATE KEY '

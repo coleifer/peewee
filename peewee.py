@@ -3702,7 +3702,7 @@ class MySQLDatabase(Database):
             # Here we need to determine which function to use, which varies
             # depending on the MySQL server version. MySQL and MariaDB prior to
             # 10.3.3 use "VALUES", while MariaDB 10.3.3+ use "VALUE".
-            version = self._server_version or (0,)
+            version = self.server_version or (0,)
             if version[0] == 10 and version >= (10, 3, 3):
                 VALUE_FN = fn.VALUE
             else:
