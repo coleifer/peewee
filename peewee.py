@@ -2692,6 +2692,7 @@ class Database(_callable_context_manager):
     operations = {}
     param = '?'
     quote = '""'
+    server_version = None
 
     # Feature toggles.
     commit_select = False
@@ -2775,10 +2776,15 @@ class Database(_callable_context_manager):
             with __exception_wrapper__:
                 self._state.set_connection(self._connect())
                 self._initialize_connection(self._state.conn)
+                if self.server_version is None:
+                    self._set_server_version(self._state.conn)
         return True
 
     def _initialize_connection(self, conn):
         pass
+
+    def _set_server_version(self, conn):
+        self.server_version = 0
 
     def close(self):
         with self._lock:
@@ -3030,7 +3036,7 @@ class SqliteDatabase(Database):
         'ILIKE': 'LIKE'}
     index_schema_prefix = True
     limit_max = -1
-    _sqlite_version = __sqlite_version__
+    server_version = __sqlite_version__
 
     def __init__(self, database, *args, **kwargs):
         self._pragmas = kwargs.pop('pragmas', ())
@@ -3053,6 +3059,9 @@ class SqliteDatabase(Database):
         self._timeout = timeout
         super(SqliteDatabase, self).init(database, **kwargs)
 
+    def _set_server_version(self, conn):
+        pass
+
     def _connect(self):
         if sqlite3 is None:
             raise ImproperlyConfigured('SQLite driver not installed!')
@@ -3074,7 +3083,7 @@ class SqliteDatabase(Database):
         self._load_aggregates(conn)
         self._load_collations(conn)
         self._load_functions(conn)
-        if self._sqlite_version >= (3, 25, 0):
+        if self.server_version >= (3, 25, 0):
             self._load_window_functions(conn)
         if self._table_functions:
             for table_function in self._table_functions:
@@ -3351,7 +3360,7 @@ class SqliteDatabase(Database):
 
     def conflict_update(self, oc, query):
         # Sqlite prior to 3.24.0 does not support Postgres-style upsert.
-        if self._sqlite_version < (3, 24, 0) and \
+        if self.server_version < (3, 24, 0) and \
            any((oc._preserve, oc._update, oc._where, oc._conflict_target,
                 oc._conflict_constraint)):
             raise ValueError('SQLite does not support specifying which values '
@@ -3408,7 +3417,6 @@ class PostgresqlDatabase(Database):
     def init(self, database, register_unicode=True, encoding=None, **kwargs):
         self._register_unicode = register_unicode
         self._encoding = encoding
-        self._need_server_version = True
         super(PostgresqlDatabase, self).init(database, **kwargs)
 
     def _connect(self):
@@ -3420,13 +3428,11 @@ class PostgresqlDatabase(Database):
             pg_extensions.register_type(pg_extensions.UNICODEARRAY, conn)
         if self._encoding:
             conn.set_client_encoding(self._encoding)
-        if self._need_server_version:
-            self.set_server_version(conn.server_version)
-            self._need_server_version = False
         return conn
 
-    def set_server_version(self, version):
-        if version >= 90600:
+    def _set_server_version(self, conn):
+        self.server_version = conn.server_version
+        if self.server_version >= 90600:
             self.safe_create_index = True
 
     def last_insert_id(self, cursor, query_type=None):
@@ -3580,7 +3586,6 @@ class MySQLDatabase(Database):
     limit_max = 2 ** 64 - 1
     safe_create_index = False
     safe_drop_index = False
-    _server_version = None
 
     def init(self, database, **kwargs):
         params = {'charset': 'utf8', 'use_unicode': True}
@@ -3593,10 +3598,14 @@ class MySQLDatabase(Database):
         if mysql is None:
             raise ImproperlyConfigured('MySQL driver not installed!')
         conn = mysql.connect(db=self.database, **self.connect_params)
-        if self._server_version is None:
-            version_raw = conn.server_version
-            self._server_version = self._extract_server_version(version_raw)
         return conn
+
+    def _set_server_version(self, conn):
+        try:
+            version_raw = conn.server_version
+        except AttributeError:
+            version_raw = conn.get_server_info()
+        self.server_version = self._extract_server_version(version_raw)
 
     def _extract_server_version(self, version):
         version = version.lower()
