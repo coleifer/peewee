@@ -3062,7 +3062,7 @@ The reflection module contains helpers for introspecting existing databases.
 This module is used internally by several other modules in the playhouse,
 including :ref:`dataset` and :ref:`pwiz`.
 
-.. py:func:: generate_models(database[, schema=None[, **options]])
+.. py:function:: generate_models(database[, schema=None[, **options]])
 
     :param Database database: database instance to introspect.
     :param str schema: optional schema to introspect.
@@ -3072,7 +3072,7 @@ including :ref:`dataset` and :ref:`pwiz`.
     Generate models for the tables in the given database. For an example of how
     to use this function, see the section :ref:`interactive`.
 
-.. py:func:: print_model(model)
+.. py:function:: print_model(model)
 
     :param Model model: model class to print
     :returns: no return value
@@ -3081,7 +3081,7 @@ including :ref:`dataset` and :ref:`pwiz`.
     interactive use. Currently this prints the table name, and all fields along
     with their data-types. The :ref:`interactive` section contains an example.
 
-.. py:func:: print_table_sql(model)
+.. py:function:: print_table_sql(model)
 
     :param Model model: model to print
     :returns: no return value
