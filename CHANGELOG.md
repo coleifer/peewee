@@ -7,24 +7,52 @@ https://github.com/coleifer/peewee/releases
 
 ## master
 
-* MariaDB 10.3.3 introduces backwards-incompatible changes to the SQL used for
-  upsert. Peewee now introspects the MySQL server version at connection time to
-  ensure proper handling of version-specific features. See #1834 for details.
+[View commits](https://github.com/coleifer/peewee/compare/3.9.0...master)
+
+## 3.9.0
+
+* Added new document describing how to [use peewee interactively](http://docs.peewee-orm.com/en/latest/peewee/interactive.html).
+* Added convenience functions for generating model classes from a pre-existing
+  database, printing model definitions and printing CREATE TABLE sql for a
+  model. See the "use peewee interactively" section for details.
+* Added a `__str__` implementation to all `Query` subclasses which converts the
+  query to a string and interpolates the parameters.
 * Improvements to `sqlite_ext.JSONField` regarding the serialization of data,
   as well as the addition of options to override the JSON serialization and
   de-serialization functions.
+* Added `index_type` parameter to `Field`
 * Added `DatabaseProxy`, which allows one to use database-specific decorators
-  with an uninitialized `Proxy` object. See #1842 for discussion.
+  with an uninitialized `Proxy` object. See #1842 for discussion. Recommend
+  that you update any usage of `Proxy` for deferring database initialization to
+  use the new `DatabaseProxy` class instead.
 * Added support for `INSERT ... ON CONFLICT` when the conflict target is a
-  partial index (e.g., contains a WHERE clause). The `OnConflict` and
+  partial index (e.g., contains a `WHERE` clause). The `OnConflict` and
   `on_conflict()` APIs now take an additional `conflict_where` parameter to
-  represent the WHERE clause of the partial index in question. See #1860.
+  represent the `WHERE` clause of the partial index in question. See #1860.
 * Enhanced the `playhouse.kv` extension to use efficient upsert for *all*
   database engines. Previously upsert was only supported for sqlite and mysql.
+* Re-added the `orwhere()` query filtering method, which will append the given
+  expressions using `OR` instead of `AND`. See #391 for old discussion.
+* Added some new examples to the ``examples/`` directory
+* Added `select_from()` API for wrapping a query and selecting one or more
+  columns from the wrapped subquery. [Docs](http://docs.peewee-orm.com/en/latest/peewee/api.html#SelectQuery.select_from).
+* Added documentation on using [row values](http://docs.peewee-orm.com/en/latest/peewee/query_operators.html#row-values).
+* Removed the (defunct) "speedups" C extension, which as of 3.8.2 only
+  contained a barely-faster function for quoting entities.
+
+**Bugfixes**
+
+* Fix bug in SQL generation when there was a subquery that used a common table
+  expressions.
+* Enhanced `prefetch()` and fixed bug that could occur when mixing
+  self-referential foreign-keys and model aliases.
+* MariaDB 10.3.3 introduces backwards-incompatible changes to the SQL used for
+  upsert. Peewee now introspects the MySQL server version at connection time to
+  ensure proper handling of version-specific features. See #1834 for details.
 * Fixed bug where `TimestampField` would treat zero values as `None` when
   reading from the database.
 
-[View commits](https://github.com/coleifer/peewee/compare/3.8.2...master)
+[View commits](https://github.com/coleifer/peewee/compare/3.8.2...3.9.0)
 
 ## 3.8.2
 

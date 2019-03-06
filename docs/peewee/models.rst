@@ -201,6 +201,7 @@ Parameters accepted by all field types and their default values:
 * ``choices = None`` -- optional iterable containing 2-tuples of ``value``, ``display``
 * ``help_text = None`` -- string representing any helpful text for this field
 * ``verbose_name = None`` -- string representing the "user-friendly" name of this field
+* ``index_type = None`` -- specify a custom index-type, e.g. for Postgres you might specify a ``'BRIN'`` or ``'GIN'`` index.
 
 Some fields take special parameters...
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
