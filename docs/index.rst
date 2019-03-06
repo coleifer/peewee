@@ -34,6 +34,7 @@ New to peewee? These may help:
 
 * :ref:`Quickstart <quickstart>`
 * :ref:`Example twitter app <example-app>`
+* :ref:`Using peewee interactively <interactive>`
 * :ref:`Models and fields <models>`
 * :ref:`Querying <querying>`
 * :ref:`Relationships and joins <relationships>`

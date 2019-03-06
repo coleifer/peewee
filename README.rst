@@ -17,6 +17,7 @@ New to peewee? These may help:
 
 * `Quickstart <http://docs.peewee-orm.com/en/latest/peewee/quickstart.html#quickstart>`_
 * `Example twitter app <http://docs.peewee-orm.com/en/latest/peewee/example.html>`_
+* `Using peewee interactively <http://docs.peewee-orm.com/en/latest/peewee/interactive.html>`_
 * `Models and fields <http://docs.peewee-orm.com/en/latest/peewee/models.html>`_
 * `Querying <http://docs.peewee-orm.com/en/latest/peewee/querying.html>`_
 * `Relationships and joins <http://docs.peewee-orm.com/en/latest/peewee/relationships.html>`_
