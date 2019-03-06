@@ -644,25 +644,26 @@ def query_to_string(query):
     if param == '?':
         sql = sql.replace('?', '%s')
 
+    return sql % tuple(map(_query_val_transform, params))
+
+def _query_val_transform(v):
     # Interpolate parameters.
-    def transform(v):
-        if isinstance(v, (text_type, datetime.datetime, datetime.date,
-                          datetime.time)):
-            v = "'%s'" % v
-        elif isinstance(v, bytes_type):
-            try:
-                v = v.decode('utf8')
-            except UnicodeDecodeError:
-                v = v.decode('raw_unicode_escape')
-            v = "'%s'" % v
-        elif isinstance(v, int):
-            v = '%s' % int(v)  # Also handles booleans -> 1 or 0.
-        elif v is None:
-            v = 'NULL'
-        else:
-            v = str(v)
-        return v
-    return sql % tuple(map(transform, params))
+    if isinstance(v, (text_type, datetime.datetime, datetime.date,
+                      datetime.time)):
+        v = "'%s'" % v
+    elif isinstance(v, bytes_type):
+        try:
+            v = v.decode('utf8')
+        except UnicodeDecodeError:
+            v = v.decode('raw_unicode_escape')
+        v = "'%s'" % v
+    elif isinstance(v, int):
+        v = '%s' % int(v)  # Also handles booleans -> 1 or 0.
+    elif v is None:
+        v = 'NULL'
+    else:
+        v = str(v)
+    return v
 
 
 # AST.
@@ -1797,6 +1798,9 @@ class BaseQuery(Node):
     def __len__(self):
         self._ensure_execution()
         return len(self._cursor_wrapper)
+
+    def __str__(self):
+        return query_to_string(self)
 
 
 class RawQuery(BaseQuery):
