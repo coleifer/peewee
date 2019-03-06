@@ -748,9 +748,13 @@ def print_model(model, indexes=True, inline_indexes=False):
                                          field.rel_field.name))
         print(''.join(parts))
 
-    if indexes and model._meta.indexes:
+    if indexes:
+        index_list = model._meta.fields_to_index()
+        if not index_list:
+            return
+
         print('\nindex(es)')
-        for index in model._meta.fields_to_index():
+        for index in index_list:
             parts = ['  ']
             ctx = model._meta.database.get_sql_context()
             with ctx.scope_values(param='%s', quote='""'):

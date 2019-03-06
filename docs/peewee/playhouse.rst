@@ -3072,6 +3072,25 @@ including :ref:`dataset` and :ref:`pwiz`.
     Generate models for the tables in the given database. For an example of how
     to use this function, see the section :ref:`interactive`.
 
+    Example:
+
+    .. code-block:: pycon
+
+        >>> from peewee import *
+        >>> from playhouse.reflection import generate_models
+        >>> db = PostgresqlDatabase('my_app')
+        >>> models = generate_models(db)
+        >>> list(models.keys())
+        ['account', 'customer', 'order', 'orderitem', 'product']
+
+        >>> globals().update(models)  # Inject models into namespace.
+        >>> for cust in customer.select():  # Query using generated model.
+        ...     print(cust.name)
+        ...
+
+        Huey Kitty
+        Mickey Dog
+
 .. py:function:: print_model(model)
 
     :param Model model: model class to print
@@ -3081,6 +3100,34 @@ including :ref:`dataset` and :ref:`pwiz`.
     interactive use. Currently this prints the table name, and all fields along
     with their data-types. The :ref:`interactive` section contains an example.
 
+    Example output:
+
+    .. code-block:: pycon
+
+        >>> from playhouse.reflection import print_model
+        >>> print_model(User)
+        user
+          id AUTO PK
+          email TEXT
+          name TEXT
+          dob DATE
+
+        index(es)
+          email UNIQUE
+
+        >>> print_model(Tweet)
+        tweet
+          id AUTO PK
+          user INT FK: User.id
+          title TEXT
+          content TEXT
+          timestamp DATETIME
+          is_published BOOL
+
+        index(es)
+          user_id
+          is_published, timestamp
+
 .. py:function:: print_table_sql(model)
 
     :param Model model: model to print
@@ -3088,7 +3135,32 @@ including :ref:`dataset` and :ref:`pwiz`.
 
     Prints the SQL ``CREATE TABLE`` for the given model class, which may be
     useful for debugging or interactive use. See the :ref:`interactive` section
-    for example usage.
+    for example usage. Note that indexes and constraints are not included in
+    the output of this function.
+
+    Example output:
+
+    .. code-block:: pycon
+
+        >>> from playhouse.reflection import print_table_sql
+        >>> print_table_sql(User)
+        CREATE TABLE IF NOT EXISTS "user" (
+          "id" INTEGER NOT NULL PRIMARY KEY,
+          "email" TEXT NOT NULL,
+          "name" TEXT NOT NULL,
+          "dob" DATE NOT NULL
+        )
+
+        >>> print_table_sql(Tweet)
+        CREATE TABLE IF NOT EXISTS "tweet" (
+          "id" INTEGER NOT NULL PRIMARY KEY,
+          "user_id" INTEGER NOT NULL,
+          "title" TEXT NOT NULL,
+          "content" TEXT NOT NULL,
+          "timestamp" DATETIME NOT NULL,
+          "is_published" INTEGER NOT NULL,
+          FOREIGN KEY ("user_id") REFERENCES "user" ("id")
+        )
 
 .. py:class:: Introspector(metadata[, schema=None])
 
