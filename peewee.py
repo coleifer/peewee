@@ -61,7 +61,7 @@ except ImportError:
         mysql = None
 
 
-__version__ = '3.9.1'
+__version__ = '3.9.2'
 __all__ = [
     'AsIs',
     'AutoField',
@@ -2775,9 +2775,9 @@ class Database(_callable_context_manager):
             self._state.reset()
             with __exception_wrapper__:
                 self._state.set_connection(self._connect())
-                self._initialize_connection(self._state.conn)
                 if self.server_version is None:
                     self._set_server_version(self._state.conn)
+                self._initialize_connection(self._state.conn)
         return True
 
     def _initialize_connection(self, conn):

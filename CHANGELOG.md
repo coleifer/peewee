@@ -7,14 +7,14 @@ https://github.com/coleifer/peewee/releases
 
 ## master
 
-[View commits](https://github.com/coleifer/peewee/compare/3.9.1...master)
+[View commits](https://github.com/coleifer/peewee/compare/3.9.2...master)
 
-## 3.9.1
+## 3.9.1 and 3.9.2
 
 Includes a bugfix for an `AttributeError` that occurs when using MySQL with the
-`MySQLdb` client.
+`MySQLdb` client. The 3.9.2 release includes fixes for a test failure.
 
-[View commits](https://github.com/coleifer/peewee/compare/3.9.0...3.9.1)
+[View commits](https://github.com/coleifer/peewee/compare/3.9.0...3.9.2)
 
 ## 3.9.0
 

@@ -253,6 +253,28 @@ class TestDatabase(DatabaseTestCase):
         assertBatches(12, 12, 1)
         assertBatches(12, 13, 1)
 
+    def test_server_version(self):
+        class FakeDatabase(Database):
+            server_version = None
+            def _connect(self):
+                return 1
+            def _close(self, conn):
+                pass
+            def _set_server_version(self, conn):
+                self.server_version = (1, 33, 7)
+
+        db = FakeDatabase(':memory:')
+        self.assertTrue(db.server_version is None)
+        db.connect()
+        self.assertEqual(db.server_version, (1, 33, 7))
+        db.close()
+        self.assertEqual(db.server_version, (1, 33, 7))
+
+        db.server_version = (1, 2, 3)
+        db.connect()
+        self.assertEqual(db.server_version, (1, 2, 3))
+        db.close()
+
 
 class TestThreadSafety(ModelTestCase):
     nthreads = 4
