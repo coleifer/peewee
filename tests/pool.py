@@ -8,8 +8,13 @@ from peewee import _savepoint
 from peewee import _transaction
 from playhouse.pool import *
 
+from .base import BACKEND
 from .base import BaseTestCase
+from .base import IS_MYSQL
+from .base import IS_POSTGRESQL
+from .base import IS_SQLITE
 from .base import ModelTestCase
+from .base import db_loader
 from .base_models import Register
 
 
@@ -355,3 +360,122 @@ class TestLivePooledDatabase(ModelTestCase):
             pass
         self.database.close()
         self.database.connect()
+
+
+class TestPooledDatabaseIntegration(ModelTestCase):
+    requires = [Register]
+
+    def setUp(self):
+        params = {}
+        if IS_MYSQL:
+            db_class = PooledMySQLDatabase
+        elif IS_POSTGRESQL:
+            db_class = PooledPostgresqlDatabase
+        else:
+            db_class = PooledSqliteDatabase
+            params['check_same_thread'] = False
+        self.database = db_loader(BACKEND, db_class=db_class, **params)
+        super(TestPooledDatabaseIntegration, self).setUp()
+
+    def assertConnections(self, expected):
+        available = len(self.database._connections)
+        in_use = len(self.database._in_use)
+        self.assertEqual(available + in_use, expected,
+                         'expected %s, got: %s available, %s in use'
+                         % (expected, available, in_use))
+
+    def test_pooled_database_integration(self):
+        # Connection should be open from the setup method.
+        self.assertFalse(self.database.is_closed())
+        self.assertConnections(1)
+        self.assertTrue(self.database.close())
+        self.assertTrue(self.database.is_closed())
+        self.assertConnections(1)
+
+        signal = threading.Event()
+        def connect():
+            self.assertTrue(self.database.is_closed())
+            self.assertTrue(self.database.connect())
+            self.assertFalse(self.database.is_closed())
+            signal.wait()
+            self.assertTrue(self.database.close())
+            self.assertTrue(self.database.is_closed())
+
+        # Open connections in 4 separate threads.
+        threads = [threading.Thread(target=connect) for _ in range(4)]
+        for t in threads: t.start()
+
+        while len(self.database._in_use) < 4:
+            time.sleep(.005)
+
+        # Close connections in all 4 threads.
+        signal.set()
+        for t in threads: t.join()
+
+        # Verify that there are 4 connections available in the pool.
+        self.assertConnections(4)
+        self.assertEqual(len(self.database._connections), 4)  # Available.
+        self.assertEqual(len(self.database._in_use), 0)
+
+        # Verify state of the main thread, just a sanity check.
+        self.assertTrue(self.database.is_closed())
+
+        # Opening a connection will pull from the pool.
+        self.assertTrue(self.database.connect())
+        self.assertFalse(self.database.connect(reuse_if_open=True))
+        self.assertConnections(4)
+        self.assertEqual(len(self.database._in_use), 1)
+
+        # Calling close_all() closes everything, including calling thread.
+        self.database.close_all()
+        self.assertConnections(0)
+        self.assertTrue(self.database.is_closed())
+
+    def test_pool_with_models(self):
+        self.database.close()
+        signal = threading.Event()
+
+        def create_obj(i):
+            with self.database.connection_context():
+                with self.database.atomic():
+                    Register.create(value=i)
+                signal.wait()
+
+        # Create 4 objects, one in each thread. The INSERT will be wrapped in a
+        # transaction, and after COMMIT (but while the conn is still open), we
+        # will wait for the signal that all objects were created. This ensures
+        # that all our connections are open concurrently.
+        threads = [threading.Thread(target=create_obj, args=(i,))
+                   for i in range(4)]
+        for t in threads: t.start()
+
+        # Explicitly connect, as the connection is required to verify that all
+        # the objects are present (and that its safe to set the signal).
+        self.assertTrue(self.database.connect())
+        while Register.select().count() != 4:
+            time.sleep(0.005)
+
+        # Signal threads that they can exit now and ensure all exited.
+        signal.set()
+        for t in threads: t.join()
+
+        # Close connection from main thread as well.
+        self.database.close()
+
+        self.assertConnections(5)
+        self.assertEqual(len(self.database._in_use), 0)
+
+        # Cycle through the available connections, running a query on each, and
+        # then manually closing it.
+        for i in range(5):
+            self.assertTrue(self.database.is_closed())
+            self.assertTrue(self.database.connect())
+
+            # Sanity check to verify objects are created.
+            query = Register.select().order_by(Register.value)
+            self.assertEqual([r.value for r in query], [0, 1, 2, 3])
+            self.database.manual_close()
+            self.assertConnections(4 - i)
+
+        self.assertConnections(0)
+        self.assertEqual(len(self.database._in_use), 0)

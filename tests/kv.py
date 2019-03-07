@@ -2,9 +2,7 @@ from peewee import IntegerField
 from playhouse.kv import KeyValue
 
 from .base import DatabaseTestCase
-from .base import IS_POSTGRESQL
 from .base import db
-from .base import skip_if
 
 
 class TestKeyValue(DatabaseTestCase):
