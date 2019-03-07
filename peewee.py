@@ -4912,12 +4912,11 @@ class ManyToManyField(MetaField):
                 ((lhs._meta.name, rhs._meta.name),
                  True),)
 
+        params = {'on_delete': self._on_delete, 'on_update': self._on_update}
         attrs = {
-            lhs._meta.name: ForeignKeyField(lhs, on_delete=self._on_delete,
-                                            on_update=self._on_update),
-            rhs._meta.name: ForeignKeyField(rhs, on_delete=self._on_delete,
-                                            on_update=self._on_update)}
-        attrs['Meta'] = Meta
+            lhs._meta.name: ForeignKeyField(lhs, **params),
+            rhs._meta.name: ForeignKeyField(rhs, **params),
+            'Meta': Meta}
 
         klass_name = '%s%sThrough' % (lhs.__name__, rhs.__name__)
         return type(klass_name, (Model,), attrs)

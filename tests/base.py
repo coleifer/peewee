@@ -228,22 +228,17 @@ def requires_models(*models):
     def decorator(method):
         @wraps(method)
         def inner(self):
-            _db_mapping = {}
-            for model in models:
-                _db_mapping[model] = model._meta.database
-                model._meta.set_database(self.database)
-            self.database.drop_tables(models, safe=True)
-            self.database.create_tables(models)
+            with self.database.bind_ctx(models, False, False):
+                self.database.drop_tables(models, safe=True)
+                self.database.create_tables(models)
 
-            try:
-                method(self)
-            finally:
                 try:
-                    self.database.drop_tables(models)
-                except:
-                    pass
-                for model in models:
-                    model._meta.set_database(_db_mapping[model])
+                    method(self)
+                finally:
+                    try:
+                        self.database.drop_tables(models)
+                    except:
+                        pass
         return inner
     return decorator
 
