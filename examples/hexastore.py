@@ -158,3 +158,11 @@ if __name__ == '__main__':
     results = h.search((X, 'likes', Y), (Y, 'likes', X))
     for result in results:
         print(result['x'], ' <-> ', result['y'])
+
+    print('\nliked by both charlie, huey and mickey?')
+    X = h.v.x
+    results = h.search(('charlie', 'likes', X),
+                       ('huey', 'likes', X),
+                       ('mickey', 'likes', X))
+    for result in results:
+        print(result['x'])
