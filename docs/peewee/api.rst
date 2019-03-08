@@ -1322,7 +1322,7 @@ Query-builder
     :param node: A column-like object.
     :param str direction: ASC or DESC
     :param str collation: Collation name to use for sorting.
-    :param str nulls: Sort nulls (FIRST or LAST).
+    :param str nulls: Sort nulls (FIRST or LAST, Postgres-only).
 
     Represent ordering by a column-like object.
 
