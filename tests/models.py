@@ -3932,3 +3932,37 @@ class TestDatabaseExecuteQuery(ModelTestCase):
         query = User.select().order_by(User.username.desc())
         cursor = self.database.execute(query)
         self.assertEqual([row[1] for row in cursor], ['zaizee', 'huey'])
+
+
+class Datum(TestModel):
+    key = TextField()
+    value = IntegerField(null=True)
+
+class TestNullOrdering(ModelTestCase):
+    requires = [Datum]
+
+    def test_null_ordering(self):
+        values = [('k1', 1), ('ka', None), ('k2', 2), ('kb', None)]
+        Datum.insert_many(values, fields=[Datum.key, Datum.value]).execute()
+
+        def assertOrder(ordering, expected):
+            query = Datum.select().order_by(*ordering)
+            self.assertEqual([d.key for d in query], expected)
+
+        # Ascending order.
+        nulls_last = (Datum.value.asc(nulls='last'), Datum.key)
+        assertOrder(nulls_last, ['k1', 'k2', 'ka', 'kb'])
+
+        nulls_first = (Datum.value.asc(nulls='first'), Datum.key)
+        assertOrder(nulls_first, ['ka', 'kb', 'k1', 'k2'])
+
+        # Descending order.
+        nulls_last = (Datum.value.desc(nulls='last'), Datum.key)
+        assertOrder(nulls_last, ['k2', 'k1', 'ka', 'kb'])
+
+        nulls_first = (Datum.value.desc(nulls='first'), Datum.key)
+        assertOrder(nulls_first, ['ka', 'kb', 'k2', 'k1'])
+
+        # Invalid values.
+        self.assertRaises(ValueError, Datum.value.desc, nulls='bar')
+        self.assertRaises(ValueError, Datum.value.asc, nulls='foo')

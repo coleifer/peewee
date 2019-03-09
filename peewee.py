@@ -1313,15 +1313,30 @@ class Ordering(WrappedNode):
         self.direction = direction
         self.collation = collation
         self.nulls = nulls
+        if nulls and nulls.lower() not in ('first', 'last'):
+            raise ValueError('Ordering nulls= parameter must be "first" or '
+                             '"last", got: %s' % nulls)
 
     def collate(self, collation=None):
         return Ordering(self.node, self.direction, collation)
 
+    def _null_ordering_case(self, nulls):
+        if nulls.lower() == 'last':
+            ifnull, notnull = 1, 0
+        elif nulls.lower() == 'first':
+            ifnull, notnull = 0, 1
+        else:
+            raise ValueError('unsupported value for nulls= ordering.')
+        return Case(None, ((self.node.is_null(), ifnull),), notnull)
+
     def __sql__(self, ctx):
+        if self.nulls and not ctx.state.nulls_ordering:
+            ctx.sql(self._null_ordering_case(self.nulls)).literal(', ')
+
         ctx.sql(self.node).literal(' %s' % self.direction)
         if self.collation:
             ctx.literal(' COLLATE %s' % self.collation)
-        if self.nulls:
+        if self.nulls and ctx.state.nulls_ordering:
             ctx.literal(' NULLS %s' % self.nulls)
         return ctx
 
@@ -2700,6 +2715,7 @@ class Database(_callable_context_manager):
     for_update = False
     index_schema_prefix = False
     limit_max = None
+    nulls_ordering = False
     returning_clause = False
     safe_create_index = True
     safe_drop_index = True
@@ -2859,6 +2875,7 @@ class Database(_callable_context_manager):
             'for_update': self.for_update,
             'index_schema_prefix': self.index_schema_prefix,
             'limit_max': self.limit_max,
+            'nulls_ordering': self.nulls_ordering,
         }
 
     def get_sql_context(self, **context_options):
@@ -3410,6 +3427,7 @@ class PostgresqlDatabase(Database):
     commit_select = True
     compound_select_parentheses = CSQ_PARENTHESES_ALWAYS
     for_update = True
+    nulls_ordering = True
     returning_clause = True
     safe_create_index = False
     sequences = True

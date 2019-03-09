@@ -1246,12 +1246,16 @@ Query-builder
 
         Create a ``CAST`` expression.
 
-    .. py:method:: asc()
+    .. py:method:: asc([collation=None[, nulls=None]])
 
+        :param str collation: Collation name to use for sorting.
+        :param str nulls: Sort nulls (FIRST or LAST).
         :returns: an ascending :py:class:`Ordering` object for the column.
 
-    .. py:method:: desc()
+    .. py:method:: desc([collation=None[, nulls=None]])
 
+        :param str collation: Collation name to use for sorting.
+        :param str nulls: Sort nulls (FIRST or LAST).
         :returns: an descending :py:class:`Ordering` object for the column.
 
     .. py:method:: __invert__()
@@ -1322,9 +1326,13 @@ Query-builder
     :param node: A column-like object.
     :param str direction: ASC or DESC
     :param str collation: Collation name to use for sorting.
-    :param str nulls: Sort nulls (FIRST or LAST, Postgres-only).
+    :param str nulls: Sort nulls (FIRST or LAST).
 
     Represent ordering by a column-like object.
+
+    Postgresql supports a non-standard clause ("NULLS FIRST/LAST"). Peewee will
+    automatically use an equivalent ``CASE`` statement for databases that do
+    not support this (Sqlite / MySQL).
 
     .. py:method:: collate([collation=None])
 
