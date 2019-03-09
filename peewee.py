@@ -4182,6 +4182,9 @@ class Field(ColumnBase):
             accum.extend(self.constraints)
         if self.collation:
             accum.append(SQL('COLLATE %s' % self.collation))
+        if isinstance(self.model._meta.database, MySQLDatabase):
+            if self.help_text:
+                accum.append(SQL("COMMENT '%s'" % self.help_text))
         return NodeList(accum)
 
 
