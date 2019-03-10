@@ -5529,6 +5529,10 @@ class Metadata(object):
         self.model._schema._database = database
         del self.table
 
+    def set_table_name(self, table_name):
+        self.table_name = table_name
+        del self.table
+
 
 class SubclassAwareMetadata(Metadata):
     models = []
