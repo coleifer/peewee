@@ -147,6 +147,24 @@ class TestDatabase(DatabaseTestCase):
         conn = self.database.connection()
         self.assertFalse(self.database.is_closed())
 
+    def test_db_context_manager(self):
+        self.database.close()
+        self.assertTrue(self.database.is_closed())
+
+        with self.database:
+            self.assertFalse(self.database.is_closed())
+
+        self.assertTrue(self.database.is_closed())
+        self.database.connect()
+        self.assertFalse(self.database.is_closed())
+
+        # Enter context with an already-open db.
+        with self.database:
+            self.assertFalse(self.database.is_closed())
+
+        # Closed after exit.
+        self.assertTrue(self.database.is_closed())
+
     def test_connection_initialization(self):
         state = {'count': 0}
         class TestDatabase(SqliteDatabase):
