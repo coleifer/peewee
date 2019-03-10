@@ -3507,6 +3507,27 @@ Model
         Traverse the model graph and return a list of 3-tuples, consisting of
         ``(foreign key field, model class, is_backref)``.
 
+    .. py:method:: set_database(database)
+
+        :param Database database: database object to bind Model to.
+
+        Bind the model class to the given :py:class:`Database` instance.
+
+        .. warning::
+            This API should not need to be used. Instead, to change a
+            :py:class:`Model` database at run-time, use one of the following:
+
+            * :py:meth:`Model.bind`
+            * :py:meth:`Model.bind_ctx` (bind for scope of a context manager).
+            * :py:meth:`Database.bind`
+            * :py:meth:`Database.bind_ctx`
+
+    .. py:method:: set_table_name(table_name)
+
+        :param str table_name: table name to bind Model to.
+
+        Bind the model class to the given table name at run-time.
+
 
 .. py:class:: SubclassAwareMetadata
 
