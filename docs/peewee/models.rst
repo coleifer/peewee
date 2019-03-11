@@ -110,7 +110,8 @@ an example:
 
 In the above example, because none of the fields are initialized with
 ``primary_key=True``, an auto-incrementing primary key will automatically be
-created and named "id".
+created and named "id". Peewee uses :py:class:`AutoField` to signify an
+auto-incrementing integer primary key, which implies ``primary_key=True``.
 
 There is one special type of field, :py:class:`ForeignKeyField`, which allows
 you to represent foreign-key relationships between models in an intuitive way:
@@ -149,11 +150,11 @@ Field types table
 =====================   =================   =================   =================
 Field Type              Sqlite              Postgresql          MySQL
 =====================   =================   =================   =================
+``AutoField``           integer             serial              integer
+``BigAutoField``        integer             bigserial           bigint
 ``IntegerField``        integer             integer             integer
 ``BigIntegerField``     integer             bigint              bigint
 ``SmallIntegerField``   integer             smallint            smallint
-``AutoField``           integer             serial              integer
-``BigAutoField``        integer             bigserial           bigint
 ``IdentityField``       not supported       int identity        not supported
 ``FloatField``          real                real                real
 ``DoubleField``         real                double precision    double precision
@@ -1010,8 +1011,76 @@ You can also implement ``CHECK`` constraints at the table level:
 
 .. _non_integer_primary_keys:
 
-Non-integer Primary Keys, Composite Keys and other Tricks
----------------------------------------------------------
+Primary Keys, Composite Keys and other Tricks
+---------------------------------------------
+
+The :py:class:`AutoField` is used to identify an auto-incrementing integer
+primary key. If you do not specify a primary key, Peewee will automatically
+create an auto-incrementing primary key named "id".
+
+To specify an auto-incrementing ID using a different field name, you can write:
+
+.. code-block:: python
+
+    class Event(Model):
+        event_id = AutoField()  # Event.event_id will be auto-incrementing PK.
+        name = CharField()
+        timestamp = DateTimeField(default=datetime.datetime.now)
+        metadata = BlobField()
+
+You can identify a different field as the primary key, in which case an "id"
+column will not be created. In this example we will use a person's email
+address as the primary key:
+
+.. code-block:: python
+
+    class Person(Model):
+        email = CharField(primary_key=True)
+        name = TextField()
+        dob = DateField()
+
+.. warning::
+    I frequently see people write the following, expecting an auto-incrementing
+    integer primary key:
+
+    .. code-block:: python
+
+        class MyModel(Model):
+            id = IntegerField(primary_key=True)
+
+    Peewee understands the above model declaration as a model with an integer
+    primary key, but the value of that ID is determined by the application. To
+    create an auto-incrementing integer primary key, you would instead write:
+
+    .. code-block:: python
+
+        class MyModel(Model):
+            id = AutoField()  # primary_key=True is implied.
+
+Composite primary keys can be declared using :py:class:`CompositeKey`. Note
+that doing this may cause issues with :py:class:`ForeignKeyField`, as Peewee
+does not support the concept of a "composite foreign-key". As such, I've found
+it only advisable to use composite primary keys in a handful of situations,
+such as trivial many-to-many junction tables:
+
+.. code-block:: python
+
+    class Image(Model):
+        filename = TextField()
+        mimetype = CharField()
+
+    class Tag(Model):
+        label = CharField()
+
+    class ImageTag(Model):  # Many-to-many relationship.
+        image = ForeignKeyField(Image)
+        tag = ForeignKeyField(Tag)
+
+        class Meta:
+            primary_key = CompositeKey('image', 'tag')
+
+In the extremely rare case you wish to declare a model with *no* primary key,
+you can specify ``primary_key = False`` in the model ``Meta`` options.
 
 Non-integer primary keys
 ^^^^^^^^^^^^^^^^^^^^^^^^
