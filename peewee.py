@@ -4822,7 +4822,8 @@ class DeferredForeignKey(Field):
 
     @staticmethod
     def resolve(model_cls):
-        unresolved = list(DeferredForeignKey._unresolved)
+        unresolved = sorted(DeferredForeignKey._unresolved,
+                            key=operator.attrgetter('_order'))
         for dr in unresolved:
             if dr.rel_model_name == model_cls.__name__.lower():
                 dr.set_model(model_cls)

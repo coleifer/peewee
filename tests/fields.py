@@ -371,6 +371,52 @@ class TestDeferredForeignKey(ModelTestCase):
         self.assertEqual(m2_db.m1.name, 'm1')
 
 
+class TestDeferredForeignKeyResolution(ModelTestCase):
+    def test_deferred_foreign_key_resolution(self):
+        class Base(Model):
+            class Meta:
+                database = get_in_memory_db()
+
+        class Photo(Base):
+            album = DeferredForeignKey('Album', column_name='id_album',
+                                       null=False, backref='pictures')
+            alt_album = DeferredForeignKey('Album', column_name='id_Alt_album',
+                                           field='alt_id', backref='alt_pix',
+                                           null=True)
+
+        class Album(Base):
+            name = TextField()
+            alt_id = IntegerField(column_name='_Alt_id')
+
+        self.assertTrue(Photo.album.rel_model is Album)
+        self.assertTrue(Photo.album.rel_field is Album.id)
+        self.assertEqual(Photo.album.column_name, 'id_album')
+        self.assertFalse(Photo.album.null)
+
+        self.assertTrue(Photo.alt_album.rel_model is Album)
+        self.assertTrue(Photo.alt_album.rel_field is Album.alt_id)
+        self.assertEqual(Photo.alt_album.column_name, 'id_Alt_album')
+        self.assertTrue(Photo.alt_album.null)
+
+        self.assertSQL(Photo._schema._create_table(), (
+            'CREATE TABLE IF NOT EXISTS "photo" ('
+            '"id" INTEGER NOT NULL PRIMARY KEY, '
+            '"id_album" INTEGER NOT NULL, '
+            '"id_Alt_album" INTEGER)'), [])
+
+        self.assertSQL(Photo._schema._create_foreign_key(Photo.album), (
+            'ALTER TABLE "photo" ADD CONSTRAINT "fk_photo_id_album_refs_album"'
+            ' FOREIGN KEY ("id_album") REFERENCES "album" ("id")'))
+        self.assertSQL(Photo._schema._create_foreign_key(Photo.alt_album), (
+            'ALTER TABLE "photo" ADD CONSTRAINT '
+            '"fk_photo_id_Alt_album_refs_album"'
+            ' FOREIGN KEY ("id_Alt_album") REFERENCES "album" ("_Alt_id")'))
+
+        self.assertSQL(Photo.select(), (
+            'SELECT "t1"."id", "t1"."id_album", "t1"."id_Alt_album" '
+            'FROM "photo" AS "t1"'), [])
+
+
 class Composite(TestModel):
     first = CharField()
     last = CharField()
