@@ -1543,6 +1543,19 @@ class TestOnConflictPostgresql(BaseTestCase):
         with self.assertRaisesCtx(ValueError):
             self.database.get_sql_context().parse(query)
 
+    def test_conflict_update_excluded(self):
+        KV = Table('kv', ('key', 'value', 'extra'), _database=self.database)
+
+        query = (KV.insert(key='k1', value='v1', extra=1)
+                 .on_conflict(conflict_target=(KV.key, KV.value),
+                              update={KV.extra: EXCLUDED.extra + 2},
+                              where=(EXCLUDED.extra < KV.extra)))
+        self.assertSQL(query, (
+            'INSERT INTO "kv" ("extra", "key", "value") VALUES (?, ?, ?) '
+            'ON CONFLICT ("key", "value") DO UPDATE '
+            'SET "extra" = (EXCLUDED."extra" + ?) '
+            'WHERE (EXCLUDED."extra" < "kv"."extra")'), [1, 'k1', 'v1', 2])
+
     def test_conflict_target_or_constraint(self):
         KV = Table('kv', ('key', 'value', 'extra'), _database=self.database)
 

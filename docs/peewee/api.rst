@@ -1669,7 +1669,7 @@ Query-builder
 
     :param str action: Action to take when resolving conflict.
     :param update: A dictionary mapping column to new value.
-    :param preserve: A list of columns whose values should be preserved from the original INSERT.
+    :param preserve: A list of columns whose values should be preserved from the original INSERT. See also :py:class:`EXCLUDED`.
     :param where: Expression to restrict the conflict resolution.
     :param conflict_target: Column(s) that comprise the constraint.
     :param conflict_where: Expressions needed to match the constraint target if it is a partial index (index with a WHERE clause).
@@ -1711,6 +1711,44 @@ Query-builder
 
         :param str constraint: Name of constraints to use as target for
             conflict resolution. Currently only supported by Postgres.
+
+
+.. py:class:: EXCLUDED()
+
+    Helper object that exposes the ``EXCLUDED`` namespace that is used with
+    ``INSERT ... ON CONFLICT`` to reference values in the conflicting data.
+    This is a "magic" helper, such that one uses it by accessing attributes on
+    it that correspond to a particular column.
+
+    Example:
+
+    .. code-block:: python
+
+        class KV(Model):
+            key = CharField(unique=True)
+            value = IntegerField()
+
+        # Create one row.
+        KV.create(key='k1', value=1)
+
+        # Demonstrate usage of EXCLUDED.
+        # Here we will attempt to insert a new value for a given key. If that
+        # key already exists, then we will update its value with the *sum* of its
+        # original value and the value we attempted to insert -- provided that
+        # the new value is larger than the original value.
+        query = (KV.insert(key='k1', value=10)
+                 .on_conflict(conflict_target=[KV.key],
+                              update={KV.value: KV.value + EXCLUDED.value},
+                              where=(EXCLUDED.value > KV.value)))
+
+        # Executing the above query will result in the following data being
+        # present in the "kv" table:
+        # (key='k1', value=11)
+        query.execute()
+
+        # If we attempted to execute the query *again*, then nothing would be
+        # updated, as the new value (10) is now less than the value in the
+        # original row (11).
 
 
 .. py:class:: BaseQuery()
@@ -2439,7 +2477,7 @@ Query-builder
         Specify the parameters for an :py:class:`OnConflict` clause to use for
         conflict resolution.
 
-        Example:
+        Examples:
 
         .. code-block:: python
 
@@ -2463,6 +2501,36 @@ Query-builder
                               update={User.login_count: User.login_count + 1})
                           .execute())
                 return userid
+
+        Example using the special :py:class:`EXCLUDED` namespace:
+
+        .. code-block:: python
+
+            class KV(Model):
+                key = CharField(unique=True)
+                value = IntegerField()
+
+            # Create one row.
+            KV.create(key='k1', value=1)
+
+            # Demonstrate usage of EXCLUDED.
+            # Here we will attempt to insert a new value for a given key. If that
+            # key already exists, then we will update its value with the *sum* of its
+            # original value and the value we attempted to insert -- provided that
+            # the new value is larger than the original value.
+            query = (KV.insert(key='k1', value=10)
+                     .on_conflict(conflict_target=[KV.key],
+                                  update={KV.value: KV.value + EXCLUDED.value},
+                                  where=(EXCLUDED.value > KV.value)))
+
+            # Executing the above query will result in the following data being
+            # present in the "kv" table:
+            # (key='k1', value=11)
+            query.execute()
+
+            # If we attempted to execute the query *again*, then nothing would be
+            # updated, as the new value (10) is now less than the value in the
+            # original row (11).
 
 
 .. py:class:: Delete()

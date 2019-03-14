@@ -94,6 +94,7 @@ __all__ = [
     'DoesNotExist',
     'DoubleField',
     'DQ',
+    'EXCLUDED',
     'Field',
     'FixedCharField',
     'FloatField',
@@ -1607,6 +1608,27 @@ def CommaNodeList(nodes):
 
 def EnclosedNodeList(nodes):
     return NodeList(nodes, ', ', True)
+
+
+class _Namespace(Node):
+    __slots__ = ('_name',)
+    def __init__(self, name):
+        self._name = name
+    def __getattr__(self, attr):
+        return NamespaceAttribute(self, attr)
+    __getitem__ = __getattr__
+
+class NamespaceAttribute(ColumnBase):
+    def __init__(self, namespace, attribute):
+        self._namespace = namespace
+        self._attribute = attribute
+
+    def __sql__(self, ctx):
+        return (ctx
+                .literal(self._namespace._name + '.')
+                .sql(Entity(self._attribute)))
+
+EXCLUDED = _Namespace('EXCLUDED')
 
 
 class DQ(ColumnBase):

@@ -2969,6 +2969,11 @@ def requires_upsert(m):
     return skip_unless(IS_SQLITE_24 or IS_POSTGRESQL, 'requires upsert')(m)
 
 
+class KV(TestModel):
+    key = CharField(unique=True)
+    value = IntegerField()
+
+
 class PGOnConflictTests(OnConflictTests):
     @requires_upsert
     def test_update(self):
@@ -3064,6 +3069,38 @@ class PGOnConflictTests(OnConflictTests):
         obj = OCTest.get()
         self.assertEqual(obj.a, 'foo')
         self.assertEqual(obj.b, 3)
+
+    @requires_upsert
+    @requires_models(Emp)  # Has unique on first/last, unique on empno.
+    def test_conflict_update_excluded(self):
+        e1 = Emp.create(first='huey', last='c', empno='10')
+        e2 = Emp.create(first='zaizee', last='c', empno='20')
+
+        res = (Emp.insert(first='huey', last='c', empno='30')
+               .on_conflict(conflict_target=(Emp.first, Emp.last),
+                            update={Emp.empno: Emp.empno + EXCLUDED.empno},
+                            where=(EXCLUDED.empno != Emp.empno))
+               .execute())
+
+        data = sorted(Emp.select(Emp.first, Emp.last, Emp.empno).tuples())
+        self.assertEqual(data, [('huey', 'c', '1030'), ('zaizee', 'c', '20')])
+
+    @requires_upsert
+    @requires_models(KV)
+    def test_conflict_update_excluded2(self):
+        KV.create(key='k1', value=1)
+
+        query = (KV.insert(key='k1', value=10)
+                 .on_conflict(conflict_target=[KV.key],
+                              update={KV.value: KV.value + EXCLUDED.value},
+                              where=(EXCLUDED.value > KV.value)))
+        query.execute()
+        self.assertEqual(KV.select(KV.key, KV.value).tuples()[:], [('k1', 11)])
+
+        # Running it again will have no effect this time, since the new value
+        # (10) is not greater than the pre-existing row value (11).
+        query.execute()
+        self.assertEqual(KV.select(KV.key, KV.value).tuples()[:], [('k1', 11)])
 
     @requires_upsert
     @requires_models(UKVP)

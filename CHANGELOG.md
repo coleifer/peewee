@@ -7,6 +7,19 @@ https://github.com/coleifer/peewee/releases
 
 ## master
 
+* Added cross-database support for `NULLS FIRST/LAST` when specifying the
+  ordering for a query. Previously this was only supported for Postgres. Peewee
+  will now generate an equivalent `CASE` statement for Sqlite and MySQL.
+* Added [EXCLUDED](http://docs.peewee-orm.com/en/latest/peewee/api.html#EXCLUDED)
+  helper for referring to the `EXCLUDED` namespace used with `INSERT...ON CONFLICT`
+  queries, when referencing values in the conflicting row data.
+* Added helper method to the model `Metadata` class for setting the table name
+  at run-time. Setting the `Model._meta.table_name` directly may have appeared
+  to work in some situations, but could lead to subtle bugs. The new API is
+  `Model._meta.set_table_name()`.
+* Enhanced helpers for working with Peewee interactively, [see doc](http://docs.peewee-orm.com/en/latest/peewee/interactive.html).
+* New example script implementing a [hexastore](https://github.com/coleifer/peewee/blob/master/examples/hexastore.py).
+
 [View commits](https://github.com/coleifer/peewee/compare/3.9.2...master)
 
 ## 3.9.1 and 3.9.2

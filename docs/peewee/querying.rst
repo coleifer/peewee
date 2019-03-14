@@ -433,6 +433,39 @@ column will be updated, and no duplicate rows will be created.
     The main difference between MySQL and Postgresql/SQLite is that Postgresql
     and SQLite require that you specify a ``conflict_target``.
 
+Here is a more advanced (if contrived) example using the :py:class:`EXCLUDED`
+namespace. The :py:class:`EXCLUDED` helper allows us to reference values in the
+conflicting data. For our example, we'll assume a simple table mapping a unique
+key (string) to a value (integer):
+
+.. code-block:: python
+
+    class KV(Model):
+        key = CharField(unique=True)
+        value = IntegerField()
+
+    # Create one row.
+    KV.create(key='k1', value=1)
+
+    # Demonstrate usage of EXCLUDED.
+    # Here we will attempt to insert a new value for a given key. If that
+    # key already exists, then we will update its value with the *sum* of its
+    # original value and the value we attempted to insert -- provided that
+    # the new value is larger than the original value.
+    query = (KV.insert(key='k1', value=10)
+             .on_conflict(conflict_target=[KV.key],
+                          update={KV.value: KV.value + EXCLUDED.value},
+                          where=(EXCLUDED.value > KV.value)))
+
+    # Executing the above query will result in the following data being
+    # present in the "kv" table:
+    # (key='k1', value=11)
+    query.execute()
+
+    # If we attempted to execute the query *again*, then nothing would be
+    # updated, as the new value (10) is now less than the value in the
+    # original row (11).
+
 For more information, see :py:meth:`Insert.on_conflict` and
 :py:class:`OnConflict`.
 
