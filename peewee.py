@@ -4809,7 +4809,9 @@ class DeferredForeignKey(Field):
         self.field_kwargs = kwargs
         self.rel_model_name = rel_model_name.lower()
         DeferredForeignKey._unresolved.add(self)
-        super(DeferredForeignKey, self).__init__()
+        super(DeferredForeignKey, self).__init__(
+            column_name=kwargs.get('column_name'),
+            null=kwargs.get('null'))
 
     __hash__ = object.__hash__
 

@@ -372,6 +372,14 @@ class TestDeferredForeignKey(ModelTestCase):
 
 
 class TestDeferredForeignKeyResolution(ModelTestCase):
+    def test_unresolved_deferred_fk(self):
+        class Photo(Model):
+            album = DeferredForeignKey('Album', column_name='id_album')
+            class Meta:
+                database = get_in_memory_db()
+        self.assertSQL(Photo.select(), (
+            'SELECT "t1"."id", "t1"."id_album" FROM "photo" AS "t1"'), [])
+
     def test_deferred_foreign_key_resolution(self):
         class Base(Model):
             class Meta:
@@ -415,6 +423,14 @@ class TestDeferredForeignKeyResolution(ModelTestCase):
         self.assertSQL(Photo.select(), (
             'SELECT "t1"."id", "t1"."id_album", "t1"."id_Alt_album" '
             'FROM "photo" AS "t1"'), [])
+
+        a = Album(id=3, alt_id=4)
+        self.assertSQL(a.pictures, (
+            'SELECT "t1"."id", "t1"."id_album", "t1"."id_Alt_album" '
+            'FROM "photo" AS "t1" WHERE ("t1"."id_album" = ?)'), [3])
+        self.assertSQL(a.alt_pix, (
+            'SELECT "t1"."id", "t1"."id_album", "t1"."id_Alt_album" '
+            'FROM "photo" AS "t1" WHERE ("t1"."id_Alt_album" = ?)'), [4])
 
 
 class Composite(TestModel):
