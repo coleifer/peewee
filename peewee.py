@@ -456,6 +456,8 @@ class DatabaseProxy(Proxy):
 
 
 class AliasManager(object):
+    __slots__ = ('_counter', '_current_index', '_mapping')
+
     def __init__(self):
         # A list of dictionaries containing mappings at various depths.
         self._counter = 0
