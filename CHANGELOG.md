@@ -7,6 +7,10 @@ https://github.com/coleifer/peewee/releases
 
 ## master
 
+[View commits](https://github.com/coleifer/peewee/compare/3.9.3...master)
+
+## 3.9.3
+
 * Added cross-database support for `NULLS FIRST/LAST` when specifying the
   ordering for a query. Previously this was only supported for Postgres. Peewee
   will now generate an equivalent `CASE` statement for Sqlite and MySQL.
@@ -18,9 +22,11 @@ https://github.com/coleifer/peewee/releases
   to work in some situations, but could lead to subtle bugs. The new API is
   `Model._meta.set_table_name()`.
 * Enhanced helpers for working with Peewee interactively, [see doc](http://docs.peewee-orm.com/en/latest/peewee/interactive.html).
+* Fix cache invalidation bug in `DataSet` that was originally reported on the
+  sqlite-web project.
 * New example script implementing a [hexastore](https://github.com/coleifer/peewee/blob/master/examples/hexastore.py).
 
-[View commits](https://github.com/coleifer/peewee/compare/3.9.2...master)
+[View commits](https://github.com/coleifer/peewee/compare/3.9.2...3.9.3)
 
 ## 3.9.1 and 3.9.2
 

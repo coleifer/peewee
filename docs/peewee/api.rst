@@ -1713,7 +1713,7 @@ Query-builder
             conflict resolution. Currently only supported by Postgres.
 
 
-.. py:class:: EXCLUDED()
+.. py:class:: EXCLUDED
 
     Helper object that exposes the ``EXCLUDED`` namespace that is used with
     ``INSERT ... ON CONFLICT`` to reference values in the conflicting data.
