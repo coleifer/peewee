@@ -402,7 +402,10 @@ class SqliteMetadata(Metadata):
             field_class = CharField
         else:
             column_type = re.sub('\(.+\)', '', raw_column_type)
-            field_class = self.column_map.get(column_type, UnknownField)
+            if column_type == '':
+                field_class = BareField
+            else:
+                field_class = self.column_map.get(column_type, UnknownField)
         return field_class
 
     def get_column_types(self, table, schema=None):
