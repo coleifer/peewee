@@ -4059,6 +4059,7 @@ class TestManyToManyJoining(ModelTestCase):
                             on=(Attendance.course == courses.c.id)))
         self.assertQuery(query)
 
+    @skip_if(IS_MYSQL)
     def test_join_where_subquery(self):
         courses = Course.select().order_by(Course.id).limit(5)
         query = (Attendance
