@@ -4003,3 +4003,68 @@ class TestNullOrdering(ModelTestCase):
         # Invalid values.
         self.assertRaises(ValueError, Datum.value.desc, nulls='bar')
         self.assertRaises(ValueError, Datum.value.asc, nulls='foo')
+
+
+class Student(TestModel):
+    name = TextField()
+
+class Course(TestModel):
+    name = TextField()
+
+class Attendance(TestModel):
+    student = ForeignKeyField(Student)
+    course = ForeignKeyField(Course)
+
+
+class TestManyToManyJoining(ModelTestCase):
+    requires = [Student, Course, Attendance]
+
+    def setUp(self):
+        super(TestManyToManyJoining, self).setUp()
+
+        data = (
+            ('charlie', ('eng101', 'cs101', 'cs111')),
+            ('huey', ('cats1', 'cats2', 'cats3')),
+            ('zaizee', ('cats2', 'cats3')))
+        c = {}
+        with self.database.atomic():
+            for name, courses in data:
+                student = Student.create(name=name)
+                for course in courses:
+                    if course not in c:
+                        c[course] = Course.create(name=course)
+                    Attendance.create(student=student, course=c[course])
+
+    def assertQuery(self, query):
+        with self.assertQueryCount(1):
+            query = query.order_by(Attendance.id)
+            results = [(a.student.name, a.course.name) for a in query]
+            self.assertEqual(results, [
+                ('charlie', 'eng101'),
+                ('charlie', 'cs101'),
+                ('charlie', 'cs111'),
+                ('huey', 'cats1'),
+                ('huey', 'cats2'),
+                ('zaizee', 'cats2')])
+
+    def test_join_subquery(self):
+        courses = (Course
+                   .select(Course.id, Course.name)
+                   .order_by(Course.id)
+                   .limit(5))
+        query = (Attendance
+                 .select(Attendance, Student, courses.c.name)
+                 .join_from(Attendance, Student)
+                 .join_from(Attendance, courses,
+                            on=(Attendance.course == courses.c.id)))
+        self.assertQuery(query)
+
+    @skip_if(IS_MYSQL)
+    def test_join_where_subquery(self):
+        courses = Course.select().order_by(Course.id).limit(5)
+        query = (Attendance
+                 .select(Attendance, Student, Course)
+                 .join_from(Attendance, Student)
+                 .join_from(Attendance, Course)
+                 .where(Attendance.course.in_(courses)))
+        self.assertQuery(query)

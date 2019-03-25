@@ -125,6 +125,15 @@ class TestDataSet(ModelTestCase):
         self.assertEqual(sorted(Foo.columns), ['data', 'id'])
         self.assertTrue('foo' in self.dataset._models)
 
+        self.dataset._models['foo'].drop_table()
+        self.dataset.update_cache()
+        self.assertTrue('foo' not in self.database.get_tables())
+
+        # This will create the table again.
+        Foo = self.dataset['foo']
+        self.assertTrue('foo' in self.database.get_tables())
+        self.assertEqual(Foo.columns, ['id'])
+
     def assertQuery(self, query, expected, sort_key='id'):
         key = operator.itemgetter(sort_key)
         self.assertEqual(

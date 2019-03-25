@@ -10,16 +10,21 @@ from peewee import print_
 from peewee import __version__ as peewee_version
 from playhouse.reflection import *
 
-TEMPLATE = """from peewee import *%s
 
-database = %s('%s', **%s)
+HEADER = """from peewee import *%s
 
-class UnknownField(object):
-    def __init__(self, *_, **__): pass
+database = %s('%s'%s)
+"""
 
+BASE_MODEL = """\
 class BaseModel(Model):
     class Meta:
         database = database
+"""
+
+UNKNOWN_FIELD = """\
+class UnknownField(object):
+    def __init__(self, *_, **__): pass
 """
 
 DATABASE_ALIASES = {
@@ -44,15 +49,22 @@ def make_introspector(database_type, database_name, **kwargs):
     return Introspector.from_database(db, schema=schema)
 
 def print_models(introspector, tables=None, preserve_order=False,
-                 include_views=False):
+                 include_views=False, ignore_unknown=False):
     database = introspector.introspect(table_names=tables,
                                        include_views=include_views)
 
-    print_(TEMPLATE % (
+    db_kwargs = introspector.get_database_kwargs()
+    header = HEADER % (
         introspector.get_additional_imports(),
         introspector.get_database_class().__name__,
         introspector.get_database_name(),
-        repr(introspector.get_database_kwargs())))
+        ', **%s' % repr(db_kwargs) if db_kwargs else '')
+    print_(header)
+
+    if not ignore_unknown:
+        print_(UNKNOWN_FIELD)
+
+    print_(BASE_MODEL)
 
     def _print_table(table, seen, accum=None):
         accum = accum or []
@@ -90,7 +102,12 @@ def print_models(introspector, tables=None, preserve_order=False,
                 # mark the columns as being primary keys.
                 column.primary_key = False
 
-            print_('    %s' % column.get_field())
+            is_unknown = column.field_class is UnknownField
+            if is_unknown and ignore_unknown:
+                disp = '%s - %s' % (column.name, column.raw_column_type or '?')
+                print_('    # %s' % disp)
+            else:
+                print_('    %s' % column.get_field())
 
         print_('')
         print_('    class Meta:')
@@ -161,6 +178,8 @@ def get_option_parser():
              'generated file.'))
     ao('-o', '--preserve-order', action='store_true', dest='preserve_order',
        help='Model definition column ordering matches source table.')
+    ao('-I', '--ignore-unknown', action='store_true', dest='ignore_unknown',
+       help='Ignore fields whose type cannot be determined.')
     return parser
 
 def get_connect_kwargs(options):
@@ -195,4 +214,5 @@ if __name__ == '__main__':
         cmd_line = ' '.join(raw_argv[1:])
         print_header(cmd_line, introspector)
 
-    print_models(introspector, tables, options.preserve_order, options.views)
+    print_models(introspector, tables, options.preserve_order, options.views,
+                 options.ignore_unknown)

@@ -1713,7 +1713,7 @@ Query-builder
             conflict resolution. Currently only supported by Postgres.
 
 
-.. py:class:: EXCLUDED()
+.. py:class:: EXCLUDED
 
     Helper object that exposes the ``EXCLUDED`` namespace that is used with
     ``INSERT ... ON CONFLICT`` to reference values in the conflicting data.
@@ -3143,6 +3143,33 @@ Fields
     In the above example, when the ``Wife`` model is declared, the foreign-key
     ``Husband.wife`` is automatically resolved and turned into a regular
     :py:class:`ForeignKeyField`.
+
+    .. warning::
+        :py:class:`DeferredForeignKey` references are resolved when model
+        classes are declared and created. This means that if you declare a
+        :py:class:`DeferredForeignKey` to a model class that has already been
+        imported and created, the deferred foreign key instance will never be
+        resolved. For example:
+
+        .. code-block:: python
+
+            class User(Model):
+                username = TextField()
+
+            class Tweet(Model):
+                # This will never actually be resolved, because the User
+                # model has already been declared.
+                user = DeferredForeignKey('user', backref='tweets')
+                content = TextField()
+
+        In cases like these you should use the regular
+        :py:class:`ForeignKeyField` *or* you can manually resolve deferred
+        foreign keys like so:
+
+        .. code-block:: python
+
+            # Tweet.user will be resolved into a ForeignKeyField:
+            DeferredForeignKey.resolve(User)
 
 .. py:class:: ManyToManyField(model[, backref=None[, through_model=None[, on_delete=None[, on_update=None]]]])
 

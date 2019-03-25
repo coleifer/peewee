@@ -98,6 +98,7 @@ class DataSet(object):
                 dependencies.extend(self.get_table_dependencies(table))
         else:
             dependencies = None  # Update all tables.
+            self._models = {}
         updated = self._introspector.generate_models(
             skip_invalid=True,
             table_names=dependencies,
