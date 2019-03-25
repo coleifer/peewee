@@ -1043,7 +1043,7 @@ inserting or updating the ``search_content`` field:
         content=content,
         search_content=fn.to_tsvector(content))
 
-To perform a full-text search, use :py:class:`TSVectorField.match`:
+To perform a full-text search, use :py:meth:`TSVectorField.match`:
 
 .. code-block:: python
 
