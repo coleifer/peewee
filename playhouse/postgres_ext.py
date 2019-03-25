@@ -343,9 +343,10 @@ class TSVectorField(IndexedFieldMixin, TextField):
     field_type = 'TSVECTOR'
     __hash__ = Field.__hash__
 
-    def match(self, query, language=None):
+    def match(self, query, language=None, plain=False):
         params = (language, query) if language is not None else (query,)
-        return Expression(self, TS_MATCH, fn.to_tsquery(*params))
+        func = fn.plainto_tsquery if plain else fn.to_tsquery
+        return Expression(self, TS_MATCH, func(*params))
 
 
 def Match(field, query, language=None):

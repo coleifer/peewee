@@ -1030,6 +1030,9 @@ dedicated column for storing ``tsvector`` data:
         content = TextField()
         search_content = TSVectorField()
 
+.. note::
+    :py:class:`TSVectorField`, will automatically be created with a GIN index.
+
 You will need to explicitly convert the incoming text data to ``tsvector`` when
 inserting or updating the ``search_content`` field:
 
@@ -1040,7 +1043,14 @@ inserting or updating the ``search_content`` field:
         content=content,
         search_content=fn.to_tsvector(content))
 
-.. note:: If you are using the :py:class:`TSVectorField`, it will automatically be created with a GIN index.
+To perform a full-text search, use :py:class:`TSVectorField.match`:
+
+.. code-block:: python
+
+    terms = 'python & (sqlite | postgres)'
+    results = Blog.select().where(Blog.search_content.match(terms))
+
+For more information, see the `Postgres full-text search docs <https://www.postgresql.org/docs/current/textsearch.html>`_.
 
 
 postgres_ext API notes
@@ -1555,6 +1565,21 @@ postgres_ext API notes
           blog_entry = Blog.create(
               content=content,
               search_content=fn.to_tsvector(content))  # Note `to_tsvector()`.
+
+    .. py:method:: match(query[, language=None[, plain=False]])
+
+        :param str query: the full-text search query.
+        :param str language: language name (optional).
+        :param bool plain: parse search query using plain (simple) parser.
+        :returns: an expression representing full-text search/match.
+
+        Example:
+
+        .. code-block:: python
+
+            # Perform a search using the "match" method.
+            terms = 'python & (sqlite | postgres)'
+            results = Blog.select().where(Blog.search_content.match(terms))
 
 
 .. _mysql_ext:

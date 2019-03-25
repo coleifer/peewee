@@ -461,6 +461,13 @@ class TestTSVectorField(ModelTestCase):
         self.assertMessages(M('god | things'), [1, 2, 4])
         self.assertMessages(M('god & things'), [])
 
+        # Using the plain parser we cannot express "OR", but individual term
+        # match works like we expect and multi-term is AND-ed together.
+        self.assertMessages(M('god | things', plain=True), [])
+        self.assertMessages(M('god', plain=True), [1])
+        self.assertMessages(M('thing', plain=True), [2, 4])
+        self.assertMessages(M('faith things', plain=True), [2, 4])
+
 
 class BaseJsonFieldTestCase(object):
     M = None  # Subclasses must define this.
