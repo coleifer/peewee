@@ -1042,6 +1042,14 @@ inserting or updating the ``search_content`` field:
 
 .. note:: If you are using the :py:class:`TSVectorField`, it will automatically be created with a GIN index.
 
+To search a ``tsvector`` field, you can use its match method:
+
+.. code-block:: python
+
+    query = Blog.select().where(cls.search_content.match(query, "peewee"))
+
+Alternatively, you can use Postgres's more permissive ``plainto_tsquery`` by passing ``use_plain=True``.
+
 
 postgres_ext API notes
 ^^^^^^^^^^^^^^^^^^^^^^
