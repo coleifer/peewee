@@ -232,7 +232,7 @@ def detail(slug):
         query = Entry.select()
     else:
         query = Entry.public()
-    entry = get_object_or_404(query, Entry.slug == slug)
+    entry = get_object_or_404(query, Entry.slug == slug)	
     return render_template('detail.html', entry=entry)
 
 @app.route('/<slug>/edit/', methods=['GET', 'POST'])
