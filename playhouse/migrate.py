@@ -499,7 +499,7 @@ class MySQLMigrator(SchemaMigrator):
                 .sql(Entity(new_name)))
 
     def _get_column_definition(self, table, column_name):
-        cursor = self.database.execute_sql('DESCRIBE %s;' % table)
+        cursor = self.database.execute_sql('DESCRIBE `%s`;' % table)
         rows = cursor.fetchall()
         for row in rows:
             column = MySQLColumn(*row)
