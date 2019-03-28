@@ -1450,7 +1450,7 @@ class Function(ColumnBase):
         self._python_value = func
 
     def over(self, partition_by=None, order_by=None, start=None, end=None,
-             frame_type=None, window=None):
+             frame_type=None, window=None, exclude=None):
         if isinstance(partition_by, Window) and window is None:
             window = partition_by
 
@@ -1459,7 +1459,7 @@ class Function(ColumnBase):
         else:
             node = Window(partition_by=partition_by, order_by=order_by,
                           start=start, end=end, frame_type=frame_type,
-                          _inline=True)
+                          exclude=exclude, _inline=True)
         return NodeList((self, SQL('OVER'), node))
 
     def __sql__(self, ctx):
@@ -1482,12 +1482,20 @@ fn = Function(None, None)
 
 
 class Window(Node):
+    # Frame start/end and frame exclusion.
     CURRENT_ROW = SQL('CURRENT ROW')
+    GROUP = SQL('GROUP')
+    TIES = SQL('TIES')
+    NO_OTHERS = SQL('NO OTHERS')
+
+    # Frame types.
+    GROUPS = 'GROUPS'
     RANGE = 'RANGE'
     ROWS = 'ROWS'
 
     def __init__(self, partition_by=None, order_by=None, start=None, end=None,
-                 frame_type=None, alias=None, _inline=False):
+                 frame_type=None, extends=None, exclude=None, alias=None,
+                 _inline=False):
         super(Window, self).__init__()
         if start is not None and not isinstance(start, SQL):
             start = SQL(start)
@@ -1503,6 +1511,8 @@ class Window(Node):
         self._alias = alias or 'w'
         self._inline = _inline
         self.frame_type = frame_type
+        self._extends = extends
+        self._exclude = exclude
 
     def alias(self, alias=None):
         self._alias = alias or 'w'
@@ -1515,6 +1525,20 @@ class Window(Node):
     @Node.copy
     def as_rows(self):
         self.frame_type = Window.ROWS
+
+    @Node.copy
+    def as_groups(self):
+        self.frame_type = Window.GROUPS
+
+    @Node.copy
+    def extends(self, window=None):
+        self._extends = window
+
+    @Node.copy
+    def exclude(self, frame_exclusion=None):
+        if isinstance(frame_exclusion, basestring):
+            frame_exclusion = SQL(frame_exclusion)
+        self._exclude = frame_exclusion
 
     @staticmethod
     def following(value=None):
@@ -1535,6 +1559,13 @@ class Window(Node):
 
         with ctx(parentheses=True):
             parts = []
+            if self._extends is not None:
+                ext = self._extends
+                if isinstance(ext, Window):
+                    ext = SQL(ext._alias)
+                elif isinstance(ext, basestring):
+                    ext = SQL(ext)
+                parts.append(ext)
             if self.partition_by:
                 parts.extend((
                     SQL('PARTITION BY'),
@@ -1554,6 +1585,8 @@ class Window(Node):
                 parts.extend((SQL(self.frame_type or 'ROWS'), self.start))
             elif self.frame_type is not None:
                 parts.append(SQL('%s UNBOUNDED PRECEDING' % self.frame_type))
+            if self._exclude is not None:
+                parts.extend((SQL('EXCLUDE'), self._exclude))
             ctx.sql(NodeList(parts))
         return ctx
 

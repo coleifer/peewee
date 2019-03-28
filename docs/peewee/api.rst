@@ -1410,7 +1410,7 @@ Query-builder
                  .group_by(User.username)
                  .order_by(fn.COUNT(Tweet.id).desc()))
 
-    .. py:method:: over([partition_by=None[, order_by=None[, start=None[, end=None[, window=None]]]]])
+    .. py:method:: over([partition_by=None[, order_by=None[, start=None[, end=None[, window=None[, exclude=None]]]]]])
 
         :param list partition_by: List of columns to partition by.
         :param list order_by: List of columns / expressions to order window by.
@@ -1418,8 +1418,11 @@ Query-builder
             start of the window range.
         :param end: A :py:class:`SQL` instance or a string expressing the
             end of the window range.
-        :param str frame_type: ``Window.RANGE`` or ``Window.ROWS``.
+        :param str frame_type: ``Window.RANGE``, ``Window.ROWS`` or
+            ``Window.GROUPS``.
         :param Window window: A :py:class:`Window` instance.
+        :param exclude: Frame exclusion, one of ``Window.CURRENT_ROW``,
+            ``Window.GROUP``, ``Window.TIES`` or ``Window.NO_OTHERS``.
 
         .. note::
             For an in-depth guide to using window functions with Peewee,
@@ -1533,7 +1536,7 @@ Query-builder
         # Get users whose username begins with "A" or "a":
         a_users = User.select().where(fn.LOWER(fn.SUBSTR(User.username, 1, 1)) == 'a')
 
-.. py:class:: Window([partition_by=None[, order_by=None[, start=None[, end=None[, frame_type=None[, alias=None]]]]]])
+.. py:class:: Window([partition_by=None[, order_by=None[, start=None[, end=None[, frame_type=None[, extends=None[, exclude=None[, alias=None]]]]]]]])
 
     :param list partition_by: List of columns to partition by.
     :param list order_by: List of columns to order by.
@@ -1541,7 +1544,12 @@ Query-builder
         of the window range.
     :param end: A :py:class:`SQL` instance or a string expressing the end of
         the window range.
-    :param str frame_type: ``Window.RANGE`` or ``Window.ROWS``.
+    :param str frame_type: ``Window.RANGE``, ``Window.ROWS`` or
+        ``Window.GROUPS``.
+    :param extends: A :py:class:`Window` definition to extend. Alternately, you
+        may specify the window's alias instead.
+    :param exclude: Frame exclusion, one of ``Window.CURRENT_ROW``,
+        ``Window.GROUP``, ``Window.TIES`` or ``Window.NO_OTHERS``.
     :param str alias: Alias for the window.
 
     Represent a WINDOW clause.
@@ -1550,19 +1558,22 @@ Query-builder
         For an in-depth guide to using window functions with Peewee,
         see the :ref:`window-functions` section.
 
+    .. py:attribute:: RANGE
+    .. py:attribute:: ROWS
+    .. py:attribute:: GROUPS
+
+        Specify the window ``frame_type``. See :ref:`window-frame-types`.
+
     .. py:attribute:: CURRENT_ROW
 
-        Reference to current row for use in start/end clause.
+        Reference to current row for use in start/end clause or the frame
+        exclusion parameter.
 
-    .. py:attribute:: RANGE
+    .. py:attribute:: NO_OTHERS
+    .. py:attribute:: GROUP
+    .. py:attribute:: TIES
 
-        Specify the use of *RANGE* for the window ``frame_type``. For more
-        information, see :ref:`window-frame-types`.
-
-    .. py:attribute:: ROWS
-
-        Specify the use of *ROWS* for the window ``frame_type``. For more
-        information, see :ref:`window-frame-types`.
+        Specify the window frame exclusion parameter.
 
     .. py:staticmethod:: preceding([value=None])
 
@@ -1577,6 +1588,22 @@ Query-builder
 
         Convenience method for generating SQL suitable for passing in as the
         ``end`` parameter for a window range.
+
+    .. py:method:: as_rows()
+    .. py:method:: as_range()
+    .. py:method:: as_groups()
+
+        Specify the frame type.
+
+    .. py:method:: extends([window=None])
+
+        :param Window window: A :py:class:`Window` definition to extend.
+            Alternately, you may specify the window's alias instead.
+
+    .. py:method:: exclude([frame_exclusion=None])
+
+        :param frame_exclusion: Frame exclusion, one of ``Window.CURRENT_ROW``,
+            ``Window.GROUP``, ``Window.TIES`` or ``Window.NO_OTHERS``.
 
     .. py:method:: alias([alias=None])
 

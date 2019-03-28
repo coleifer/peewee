@@ -1855,6 +1855,8 @@ API
 
 .. py:class:: Table(dataset, name, model_class)
 
+    :noindex:
+
     Provides a high-level API for working with rows in a given table.
 
     .. py:attribute:: columns

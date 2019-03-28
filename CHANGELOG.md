@@ -7,6 +7,11 @@ https://github.com/coleifer/peewee/releases
 
 ## master
 
+* Add support for window function frame exclusion and added built-in support
+  for the GROUPS frame type.
+* Add support for chaining window functions by extending a previously-declared
+  window function.
+
 [View commits](https://github.com/coleifer/peewee/compare/3.9.3...master)
 
 ## 3.9.3

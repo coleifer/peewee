@@ -1245,6 +1245,122 @@ class TestWindowFunctions(BaseTestCase):
             'ORDER BY FIRST_VALUE("t1"."id") '
             'OVER (PARTITION BY "t1"."value" ORDER BY "t1"."id")'), [])
 
+    def test_window_extends(self):
+        Tbl = Table('tbl', ('b', 'c'))
+        w1 = Window(partition_by=[Tbl.b], alias='win1')
+        w2 = Window(extends=w1, order_by=[Tbl.c], alias='win2')
+        query = Tbl.select(fn.GROUP_CONCAT(Tbl.c).over(w2)).window(w1, w2)
+        self.assertSQL(query, (
+            'SELECT GROUP_CONCAT("t1"."c") OVER win2 FROM "tbl" AS "t1" '
+            'WINDOW win1 AS (PARTITION BY "t1"."b"), '
+            'win2 AS (win1 ORDER BY "t1"."c")'), [])
+
+        w1 = Window(partition_by=[Tbl.b], alias='w1')
+        w2 = Window(extends=w1).alias('w2')
+        w3 = Window(extends=w2).alias('w3')
+        w4 = Window(extends=w3, order_by=[Tbl.c]).alias('w4')
+        query = (Tbl
+                 .select(fn.GROUP_CONCAT(Tbl.c).over(w4))
+                 .window(w1, w2, w3, w4))
+        self.assertSQL(query, (
+            'SELECT GROUP_CONCAT("t1"."c") OVER w4 FROM "tbl" AS "t1" '
+            'WINDOW w1 AS (PARTITION BY "t1"."b"), w2 AS (w1), w3 AS (w2), '
+            'w4 AS (w3 ORDER BY "t1"."c")'), [])
+
+    def test_window_ranged(self):
+        Tbl = Table('tbl', ('a', 'b'))
+        query = (Tbl
+                 .select(Tbl.a, fn.SUM(Tbl.b).over(
+                     order_by=[Tbl.a.desc()],
+                     frame_type=Window.RANGE,
+                     start=Window.preceding(1),
+                     end=Window.following(2)))
+                 .order_by(Tbl.a.asc()))
+        self.assertSQL(query, (
+            'SELECT "t1"."a", SUM("t1"."b") OVER ('
+            'ORDER BY "t1"."a" DESC RANGE BETWEEN 1 PRECEDING AND 2 FOLLOWING)'
+            ' FROM "tbl" AS "t1" ORDER BY "t1"."a" ASC'), [])
+
+        query = (Tbl
+                 .select(Tbl.a, fn.SUM(Tbl.b).over(
+                     order_by=[Tbl.a],
+                     frame_type=Window.GROUPS,
+                     start=Window.preceding(3),
+                     end=Window.preceding(1))))
+        self.assertSQL(query, (
+            'SELECT "t1"."a", SUM("t1"."b") OVER ('
+            'ORDER BY "t1"."a" GROUPS BETWEEN 3 PRECEDING AND 1 PRECEDING) '
+            'FROM "tbl" AS "t1"'), [])
+
+        query = (Tbl
+                 .select(Tbl.a, fn.SUM(Tbl.b).over(
+                     order_by=[Tbl.a],
+                     frame_type=Window.GROUPS,
+                     start=Window.following(1),
+                     end=Window.following(5))))
+        self.assertSQL(query, (
+            'SELECT "t1"."a", SUM("t1"."b") OVER ('
+            'ORDER BY "t1"."a" GROUPS BETWEEN 1 FOLLOWING AND 5 FOLLOWING) '
+            'FROM "tbl" AS "t1"'), [])
+
+
+    def test_window_frametypes(self):
+        Tbl = Table('tbl', ('b', 'c'))
+        fts = (('as_range', Window.RANGE, 'RANGE'),
+               ('as_rows', Window.ROWS, 'ROWS'),
+               ('as_groups', Window.GROUPS, 'GROUPS'))
+        for method, arg, sql in fts:
+            w = getattr(Window(order_by=[Tbl.b + 1]), method)()
+            self.assertSQL(Tbl.select(fn.SUM(Tbl.c).over(w)).window(w), (
+                'SELECT SUM("t1"."c") OVER w FROM "tbl" AS "t1" '
+                'WINDOW w AS (ORDER BY ("t1"."b" + ?) '
+                '%s UNBOUNDED PRECEDING)') % sql, [1])
+
+            query = Tbl.select(fn.SUM(Tbl.c)
+                               .over(order_by=[Tbl.b + 1], frame_type=arg))
+            self.assertSQL(query, (
+                'SELECT SUM("t1"."c") OVER (ORDER BY ("t1"."b" + ?) '
+                '%s UNBOUNDED PRECEDING) FROM "tbl" AS "t1"') % sql, [1])
+
+    def test_window_frame_exclusion(self):
+        Tbl = Table('tbl', ('b', 'c'))
+        fts = ((Window.CURRENT_ROW, 'CURRENT ROW'),
+               (Window.TIES, 'TIES'),
+               (Window.NO_OTHERS, 'NO OTHERS'),
+               (Window.GROUP, 'GROUP'))
+        for arg, sql in fts:
+            query = Tbl.select(fn.MAX(Tbl.b).over(
+                order_by=[Tbl.c],
+                start=Window.preceding(4),
+                end=Window.following(),
+                frame_type=Window.ROWS,
+                exclude=arg))
+            self.assertSQL(query, (
+                'SELECT MAX("t1"."b") OVER (ORDER BY "t1"."c" '
+                'ROWS BETWEEN 4 PRECEDING AND UNBOUNDED FOLLOWING '
+                'EXCLUDE %s) FROM "tbl" AS "t1"') % sql, [])
+
+    def test_filter_window(self):
+        # Example derived from sqlite window test 5.1.3.2.
+        Tbl = Table('tbl', ('a', 'c'))
+        win = Window(partition_by=fn.COALESCE(Tbl.a, ''),
+                     frame_type=Window.RANGE,
+                     start=Window.CURRENT_ROW,
+                     end=Window.following(),
+                     exclude=Window.NO_OTHERS)
+        query = (Tbl
+                 .select(fn.SUM(Tbl.c).filter(Tbl.c < 5).over(win),
+                         fn.RANK().over(win),
+                         fn.DENSE_RANK().over(win))
+                 .window(win))
+        self.assertSQL(query, (
+            'SELECT SUM("t1"."c") FILTER (WHERE ("t1"."c" < ?)) OVER w, '
+            'RANK() OVER w, DENSE_RANK() OVER w '
+            'FROM "tbl" AS "t1" '
+            'WINDOW w AS (PARTITION BY COALESCE("t1"."a", ?) '
+            'RANGE BETWEEN CURRENT ROW AND UNBOUNDED FOLLOWING '
+            'EXCLUDE NO OTHERS)'), [5, ''])
+
 
 class TestValuesList(BaseTestCase):
     _data = [(1, 'one'), (2, 'two'), (3, 'three')]
