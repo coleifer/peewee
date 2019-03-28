@@ -1455,10 +1455,41 @@ each window has a unique alias:
     # 2           3.     34.      2.
     # 3         100     134.    100.
 
+Similarly, if you have multiple window definitions that share similar
+definitions, it is possible to extend a previously-defined window definition.
+For example, here we will be partitioning the data-set by the counter value, so
+we'll be doing our aggregations with respect to the counter. Then we'll define
+a second window that extends this partitioning, and adds an ordering clause:
+
+.. code-block:: python
+
+    w1 = Window(partition_by=[Sample.counter]).alias('w1')
+
+    # By extending w1, this window definition will also be partitioned
+    # by "counter".
+    w2 = Window(extends=w1, order_by=[Sample.value.desc()]).alias('w2')
+
+    query = (Sample
+             .select(Sample.counter, Sample.value,
+                     fn.SUM(Sample.value).over(w1).alias('group_sum'),
+                     fn.RANK().over(w2).alias('revrank'))
+             .window(w1, w2)
+             .order_by(Sample.id))
+
+    for sample in query:
+        print(sample.counter, sample.value, sample.group_sum, sample.revrank)
+
+    # counter  value   group_sum   revrank
+    # 1        10.     30.         2
+    # 1        20.     30.         1
+    # 2        1.      4.          2
+    # 2        3.      4.          1
+    # 3        100.    100.        1
+
 .. _window-frame-types:
 
-Frame types: RANGE vs ROWS
-^^^^^^^^^^^^^^^^^^^^^^^^^^
+Frame types: RANGE vs ROWS vs GROUPS
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 Depending on the frame type, the database will process ordered groups
 differently. Let's create two additional ``Sample`` rows to visualize the
@@ -1491,6 +1522,7 @@ frame type, we can use either:
 
 * :py:attr:`Window.RANGE`
 * :py:attr:`Window.ROWS`
+* :py:attr:`Window.GROUPS`
 
 The behavior of :py:attr:`~Window.RANGE`, when there are logical duplicates,
 may lead to unexpected results:
@@ -1552,6 +1584,37 @@ Peewee uses these rules for determining what frame-type to use:
 * If the user did not specify frame type or start/end boundaries, Peewee will
   use the database default, which is ``RANGE``.
 
+The :py:attr:`Window.GROUPS` frame type looks at the window range specification
+in terms of groups of rows, based on the ordering term(s). Using ``GROUPS``, we
+can define the frame so it covers distinct groupings of rows. Let's look at an
+example:
+
+.. code-block:: python
+
+    query = (Sample
+             .select(Sample.counter, Sample.value,
+                     fn.SUM(Sample.value).over(
+                        order_by=[Sample.counter, Sample.value],
+                        frame_type=Window.GROUPS,
+                        start=Window.preceding(1)).alias('gsum'))
+             .order_by(Sample.counter, Sample.value))
+
+    for sample in query:
+        print(sample.counter, sample.value, sample.gsum)
+
+    #  counter   value    gsum
+    #  1         10       10
+    #  1         20       50
+    #  1         20       50   (10) + (20+0)
+    #  2         1        42
+    #  2         1        42   (20+20) + (1+1)
+    #  2         3        5    (1+1) + 3
+    #  3         100      103  (3) + 100
+
+As you can hopefully infer, the window is grouped by its ordering term, which
+is ``(counter, value)``. We are looking at a window that extends between one
+previous group and the current group.
+
 .. note::
     For information about the window function APIs, see:
 
@@ -1559,9 +1622,11 @@ Peewee uses these rules for determining what frame-type to use:
     * :py:meth:`Function.filter`
     * :py:class:`Window`
 
-    For general information on window functions, the
-    `postgresql docs <http://www.postgresql.org/docs/9.1/static/tutorial-window.html>`_.
-    have a good overview.
+    For general information on window functions, read the postgres `window functions tutorial <https://www.postgresql.org/docs/current/tutorial-window.html>`_
+
+    Additionally, the `postgres docs <https://www.postgresql.org/docs/current/sql-select.html#SQL-WINDOW>`_
+    and the `sqlite docs <https://www.sqlite.org/windowfunctions.html>`_
+    contain a lot of good information.
 
 .. _rowtypes:
 
