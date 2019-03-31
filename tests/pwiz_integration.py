@@ -46,6 +46,9 @@ class Category(TestModel):
 class OddColumnNames(TestModel):
     spaces = CharField(column_name='s p aces')
     symbols = CharField(column_name='w/-nug!')
+    camelCaseName = CharField(column_name='camelCaseName')
+    class Meta:
+        table_name = 'oddColumnNames'
 
 
 class Event(TestModel):
@@ -235,11 +238,29 @@ class TestPwizInvalidColumns(BasePwizTestCase):
         result = output.data.strip()
         expected = textwrap.dedent("""
             class OddColumnNames(BaseModel):
+                camel_case_name = CharField(column_name='camelCaseName')
                 s_p_aces = CharField(column_name='s p aces')
                 w_nug_ = CharField(column_name='w/-nug!')
 
                 class Meta:
-                    table_name = 'odd_column_names'""").strip()
+                    table_name = 'oddColumnNames'""").strip()
+
+        actual = result[-len(expected):]
+        self.assertEqual(actual, expected)
+
+    def test_odd_columns_legacy(self):
+        with capture_output() as output:
+            print_models(self.introspector, snake_case=False)
+
+        result = output.data.strip()
+        expected = textwrap.dedent("""
+            class Oddcolumnnames(BaseModel):
+                camelcasename = CharField(column_name='camelCaseName')
+                s_p_aces = CharField(column_name='s p aces')
+                w_nug_ = CharField(column_name='w/-nug!')
+
+                class Meta:
+                    table_name = 'oddColumnNames'""").strip()
 
         actual = result[-len(expected):]
         self.assertEqual(actual, expected)

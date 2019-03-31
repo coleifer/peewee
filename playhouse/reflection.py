@@ -11,6 +11,7 @@ from peewee import _StringField
 from peewee import _query_val_transform
 from peewee import CommaNodeList
 from peewee import SCOPE_VALUES
+from peewee import make_snake_case
 from peewee import text_type
 try:
     from pymysql.constants import FIELD_TYPE
@@ -481,15 +482,20 @@ class Introspector(object):
             return '\n' + self.metadata.extension_import
         return ''
 
-    def make_model_name(self, table):
+    def make_model_name(self, table, snake_case=True):
+        if snake_case:
+            table = make_snake_case(table)
         model = re.sub('[^\w]+', '', table)
         model_name = ''.join(sub.title() for sub in model.split('_'))
         if not model_name[0].isalpha():
             model_name = 'T' + model_name
         return model_name
 
-    def make_column_name(self, column, is_foreign_key=False):
-        column = column.lower().strip()
+    def make_column_name(self, column, is_foreign_key=False, snake_case=True):
+        column = column.strip()
+        if snake_case:
+            column = make_snake_case(column)
+        column = column.lower()
         if is_foreign_key:
             # Strip "_id" from foreign keys, unless the foreign-key happens to
             # be named "_id", in which case the name is retained.
@@ -504,7 +510,7 @@ class Introspector(object):
         return column
 
     def introspect(self, table_names=None, literal_column_names=False,
-                   include_views=False):
+                   include_views=False, snake_case=True):
         # Retrieve all the tables in the database.
         tables = self.metadata.database.get_tables(schema=self.schema)
         if include_views:
@@ -549,7 +555,7 @@ class Introspector(object):
                             tables.append(foreign_key.dest_table)
                             table_set.add(foreign_key.dest_table)
 
-            model_names[table] = self.make_model_name(table)
+            model_names[table] = self.make_model_name(table, snake_case)
 
             # Collect sets of all the column names as well as all the
             # foreign-key column names.
@@ -561,7 +567,8 @@ class Introspector(object):
                 if literal_column_names:
                     new_name = re.sub('[^\w]+', '_', col_name)
                 else:
-                    new_name = self.make_column_name(col_name, col_name in fks)
+                    new_name = self.make_column_name(col_name, col_name in fks,
+                                                     snake_case)
 
                 # If we have two columns, "parent" and "parent_id", ensure
                 # that when we don't introduce naming conflicts.

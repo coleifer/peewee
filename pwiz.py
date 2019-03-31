@@ -49,9 +49,10 @@ def make_introspector(database_type, database_name, **kwargs):
     return Introspector.from_database(db, schema=schema)
 
 def print_models(introspector, tables=None, preserve_order=False,
-                 include_views=False, ignore_unknown=False):
+                 include_views=False, ignore_unknown=False, snake_case=True):
     database = introspector.introspect(table_names=tables,
-                                       include_views=include_views)
+                                       include_views=include_views,
+                                       snake_case=snake_case)
 
     db_kwargs = introspector.get_database_kwargs()
     header = HEADER % (
@@ -180,6 +181,8 @@ def get_option_parser():
        help='Model definition column ordering matches source table.')
     ao('-I', '--ignore-unknown', action='store_true', dest='ignore_unknown',
        help='Ignore fields whose type cannot be determined.')
+    ao('-L', '--legacy-naming', action='store_true', dest='legacy_naming',
+       help='Use legacy table- and column-name generation.')
     return parser
 
 def get_connect_kwargs(options):
@@ -215,4 +218,4 @@ if __name__ == '__main__':
         print_header(cmd_line, introspector)
 
     print_models(introspector, tables, options.preserve_order, options.views,
-                 options.ignore_unknown)
+                 options.ignore_unknown, not options.legacy_naming)

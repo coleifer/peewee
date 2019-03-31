@@ -178,7 +178,7 @@ class TestReflection(BaseReflectionTestCase):
         # Tests for is_foreign_key=False.
         tests = (
             ('Column', 'column'),
-            ('Foo_iD', 'foo_id'),
+            ('Foo_id', 'foo_id'),
             ('foo_id', 'foo_id'),
             ('foo_id_id', 'foo_id_id'),
             ('foo', 'foo'),
@@ -187,6 +187,8 @@ class TestReflection(BaseReflectionTestCase):
             ('and', 'and_'),
             ('Class', 'class_'),
             ('Class_ID', 'class_id'),
+            ('camelCase', 'camel_case'),
+            ('ABCdefGhi', 'ab_cdef_ghi'),
         )
         for col_name, expected in tests:
             self.assertEqual(
@@ -194,7 +196,7 @@ class TestReflection(BaseReflectionTestCase):
 
         # Tests for is_foreign_key=True.
         tests = (
-            ('Foo_iD', 'foo'),
+            ('Foo_id', 'foo'),
             ('foo_id', 'foo'),
             ('foo_id_id', 'foo_id'),
             ('foo', 'foo'),
@@ -203,6 +205,8 @@ class TestReflection(BaseReflectionTestCase):
             ('and', 'and_'),
             ('Class', 'class_'),
             ('Class_ID', 'class_'),
+            ('camelCase', 'camel_case'),
+            ('ABCdefGhi', 'ab_cdef_ghi'),
         )
         for col_name, expected in tests:
             self.assertEqual(
