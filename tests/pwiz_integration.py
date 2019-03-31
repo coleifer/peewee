@@ -1,5 +1,6 @@
 import datetime
 import os
+
 try:
     from StringIO import StringIO
 except ImportError:
@@ -15,7 +16,6 @@ from .base import TestModel
 from .base import db_loader
 from .base import mock
 from .base import skip_if
-
 
 db = db_loader('sqlite')
 
@@ -46,11 +46,19 @@ class Category(TestModel):
 class OddColumnNames(TestModel):
     spaces = CharField(column_name='s p aces')
     symbols = CharField(column_name='w/-nug!')
+    camelCase = CharField(column_name='camelCase')
 
 
 class Event(TestModel):
     data = TextField()
     status = IntegerField()
+
+
+class CamelCaseTableName(TestModel):
+    camelCase = CharField(column_name='camelCase')
+
+    class Meta:
+        table_name = "camelCaseTableName"
 
 
 class capture_output(object):
@@ -75,6 +83,12 @@ class UnknownField(object):
 class BaseModel(Model):
     class Meta:
         database = database
+
+class CamelCaseTableName(BaseModel):
+    camel_case = CharField(column_name='camelCase')
+
+    class Meta:
+        table_name = 'camelCaseTableName'
 
 class Category(BaseModel):
     name = CharField(unique=True)
@@ -153,7 +167,7 @@ class BasePwizTestCase(ModelTestCase):
 
 
 class TestPwiz(BasePwizTestCase):
-    requires = [User, Note, Category]
+    requires = [User, CamelCaseTableName, Note, Category]
 
     def test_print_models(self):
         with capture_output() as output:
@@ -207,22 +221,22 @@ class TestPwizUnknownField(BasePwizTestCase):
             print_models(self.introspector)
 
         self.assertEqual(output.data.strip(), (
-            self.header + self.unknown + self.basemodel +
-            'class Foo(BaseModel):\n'
-            '    unk1 = BareField(null=True)\n'
-            '    unk2 = UnknownField()  # BIZBAZ\n\n'
-            '    class Meta:\n        table_name = \'foo\''))
+                self.header + self.unknown + self.basemodel +
+                'class Foo(BaseModel):\n'
+                '    unk1 = BareField(null=True)\n'
+                '    unk2 = UnknownField()  # BIZBAZ\n\n'
+                '    class Meta:\n        table_name = \'foo\''))
 
     def test_ignore_unknown(self):
         with capture_output() as output:
             print_models(self.introspector, ignore_unknown=True)
 
         self.assertEqual(output.data.strip(), (
-            self.header + self.basemodel +
-            'class Foo(BaseModel):\n'
-            '    unk1 = BareField(null=True)\n'
-            '    # unk2 - BIZBAZ\n\n'
-            '    class Meta:\n        table_name = \'foo\''))
+                self.header + self.basemodel +
+                'class Foo(BaseModel):\n'
+                '    unk1 = BareField(null=True)\n'
+                '    # unk2 - BIZBAZ\n\n'
+                '    class Meta:\n        table_name = \'foo\''))
 
 
 class TestPwizInvalidColumns(BasePwizTestCase):
@@ -235,9 +249,10 @@ class TestPwizInvalidColumns(BasePwizTestCase):
         result = output.data.strip()
         expected = textwrap.dedent("""
             class OddColumnNames(BaseModel):
+                camel_case = CharField(column_name='camelCase')
                 s_p_aces = CharField(column_name='s p aces')
                 w_nug_ = CharField(column_name='w/-nug!')
-
+                
                 class Meta:
                     table_name = 'odd_column_names'""").strip()
 
