@@ -49,7 +49,7 @@ def make_introspector(database_type, database_name, **kwargs):
     return Introspector.from_database(db, schema=schema)
 
 def print_models(introspector, tables=None, preserve_order=False,
-                 include_views=False, ignore_unknown=False, camel_to_snake=False):
+                 include_views=False, ignore_unknown=False, camel_to_snake=True):
     database = introspector.introspect(table_names=tables,
                                        include_views=include_views,
                                        camel_to_snake=camel_to_snake)
@@ -181,8 +181,8 @@ def get_option_parser():
        help='Model definition column ordering matches source table.')
     ao('-I', '--ignore-unknown', action='store_true', dest='ignore_unknown',
        help='Ignore fields whose type cannot be determined.')
-    ao('-S', '--snake', action='store_true', dest='camel_to_snake',
-       help='Convert camelCase to snake_case')
+    ao('-S', '--snake', dest='camel_to_snake', type='int',
+       default=1, help='Whether convert camelCase to snake_case, 0 for no, 1 for yes')
     return parser
 
 def get_connect_kwargs(options):
@@ -218,4 +218,4 @@ if __name__ == '__main__':
         print_header(cmd_line, introspector)
 
     print_models(introspector, tables, options.preserve_order, options.views,
-                 options.ignore_unknown, options.camel_to_snake)
+                 options.ignore_unknown, bool(options.camel_to_snake))
