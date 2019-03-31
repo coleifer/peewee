@@ -46,11 +46,19 @@ class Category(TestModel):
 class OddColumnNames(TestModel):
     spaces = CharField(column_name='s p aces')
     symbols = CharField(column_name='w/-nug!')
+    camelCase = CharField(column_name='camelCase')
 
 
 class Event(TestModel):
     data = TextField()
     status = IntegerField()
+
+
+class CamelCaseTableName(TestModel):
+    camelCase = CharField(column_name='camelCase')
+
+    class Meta:
+        table_name = "camelCaseTableName"
 
 
 class capture_output(object):
@@ -75,6 +83,12 @@ class UnknownField(object):
 class BaseModel(Model):
     class Meta:
         database = database
+
+class CamelCaseTableName(BaseModel):
+    camel_case = CharField(column_name='camelCase')
+
+    class Meta:
+        table_name = 'camelCaseTableName'
 
 class Category(BaseModel):
     name = CharField(unique=True)
@@ -153,7 +167,7 @@ class BasePwizTestCase(ModelTestCase):
 
 
 class TestPwiz(BasePwizTestCase):
-    requires = [User, Note, Category]
+    requires = [User, CamelCaseTableName, Note, Category]
 
     def test_print_models(self):
         with capture_output() as output:
@@ -235,6 +249,7 @@ class TestPwizInvalidColumns(BasePwizTestCase):
         result = output.data.strip()
         expected = textwrap.dedent("""
             class OddColumnNames(BaseModel):
+                camel_case = CharField(column_name='camelCase')
                 s_p_aces = CharField(column_name='s p aces')
                 w_nug_ = CharField(column_name='w/-nug!')
 

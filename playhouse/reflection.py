@@ -455,6 +455,12 @@ class Introspector(object):
     def __repr__(self):
         return '<Introspector: %s>' % self.metadata.database
 
+    @staticmethod
+    def convert_camel_to_snake(name):
+        # https://stackoverflow.com/questions/1175208/elegant-python-function-to-convert-camelcase-to-snake-case
+        s1 = re.sub('(.)([A-Z][a-z]+)', r'\1_\2', name)
+        return re.sub('([a-z0-9])([A-Z])', r'\1_\2', s1).lower().replace("__", "_")
+
     @classmethod
     def from_database(cls, database, schema=None):
         if isinstance(database, PostgresqlDatabase):
@@ -481,7 +487,9 @@ class Introspector(object):
             return '\n' + self.metadata.extension_import
         return ''
 
-    def make_model_name(self, table):
+    def make_model_name(self, table, camel_to_snake=False):
+        if camel_to_snake:
+            table = self.convert_camel_to_snake(table)
         model = re.sub('[^\w]+', '', table)
         model_name = ''.join(sub.title() for sub in model.split('_'))
         if not model_name[0].isalpha():
@@ -504,7 +512,7 @@ class Introspector(object):
         return column
 
     def introspect(self, table_names=None, literal_column_names=False,
-                   include_views=False):
+                   include_views=False, camel_to_snake=False):
         # Retrieve all the tables in the database.
         tables = self.metadata.database.get_tables(schema=self.schema)
         if include_views:
@@ -549,7 +557,7 @@ class Introspector(object):
                             tables.append(foreign_key.dest_table)
                             table_set.add(foreign_key.dest_table)
 
-            model_names[table] = self.make_model_name(table)
+            model_names[table] = self.make_model_name(table, camel_to_snake=camel_to_snake)
 
             # Collect sets of all the column names as well as all the
             # foreign-key column names.
@@ -558,6 +566,9 @@ class Introspector(object):
             fks = set(fk_col.column for fk_col in foreign_keys[table])
 
             for col_name, column in table_columns.items():
+                if camel_to_snake:
+                    col_name = self.convert_camel_to_snake(col_name)
+
                 if literal_column_names:
                     new_name = re.sub('[^\w]+', '_', col_name)
                 else:

@@ -51,7 +51,8 @@ def make_introspector(database_type, database_name, **kwargs):
 def print_models(introspector, tables=None, preserve_order=False,
                  include_views=False, ignore_unknown=False):
     database = introspector.introspect(table_names=tables,
-                                       include_views=include_views)
+                                       include_views=include_views,
+                                       camel_to_snake=True)
 
     db_kwargs = introspector.get_database_kwargs()
     header = HEADER % (
