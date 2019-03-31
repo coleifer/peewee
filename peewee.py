@@ -377,6 +377,10 @@ def ensure_entity(value):
     if value is not None:
         return value if isinstance(value, Node) else Entity(value)
 
+def make_snake_case(s):
+    first = SNAKE_CASE_STEP1.sub(r'\1_\2', s)
+    return SNAKE_CASE_STEP2.sub(r'\1_\2', first).lower()
+
 def chunked(it, n):
     marker = object()
     for group in (list(g) for g in izip_longest(*[iter(it)] * n,
@@ -5377,9 +5381,7 @@ class Metadata(object):
     def make_table_name(self):
         if self.legacy_table_names:
             return re.sub('[^\w]+', '_', self.name)
-
-        first = SNAKE_CASE_STEP1.sub(r'\1_\2', self.model.__name__)
-        return SNAKE_CASE_STEP2.sub(r'\1_\2', first).lower()
+        return make_snake_case(self.model.__name__)
 
     def model_graph(self, refs=True, backrefs=True, depth_first=True):
         if not refs and not backrefs:
