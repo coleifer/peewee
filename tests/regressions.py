@@ -556,3 +556,58 @@ class TestZeroTimestamp(ModelTestCase):
         t1_db = TS.get(TS.key == 't1')
         self.assertEqual(t1_db.timestamp,
                          datetime.datetime(1970, 1, 1, 0, 0, 1))
+
+
+class Player(TestModel):
+    name = TextField()
+
+class Game(TestModel):
+    name = TextField()
+    player = ForeignKeyField(Player)
+
+class Score(TestModel):
+    game = ForeignKeyField(Game)
+    points = IntegerField()
+
+
+class TestJoinSubqueryAggregateViaLeftOuter(ModelTestCase):
+    requires = [Player, Game, Score]
+
+    def test_join_subquery_aggregate_left_outer(self):
+        with self.database.atomic():
+            p1, p2 = [Player.create(name=name) for name in ('p1', 'p2')]
+            games = []
+            for p in (p1, p2):
+                for gnum in (1, 2):
+                    g = Game.create(name='%s-g%s' % (p.name, gnum), player=p)
+                    games.append(g)
+
+            score_list = (
+                (10, 20, 30),
+                (),
+                (100, 110, 100),
+                (50, 50))
+            for g, plist in zip(games, score_list):
+                for p in plist:
+                    Score.create(game=g, points=p)
+
+        subq = (Game
+                .select(Game.player, fn.SUM(Score.points).alias('ptotal'),
+                        fn.AVG(Score.points).alias('pavg'))
+                .join(Score, JOIN.LEFT_OUTER)
+                .group_by(Game.player))
+        query = (Player
+                 .select(Player, subq.c.ptotal, subq.c.pavg)
+                 .join(subq, on=(Player.id == subq.c.player_id))
+                 .order_by(Player.name))
+
+        with self.assertQueryCount(1):
+            results = [(p.name, p.game.ptotal, p.game.pavg) for p in query]
+
+        self.assertEqual(results, [('p1', 60, 20), ('p2', 410, 82)])
+
+        with self.assertQueryCount(1):
+            obj_query = query.objects()
+            results = [(p.name, p.ptotal, p.pavg) for p in obj_query]
+
+        self.assertEqual(results, [('p1', 60, 20), ('p2', 410, 82)])
