@@ -4032,6 +4032,49 @@ Model
               :py:meth:`Database.atomic`. Otherwise an error in a batch mid-way
               through could leave the database in an inconsistent state.
 
+    .. py:classmethod:: bulk_update(model_list, fields[, batch_size=None])
+
+        :param iterable model_list: a list or other iterable of
+            :py:class:`Model` instances.
+        :param list fields: list of fields to update.
+        :param int batch_size: number of rows to batch per insert. If
+            unspecified, all models will be inserted in a single query.
+        :returns: total number of rows updated.
+
+        Efficiently UPDATE multiple model instances.
+
+        Example:
+
+        .. code-block:: python
+
+            # First, create 3 users.
+            u1, u2, u3 = [User.create(username='u%s' % i) for i in (1, 2, 3)]
+
+            # Now let's modify their usernames.
+            u1.username = 'u1-x'
+            u2.username = 'u2-y'
+            u3.username = 'u3-z'
+
+            # Update all three rows using a single UPDATE query.
+            User.bulk_update([u1, u2, u3], fields=[User.username])
+
+        If you have a large number of objects to update, it is strongly
+        recommended that you specify a ``batch_size`` and wrap the operation in
+        a transaction:
+
+        .. code-block:: python
+
+            with database.atomic():
+                User.bulk_update(user_list, fields=['username'], batch_size=50)
+
+        .. warning::
+
+            * SQLite generally has a limit of 999 bound parameters for a query.
+            * When a batch-size is provided it is **strongly recommended** that
+              you wrap the call in a transaction or savepoint using
+              :py:meth:`Database.atomic`. Otherwise an error in a batch mid-way
+              through could leave the database in an inconsistent state.
+
     .. py:classmethod:: get(*query, **filters)
 
         :param query: Zero or more :py:class:`Expression` objects.

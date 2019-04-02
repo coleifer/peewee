@@ -215,6 +215,27 @@ the :py:meth:`~Model.bulk_create` API:
     the previously-unsaved model instances will have their new primary key
     values automatically populated.
 
+In addition, Peewee also offers :py:meth:`Model.bulk_update`, which can
+efficiently update one or more columns on a list of models. For example:
+
+.. code-block:: python
+
+    # First, create 3 users with usernames u1, u2, u3.
+    u1, u2, u3 = [User.create(username='u%s' % i) for i in (1, 2, 3)]
+
+    # Now we'll modify the user instances.
+    u1.username = 'u1-x'
+    u2.username = 'u2-y'
+    u3.username = 'u3-z'
+
+    # Update all three users with a single UPDATE query.
+    User.bulk_update([u1, u2, u3], fields=[User.username])
+
+.. note::
+    For large lists of objects, you should specify a reasonable batch_size and
+    wrap the call to :py:meth:`~Model.bulk_update` with
+    :py:meth:`Database.atomic`.
+
 Alternatively, you can use the :py:meth:`Database.batch_commit` helper to
 process chunks of rows inside *batch*-sized transactions. This method also
 provides a workaround for databases besides Postgresql, when the primary-key of

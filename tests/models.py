@@ -186,6 +186,77 @@ class TestModelAPIs(ModelTestCase):
                 Person.bulk_create(people)
         self.assertEqual(Person.select().count(), 0)
 
+    @requires_models(Person)
+    def test_bulk_update(self):
+        data = [('f%s' % i, 'l%s' % i, datetime.date(1980, i, i))
+                for i in range(1, 5)]
+        Person.insert_many(data).execute()
+
+        p1, p2, p3, p4 = list(Person.select().order_by(Person.id))
+        p1.first = 'f1-x'
+        p1.last = 'l1-x'
+        p2.first = 'f2-y'
+        p3.last = 'l3-z'
+
+        with self.assertQueryCount(1):
+            n = Person.bulk_update([p1, p2, p3, p4], ['first', 'last'])
+            self.assertEqual(n, 4)
+
+        query = Person.select().order_by(Person.id)
+        self.assertEqual([(p.first, p.last) for p in query], [
+            ('f1-x', 'l1-x'),
+            ('f2-y', 'l2'),
+            ('f3', 'l3-z'),
+            ('f4', 'l4')])
+
+        # Modify multiple fields, but only update "first".
+        p1.first = 'f1-x2'
+        p1.last = 'l1-x2'
+        p2.first = 'f2-y2'
+        p3.last = 'f3-z2'
+        with self.assertQueryCount(2):  # Two batches, so two queries.
+            n = Person.bulk_update([p1, p2, p3, p4], [Person.first], 2)
+            self.assertEqual(n, 4)
+
+        query = Person.select().order_by(Person.id)
+        self.assertEqual([(p.first, p.last) for p in query], [
+            ('f1-x2', 'l1-x'),
+            ('f2-y2', 'l2'),
+            ('f3', 'l3-z'),
+            ('f4', 'l4')])
+
+    @requires_models(User, Tweet)
+    def test_bulk_update_foreign_key(self):
+        for username in ('charlie', 'huey', 'zaizee'):
+            user = User.create(username=username)
+            for i in range(2):
+                Tweet.create(user=user, content='%s-%s' % (username, i))
+
+        c, h, z = list(User.select().order_by(User.id))
+        c0, c1, h0, h1, z0, z1 = list(Tweet.select().order_by(Tweet.id))
+        c0.content = 'charlie-0x'
+        c1.user = h
+        h0.user = z
+        h1.content = 'huey-1x'
+        z0.user = c
+        z0.content = 'zaizee-0x'
+
+        with self.assertQueryCount(1):
+            Tweet.bulk_update([c0, c1, h0, h1, z0, z1], ['user', 'content'])
+
+        query = (Tweet
+                 .select(Tweet.content, User.username)
+                 .join(User)
+                 .order_by(Tweet.id)
+                 .objects())
+        self.assertEqual([(t.username, t.content) for t in query], [
+            ('charlie', 'charlie-0x'),
+            ('huey', 'charlie-1'),
+            ('zaizee', 'huey-0'),
+            ('huey', 'huey-1x'),
+            ('charlie', 'zaizee-0x'),
+            ('zaizee', 'zaizee-1')])
+
     @requires_models(User, Tweet)
     def test_get_shortcut(self):
         huey = self.add_user('huey')

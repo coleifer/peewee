@@ -2427,8 +2427,9 @@ class Insert(_WriteQuery):
         defaults = self.get_default_data()
         value_lookups = {}
 
+        # First figure out what columns are being inserted (if they weren't
+        # specified explicitly). Resulting columns are normalized and ordered.
         if not columns:
-            uses_strings = False
             try:
                 row = next(rows_iter)
             except StopIteration:
@@ -2441,6 +2442,7 @@ class Insert(_WriteQuery):
             else:
                 # Infer column names from the dict of data being inserted.
                 accum = []
+                uses_strings = False  # Are the dict keys strings or columns?
                 for key in row:
                     if isinstance(key, basestring):
                         column = getattr(self.table, key)
@@ -5886,6 +5888,34 @@ class Model(with_metaclass(ModelBase, Node)):
             if ids_returned:
                 for (obj_id,), model in zip(res, batch):
                     setattr(model, pk_name, obj_id)
+
+    @classmethod
+    def bulk_update(cls, model_list, fields, batch_size=None):
+        # First normalize list of fields so all are field instances.
+        fields = [cls._meta.fields[f] if isinstance(f, basestring) else f
+                  for f in fields]
+        # Now collect list of attribute names to use for values.
+        attrs = [field.object_id_name if isinstance(field, ForeignKeyField)
+                 else field.name for field in fields]
+
+        if batch_size is not None:
+            batches = chunked(model_list, batch_size)
+        else:
+            batches = [model_list]
+
+        n = 0
+        for batch in batches:
+            id_list = [model._pk for model in batch]
+            update = {}
+            for field, attr in zip(fields, attrs):
+                accum = [(model._pk, getattr(model, attr)) for model in batch]
+                case = Case(cls._meta.primary_key, accum)
+                update[field] = case
+
+            n += (cls.update(update)
+                  .where(cls._meta.primary_key.in_(id_list))
+                  .execute())
+        return n
 
     @classmethod
     def noop(cls):

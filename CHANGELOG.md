@@ -7,6 +7,8 @@ https://github.com/coleifer/peewee/releases
 
 ## master
 
+* Add `Model.bulk_update()` method for bulk-updating fields across multiple
+  model instances.
 * Add support for window function frame exclusion and added built-in support
   for the GROUPS frame type.
 * Add support for chaining window functions by extending a previously-declared
