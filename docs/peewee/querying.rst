@@ -234,7 +234,12 @@ efficiently update one or more columns on a list of models. For example:
 .. note::
     For large lists of objects, you should specify a reasonable batch_size and
     wrap the call to :py:meth:`~Model.bulk_update` with
-    :py:meth:`Database.atomic`.
+    :py:meth:`Database.atomic`:
+
+    .. code-block:: python
+
+        with database.atomic():
+            User.bulk_update(list_of_users, fields=['username'], batch_size=50)
 
 Alternatively, you can use the :py:meth:`Database.batch_commit` helper to
 process chunks of rows inside *batch*-sized transactions. This method also
