@@ -257,6 +257,61 @@ class TestModelAPIs(ModelTestCase):
             ('charlie', 'zaizee-0x'),
             ('zaizee', 'zaizee-1')])
 
+    @requires_models(Person)
+    def test_bulk_update_integrityerror(self):
+        people = [Person(first='f%s' % i, last='l%s' % i, dob='1980-01-01')
+                  for i in range(10)]
+        Person.bulk_create(people)
+
+        # Get list of people w/the IDs populated. They will not be set if the
+        # underlying DB is Sqlite or MySQL.
+        people = list(Person.select().order_by(Person.id))
+
+        # First we'll just modify all the first and last names.
+        for person in people:
+            person.first += '-x'
+            person.last += '-x'
+
+        # Now we'll introduce an issue that will cause an integrity error.
+        p3, p7 = people[3], people[7]
+        p3.first = p7.first = 'fx'
+        p3.last = p7.last = 'lx'
+        with self.assertRaises(IntegrityError):
+            with self.assertQueryCount(1):
+                with self.database.atomic():
+                    Person.bulk_update(people, fields=['first', 'last'])
+
+        with self.assertRaises(IntegrityError):
+            # 10 objects, batch size=4, so 0-3, 4-7, 8&9. But we never get to 8
+            # and 9 because of the integrity error processing the 2nd batch.
+            with self.assertQueryCount(2):
+                with self.database.atomic():
+                    Person.bulk_update(people, ['first', 'last'], 4)
+
+        # Ensure no changes were made.
+        vals = [(p.first, p.last) for p in Person.select().order_by(Person.id)]
+        self.assertEqual(vals, [('f%s' % i, 'l%s' % i) for i in range(10)])
+
+    @requires_models(User, Tweet)
+    def test_bulk_update_apply_dbvalue(self):
+        u = User.create(username='u')
+        t1, t2, t3 = [Tweet.create(user=u, content=str(i)) for i in (1, 2, 3)]
+
+        # If we don't end up applying the field's db_value() to these timestamp
+        # values, then we will end up with bad data or an error when attempting
+        # to do the update.
+        t1.timestamp = datetime.datetime(2019, 1, 2, 3, 4, 5)
+        t2.timestamp = datetime.date(2019, 1, 3)
+        t3.timestamp = 1337133700  # 2012-05-15T21:1:40.
+        t3_dt = datetime.datetime.fromtimestamp(1337133700)
+        Tweet.bulk_update([t1, t2, t3], fields=['timestamp'])
+
+        # Ensure that the values were handled appropriately.
+        t1, t2, t3 = list(Tweet.select().order_by(Tweet.id))
+        self.assertEqual(t1.timestamp, datetime.datetime(2019, 1, 2, 3, 4, 5))
+        self.assertEqual(t2.timestamp, datetime.datetime(2019, 1, 3, 0, 0, 0))
+        self.assertEqual(t3.timestamp, t3_dt)
+
     @requires_models(User, Tweet)
     def test_get_shortcut(self):
         huey = self.add_user('huey')

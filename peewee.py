@@ -5908,7 +5908,12 @@ class Model(with_metaclass(ModelBase, Node)):
             id_list = [model._pk for model in batch]
             update = {}
             for field, attr in zip(fields, attrs):
-                accum = [(model._pk, getattr(model, attr)) for model in batch]
+                accum = []
+                for model in batch:
+                    value = getattr(model, attr)
+                    if not isinstance(value, Node):
+                        value = Value(value, converter=field.db_value)
+                    accum.append((model._pk, value))
                 case = Case(cls._meta.primary_key, accum)
                 update[field] = case
 
