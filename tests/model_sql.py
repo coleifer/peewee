@@ -13,9 +13,17 @@ from .base import __sql__
 from .base_models import *
 
 
+class CKM(TestModel):
+    category = CharField()
+    key = CharField()
+    value = IntegerField()
+    class Meta:
+        primary_key = CompositeKey('category', 'key')
+
+
 class TestModelSQL(ModelDatabaseTestCase):
     database = get_in_memory_db()
-    requires = [Category, Note, Person, Relationship, User]
+    requires = [Category, CKM, Note, Person, Relationship, Sample, User]
 
     def test_select(self):
         query = (Person
@@ -326,6 +334,19 @@ class TestModelSQL(ModelDatabaseTestCase):
             'VALUES (?, ?), (?, ?)'),
             [1, 'note-1', 2, 'note-2'])
 
+    def test_insert_many_defaults(self):
+        # Verify fields are inferred and values are read correctly, when
+        # partial data is given and a field has default values.
+        s2 = {'counter': 2, 'value': 2.}
+        s3 = {'counter': 3}
+        self.assertSQL(Sample.insert_many([s2, s3]), (
+            'INSERT INTO "sample" ("counter", "value") VALUES (?, ?), (?, ?)'),
+            [2, 2., 3, 1.])
+
+        self.assertSQL(Sample.insert_many([s3, s2]), (
+            'INSERT INTO "sample" ("counter", "value") VALUES (?, ?), (?, ?)'),
+            [3, 1., 2, 2.])
+
     def test_insert_many_list_with_fields(self):
         data = [(i,) for i in ('charlie', 'huey', 'zaizee')]
         query = User.insert_many(data, fields=[User.username])
@@ -338,6 +359,21 @@ class TestModelSQL(ModelDatabaseTestCase):
         self.assertSQL(query, (
             'INSERT INTO "users" ("username") VALUES (?), (?), (?)'),
             ['charlie', 'huey', 'zaizee'])
+
+    def test_insert_many_infer_fields(self):
+        data = [('f1', 'l1', '1980-01-01'),
+                ('f2', 'l2', '1980-02-02')]
+        self.assertSQL(Person.insert_many(data), (
+            'INSERT INTO "person" ("first", "last", "dob") '
+            'VALUES (?, ?, ?), (?, ?, ?)'),
+            ['f1', 'l1', datetime.date(1980, 1, 1),
+             'f2', 'l2', datetime.date(1980, 2, 2)])
+
+        # When primary key is not auto-increment, PKs are included.
+        data = [('c1', 'k1', 1), ('c2', 'k2', 2)]
+        self.assertSQL(CKM.insert_many(data), (
+            'INSERT INTO "ckm" ("category", "key", "value") '
+            'VALUES (?, ?, ?), (?, ?, ?)'), ['c1', 'k1', 1, 'c2', 'k2', 2])
 
     def test_insert_query(self):
         select = (Person

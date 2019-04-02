@@ -11,6 +11,9 @@ https://github.com/coleifer/peewee/releases
   for the GROUPS frame type.
 * Add support for chaining window functions by extending a previously-declared
   window function.
+* Bulk insert via ``insert_many()`` no longer require specification of the
+  fields argument when the inserted rows are lists/tuples. In that case, the
+  fields will be inferred to be all model fields except any auto-increment id.
 
 [View commits](https://github.com/coleifer/peewee/compare/3.9.3...master)
 

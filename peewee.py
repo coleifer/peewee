@@ -2414,12 +2414,18 @@ class Insert(_WriteQuery):
     def get_default_data(self):
         return {}
 
+    def get_default_columns(self):
+        if self.table._columns:
+            return [getattr(self.table, col) for col in self.table._columns
+                    if col != self.table._primary_key]
+
     def _generate_insert(self, insert, ctx):
         rows_iter = iter(insert)
         columns = self._columns
 
         # Load and organize column defaults (if provided).
         defaults = self.get_default_data()
+        value_lookups = {}
 
         if not columns:
             uses_strings = False
@@ -2427,9 +2433,14 @@ class Insert(_WriteQuery):
                 row = next(rows_iter)
             except StopIteration:
                 raise self.DefaultValuesException('Error: no rows to insert.')
+
+            if not isinstance(row, dict):
+                columns = self.get_default_columns()
+                if columns is None:
+                    raise ValueError('Bulk insert must specify columns.')
             else:
+                # Infer column names from the dict of data being inserted.
                 accum = []
-                value_lookups = {}
                 for key in row:
                     if isinstance(key, basestring):
                         column = getattr(self.table, key)
@@ -2439,16 +2450,17 @@ class Insert(_WriteQuery):
                     accum.append(column)
                     value_lookups[column] = key
 
-            column_set = set(accum)
-            for column in (set(defaults) - column_set):
-                accum.append(column)
-                value_lookups[column] = column.name if uses_strings else column
+                # Add any columns present in the default data that are not
+                # accounted for by the dictionary of row data.
+                column_set = set(accum)
+                for col in (set(defaults) - column_set):
+                    accum.append(col)
+                    value_lookups[col] = col.name if uses_strings else col
 
-            columns = sorted(accum, key=lambda obj: obj.get_sort_key(ctx))
+                columns = sorted(accum, key=lambda obj: obj.get_sort_key(ctx))
             rows_iter = itertools.chain(iter((row,)), rows_iter)
         else:
             clean_columns = []
-            value_lookups = {}
             for column in columns:
                 if isinstance(column, basestring):
                     column_obj = getattr(self.table, column)
@@ -2484,7 +2496,7 @@ class Insert(_WriteQuery):
                         if callable_(val):
                             val = val()
                     else:
-                        raise ValueError('Missing value for "%s".' % column)
+                        raise ValueError('Missing value for %s.' % column.name)
 
                 if not isinstance(val, Node):
                     val = Value(val, converter=converter, unpack=False)
@@ -6636,6 +6648,10 @@ class ModelInsert(_ModelWriteQueryHelper, Insert):
 
     def get_default_data(self):
         return self.model._meta.defaults
+
+    def get_default_columns(self):
+        fields = self.model._meta.sorted_fields
+        return fields[1:] if self.model._meta.auto_increment else fields
 
 
 class ModelDelete(_ModelWriteQueryHelper, Delete):

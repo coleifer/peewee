@@ -15,7 +15,7 @@ from .base import __sql__
 
 User = Table('users')
 Tweet = Table('tweets')
-Person = Table('person', ['id', 'name', 'dob'])
+Person = Table('person', ['id', 'name', 'dob'], primary_key='id')
 Note = Table('note', ['id', 'person_id', 'content'])
 
 
@@ -767,6 +767,26 @@ class TestInsertQuery(BaseTestCase):
         self.assertSQL(query, (
             'INSERT INTO "person" ("name") VALUES (?), (?), (?)'),
             ['charlie', 'huey', 'zaizee'])
+
+    def test_insert_list_infer_columns(self):
+        data = [('p1', '1980-01-01'), ('p2', '1980-02-02')]
+        self.assertSQL(Person.insert(data), (
+            'INSERT INTO "person" ("name", "dob") VALUES (?, ?), (?, ?)'),
+            ['p1', '1980-01-01', 'p2', '1980-02-02'])
+
+        # Cannot infer any columns for User.
+        data = [('u1',), ('u2',)]
+        self.assertRaises(ValueError, User.insert(data).sql)
+
+        # Note declares columns, but no primary key. So we would have to
+        # include it for this to work.
+        data = [(1, 'p1-n'), (2, 'p2-n')]
+        self.assertRaises(ValueError, Note.insert(data).sql)
+
+        data = [(1, 1, 'p1-n'), (2, 2, 'p2-n')]
+        self.assertSQL(Note.insert(data), (
+            'INSERT INTO "note" ("id", "person_id", "content") '
+            'VALUES (?, ?, ?), (?, ?, ?)'), [1, 1, 'p1-n', 2, 2, 'p2-n'])
 
     def test_insert_query(self):
         source = User.select(User.c.username).where(User.c.admin == False)
