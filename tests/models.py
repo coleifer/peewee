@@ -200,7 +200,7 @@ class TestModelAPIs(ModelTestCase):
 
         with self.assertQueryCount(1):
             n = Person.bulk_update([p1, p2, p3, p4], ['first', 'last'])
-            self.assertEqual(n, 4)
+            self.assertEqual(n, 3 if IS_MYSQL else 4)
 
         query = Person.select().order_by(Person.id)
         self.assertEqual([(p.first, p.last) for p in query], [
@@ -216,7 +216,7 @@ class TestModelAPIs(ModelTestCase):
         p3.last = 'f3-z2'
         with self.assertQueryCount(2):  # Two batches, so two queries.
             n = Person.bulk_update([p1, p2, p3, p4], [Person.first], 2)
-            self.assertEqual(n, 4)
+            self.assertEqual(n, 2 if IS_MYSQL else 4)
 
         query = Person.select().order_by(Person.id)
         self.assertEqual([(p.first, p.last) for p in query], [
