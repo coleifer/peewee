@@ -312,8 +312,8 @@ where the keys correspond to the model's field names:
     >>> query.execute()  # Returns the number of rows that were updated.
     4
 
-For more information, see the documentation on :py:meth:`Model.update` and
-:py:class:`Update`.
+For more information, see the documentation on :py:meth:`Model.update`,
+:py:class:`Update` and :py:meth:`Model.bulk_update`.
 
 .. note::
     If you would like more information on performing atomic updates (such as
