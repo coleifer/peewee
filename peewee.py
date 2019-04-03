@@ -4398,15 +4398,21 @@ class TextField(_StringField):
 class BlobField(Field):
     field_type = 'BLOB'
 
+    def _db_hook(self, database):
+        self._constructor = database.get_binary_type()
+
     def bind(self, model, name, set_attribute=True):
         self._constructor = bytearray
         if model._meta.database:
             if isinstance(model._meta.database, Proxy):
-                def cb(db):
-                    self._constructor = db.get_binary_type()
-                model._meta.database.attach_callback(cb)
+                model._meta.database.attach_callback(self._db_hook)
             else:
-                self._constructor = model._meta.database.get_binary_type()
+                self._db_hook(model._meta.database)
+
+        # Attach a hook to the model metadata; in the event the database is
+        # changed or set at run-time, we will be sure to apply our callback and
+        # use the proper data-type for our database driver.
+        model._meta._db_hooks.append(self._db_hook)
         return super(BlobField, self).bind(model, name, set_attribute)
 
     def db_value(self, value):
@@ -5392,6 +5398,13 @@ class Metadata(object):
             setattr(self, key, value)
         self._additional_keys = set(kwargs.keys())
 
+        # Allow objects to register hooks that are called if the model is bound
+        # to a different database. For example, BlobField uses a different
+        # Python data-type depending on the db driver / python version. When
+        # the database changes, we need to update any BlobField so they can use
+        # the appropriate data-type.
+        self._db_hooks = []
+
     def make_table_name(self):
         if self.legacy_table_names:
             return re.sub('[^\w]+', '_', self.name)
@@ -5604,6 +5617,10 @@ class Metadata(object):
         self.database = database
         self.model._schema._database = database
         del self.table
+
+        # Apply any hooks that have been registered.
+        for hook in self._db_hooks:
+            hook(database)
 
     def set_table_name(self, table_name):
         self.table_name = table_name

@@ -626,6 +626,31 @@ class TestBlobField(ModelTestCase):
         db.initialize(db_obj)
         self.assertTrue(NewBlobModel.data._constructor is sqlite3.Binary)
 
+    def test_blob_db_hook(self):
+        sentinel = object()
+
+        class FakeDatabase(Database):
+            def get_binary_type(self):
+                return sentinel
+
+        class B(Model):
+            b1 = BlobField()
+            b2 = BlobField()
+
+        B._meta.set_database(FakeDatabase(None))
+        self.assertTrue(B.b1._constructor is sentinel)
+        self.assertTrue(B.b2._constructor is sentinel)
+
+        alt_db = SqliteDatabase(':memory:')
+        with alt_db.bind_ctx([B]):
+            # The constructor has been changed.
+            self.assertTrue(B.b1._constructor is sqlite3.Binary)
+            self.assertTrue(B.b2._constructor is sqlite3.Binary)
+
+        # The constructor has been restored.
+        self.assertTrue(B.b1._constructor is sentinel)
+        self.assertTrue(B.b2._constructor is sentinel)
+
 
 class BigModel(TestModel):
     pk = BigAutoField()
