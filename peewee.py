@@ -47,6 +47,10 @@ except ImportError:
 try:
     import psycopg2
     from psycopg2 import extensions as pg_extensions
+    try:
+        from psycopg2 import errors as pg_errors
+    except ImportError:
+        pg_errors = None
 except ImportError:
     psycopg2 = None
 
@@ -2711,10 +2715,15 @@ class ExceptionWrapper(object):
     def __exit__(self, exc_type, exc_value, traceback):
         if exc_type is None:
             return
+        # psycopg2.8 shits out a million cute error types. Try to catch em all.
+        if pg_errors is not None and exc_type.__name__ not in self.exceptions \
+           and issubclass(exc_type, pg_errors.Error):
+            exc_type = exc_type.__bases__[0]
         if exc_type.__name__ in self.exceptions:
             new_type = self.exceptions[exc_type.__name__]
             exc_args = exc_value.args
             reraise(new_type, new_type(*exc_args), traceback)
+
 
 EXCEPTIONS = {
     'ConstraintError': IntegrityError,
