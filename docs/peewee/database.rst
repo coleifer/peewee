@@ -549,7 +549,7 @@ database name and any additional keyword arguments:
 
 .. code-block:: python
 
-    database_name = raw_input('What is the name of the db? ')
+    database_name = input('What is the name of the db? ')
     database.init(database_name, host='localhost', user='postgres')
 
 For even more control over initializing your database, see the next section,
@@ -561,14 +561,14 @@ Dynamically defining a database
 -------------------------------
 
 For even more control over how your database is defined/initialized, you can
-use the :py:class:`Proxy` helper. :py:class:`Proxy` objects act as a
-placeholder, and then at run-time you can swap it out for a different object.
-In the example below, we will swap out the database depending on how the app is
-configured:
+use the :py:class:`DatabaseProxy` helper. :py:class:`DatabaseProxy` objects act
+as a placeholder, and then at run-time you can swap it out for a different
+object. In the example below, we will swap out the database depending on how
+the app is configured:
 
 .. code-block:: python
 
-    database_proxy = Proxy()  # Create a proxy for our db.
+    database_proxy = DatabaseProxy()  # Create a proxy for our db.
 
     class BaseModel(Model):
         class Meta:
@@ -591,13 +591,109 @@ configured:
 .. warning::
     Only use this method if your actual database driver varies at run-time. For
     instance, if your tests and local dev environment run on SQLite, but your
-    deployed app uses PostgreSQL, you can use the :py:class:`Proxy` to swap out
-    engines at run-time.
+    deployed app uses PostgreSQL, you can use the :py:class:`DatabaseProxy` to
+    swap out engines at run-time.
 
     However, if it is only connection values that vary at run-time, such as the
     path to the database file, or the database host, you should instead use
     :py:meth:`Database.init`. See :ref:`deferring_initialization` for more
     details.
+
+.. note::
+    It may be easier to avoid the use of :py:class:`DatabaseProxy` and instead
+    use :py:meth:`Database.bind` and related methods to set or change the
+    database. See :ref:`binding_database` for details.
+
+.. _binding_database:
+
+Setting the database at run-time
+--------------------------------
+
+We have seen three ways that databases can be configured with Peewee:
+
+.. code-block:: python
+
+    # The usual way:
+    db = SqliteDatabase('my_app.db', pragmas={'journal_mode': 'wal'})
+
+
+    # Specify the details at run-time:
+    db = SqliteDatabase(None)
+    ...
+    db.init(db_filename, pragmas={'journal_mode': 'wal'})
+
+
+    # Or use a placeholder:
+    db = DatabaseProxy()
+    ...
+    db.initialize(SqliteDatabase('my_app.db', pragmas={'journal_mode': 'wal'}))
+
+Peewee can also set or change the database for your model classes. This
+technique is used by the Peewee test suite to bind test model classes to
+various database instances when running the tests.
+
+There are two sets of complementary methods:
+
+* :py:meth:`Database.bind` and :py:meth:`Model.bind` - bind one or more models
+  to a database.
+* :py:meth:`Database.bind_ctx` and :py:meth:`Model.bind_ctx` - which are the
+  same as their ``bind()`` counterparts, but return a context-manager and are
+  useful when the database should only be changed temporarily.
+
+As an example, we'll declare two models **without** specifying any database:
+
+.. code-block:: python
+
+    class User(Model):
+        username = TextField()
+
+    class Tweet(Model):
+        user = ForeignKeyField(User, backref='tweets')
+        content = TextField()
+        timestamp = TimestampField()
+
+Bind the models to a database at run-time:
+
+.. code-block:: python
+
+    postgres_db = PostgresqlDatabase('my_app', user='postgres')
+    sqlite_db = SqliteDatabase('my_app.db')
+
+    # At this point, the User and Tweet models are NOT bound to any database.
+
+    # Let's bind them to the Postgres database:
+    postgres_db.bind([User, Tweet])
+
+    # Now we will temporarily bind them to the sqlite database:
+    with sqlite_db.bind_ctx([User, Tweet]):
+        # User and Tweet are now bound to the sqlite database.
+        assert User._meta.database is sqlite_db
+
+    # User and Tweet are once again bound to the Postgres database.
+    assert User._meta.database is postgres_db
+
+The :py:meth:`Model.bind` and :py:meth:`Model.bind_ctx` methods work the same
+for binding a given model class:
+
+.. code-block:: python
+
+    # Bind the user model to the sqlite db. By default, Peewee will also
+    # bind any models that are related to User via foreign-key as well.
+    User.bind(sqlite_db)
+
+    assert User._meta.database is sqlite_db
+    assert Tweet._meta.database is sqlite_db  # Related models bound too.
+
+    # Here we will temporarily bind *just* the User model to the postgres db.
+    with User.bind_ctx(postgres_db, bind_backrefs=False):
+        assert User._meta.database is postgres_db
+        assert Tweet._meta.database is sqlite_db  # Has not changed.
+
+    # And now User is back to being bound to the sqlite_db.
+    assert User._meta.database is sqlite_db
+
+The :ref:`testing` section of this document also contains some examples of
+using the ``bind()`` methods.
 
 Connection Management
 ---------------------

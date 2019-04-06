@@ -4773,6 +4773,13 @@ Constants and Helpers
 
         Add a callback to be executed when the proxy is initialized.
 
+.. py:class:: DatabaseProxy()
+
+    Proxy subclass that is suitable to use as a placeholder for a
+    :py:class:`Database` instance.
+
+    See :ref:`dynamic_db` for details on usage.
+
 .. py:function:: chunked(iterable, n)
 
     :param iterable: an iterable that is the source of the data to be chunked.
