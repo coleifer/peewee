@@ -51,6 +51,12 @@ data model, by defining one or more :py:class:`Model` classes:
             database = db # This model uses the "people.db" database.
 
 .. note::
+    If you want your database file path to be based on the environment (e.g.
+    ``XDG_DATA_HOME``) or a configuration setting, you can defer the
+    initialization of the database by specifying ``None`` as the database name.
+    Refer to the :ref:`deferring_initialization` section for more details.
+
+.. note::
     Peewee will automatically infer the database table name from the name of
     the class. You can override the default name by specifying a ``table_name``
     attribute in the inner "Meta" class (alongside the ``database`` attribute).
