@@ -52,7 +52,7 @@ try:
     except ImportError:
         pg_errors = None
 except ImportError:
-    psycopg2 = None
+    psycopg2 = pg_errors = None
 
 mysql_passwd = False
 try:
