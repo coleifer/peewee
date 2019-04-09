@@ -87,6 +87,7 @@ IS_SQLITE_24 = IS_SQLITE and sqlite3.sqlite_version_info >= (3, 24)
 IS_SQLITE_25 = IS_SQLITE and sqlite3.sqlite_version_info >= (3, 25)
 IS_SQLITE_9 = IS_SQLITE and sqlite3.sqlite_version_info >= (3, 9)
 IS_MYSQL_ADVANCED_FEATURES = False
+IS_MYSQL_JSON = False
 if IS_MYSQL:
     db.connect()
     server_info = db.server_version
@@ -94,6 +95,9 @@ if IS_MYSQL:
         IS_MYSQL_ADVANCED_FEATURES = True
     elif server_info[0] == 0:
         logger.warning('Could not determine mysql server version.')
+    if server_info[0] == 8 or ((5, 7) <= server_info[:2] <= (6, 0)):
+        # Needs actual MySQL - not MariaDB.
+        IS_MYSQL_JSON = True
     db.close()
     if not IS_MYSQL_ADVANCED_FEATURES:
         logger.warning('MySQL too old to test certain advanced features.')

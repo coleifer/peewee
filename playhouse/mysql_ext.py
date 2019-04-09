@@ -1,3 +1,5 @@
+import json
+
 try:
     import mysql.connector as mysql_connector
 except ImportError:
@@ -5,6 +7,7 @@ except ImportError:
 
 from peewee import ImproperlyConfigured
 from peewee import MySQLDatabase
+from peewee import TextField
 
 
 class MySQLConnectorDatabase(MySQLDatabase):
@@ -17,3 +20,15 @@ class MySQLConnectorDatabase(MySQLDatabase):
         if self.is_closed():
             self.connect()
         return self._state.conn.cursor(buffered=True)
+
+
+class JSONField(TextField):
+    field_type = 'JSON'
+
+    def db_value(self, value):
+        if value is not None:
+            return json.dumps(value)
+
+    def python_value(self, value):
+        if value is not None:
+            return json.loads(value)
