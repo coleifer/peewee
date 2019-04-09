@@ -920,3 +920,45 @@ class TestSQLFunctionDBValue(ModelTestCase):
         # If we nest the field in a function, the conversion is not applied.
         expr = fn.SUBSTR(UpperModel.name, 1, 1) == 'z'
         self.assertRaises(UpperModel.DoesNotExist, UpperModel.get, expr)
+
+
+class NQ(TestModel):
+    name = TextField()
+
+class NQItem(TestModel):
+    nq = ForeignKeyField(NQ, backref='items')
+    nq_null = ForeignKeyField(NQ, backref='null_items', null=True)
+    nq_lazy = ForeignKeyField(NQ, lazy_load=False, backref='lazy_items')
+    nq_lazy_null = ForeignKeyField(NQ, lazy_load=False,
+                                   backref='lazy_null_items', null=True)
+
+
+class TestForeignKeyLazyLoad(ModelTestCase):
+    requires = [NQ, NQItem]
+
+    def test_foreign_key_lazy_load(self):
+        with self.database.atomic():
+            a = NQ.create(name='a')
+            ai = NQItem.create(nq=a, nq_null=a, nq_lazy=a, nq_lazy_null=a)
+
+            b = NQ.create(name='b')
+            bi = NQItem.create(nq=b, nq_lazy=b)
+
+            a_db = NQ[a.id]
+            b_db = NQ[b.id]
+            ai_db = NQItem[ai.id]
+            bi_db = NQItem[bi.id]
+
+        with self.assertQueryCount(0):
+            self.assertEqual(ai_db.nq_lazy, a_db.id)
+            self.assertEqual(ai_db.nq_lazy_null, a_db.id)
+            self.assertEqual(bi_db.nq_lazy, b_db.id)
+            self.assertTrue(bi_db.nq_lazy_null is None)
+            self.assertTrue(bi_db.nq_null is None)
+
+        with self.assertQueryCount(2):
+            self.assertEqual(ai_db.nq.id, a_db.id)
+            self.assertEqual(ai_db.nq_null.id, a_db.id)
+
+        with self.assertQueryCount(1):
+            self.assertEqual(bi_db.nq.id, b_db.id)
