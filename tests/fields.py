@@ -936,29 +936,61 @@ class NQItem(TestModel):
 class TestForeignKeyLazyLoad(ModelTestCase):
     requires = [NQ, NQItem]
 
-    def test_foreign_key_lazy_load(self):
+    def setUp(self):
+        super(TestForeignKeyLazyLoad, self).setUp()
         with self.database.atomic():
-            a = NQ.create(name='a')
-            ai = NQItem.create(nq=a, nq_null=a, nq_lazy=a, nq_lazy_null=a)
+            a1, a2, a3, a4 = [NQ.create(name='a%s' % i) for i in range(1, 5)]
+            ai = NQItem.create(nq=a1, nq_null=a2, nq_lazy=a3, nq_lazy_null=a4)
 
             b = NQ.create(name='b')
             bi = NQItem.create(nq=b, nq_lazy=b)
 
-            a_db = NQ[a.id]
-            b_db = NQ[b.id]
-            ai_db = NQItem[ai.id]
-            bi_db = NQItem[bi.id]
+    def test_foreign_key_lazy_load(self):
+        a1, a2, a3, a4 = (NQ.select()
+                          .where(NQ.name.startswith('a'))
+                          .order_by(NQ.name))
+        b = NQ.get(NQ.name == 'b')
+        ai = NQItem.get(NQItem.nq_id == a1.id)
+        bi = NQItem.get(NQItem.nq_id == b.id)
 
+        # Accessing the lazy foreign-key fields will not result in any queries
+        # being executed.
         with self.assertQueryCount(0):
-            self.assertEqual(ai_db.nq_lazy, a_db.id)
-            self.assertEqual(ai_db.nq_lazy_null, a_db.id)
-            self.assertEqual(bi_db.nq_lazy, b_db.id)
-            self.assertTrue(bi_db.nq_lazy_null is None)
-            self.assertTrue(bi_db.nq_null is None)
+            self.assertEqual(ai.nq_lazy, a3.id)
+            self.assertEqual(ai.nq_lazy_null, a4.id)
+            self.assertEqual(bi.nq_lazy, b.id)
+            self.assertTrue(bi.nq_lazy_null is None)
+            self.assertTrue(bi.nq_null is None)
 
+        # Accessing the regular foreign-key fields uses a query to get the
+        # related model instance.
         with self.assertQueryCount(2):
-            self.assertEqual(ai_db.nq.id, a_db.id)
-            self.assertEqual(ai_db.nq_null.id, a_db.id)
+            self.assertEqual(ai.nq.id, a1.id)
+            self.assertEqual(ai.nq_null.id, a2.id)
 
         with self.assertQueryCount(1):
-            self.assertEqual(bi_db.nq.id, b_db.id)
+            self.assertEqual(bi.nq.id, b.id)
+
+    def test_fk_lazy_select_related(self):
+        NA, NB, NC, ND = [NQ.alias(a) for a in ('na', 'nb', 'nc', 'nd')]
+        LO = JOIN.LEFT_OUTER
+        query = (NQItem.select(NQItem, NA, NB, NC, ND)
+                 .join_from(NQItem, NA, LO, on=NQItem.nq)
+                 .join_from(NQItem, NB, LO, on=NQItem.nq_null)
+                 .join_from(NQItem, NC, LO, on=NQItem.nq_lazy)
+                 .join_from(NQItem, ND, LO, on=NQItem.nq_lazy_null)
+                 .order_by(NQItem.id))
+
+        # If we explicitly / eagerly select lazy foreign-key models, they
+        # behave just like regular foreign keys.
+        with self.assertQueryCount(1):
+            ai, bi = [ni for ni in query]
+            self.assertEqual(ai.nq.name, 'a1')
+            self.assertEqual(ai.nq_null.name, 'a2')
+            self.assertEqual(ai.nq_lazy.name, 'a3')
+            self.assertEqual(ai.nq_lazy_null.name, 'a4')
+
+            self.assertEqual(bi.nq.name, 'b')
+            self.assertEqual(bi.nq_lazy.name, 'b')
+            self.assertTrue(bi.nq_null is None)
+            self.assertTrue(bi.nq_lazy_null is None)

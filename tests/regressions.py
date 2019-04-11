@@ -611,3 +611,47 @@ class TestJoinSubqueryAggregateViaLeftOuter(ModelTestCase):
             results = [(p.name, p.ptotal, p.pavg) for p in obj_query]
 
         self.assertEqual(results, [('p1', 60, 20), ('p2', 410, 82)])
+
+
+class Project(TestModel):
+    name = TextField()
+
+class Task(TestModel):
+    name = TextField()
+    project = ForeignKeyField(Project, backref='tasks')
+    alt = ForeignKeyField(Project, backref='alt_tasks')
+
+
+class TestModelGraphMultiFK(ModelTestCase):
+    requires = [Project, Task]
+
+    def test_model_graph_multi_fk(self):
+        pa, pb, pc = [Project.create(name=name) for name in 'abc']
+        t1 = Task.create(name='t1', project=pa, alt=pc)
+        t2 = Task.create(name='t2', project=pb, alt=pb)
+
+        P1 = Project.alias('p1')
+        P2 = Project.alias('p2')
+        LO = JOIN.LEFT_OUTER
+
+        # Query using join expression.
+        q1 = (Task
+              .select(Task, P1, P2)
+              .join_from(Task, P1, LO, on=(Task.project == P1.id))
+              .join_from(Task, P2, LO, on=(Task.alt == P2.id))
+              .order_by(Task.name))
+
+        # Query specifying target field.
+        q2 = (Task
+              .select(Task, P1, P2)
+              .join_from(Task, P1, LO, on=Task.project)
+              .join_from(Task, P2, LO, on=Task.alt)
+              .order_by(Task.name))
+
+        for query in (q1, q2):
+            with self.assertQueryCount(1):
+                t1, t2 = list(query)
+                self.assertEqual(t1.project.name, 'a')
+                self.assertEqual(t1.alt.name, 'c')
+                self.assertEqual(t2.project.name, 'b')
+                self.assertEqual(t2.alt.name, 'b')

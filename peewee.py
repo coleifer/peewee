@@ -6554,7 +6554,22 @@ class ModelSelect(BaseModelSelect, Select):
                 raise ValueError('More than one foreign key between %s and %s.'
                                  ' Please specify which you are joining on.' %
                                  (src, dest))
-            return None, False
+
+            # If there are multiple foreign-keys to choose from and the join
+            # predicate is an expression, we'll try to figure out which
+            # foreign-key field we're joining on so that we can assign to the
+            # correct attribute when resolving the model graph.
+            to_field = None
+            if isinstance(on, Expression):
+                lhs, rhs = on.lhs, on.rhs
+                lhs_f = lhs.field if isinstance(lhs, FieldAlias) else lhs
+                rhs_f = rhs.field if isinstance(rhs, FieldAlias) else rhs
+                if lhs_f in fk_fields:
+                    to_field = lhs_f
+                elif rhs_f in fk_fields:
+                    to_field = rhs_f
+
+            return to_field, False
         else:
             return fk_fields[0], is_backref
 
