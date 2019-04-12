@@ -5,6 +5,7 @@ from decimal import Decimal as D
 from decimal import ROUND_UP
 
 from peewee import bytes_type
+from peewee import NodeList
 from peewee import *
 
 from .base import BaseTestCase
@@ -16,6 +17,8 @@ from .base import TestModel
 from .base import db
 from .base import get_in_memory_db
 from .base import requires_models
+from .base import requires_mysql
+from .base import requires_postgresql
 from .base import requires_sqlite
 from .base import skip_if
 from .base_models import Tweet
@@ -920,3 +923,65 @@ class TestSQLFunctionDBValue(ModelTestCase):
         # If we nest the field in a function, the conversion is not applied.
         expr = fn.SUBSTR(UpperModel.name, 1, 1) == 'z'
         self.assertRaises(UpperModel.DoesNotExist, UpperModel.get, expr)
+
+
+class Schedule(TestModel):
+    interval = IntegerField()
+
+class Task(TestModel):
+    schedule = ForeignKeyField(Schedule)
+    name = TextField()
+    last_run = DateTimeField()
+
+
+class TestDateTimeMath(ModelTestCase):
+    offset_to_names = (
+        (-10, ()),
+        (5, ('s1',)),
+        (10, ('s1', 's10')),
+        (11, ('s1', 's10')),
+        (60, ('s1', 's10', 's60')),
+        (61, ('s1', 's10', 's60')))
+    requires = [Schedule, Task]
+
+    def setUp(self):
+        super(TestDateTimeMath, self).setUp()
+        with self.database.atomic():
+            s1 = Schedule.create(interval=1)
+            s10 = Schedule.create(interval=10)
+            s60 = Schedule.create(interval=60)
+
+            self.dt = datetime.datetime(2019, 1, 1, 12)
+            for s, n in ((s1, 's1'), (s10, 's10'), (s60, 's60')):
+                Task.create(schedule=s, name=n, last_run=self.dt)
+
+    def _do_test_date_time_math(self, next_occurrence_expression):
+        for offset, names in self.offset_to_names:
+            dt = Value(self.dt + datetime.timedelta(seconds=offset))
+            query = (Task
+                     .select(Task, Schedule)
+                     .join(Schedule)
+                     .where(dt >= next_occurrence_expression)
+                     .order_by(Schedule.interval))
+            tnames = [task.name for task in query]
+            self.assertEqual(list(names), tnames)
+
+    @requires_postgresql
+    def test_date_time_math_pg(self):
+        second = SQL("INTERVAL '1 second'")
+        next_occurrence = Task.last_run + (Schedule.interval * second)
+        self._do_test_date_time_math(next_occurrence)
+
+    @requires_sqlite
+    def test_date_time_math_sqlite(self):
+        # Convert to a timestamp, add the scheduled seconds, then convert back
+        # to a datetime string for comparison with the last occurrence.
+        next_ts = fn.strftime('%s', Task.last_run) + Schedule.interval
+        next_occurrence = fn.datetime(next_ts, 'unixepoch')
+        self._do_test_date_time_math(next_occurrence)
+
+    @requires_mysql
+    def test_date_time_math_mysql(self):
+        nl = NodeList((SQL('INTERVAL'), Schedule.interval, SQL('SECOND')))
+        next_occurrence = fn.date_add(Task.last_run, nl)
+        self._do_test_date_time_math(next_occurrence)

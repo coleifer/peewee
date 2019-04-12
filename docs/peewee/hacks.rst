@@ -402,3 +402,79 @@ To implement ``login``-type functionality, you could write something like this:
         except User.DoesNotExist:
             # Incorrect username and/or password.
             return False
+
+.. _datemath:
+
+Date math
+---------
+
+Each of the databases supported by Peewee implement their own set of functions
+and semantics for date/time arithmetic.
+
+This section will provide a short scenario and example code demonstrating how
+you might utilize Peewee to do dynamic date manipulation in SQL.
+
+Scenario: we need to run certain tasks every *X* seconds, and both the task
+intervals and the task themselves are defined in the database. We need to write
+some code that will tell us which tasks we should run at a given time:
+
+.. code-block:: python
+
+    class Schedule(Model):
+        interval = IntegerField()  # Run this schedule every X seconds.
+
+
+    class Task(Model):
+        schedule = ForeignKeyField(Schedule, backref='tasks')
+        command = TextField()  # Run this command.
+        last_run = DateTimeField()  # When was this run last?
+
+Our logic will essentially boil down to::
+
+.. code-block:: python
+
+    # e.g., if the task was last run at 12:00:05, and the associated interval
+    # is 10 seconds, the next occurrence should be 12:00:15. So we check
+    # whether the current time (now) is 12:00:15 or later.
+    now >= task.last_run + schedule.interval
+
+So we can write the following code:
+
+.. code-block:: python
+
+    next_occurrence = ???
+
+    # We can express the current time as a Python datetime value, or we could
+    # alternatively use the appropriate SQL function/name.
+    now = Value(datetime.datetime.now())  # Or SQL('current_timestamp'), e.g.
+
+    query = (Task
+             .select(Task, Schedule)
+             .join(Schedule)
+             .where(now >= next_occurrence))
+
+For Postgresql we will multiple a static 1-second interval to calculate the
+offsets dynamically:
+
+.. code-block:: python
+
+    second = SQL("INTERVAL '1 second'")
+    next_occurrence = Task.last_run + (Schedule.interval * second)
+
+For MySQL we can reference the schedule's interval directly:
+
+.. code-block:: python
+
+    from peewee import NodeList  # Needed to construct sql entity.
+
+    interval = NodeList((SQL('INTERVAL'), Schedule.interval, SQL('SECOND')))
+    next_occurrence = fn.date_add(Task.last_run, interval)
+
+For SQLite, things are slightly tricky because SQLite does not have a dedicated
+datetime type. So for SQLite, we convert to a unix timestamp, add the schedule
+seconds, then convert back to a comparable datetime representation:
+
+.. code-block:: python
+
+    next_ts = fn.strftime('%s', Task.last_run) + Schedule.interval
+    next_occurrence = fn.datetime(next_ts, 'unixepoch')
