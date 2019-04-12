@@ -984,6 +984,7 @@ class KX(TestModel):
     value = IntegerField()
 
 class TestAutocommitIntegration(ModelTestCase):
+    database = db
     requires = [KX]
 
     def setUp(self):
