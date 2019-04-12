@@ -977,3 +977,63 @@ class TestServerSide(ModelTestCase):
 
         ss_query = ServerSide(query.where(SQL('1 = 0')))
         self.assertEqual(list(ss_query), [])
+
+
+class KX(TestModel):
+    key = CharField(unique=True)
+    value = IntegerField()
+
+class TestAutocommitIntegration(ModelTestCase):
+    requires = [KX]
+
+    def setUp(self):
+        super(TestAutocommitIntegration, self).setUp()
+        with self.database.atomic():
+            kx1 = KX.create(key='k1', value=1)
+
+    def force_integrity_error(self):
+        # Force an integrity error, then verify that the current
+        # transaction has been aborted.
+        self.assertRaises(IntegrityError, KX.create, key='k1', value=10)
+        self.assertRaises(InternalError, KX.get, key='k1')
+
+    def test_autocommit_default(self):
+        kx2 = KX.create(key='k2', value=2)  # Will be committed.
+        self.assertTrue(kx2.id > 0)
+        self.force_integrity_error()
+        self.database.rollback()
+
+        self.assertEqual(KX.select().count(), 2)
+        self.assertEqual([(kx.key, kx.value)
+                          for kx in KX.select().order_by(KX.key)],
+                         [('k1', 1), ('k2', 2)])
+
+    def test_autocommit_disabled(self):
+        with self.database.manual_commit():
+            kx2 = KX.create(key='k2', value=2)  # Not committed.
+            self.assertTrue(kx2.id > 0)  # Yes, we have a primary key.
+            self.force_integrity_error()
+            self.database.rollback()
+
+        self.assertEqual(KX.select().count(), 1)
+        kx1_db = KX.get(KX.key == 'k1')
+        self.assertEqual(kx1_db.value, 1)
+
+    def test_atomic_block(self):
+        with self.database.atomic() as txn:
+            kx2 = KX.create(key='k2', value=2)
+            self.assertTrue(kx2.id > 0)
+            self.force_integrity_error()
+            txn.rollback(False)
+
+        self.assertEqual(KX.select().count(), 1)
+        kx1_db = KX.get(KX.key == 'k1')
+        self.assertEqual(kx1_db.value, 1)
+
+    def test_atomic_block_exception(self):
+        with self.assertRaises(IntegrityError):
+            with self.database.atomic():
+                KX.create(key='k2', value=2)
+                KX.create(key='k1', value=10)
+
+        self.assertEqual(KX.select().count(), 1)

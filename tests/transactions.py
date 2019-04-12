@@ -158,6 +158,13 @@ class TestTransaction(ModelTestCase):
         with db.manual_commit():
             self.assertRaises(ValueError, also_fails)
 
+        with db.manual_commit():
+            with self.assertRaises(ValueError):
+                with db.atomic(): pass
+        with db.atomic():
+            with self.assertRaises(ValueError):
+                with db.manual_commit(): pass
+
     def test_closing_db_in_transaction(self):
         with db.atomic():
             self.assertRaises(OperationalError, db.close)
