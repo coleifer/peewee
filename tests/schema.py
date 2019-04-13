@@ -632,11 +632,12 @@ class TestTruncateTable(ModelTestCase):
         for i in range(3):
             User.create(username='u%s' % i)
 
-        query = User._schema._truncate_table()
+        ctx = User._schema._truncate_table()
         if IS_SQLITE:
-            self.assertSQL(query, 'DELETE FROM "users"', [])
+            self.assertSQL(ctx, 'DELETE FROM "users"', [])
         else:
-            self.assertSQL(query, 'TRUNCATE TABLE "users"', [])
+            sql, _ = ctx.query()
+            self.assertTrue(sql.startswith('TRUNCATE TABLE '))
 
         User.truncate_table()
         self.assertEqual(User.select().count(), 0)
