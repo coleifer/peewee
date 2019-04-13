@@ -3514,6 +3514,15 @@ Schema Manager
 
         Execute DROP TABLE query for the given model.
 
+    .. py:method:: truncate_table([restart_identity=False[, cascade=False]])
+
+        :param bool restart_identity: Restart the id sequence (postgres-only).
+        :param bool cascade: Truncate related tables as well (postgres-only).
+
+        Execute TRUNCATE TABLE for the given model. If the database is Sqlite,
+        which does not support TRUNCATE, then an equivalent DELETE query will
+        be executed.
+
     .. py:method:: create_indexes([safe=True])
 
         :param bool safe: Specify IF NOT EXISTS clause.
@@ -4308,6 +4317,13 @@ Model
             include an ``IF EXISTS`` clause.
 
         Drop the model table.
+
+    .. py:method:: truncate_table([restart_identity=False[, cascade=False]])
+
+        :param bool restart_identity: Restart the id sequence (postgres-only).
+        :param bool cascade: Truncate related tables as well (postgres-only).
+
+        Truncate (delete all rows) for the model.
 
     .. py:classmethod:: index(*fields[, unique=False[, safe=True[, where=None[, using=None[, name=None]]]]])
 

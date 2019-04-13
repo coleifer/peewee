@@ -3,7 +3,9 @@ from peewee import NodeList
 
 from .base import BaseTestCase
 from .base import get_in_memory_db
+from .base import IS_SQLITE
 from .base import ModelDatabaseTestCase
+from .base import ModelTestCase
 from .base import TestModel
 from .base_models import Category
 from .base_models import Note
@@ -621,3 +623,20 @@ class TestModelSetTableName(BaseTestCase):
         # Use the helper-method.
         Foo._meta.set_table_name('foo3')
         self.assertEqual(Foo._meta.table.__name__, 'foo3')
+
+
+class TestTruncateTable(ModelTestCase):
+    requires = [User]
+
+    def test_truncate_table(self):
+        for i in range(3):
+            User.create(username='u%s' % i)
+
+        query = User._schema._truncate_table()
+        if IS_SQLITE:
+            self.assertSQL(query, 'DELETE FROM "users"', [])
+        else:
+            self.assertSQL(query, 'TRUNCATE TABLE "users"', [])
+
+        User.truncate_table()
+        self.assertEqual(User.select().count(), 0)

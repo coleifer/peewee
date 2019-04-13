@@ -2804,6 +2804,7 @@ class Database(_callable_context_manager):
     safe_create_index = True
     safe_drop_index = True
     sequences = False
+    truncate_table = True
 
     def __init__(self, database, thread_safe=True, autorollback=False,
                  field_types=None, operations=None, autocommit=None, **kwargs):
@@ -3138,6 +3139,7 @@ class SqliteDatabase(Database):
     index_schema_prefix = True
     limit_max = -1
     server_version = __sqlite_version__
+    truncate_table = False
 
     def __init__(self, database, *args, **kwargs):
         self._pragmas = kwargs.pop('pragmas', ())
@@ -5233,6 +5235,22 @@ class SchemaManager(object):
     def drop_table(self, safe=True, **options):
         self.database.execute(self._drop_table(safe=safe, **options))
 
+    def _truncate_table(self, restart_identity=False, cascade=False):
+        db = self.database
+        if not db.truncate_table:
+            return (self._create_context()
+                    .literal('DELETE FROM ').sql(self.model))
+
+        ctx = self._create_context().literal('TRUNCATE TABLE ').sql(self.model)
+        if restart_identity:
+            ctx = ctx.literal(' RESTART IDENTITY')
+        if cascade:
+            ctx = ctx.literal(' CASCADE')
+        return ctx
+
+    def truncate_table(self, restart_identity=False, cascade=False):
+        self.database.execute(self._truncate_table(restart_identity, cascade))
+
     def _create_indexes(self, safe=True):
         return [self._create_index(index, safe)
                 for index in self.model._meta.fields_to_index()]
@@ -6175,6 +6193,10 @@ class Model(with_metaclass(ModelBase, Node)):
         if cls._meta.temporary:
             options.setdefault('temporary', cls._meta.temporary)
         cls._schema.drop_all(safe, drop_sequences, **options)
+
+    @classmethod
+    def truncate_table(cls, **options):
+        cls._schema.truncate_table(**options)
 
     @classmethod
     def index(cls, *fields, **kwargs):
