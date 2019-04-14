@@ -227,6 +227,7 @@ Some fields take special parameters...
 +--------------------------------+------------------------------------------------+
 | :py:class:`ForeignKeyField`    | ``model``, ``field``, ``backref``,             |
 |                                | ``on_delete``, ``on_update``, ``deferrable``   |
+|                                | ``lazy_load``                                  |
 +--------------------------------+------------------------------------------------+
 | :py:class:`BareField`          | ``adapt``                                      |
 +--------------------------------+------------------------------------------------+
@@ -326,12 +327,13 @@ entire related object, e.g.:
     for tweet in tweets:
         print(tweet.user.username, tweet.message)
 
-In the example above the ``User`` data was selected as part of the query. For
-more examples of this technique, see the :ref:`Avoiding N+1 <nplusone>`
-document.
+.. note::
+    In the example above the ``User`` data was selected as part of the query.
+    For more examples of this technique, see the :ref:`Avoiding N+1 <nplusone>`
+    document.
 
-If we did not select the ``User``, though, then an additional query would be
-issued to fetch the associated ``User`` data:
+If we did not select the ``User``, though, then an **additional query** would
+be issued to fetch the associated ``User`` data:
 
 .. code-block:: python
 
@@ -353,6 +355,40 @@ foreign key field's name:
         # Instead of "tweet.user", we will just get the raw ID value stored
         # in the column.
         print(tweet.user_id, tweet.message)
+
+To prevent accidentally resolving a foreign-key and triggering an additional
+query, :py:class:`ForeignKeyField` supports an initialization paramater
+``lazy_load`` which, when disabled, behaves like the ``"_id"`` attribute. For
+example:
+
+.. code-block:: python
+
+    class Tweet(Model):
+        # ... same fields, except we declare the user FK to have
+        # lazy-load disabled:
+        user = ForeignKeyField(User, backref='tweets', lazy_load=False)
+
+    for tweet in Tweet.select():
+        print(tweet.user, tweet.message)
+
+    # With lazy-load disabled, accessing tweet.user will not perform an extra
+    # query and the user ID value is returned instead.
+    # e.g.:
+    # 1  tweet from user1
+    # 1  another from user1
+    # 2  tweet from user2
+
+    # However, if we eagerly load the related user object, then the user
+    # foreign key will behave like usual:
+    for tweet in Tweet.select(Tweet, User).join(User):
+        print(tweet.user.username, tweet.message)
+
+    # user1  tweet from user1
+    # user1  another from user1
+    # user2  tweet from user1
+
+ForeignKeyField Back-references
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 :py:class:`ForeignKeyField` allows for a backreferencing property to be bound
 to the target model. Implicitly, this property will be named ``classname_set``,

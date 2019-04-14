@@ -442,7 +442,7 @@ So we can write the following code:
 
 .. code-block:: python
 
-    next_occurrence = ???
+    next_occurrence = something  # ??? how do we define this ???
 
     # We can express the current time as a Python datetime value, or we could
     # alternatively use the appropriate SQL function/name.
