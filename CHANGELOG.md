@@ -7,17 +7,38 @@ https://github.com/coleifer/peewee/releases
 
 ## master
 
+[View commits](https://github.com/coleifer/peewee/compare/3.9.4...master)
+
+## 3.9.4
+
 * Add `Model.bulk_update()` method for bulk-updating fields across multiple
   model instances. [Docs](http://docs.peewee-orm.com/en/latest/peewee/api.html#Model.bulk_update).
+* Add `lazy_load` parameter to `ForeignKeyField`. When initialized with
+  `lazy_load=False`, the foreign-key will not use an additional query to
+  resolve the related model instance. Instead, if the related model instance is
+  not available, the underlying FK column value is returned (behaving like the
+  "_id" descriptor).
+* Added `Model.truncate_table()` method.
+* The `reflection` and `pwiz` extensions now attempt to be smarter about
+  converting database table and column names into snake-case. To disable this,
+  you can set `snake_case=False` when calling the `Introspector.introspect()`
+  method or use the `-L` (legacy naming) option with the `pwiz` script.
 * Bulk insert via ``insert_many()`` no longer require specification of the
   fields argument when the inserted rows are lists/tuples. In that case, the
   fields will be inferred to be all model fields except any auto-increment id.
+* Add `DatabaseProxy`, which implements several of the `Database` class context
+  managers. This allows you to reference some of the special features of the
+  database object without directly needing to initialize the proxy first.
 * Add support for window function frame exclusion and added built-in support
   for the GROUPS frame type.
 * Add support for chaining window functions by extending a previously-declared
   window function.
+* Playhouse Postgresql extension `TSVectorField.match()` method supports an
+  additional argument `plain`, which can be used to control the parsing of the
+  TS query.
+* Added very minimal `JSONField` to the playhouse MySQL extension.
 
-[View commits](https://github.com/coleifer/peewee/compare/3.9.3...master)
+[View commits](https://github.com/coleifer/peewee/compare/3.9.3...3.9.4)
 
 ## 3.9.3
 

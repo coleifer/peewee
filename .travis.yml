@@ -32,8 +32,6 @@ matrix:
         - ./.travis_deps.sh
         - sudo ldconfig
       script: "python runtests.py -v2"
-  allow_failures:
-    - python: 3.8-dev
 addons:
   postgresql: "9.6"
   mariadb: "10.3"
