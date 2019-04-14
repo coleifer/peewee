@@ -4147,6 +4147,15 @@ class ForeignKeyAccessor(FieldAccessor):
         instance._dirty.add(self.name)
 
 
+class NoQueryForeignKeyAccessor(ForeignKeyAccessor):
+    def get_rel_instance(self, instance):
+        value = instance.__data__.get(self.name)
+        if value is not None:
+            return instance.__rel__.get(self.name, value)
+        elif not self.field.null:
+            raise self.rel_model.DoesNotExist
+
+
 class BackrefAccessor(object):
     def __init__(self, field):
         self.field = field
@@ -4761,9 +4770,16 @@ class ForeignKeyField(Field):
     def __init__(self, model, field=None, backref=None, on_delete=None,
                  on_update=None, deferrable=None, _deferred=None,
                  rel_model=None, to_field=None, object_id_name=None,
-                 related_name=None, *args, **kwargs):
+                 lazy_load=True, related_name=None, *args, **kwargs):
         kwargs.setdefault('index', True)
+
+        # If lazy_load is disable, we use a different descriptor/accessor that
+        # will ensure we don't accidentally perform a query.
+        if not lazy_load:
+            self.accessor_class = NoQueryForeignKeyAccessor
+
         super(ForeignKeyField, self).__init__(*args, **kwargs)
+
         if rel_model is not None:
             __deprecated__('"rel_model" has been deprecated in favor of '
                            '"model" for ForeignKeyField objects.')
@@ -4786,6 +4802,7 @@ class ForeignKeyField(Field):
         self.deferrable = deferrable
         self.deferred = _deferred
         self.object_id_name = object_id_name
+        self.lazy_load = lazy_load
 
     @property
     def field_type(self):
@@ -6559,7 +6576,22 @@ class ModelSelect(BaseModelSelect, Select):
                 raise ValueError('More than one foreign key between %s and %s.'
                                  ' Please specify which you are joining on.' %
                                  (src, dest))
-            return None, False
+
+            # If there are multiple foreign-keys to choose from and the join
+            # predicate is an expression, we'll try to figure out which
+            # foreign-key field we're joining on so that we can assign to the
+            # correct attribute when resolving the model graph.
+            to_field = None
+            if isinstance(on, Expression):
+                lhs, rhs = on.lhs, on.rhs
+                lhs_f = lhs.field if isinstance(lhs, FieldAlias) else lhs
+                rhs_f = rhs.field if isinstance(rhs, FieldAlias) else rhs
+                if lhs_f in fk_fields:
+                    to_field = lhs_f
+                elif rhs_f in fk_fields:
+                    to_field = rhs_f
+
+            return to_field, False
         else:
             return fk_fields[0], is_backref
 

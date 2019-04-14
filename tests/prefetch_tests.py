@@ -433,6 +433,10 @@ class TestPrefetch(ModelTestCase):
 
         # User prefetch to go Person -> Relationship+Person (PA).
         with self.assertQueryCount(2):
+            people = (Person
+                      .select()
+                      .where(Person.name != 'mickey')
+                      .order_by(Person.name))
             rels = (Relationship
                     .select(Relationship, PA)
                     .join(PA, on=(Relationship.to_person == PA.id))

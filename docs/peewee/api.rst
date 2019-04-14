@@ -3093,7 +3093,7 @@ Fields
     Accepts a special ``coerce`` parameter, a function that takes a value
     coming from the database and converts it into the appropriate Python type.
 
-.. py:class:: ForeignKeyField(model[, field=None[, backref=None[, on_delete=None[, on_update=None[, deferrable=None[, object_id_name=None[, **kwargs]]]]]]])
+.. py:class:: ForeignKeyField(model[, field=None[, backref=None[, on_delete=None[, on_update=None[, deferrable=None[, object_id_name=None[, lazy_load=True[, **kwargs]]]]]]]])
 
     :param Model model: Model to reference or the string 'self' if declaring a
         self-referential foreign key.
@@ -3105,6 +3105,10 @@ Fields
     :param str on_update: ON UPDATE action.
     :param str deferrable: Control when constraint is enforced, e.g. ``'INITIALLY DEFERRED'``.
     :param str object_id_name: Name for object-id accessor.
+    :param bool lazy_load: Fetch the related object when the foreign-key field
+        attribute is accessed (if it was not already loaded). If this is
+        disabled, accessing the foreign-key field will return the value stored
+        in the foreign-key column.
 
     Field class for storing a foreign key.
 
