@@ -121,6 +121,16 @@ class TestTZField(ModelTestCase):
         tzq2 = TZModel.get(TZModel.dt == dt2)
         self.assertEqual(tzq2.id, tz2.id)
 
+        # Change the connection timezone?
+        self.database.execute_sql('set time zone "us/central";')
+        tz_db = TZModel[tz.id]
+        self.assertEqual(tz_db.dt.timetuple()[:4], (2019, 1, 1, 11))
+        self.assertEqual(tz_db.dt.utctimetuple()[:4], (2019, 1, 1, 17))
+
+        tz2_db = TZModel[tz2.id]
+        self.assertEqual(tz2_db.dt.timetuple()[:4], (2019, 1, 1, 6))
+        self.assertEqual(tz2_db.dt.utctimetuple()[:4], (2019, 1, 1, 12))
+
 
 class TestHStoreField(ModelTestCase):
     database = db_loader('postgres', db_class=PostgresqlExtDatabase,
