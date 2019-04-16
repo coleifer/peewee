@@ -85,7 +85,7 @@ class TestTZField(ModelTestCase):
     requires = [TZModel]
 
     def test_tz_field(self):
-        self.database.execute_sql('set time zone "us/eastern";')
+        self.database.set_time_zone('us/eastern')
 
         # Our naive datetime is treated as if it were in US/Eastern.
         dt = datetime.datetime(2019, 1, 1, 12)
@@ -122,7 +122,7 @@ class TestTZField(ModelTestCase):
         self.assertEqual(tzq2.id, tz2.id)
 
         # Change the connection timezone?
-        self.database.execute_sql('set time zone "us/central";')
+        self.database.set_time_zone('us/central')
         tz_db = TZModel[tz.id]
         self.assertEqual(tz_db.dt.timetuple()[:4], (2019, 1, 1, 11))
         self.assertEqual(tz_db.dt.utctimetuple()[:4], (2019, 1, 1, 17))

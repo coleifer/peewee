@@ -882,6 +882,14 @@ Database
     :param bool register_unicode: Register unicode types.
     :param str encoding: Database encoding.
 
+    .. py:method:: set_time_zone(timezone)
+
+        :param str timezone: timezone name, e.g. "US/Central".
+        :returns: no return value.
+
+        Set the timezone on the current connection. If no connection is open,
+        then one will be opened.
+
 
 .. py:class:: MySQLDatabase(database[, **kwargs])
 

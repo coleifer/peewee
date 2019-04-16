@@ -3664,6 +3664,9 @@ class PostgresqlDatabase(Database):
     def get_noop_select(self, ctx):
         return ctx.sql(Select().columns(SQL('0')).where(SQL('false')))
 
+    def set_time_zone(self, timezone):
+        self.execute_sql('set time zone "%s";' % timezone)
+
 
 class MySQLDatabase(Database):
     field_types = {
