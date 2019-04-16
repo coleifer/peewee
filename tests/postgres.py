@@ -85,13 +85,41 @@ class TestTZField(ModelTestCase):
     requires = [TZModel]
 
     def test_tz_field(self):
-        self.database.execute_sql('set time zone "us/central";')
+        self.database.execute_sql('set time zone "us/eastern";')
 
-        dt = datetime.datetime.now()
+        # Our naive datetime is treated as if it were in US/Eastern.
+        dt = datetime.datetime(2019, 1, 1, 12)
         tz = TZModel.create(dt=dt)
         self.assertTrue(tz.dt.tzinfo is None)
 
-        tz = TZModel.get(TZModel.id == tz.id)
+        # When we retrieve the row, psycopg2 will attach the appropriate tzinfo
+        # data. The value is returned as an "aware" datetime in US/Eastern.
+        tz_db = TZModel[tz.id]
+        self.assertTrue(tz_db.dt.tzinfo is not None)
+        self.assertEqual(tz_db.dt.timetuple()[:4], (2019, 1, 1, 12))
+        self.assertEqual(tz_db.dt.utctimetuple()[:4], (2019, 1, 1, 17))
+
+        class _UTC(datetime.tzinfo):
+            def utcoffset(self, dt): return datetime.timedelta(0)
+            def tzname(self, dt): return "UTC"
+            def dst(self, dt): return datetime.timedelta(0)
+        UTC = _UTC()
+
+        # We can explicitly insert a row with a different timezone, however.
+        # When we read the row back, it is returned in US/Eastern.
+        dt2 = datetime.datetime(2019, 1, 1, 12, tzinfo=UTC)
+        tz2 = TZModel.create(dt=dt2)
+        tz2_db = TZModel[tz2.id]
+        self.assertEqual(tz2_db.dt.timetuple()[:4], (2019, 1, 1, 7))
+        self.assertEqual(tz2_db.dt.utctimetuple()[:4], (2019, 1, 1, 12))
+
+        # Querying using naive datetime, treated as localtime (US/Eastern).
+        tzq1 = TZModel.get(TZModel.dt == dt)
+        self.assertEqual(tzq1.id, tz.id)
+
+        # Querying using aware datetime, tzinfo is respected.
+        tzq2 = TZModel.get(TZModel.dt == dt2)
+        self.assertEqual(tzq2.id, tz2.id)
 
 
 class TestHStoreField(ModelTestCase):
