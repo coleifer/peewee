@@ -1,5 +1,7 @@
+import calendar
 import datetime
 import sqlite3
+import time
 import uuid
 from decimal import Decimal as D
 from decimal import ROUND_UP
@@ -839,6 +841,7 @@ class TestUUIDField(ModelTestCase):
 class TSModel(TestModel):
     ts_s = TimestampField()
     ts_us = TimestampField(resolution=10 ** 6)
+    ts_ms = TimestampField(resolution=3)  # Milliseconds.
 
 
 class TestTimestampField(ModelTestCase):
@@ -846,14 +849,60 @@ class TestTimestampField(ModelTestCase):
 
     def test_timestamp_field(self):
         dt = datetime.datetime(2018, 3, 1, 3, 3, 7)
-        dt = dt.replace(microsecond=31337)
-        ts = TSModel.create(ts_s=dt, ts_us=dt)
+        dt = dt.replace(microsecond=31337)  # us=031_337, ms=031.
+        ts = TSModel.create(ts_s=dt, ts_us=dt, ts_ms=dt)
         ts_db = TSModel.get(TSModel.id == ts.id)
         self.assertEqual(ts_db.ts_s, dt.replace(microsecond=0))
+        self.assertEqual(ts_db.ts_ms, dt.replace(microsecond=31000))
         self.assertEqual(ts_db.ts_us, dt)
 
         self.assertEqual(TSModel.get(TSModel.ts_s == dt).id, ts.id)
+        self.assertEqual(TSModel.get(TSModel.ts_ms == dt).id, ts.id)
         self.assertEqual(TSModel.get(TSModel.ts_us == dt).id, ts.id)
+
+    def test_timestamp_field_value_as_ts(self):
+        dt = datetime.datetime(2018, 3, 1, 3, 3, 7, 31337)
+        unix_ts = time.mktime(dt.timetuple()) + 0.031337
+        ts = TSModel.create(ts_s=unix_ts, ts_us=unix_ts, ts_ms=unix_ts)
+
+        # Fetch from the DB and validate the values were stored correctly.
+        ts_db = TSModel[ts.id]
+        self.assertEqual(ts_db.ts_s, dt.replace(microsecond=0))
+        self.assertEqual(ts_db.ts_ms, dt.replace(microsecond=31000))
+        self.assertEqual(ts_db.ts_us, dt)
+
+        # Verify we can query using a timestamp.
+        self.assertEqual(TSModel.get(TSModel.ts_s == unix_ts).id, ts.id)
+        self.assertEqual(TSModel.get(TSModel.ts_ms == unix_ts).id, ts.id)
+        self.assertEqual(TSModel.get(TSModel.ts_us == unix_ts).id, ts.id)
+
+    def test_timestamp_utc_vs_localtime(self):
+        local_field = TimestampField()
+        utc_field = TimestampField(utc=True)
+
+        dt = datetime.datetime(2019, 1, 1, 12)
+        unix_ts = int(time.mktime(dt.timetuple()))
+        utc_ts = int(calendar.timegm(dt.utctimetuple()))
+
+        # Local timestamp is unmodified. Verify that when utc=True, the
+        # timestamp is converted from local time to UTC.
+        self.assertEqual(local_field.db_value(dt), unix_ts)
+        self.assertEqual(utc_field.db_value(dt), utc_ts)
+
+        self.assertEqual(local_field.python_value(unix_ts), dt)
+        self.assertEqual(utc_field.python_value(utc_ts), dt)
+
+        # Convert back-and-forth several times.
+        dbv, pyv = local_field.db_value, local_field.python_value
+        self.assertEqual(pyv(dbv(pyv(dbv(dt)))), dt)
+
+        dbv, pyv = utc_field.db_value, utc_field.python_value
+        self.assertEqual(pyv(dbv(pyv(dbv(dt)))), dt)
+
+    def test_invalid_resolution(self):
+        self.assertRaises(ValueError, TimestampField, resolution=7)
+        self.assertRaises(ValueError, TimestampField, resolution=20)
+        self.assertRaises(ValueError, TimestampField, resolution=10**7)
 
 
 class ListField(TextField):

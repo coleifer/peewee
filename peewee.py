@@ -4695,17 +4695,34 @@ class TimestampField(BigIntegerField):
     valid_resolutions = [10**i for i in range(7)]
 
     def __init__(self, *args, **kwargs):
-        self.resolution = kwargs.pop('resolution', 1) or 1
-        if self.resolution not in self.valid_resolutions:
+        self.resolution = kwargs.pop('resolution', None)
+        if not self.resolution:
+            self.resolution = 1
+        elif self.resolution in range(7):
+            self.resolution = 10 ** self.resolution
+        elif self.resolution not in self.valid_resolutions:
             raise ValueError('TimestampField resolution must be one of: %s' %
                              ', '.join(str(i) for i in self.valid_resolutions))
 
         self.utc = kwargs.pop('utc', False) or False
-        _dt = datetime.datetime
-        self._conv = _dt.utcfromtimestamp if self.utc else _dt.fromtimestamp
-        _default = _dt.utcnow if self.utc else _dt.now
-        kwargs.setdefault('default', _default)
+        dflt = datetime.datetime.utcnow if self.utc else datetime.datetime.now
+        kwargs.setdefault('default', dflt)
         super(TimestampField, self).__init__(*args, **kwargs)
+
+    def local_to_utc(self, dt):
+        # Convert naive local datetime into naive UTC, e.g.:
+        # 2019-03-01T12:00:00 (local=US/Central) -> 2019-03-01T18:00:00.
+        # 2019-05-01T12:00:00 (local=US/Central) -> 2019-05-01T17:00:00.
+        # 2019-03-01T12:00:00 (local=UTC)        -> 2019-03-01T12:00:00.
+        return datetime.datetime(*time.gmtime(time.mktime(dt.timetuple()))[:6])
+
+    def utc_to_local(self, dt):
+        # Convert a naive UTC datetime into local time, e.g.:
+        # 2019-03-01T18:00:00 (local=US/Central) -> 2019-03-01T12:00:00.
+        # 2019-05-01T17:00:00 (local=US/Central) -> 2019-05-01T12:00:00.
+        # 2019-03-01T12:00:00 (local=UTC)        -> 2019-03-01T12:00:00.
+        ts = calendar.timegm(dt.utctimetuple())
+        return datetime.datetime.fromtimestamp(ts)
 
     def db_value(self, value):
         if value is None:
@@ -4719,11 +4736,13 @@ class TimestampField(BigIntegerField):
             return int(round(value * self.resolution))
 
         if self.utc:
+            # If utc-mode is on, then we assume all naive datetimes are in UTC.
             timestamp = calendar.timegm(value.utctimetuple())
         else:
             timestamp = time.mktime(value.timetuple())
-        timestamp += (value.microsecond * .000001)
+
         if self.resolution > 1:
+            timestamp += (value.microsecond * .000001)
             timestamp *= self.resolution
         return int(round(timestamp))
 
@@ -4733,9 +4752,17 @@ class TimestampField(BigIntegerField):
                 ticks_to_microsecond = 1000000 // self.resolution
                 value, ticks = divmod(value, self.resolution)
                 microseconds = int(ticks * ticks_to_microsecond)
-                return self._conv(value).replace(microsecond=microseconds)
             else:
-                return self._conv(value)
+                microseconds = 0
+
+            if self.utc:
+                value = datetime.datetime.utcfromtimestamp(value)
+            else:
+                value = datetime.datetime.fromtimestamp(value)
+
+            if microseconds:
+                value = value.replace(microsecond=microseconds)
+
         return value
 
 
