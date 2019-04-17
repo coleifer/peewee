@@ -716,6 +716,13 @@ class TestSelectQuery(BaseTestCase):
             'SELECT COUNT("t1"."id") FROM "stats" AS "t1" '
             'WHERE (("t1"."index" % ?) = ?)'), [10, 0])
 
+    def test_where_convert_to_is_null(self):
+        Note = Table('notes', ('id', 'content', 'user_id'))
+        query = Note.select().where(Note.user_id == None)
+        self.assertSQL(query, (
+            'SELECT "t1"."id", "t1"."content", "t1"."user_id" '
+            'FROM "notes" AS "t1" WHERE ("t1"."user_id" IS ?)'), [None])
+
 
 class TestInsertQuery(BaseTestCase):
     def test_insert_simple(self):
