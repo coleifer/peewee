@@ -120,3 +120,10 @@ class TestPrimaryKeySaveHandling(ModelTestCase):
 
         t4_db = T4[1, 2]
         self.assertEqual(t4_db.value, 30)
+
+    @requires_postgresql
+    def test_returning_object(self):
+        query = T2.insert(value=10).returning(T2).objects()
+        t2_db, = list(query)
+        self.assertEqual(t2_db.pk, 3)
+        self.assertEqual(t2_db.value, 10)
