@@ -6126,6 +6126,8 @@ class Model(with_metaclass(ModelBase, Node)):
                 return False
 
         self._populate_unsaved_relations(field_dict)
+        rows = 1
+
         if pk_value is not None and not force_insert:
             if self._meta.composite_key:
                 for pk_part_name in pk_field.field_names:
@@ -6133,15 +6135,14 @@ class Model(with_metaclass(ModelBase, Node)):
             else:
                 field_dict.pop(pk_field.name, None)
             rows = self.update(**field_dict).where(self._pk_expr()).execute()
-        elif pk_field is None or not self._meta.auto_increment:
-            self.insert(**field_dict).execute()
-            rows = 1
+        elif pk_field is not None:
+            pk = self.insert(**field_dict).execute()
+            if pk is not None and (self._meta.auto_increment or
+                                   pk_value is None):
+                self._pk = pk
         else:
-            pk_from_cursor = self.insert(**field_dict).execute()
-            if pk_from_cursor is not None:
-                pk_value = pk_from_cursor
-            self._pk = pk_value
-            rows = 1
+            self.insert(**field_dict).execute()
+
         self._dirty.clear()
         return rows
 

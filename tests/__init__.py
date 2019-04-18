@@ -10,6 +10,7 @@ from .fields import *
 from .keys import *
 from .manytomany import *
 from .models import *
+from .model_save import *
 from .model_sql import *
 from .prefetch_tests import *
 from .queries import *
