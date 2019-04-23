@@ -5144,8 +5144,8 @@ class CompositeKey(MetaField):
         return hash((self.model.__name__, self.field_names))
 
     def __sql__(self, ctx):
-        return ctx.sql(CommaNodeList([self.model._meta.fields[field]
-                                      for field in self.field_names]))
+        return ctx.sql(EnclosedNodeList([self.model._meta.fields[field]
+                                         for field in self.field_names]))
 
     def bind(self, model, name, set_attribute=True):
         self.model = model
@@ -5982,6 +5982,10 @@ class Model(with_metaclass(ModelBase, Node)):
 
     @classmethod
     def bulk_update(cls, model_list, fields, batch_size=None):
+        if isinstance(cls._meta.primary_key, CompositeKey):
+            raise ValueError('bulk_update() is not supported for models with '
+                             'a composite primary key.')
+
         # First normalize list of fields so all are field instances.
         fields = [cls._meta.fields[f] if isinstance(f, basestring) else f
                   for f in fields]
