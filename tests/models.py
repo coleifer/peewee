@@ -60,6 +60,14 @@ class Point(TestModel):
         primary_key = False
 
 
+class CPK(TestModel):
+    key = CharField()
+    value = IntegerField()
+    extra = IntegerField()
+    class Meta:
+        primary_key = CompositeKey('key', 'value')
+
+
 class TestModelAPIs(ModelTestCase):
     def add_user(self, username):
         return User.create(username=username)
@@ -2529,7 +2537,7 @@ class TestCTEIntegration(ModelTestCase):
             (2, .4)])
 
 
-@skip_unless(IS_POSTGRESQL or IS_SQLITE_15, 'requires row-value support')
+@skip_if(not IS_SQLITE_15, 'requires row-values')
 class TestTupleComparison(ModelTestCase):
     requires = [User]
 
@@ -2556,6 +2564,22 @@ class TestTupleComparison(ModelTestCase):
                  .where(Tuple(User.username, User.id).in_(subquery))
                  .order_by(User.username))
         self.assertEqual([u.username for u in query], ['a', 'c'])
+
+    @requires_models(CPK)
+    def test_row_value_composite_key(self):
+        CPK.insert_many([('k1', 1, 1), ('k2', 2, 2), ('k3', 3, 3)]).execute()
+
+        cpk = CPK.get(CPK._meta.primary_key == ('k2', 2))
+        self.assertEqual(cpk._pk, ('k2', 2))
+
+        cpk = CPK['k3', 3]
+        self.assertEqual(cpk._pk, ('k3', 3))
+
+        uq = CPK.update(extra=20).where(CPK._meta.primary_key != ('k2', 2))
+        uq.execute()
+
+        self.assertEqual(list(sorted(CPK.select().tuples())), [
+            ('k1', 1, 20), ('k2', 2, 2), ('k3', 3, 20)])
 
 
 class TestModelGraph(BaseTestCase):
