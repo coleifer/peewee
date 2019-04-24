@@ -46,5 +46,5 @@ before_script:
   - psql peewee_test -c 'create extension hstore;' -U postgres
   - mysql -e 'drop database if exists peewee_test;'
   - mysql -e 'create database peewee_test;'
-  - mysql -e 'grant all on *.* to travis@localhost;'
+  - mysql -e 'grant all on *.* to travis@localhost;' || true
 script: "python runtests.py"
