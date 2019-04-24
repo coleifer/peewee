@@ -765,6 +765,9 @@ class Source(Node):
     def left_outer_join(self, dest, on=None):
         return Join(self, dest, JOIN.LEFT_OUTER, on)
 
+    def cte(self, name, recursive=False, columns=None):
+        return CTE(name, self, recursive=recursive, columns=columns)
+
     def get_sort_key(self, ctx):
         if self._alias:
             return (self._alias,)
@@ -994,17 +997,21 @@ class ValuesList(_HashableSource, BaseTable):
         if self._alias:
             ctx.alias_manager[self] = self._alias
 
-        if ctx.scope == SCOPE_SOURCE:
-            ctx = (ctx
-                   .literal('(VALUES ')
-                   .sql(CommaNodeList([
-                       EnclosedNodeList(row) for row in self._values]))
-                   .literal(') AS ')
-                   .sql(Entity(ctx.alias_manager[self])))
-            if self._columns:
-                ctx.sql(EnclosedNodeList([Entity(c) for c in self._columns]))
+        if ctx.scope == SCOPE_SOURCE or ctx.scope == SCOPE_NORMAL:
+            with ctx(parentheses=not ctx.parentheses):
+                ctx = (ctx
+                       .literal('VALUES ')
+                       .sql(CommaNodeList([
+                           EnclosedNodeList(row) for row in self._values])))
+
+            if ctx.scope == SCOPE_SOURCE:
+                ctx.literal(' AS ').sql(Entity(ctx.alias_manager[self]))
+                if self._columns:
+                    entities = [Entity(c) for c in self._columns]
+                    ctx.sql(EnclosedNodeList(entities))
         else:
             ctx.sql(Entity(ctx.alias_manager[self]))
+
         return ctx
 
 
@@ -1998,9 +2005,6 @@ class SelectQuery(Query):
     __ror__ = __compound_select__('UNION', inverted=True)
     __rand__ = __compound_select__('INTERSECT', inverted=True)
     __rsub__ = __compound_select__('EXCEPT', inverted=True)
-
-    def cte(self, name, recursive=False, columns=None):
-        return CTE(name, self, recursive=recursive, columns=columns)
 
     def select_from(self, *columns):
         if not columns:

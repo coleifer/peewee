@@ -320,6 +320,33 @@ class TestModelAPIs(ModelTestCase):
         self.assertEqual(t2.timestamp, datetime.datetime(2019, 1, 3, 0, 0, 0))
         self.assertEqual(t3.timestamp, t3_dt)
 
+    @skip_if(IS_SQLITE_OLD or IS_MYSQL)
+    @requires_models(CPK)
+    def test_bulk_update_cte(self):
+        CPK.insert_many([('k1', 1, 1), ('k2', 2, 2), ('k3', 3, 3)]).execute()
+
+        # We can also do a bulk-update using ValuesList when the primary-key of
+        # the model is a composite-pk.
+        new_values = [('k1', 1, 10), ('k3', 3, 30)]
+        cte = ValuesList(new_values).cte('new_values', columns=('k', 'v', 'x'))
+
+        # We have to use a subquery to update the individual column, as SQLite
+        # does not support UPDATE/FROM syntax.
+        subq = (cte
+                .select(cte.c.x)
+                .where(CPK._meta.primary_key == (cte.c.k, cte.c.v)))
+
+        # Perform the update, assigning extra the new value from the values
+        # list, and restricting the overall update using the composite pk.
+        res = (CPK
+               .update(extra=subq)
+               .where(CPK._meta.primary_key.in_(cte.select(cte.c.k, cte.c.v)))
+               .with_cte(cte)
+               .execute())
+
+        self.assertEqual(list(sorted(CPK.select().tuples())), [
+            ('k1', 1, 10), ('k2', 2, 2), ('k3', 3, 30)])
+
     @requires_models(User, Tweet)
     def test_get_shortcut(self):
         huey = self.add_user('huey')
