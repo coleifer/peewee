@@ -9,6 +9,7 @@ from playhouse._sqlite_ext import BloomFilter
 from .base import BaseTestCase
 from .base import DatabaseTestCase
 from .base import db_loader
+from .base import skip_unless
 
 
 database = CSqliteExtDatabase('peewee_test.db', timeout=100,
