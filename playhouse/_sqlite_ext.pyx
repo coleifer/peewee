@@ -335,20 +335,20 @@ cdef python_to_sqlite(sqlite3_context *context, value):
         sqlite3_result_text(
             context,
             <const char *>bval,
-            -1,
+            len(bval),
             <sqlite3_destructor_type>-1)
     elif isinstance(value, bytes):
         if PY_MAJOR_VERSION > 2:
             sqlite3_result_blob(
                 context,
                 <void *>(<char *>value),
-                -1,
+                len(value),
                 <sqlite3_destructor_type>-1)
         else:
             sqlite3_result_text(
                 context,
                 <const char *>value,
-                -1,
+                len(value),
                 <sqlite3_destructor_type>-1)
     else:
         sqlite3_result_error(
