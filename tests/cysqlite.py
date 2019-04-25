@@ -1,6 +1,7 @@
 import os
 
 from peewee import *
+from peewee import sqlite3
 from playhouse.sqlite_ext import CYTHON_SQLITE_EXTENSIONS
 from playhouse.sqlite_ext import *
 from playhouse._sqlite_ext import BloomFilter
@@ -414,6 +415,7 @@ class DataTypes(TableFunction):
         raise StopIteration
 
 
+@skip_unless(sqlite3.sqlite_version_info >= (3, 9), 'requires sqlite >= 3.9')
 class TestDataTypesTableFunction(CyDatabaseTestCase):
     database = db_loader('sqlite')
 
