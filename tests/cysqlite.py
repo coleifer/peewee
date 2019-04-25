@@ -7,6 +7,7 @@ from playhouse._sqlite_ext import BloomFilter
 
 from .base import BaseTestCase
 from .base import DatabaseTestCase
+from .base import db_loader
 
 
 database = CSqliteExtDatabase('peewee_test.db', timeout=100,
@@ -388,3 +389,44 @@ class TestBloomFilter(BaseTestCase):
             self.assertFalse(key + '-x' in self.bf)
             self.assertFalse(key + '-y' in self.bf)
             self.assertFalse(key + ' ' in self.bf)
+
+
+class DataTypes(TableFunction):
+    columns = ('key', 'value')
+    params = ('i',)
+    name = 'data_types'
+
+    def initialize(self, i=None):
+        self.values = (
+            None,
+            1,
+            2.,
+            u'unicode str',
+            b'byte str',
+            False,
+            True)
+        self.idx = 0
+        self.n = len(self.values)
+
+    def iterate(self, idx):
+        if idx < self.n:
+            return ('k%s' % idx, self.values[idx])
+        raise StopIteration
+
+
+class TestDataTypesTableFunction(CyDatabaseTestCase):
+    database = db_loader('sqlite')
+
+    def test_data_types_table_function(self):
+        self.database.register_table_function(DataTypes)
+        cursor = self.database.execute_sql('SELECT key, value '
+                                           'FROM data_types(0) ORDER BY key')
+        self.assertEqual(cursor.fetchall(), [
+            ('k0', None),
+            ('k1', 1),
+            ('k2', 2.),
+            ('k3', u'unicode str'),
+            ('k4', b'byte str'),
+            ('k5', 0),
+            ('k6', 1),
+        ])
