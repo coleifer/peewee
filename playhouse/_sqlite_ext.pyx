@@ -11,6 +11,8 @@ from cpython.object cimport PyObject
 from cpython.ref cimport Py_INCREF, Py_DECREF
 from cpython.unicode cimport PyUnicode_AsUTF8String
 from cpython.unicode cimport PyUnicode_Check
+from cpython.unicode cimport PyUnicode_DecodeUTF8
+from cpython.version cimport PY_MAJOR_VERSION
 from libc.float cimport DBL_MAX
 from libc.math cimport ceil, log, sqrt
 from libc.math cimport pow as cpow
@@ -164,6 +166,8 @@ cdef extern from "sqlite3.h" nogil:
     cdef int sqlite3_value_numeric_type(sqlite3_value*)
 
     # Converting from Python -> Sqlite.
+    cdef void sqlite3_result_blob(sqlite3_context*, const void *, int,
+                                  void(*)(void*))
     cdef void sqlite3_result_double(sqlite3_context*, double)
     cdef void sqlite3_result_error(sqlite3_context*, const char*, int)
     cdef void sqlite3_result_error_toobig(sqlite3_context*)
@@ -287,6 +291,73 @@ cdef extern from "_pysqlite/connection.h":
         int initialized
         PyObject* isolation_level
         char* begin_statement
+
+
+cdef sqlite_to_python(int argc, sqlite3_value **params):
+    cdef:
+        int i
+        int vtype
+        list pyargs = []
+
+    for i in range(argc):
+        vtype = sqlite3_value_type(params[i])
+        if vtype == SQLITE_INTEGER:
+            pyval = sqlite3_value_int(params[i])
+        elif vtype == SQLITE_FLOAT:
+            pyval = sqlite3_value_double(params[i])
+        elif vtype == SQLITE_TEXT:
+            pyval = PyUnicode_DecodeUTF8(
+                <const char *>sqlite3_value_text(params[i]),
+                <Py_ssize_t>sqlite3_value_bytes(params[i]), NULL)
+        elif vtype == SQLITE_BLOB:
+            pyval = PyBytes_FromStringAndSize(
+                <const char *>sqlite3_value_blob(params[i]),
+                <Py_ssize_t>sqlite3_value_bytes(params[i]))
+        elif vtype == SQLITE_NULL:
+            pyval = None
+        else:
+            pyval = None
+
+        pyargs.append(pyval)
+
+    return pyargs
+
+
+cdef python_to_sqlite(sqlite3_context *context, value):
+    if value is None:
+        sqlite3_result_null(context)
+    elif isinstance(value, (int, long)):
+        sqlite3_result_int64(context, <sqlite3_int64>value)
+    elif isinstance(value, float):
+        sqlite3_result_double(context, <double>value)
+    elif isinstance(value, unicode):
+        bval = PyUnicode_AsUTF8String(value)
+        sqlite3_result_text(
+            context,
+            <const char *>bval,
+            -1,
+            <sqlite3_destructor_type>-1)
+    elif isinstance(value, bytes):
+        if PY_MAJOR_VERSION > 2:
+            sqlite3_result_blob(
+                context,
+                <void *>(<char *>value),
+                -1,
+                <sqlite3_destructor_type>-1)
+        else:
+            sqlite3_result_text(
+                context,
+                <const char *>value,
+                -1,
+                <sqlite3_destructor_type>-1)
+    else:
+        sqlite3_result_error(
+            context,
+            encode('Unsupported type %s' % type(value)),
+            -1)
+        return SQLITE_ERROR
+
+    return SQLITE_OK
 
 
 cdef int SQLITE_CONSTRAINT = 19  # Abort due to constraint violation.
@@ -428,30 +499,7 @@ cdef int pwColumn(sqlite3_vtab_cursor *pBase, sqlite3_context *ctx,
         return SQLITE_ERROR
 
     row_data = <tuple>pCur.row_data
-    value = row_data[iCol]
-    if value is None:
-        sqlite3_result_null(ctx)
-    elif isinstance(value, (int, long)):
-        sqlite3_result_int64(ctx, <sqlite3_int64>value)
-    elif isinstance(value, float):
-        sqlite3_result_double(ctx, <double>value)
-    elif isinstance(value, basestring):
-        bval = encode(value)
-        sqlite3_result_text(
-            ctx,
-            <const char *>bval,
-            -1,
-            <sqlite3_destructor_type>-1)
-    elif isinstance(value, bool):
-        sqlite3_result_int(ctx, int(value))
-    else:
-        sqlite3_result_error(
-            ctx,
-            encode('Unsupported type %s' % type(value)),
-            -1)
-        return SQLITE_ERROR
-
-    return SQLITE_OK
+    return python_to_sqlite(ctx, row_data[iCol])
 
 
 cdef int pwRowid(sqlite3_vtab_cursor *pBase, sqlite3_int64 *pRowid):
@@ -465,9 +513,7 @@ cdef int pwRowid(sqlite3_vtab_cursor *pBase, sqlite3_int64 *pRowid):
 cdef int pwEof(sqlite3_vtab_cursor *pBase):
     cdef:
         peewee_cursor *pCur = <peewee_cursor *>pBase
-    if pCur.stopped:
-        return 1
-    return 0
+    return 1 if pCur.stopped else 0
 
 
 # The filter method is called on the first iteration. This method is where we
@@ -491,25 +537,14 @@ cdef int pwFilter(sqlite3_vtab_cursor *pBase, int idxNum,
     else:
         params = []
 
+    py_values = sqlite_to_python(argc, argv)
+
     for idx, param in enumerate(params):
         value = argv[idx]
         if not value:
             query[param] = None
-            continue
-
-        value_type = sqlite3_value_type(value)
-        if value_type == SQLITE_INTEGER:
-            query[param] = sqlite3_value_int(value)
-        elif value_type == SQLITE_FLOAT:
-            query[param] = sqlite3_value_double(value)
-        elif value_type == SQLITE_TEXT:
-            query[param] = decode(sqlite3_value_text(value))
-        elif value_type == SQLITE_BLOB:
-            query[param] = <bytes>sqlite3_value_blob(value)
-        elif value_type == SQLITE_NULL:
-            query[param] = None
         else:
-            query[param] = None
+            query[param] = py_values[idx]
 
     try:
         table_func.initialize(**query)
