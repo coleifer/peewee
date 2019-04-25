@@ -532,7 +532,7 @@ cdef int pwFilter(sqlite3_vtab_cursor *pBase, int idxNum,
 
     if not idxStr or argc == 0 and len(table_func.params):
         return SQLITE_ERROR
-    elif idxStr:
+    elif len(idxStr):
         params = decode(idxStr).split(',')
     else:
         params = []
@@ -597,7 +597,7 @@ cdef int pwBestIndex(sqlite3_vtab *pBase, sqlite3_index_info *pIdxInfo) \
         pIdxInfo.aConstraintUsage[i].argvIndex = nArg
         pIdxInfo.aConstraintUsage[i].omit = 1
 
-    if nArg > 0:
+    if nArg > 0 or nParams == 0:
         if nArg == nParams:
             # All parameters are present, this is ideal.
             pIdxInfo.estimatedCost = <double>1

@@ -393,10 +393,10 @@ class TestBloomFilter(BaseTestCase):
 
 class DataTypes(TableFunction):
     columns = ('key', 'value')
-    params = ('i',)
+    params = ()
     name = 'data_types'
 
-    def initialize(self, i=None):
+    def initialize(self):
         self.values = (
             None,
             1,
@@ -420,7 +420,7 @@ class TestDataTypesTableFunction(CyDatabaseTestCase):
     def test_data_types_table_function(self):
         self.database.register_table_function(DataTypes)
         cursor = self.database.execute_sql('SELECT key, value '
-                                           'FROM data_types(0) ORDER BY key')
+                                           'FROM data_types() ORDER BY key')
         self.assertEqual(cursor.fetchall(), [
             ('k0', None),
             ('k1', 1),
