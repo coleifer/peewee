@@ -4426,7 +4426,10 @@ class BlobField(Field):
     field_type = 'BLOB'
 
     def _db_hook(self, database):
-        self._constructor = database.get_binary_type()
+        if database is None:
+            self._constructor = bytearray
+        else:
+            self._constructor = database.get_binary_type()
 
     def bind(self, model, name, set_attribute=True):
         self._constructor = bytearray

@@ -655,3 +655,16 @@ class TestModelGraphMultiFK(ModelTestCase):
                 self.assertEqual(t1.alt.name, 'c')
                 self.assertEqual(t2.project.name, 'b')
                 self.assertEqual(t2.alt.name, 'b')
+
+
+class TestBlobFieldContextRegression(BaseTestCase):
+    def test_blob_field_context_regression(self):
+        class A(Model):
+            f = BlobField()
+
+        orig = A.f._constructor
+        db = get_in_memory_db()
+        with db.bind_ctx([A]):
+            self.assertTrue(A.f._constructor is db.get_binary_type())
+
+        self.assertTrue(A.f._constructor is orig)
