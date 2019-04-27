@@ -275,6 +275,74 @@ class TestModelSQL(ModelDatabaseTestCase):
             'CROSS JOIN "b" AS "t2" '
             'ORDER BY "t1"."id", "t2"."id"'), [])
 
+    def test_join_expr(self):
+        class User(TestModel):
+            username = TextField(primary_key=True)
+        class Tweet(TestModel):
+            user = ForeignKeyField(User, backref='tweets')
+            content = TextField()
+
+        sql = ('SELECT "t1"."id", "t1"."user_id", "t1"."content", '
+               '"t2"."username" FROM "tweet" AS "t1" '
+               'INNER JOIN "user" AS "t2" '
+               'ON ("t1"."user_id" = "t2"."username")')
+
+        query = Tweet.select(Tweet, User).join(User)
+        self.assertSQL(query, sql, [])
+
+        query = (Tweet
+                 .select(Tweet, User)
+                 .join(User, on=(Tweet.user == User.username)))
+        self.assertSQL(query, sql, [])
+
+        join_expr = ((Tweet.user == User.username) & (Value(1) == 1))
+        query = Tweet.select().join(User, on=join_expr)
+        self.assertSQL(query, (
+            'SELECT "t1"."id", "t1"."user_id", "t1"."content" '
+            'FROM "tweet" AS "t1" '
+            'INNER JOIN "user" AS "t2" '
+            'ON (("t1"."user_id" = "t2"."username") AND (? = ?))'), [1, 1])
+
+    def test_join_multiple_fks(self):
+        class A(TestModel):
+            name = TextField()
+        class B(TestModel):
+            name = TextField(primary_key=True)
+            a1 = ForeignKeyField(A, backref='b_set1')
+            a2 = ForeignKeyField(A, field=A.name, backref='b_set2')
+
+        A1 = A.alias('a1')
+        A2 = A.alias('a2')
+
+        sql = ('SELECT "t1"."name", "t1"."a1_id", "t1"."a2_id", '
+               '"a1"."id", "a1"."name", "a2"."id", "a2"."name" '
+               'FROM "b" AS "t1" '
+               'INNER JOIN "a" AS "a1" ON ("t1"."a1_id" = "a1"."id") '
+               'INNER JOIN "a" AS "a2" ON ("t1"."a2_id" = "a2"."name")')
+
+        query = (B.select(B, A1, A2)
+                 .join_from(B, A1, on=B.a1)
+                 .join_from(B, A2, on=B.a2))
+        self.assertSQL(query, sql, [])
+
+        query = (B.select(B, A1, A2)
+                 .join(A1, on=(B.a1 == A1.id)).switch(B)
+                 .join(A2, on=(B.a2 == A2.name)))
+        self.assertSQL(query, sql, [])
+
+        jx1 = (B.a1 == A1.id) & (Value(1) == 1)
+        jx2 = (Value(1) == 1) & (B.a2 == A2.name)
+        query = (B.select()
+                 .join(A1, on=jx1).switch(B)
+                 .join(A2, on=jx2))
+        self.assertSQL(query, (
+            'SELECT "t1"."name", "t1"."a1_id", "t1"."a2_id" '
+            'FROM "b" AS "t1" '
+            'INNER JOIN "a" AS "a1" '
+            'ON (("t1"."a1_id" = "a1"."id") AND (? = ?)) '
+            'INNER JOIN "a" AS "a2" '
+            'ON ((? = ?) AND ("t1"."a2_id" = "a2"."name"))'), [1, 1, 1, 1])
+
     def test_raw(self):
         query = (Person
                  .raw('SELECT first, last, dob FROM person '
