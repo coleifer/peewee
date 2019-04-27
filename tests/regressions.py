@@ -1,6 +1,7 @@
 import datetime
 
 from peewee import *
+from playhouse.hybrid import *
 
 from .base import BaseTestCase
 from .base import IS_MYSQL
@@ -668,3 +669,77 @@ class TestBlobFieldContextRegression(BaseTestCase):
             self.assertTrue(A.f._constructor is db.get_binary_type())
 
         self.assertTrue(A.f._constructor is orig)
+
+
+class Product(TestModel):
+    id = CharField()
+    color = CharField()
+    class Meta:
+        primary_key = CompositeKey('id', 'color')
+
+class Sku(TestModel):
+    upc = CharField(primary_key=True)
+    product_id = CharField()
+    color = CharField()
+    class Meta:
+        constraints = [SQL('FOREIGN KEY (product_id, color) REFERENCES '
+                           'product(id, color)')]
+
+    @hybrid_property
+    def product(self):
+        if not hasattr(self, '_product'):
+            self._product = Product.get((Product.id == self.product_id) &
+                                        (Product.color == self.color))
+        return self._product
+
+    @product.setter
+    def product(self, obj):
+        self._product = obj
+        self.product_id = obj.id
+        self.color = obj.color
+
+    @product.expression
+    def product(cls):
+        return (Product.id == cls.product_id) & (Product.color == cls.color)
+
+
+class TestFKCompositePK(ModelTestCase):
+    requires = [Product, Sku]
+
+    def test_fk_composite_pk_regression(self):
+        Product.insert_many([
+            (1, 'red'),
+            (1, 'blue'),
+            (2, 'red'),
+            (2, 'green'),
+            (3, 'white')]).execute()
+        Sku.insert_many([
+            ('1-red', 1, 'red'),
+            ('1-blue', 1, 'blue'),
+            ('2-red', 2, 'red'),
+            ('2-green', 2, 'green'),
+            ('3-white', 3, 'white')]).execute()
+
+        query = (Product
+                 .select(Product, Sku)
+                 .join(Sku, on=Sku.product)
+                 .where(Product.color == 'red')
+                 .order_by(Product.id, Product.color))
+        with self.assertQueryCount(1):
+            rows = [(p.id, p.color, p.sku.upc) for p in query]
+            self.assertEqual(rows, [
+                ('1', 'red', '1-red'),
+                ('2', 'red', '2-red')])
+
+        query = (Sku
+                 .select(Sku, Product)
+                 .join(Product, on=Sku.product)
+                 .where(Product.color != 'red')
+                 .order_by(Sku.upc))
+        with self.assertQueryCount(1):
+            rows = [(s.upc, s.product_id, s.color,
+                     s.product.id, s.product.color) for s in query]
+            self.assertEqual(rows, [
+                ('1-blue', '1', 'blue', '1', 'blue'),
+                ('2-green', '2', 'green', '2', 'green'),
+                ('3-white', '3', 'white', '3', 'white')])
