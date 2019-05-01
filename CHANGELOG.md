@@ -7,6 +7,10 @@ https://github.com/coleifer/peewee/releases
 
 ## master
 
+* Support nesting the `Database` instance as a context-manager. The outermost
+  block will handle opening and closing the connection along with wrapping
+  everything in a transaction. Nested blocks will use savepoints.
+
 [View commits](https://github.com/coleifer/peewee/compare/3.9.5...master)
 
 ## 3.9.5

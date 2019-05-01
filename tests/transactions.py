@@ -168,3 +168,34 @@ class TestTransaction(ModelTestCase):
     def test_closing_db_in_transaction(self):
         with db.atomic():
             self.assertRaises(OperationalError, db.close)
+
+    def test_db_context_manager(self):
+        db.close()
+        self.assertTrue(db.is_closed())
+
+        with db:
+            self.assertFalse(db.is_closed())
+            self._save(1)
+            with db:
+                self._save(2)
+                try:
+                    with db:
+                        self._save(3)
+                        raise ValueError('xxx')
+                except ValueError:
+                    pass
+                self._save(4)
+
+            try:
+                with db:
+                    self._save(5)
+                    with db:
+                        self._save(6)
+                    raise ValueError('yyy')
+            except ValueError:
+                pass
+
+            self.assertFalse(db.is_closed())
+
+        self.assertTrue(db.is_closed())
+        self.assertRegister([1, 2, 4])

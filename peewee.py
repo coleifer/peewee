@@ -2766,11 +2766,14 @@ class _ConnectionState(object):
     def reset(self):
         self.closed = True
         self.conn = None
+        self.ctx = []
         self.transactions = []
 
     def set_connection(self, conn):
         self.conn = conn
         self.closed = False
+        self.ctx = []
+        self.transactions = []
 
 
 class _ConnectionLocal(_ConnectionState, threading.local): pass
@@ -2851,15 +2854,18 @@ class Database(_callable_context_manager):
     def __enter__(self):
         if self.is_closed():
             self.connect()
-        self.transaction().__enter__()
+        ctx = self.atomic()
+        self._state.ctx.append(ctx)
+        ctx.__enter__()
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
-        top = self._state.transactions[-1]
+        ctx = self._state.ctx.pop()
         try:
-            top.__exit__(exc_type, exc_val, exc_tb)
+            ctx.__exit__(exc_type, exc_val, exc_tb)
         finally:
-            self.close()
+            if not self._state.ctx:
+                self.close()
 
     def connection_context(self):
         return ConnectionContext(self)
