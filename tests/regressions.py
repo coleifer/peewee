@@ -743,3 +743,39 @@ class TestFKCompositePK(ModelTestCase):
                 ('1-blue', '1', 'blue', '1', 'blue'),
                 ('2-green', '2', 'green', '2', 'green'),
                 ('3-white', '3', 'white', '3', 'white')])
+
+
+class RS(TestModel):
+    name = TextField()
+
+class RD(TestModel):
+    key = TextField()
+    value = IntegerField()
+    rs = ForeignKeyField(RS, backref='rds')
+
+
+class TestRegressionCountDistinct(ModelTestCase):
+    requires = [RS, RD]
+
+    def test_regression_count_distinct(self):
+        rs = RS.create(name='rs')
+
+        nums = [0, 1, 2, 3, 2, 1, 0]
+        RD.insert_many([('k%s' % i, i, rs) for i in nums]).execute()
+
+        query = RD.select(RD.key).distinct()
+        self.assertEqual(query.count(), 4)
+
+        # Try re-selecting using the id/key, which are all distinct.
+        query = query.select(RD.id, RD.key)
+        self.assertEqual(query.count(), 7)
+
+        # Re-select the key/value, of which there are 4 distinct.
+        query = query.select(RD.key, RD.value)
+        self.assertEqual(query.count(), 4)
+
+        query = rs.rds.select(RD.key).distinct()
+        self.assertEqual(query.count(), 4)
+
+        query = rs.rds.select(RD.key, RD.value).distinct()
+        self.assertEqual(query.count(), 4)  # Was returning 7!

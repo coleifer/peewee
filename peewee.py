@@ -6507,6 +6507,7 @@ class ModelSelect(BaseModelSelect, Select):
 
     def select(self, *fields):
         if fields or not self._is_default:
+            self._is_default = False
             return super(ModelSelect, self).select(*fields)
         return self
 
