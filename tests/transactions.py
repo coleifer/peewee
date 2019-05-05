@@ -64,6 +64,11 @@ class TestTransaction(ModelTestCase):
         self.assertRegister([1, 4])
 
     def test_commit_rollback_nested(self):
+        with db.atomic() as txn:
+            self.test_commit_rollback()
+            txn.rollback()
+        self.assertRegister([])
+
         with db.atomic():
             self.test_commit_rollback()
         self.assertRegister([1, 4])

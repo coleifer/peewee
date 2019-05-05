@@ -3887,11 +3887,11 @@ class _atomic(_callable_context_manager):
     def __enter__(self):
         if self.db.transaction_depth() == 0:
             self._helper = self.db.transaction(*self._transaction_args)
+        elif isinstance(self.db.top_transaction(), _manual):
+            raise ValueError('Cannot enter atomic commit block while in '
+                             'manual commit mode.')
         else:
             self._helper = self.db.savepoint()
-            if isinstance(self.db.top_transaction(), _manual):
-                raise ValueError('Cannot enter atomic commit block while in '
-                                 'manual commit mode.')
         return self._helper.__enter__()
 
     def __exit__(self, exc_type, exc_val, exc_tb):
