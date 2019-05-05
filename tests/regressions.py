@@ -753,10 +753,16 @@ class RD(TestModel):
     value = IntegerField()
     rs = ForeignKeyField(RS, backref='rds')
 
+class RKV(TestModel):
+    key = TextField()
+    value = IntegerField()
+    extra = IntegerField()
+    class Meta:
+        primary_key = CompositeKey('key', 'value')
+
 
 class TestRegressionCountDistinct(ModelTestCase):
-    requires = [RS, RD]
-
+    @requires_models(RS, RD)
     def test_regression_count_distinct(self):
         rs = RS.create(name='rs')
 
@@ -779,3 +785,8 @@ class TestRegressionCountDistinct(ModelTestCase):
 
         query = rs.rds.select(RD.key, RD.value).distinct()
         self.assertEqual(query.count(), 4)  # Was returning 7!
+
+    @requires_models(RKV)
+    def test_regression_count_distinct_cpk(self):
+        RKV.insert_many([('k%s' % i, i, i) for i in range(5)]).execute()
+        self.assertEqual(RKV.select().distinct().count(), 5)

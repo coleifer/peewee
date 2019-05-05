@@ -5157,8 +5157,12 @@ class CompositeKey(MetaField):
         return hash((self.model.__name__, self.field_names))
 
     def __sql__(self, ctx):
-        return ctx.sql(EnclosedNodeList([self.model._meta.fields[field]
-                                         for field in self.field_names]))
+        # If the composite PK is being selected, do not use parens. Elsewhere,
+        # such as in an expression, we want to use parentheses and treat it as
+        # a row value.
+        parens = ctx.scope != SCOPE_SOURCE
+        return ctx.sql(NodeList([self.model._meta.fields[field]
+                                 for field in self.field_names], ', ', parens))
 
     def bind(self, model, name, set_attribute=True):
         self.model = model
