@@ -754,7 +754,7 @@ class RD(TestModel):
     rs = ForeignKeyField(RS, backref='rds')
 
 class RKV(TestModel):
-    key = TextField()
+    key = CharField(max_length=10)
     value = IntegerField()
     extra = IntegerField()
     class Meta:
