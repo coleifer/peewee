@@ -6510,21 +6510,26 @@ class ModelCompoundSelectQuery(BaseModelSelect, CompoundSelectQuery):
         return self.lhs._get_model_cursor_wrapper(cursor)
 
 
+def _normalize_model_select(fields_or_models):
+    fields = []
+    for fm in fields_or_models:
+        if is_model(fm):
+            fields.extend(fm._meta.sorted_fields)
+        elif isinstance(fm, ModelAlias):
+            fields.extend(fm.get_field_aliases())
+        elif isinstance(fm, Table) and fm._columns:
+            fields.extend([getattr(fm, col) for col in fm._columns])
+        else:
+            fields.append(fm)
+    return fields
+
+
 class ModelSelect(BaseModelSelect, Select):
     def __init__(self, model, fields_or_models, is_default=False):
         self.model = self._join_ctx = model
         self._joins = {}
         self._is_default = is_default
-        fields = []
-        for fm in fields_or_models:
-            if is_model(fm):
-                fields.extend(fm._meta.sorted_fields)
-            elif isinstance(fm, ModelAlias):
-                fields.extend(fm.get_field_aliases())
-            elif isinstance(fm, Table) and fm._columns:
-                fields.extend([getattr(fm, col) for col in fm._columns])
-            else:
-                fields.append(fm)
+        fields = _normalize_model_select(fields_or_models)
         super(ModelSelect, self).__init__([model], fields)
 
     def clone(self):
@@ -6533,9 +6538,10 @@ class ModelSelect(BaseModelSelect, Select):
             clone._joins = dict(clone._joins)
         return clone
 
-    def select(self, *fields):
-        if fields or not self._is_default:
+    def select(self, *fields_or_models):
+        if fields_or_models or not self._is_default:
             self._is_default = False
+            fields = _normalize_model_select(fields_or_models)
             return super(ModelSelect, self).select(*fields)
         return self
 

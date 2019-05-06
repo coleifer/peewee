@@ -790,3 +790,19 @@ class TestRegressionCountDistinct(ModelTestCase):
     def test_regression_count_distinct_cpk(self):
         RKV.insert_many([('k%s' % i, i, i) for i in range(5)]).execute()
         self.assertEqual(RKV.select().distinct().count(), 5)
+
+
+class TestReselectModelRegression(ModelTestCase):
+    requires = [User]
+
+    def test_reselect_model_regression(self):
+        u1, u2, u3 = [User.create(username='u%s' % i) for i in '123']
+
+        query = User.select(User.username).order_by(User.username.desc())
+        self.assertEqual(list(query.tuples()), [('u3',), ('u2',), ('u1',)])
+
+        query = query.select(User)
+        self.assertEqual(list(query.tuples()), [
+            (u3.id, 'u3',),
+            (u2.id, 'u2',),
+            (u1.id, 'u1',)])
