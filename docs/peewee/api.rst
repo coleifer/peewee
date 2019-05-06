@@ -242,6 +242,39 @@ Database
             with db.atomic():
                 user.delete_instance(recursive=True)
 
+    .. py:method:: session_start()
+
+        Begin a new transaction (without using a context-manager or decorator).
+        This method is useful if you intend to execute a sequence of operations
+        inside a transaction, but using a decorator or context-manager would
+        not be appropriate.
+
+        .. note::
+            It is strongly advised that you use the :py:meth:`Database.atomic`
+            method whenever possible for managing transactions/savepoints. The
+            ``atomic`` method correctly manages nesting, uses the appropriate
+            construction (e.g., transaction-vs-savepoint), and always cleans up
+            after itself.
+
+            The :py:meth:`~Database.session_start` method should only be used
+            if the sequence of operations does not easily lend itself to
+            wrapping using either a context-manager or decorator.
+
+        .. warning::
+            You must *always* call either :py:meth:`~Database.session_commit`
+            or :py:meth:`~Database.session_rollback` after calling the
+            ``session_start`` method.
+
+    .. py:method:: session_commit()
+
+        Commit any changes made during a transaction begun with
+        :py:meth:`~Database.session_start`.
+
+    .. py:method:: session_rollback()
+
+        Roll back any changes made during a transaction begun with
+        :py:meth:`~Database.session_start`.
+
     .. py:method:: transaction()
 
         Create a context-manager that runs all queries in the wrapped block in

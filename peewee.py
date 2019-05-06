@@ -3037,6 +3037,28 @@ class Database(_callable_context_manager):
     def default_values_insert(self, ctx):
         return ctx.literal('DEFAULT VALUES')
 
+    def session_start(self):
+        with self._lock:
+            return self.transaction().__enter__()
+
+    def session_commit(self):
+        with self._lock:
+            try:
+                txn = self.pop_transaction()
+            except IndexError:
+                return False
+            txn.commit(begin=self.in_transaction())
+            return True
+
+    def session_rollback(self):
+        with self._lock:
+            try:
+                txn = self.pop_transaction()
+            except IndexError:
+                return False
+            txn.rollback(begin=self.in_transaction())
+            return True
+
     def in_transaction(self):
         return bool(self._state.transactions)
 
