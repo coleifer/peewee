@@ -6155,6 +6155,8 @@ class Model(with_metaclass(ModelBase, Node)):
                     field_dict.pop(pk_part_name, None)
             else:
                 field_dict.pop(pk_field.name, None)
+            if not field_dict:
+                raise ValueError('no data to save!')
             rows = self.update(**field_dict).where(self._pk_expr()).execute()
         elif pk_field is not None:
             pk = self.insert(**field_dict).execute()

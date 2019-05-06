@@ -24,6 +24,9 @@ class T4(TestModel):
     class Meta:
         primary_key = CompositeKey('pk1', 'pk2')
 
+class T5(TestModel):
+    val = IntegerField(null=True)
+
 
 class TestPrimaryKeySaveHandling(ModelTestCase):
     requires = [T1, T2, T3, T4]
@@ -127,3 +130,36 @@ class TestPrimaryKeySaveHandling(ModelTestCase):
         t2_db, = list(query)
         self.assertEqual(t2_db.pk, 3)
         self.assertEqual(t2_db.value, 10)
+
+
+class TestSaveNoData(ModelTestCase):
+    requires = [T5]
+
+    def test_save_no_data(self):
+        t5 = T5.create()
+        self.assertTrue(t5.id >= 1)
+
+        t5.val = 3
+        t5.save()
+
+        t5_db = T5.get(T5.id == t5.id)
+        self.assertEqual(t5_db.val, 3)
+
+        t5.val = None
+        t5.save()
+
+        t5_db = T5.get(T5.id == t5.id)
+        self.assertTrue(t5_db.val is None)
+
+    def test_save_no_data2(self):
+        t5 = T5.create()
+
+        t5_db = T5.get(T5.id == t5.id)
+        t5_db.save()
+
+        t5_db = T5.get(T5.id == t5.id)
+        self.assertTrue(t5_db.val is None)
+
+    def test_save_no_data3(self):
+        t5 = T5.create()
+        self.assertRaises(ValueError, t5.save)
