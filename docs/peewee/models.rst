@@ -743,11 +743,11 @@ relationships, and more).
 .. code-block:: pycon
 
     >>> Person._meta.fields
-    {'id': <peewee.PrimaryKeyField object at 0x7f51a2e92750>,
+    {'id': <peewee.AutoField object at 0x7f51a2e92750>,
      'name': <peewee.CharField object at 0x7f51a2f0a510>}
 
     >>> Person._meta.primary_key
-    <peewee.PrimaryKeyField object at 0x7f51a2e92750>
+    <peewee.AutoField object at 0x7f51a2e92750>
 
     >>> Person._meta.database
     <peewee.SqliteDatabase object at 0x7f519bff6dd0>
@@ -1216,7 +1216,7 @@ to use the :py:meth:`Model.insert_many` API:
         User.insert_many(data, fields=fields).execute()
 
 If you *always* want to have control over the primary key, simply do not use
-the :py:class:`PrimaryKeyField` field type, but use a normal
+the :py:class:`AutoField` field type, but use a normal
 :py:class:`IntegerField` (or other column type):
 
 .. code-block:: python
