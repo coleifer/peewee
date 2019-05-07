@@ -806,3 +806,33 @@ class TestReselectModelRegression(ModelTestCase):
             (u3.id, 'u3',),
             (u2.id, 'u2',),
             (u1.id, 'u1',)])
+
+
+class TestJoinCorrelatedSubquery(ModelTestCase):
+    requires = [User, Tweet]
+
+    def test_join_correlated_subquery(self):
+        for i in range(3):
+            user = User.create(username='u%s' % i)
+            for j in range(i + 1):
+                Tweet.create(user=user, content='u%s-%s' % (i, j))
+
+        UA = User.alias()
+        subq = (UA
+                .select(UA.username)
+                .where(UA.username.in_(('u0', 'u2'))))
+
+        query = (Tweet
+                 .select(Tweet, User)
+                 .join(User, on=(
+                     (Tweet.user == User.id) &
+                     (User.username.in_(subq))))
+                 .order_by(Tweet.id))
+
+        with self.assertQueryCount(1):
+            data = [(t.content, t.user.username) for t in query]
+            self.assertEqual(data, [
+                ('u0-0', 'u0'),
+                ('u2-0', 'u2'),
+                ('u2-1', 'u2'),
+                ('u2-2', 'u2')])

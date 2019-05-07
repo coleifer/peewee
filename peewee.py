@@ -7093,6 +7093,15 @@ class ModelCursorWrapper(BaseModelCursorWrapper):
                     dests.add(key)
                     accum.append(key)
 
+        # Ensure that we accommodate everything selected.
+        for src in selected_src:
+            if src not in self.key_to_constructor:
+                if is_model(src):
+                    self.key_to_constructor[src] = src
+                elif isinstance(src, ModelAlias):
+                    self.key_to_constructor[src] = src.model
+
+        # Indicate which sources are also dests.
         for src, _, dest, _ in self.src_to_dest:
             self.src_is_dest[src] = src in dests and (dest in selected_src
                                                       or src in selected_src)
