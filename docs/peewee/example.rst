@@ -6,9 +6,9 @@ Example app
 We'll be building a simple *twitter*-like site. The source code for the example
 can be found in the ``examples/twitter`` directory. You can also `browse the
 source-code <https://github.com/coleifer/peewee/tree/master/examples/twitter>`_
-on github. There is also an example `blog app
+on GitHub. There is also an example `blog app
 <https://github.com/coleifer/peewee/tree/master/examples/blog>`_ if that's more
-to your liking, however it is not covered in this guide.
+to your liking; however, it is not covered in this guide.
 
 The example app uses the `flask <http://flask.pocoo.org/>`_ web framework which
 is very easy to get started with. If you don't have flask already, you will
@@ -35,7 +35,7 @@ The example app will be accessible at http://localhost:5000/
 Diving into the code
 --------------------
 
-For simplicity all example code is contained within a single module,
+For simplicity, all example code is contained within a single module,
 ``examples/twitter/app.py``. For a guide on structuring larger Flask apps with
 peewee, check out `Structuring Flask Apps
 <http://charlesleifer.com/blog/structuring-flask-apps-a-how-to-for-those-coming-from-django/>`_.
@@ -125,7 +125,7 @@ the columns as :py:class:`Field` instances on the class.
 
 Peewee supports many different :ref:`field types <fields>` which map to
 different column types commonly supported by database engines.  Conversion
-between python types and those used in the database is handled transparently,
+between Python types and those used in the database is handled transparently,
 allowing you to use the following in your application:
 
 * Strings (unicode or otherwise)
@@ -171,7 +171,7 @@ resolve inter-model dependencies and call :py:meth:`~Model.create_table` on
 each model, ensuring the tables are created in order.
 
 .. note::
-    Adding fields after the table has been created will required you to
+    Adding fields after the table has been created will require you to
     either drop the table and re-create it or manually add the columns
     using an *ALTER TABLE* query.
 
@@ -261,7 +261,7 @@ difference in the SQL *JOIN* and *WHERE* clauses:
 Creating new objects
 ^^^^^^^^^^^^^^^^^^^^
 
-When a new user wants to join the site we need to make sure the username is
+When a new user wants to join the site, we need to make sure the username is
 available, and if so, create a new *User* record. Looking at the *join()* view,
 we can see that our application attempts to create the User using
 :py:meth:`Model.create`. We defined the *User.username* field with a unique
@@ -306,7 +306,7 @@ pointing from one user to another. Due to the unique index on ``from_user`` and
 Performing subqueries
 ^^^^^^^^^^^^^^^^^^^^^
 
-If you are logged-in and visit the twitter homepage, you will see tweets from
+If you are logged-in and visit the Twitter homepage, you will see tweets from
 the users that you follow. In order to implement this cleanly, we can use a
 subquery:
 
