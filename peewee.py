@@ -3201,8 +3201,7 @@ class SqliteDatabase(Database):
         if sqlite3 is None:
             raise ImproperlyConfigured('SQLite driver not installed!')
         conn = sqlite3.connect(self.database, timeout=self._timeout,
-                               **self.connect_params)
-        conn.isolation_level = None
+                               isolation_level=None, **self.connect_params)
         try:
             self._add_conn_hooks(conn)
         except:

@@ -65,8 +65,7 @@ class _SqlCipherDatabase(object):
         params = dict(self.connect_params)
         passphrase = params.pop('passphrase', '').replace("'", "''")
 
-        conn = sqlcipher.connect(self.database, **params)
-        conn.isolation_level = None
+        conn = sqlcipher.connect(self.database, isolation_level=None, **params)
         try:
             if passphrase:
                 conn.execute("PRAGMA key='%s'" % passphrase)
