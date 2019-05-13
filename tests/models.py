@@ -171,6 +171,11 @@ class TestModelAPIs(ModelTestCase):
                              [user.id for user in users])
 
     @requires_models(User)
+    def test_bulk_create_empty(self):
+        self.assertEqual(User.select().count(), 0)
+        User.bulk_create([])
+
+    @requires_models(User)
     def test_bulk_create_batching(self):
         users = [User(username=str(i)) for i in range(10)]
         with self.assertQueryCount(4):

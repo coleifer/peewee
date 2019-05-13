@@ -2514,6 +2514,9 @@ class Insert(_WriteQuery):
 
             all_values.append(EnclosedNodeList(values))
 
+        if not all_values:
+            raise self.DefaultValuesException('Error: no data to insert.')
+
         with ctx.scope_values(subquery=True):
             return ctx.sql(CommaNodeList(all_values))
 
@@ -2551,10 +2554,7 @@ class Insert(_WriteQuery):
                 self._query_insert(ctx)
                 self._query_type = Insert.QUERY
             else:
-                try:
-                    self._generate_insert(self._insert, ctx)
-                except self.DefaultValuesException:
-                    return
+                self._generate_insert(self._insert, ctx)
                 self._query_type = Insert.MULTI
 
             if self._on_conflict is not None:
@@ -2568,7 +2568,10 @@ class Insert(_WriteQuery):
         if self._returning is None and database.returning_clause \
            and self.table._primary_key:
             self._returning = (self.table._primary_key,)
-        return super(Insert, self)._execute(database)
+        try:
+            return super(Insert, self)._execute(database)
+        except self.DefaultValuesException:
+            pass
 
     def handle_result(self, database, cursor):
         if self._return_cursor:
