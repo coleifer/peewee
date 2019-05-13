@@ -6017,7 +6017,7 @@ class Model(with_metaclass(ModelBase, Node)):
             accum = ([getattr(model, f) for f in field_names]
                      for model in batch)
             res = cls.insert_many(accum, fields=fields).execute()
-            if ids_returned:
+            if ids_returned and res is not None:
                 for (obj_id,), model in zip(res, batch):
                     setattr(model, pk_name, obj_id)
 
