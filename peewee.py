@@ -5996,6 +5996,8 @@ class Model(with_metaclass(ModelBase, Node)):
 
     @classmethod
     def bulk_create(cls, model_list, batch_size=None):
+        if len(model_list) == 0:
+            return
         if batch_size is not None:
             batches = chunked(model_list, batch_size)
         else:
