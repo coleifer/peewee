@@ -390,7 +390,7 @@ cdef int pwConnect(sqlite3 *db, void *pAux, int argc, char **argv,
     cdef:
         int rc
         object table_func_cls = <object>pAux
-        peewee_vtab *pNew
+        peewee_vtab *pNew = <peewee_vtab *>0
 
     rc = sqlite3_declare_vtab(
         db,
@@ -422,7 +422,7 @@ cdef int pwDisconnect(sqlite3_vtab *pBase) with gil:
 cdef int pwOpen(sqlite3_vtab *pBase, sqlite3_vtab_cursor **ppCursor) with gil:
     cdef:
         peewee_vtab *pVtab = <peewee_vtab *>pBase
-        peewee_cursor *pCur
+        peewee_cursor *pCur = <peewee_cursor *>0
         object table_func_cls = <object>pVtab.table_func_cls
 
     pCur = <peewee_cursor *>sqlite3_malloc(sizeof(pCur[0]))
@@ -1452,7 +1452,7 @@ cdef class ConnectionHelper(object):
         Replace the default busy handler with one that introduces some "jitter"
         into the amount of time delayed between checks.
         """
-        cdef int n = timeout * 1000
+        cdef sqlite3_int64 n = timeout * 1000
         sqlite3_busy_handler(self.conn.db, _aggressive_busy_handler, <void *>n)
         return True
 
@@ -1561,7 +1561,7 @@ cdef int _aggressive_busy_handler(void *ptr, int n) nogil:
     # ensure that this doesn't happen. Furthermore, this function makes more
     # attempts in the same time period than the default handler.
     cdef:
-        int busyTimeout = <int>ptr
+        sqlite3_int64 busyTimeout = <sqlite3_int64>ptr
         int current, total
 
     if n < 20:
