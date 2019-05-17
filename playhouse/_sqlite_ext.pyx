@@ -1100,7 +1100,7 @@ seeds[:] = [0, 1337, 37, 0xabcd, 0xdead, 0xface, 97, 0xed11, 0xcad9, 0x827b]
 
 
 cdef bf_t *bf_create(size_t size):
-    cdef bf_t *bf = <bf_t *>calloc(1, sizeof(bf[0]))
+    cdef bf_t *bf = <bf_t *>calloc(1, sizeof(bf_t))
     bf.size = size
     bf.bits = malloc(size)
     return bf
@@ -1486,8 +1486,8 @@ cdef void _rollback_callback(void *userData) with gil:
     fn()
 
 
-cdef void _update_callback(void *userData, int queryType, char *database,
-                            char *table, sqlite3_int64 rowid) with gil:
+cdef void _update_callback(void *userData, int queryType, const char *database,
+                           const char *table, sqlite3_int64 rowid) with gil:
     # C-callback that delegates to a Python function that is executed whenever
     # the database is updated (insert/update/delete queries). The Python
     # callback receives a string indicating the query type, the name of the
