@@ -31,10 +31,10 @@ import traceback
 
 
 cdef struct sqlite3_index_constraint:
-    int iColumn
-    unsigned char op
-    unsigned char usable
-    int iTermOffset
+    int iColumn  # Column constrained, -1 for rowid.
+    unsigned char op  # Constraint operator.
+    unsigned char usable  # True if this constraint is usable.
+    int iTermOffset  # Used internally - xBestIndex should ignore.
 
 
 cdef struct sqlite3_index_orderby:
@@ -43,7 +43,7 @@ cdef struct sqlite3_index_orderby:
 
 
 cdef struct sqlite3_index_constraint_usage:
-    int argvIndex
+    int argvIndex  # if > 0, constraint is part of argv to xFilter.
     unsigned char omit
 
 
@@ -82,9 +82,9 @@ cdef extern from "sqlite3.h" nogil:
 
     ctypedef struct sqlite3_module:
         int iVersion
-        int (*xCreate)(sqlite3*, void *pAux, int argc, char **argv,
+        int (*xCreate)(sqlite3*, void *pAux, int argc, const char *const*argv,
                        sqlite3_vtab **ppVTab, char**)
-        int (*xConnect)(sqlite3*, void *pAux, int argc, char **argv,
+        int (*xConnect)(sqlite3*, void *pAux, int argc, const char *const*argv,
                         sqlite3_vtab **ppVTab, char**)
         int (*xBestIndex)(sqlite3_vtab *pVTab, sqlite3_index_info*)
         int (*xDisconnect)(sqlite3_vtab *pVTab)
@@ -385,7 +385,7 @@ ctypedef struct peewee_cursor:
 
 # We define an xConnect function, but leave xCreate NULL so that the
 # table-function can be called eponymously.
-cdef int pwConnect(sqlite3 *db, void *pAux, int argc, char **argv,
+cdef int pwConnect(sqlite3 *db, void *pAux, int argc, const char *const*argv,
                    sqlite3_vtab **ppVtab, char **pzErr) with gil:
     cdef:
         int rc
@@ -578,14 +578,13 @@ cdef int pwBestIndex(sqlite3_vtab *pBase, sqlite3_index_info *pIdxInfo) \
         int idxNum = 0, nArg = 0
         peewee_vtab *pVtab = <peewee_vtab *>pBase
         object table_func_cls = <object>pVtab.table_func_cls
-        sqlite3_index_constraint *pConstraint
+        sqlite3_index_constraint *pConstraint = <sqlite3_index_constraint *>0
         list columns = []
         char *idxStr
         int nParams = len(table_func_cls.params)
 
-    pConstraint = <sqlite3_index_constraint*>0
     for i in range(pIdxInfo.nConstraint):
-        pConstraint = &pIdxInfo.aConstraint[i]
+        pConstraint = pIdxInfo.aConstraint + i
         if not pConstraint.usable:
             continue
         if pConstraint.op != SQLITE_INDEX_CONSTRAINT_EQ:
