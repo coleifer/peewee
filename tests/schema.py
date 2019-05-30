@@ -610,7 +610,7 @@ class TestModelDDL(ModelDatabaseTestCase):
         ])
 
 
-class Note(TestModel):
+class NoteX(TestModel):
     content = TextField()
     timestamp = TimestampField()
     status = IntegerField()
@@ -618,7 +618,7 @@ class Note(TestModel):
 
 
 class TestCreateAs(ModelTestCase):
-    requires = [Note]
+    requires = [NoteX]
     test_data = (
         # name, timestamp, status, flags.
         ('n1', datetime.datetime(2019, 1, 1), 1, 1),
@@ -628,19 +628,19 @@ class TestCreateAs(ModelTestCase):
 
     def setUp(self):
         super(TestCreateAs, self).setUp()
-        fields = (Note.content, Note.timestamp, Note.status, Note.flags)
-        Note.insert_many(self.test_data, fields=fields).execute()
+        fields = (NoteX.content, NoteX.timestamp, NoteX.status, NoteX.flags)
+        NoteX.insert_many(self.test_data, fields=fields).execute()
 
     def test_create_as(self):
-        status = Case(Note.status, (
+        status = Case(NoteX.status, (
             (1, 'published'),
             (2, 'draft'),
             (9, 'deleted')))
 
-        query = (Note
-                 .select(Note.id, Note.content, Note.timestamp,
+        query = (NoteX
+                 .select(NoteX.id, NoteX.content, NoteX.timestamp,
                          status.alias('status'))
-                 .where(Note.flags == SQL('1')))
+                 .where(NoteX.flags == SQL('1')))
         query.create_table('note2', temporary=True)
 
         class Note2(TestModel):
