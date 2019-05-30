@@ -5310,6 +5310,21 @@ class SchemaManager(object):
     def create_table(self, safe=True, **options):
         self.database.execute(self._create_table(safe=safe, **options))
 
+    def _create_table_as(self, table_name, query, safe=True, **meta):
+        ctx = (self._create_context()
+               .literal('CREATE TEMPORARY TABLE '
+                        if meta.get('temporary') else 'CREATE TABLE '))
+        if safe:
+            ctx.literal('IF NOT EXISTS ')
+        return (ctx
+                .sql(Entity(table_name))
+                .literal(' AS ')
+                .sql(query))
+
+    def create_table_as(self, table_name, query, safe=True, **meta):
+        ctx = self._create_table_as(table_name, query, safe=safe, **meta)
+        self.database.execute(ctx)
+
     def _drop_table(self, safe=True, **options):
         ctx = (self._create_context()
                .literal('DROP TABLE IF EXISTS ' if safe else 'DROP TABLE ')
@@ -6790,6 +6805,9 @@ class ModelSelect(BaseModelSelect, Select):
                 field_obj = field.field
             query = query.ensure_join(lm, rm, field_obj)
         return query.where(dq_node)
+
+    def create_table(self, name, safe=True, **meta):
+        return self.model._schema.create_table_as(name, self, safe, **meta)
 
     def __sql_selection__(self, ctx, is_subquery=False):
         if self._is_default and is_subquery and len(self._returning) > 1 and \
