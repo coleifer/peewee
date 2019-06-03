@@ -6245,7 +6245,7 @@ class Model(with_metaclass(ModelBase, Node)):
                     model.update(**{fk.name: None}).where(query).execute()
                 else:
                     model.delete().where(query).execute()
-        return self.delete().where(self._pk_expr()).execute()
+        return Model.delete().where(self._pk_expr()).execute()
 
     def __hash__(self):
         return hash((self.__class__, self._pk))
