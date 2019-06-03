@@ -6686,13 +6686,18 @@ class ModelSelect(BaseModelSelect, Select):
         to_field = None
         if isinstance(on, Expression):
             lhs, rhs = on.lhs, on.rhs
+            # Coerce to set() so that we force Python to compare using the
+            # object's hash rather than equality test, which returns a
+            # false-positive due to overriding __eq__.
+            fk_set = set(fk_fields)
+
             if isinstance(lhs, Field):
                 lhs_f = lhs.field if isinstance(lhs, FieldAlias) else lhs
-                if lhs_f in fk_fields:
+                if lhs_f in fk_set:
                     to_field = lhs_f
             elif isinstance(rhs, Field):
                 rhs_f = rhs.field if isinstance(rhs, FieldAlias) else rhs
-                if rhs_f in fk_fields:
+                if rhs_f in fk_set:
                     to_field = rhs_f
 
         return to_field, False

@@ -836,3 +836,36 @@ class TestJoinCorrelatedSubquery(ModelTestCase):
                 ('u2-0', 'u2'),
                 ('u2-1', 'u2'),
                 ('u2-2', 'u2')])
+
+
+class RU(TestModel):
+    username = TextField()
+
+
+class Recipe(TestModel):
+    name = TextField()
+    created_by = ForeignKeyField(RU, backref='recipes')
+    changed_by = ForeignKeyField(RU, backref='recipes_modified')
+
+
+class TestMultiFKJoinRegression(ModelTestCase):
+    requires = [RU, Recipe]
+
+    def test_multi_fk_join_regression(self):
+        u1, u2 = [RU.create(username=u) for u in ('u1', 'u2')]
+        for (n, a, m) in (('r11', u1, u1), ('r12', u1, u2), ('r21', u2, u1)):
+            Recipe.create(name=n, created_by=a, changed_by=m)
+
+        Change = RU.alias()
+        query = (Recipe
+                 .select(Recipe, RU, Change)
+                 .join(RU, on=(RU.id == Recipe.created_by).alias('a'))
+                 .switch(Recipe)
+                 .join(Change, on=(Change.id == Recipe.changed_by).alias('b'))
+                 .order_by(Recipe.name))
+        with self.assertQueryCount(1):
+            data = [(r.name, r.a.username, r.b.username) for r in query]
+            self.assertEqual(data, [
+                ('r11', 'u1', 'u1'),
+                ('r12', 'u1', 'u2'),
+                ('r21', 'u2', 'u1')])
