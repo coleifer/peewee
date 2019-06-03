@@ -7,11 +7,24 @@ https://github.com/coleifer/peewee/releases
 
 ## master
 
+[View commits](https://github.com/coleifer/peewee/compare/3.9.6...master)
+
+## 3.9.6
+
 * Support nesting the `Database` instance as a context-manager. The outermost
   block will handle opening and closing the connection along with wrapping
   everything in a transaction. Nested blocks will use savepoints.
+* Add new `session_start()`, `session_commit()` and `session_rollback()`
+  interfaces to the Database object to support using transactional controls in
+  situations where a context-manager or decorator is awkward.
+* Fix error that would arise when attempting to do an empty bulk-insert.
+* Set `isolation_level=None` in SQLite connection constructor rather than
+  afterwards using the setter.
+* Add `create_table()` method to `Select` query to implement `CREATE TABLE AS`.
+* Cleanup some declarations in the Sqlite C extension.
+* Add new example showing how to implement Reddit's ranking algorithm in SQL.
 
-[View commits](https://github.com/coleifer/peewee/compare/3.9.5...master)
+[View commits](https://github.com/coleifer/peewee/compare/3.9.5...3.9.6)
 
 ## 3.9.5
 
