@@ -5857,9 +5857,16 @@ class ModelBase(type):
             setattr(cls, '__repr__', lambda self: '<%s: %s>' % (
                 cls.__name__, self.__str__()))
 
-        exc_name = '%sDoesNotExist' % cls.__name__
-        exc_attrs = {'__module__': cls.__module__}
-        exception_class = type(exc_name, (DoesNotExist,), exc_attrs)
+        if not hasattr(cls, 'DoesNotExist'):
+            exc_name = '%sDoesNotExist' % cls.__name__
+            exc_attrs = {'__module__': cls.__module__}
+            exception_class = type(exc_name, (DoesNotExist,), exc_attrs)
+        else:
+            if not issubclass(cls.DoesNotExist, DoesNotExist):
+                raise ValueError('%s must inherit from peewee.DoesNotExist'
+                                 % cls.DoesNotExist)
+
+            exception_class = cls.DoesNotExist
         cls.DoesNotExist = exception_class
 
         # Call validation hook, allowing additional model validation.

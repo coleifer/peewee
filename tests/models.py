@@ -37,9 +37,15 @@ if sys.version_info[0] >= 3:
     long = int
 
 
+class UnknownColorException(DoesNotExist):
+    pass
+
+
 class Color(TestModel):
     name = CharField(primary_key=True)
     is_neutral = BooleanField(default=False)
+
+    DoesNotExist = UnknownColorException
 
 
 class Post(TestModel):
@@ -389,6 +395,12 @@ class TestModelAPIs(ModelTestCase):
         tweet = Tweet.get(content__ilike='w%',
                           user__username__ilike='%ck%')
         self.assertEqual(tweet.content, 'woof')
+
+    @requires_models(Color)
+    def test_custom_does_not_exist_exception(self):
+        self.assertRaises(DoesNotExist, Color.get_by_id, 'pizza')
+        self.assertRaises(Color.DoesNotExist, Color.get_by_id, 'pizza')
+        self.assertRaises(UnknownColorException, Color.get_by_id, 'pizza')
 
     @requires_models(User)
     def test_get_with_alias(self):
