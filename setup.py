@@ -35,6 +35,9 @@ else:
 if 'sdist' in sys.argv and not cython_installed:
     raise Exception('Building sdist requires that Cython be installed.')
 
+if sys.version_info[0] < 3:
+    FileNotFoundError = EnvironmentError
+
 if cython_installed:
     src_ext = '.pyx'
 else:
@@ -79,6 +82,8 @@ def _have_sqlite_extension_support():
         print('unable to compile sqlite3 C extensions - no c compiler?')
     except DistutilsPlatformError:
         print('unable to compile sqlite3 C extensions - platform error')
+    except FileNotFoundError:
+        print('unable to compile sqlite3 C extensions - no compiler!')
     else:
         success = True
     shutil.rmtree(tmp_dir)
