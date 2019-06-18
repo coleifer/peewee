@@ -7,6 +7,9 @@ https://github.com/coleifer/peewee/releases
 
 ## master
 
+* Add a helper to `playhouse.mysql_ext` for creating `Match` full-text search
+  expressions.
+
 [View commits](https://github.com/coleifer/peewee/compare/3.9.6...master)
 
 ## 3.9.6

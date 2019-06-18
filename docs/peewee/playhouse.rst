@@ -1600,6 +1600,25 @@ Example usage:
     # MySQL database implementation that utilizes mysql-connector driver.
     db = MySQLConnectorDatabase('my_database', host='1.2.3.4', user='mysql')
 
+Additional MySQL-specific helpers:
+
+.. py:class:: JSONField()
+
+    Extends :py:class:`TextField` and implements transparent JSON encoding and
+    decoding in Python.
+
+.. py:function:: Match(columns, expr[, modifier=None])
+
+    :param columns: a single :py:class:`Field` or a tuple of multiple fields.
+    :param str expr: the full-text search expression.
+    :param str modifier: optional modifiers for the search, e.g. *'in boolean mode'*.
+
+    Helper class for constructing MySQL full-text search queries of the form:
+
+    .. code-block:: sql
+
+        MATCH (columns, ...) AGAINST (expr[ modifier])
+
 .. _dataset:
 
 DataSet
