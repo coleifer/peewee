@@ -2,8 +2,10 @@ import datetime
 
 from peewee import *
 from playhouse.mysql_ext import JSONField
+from playhouse.mysql_ext import Match
 
 from .base import IS_MYSQL_JSON
+from .base import ModelDatabaseTestCase
 from .base import ModelTestCase
 from .base import TestModel
 from .base import db_loader
@@ -90,3 +92,27 @@ class TestMySQLJSONField(ModelTestCase):
 
         with self.assertRaises(IntegrityError):
             KJ.create(key='kx', data=None)
+
+
+@requires_mysql
+class TestMatchExpression(ModelDatabaseTestCase):
+    requires = [Person]
+
+    def test_match_expression(self):
+        query = (Person
+                 .select()
+                 .where(Match(Person.first, 'charlie')))
+        self.assertSQL(query, (
+            'SELECT "t1"."id", "t1"."first", "t1"."last", "t1"."dob" '
+            'FROM "person" AS "t1" '
+            'WHERE MATCH("t1"."first") AGAINST(?)'), ['charlie'])
+
+        query = (Person
+                 .select()
+                 .where(Match((Person.first, Person.last), 'huey AND zaizee',
+                              'IN BOOLEAN MODE')))
+        self.assertSQL(query, (
+            'SELECT "t1"."id", "t1"."first", "t1"."last", "t1"."dob" '
+            'FROM "person" AS "t1" '
+            'WHERE MATCH("t1"."first", "t1"."last") '
+            'AGAINST(? IN BOOLEAN MODE)'), ['huey AND zaizee'])
