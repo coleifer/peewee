@@ -534,6 +534,28 @@ class TestDictToModel(ModelTestCase):
         inst = dict_to_model(User, data, ignore_unknown=True)
         self.assertEqual(inst.xx, 'does not exist')
 
+    def test_ignore_id_attribute(self):
+        class Register(Model):
+            key = CharField(primary_key=True)
+
+        data = {'id': 100, 'key': 'k1'}
+        self.assertRaises(AttributeError, dict_to_model, Register, data)
+
+        inst = dict_to_model(Register, data, ignore_unknown=True)
+        self.assertEqual(inst.__data__, {'key': 'k1'})
+
+        class Base(Model):
+            class Meta:
+                primary_key = False
+
+        class Register2(Model):
+            key = CharField(primary_key=True)
+
+        self.assertRaises(AttributeError, dict_to_model, Register2, data)
+
+        inst = dict_to_model(Register2, data, ignore_unknown=True)
+        self.assertEqual(inst.__data__, {'key': 'k1'})
+
 
 class ReconnectMySQLDatabase(ReconnectMixin, MySQLDatabase):
     def cursor(self, commit):
