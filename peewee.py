@@ -326,7 +326,8 @@ JOIN = attrdict(
     FULL='FULL',
     FULL_OUTER='FULL OUTER',
     CROSS='CROSS',
-    NATURAL='NATURAL')
+    NATURAL='NATURAL',
+    STRAIGHT='STRAIGHT')
 
 # Row representations.
 ROW = attrdict(
@@ -971,9 +972,10 @@ class Join(BaseTable):
         return self
 
     def __sql__(self, ctx):
+        lit = ' STRAIGHT_JOIN ' if self.join_type == JOIN.STRAIGHT else ' %s JOIN ' % self.join_type
         (ctx
          .sql(self.lhs)
-         .literal(' %s JOIN ' % self.join_type)
+         .literal(lit)
          .sql(self.rhs))
         if self._on is not None:
             ctx.literal(' ON ').sql(self._on)
