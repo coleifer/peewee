@@ -289,8 +289,6 @@ cdef extern from "_pysqlite/connection.h":
         sqlite3* db
         double timeout
         int initialized
-        PyObject* isolation_level
-        char* begin_statement
 
 
 cdef sqlite_to_python(int argc, sqlite3_value **params):
