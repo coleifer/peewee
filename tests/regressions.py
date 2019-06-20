@@ -869,3 +869,24 @@ class TestMultiFKJoinRegression(ModelTestCase):
                 ('r11', 'u1', 'u1'),
                 ('r12', 'u1', 'u2'),
                 ('r21', 'u2', 'u1')])
+
+
+class NoPK(TestModel):
+    val1 = IntegerField(index=True)
+    val2 = IntegerField()
+
+    class Meta:
+        primary_key = False
+
+
+class TestNoPKSaveRegression(ModelTestCase):
+    requires = [NoPK]
+
+    def test_no_pk_save_regression(self):
+        obj = NoPK.create(val1=1, val2=2)
+        self.assertEqual(obj.val1, 1)
+        self.assertEqual(obj.val2, 2)
+
+        obj_db = NoPK.get(NoPK.val1 == 1)
+        self.assertEqual(obj_db.val1, 1)
+        self.assertEqual(obj_db.val2, 2)
