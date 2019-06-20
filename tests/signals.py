@@ -156,3 +156,29 @@ class TestSignals(ModelTestCase):
 
         b = SubB.create()
         assert b in state
+
+
+class NoPK(BaseSignalModel):
+    val = IntegerField(index=True)
+    class Meta:
+        primary_key = False
+
+
+class TestSaveNoPrimaryKey(ModelTestCase):
+    database = get_in_memory_db()
+    requires = [NoPK]
+
+    def test_save_no_pk(self):
+        accum = [0]
+
+        @signals.pre_save(sender=NoPK)
+        @signals.post_save(sender=NoPK)
+        def save_hook(sender, instance, created):
+            accum[0] += 1
+
+        obj = NoPK.create(val=1)
+        self.assertEqual(obj.val, 1)
+
+        obj_db = NoPK.get(NoPK.val == 1)
+        self.assertEqual(obj_db.val, 1)
+        self.assertEqual(accum[0], 2)
