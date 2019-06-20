@@ -1150,6 +1150,8 @@ class ColumnBase(Node):
         return Expression(self, OP.BETWEEN, NodeList((lo, SQL('AND'), hi)))
     def concat(self, rhs):
         return StringExpression(self, OP.CONCAT, rhs)
+    def lconcat(self, lhs):
+        return StringExpression(lhs, OP.CONCAT, self)
     def regexp(self, rhs):
         return Expression(self, OP.REGEXP, rhs)
     def iregexp(self, rhs):
