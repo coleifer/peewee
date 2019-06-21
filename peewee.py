@@ -4423,8 +4423,8 @@ class _StringField(Field):
             return value.decode('utf-8')
         return text_type(value)
 
-    def __add__(self, other): return self.concat(other)
-    def __radd__(self, other): return other.concat(self)
+    def __add__(self, other): return StringExpression(self, OP.CONCAT, other)
+    def __radd__(self, other): return StringExpression(other, OP.CONCAT, self)
 
 
 class CharField(_StringField):
