@@ -3141,6 +3141,9 @@ class Database(_callable_context_manager):
     def truncate_date(self, date_part, date_field):
         raise NotImplementedError
 
+    def to_timestamp(self, date_field):
+        raise NotImplementedError
+
     def bind(self, models, bind_refs=True, bind_backrefs=True):
         for model in models:
             model.bind(self, bind_refs=bind_refs, bind_backrefs=bind_backrefs)
@@ -3529,6 +3532,9 @@ class SqliteDatabase(Database):
     def truncate_date(self, date_part, date_field):
         return fn.date_trunc(date_part, date_field)
 
+    def to_timestamp(self, date_field):
+        return fn.strftime('%s', date_field).cast('integer')
+
 
 class PostgresqlDatabase(Database):
     field_types = {
@@ -3694,6 +3700,9 @@ class PostgresqlDatabase(Database):
 
     def truncate_date(self, date_part, date_field):
         return fn.DATE_TRUNC(date_part, date_field)
+
+    def to_timestamp(self, date_field):
+        return self.extract_date('EPOCH', date_field)
 
     def get_noop_select(self, ctx):
         return ctx.sql(Select().columns(SQL('0')).where(SQL('false')))
@@ -3877,6 +3886,9 @@ class MySQLDatabase(Database):
 
     def truncate_date(self, date_part, date_field):
         return fn.DATE_FORMAT(date_field, __mysql_date_trunc__[date_part])
+
+    def to_timestamp(self, date_field):
+        return fn.UNIX_TIMESTAMP(date_field)
 
     def get_noop_select(self, ctx):
         return ctx.literal('DO 0')
@@ -4675,6 +4687,9 @@ class DateTimeField(_BaseFormattedField):
             return format_date_time(value, self.formats)
         return value
 
+    def to_timestamp(self):
+        return self.model._meta.database.to_timestamp(self)
+
     year = property(_date_part('year'))
     month = property(_date_part('month'))
     day = property(_date_part('day'))
@@ -4698,6 +4713,9 @@ class DateField(_BaseFormattedField):
         elif value and isinstance(value, datetime.datetime):
             return value.date()
         return value
+
+    def to_timestamp(self):
+        return self.model._meta.database.to_timestamp(self)
 
     year = property(_date_part('year'))
     month = property(_date_part('month'))

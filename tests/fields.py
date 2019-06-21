@@ -250,6 +250,23 @@ class TestDateFields(ModelTestCase):
                 2011., 1., 2., 11., 12., 13.054321, 2012., 2., 3., 3., 13.,
                 37.))
 
+    def test_to_timestamp(self):
+        dt = datetime.datetime(2019, 1, 2, 3, 4, 5)
+        ts = calendar.timegm(dt.utctimetuple())
+
+        dt2 = datetime.datetime(2019, 1, 3)
+        ts2 = calendar.timegm(dt2.utctimetuple())
+
+        DateModel.create(date_time=dt, date=dt2.date())
+
+        query = DateModel.select(
+            DateModel.date_time.to_timestamp().alias('dt_ts'),
+            DateModel.date.to_timestamp().alias('dt2_ts'))
+        obj = query.get()
+
+        self.assertEqual(obj.dt_ts, ts)
+        self.assertEqual(obj.dt2_ts, ts2)
+
     def test_distinct_date_part(self):
         years = (1980, 1990, 2000, 2010)
         for i, year in enumerate(years):
@@ -1025,7 +1042,7 @@ class TestDateTimeMath(ModelTestCase):
     def test_date_time_math_sqlite(self):
         # Convert to a timestamp, add the scheduled seconds, then convert back
         # to a datetime string for comparison with the last occurrence.
-        next_ts = fn.strftime('%s', Task.last_run) + Schedule.interval
+        next_ts = Task.last_run.to_timestamp() + Schedule.interval
         next_occurrence = fn.datetime(next_ts, 'unixepoch')
         self._do_test_date_time_math(next_occurrence)
 
