@@ -260,12 +260,22 @@ class TestDateFields(ModelTestCase):
         DateModel.create(date_time=dt, date=dt2.date())
 
         query = DateModel.select(
+            DateModel.id,
             DateModel.date_time.to_timestamp().alias('dt_ts'),
             DateModel.date.to_timestamp().alias('dt2_ts'))
         obj = query.get()
 
         self.assertEqual(obj.dt_ts, ts)
         self.assertEqual(obj.dt2_ts, ts2)
+
+        ts3 = ts + 86400
+        query = (DateModel.select()
+                 .where((DateModel.date_time.to_timestamp() + 86400) < ts3))
+        self.assertRaises(DateModel.DoesNotExist, query.get)
+
+        query = (DateModel.select()
+                 .where((DateModel.date.to_timestamp() + 86400) > ts3))
+        self.assertEqual(query.get().id, obj.id)
 
     def test_distinct_date_part(self):
         years = (1980, 1990, 2000, 2010)

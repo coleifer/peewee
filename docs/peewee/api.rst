@@ -3019,6 +3019,23 @@ Fields
 
         Reference the second of the value stored in the column in a query.
 
+    .. py:method:: to_timestamp()
+
+        Method that returns a database-specific function call that will allow
+        you to work with the given date-time value as a numeric timestamp. This
+        can sometimes simplify tasks like date math in a compatible way.
+
+        Example:
+
+        .. code-block:: python
+
+            # Find all events that are exactly 1 hour long.
+            query = (Event
+                     .select()
+                     .where((Event.start.to_timestamp() + 3600) ==
+                            Event.stop.to_timestamp())
+                     .order_by(Event.start))
+
 .. py:class:: DateField([formats=None[, **kwargs]])
 
     :param list formats: A list of format strings to use when coercing a string
@@ -3054,6 +3071,10 @@ Fields
     .. py:attribute:: day
 
         Reference the day of the value stored in the column in a query.
+
+    .. py:method:: to_timestamp()
+
+        See :py:meth:`DateTimeField.to_timestamp`.
 
 .. py:class:: TimeField([formats=None[, **kwargs]])
 
