@@ -3144,6 +3144,9 @@ class Database(_callable_context_manager):
     def to_timestamp(self, date_field):
         raise NotImplementedError
 
+    def from_timestamp(self, date_field):
+        raise NotImplementedError
+
     def bind(self, models, bind_refs=True, bind_backrefs=True):
         for model in models:
             model.bind(self, bind_refs=bind_refs, bind_backrefs=bind_backrefs)
@@ -3535,6 +3538,9 @@ class SqliteDatabase(Database):
     def to_timestamp(self, date_field):
         return fn.strftime('%s', date_field).cast('integer')
 
+    def from_timestamp(self, date_field):
+        return fn.datetime(date_field, 'unixepoch')
+
 
 class PostgresqlDatabase(Database):
     field_types = {
@@ -3703,6 +3709,10 @@ class PostgresqlDatabase(Database):
 
     def to_timestamp(self, date_field):
         return self.extract_date('EPOCH', date_field)
+
+    def from_timestamp(self, date_field):
+        # Ironically, here, Postgres means "to the Postgresql timestamp type".
+        return fn.to_timestamp(date_field)
 
     def get_noop_select(self, ctx):
         return ctx.sql(Select().columns(SQL('0')).where(SQL('false')))
@@ -3889,6 +3899,9 @@ class MySQLDatabase(Database):
 
     def to_timestamp(self, date_field):
         return fn.UNIX_TIMESTAMP(date_field)
+
+    def from_timestamp(self, date_field):
+        return fn.FROM_UNIXTIME(date_field)
 
     def get_noop_select(self, ctx):
         return ctx.literal('DO 0')
@@ -4748,6 +4761,15 @@ class TimeField(_BaseFormattedField):
     second = property(_date_part('second'))
 
 
+def _timestamp_date_part(date_part):
+    def dec(self):
+        db = self.model._meta.database
+        expr = ((self / Value(self.resolution, converter=False))
+                if self.resolution > 1 else self)
+        return db.extract_date(date_part, db.from_timestamp(expr))
+    return dec
+
+
 class TimestampField(BigIntegerField):
     # Support second -> microsecond resolution.
     valid_resolutions = [10**i for i in range(7)]
@@ -4761,6 +4783,7 @@ class TimestampField(BigIntegerField):
         elif self.resolution not in self.valid_resolutions:
             raise ValueError('TimestampField resolution must be one of: %s' %
                              ', '.join(str(i) for i in self.valid_resolutions))
+        self.ticks_to_microsecond = 1000000 // self.resolution
 
         self.utc = kwargs.pop('utc', False) or False
         dflt = datetime.datetime.utcnow if self.utc else datetime.datetime.now
@@ -4782,6 +4805,13 @@ class TimestampField(BigIntegerField):
         ts = calendar.timegm(dt.utctimetuple())
         return datetime.datetime.fromtimestamp(ts)
 
+    def get_timestamp(self, value):
+        if self.utc:
+            # If utc-mode is on, then we assume all naive datetimes are in UTC.
+            return calendar.timegm(value.utctimetuple())
+        else:
+            return time.mktime(value.timetuple())
+
     def db_value(self, value):
         if value is None:
             return
@@ -4793,12 +4823,7 @@ class TimestampField(BigIntegerField):
         else:
             return int(round(value * self.resolution))
 
-        if self.utc:
-            # If utc-mode is on, then we assume all naive datetimes are in UTC.
-            timestamp = calendar.timegm(value.utctimetuple())
-        else:
-            timestamp = time.mktime(value.timetuple())
-
+        timestamp = self.get_timestamp(value)
         if self.resolution > 1:
             timestamp += (value.microsecond * .000001)
             timestamp *= self.resolution
@@ -4807,9 +4832,8 @@ class TimestampField(BigIntegerField):
     def python_value(self, value):
         if value is not None and isinstance(value, (int, float, long)):
             if self.resolution > 1:
-                ticks_to_microsecond = 1000000 // self.resolution
                 value, ticks = divmod(value, self.resolution)
-                microseconds = int(ticks * ticks_to_microsecond)
+                microseconds = int(ticks * self.ticks_to_microsecond)
             else:
                 microseconds = 0
 
@@ -4822,6 +4846,18 @@ class TimestampField(BigIntegerField):
                 value = value.replace(microsecond=microseconds)
 
         return value
+
+    def from_timestamp(self):
+        expr = ((self / Value(self.resolution, converter=False))
+                if self.resolution > 1 else self)
+        return self.model._meta.database.from_timestamp(expr)
+
+    year = property(_timestamp_date_part('year'))
+    month = property(_timestamp_date_part('month'))
+    day = property(_timestamp_date_part('day'))
+    hour = property(_timestamp_date_part('hour'))
+    minute = property(_timestamp_date_part('minute'))
+    second = property(_timestamp_date_part('second'))
 
 
 class IPField(BigIntegerField):
