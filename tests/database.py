@@ -293,6 +293,13 @@ class TestDatabase(DatabaseTestCase):
         self.assertEqual(db.server_version, (1, 2, 3))
         db.close()
 
+    def test_explicit_connect(self):
+        db = get_in_memory_db(autoconnect=False)
+        self.assertRaises(InterfaceError, db.execute_sql, 'pragma cache_size')
+        with db:
+            db.execute_sql('pragma cache_size')
+        self.assertRaises(InterfaceError, db.cursor)
+
 
 class TestThreadSafety(ModelTestCase):
     nthreads = 4

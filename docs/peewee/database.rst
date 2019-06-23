@@ -760,16 +760,26 @@ You can test whether the database is closed using the
     >>> db.is_closed()
     True
 
-A note of caution
+Using autoconnect
 ^^^^^^^^^^^^^^^^^
 
-Although it is not necessary to explicitly connect to the database before using
-it, managing connections explicitly is considered a **best practice**. For
-example, if the connection fails, the exception will be caught when the
+It is not necessary to explicitly connect to the database before using
+it if the database is initialized with ``autoconnect=True`` (the default).
+Managing connections explicitly is considered a **best practice**, therefore
+you may consider disabling the ``autoconnect`` behavior.
+
+It is very helpful to be explicit about your connection lifetimes. If the
+connection fails, for instance, the exception will be caught when the
 connection is being opened, rather than some arbitrary time later when a query
-is executed. Furthermore, if you are using a :ref:`connection pool <pool>`, it
-is necessary to call :py:meth:`~Database.connect` and
-:py:meth:`~Database.close` to ensure connections are recycled properly.
+is executed. Furthermore, if using a :ref:`connection pool <pool>`, it is
+necessary to call :py:meth:`~Database.connect` and :py:meth:`~Database.close`
+to ensure connections are recycled properly.
+
+For the best guarantee of correctness, disable ``autoconnect``:
+
+.. code-block:: python
+
+    db = PostgresqlDatabase('my_app', user='postgres', autoconnect=False)
 
 Thread Safety
 ^^^^^^^^^^^^^

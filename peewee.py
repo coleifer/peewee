@@ -2817,7 +2817,8 @@ class Database(_callable_context_manager):
     truncate_table = True
 
     def __init__(self, database, thread_safe=True, autorollback=False,
-                 field_types=None, operations=None, autocommit=None, **kwargs):
+                 field_types=None, operations=None, autocommit=None,
+                 autoconnect=True, **kwargs):
         self._field_types = merge_dict(FIELD, self.field_types)
         self._operations = merge_dict(OP, self.operations)
         if field_types:
@@ -2825,6 +2826,7 @@ class Database(_callable_context_manager):
         if operations:
             self._operations.update(operations)
 
+        self.autoconnect = autoconnect
         self.autorollback = autorollback
         self.thread_safe = thread_safe
         if thread_safe:
@@ -2930,7 +2932,10 @@ class Database(_callable_context_manager):
 
     def cursor(self, commit=None):
         if self.is_closed():
-            self.connect()
+            if self.autoconnect:
+                self.connect()
+            else:
+                raise InterfaceError('Error, database connection not opened.')
         return self._state.conn.cursor()
 
     def execute_sql(self, sql, params=None, commit=SENTINEL):

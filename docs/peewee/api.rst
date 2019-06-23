@@ -8,7 +8,7 @@ This document specifies Peewee's APIs.
 Database
 --------
 
-.. py:class:: Database(database[, thread_safe=True[, autorollback=False[, field_types=None[, operations=None[, **kwargs]]]]])
+.. py:class:: Database(database[, thread_safe=True[, autorollback=False[, field_types=None[, operations=None[, autoconnect=True[, **kwargs]]]]]])
 
     :param str database: Database name or filename for SQLite (or ``None`` to
         :ref:`defer initialization <deferring_initialization>`, in which case
@@ -19,6 +19,8 @@ Database
         **not** in an explicit transaction.
     :param dict field_types: A mapping of additional field types to support.
     :param dict operations: A mapping of additional operations to support.
+    :param bool autoconnect: Automatically connect to database if attempting to
+        execute a query on a closed database.
     :param kwargs: Arbitrary keyword arguments that will be passed to the
         database driver when a connection is created, for example ``password``,
         ``host``, etc.
