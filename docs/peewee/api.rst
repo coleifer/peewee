@@ -534,6 +534,36 @@ Database
                     # ... models are bound to test database ...
                     pass
 
+    .. py:method:: extract_date(date_part, date_field)
+
+        :param str date_part: date part to extract, e.g. 'year'.
+        :param Node date_field: a SQL node containing a date/time, for example
+            a :py:class:`DateTimeField`.
+        :returns: a SQL node representing a function call that will return the
+            provided date part.
+
+        Provides a compatible interface for extracting a portion of a datetime.
+
+    .. py:method:: truncate_date(date_part, date_field)
+
+        :param str date_part: date part to truncate to, e.g. 'day'.
+        :param Node date_field: a SQL node containing a date/time, for example
+            a :py:class:`DateTimeField`.
+        :returns: a SQL node representing a function call that will return the
+            truncated date part.
+
+        Provides a compatible interface for truncating a datetime to the given
+        resolution.
+
+    .. py:method:: random()
+
+        :returns: a SQL node representing a function call that returns a random
+            value.
+
+        A compatible interface for calling the appropriate random number
+        generation function provided by the database. For Postgres and Sqlite,
+        this is equivalent to ``fn.random()``, for MySQL ``fn.rand()``.
+
 
 .. py:class:: SqliteDatabase(database[, pragmas=None[, timeout=5[, **kwargs]]])
 

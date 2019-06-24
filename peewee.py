@@ -3160,6 +3160,9 @@ class Database(_callable_context_manager):
     def from_timestamp(self, date_field):
         raise NotImplementedError
 
+    def random(self):
+        return fn.random()
+
     def bind(self, models, bind_refs=True, bind_backrefs=True):
         for model in models:
             model.bind(self, bind_refs=bind_refs, bind_backrefs=bind_backrefs)
@@ -3915,6 +3918,9 @@ class MySQLDatabase(Database):
 
     def from_timestamp(self, date_field):
         return fn.FROM_UNIXTIME(date_field)
+
+    def random(self):
+        return fn.rand()
 
     def get_noop_select(self, ctx):
         return ctx.literal('DO 0')
