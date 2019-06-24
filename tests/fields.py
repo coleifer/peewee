@@ -890,6 +890,24 @@ class TestTimestampField(ModelTestCase):
         self.assertEqual(TSModel.get(TSModel.ts_us == dt).id, ts.id)
         self.assertEqual(TSModel.get(TSModel.ts_u == dt).id, ts.id)
 
+    def test_timestamp_field_math(self):
+        dt = datetime.datetime(2019, 1, 2, 3, 4, 5, 31337)
+        ts = TSModel.create(ts_s=dt, ts_us=dt, ts_ms=dt)
+
+        # Although these fields use different scales for storing the
+        # timestamps, adding "1" has the effect of adding a single second -
+        # the value will be multiplied by the correct scale via the converter.
+        TSModel.update(
+            ts_s=TSModel.ts_s + 1,
+            ts_us=TSModel.ts_us + 1,
+            ts_ms=TSModel.ts_ms + 1).execute()
+
+        ts_db = TSModel.get(TSModel.id == ts.id)
+        dt2 = dt + datetime.timedelta(seconds=1)
+        self.assertEqual(ts_db.ts_s, dt2.replace(microsecond=0))
+        self.assertEqual(ts_db.ts_us, dt2)
+        self.assertEqual(ts_db.ts_ms, dt2.replace(microsecond=31000))
+
     def test_timestamp_field_value_as_ts(self):
         dt = datetime.datetime(2018, 3, 1, 3, 3, 7, 31337)
         unix_ts = time.mktime(dt.timetuple()) + 0.031337

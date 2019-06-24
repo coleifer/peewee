@@ -1376,8 +1376,16 @@ class Expression(ColumnBase):
 
     def __sql__(self, ctx):
         overrides = {'parentheses': not self.flat, 'in_expr': True}
-        if isinstance(self.lhs, Field):
-            overrides['converter'] = self.lhs.db_value
+
+        # First attempt to unwrap the node on the left-hand-side, so that we
+        # can get at the underlying Field if one is present.
+        node = self.lhs
+        if isinstance(node, WrappedNode):
+            node = node.unwrap()
+
+        # Set up the appropriate converter if we have a field on the left side.
+        if isinstance(node, Field):
+            overrides['converter'] = node.db_value
         else:
             overrides['converter'] = None
 
