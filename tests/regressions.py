@@ -869,3 +869,18 @@ class TestMultiFKJoinRegression(ModelTestCase):
                 ('r11', 'u1', 'u1'),
                 ('r12', 'u1', 'u2'),
                 ('r21', 'u2', 'u1')])
+
+
+class TestCompoundExistsRegression(ModelTestCase):
+    requires = [User]
+
+    def test_compound_regressions_1961(self):
+        UA = User.alias()
+        cq = (User.select(User.id) | UA.select(UA.id))
+        # Calling .exists() fails with AttributeError, no attribute "columns".
+        self.assertFalse(cq.exists())
+        self.assertEqual(cq.count(), 0)
+
+        User.create(username='u1')
+        self.assertTrue(cq.exists())
+        self.assertEqual(cq.count(), 1)

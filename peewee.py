@@ -2098,6 +2098,11 @@ class CompoundSelectQuery(SelectBase):
     def _returning(self):
         return self.lhs._returning
 
+    @database_required
+    def exists(self, database):
+        query = Select((self.limit(1),), (SQL('1'),)).bind(database)
+        return bool(query.scalar())
+
     def _get_query_key(self):
         return (self.lhs.get_query_key(), self.rhs.get_query_key())
 
