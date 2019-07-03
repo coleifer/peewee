@@ -6752,11 +6752,11 @@ class ModelSelect(BaseModelSelect, Select):
         if len(fk_fields) == 1:
             return fk_fields[0], is_backref
 
-        for fk in fk_fields:
-            if fk.name.lower() == dest.__name__.lower():
-                return fk, is_backref
-
         if on is None:
+            for fk in fk_fields:
+                if fk.name.lower() == dest.__name__.lower():
+                    return fk, is_backref
+
             raise ValueError('More than one foreign key between %s and %s.'
                              ' Please specify which you are joining on.' %
                              (src, dest))
