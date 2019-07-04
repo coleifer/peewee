@@ -649,7 +649,14 @@ class TestModelGraphMultiFK(ModelTestCase):
               .join_from(Task, P2, LO, on=Task.alt)
               .order_by(Task.name))
 
-        for query in (q1, q2):
+        # Query specifying with missing target field.
+        q3 = (Task
+              .select(Task, P1, P2)
+              .join_from(Task, P1, LO)
+              .join_from(Task, P2, LO, on=Task.alt)
+              .order_by(Task.name))
+
+        for query in (q1, q2, q3):
             with self.assertQueryCount(1):
                 t1, t2 = list(query)
                 self.assertEqual(t1.project.name, 'a')

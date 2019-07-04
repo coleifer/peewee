@@ -6753,6 +6753,13 @@ class ModelSelect(BaseModelSelect, Select):
             return fk_fields[0], is_backref
 
         if on is None:
+            # If multiple foreign-keys exist, try using the FK whose name
+            # matches that of the related model. If not, raise an error as this
+            # is ambiguous.
+            for fk in fk_fields:
+                if fk.name == dest._meta.name:
+                    return fk, is_backref
+
             raise ValueError('More than one foreign key between %s and %s.'
                              ' Please specify which you are joining on.' %
                              (src, dest))
