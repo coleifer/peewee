@@ -94,6 +94,29 @@ class TestModelDDL(ModelDatabaseTestCase):
 
         self.assertEqual(indexes, expected)
 
+    def test_model_fk_schema(self):
+        class Base(TestModel):
+            class Meta:
+                database = self.database
+        class User(Base):
+            username = TextField()
+            class Meta:
+                schema = 'foo'
+        class Tweet(Base):
+            user = ForeignKeyField(User)
+            content = TextField()
+            class Meta:
+                schema = 'bar'
+
+        self.assertCreateTable(User, [
+            ('CREATE TABLE "foo"."user" ("id" INTEGER NOT NULL PRIMARY KEY, '
+             '"username" TEXT NOT NULL)')])
+        self.assertCreateTable(Tweet, [
+            ('CREATE TABLE "bar"."tweet" ("id" INTEGER NOT NULL PRIMARY KEY, '
+             '"user_id" INTEGER NOT NULL, "content" TEXT NOT NULL, '
+             'FOREIGN KEY ("user_id") REFERENCES "foo"."user" ("id"))'),
+            ('CREATE INDEX "bar"."tweet_user_id" ON "tweet" ("user_id")')])
+
     def test_model_indexes_with_schema(self):
         # Attach cache database so we can reference "cache." as the schema.
         self.database.execute_sql("attach database ':memory:' as cache;")
