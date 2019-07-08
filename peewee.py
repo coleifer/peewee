@@ -4704,7 +4704,10 @@ def format_date_time(value, formats, post_process=None):
     return value
 
 def simple_date_time(value):
-    return datetime.datetime.strptime(value, '%Y-%m-%d %H:%M:%S')
+    try:
+        return datetime.datetime.strptime(value, '%Y-%m-%d %H:%M:%S')
+    except (TypeError, ValueError):
+        return value
 
 
 class _BaseFormattedField(Field):

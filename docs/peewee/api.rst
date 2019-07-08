@@ -3068,6 +3068,15 @@ Fields
                             Event.stop.to_timestamp())
                      .order_by(Event.start))
 
+    .. py:method:: truncate(date_part)
+
+        :param str date_part: year, month, day, hour, minute or second.
+        :returns: expression node to truncate date/time to given resolution.
+
+        Truncates the value in the column to the given part. This method is
+        useful for finding all rows within a given month, for instance.
+
+
 .. py:class:: DateField([formats=None[, **kwargs]])
 
     :param list formats: A list of format strings to use when coercing a string
@@ -3107,6 +3116,12 @@ Fields
     .. py:method:: to_timestamp()
 
         See :py:meth:`DateTimeField.to_timestamp`.
+
+    .. py:method:: truncate(date_part)
+
+        See :py:meth:`DateTimeField.truncate`. Note that only *year*, *month*,
+        and *day* are meaningful for :py:class:`DateField`.
+
 
 .. py:class:: TimeField([formats=None[, **kwargs]])
 
