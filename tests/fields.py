@@ -250,6 +250,35 @@ class TestDateFields(ModelTestCase):
                 2011., 1., 2., 11., 12., 13.054321, 2012., 2., 3., 3., 13.,
                 37.))
 
+    def test_truncate_date(self):
+        dm = DateModel.create(
+            date_time=datetime.datetime(2001, 2, 3, 4, 5, 6, 7),
+            date=datetime.date(2002, 3, 4))
+
+        accum = []
+        for p in ('year', 'month', 'day', 'hour', 'minute', 'second'):
+            accum.append(DateModel.date_time.truncate(p))
+        for p in ('year', 'month', 'day'):
+            accum.append(DateModel.date.truncate(p))
+
+        query = DateModel.select(*accum).tuples()
+        data = list(query[0])
+
+        # Postgres includes timezone info, so strip that for comparison.
+        if IS_POSTGRESQL:
+            data = [dt.replace(tzinfo=None) for dt in data]
+
+        self.assertEqual(data, [
+            datetime.datetime(2001, 1, 1, 0, 0, 0),
+            datetime.datetime(2001, 2, 1, 0, 0, 0),
+            datetime.datetime(2001, 2, 3, 0, 0, 0),
+            datetime.datetime(2001, 2, 3, 4, 0, 0),
+            datetime.datetime(2001, 2, 3, 4, 5, 0),
+            datetime.datetime(2001, 2, 3, 4, 5, 6),
+            datetime.datetime(2002, 1, 1, 0, 0, 0),
+            datetime.datetime(2002, 3, 1, 0, 0, 0),
+            datetime.datetime(2002, 3, 4, 0, 0, 0)])
+
     def test_to_timestamp(self):
         dt = datetime.datetime(2019, 1, 2, 3, 4, 5)
         ts = calendar.timegm(dt.utctimetuple())

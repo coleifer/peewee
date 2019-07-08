@@ -206,15 +206,15 @@ __sqlite_datetime_formats__ = (
     '%H:%M')
 
 __sqlite_date_trunc__ = {
-    'year': '%Y',
-    'month': '%Y-%m',
-    'day': '%Y-%m-%d',
-    'hour': '%Y-%m-%d %H',
-    'minute': '%Y-%m-%d %H:%M',
+    'year': '%Y-01-01 00:00:00',
+    'month': '%Y-%m-01 00:00:00',
+    'day': '%Y-%m-%d 00:00:00',
+    'hour': '%Y-%m-%d %H:00:00',
+    'minute': '%Y-%m-%d %H:%M:00',
     'second': '%Y-%m-%d %H:%M:%S'}
 
 __mysql_date_trunc__ = __sqlite_date_trunc__.copy()
-__mysql_date_trunc__['minute'] = '%Y-%m-%d %H:%i'
+__mysql_date_trunc__['minute'] = '%Y-%m-%d %H:%i:00'
 __mysql_date_trunc__['second'] = '%Y-%m-%d %H:%i:%S'
 
 def _sqlite_date_part(lookup_type, datetime_string):
@@ -3551,10 +3551,11 @@ class SqliteDatabase(Database):
         return self._build_on_conflict_update(oc, query)
 
     def extract_date(self, date_part, date_field):
-        return fn.date_part(date_part, date_field)
+        return fn.date_part(date_part, date_field, python_value=int)
 
     def truncate_date(self, date_part, date_field):
-        return fn.date_trunc(date_part, date_field)
+        return fn.date_trunc(date_part, date_field,
+                             python_value=simple_date_time)
 
     def to_timestamp(self, date_field):
         return fn.strftime('%s', date_field).cast('integer')
@@ -3916,7 +3917,8 @@ class MySQLDatabase(Database):
         return fn.EXTRACT(NodeList((SQL(date_part), SQL('FROM'), date_field)))
 
     def truncate_date(self, date_part, date_field):
-        return fn.DATE_FORMAT(date_field, __mysql_date_trunc__[date_part])
+        return fn.DATE_FORMAT(date_field, __mysql_date_trunc__[date_part],
+                              python_value=simple_date_time)
 
     def to_timestamp(self, date_field):
         return fn.UNIX_TIMESTAMP(date_field)
@@ -4701,6 +4703,9 @@ def format_date_time(value, formats, post_process=None):
             pass
     return value
 
+def simple_date_time(value):
+    return datetime.datetime.strptime(value, '%Y-%m-%d %H:%M:%S')
+
 
 class _BaseFormattedField(Field):
     formats = None
@@ -4726,6 +4731,9 @@ class DateTimeField(_BaseFormattedField):
 
     def to_timestamp(self):
         return self.model._meta.database.to_timestamp(self)
+
+    def truncate(self, part):
+        return self.model._meta.database.truncate_date(part, self)
 
     year = property(_date_part('year'))
     month = property(_date_part('month'))
@@ -4753,6 +4761,9 @@ class DateField(_BaseFormattedField):
 
     def to_timestamp(self):
         return self.model._meta.database.to_timestamp(self)
+
+    def truncate(self, part):
+        return self.model._meta.database.truncate_date(part, self)
 
     year = property(_date_part('year'))
     month = property(_date_part('month'))
