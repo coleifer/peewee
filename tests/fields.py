@@ -1247,3 +1247,39 @@ class TestForeignKeyLazyLoad(ModelTestCase):
             self.assertEqual(bi.nq_lazy.name, 'b')
             self.assertTrue(bi.nq_null is None)
             self.assertTrue(bi.nq_lazy_null is None)
+
+
+class SM(TestModel):
+    text_field = TextField()
+    char_field = CharField()
+
+
+class TestStringFields(ModelTestCase):
+    requires = [SM]
+
+    def test_string_fields(self):
+        bdata = b'b1'
+        udata = b'u1'.decode('utf8')
+
+        sb = SM.create(text_field=bdata, char_field=bdata)
+        su = SM.create(text_field=udata, char_field=udata)
+
+        sb_db = SM.get(SM.id == sb.id)
+        self.assertEqual(sb_db.text_field, 'b1')
+        self.assertEqual(sb_db.char_field, 'b1')
+
+        su_db = SM.get(SM.id == su.id)
+        self.assertEqual(su_db.text_field, 'u1')
+        self.assertEqual(su_db.char_field, 'u1')
+
+        bvals = (b'b1', u'b1')
+        uvals = (b'u1', u'u1')
+
+        for field in (SM.text_field, SM.char_field):
+            for bval in bvals:
+                sb_db = SM.get(field == bval)
+                self.assertEqual(sb.id, sb_db.id)
+
+            for uval in uvals:
+                sb_db = SM.get(field == uval)
+                self.assertEqual(su.id, su_db.id)
