@@ -27,6 +27,7 @@ from .base import IS_SQLITE_OLD
 from .base import IS_SQLITE_15  # Row-values.
 from .base import IS_SQLITE_24  # Upsert.
 from .base import IS_SQLITE_25  # Window functions.
+from .base import IS_SQLITE_30  # FILTER clause functions.
 from .base import IS_SQLITE_9
 from .base import ModelTestCase
 from .base import TestModel
@@ -2033,6 +2034,19 @@ class TestWindowFunctionIntegration(ModelTestCase):
             (1, 20., None),
             (3, 100., 103.),
         ])
+
+    @skip_if(IS_MYSQL or (IS_SQLITE and not IS_SQLITE_30),
+             'requires FILTER with aggregates')
+    def test_filter_with_aggregate(self):
+        condsum = fn.SUM(Sample.value).filter(Sample.counter > 1)
+        query = (Sample
+                 .select(Sample.counter, condsum.alias('cs'))
+                 .group_by(Sample.counter)
+                 .order_by(Sample.counter))
+        self.assertEqual(list(query.tuples()), [
+            (1, None),
+            (2, 4.),
+            (3, 100.)])
 
 
 @skip_if(IS_SQLITE or (IS_MYSQL and not IS_MYSQL_ADVANCED_FEATURES))
