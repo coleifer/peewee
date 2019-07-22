@@ -938,7 +938,7 @@ Database
         strategy (defaults to DEFERRED).
 
 
-.. py:class:: PostgresqlDatabase(database[, register_unicode=True[, encoding=None]])
+.. py:class:: PostgresqlDatabase(database[, register_unicode=True[, encoding=None[, isolation_level=None]]])
 
     Postgresql database implementation.
 
@@ -946,6 +946,8 @@ Database
 
     :param bool register_unicode: Register unicode types.
     :param str encoding: Database encoding.
+    :param int isolation_level: Isolation level constant, defined in the
+        ``psycopg2.extensions`` module.
 
     .. py:method:: set_time_zone(timezone)
 

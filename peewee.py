@@ -3586,9 +3586,11 @@ class PostgresqlDatabase(Database):
     safe_create_index = False
     sequences = True
 
-    def init(self, database, register_unicode=True, encoding=None, **kwargs):
+    def init(self, database, register_unicode=True, encoding=None,
+             isolation_level=None, **kwargs):
         self._register_unicode = register_unicode
         self._encoding = encoding
+        self._isolation_level = isolation_level
         super(PostgresqlDatabase, self).init(database, **kwargs)
 
     def _connect(self):
@@ -3600,6 +3602,8 @@ class PostgresqlDatabase(Database):
             pg_extensions.register_type(pg_extensions.UNICODEARRAY, conn)
         if self._encoding:
             conn.set_client_encoding(self._encoding)
+        if self._isolation_level:
+            conn.set_isolation_level(self._isolation_level)
         return conn
 
     def _set_server_version(self, conn):

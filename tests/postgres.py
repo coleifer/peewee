@@ -8,6 +8,7 @@ from peewee import *
 from playhouse.postgres_ext import *
 
 from .base import BaseTestCase
+from .base import DatabaseTestCase
 from .base import ModelTestCase
 from .base import TestModel
 from .base import db_loader
@@ -1076,3 +1077,18 @@ class TestAutocommitIntegration(ModelTestCase):
                 KX.create(key='k1', value=10)
 
         self.assertEqual(KX.select().count(), 1)
+
+
+class TestPostgresIsolationLevel(DatabaseTestCase):
+    database = db_loader('postgres', isolation_level=3)  # SERIALIZABLE.
+
+    def test_isolation_level(self):
+        conn = self.database.connection()
+        self.assertEqual(conn.isolation_level, 3)
+
+        conn.set_isolation_level(2)
+        self.assertEqual(conn.isolation_level, 2)
+
+        self.database.close()
+        conn = self.database.connection()
+        self.assertEqual(conn.isolation_level, 3)

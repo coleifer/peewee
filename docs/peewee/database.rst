@@ -132,6 +132,43 @@ If you would like to use these awesome features, use the
 
     psql_db = PostgresqlExtDatabase('my_database', user='postgres')
 
+
+Isolation level
+^^^^^^^^^^^^^^^
+
+As of Peewee 3.9.7, the isolation level can be specified as an initialization
+parameter, using the symbolic constants in ``psycopg2.extensions``:
+
+.. code-block:: python
+
+    from psycopg2.extensions import ISOLATION_LEVEL_SERIALIZABLE
+
+    db = PostgresqlDatabase('my_app', user='postgres', host='db-host',
+                            isolation_level=ISOLATION_LEVEL_SERIALIZABLE)
+
+.. note::
+
+    In older versions, you can manually set the isolation level on the
+    underlying psycopg2 connection. This can be done in a one-off fashion:
+
+    .. code-block:: python
+
+        db = PostgresqlDatabase(...)
+        conn = db.connection()  # returns current connection.
+
+        from psycopg2.extensions import ISOLATION_LEVEL_SERIALIZABLE
+        conn.set_isolation_level(ISOLATION_LEVEL_SERIALIZABLE)
+
+    To run this every time a connection is created, subclass and implement
+    the ``_initialize_database()`` hook, which is designed for this purpose:
+
+    .. code-block:: python
+
+        class SerializedPostgresqlDatabase(PostgresqlDatabase):
+            def _initialize_connection(self, conn):
+                conn.set_isolation_level(ISOLATION_LEVEL_SERIALIZABLE)
+
+
 .. _using_sqlite:
 
 Using SQLite
