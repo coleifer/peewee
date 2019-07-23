@@ -460,6 +460,9 @@ class DatabaseProxy(Proxy):
         return _savepoint(self)
 
 
+class ModelDescriptor(object): pass
+
+
 # SQL Generation.
 
 
@@ -6423,6 +6426,18 @@ class ModelAlias(Node):
         self.__dict__['alias'] = alias
 
     def __getattr__(self, attr):
+        # Hack to work-around the fact that properties or other objects
+        # implementing the descriptor protocol (on the model being aliased),
+        # will not work correctly when we use getattr(). So we explicitly pass
+        # the model alias to the descriptor's getter.
+        try:
+            obj = self.model.__dict__[attr]
+        except KeyError:
+            pass
+        else:
+            if isinstance(obj, ModelDescriptor):
+                return obj.__get__(None, self)
+
         model_attr = getattr(self.model, attr)
         if isinstance(model_attr, Field):
             self.__dict__[attr] = FieldAlias.create(self, model_attr)

@@ -99,3 +99,12 @@ class TestHybridProperties(ModelTestCase):
         query = Person.select().where(Person.full_name.startswith('huey c'))
         huey_db = query.get()
         self.assertEqual(huey_db.id, huey.id)
+
+    def test_hybrid_model_alias(self):
+        Person.create(first='huey', last='cat')
+        PA = Person.alias()
+        query = PA.select(PA.full_name).where(PA.last == 'cat')
+        self.assertSQL(query, (
+            'SELECT (("t1"."first" || ?) || "t1"."last") '
+            'FROM "person" AS "t1" WHERE ("t1"."last" = ?)'), [' ', 'cat'])
+        self.assertEqual(query.tuples()[0], ('huey cat',))
