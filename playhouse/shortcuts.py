@@ -73,7 +73,7 @@ def model_to_dict(model, recurse=True, backrefs=False, only=None,
 
         field_data = model.__data__.get(field.name)
         if isinstance(field, ForeignKeyField) and recurse:
-            if field_data:
+            if field_data is not None:
                 seen.add(field)
                 rel_obj = getattr(model, field.name)
                 field_data = model_to_dict(
