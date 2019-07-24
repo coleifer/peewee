@@ -7117,8 +7117,7 @@ class BaseModelCursorWrapper(DictCursorWrapper):
                 if raw_node._coerce:
                     converters[idx] = node.python_value
                 fields[idx] = node
-                if (column == node.name or column == node.column_name) and \
-                   not raw_node.is_alias():
+                if not raw_node.is_alias():
                     self.columns[idx] = node.name
             elif isinstance(node, Function) and node._coerce:
                 if node._python_value is not None:
