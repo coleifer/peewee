@@ -6359,7 +6359,8 @@ class Model(with_metaclass(ModelBase, Node)):
         return not self == other
 
     def __sql__(self, ctx):
-        return ctx.sql(getattr(self, self._meta.primary_key.name))
+        return ctx.sql(Value(getattr(self, self._meta.primary_key.name),
+                             converter=self._meta.primary_key.db_value))
 
     @classmethod
     def bind(cls, database, bind_refs=True, bind_backrefs=True):

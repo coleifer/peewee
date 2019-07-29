@@ -894,6 +894,41 @@ class TestUUIDField(ModelTestCase):
         self.assertEqual(u_db.bdata, uu)
 
 
+class UU1(TestModel):
+    id = UUIDField(default=uuid.uuid4, primary_key=True)
+    name = TextField()
+
+class UU2(TestModel):
+    id = UUIDField(default=uuid.uuid4, primary_key=True)
+    u1 = ForeignKeyField(UU1)
+    name = TextField()
+
+
+class TestForeignKeyUUIDField(ModelTestCase):
+    requires = [UU1, UU2]
+
+    def test_bulk_insert(self):
+        # Create three UU1 instances.
+        UU1.insert_many([{UU1.name: name} for name in 'abc'],
+                       fields=[UU1.id, UU1.name]).execute()
+        ua, ub, uc = UU1.select().order_by(UU1.name)
+
+        # Create several UU2 instances.
+        data = (
+            ('a1', ua),
+            ('b1', ub),
+            ('b2', ub),
+            ('c1', uc))
+        iq = UU2.insert_many([{UU2.name: name, UU2.u1: u} for name, u in data],
+                             fields=[UU2.id, UU2.name, UU2.u1])
+        iq.execute()
+
+        query = UU2.select().order_by(UU2.name)
+        for (name, u1), u2 in zip(data, query):
+            self.assertEqual(u2.name, name)
+            self.assertEqual(u2.u1.id, u1.id)
+
+
 class TSModel(TestModel):
     ts_s = TimestampField()
     ts_us = TimestampField(resolution=10 ** 6)
