@@ -488,6 +488,128 @@ class TestModelSQL(ModelDatabaseTestCase):
         self.assertSQL(query, (
             'INSERT INTO "person" ("name") VALUES (?)'), ['huey'])
 
+    def test_insert_get_field_values(self):
+        class User(TestModel):
+            username = TextField(primary_key=True)
+            class Meta:
+                database = self.database
+
+        class Tweet(TestModel):
+            user = ForeignKeyField(User)
+            content = TextField()
+            class Meta:
+                database = self.database
+
+        queries = (
+            User.insert(username='a'),
+            User.insert({'username': 'a'}),
+            User.insert({User.username: 'a'}))
+        for query in queries:
+            self.assertSQL(query, ('INSERT INTO "user" ("username") '
+                                   'VALUES (?)'), ['a'])
+
+        # Verify that we can provide all kinds of combinations to the
+        # constructor to INSERT and it will map the parameters correctly
+        # without losing values.
+        a = User(username='a')
+        queries = (
+            Tweet.insert(user=a, content='ca'),
+            Tweet.insert({'user': a, 'content': 'ca'}),
+            Tweet.insert({Tweet.user: a, 'content': 'ca'}),
+            Tweet.insert({'user': a, Tweet.content: 'ca'}),
+            Tweet.insert({Tweet.user: a, Tweet.content: 'ca'}),
+            Tweet.insert({Tweet.user: a}, content='ca'),
+            Tweet.insert({Tweet.content: 'ca'}, user=a),
+            Tweet.insert({'user': a}, content='ca'),
+            Tweet.insert({'content': 'ca'}, user=a),
+
+            # Also test using the foreign-key descriptor and column name.
+            Tweet.insert({Tweet.user_id: a, Tweet.content: 'ca'}),
+            Tweet.insert(user_id=a, content='ca'),
+            Tweet.insert({'user_id': a, 'content': 'ca'}))
+
+        for query in queries:
+            self.assertSQL(query, ('INSERT INTO "tweet" ("user_id", "content")'
+                                   ' VALUES (?, ?)'), ['a', 'ca'])
+
+    def test_insert_many_get_field_values(self):
+        class User(TestModel):
+            username = TextField(primary_key=True)
+            class Meta:
+                database = self.database
+
+        class Tweet(TestModel):
+            user = ForeignKeyField(User)
+            content = TextField()
+            class Meta:
+                database = self.database
+
+        # Ensure we can handle any combination of insert-data key and field
+        # list value.
+        pairs = ((User.username, 'username'),
+                 ('username', User.username),
+                 ('username', 'username'),
+                 (User.username, User.username))
+
+        for dict_key, fields_key in pairs:
+            iq = User.insert_many([{dict_key: u} for u in 'abc'],
+                                  fields=[fields_key])
+            self.assertSQL(iq, (
+                'INSERT INTO "user" ("username") VALUES (?), (?), (?)'),
+                ['a', 'b', 'c'])
+
+        a, b = User(username='a'), User(username='b')
+        user_content = (
+            (a, 'ca1'),
+            (a, 'ca2'),
+            (b, 'cb1'),
+            ('a', 'ca3'))  # Specify user id directly.
+
+        # Ensure we can mix-and-match key type within insert-data.
+        pairs = (('user', 'content'),
+                 (Tweet.user, Tweet.content),
+                 (Tweet.user, 'content'),
+                 ('user', Tweet.content),
+                 ('user_id', 'content'),
+                 (Tweet.user_id, Tweet.content))
+
+        for ukey, ckey in pairs:
+            iq = Tweet.insert_many([{ukey: u, ckey: c}
+                                    for u, c in user_content])
+            self.assertSQL(iq, (
+                'INSERT INTO "tweet" ("user_id", "content") VALUES '
+                '(?, ?), (?, ?), (?, ?), (?, ?)'),
+                ['a', 'ca1', 'a', 'ca2', 'b', 'cb1', 'a', 'ca3'])
+
+    def test_insert_many_dict_and_list(self):
+        class R(TestModel):
+            k = TextField(column_name='key')
+            v = IntegerField(column_name='value', default=0)
+            class Meta:
+                database = self.database
+
+        data = (
+            {'k': 'k1', 'v': 1},
+            {R.k: 'k2', R.v: 2},
+            {'key': 'k3', 'value': 3},
+            ('k4', 4),
+            ('k5', '5'),  # Will be converted properly.
+            {R.k: 'k6', R.v: '6'},
+            {'key': 'k7', 'value': '7'},
+            {'k': 'kx'},
+            ('ky',))
+
+        param_str = ', '.join('(?, ?)' for _ in range(len(data)))
+        queries = (
+            R.insert_many(data),
+            R.insert_many(data, fields=[R.k, R.v]),
+            R.insert_many(data, fields=['k', 'v']))
+        for query in queries:
+            self.assertSQL(query, (
+                'INSERT INTO "r" ("key", "value") VALUES %s' % param_str),
+                ['k1', 1, 'k2', 2, 'k3', 3, 'k4', 4, 'k5', 5, 'k6', 6,
+                 'k7', 7, 'kx', 0, 'ky', 0])
+
     def test_update(self):
         class Stat(TestModel):
             url = TextField()

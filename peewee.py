@@ -2449,7 +2449,6 @@ class Insert(_WriteQuery):
 
         # Load and organize column defaults (if provided).
         defaults = self.get_default_data()
-        value_lookups = {}
 
         # First figure out what columns are being inserted (if they weren't
         # specified explicitly). Resulting columns are normalized and ordered.
@@ -2466,40 +2465,41 @@ class Insert(_WriteQuery):
             else:
                 # Infer column names from the dict of data being inserted.
                 accum = []
-                uses_strings = False  # Are the dict keys strings or columns?
-                for key in row:
-                    if isinstance(key, basestring):
-                        column = getattr(self.table, key)
-                        uses_strings = True
-                    else:
-                        column = key
+                for column in row:
+                    if isinstance(column, basestring):
+                        column = getattr(self.table, column)
                     accum.append(column)
-                    value_lookups[column] = key
 
                 # Add any columns present in the default data that are not
                 # accounted for by the dictionary of row data.
                 column_set = set(accum)
                 for col in (set(defaults) - column_set):
                     accum.append(col)
-                    value_lookups[col] = col.name if uses_strings else col
 
                 columns = sorted(accum, key=lambda obj: obj.get_sort_key(ctx))
             rows_iter = itertools.chain(iter((row,)), rows_iter)
         else:
             clean_columns = []
+            seen = set()
             for column in columns:
                 if isinstance(column, basestring):
                     column_obj = getattr(self.table, column)
                 else:
                     column_obj = column
-                value_lookups[column_obj] = column
                 clean_columns.append(column_obj)
+                seen.add(column_obj)
 
             columns = clean_columns
             for col in sorted(defaults, key=lambda obj: obj.get_sort_key(ctx)):
-                if col not in value_lookups:
+                if col not in seen:
                     columns.append(col)
-                    value_lookups[col] = col
+
+        value_lookups = {}
+        for column in columns:
+            lookups = [column, column.name]
+            if isinstance(column, Field) and column.name != column.column_name:
+                lookups.append(column.column_name)
+            value_lookups[column] = lookups
 
         ctx.sql(EnclosedNodeList(columns)).literal(' VALUES ')
         columns_converters = [
@@ -2513,7 +2513,18 @@ class Insert(_WriteQuery):
             for i, (column, converter) in enumerate(columns_converters):
                 try:
                     if is_dict:
-                        val = row[value_lookups[column]]
+                        # The logic is a bit convoluted, but in order to be
+                        # flexible in what we accept (dict keyed by
+                        # column/field, field name, or underlying column name),
+                        # we try accessing the row data dict using each
+                        # possible key. If no match is found, throw an error.
+                        for lookup in value_lookups[column]:
+                            try:
+                                val = row[lookup]
+                            except KeyError: pass
+                            else: break
+                        else:
+                            raise KeyError
                     else:
                         val = row[i]
                 except (KeyError, IndexError):
