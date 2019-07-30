@@ -116,6 +116,19 @@ class TestModelSQL(ModelDatabaseTestCase):
             'SELECT "t1"."id", "t1"."username" FROM "users" AS "t1" '
             'ORDER BY "t1"."username" DESC, "t1"."id"'), [])
 
+    def test_paginate(self):
+        # Get the first page, default is limit of 20.
+        query = User.select().paginate(1)
+        self.assertSQL(query, (
+            'SELECT "t1"."id", "t1"."username" FROM "users" AS "t1" '
+            'LIMIT ? OFFSET ?'), [20, 0])
+
+        # Page 3 contains rows 31-45.
+        query = User.select().paginate(3, 15)
+        self.assertSQL(query, (
+            'SELECT "t1"."id", "t1"."username" FROM "users" AS "t1" '
+            'LIMIT ? OFFSET ?'), [15, 30])
+
     def test_subquery_correction(self):
         users = User.select().where(User.username.in_(['foo', 'bar']))
         query = Tweet.select().where(Tweet.user.in_(users))
