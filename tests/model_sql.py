@@ -623,6 +623,13 @@ class TestModelSQL(ModelDatabaseTestCase):
                 ['k1', 1, 'k2', 2, 'k3', 3, 'k4', 4, 'k5', 5, 'k6', 6,
                  'k7', 7, 'kx', 0, 'ky', 0])
 
+    def test_insert_modelalias(self):
+        UA = User.alias('ua')
+        self.assertSQL(UA.insert({UA.username: 'huey'}), (
+            'INSERT INTO "users" ("username") VALUES (?)'), ['huey'])
+        self.assertSQL(UA.insert(username='huey'), (
+            'INSERT INTO "users" ("username") VALUES (?)'), ['huey'])
+
     def test_update(self):
         class Stat(TestModel):
             url = TextField()
