@@ -2458,7 +2458,7 @@ class Insert(_WriteQuery):
             except StopIteration:
                 raise self.DefaultValuesException('Error: no rows to insert.')
 
-            if not isinstance(row, dict):
+            if not isinstance(row, Mapping):
                 columns = self.get_default_columns()
                 if columns is None:
                     raise ValueError('Bulk insert must specify columns.')
@@ -2571,7 +2571,7 @@ class Insert(_WriteQuery):
              .sql(self.table)
              .literal(' '))
 
-            if isinstance(self._insert, dict) and not self._columns:
+            if isinstance(self._insert, Mapping) and not self._columns:
                 try:
                     self._simple_insert(ctx)
                 except self.DefaultValuesException:
