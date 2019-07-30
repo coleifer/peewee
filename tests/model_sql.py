@@ -654,6 +654,31 @@ class TestModelSQL(ModelDatabaseTestCase):
             'WHERE ("stat"."url" = ?)'),
             [1, '/peewee'])
 
+    def test_update_subquery(self):
+        class U(TestModel):
+            username = TextField()
+            flood_count = IntegerField()
+
+        class T(TestModel):
+            user = ForeignKeyField(U)
+
+        ctq = T.select(fn.COUNT(T.id) / 100).where(T.user == U.id)
+        subq = (T
+                .select(T.user)
+                .group_by(T.user)
+                .having(fn.COUNT(T.id) > 100))
+        query = (U
+                 .update({U.flood_count: ctq})
+                 .where(U.id.in_(subq)))
+        self.assertSQL(query, (
+            'UPDATE "u" SET "flood_count" = ('
+            'SELECT (COUNT("t1"."id") / ?) FROM "t" AS "t1" '
+            'WHERE ("t1"."user_id" = "u"."id")) '
+            'WHERE ("u"."id" IN ('
+            'SELECT "t1"."user_id" FROM "t" AS "t1" '
+            'GROUP BY "t1"."user_id" '
+            'HAVING (COUNT("t1"."id") > ?)))'), [100, 100])
+
     def test_update_from(self):
         class SalesPerson(TestModel):
             first = TextField()
