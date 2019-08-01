@@ -3,6 +3,7 @@ Collection of postgres-specific extensions, currently including:
 
 * Support for hstore, a key/value type storage
 """
+import json
 import logging
 import uuid
 
@@ -277,18 +278,19 @@ class HStoreField(IndexedFieldMixin, Field):
 
 class JSONField(Field):
     field_type = 'JSON'
+    _json_datatype = 'json'
 
     def __init__(self, dumps=None, *args, **kwargs):
         if Json is None:
             raise Exception('Your version of psycopg2 does not support JSON.')
-        self.dumps = dumps
+        self.dumps = dumps or json.dumps
         super(JSONField, self).__init__(*args, **kwargs)
 
     def db_value(self, value):
         if value is None:
             return value
         if not isinstance(value, Json):
-            return Json(value, dumps=self.dumps)
+            return Cast(self.dumps(value), self._json_datatype)
         return value
 
     def __getitem__(self, value):
@@ -307,6 +309,7 @@ def cast_jsonb(node):
 
 class BinaryJSONField(IndexedFieldMixin, JSONField):
     field_type = 'JSONB'
+    _json_datatype = 'jsonb'
     __hash__ = Field.__hash__
 
     def contains(self, other):

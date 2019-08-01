@@ -617,7 +617,8 @@ class BaseJsonFieldTestCase(object):
         table = self.M._meta.table_name
         self.assertSQL(j, (
             'SELECT "t1"."id", "t1"."data" '
-            'FROM "%s" AS "t1" WHERE ("t1"."data" = ?)') % table)
+            'FROM "%s" AS "t1" WHERE ("t1"."data" = CAST(? AS %s))')
+            % (table, self.M.data._json_datatype))
 
         j = (self.M
              .select()
@@ -936,6 +937,24 @@ class TestBinaryJsonField(BaseJsonFieldTestCase, ModelTestCase):
         self.assertEqual(BJson.data, {'k1': 'v1-w'})
 
         self.assertEqual(BJson.select().count(), 1)
+
+
+@skip_unless(JSON_SUPPORT, 'json support unavailable')
+class TestBinaryJsonFieldBulkUpdate(ModelTestCase):
+    database = db
+    requires = [BJson]
+
+    def test_binary_json_field_bulk_update(self):
+        b1 = BJson.create(data={'k1': 'v1'})
+        b2 = BJson.create(data={'k2': 'v2'})
+        b1.data['k1'] = 'v1-x'
+        b2.data['k2'] = 'v2-y'
+        BJson.bulk_update([b1, b2], fields=[BJson.data])
+
+        b1_db = BJson.get(BJson.id == b1.id)
+        b2_db = BJson.get(BJson.id == b2.id)
+        self.assertEqual(b1_db.data, {'k1': 'v1-x'})
+        self.assertEqual(b2_db.data, {'k2': 'v2-y'})
 
 
 class TestIntervalField(ModelTestCase):
