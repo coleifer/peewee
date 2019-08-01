@@ -9,6 +9,23 @@ https://github.com/coleifer/peewee/releases
 
 * Add a helper to `playhouse.mysql_ext` for creating `Match` full-text search
   expressions.
+* Added date-part properties to `TimestampField` for accessing the year, month,
+  day, etc., within a SQL expression.
+* Added `to_timestamp()` helper for `DateField` and `DateTimeField` that
+  produces an expression returning a unix timestamp.
+* Add `autoconnect` parameter to `Database` classes.
+* Added database-agnostic interface for obtaining a random value.
+* Improved date truncation logic for Sqlite and MySQL to make more compatible
+  with Postgres' `date_trunc()` behavior.
+* Support aggregates with FILTER predicates on the latest Sqlite.
+* Fix for differentiating empty values from NULL values in `model_to_dict`.
+* More aggressively slot row values into the appropriate field when building
+  objects from the database cursor (rather than using whatever
+  `cursor.description` tells us, which is buggy in older Sqlite).
+* Be more permissive in what we accept in the `insert_many()` and `insert()`
+  methods.
+* Save hooks can now be called for models without a primary key.
+* Fixed bug in the conversion of Python values to JSON when using Postgres.
 
 [View commits](https://github.com/coleifer/peewee/compare/3.9.6...master)
 
