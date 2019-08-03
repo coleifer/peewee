@@ -7,27 +7,58 @@ https://github.com/coleifer/peewee/releases
 
 ## master
 
+[View commits](https://github.com/coleifer/peewee/compare/3.10.0...master)
+
+## 3.10.0
+
 * Add a helper to `playhouse.mysql_ext` for creating `Match` full-text search
   expressions.
 * Added date-part properties to `TimestampField` for accessing the year, month,
   day, etc., within a SQL expression.
 * Added `to_timestamp()` helper for `DateField` and `DateTimeField` that
   produces an expression returning a unix timestamp.
-* Add `autoconnect` parameter to `Database` classes.
+* Add `autoconnect` parameter to `Database` classes. This parameter defaults to
+  `True` and is compatible with previous versions of Peewee, in which executing
+  a query on a closed database would open a connection automatically. To make
+  it easier to catch inconsistent use of the database connection, this behavior
+  can now be disabled by specifying `autoconnect=False`, making an explicit
+  call to `Database.connect()` needed before executing a query.
 * Added database-agnostic interface for obtaining a random value.
-* Improved date truncation logic for Sqlite and MySQL to make more compatible
-  with Postgres' `date_trunc()` behavior.
+* Allow `isolation_level` to be specified when initializing a Postgres db.
+* Allow hybrid properties to be used on model aliases. Refs #1969.
 * Support aggregates with FILTER predicates on the latest Sqlite.
-* Fix for differentiating empty values from NULL values in `model_to_dict`.
+
+#### Changes
+
 * More aggressively slot row values into the appropriate field when building
   objects from the database cursor (rather than using whatever
   `cursor.description` tells us, which is buggy in older Sqlite).
 * Be more permissive in what we accept in the `insert_many()` and `insert()`
   methods.
+* When implicitly joining a model with multiple foreign-keys, choose the
+  foreign-key whose name matches that of the related model. Previously, this
+  would have raised a `ValueError` stating that multiple FKs existed.
+* Improved date truncation logic for Sqlite and MySQL to make more compatible
+  with Postgres' `date_trunc()` behavior. Previously, truncating a datetime to
+  month resolution would return `'2019-08'` for example. As of 3.10.0, the
+  Sqlite and MySQL `date_trunc` implementation returns a full datetime, e.g.
+  `'2019-08-01 00:00:00'`.
+* Apply slightly different logic for casting JSON values with Postgres.
+  Previously, Peewee just wrapped the value in the psycopg2 `Json()` helper.
+  In this version, Peewee now dumps the json to a string and applies an
+  explicit cast to the underlying JSON data-type (e.g. json or jsonb).
+
+#### Bug fixes
+
 * Save hooks can now be called for models without a primary key.
 * Fixed bug in the conversion of Python values to JSON when using Postgres.
+* Fix for differentiating empty values from NULL values in `model_to_dict`.
+* Fixed a bug referencing primary-key values that required some kind of
+  conversion (e.g., a UUID). See #1979 for details.
+* Add small jitter to the pool connection timestamp to avoid issues when
+  multiple connections are checked-out at the same exact time.
 
-[View commits](https://github.com/coleifer/peewee/compare/3.9.6...master)
+[View commits](https://github.com/coleifer/peewee/compare/3.9.6...3.10.0)
 
 ## 3.9.6
 
