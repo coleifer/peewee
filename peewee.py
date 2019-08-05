@@ -4970,6 +4970,7 @@ class ForeignKeyField(Field):
                            '"backref" for Field objects.')
             backref = related_name
 
+        self._is_self_reference = model == 'self'
         self.rel_model = model
         self.rel_field = field
         self.declared_backref = backref
@@ -5018,7 +5019,7 @@ class ForeignKeyField(Field):
             raise ValueError('ForeignKeyField "%s"."%s" specifies an '
                              'object_id_name that conflicts with its field '
                              'name.' % (model._meta.name, name))
-        if self.rel_model == 'self':
+        if self._is_self_reference:
             self.rel_model = model
         if isinstance(self.rel_field, basestring):
             self.rel_field = getattr(self.rel_model, self.rel_field)

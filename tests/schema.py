@@ -632,6 +632,36 @@ class TestModelDDL(ModelDatabaseTestCase):
              '"data" TEXT NOT NULL)'),
         ])
 
+    def test_self_fk_inheritance(self):
+        class BaseCategory(TestModel):
+            parent = ForeignKeyField('self', backref='children')
+            class Meta:
+                database = self.database
+        class CatA1(BaseCategory):
+            name_a1 = TextField()
+        class CatA2(CatA1):
+            name_a2 = TextField()
+
+        self.assertTrue(CatA1.parent.rel_model is CatA1)
+        self.assertTrue(CatA2.parent.rel_model is CatA2)
+
+        self.assertCreateTable(CatA1, [
+            ('CREATE TABLE "cat_a1" ('
+             '"id" INTEGER NOT NULL PRIMARY KEY, '
+             '"parent_id" INTEGER NOT NULL, '
+             '"name_a1" TEXT NOT NULL, '
+             'FOREIGN KEY ("parent_id") REFERENCES "cat_a1" ("id"))'),
+            ('CREATE INDEX "cat_a1_parent_id" ON "cat_a1" ("parent_id")')])
+
+        self.assertCreateTable(CatA2, [
+            ('CREATE TABLE "cat_a2" ('
+             '"id" INTEGER NOT NULL PRIMARY KEY, '
+             '"parent_id" INTEGER NOT NULL, '
+             '"name_a1" TEXT NOT NULL, '
+             '"name_a2" TEXT NOT NULL, '
+             'FOREIGN KEY ("parent_id") REFERENCES "cat_a2" ("id"))'),
+            ('CREATE INDEX "cat_a2_parent_id" ON "cat_a2" ("parent_id")')])
+
 
 class NoteX(TestModel):
     content = TextField()
