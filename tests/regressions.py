@@ -914,3 +914,23 @@ class TestViewFieldMapping(ModelTestCase):
 
         self.assertEqual([(v.id, v.username) for v in View.select()],
                          [(user.id, 'huey')])
+
+
+class TC(TestModel):
+    ifield = IntegerField()
+    ffield = FloatField()
+    cfield = TextField()
+    tfield = TextField()
+
+
+class TestTypeCoercion(ModelTestCase):
+    requires = [TC]
+
+    def test_type_coercion(self):
+        t = TC.create(ifield='10', ffield='20.5', cfield=30, tfield=40)
+        t_db = TC.get(TC.id == t.id)
+
+        self.assertEqual(t_db.ifield, 10)
+        self.assertEqual(t_db.ffield, 20.5)
+        self.assertEqual(t_db.cfield, '30')
+        self.assertEqual(t_db.tfield, '40')
