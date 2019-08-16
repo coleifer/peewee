@@ -1,6 +1,5 @@
 todo
 ====
 
-* move Model classmethods (select/insert/update/delete) to meta-class?
-* better schema-manager support for sequences (and views?)
-* additional examples in example dir
+* GitHub #1991 - two left-outer joins, the intervening model should probably
+  be set to NULL rather than an empty model, when there is no data present.
