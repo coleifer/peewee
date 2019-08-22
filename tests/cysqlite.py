@@ -360,9 +360,9 @@ class TestBloomFilterIntegration(CyDatabaseTestCase):
         all_keys = self.populate()
 
         curs = self.execute('select bloomfilter(data, ?) from register',
-                            1024 * 16)
+                            1024 * 128)
         buf, = curs.fetchone()
-        self.assertEqual(len(buf), 1024 * 16)
+        self.assertEqual(len(buf), 1024 * 128)
         for key in all_keys:
             curs = self.execute('select bloomfilter_contains(?, ?)',
                                 key, buf)
