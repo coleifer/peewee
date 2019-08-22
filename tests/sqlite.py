@@ -1783,7 +1783,7 @@ class TestLSM1Extension(BaseTestCase):
         keys = [row.key for row in KVS['k4.1':'k8.9']]
         self.assertEqual(keys, ['k5', 'k6', 'k7', 'k8'])
 
-        keys = [row.key for row in KVS[:'k13']]
+        keys = sorted([row.key for row in KVS[:'k13']])
         self.assertEqual(keys, ['k0', 'k1', 'k10', 'k11', 'k12', 'k13'])
 
         keys = [row.key for row in KVS['k5':]]
@@ -1797,7 +1797,7 @@ class TestLSM1Extension(BaseTestCase):
             ('k9', 'v9')])
 
         del KVS[KVS.key.between('k10', 'k18')]
-        self.assertEqual([row.key for row in KVS[:'k2']],
+        self.assertEqual(sorted([row.key for row in KVS[:'k2']]),
                          ['k0', 'k1', 'k19', 'k2'])
 
         del KVS['k3.1':'k8.1']
@@ -1817,7 +1817,7 @@ class TestLSM1Extension(BaseTestCase):
         keys = [row.key for row in KVI[27:33]]
         self.assertEqual(keys, [27, 28, 29, 30, 31, 32, 33])
 
-        keys = [row.key for row in KVI[KVI.key < 4]]
+        keys = sorted([row.key for row in KVI[KVI.key < 4]])
         self.assertEqual(keys, [0, 1, 2, 3])
 
         keys = [row.key for row in KVI[KVI.key > 95]]
