@@ -1104,6 +1104,19 @@ class:
     from my_blog.db import database  # Import the peewee database instance.
 
 
+    def PeeweeConnectionMiddleware(get_response):
+        def middleware(request):
+            database.connect()
+            try:
+                response = get_response(request)
+            finally:
+                if not database.is_closed():
+                    database.close()
+            return response
+        return middleware
+
+
+    # Older Django < 1.10 middleware.
     class PeeweeConnectionMiddleware(object):
         def process_request(self, request):
             database.connect()
