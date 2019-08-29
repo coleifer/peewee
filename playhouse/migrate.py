@@ -777,7 +777,7 @@ class SqliteMigrator(SchemaMigrator):
         clean = []
         for column in columns:
             if re.match('%s(?:[\'"`\]]?\s|$)' % column_to_update, column):
-                column = new_columne + column[len(column_to_update):]
+                column = new_column + column[len(column_to_update):]
             clean.append(column)
 
         return '%s(%s)' % (lhs, ', '.join('"%s"' % c for c in clean))
