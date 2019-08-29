@@ -1,8 +1,7 @@
 import datetime
 
 from peewee import *
-from playhouse.sqlite_changelog import get_changelog_model
-from playhouse.sqlite_changelog import install_triggers
+from playhouse.sqlite_changelog import ChangeLog
 from playhouse.sqlite_ext import SqliteExtDatabase
 
 from .base import ModelTestCase
@@ -34,7 +33,8 @@ class CT1(TestModel):
     fi = IntegerField()
 
 
-ChangeLog = get_changelog_model(database)
+changelog = ChangeLog(database)
+CL = changelog.model
 
 
 @skip_unless(json_installed(), 'requires sqlite json1')
@@ -44,15 +44,15 @@ class TestChangeLog(ModelTestCase):
 
     def setUp(self):
         super(TestChangeLog, self).setUp()
-        install_triggers(Person)
-        install_triggers(Note, skip_fields=['timestamp'])
+        changelog.install(Person)
+        changelog.install(Note, skip_fields=['timestamp'])
         self.last_index = 0
 
     def assertChanges(self, changes, last_index=None):
         last_index = last_index or self.last_index
-        query = (ChangeLog
-                 .select(ChangeLog.action, ChangeLog.table, ChangeLog.changes)
-                 .order_by(ChangeLog.id)
+        query = (CL
+                 .select(CL.action, CL.table, CL.changes)
+                 .order_by(CL.id)
                  .offset(last_index))
         accum = list(query.tuples())
         self.last_index += len(accum)
@@ -123,7 +123,7 @@ class TestChangeLog(ModelTestCase):
 
     @requires_models(CT1)
     def test_changelog_details(self):
-        install_triggers(CT1, skip_fields=['fi'], insert=False, delete=False)
+        changelog.install(CT1, skip_fields=['fi'], insert=False, delete=False)
 
         c1 = CT1.create(f1='v1', f2=1, f3=1.5, fi=0)
         self.assertChanges([])
