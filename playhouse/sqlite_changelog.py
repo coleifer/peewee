@@ -66,6 +66,12 @@ class ChangeLog(object):
             new = 'NULL' if not use_new else 'NEW."%s"' % column
             old = 'NULL' if not use_old else 'OLD."%s"' % column
 
+            if isinstance(field, JSONField):
+                # Ensure that values are cast to JSON so that the serialization
+                # is preserved when calculating the old / new.
+                if use_old: old = 'json(%s)' % old
+                if use_new: new = 'json(%s)' % new
+
             col_array.append("json_array('%s', %s, %s)" % (column, old, new))
 
         return ', '.join(col_array)

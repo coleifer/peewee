@@ -2,6 +2,7 @@ import datetime
 
 from peewee import *
 from playhouse.sqlite_changelog import ChangeLog
+from playhouse.sqlite_ext import JSONField
 from playhouse.sqlite_ext import SqliteExtDatabase
 
 from .base import ModelTestCase
@@ -28,9 +29,13 @@ class Note(TestModel):
 
 class CT1(TestModel):
     f1 = TextField()
-    f2 = IntegerField()
+    f2 = IntegerField(null=True)
     f3 = FloatField()
     fi = IntegerField()
+
+
+class CT2(TestModel):
+    data = JSONField()  # Diff of json?
 
 
 changelog = ChangeLog(database)
@@ -134,3 +139,48 @@ class TestChangeLog(ModelTestCase):
                 'f1': ['v1', 'v1-x'],
                 'f2': [1, 2],
                 'f3': [1.5, 2.5]})])
+
+        c1.f2 = None
+        c1.save()  # Overwrites previously-changed fields.
+        self.assertChanges([('UPDATE', 'ct1', {
+            'f1': ['v1-x', 'v1'],
+            'f2': [2, None],
+            'f3': [2.5, 1.5]})])
+
+        c1.delete_instance()
+        self.assertChanges([])
+
+    @requires_models(CT2)
+    def test_changelog_jsonfield(self):
+        changelog.install(CT2)
+
+        ca = CT2.create(data={'k1': 'v1'})
+        cb = CT2.create(data=['i0', 'i1', 'i2'])
+        cc = CT2.create(data='hello')
+
+        self.assertChanges([
+            ('INSERT', 'ct2', {'data': [None, {'k1': 'v1'}]}),
+            ('INSERT', 'ct2', {'data': [None, ['i0', 'i1', 'i2']]}),
+            ('INSERT', 'ct2', {'data': [None, 'hello']})])
+
+        ca.data['k1'] = 'v1-x'
+        cb.data.append('i3')
+        cc.data = 'world'
+
+        ca.save()
+        cb.save()
+        cc.save()
+
+        self.assertChanges([
+            ('UPDATE', 'ct2', {'data': [{'k1': 'v1'}, {'k1': 'v1-x'}]}),
+            ('UPDATE', 'ct2', {'data': [['i0', 'i1', 'i2'],
+                                        ['i0', 'i1', 'i2', 'i3']]}),
+            ('UPDATE', 'ct2', {'data': ['hello', 'world']})])
+
+        cc.data = 13.37
+        cc.save()
+        self.assertChanges([('UPDATE', 'ct2', {'data': ['world', 13.37]})])
+
+        ca.delete_instance()
+        self.assertChanges([
+            ('DELETE', 'ct2', {'data': [{'k1': 'v1-x'}, None]})])
