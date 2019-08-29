@@ -60,6 +60,10 @@ try:
     from .sqlite import *
 except ImportError:
     print('Unable to import sqlite extension tests, skipping.')
+try:
+    from .sqlite_changelog import *
+except ImportError:
+    print('Unable to import sqlite changelog tests, skipping.')
 from .sqliteq import *
 from .sqlite_udf import *
 from .test_utils import *
