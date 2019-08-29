@@ -613,13 +613,19 @@ class Context(object):
 
     def value(self, value, converter=None, add_param=True):
         if converter:
-            value = converter(value)
+            try:
+                value = converter(value)
+            except ValueError:
+                pass
             if isinstance(value, Node):
                 return self.sql(value)
         elif converter is None and self.state.converter:
             # Explicitly check for None so that "False" can be used to signify
             # that no conversion should be applied.
-            value = self.state.converter(value)
+            try:
+                value = self.state.converter(value)
+            except ValueError:
+                pass
 
         if isinstance(value, Node):
             with self(converter=None):
