@@ -613,19 +613,13 @@ class Context(object):
 
     def value(self, value, converter=None, add_param=True):
         if converter:
-            try:
-                value = converter(value)
-            except ValueError:
-                pass
+            value = converter(value)
             if isinstance(value, Node):
                 return self.sql(value)
         elif converter is None and self.state.converter:
             # Explicitly check for None so that "False" can be used to signify
             # that no conversion should be applied.
-            try:
-                value = self.state.converter(value)
-            except ValueError:
-                pass
+            value = self.state.converter(value)
 
         if isinstance(value, Node):
             with self(converter=None):
@@ -1388,12 +1382,12 @@ class Expression(ColumnBase):
 
         # First attempt to unwrap the node on the left-hand-side, so that we
         # can get at the underlying Field if one is present.
-        node = self.lhs
-        if isinstance(node, WrappedNode):
-            node = node.unwrap()
+        node = raw_node = self.lhs
+        if isinstance(raw_node, WrappedNode):
+            node = raw_node.unwrap()
 
         # Set up the appropriate converter if we have a field on the left side.
-        if isinstance(node, Field):
+        if isinstance(node, Field) and raw_node._coerce:
             overrides['converter'] = node.db_value
         else:
             overrides['converter'] = None
