@@ -7439,7 +7439,7 @@ def prefetch(sq, *subqueries):
                 rel_map.setdefault(rel_model, [])
                 rel_map[rel_model].append(pq)
 
-        deps[query_model] = {}
+        deps.setdefault(query_model, {})
         id_map = deps[query_model]
         has_relations = bool(rel_map.get(query_model))
 
