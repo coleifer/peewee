@@ -696,6 +696,12 @@ class TestModelAPIs(ModelTestCase):
                  .join(Venue, JOIN.LEFT_OUTER)
                  .join(City, JOIN.LEFT_OUTER)
                  .order_by(Event.id))
+        # Here we have two left-outer joins, and the second Event ("Holiday"),
+        # does not have an associated Venue (hence, no City). Peewee currently
+        # attaches an empty Venue() model to the event, however. It does this
+        # since we are selecting from Venue/City and Venue is an intermediary
+        # model. It would be more correct for Event.venue to be None in this
+        # case, however.
         with self.assertQueryCount(1):
             r = [(e.name, e.venue and e.venue.city.name or None)
                  for e in query]
