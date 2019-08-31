@@ -69,6 +69,18 @@ class CPK(TestModel):
         primary_key = CompositeKey('key', 'value')
 
 
+class City(TestModel):
+    name = CharField()
+
+class Venue(TestModel):
+    name = CharField()
+    city = ForeignKeyField(City, backref='venues')
+
+class Event(TestModel):
+    name = CharField()
+    venue = ForeignKeyField(Venue, backref='events', null=True)
+
+
 class TestModelAPIs(ModelTestCase):
     def add_user(self, username):
         return User.create(username=username)
@@ -670,6 +682,24 @@ class TestModelAPIs(ModelTestCase):
             ('c111', 'b11', 'a1'),
             ('c112', 'b11', 'a1'),
             ('c211', 'b21', 'a2')])
+
+    @requires_models(City, Venue, Event)
+    @unittest.expectedFailure
+    def test_join_empty_relations(self):
+        city = City.create(name='Topeka')
+        venue = Venue.create(name='House', city=city)
+        event1 = Event.create(name='House Party', venue=venue)
+        event2 = Event.create(name='Holiday')
+
+        query = (Event
+                 .select(Event, Venue, City)
+                 .join(Venue, JOIN.LEFT_OUTER)
+                 .join(City, JOIN.LEFT_OUTER)
+                 .order_by(Event.id))
+        with self.assertQueryCount(1):
+            r = [(e.name, e.venue and e.venue.city.name or None)
+                 for e in query]
+            self.assertEqual(r, [('House Party', 'Topeka'), ('Holiday', None)])
 
     @requires_models(Relationship, Person)
     def test_join_same_model_twice(self):
