@@ -4406,7 +4406,12 @@ class Field(ColumnBase):
 
 class IntegerField(Field):
     field_type = 'INT'
-    adapt = int
+
+    def adapt(self, value):
+        try:
+            return int(value)
+        except ValueError:
+            return value
 
 
 class BigIntegerField(IntegerField):
@@ -4446,7 +4451,12 @@ class PrimaryKeyField(AutoField):
 
 class FloatField(Field):
     field_type = 'FLOAT'
-    adapt = float
+
+    def adapt(self, value):
+        try:
+            return float(value)
+        except ValueError:
+            return value
 
 
 class DoubleField(FloatField):

@@ -1318,3 +1318,25 @@ class TestStringFields(ModelTestCase):
             for uval in uvals:
                 sb_db = SM.get(field == uval)
                 self.assertEqual(su.id, su_db.id)
+
+
+class InvalidTypes(TestModel):
+    tfield = TextField()
+    ifield = IntegerField()
+    ffield = FloatField()
+
+
+class TestSqliteInvalidDataTypes(ModelTestCase):
+    database = get_in_memory_db()
+    requires = [InvalidTypes]
+
+    def test_invalid_data_types(self):
+        it = InvalidTypes.create(tfield=100, ifield='five', ffield='pi')
+        it_db1 = InvalidTypes.get(InvalidTypes.tfield == 100)
+        it_db2 = InvalidTypes.get(InvalidTypes.ifield == 'five')
+        it_db3 = InvalidTypes.get(InvalidTypes.ffield == 'pi')
+        self.assertTrue(it.id == it_db1.id == it_db2.id == it_db3.id)
+
+        self.assertEqual(it_db1.tfield, '100')
+        self.assertEqual(it_db1.ifield, 'five')
+        self.assertEqual(it_db1.ffield, 'pi')
