@@ -1645,13 +1645,33 @@ A minimal data-loading script might look like this:
     table.insert(name='Mickey', age=5, gender='male')
 
     huey = table.find_one(name='Huey')
-    print huey
+    print(huey)
     # {'age': 3, 'gender': None, 'id': 1, 'name': 'Huey'}
 
     for obj in table:
-        print obj
+        print(obj)
     # {'age': 3, 'gender': None, 'id': 1, 'name': 'Huey'}
     # {'age': 5, 'gender': 'male', 'id': 2, 'name': 'Mickey'}
+
+You can insert, update or delete using the dictionary APIs as well:
+
+.. code-block:: python
+
+    huey = table.find_one(name='Huey')
+    # {'age': 3, 'gender': None, 'id': 1, 'name': 'Huey'}
+
+    # Perform an update by supplying a partial record of changes.
+    table[1] = {'gender': 'male', 'age': 4}
+    print(table[1])
+    # {'age': 4, 'gender': 'male', 'id': 1, 'name': 'Huey'}
+
+    # Or insert a new record:
+    table[3] = {'name': 'Zaizee', 'age': 2}
+    print(table[3])
+    # {'age': 2, 'gender': None, 'id': 3, 'name': 'Zaizee'}
+
+    # Or delete a record:
+    del table[3]  # Remove the row we just added.
 
 You can export or import data using :py:meth:`~DataSet.freeze` and
 :py:meth:`~DataSet.thaw`:
