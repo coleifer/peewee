@@ -61,6 +61,33 @@ class TestDataSet(ModelTestCase):
         users.insert(username='charlie')
         self.assertEqual(list(users), [{'id': 1, 'username': 'charlie'}])
 
+    def test_item_apis(self):
+        dataset = DataSet('sqlite:///:memory:')
+        users = dataset['users']
+        users.insert(username='charlie')
+        self.assertEqual(list(users), [{'id': 1, 'username': 'charlie'}])
+
+        users[2] = {'username': 'huey', 'color': 'white'}
+        self.assertEqual(list(users), [
+            {'id': 1, 'username': 'charlie', 'color': None},
+            {'id': 2, 'username': 'huey', 'color': 'white'}])
+
+        users[2] = {'username': 'huey-x', 'kind': 'cat'}
+        self.assertEqual(list(users), [
+            {'id': 1, 'username': 'charlie', 'color': None, 'kind': None},
+            {'id': 2, 'username': 'huey-x', 'color': 'white', 'kind': 'cat'}])
+
+        del users[2]
+        self.assertEqual(list(users), [
+            {'id': 1, 'username': 'charlie', 'color': None, 'kind': None}])
+
+        users[1] = {'kind': 'person'}
+        users[2] = {'username': 'zaizee'}
+        users[2] = {'kind': 'cat'}
+        self.assertEqual(list(users), [
+            {'id': 1, 'username': 'charlie', 'color': None, 'kind': 'person'},
+            {'id': 2, 'username': 'zaizee', 'color': None, 'kind': 'cat'}])
+
     def create_users(self, n=2):
         user = self.dataset['user']
         for i in range(min(n, len(self.names))):

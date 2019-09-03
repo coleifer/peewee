@@ -61,12 +61,14 @@ class DataSet(object):
     def get_export_formats(self):
         return {
             'csv': CSVExporter,
-            'json': JSONExporter}
+            'json': JSONExporter,
+            'tsv': TSVExporter}
 
     def get_import_formats(self):
         return {
             'csv': CSVImporter,
-            'json': JSONImporter}
+            'json': JSONImporter,
+            'tsv': TSVImporter}
 
     def __getitem__(self, table):
         if table not in self._models and table in self.tables:
@@ -244,6 +246,29 @@ class Table(object):
 
             self.dataset.update_cache(self.name)
 
+    def __getitem__(self, item):
+        try:
+            return self.model_class[item]
+        except self.model_class.DoesNotExist:
+            pass
+
+    def __setitem__(self, item, value):
+        if not isinstance(value, dict):
+            raise ValueError('Table.__setitem__() value must be a dict')
+
+        pk = self.model_class._meta.primary_key
+        value[pk.name] = item
+
+        try:
+            with self.dataset.transaction() as txn:
+                self.insert(**value)
+        except IntegrityError:
+            self.dataset.update_cache(self.name)
+            self.update(columns=[pk.name], **value)
+
+    def __delitem__(self, item):
+        del self.model_class[item]
+
     def insert(self, **data):
         self._migrate_new_columns(data)
         return self.model_class.insert(**data).execute()
@@ -343,6 +368,12 @@ class CSVExporter(Exporter):
             writer.writerow(row)
 
 
+class TSVExporter(CSVExporter):
+    def export(self, file_obj, header=True, **kwargs):
+        kwargs.setdefault('delimiter', '\t')
+        return super(TSVExporter, self).export(file_obj, header, **kwargs)
+
+
 class Importer(object):
     def __init__(self, table, strict=False):
         self.table = table
@@ -413,3 +444,9 @@ class CSVImporter(Importer):
             count += 1
 
         return count
+
+
+class TSVImporter(CSVImporter):
+    def load(self, file_obj, header=True, **kwargs):
+        kwargs.setdefault('delimiter', '\t')
+        return super(TSVImporter, self).load(file_obj, header, **kwargs)
