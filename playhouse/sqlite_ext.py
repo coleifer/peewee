@@ -69,6 +69,11 @@ class AutoIncrementField(AutoField):
         return NodeList((node_list, SQL('AUTOINCREMENT')))
 
 
+class TDecimalField(DecimalField):
+    field_type = 'TEXT'
+    def get_modifiers(self): pass
+
+
 class JSONPath(ColumnBase):
     def __init__(self, field, path=None):
         super(JSONPath, self).__init__()

@@ -4368,7 +4368,7 @@ class Field(ColumnBase):
         return ctx.sql(self.column)
 
     def get_modifiers(self):
-        return
+        pass
 
     def ddl_datatype(self, ctx):
         if ctx and ctx.state.field_types:
@@ -4472,6 +4472,7 @@ class DecimalField(Field):
         self.decimal_places = decimal_places
         self.auto_round = auto_round
         self.rounding = rounding or decimal.DefaultContext.rounding
+        self._exp = decimal.Decimal(10) ** (-self.decimal_places)
         super(DecimalField, self).__init__(*args, **kwargs)
 
     def get_modifiers(self):
@@ -4482,9 +4483,8 @@ class DecimalField(Field):
         if not value:
             return value if value is None else D(0)
         if self.auto_round:
-            exp = D(10) ** (-self.decimal_places)
-            rounding = self.rounding
-            return D(text_type(value)).quantize(exp, rounding=rounding)
+            decimal_value = D(text_type(value))
+            return decimal_value.quantize(self._exp, rounding=self.rounding)
         return value
 
     def python_value(self, value):

@@ -1,3 +1,4 @@
+from decimal import Decimal as D
 import os
 import sys
 
@@ -2024,3 +2025,25 @@ class TestReadOnly(ModelTestCase):
         # We cannot create a database if in read-only mode.
         db = SqliteDatabase('file:xx_not_exists.db?mode=ro', uri=True)
         self.assertRaises(OperationalError, db.connect)
+
+
+class TDecModel(TestModel):
+    value = TDecimalField(max_digits=24, decimal_places=16, auto_round=True)
+
+
+class TestTDecimalField(ModelTestCase):
+    database = get_in_memory_db()
+    requires = [TDecModel]
+
+    def test_tdecimal_field(self):
+        value = D('12345678.0123456789012345')
+        value_ov = D('12345678.012345678901234567890123456789')
+
+        td1 = TDecModel.create(value=value)
+        td2 = TDecModel.create(value=value_ov)
+
+        td1_db = TDecModel.get(TDecModel.id == td1.id)
+        self.assertEqual(td1_db.value, value)
+
+        td2_db = TDecModel.get(TDecModel.id == td2.id)
+        self.assertEqual(td2_db.value, D('12345678.0123456789012346'))
