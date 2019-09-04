@@ -191,6 +191,10 @@ class ReconnectMixin(object):
         (OperationalError, '2006'),  # MySQL server has gone away.
         (OperationalError, '2013'),  # Lost connection to MySQL server.
         (OperationalError, '2014'),  # Commands out of sync.
+
+        # mysql-connector raises a slightly different error when an idle
+        # connection is terminated by the server. This is equivalent to 2013.
+        (OperationalError, 'MySQL Connection not available.'),
     )
 
     def __init__(self, *args, **kwargs):
