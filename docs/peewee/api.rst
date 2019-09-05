@@ -3165,15 +3165,24 @@ Fields
 
 .. py:class:: TimestampField([resolution=1[, utc=False[, **kwargs]]])
 
-    :param resolution: A power of 10, 1=second, 1000=ms, 1000000=us, etc.
+    :param resolution: Can be provided as either a power of 10, or as an
+        exponent indicating how many decimal places to store.
     :param bool utc: Treat timestamps as UTC.
 
     Field class for storing date-times as integer timestamps. Sub-second
     resolution is supported by multiplying by a power of 10 to get an integer.
 
-    Accepts a special parameter ``resolution``, which is a power-of-10 up to
-    ``10^6``. This allows sub-second precision while still using an
-    :py:class:`IntegerField` for storage. Default is ``1`` (second precision).
+    If the ``resolution`` parameter is ``0`` *or* ``1``, then the timestamp is
+    stored using second resolution. A resolution between ``2`` and ``6`` is
+    treated as the number of decimal places, e.g. ``resolution=3`` corresponds
+    to milliseconds. Alternatively, the decimal can be provided as a multiple
+    of 10, such that ``resolution=10`` will store 1/10th of a second
+    resolution.
+
+    The ``resolution`` parameter can be either 0-6 *or* 10, 100, etc up to
+    1000000 (for microsecond resolution). This allows sub-second precision
+    while still using an :py:class:`IntegerField` for storage. The default is
+    second resolution.
 
     Also accepts a boolean parameter ``utc``, used to indicate whether the
     timestamps should be UTC. Default is ``False``.

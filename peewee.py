@@ -4842,9 +4842,10 @@ class TimestampField(BigIntegerField):
 
     def __init__(self, *args, **kwargs):
         self.resolution = kwargs.pop('resolution', None)
+
         if not self.resolution:
             self.resolution = 1
-        elif self.resolution in range(7):
+        elif self.resolution in range(2, 7):
             self.resolution = 10 ** self.resolution
         elif self.resolution not in self.valid_resolutions:
             raise ValueError('TimestampField resolution must be one of: %s' %

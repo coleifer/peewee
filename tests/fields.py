@@ -936,8 +936,27 @@ class TSModel(TestModel):
     ts_u = TimestampField(null=True, utc=True)
 
 
+class TSR(TestModel):
+    ts_0 = TimestampField(resolution=0)
+    ts_1 = TimestampField(resolution=1)
+    ts_10 = TimestampField(resolution=10)
+    ts_2 = TimestampField(resolution=2)
+
+
 class TestTimestampField(ModelTestCase):
     requires = [TSModel]
+
+    @requires_models(TSR)
+    def test_timestamp_field_resolutions(self):
+        dt = datetime.datetime(2018, 3, 1, 3, 3, 7).replace(microsecond=123456)
+        ts = TSR.create(ts_0=dt, ts_1=dt, ts_10=dt, ts_2=dt)
+        ts_db = TSR[ts.id]
+
+        # Zero and one are both treated as "seconds" resolution.
+        self.assertEqual(ts_db.ts_0, dt.replace(microsecond=0))
+        self.assertEqual(ts_db.ts_1, dt.replace(microsecond=0))
+        self.assertEqual(ts_db.ts_10, dt.replace(microsecond=100000))
+        self.assertEqual(ts_db.ts_2, dt.replace(microsecond=120000))
 
     def test_timestamp_field(self):
         dt = datetime.datetime(2018, 3, 1, 3, 3, 7)
