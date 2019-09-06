@@ -1144,11 +1144,24 @@ class ColumnBase(Node):
         op = OP.IS if is_null else OP.IS_NOT
         return Expression(self, op, None)
     def contains(self, rhs):
-        return Expression(self, OP.ILIKE, '%%%s%%' % rhs)
+        if isinstance(rhs, Node):
+            rhs = Expression('%', OP.CONCAT,
+                             Expression(rhs, OP.CONCAT, '%'))
+        else:
+            rhs = '%%%s%%' % rhs
+        return Expression(self, OP.ILIKE, rhs)
     def startswith(self, rhs):
-        return Expression(self, OP.ILIKE, '%s%%' % rhs)
+        if isinstance(rhs, Node):
+            rhs = Expression(rhs, OP.CONCAT, '%')
+        else:
+            rhs = '%s%%' % rhs
+        return Expression(self, OP.ILIKE, rhs)
     def endswith(self, rhs):
-        return Expression(self, OP.ILIKE, '%%%s' % rhs)
+        if isinstance(rhs, Node):
+            rhs = Expression('%', OP.CONCAT, rhs)
+        else:
+            rhs = '%%%s' % rhs
+        return Expression(self, OP.ILIKE, rhs)
     def between(self, lo, hi):
         return Expression(self, OP.BETWEEN, NodeList((lo, SQL('AND'), hi)))
     def concat(self, rhs):

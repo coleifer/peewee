@@ -950,12 +950,18 @@ class TestLikeColumnValue(ModelTestCase):
             Tweet.insert_many([(user, tweet) for tweet in tweets],
                               fields=[Tweet.user, Tweet.content]).execute()
 
-        query = (Tweet
-                 .select(Tweet, User)
-                 .join(User)
-                 .where(Tweet.content ** ('%' + User.username + '%'))
-                 .order_by(Tweet.id))
-        self.assertEqual([(t.user.username, t.content) for t in query], [
-            ('u1', 'i am u1'),
-            ('u1', 'u1 is my name'),
-            ('u3', 'hey u3 is me')])
+        expressions = (
+            (Tweet.content ** ('%' + User.username + '%')),
+            Tweet.content.contains(User.username))
+
+        for expr in expressions:
+            query = (Tweet
+                     .select(Tweet, User)
+                     .join(User)
+                     .where(expr)
+                     .order_by(Tweet.id))
+
+            self.assertEqual([(t.user.username, t.content) for t in query], [
+                ('u1', 'i am u1'),
+                ('u1', 'u1 is my name'),
+                ('u3', 'hey u3 is me')])
