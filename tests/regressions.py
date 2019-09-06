@@ -934,3 +934,28 @@ class TestTypeCoercion(ModelTestCase):
         self.assertEqual(t_db.ffield, 20.5)
         self.assertEqual(t_db.cfield, '30')
         self.assertEqual(t_db.tfield, '40')
+
+
+class TestLikeColumnValue(ModelTestCase):
+    requires = [User, Tweet]
+
+    def test_like_column_value(self):
+        # e.g., find all tweets that contain the users own username.
+        u1, u2, u3 = [User.create(username='u%s' % i) for i in (1, 2, 3)]
+        data = (
+            (u1, ('nada', 'i am u1', 'u1 is my name')),
+            (u2, ('nothing', 'he is u1')),
+            (u3, ('she is u2', 'hey u3 is me', 'xx')))
+        for user, tweets in data:
+            Tweet.insert_many([(user, tweet) for tweet in tweets],
+                              fields=[Tweet.user, Tweet.content]).execute()
+
+        query = (Tweet
+                 .select(Tweet, User)
+                 .join(User)
+                 .where(Tweet.content ** ('%' + User.username + '%'))
+                 .order_by(Tweet.id))
+        self.assertEqual([(t.user.username, t.content) for t in query], [
+            ('u1', 'i am u1'),
+            ('u1', 'u1 is my name'),
+            ('u3', 'hey u3 is me')])
