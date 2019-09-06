@@ -939,7 +939,6 @@ class TestTypeCoercion(ModelTestCase):
 class TestLikeColumnValue(ModelTestCase):
     requires = [User, Tweet]
 
-    @skip_if(IS_MYSQL)
     def test_like_column_value(self):
         # e.g., find all tweets that contain the users own username.
         u1, u2, u3 = [User.create(username='u%s' % i) for i in (1, 2, 3)]

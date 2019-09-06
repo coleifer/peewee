@@ -3799,9 +3799,13 @@ class MySQLDatabase(Database):
     limit_max = 2 ** 64 - 1
     safe_create_index = False
     safe_drop_index = False
+    sql_mode = 'PIPES_AS_CONCAT'
 
     def init(self, database, **kwargs):
-        params = {'charset': 'utf8', 'use_unicode': True}
+        params = {
+            'charset': 'utf8',
+            'sql_mode': self.sql_mode,
+            'use_unicode': True}
         params.update(kwargs)
         if 'password' in params and mysql_passwd:
             params['passwd'] = params.pop('password')
