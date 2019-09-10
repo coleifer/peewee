@@ -1285,6 +1285,74 @@ class TestFTS5(BaseFTSTestCase, ModelTestCase):
             (self.messages[2], -0.37),
             (self.messages[3], -0.37)])
 
+    def test_match_column_queries(self):
+        data = (
+            ('alpha one', 'apple aspires to ace artsy beta launch'),
+            ('beta two', 'beta boasts better broadcast over apple'),
+            ('gamma three', 'gold gray green gamma ray delta data'),
+            ('delta four', 'delta data indicates downturn for apple beta'),
+        )
+        FT = FTS5Test
+
+        for i, (title, message) in enumerate(data):
+            FT.create(title=title, data=message, misc=str(i))
+
+        def assertQ(expr, idxscore):
+            q = (FT
+                 .select(FT, FT.bm25().alias('score'))
+                 .where(expr)
+                 .order_by(SQL('score'), FT.misc.cast('int')))
+            self.assertEqual([(int(r.misc), round(r.score, 2)) for r in q],
+                             idxscore)
+
+        # Single whitespace does not affect the mapping of col->term. We can
+        # also store the column value in quotes if single-quotes are used.
+        assertQ(FT.match('beta'), [(1, -0.74), (0, -0.57), (3, -0.57)])
+        assertQ(FT.match('title: beta'), [(1, -2.08)])
+        assertQ(FT.match('title: ^bet*'), [(1, -2.08)])
+        assertQ(FT.match('title: "beta"'), [(1, -2.08)])
+        assertQ(FT.match('"beta"'), [(1, -0.74), (0, -0.57), (3, -0.57)])
+
+        # Alternatively, just specify the column explicitly.
+        assertQ(FT.title.match('beta'), [(1, -2.08)])
+        assertQ(FT.title.match(' beta '), [(1, -2.08)])
+        assertQ(FT.title.match('"beta"'), [(1, -2.08)])
+        assertQ(FT.title.match('^bet*'), [(1, -2.08)])
+        assertQ(FT.title.match('"^bet*"'), [])  # No wildcards in quotes!
+
+        #                 apple   beta   delta   gamma
+        # 0  |  alpha  |    X       X
+        # 1  |  beta   |    X       X
+        # 2  |  gamma  |                   X       X
+        # 3  |  delta  |    X       X      X
+        #
+        assertQ(FT.match('delta NOT gamma'), [(3, -1.53)])
+        assertQ(FT.match('delta NOT data:gamma'), [(3, -1.53)])
+        assertQ(FT.match('"delta"'), [(3, -1.53), (2, -1.2)])
+        assertQ(FT.match('title:delta OR data:delta'), [(3, -3.21), (2, -1.2)])
+        assertQ(FT.match('"^delta"'), [(3, -1.53), (2, -1.2)])  # Different.
+        assertQ(FT.match('^delta'), [(3, -2.57)])  # Different from FTS4.
+
+        assertQ(FT.match('(delta AND data:apple) OR title:alpha'),
+                [(3, -2.09), (0, -2.02)])
+        assertQ(FT.match('(data:delta AND data:apple) OR title:alpha'),
+                [(0, -2.02), (3, -1.76)])
+        assertQ(FT.match('data:delta data:apple OR title:alpha'),
+                [(0, -2.02), (3, -1.76)])
+        assertQ(FT.match('(data:delta AND data:apple) OR beta'),
+                [(3, -2.33), (1, -0.74), (0, -0.57)])
+        assertQ(FT.match('data:delta AND (data:apple OR title:alpha)'),
+                [(3, -1.76)])
+
+        # data apple (0,1,3) OR (...irrelevant...).
+        assertQ(FT.match('data:apple OR title:alpha NOT delta'),
+                [(0, -2.58), (1, -0.58), (3, -0.57)])
+        assertQ(FT.match('data:apple OR (title:alpha NOT data:delta)'),
+                [(0, -2.58), (1, -0.58), (3, -0.57)])
+        # data apple OR title alpha (0, 1, 3) AND NOT delta (2, 3) -> (0, 1).
+        assertQ(FT.match('(data:apple OR title:alpha) NOT delta'),
+                [(0, -2.58), (1, -0.58)])
+
 
 @skip_unless(CYTHON_EXTENSION, 'requires sqlite c extension')
 class TestMurmurHash(ModelTestCase):
