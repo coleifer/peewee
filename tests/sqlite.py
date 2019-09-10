@@ -17,6 +17,7 @@ from .base import requires_models
 from .base import skip_if
 from .base import skip_unless
 from .base_models import User
+from .sqlite_helpers import compile_option
 from .sqlite_helpers import json_installed
 from .sqlite_helpers import json_patch_installed
 
@@ -1057,6 +1058,74 @@ class TestFullTextSearch(BaseFTSTestCase, ModelTestCase):
                          0., 1.0, 0.)
         assertQueryScore(MultiColumn.c2, 'eeee', [('m2', -1.02)], 0., 2., 0.)
         assertQueryScore(MultiColumn.c3, 'aaaa', [('m3', -0.31)], 0., 1., 0.5)
+
+    @skip_unless(compile_option('enable_fts4'))
+    @requires_models(MultiColumn)
+    def test_match_column_queries(self):
+        data = (
+            ('alpha one', 'apple aspires to ace artsy beta launch'),
+            ('beta two', 'beta boasts better broadcast over apple'),
+            ('gamma three', 'gold gray green gamma ray delta data'),
+            ('delta four', 'delta data indicates downturn for apple beta'),
+        )
+        MC = MultiColumn
+
+        for i, (title, message) in enumerate(data):
+            MC.create(c1=title, c2=message, c3='', c4=i)
+
+        def assertQ(expr, idxscore):
+            q = (MC
+                 .select(MC, MC.bm25().alias('score'))
+                 .where(expr)
+                 .order_by(SQL('score'), MC.c4))
+            self.assertEqual([(r.c4, round(r.score, 2)) for r in q], idxscore)
+
+        # Single whitespace does not affect the mapping of col->term. We can
+        # also store the column value in quotes if single-quotes are used.
+        assertQ(MC.match('beta'), [(1, -0.85), (0, -0.), (3, -0.)])
+        assertQ(MC.match('c1:beta'), [(1, -0.85)])
+        assertQ(MC.match('c1: beta'), [(1, -0.85)])
+        assertQ(MC.match('c1: ^bet*'), [(1, -0.85)])
+        assertQ(MC.match('c1: \'beta\''), [(1, -0.85)])
+        assertQ(MC.match('"beta"'), [(1, -0.85), (0, -0.), (3, -0.)])
+
+        # Alternatively, just specify the column explicitly.
+        assertQ(MC.c1.match('beta'), [(1, -0.85)])
+        assertQ(MC.c1.match(' beta '), [(1, -0.85)])
+        assertQ(MC.c1.match('"beta"'), [(1, -0.85)])
+        assertQ(MC.c1.match('"^bet*"'), [(1, -0.85)])
+
+        #                 apple   beta   delta   gamma
+        # 0  |  alpha  |    X       X
+        # 1  |  beta   |    X       X
+        # 2  |  gamma  |                   X       X
+        # 3  |  delta  |    X       X      X
+        #
+        assertQ(MC.match('delta NOT gamma'), [(3, -0.85)])
+        assertQ(MC.match('delta NOT c2:gamma'), [(3, -0.85)])
+        assertQ(MC.match('"delta"'), [(3, -0.85), (2, -0.)])
+        assertQ(MC.match('c1:delta OR c2:delta'), [(3, -0.85), (2, -0.)])
+        assertQ(MC.match('"^delta"'), [(3, -1.69)])
+
+        assertQ(MC.match('(delta AND c2:apple) OR c1:alpha'),
+                [(3, -0.85), (0, -0.85)])
+        assertQ(MC.match('(c2:delta AND c2:apple) OR c1:alpha'),
+                [(0, -0.85), (3, -0.)])
+        assertQ(MC.match('c2:delta c2:apple OR c1:alpha'),
+                [(0, -0.85), (3, -0.)])
+        assertQ(MC.match('(c2:delta AND c2:apple) OR beta'),
+                [(1, -0.85), (3, -0.), (0, -0.)])
+        assertQ(MC.match('c2:delta AND (c2:apple OR c1:alpha)'),
+                [(3, -0.)])
+
+        # c2 apple (0,1,3) OR (...irrelevant...).
+        assertQ(MC.match('c2:apple OR c1:alpha NOT delta'),
+                [(0, -0.85), (1, -0.), (3, -0.)])
+        assertQ(MC.match('c2:apple OR (c1:alpha NOT c2:delta)'),
+                [(0, -0.85), (1, -0.), (3, -0.)])
+        # c2 apple OR c1 alpha (0, 1, 3) AND NOT delta (2, 3) -> (0, 1).
+        assertQ(MC.match('(c2:apple OR c1:alpha) NOT delta'),
+                [(0, -0.85), (1, -0.)])
 
 
 @skip_unless(CYTHON_EXTENSION, 'requires sqlite c extension')
