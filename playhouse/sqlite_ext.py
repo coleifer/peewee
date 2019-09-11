@@ -1195,6 +1195,33 @@ def bm25(raw_match_info, *args):
     L_O = A_O + col_count
     X_O = L_O + col_count
 
+    # Worked example of pcnalx for two columns and two phrases, 100 docs total.
+    # {
+    #   p  = 2
+    #   c  = 2
+    #   n  = 100
+    #   a0 = 4   -- avg number of tokens for col0, e.g. title
+    #   a1 = 40  -- avg number of tokens for col1, e.g. body
+    #   l0 = 5   -- curr doc has 5 tokens in col0
+    #   l1 = 30  -- curr doc has 30 tokens in col1
+    #
+    #   x000     -- hits this row for phrase0, col0
+    #   x001     -- hits all rows for phrase0, col0
+    #   x002     -- rows with phrase0 in col0 at least once
+    #
+    #   x010     -- hits this row for phrase0, col1
+    #   x011     -- hits all rows for phrase0, col1
+    #   x012     -- rows with phrase0 in col1 at least once
+    #
+    #   x100     -- hits this row for phrase1, col0
+    #   x101     -- hits all rows for phrase1, col0
+    #   x102     -- rows with phrase1 in col0 at least once
+    #
+    #   x110     -- hits this row for phrase1, col1
+    #   x111     -- hits all rows for phrase1, col1
+    #   x112     -- rows with phrase1 in col1 at least once
+    # }
+
     weights = get_weights(col_count, args)
 
     for i in range(term_count):
@@ -1218,8 +1245,8 @@ def bm25(raw_match_info, *args):
             avg_length = float(match_info[A_O + j]) or 1.  # avgdl
             ratio = doc_length / avg_length
 
-            num = term_frequency * (K + 1)
-            b_part = 1 - B + (B * ratio)
+            num = term_frequency * (K + 1.0)
+            b_part = 1.0 - B + (B * ratio)
             denom = term_frequency + (K * b_part)
 
             pc_score = idf * (num / denom)
