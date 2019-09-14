@@ -7,6 +7,17 @@ https://github.com/coleifer/peewee/releases
 
 ## master
 
+* Fixes #1991. This particular issue involves joining 3 models together in a
+  chain, where the outer two models are empty. Previously peewee would make the
+  middle model an empty model instance (since a link might be needed from the
+  source model to the outermost model). But since both were empty, it is more
+  correct to make the intervening model a NULL value on the foreign-key field
+  rather than an empty instance.
+* An unrelated fix came out of the work on #1991 where hashing a model whose
+  primary-key happened to be a foreign-key could trigger the FK resolution
+  query. This patch fixes the Model._pk and Model.get_id() interfaces so they
+  no longer introduce the possibility of accidentally resolving the FK.
+
 [View commits](https://github.com/coleifer/peewee/compare/3.10.0...master)
 
 ## 3.10.0
