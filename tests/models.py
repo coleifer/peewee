@@ -121,9 +121,10 @@ class TestModelAPIs(ModelTestCase):
                   .get())
             self.assertEqual(pn.post.content, 'p2')
 
-        with self.database.atomic() as txn:
-            self.assertRaises(IntegrityError, PostNote.create, note='pxn')
-            txn.rollback()
+        if not IS_SQLITE:
+            with self.database.atomic() as txn:
+                self.assertRaises(IntegrityError, PostNote.create, note='pxn')
+                txn.rollback()
 
     @requires_models(User, Tweet)
     def test_assertQueryCount(self):
