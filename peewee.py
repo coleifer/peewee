@@ -4360,7 +4360,7 @@ class Field(ColumnBase):
 
     def bind(self, model, name, set_attribute=True):
         self.model = model
-        self.name = name
+        self.name = self.safe_name = name
         self.column_name = self.column_name or name
         if set_attribute:
             setattr(model, name, self.accessor_class(model, self, name))
@@ -5057,6 +5057,7 @@ class ForeignKeyField(Field):
         # Bind field before assigning backref, so field is bound when
         # calling declared_backref() (if callable).
         super(ForeignKeyField, self).bind(model, name, set_attribute)
+        self.safe_name = self.object_id_name
 
         if callable_(self.declared_backref):
             self.backref = self.declared_backref(self)
@@ -5282,7 +5283,7 @@ class VirtualField(MetaField):
 
     def bind(self, model, name, set_attribute=True):
         self.model = model
-        self.column_name = self.name = name
+        self.column_name = self.name = self.safe_name = name
         setattr(model, name, self.accessor_class(model, self, name))
 
 
@@ -5329,7 +5330,7 @@ class CompositeKey(MetaField):
 
     def bind(self, model, name, set_attribute=True):
         self.model = model
-        self.column_name = self.name = name
+        self.column_name = self.name = self.safe_name = name
         setattr(model, self.name, self)
 
 
@@ -6278,7 +6279,11 @@ class Model(with_metaclass(ModelBase, Node)):
         return cls.select().filter(*dq_nodes, **filters)
 
     def get_id(self):
-        return getattr(self, self._meta.primary_key.name)
+        # Using getattr(self, pk-name) could accidentally trigger a query if
+        # the primary-key is a foreign-key. So we use the safe_name attribute,
+        # which defaults to the field-name, but will be the object_id_name for
+        # foreign-key fields.
+        return getattr(self, self._meta.primary_key.safe_name)
 
     _pk = property(get_id)
 
@@ -6393,7 +6398,7 @@ class Model(with_metaclass(ModelBase, Node)):
         return (
             other.__class__ == self.__class__ and
             self._pk is not None and
-            other._pk == self._pk)
+            self._pk == other._pk)
 
     def __ne__(self, other):
         return not self == other
@@ -6869,7 +6874,7 @@ class ModelSelect(BaseModelSelect, Select):
             on, attr, constructor = self._normalize_join(src, dest, on, attr)
             if attr:
                 self._joins.setdefault(src, [])
-                self._joins[src].append((dest, attr, constructor))
+                self._joins[src].append((dest, attr, constructor, join_type))
         elif on is not None:
             raise ValueError('Cannot specify on clause with cross join.')
 
@@ -6891,7 +6896,7 @@ class ModelSelect(BaseModelSelect, Select):
 
     def ensure_join(self, lm, rm, on=None, **join_kwargs):
         join_ctx = self._join_ctx
-        for dest, attr, constructor in self._joins.get(lm, []):
+        for dest, _, constructor, _ in self._joins.get(lm, []):
             if dest == rm:
                 return self
         return self.switch(lm).join(rm, on=on, **join_kwargs).switch(join_ctx)
@@ -6916,7 +6921,7 @@ class ModelSelect(BaseModelSelect, Select):
                 model_attr = getattr(curr, key)
             else:
                 for piece in key.split('__'):
-                    for dest, attr, _ in self._joins.get(curr, ()):
+                    for dest, attr, _, _ in self._joins.get(curr, ()):
                         if attr == piece or (isinstance(dest, ModelAlias) and
                                              dest.alias == piece):
                             curr = dest
@@ -7258,6 +7263,7 @@ class ModelCursorWrapper(BaseModelCursorWrapper):
         self.src_to_dest = []
         accum = collections.deque(self.from_list)
         dests = set()
+
         while accum:
             curr = accum.popleft()
             if isinstance(curr, Join):
@@ -7268,11 +7274,14 @@ class ModelCursorWrapper(BaseModelCursorWrapper):
             if curr not in self.joins:
                 continue
 
-            for key, attr, constructor in self.joins[curr]:
+            is_dict = isinstance(curr, dict)
+            for key, attr, constructor, join_type in self.joins[curr]:
                 if key not in self.key_to_constructor:
                     self.key_to_constructor[key] = constructor
-                    self.src_to_dest.append((curr, attr, key,
-                                             isinstance(curr, dict)))
+
+                    # (src, attr, dest, is_dict, join_type).
+                    self.src_to_dest.append((curr, attr, key, is_dict,
+                                             join_type))
                     dests.add(key)
                     accum.append(key)
 
@@ -7285,7 +7294,7 @@ class ModelCursorWrapper(BaseModelCursorWrapper):
                     self.key_to_constructor[src] = src.model
 
         # Indicate which sources are also dests.
-        for src, _, dest, _ in self.src_to_dest:
+        for src, _, dest, _, _ in self.src_to_dest:
             self.src_is_dest[src] = src in dests and (dest in selected_src
                                                       or src in selected_src)
 
@@ -7329,7 +7338,7 @@ class ModelCursorWrapper(BaseModelCursorWrapper):
                 setattr(instance, column, value)
 
         # Need to do some analysis on the joins before this.
-        for (src, attr, dest, is_dict) in self.src_to_dest:
+        for (src, attr, dest, is_dict, join_type) in self.src_to_dest:
             instance = objects[src]
             try:
                 joined_instance = objects[dest]
@@ -7340,6 +7349,12 @@ class ModelCursorWrapper(BaseModelCursorWrapper):
             # assign an "empty" instance.
             if instance is None or dest is None or \
                (dest not in set_keys and not self.src_is_dest.get(dest)):
+                continue
+
+            # If no fields were set on either the source or the destination,
+            # then we have nothing to do here.
+            if instance not in set_keys and dest not in set_keys \
+               and join_type.endswith('OUTER'):
                 continue
 
             if is_dict:
