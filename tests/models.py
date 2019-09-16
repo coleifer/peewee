@@ -567,17 +567,6 @@ class TestModelAPIs(ModelTestCase):
 
     @requires_models(User, Tweet)
     def test_model_select(self):
-        query = (Tweet
-                 .select(Tweet.content, User.username)
-                 .join(User)
-                 .order_by(User.username, Tweet.content))
-        self.assertSQL(query, (
-            'SELECT "t1"."content", "t2"."username" '
-            'FROM "tweet" AS "t1" '
-            'INNER JOIN "users" AS "t2" '
-            'ON ("t1"."user_id" = "t2"."id") '
-            'ORDER BY "t2"."username", "t1"."content"'), [])
-
         huey = self.add_user('huey')
         mickey = self.add_user('mickey')
         zaizee = self.add_user('zaizee')
@@ -586,6 +575,17 @@ class TestModelAPIs(ModelTestCase):
         self.add_tweets(mickey, 'woof', 'whine')
 
         with self.assertQueryCount(1):
+            query = (Tweet
+                     .select(Tweet.content, User.username)
+                     .join(User)
+                     .order_by(User.username, Tweet.content))
+            self.assertSQL(query, (
+                'SELECT "t1"."content", "t2"."username" '
+                'FROM "tweet" AS "t1" '
+                'INNER JOIN "users" AS "t2" '
+                'ON ("t1"."user_id" = "t2"."id") '
+                'ORDER BY "t2"."username", "t1"."content"'), [])
+
             tweets = list(query)
             self.assertEqual([(t.content, t.user.username) for t in tweets], [
                 ('hiss', 'huey'),
@@ -605,16 +605,16 @@ class TestModelAPIs(ModelTestCase):
             Favorite.create(user=mickey, tweet=h_m)
             Favorite.create(user=mickey, tweet=h_p)
 
-        UA = User.alias()
-
-        query = (Favorite
-                 .select(Favorite, Tweet, User, UA)
-                 .join(Tweet)
-                 .join(User)
-                 .switch(Favorite)
-                 .join(UA, on=Favorite.user)
-                 .order_by(Favorite.id))
         with self.assertQueryCount(1):
+            UA = User.alias()
+            query = (Favorite
+                     .select(Favorite, Tweet, User, UA)
+                     .join(Tweet)
+                     .join(User)
+                     .switch(Favorite)
+                     .join(UA, on=Favorite.user)
+                     .order_by(Favorite.id))
+
             accum = [(f.tweet.user.username, f.tweet.content, f.user.username)
                      for f in query]
 
@@ -623,15 +623,16 @@ class TestModelAPIs(ModelTestCase):
             ('huey', 'meow', 'mickey'),
             ('huey', 'purr', 'mickey')])
 
-        # Test intermediate models not selected.
-        query = (Favorite
-                 .select()
-                 .join(Tweet)
-                 .switch(Favorite)
-                 .join(User)
-                 .where(User.username == 'mickey')
-                 .order_by(Favorite.id))
         with self.assertQueryCount(5):
+            # Test intermediate models not selected.
+            query = (Favorite
+                     .select()
+                     .join(Tweet)
+                     .switch(Favorite)
+                     .join(User)
+                     .where(User.username == 'mickey')
+                     .order_by(Favorite.id))
+
             accum = [(f.user.username, f.tweet.content) for f in query]
 
         self.assertEqual(accum, [('mickey', 'meow'), ('mickey', 'purr')])
@@ -642,12 +643,8 @@ class TestModelAPIs(ModelTestCase):
         b1 = B.create(a=a1, b='b1')
         c1 = C.create(b=b1, c='c1')
 
-        query = (C
-                 .select()
-                 .join(B)
-                 .join(A)
-                 .where(A.a == 'a1'))
         with self.assertQueryCount(3):
+            query = C.select().join(B).join(A).where(A.a == 'a1')
             accum = [(c.c, c.b.b, c.b.a.a) for c in query]
 
         self.assertEqual(accum, [('c1', 'b1', 'a1')])
@@ -663,25 +660,19 @@ class TestModelAPIs(ModelTestCase):
         c112 = C.create(b=b11, c='c112')
         c211 = C.create(b=b21, c='c211')
 
-        query = (C
-                 .select(C, A.a)
-                 .join(B)
-                 .join(A)
-                 .order_by(C.c))
         with self.assertQueryCount(1):
+            query = C.select(C, A.a).join(B).join(A).order_by(C.c)
             accum = [(c.c, c.b.a.a) for c in query]
+
         self.assertEqual(accum, [
             ('c111', 'a1'),
             ('c112', 'a1'),
             ('c211', 'a2')])
 
-        query = (C
-                 .select(C, B, A)
-                 .join(B)
-                 .join(A)
-                 .order_by(C.c))
         with self.assertQueryCount(1):
+            query = C.select(C, B, A).join(B).join(A).order_by(C.c)
             accum = [(c.c, c.b.b, c.b.a.a) for c in query]
+
         self.assertEqual(accum, [
             ('c111', 'b11', 'a1'),
             ('c112', 'b11', 'a1'),
@@ -772,8 +763,8 @@ class TestModelAPIs(ModelTestCase):
         for username in ('huey', 'mickey', 'zaizee'):
             self.add_user(username)
 
-        query = User.select(User.username).order_by(User.username).dicts()
         with self.assertQueryCount(1):
+            query = User.select(User.username).order_by(User.username).dicts()
             self.assertEqual(query.peek(n=1), {'username': 'huey'})
             self.assertEqual(query.peek(n=2), [{'username': 'huey'},
                                                {'username': 'mickey'}])
@@ -847,20 +838,20 @@ class TestModelAPIs(ModelTestCase):
         self._create_user_tweets()
 
         # Select note user and timestamp of most recent tweet.
-        TA = Tweet.alias()
-        max_q = (TA
-                 .select(TA.user, fn.MAX(TA.timestamp).alias('max_ts'))
-                 .group_by(TA.user)
-                 .alias('max_q'))
-
-        predicate = ((Tweet.user == max_q.c.user_id) &
-                     (Tweet.timestamp == max_q.c.max_ts))
-        latest = (Tweet
-                  .select(Tweet.user, Tweet.content, Tweet.timestamp)
-                  .join(max_q, on=predicate)
-                  .alias('latest'))
-
         with self.assertQueryCount(1):
+            TA = Tweet.alias()
+            max_q = (TA
+                     .select(TA.user, fn.MAX(TA.timestamp).alias('max_ts'))
+                     .group_by(TA.user)
+                     .alias('max_q'))
+
+            predicate = ((Tweet.user == max_q.c.user_id) &
+                         (Tweet.timestamp == max_q.c.max_ts))
+            latest = (Tweet
+                      .select(Tweet.user, Tweet.content, Tweet.timestamp)
+                      .join(max_q, on=predicate)
+                      .alias('latest'))
+
             query = (User
                      .select(User, latest.c.content, latest.c.timestamp)
                      .join(latest, on=(User.id == latest.c.user_id)))
@@ -967,28 +958,30 @@ class TestModelAPIs(ModelTestCase):
             ('pipey', 15),
             ('zaizee', 16), ('zaizee', 17)]
 
-        # Using a self-join.
-        UA = User.alias()
-        query = (User
-                 .select(User.username, UA.id)
-                 .join(UA, on=((UA.username == User.username) &
-                               (UA.id >= User.id)))
-                 .group_by(User.username, UA.id)
-                 .having(fn.COUNT(UA.id) < 3)
-                 .order_by(User.username, UA.id))
-        self.assertEqual(query.tuples()[:], expected)
+        with self.assertQueryCount(1):
+            # Using a self-join.
+            UA = User.alias()
+            query = (User
+                     .select(User.username, UA.id)
+                     .join(UA, on=((UA.username == User.username) &
+                                   (UA.id >= User.id)))
+                     .group_by(User.username, UA.id)
+                     .having(fn.COUNT(UA.id) < 3)
+                     .order_by(User.username, UA.id))
+            self.assertEqual(query.tuples()[:], expected)
 
-        # Using a correlated subquery.
-        subq = (UA
-                .select(UA.id)
-                .where(User.username == UA.username)
-                .order_by(UA.id)
-                .limit(2))
-        query = (User
-                 .select(User.username, User.id)
-                 .where(User.id.in_(subq.alias('subq')))
-                 .order_by(User.username, User.id))
-        self.assertEqual(query.tuples()[:], expected)
+        with self.assertQueryCount(1):
+            # Using a correlated subquery.
+            subq = (UA
+                    .select(UA.id)
+                    .where(User.username == UA.username)
+                    .order_by(UA.id)
+                    .limit(2))
+            query = (User
+                     .select(User.username, User.id)
+                     .where(User.id.in_(subq.alias('subq')))
+                     .order_by(User.username, User.id))
+            self.assertEqual(query.tuples()[:], expected)
 
     @requires_models(User, Tweet)
     def test_subquery_alias_selection(self):
@@ -1002,14 +995,17 @@ class TestModelAPIs(ModelTestCase):
                 for tweet in tweets:
                     Tweet.create(user=user, content=tweet)
 
-        subq = Tweet.select(fn.COUNT(Tweet.id)).where(Tweet.user == User.id)
-        query = (User
-                 .select(User.username, subq.alias('tweet_count'))
-                 .order_by(User.id))
-        self.assertEqual([(u.username, u.tweet_count) for u in query], [
-            ('huey', 3),
-            ('mickey', 2),
-            ('zaizee', 0)])
+        with self.assertQueryCount(1):
+            subq = (Tweet
+                    .select(fn.COUNT(Tweet.id))
+                    .where(Tweet.user == User.id))
+            query = (User
+                     .select(User.username, subq.alias('tweet_count'))
+                     .order_by(User.id))
+            self.assertEqual([(u.username, u.tweet_count) for u in query], [
+                ('huey', 3),
+                ('mickey', 2),
+                ('zaizee', 0)])
 
     @requires_postgresql
     @requires_models(User)
@@ -1018,11 +1014,12 @@ class TestModelAPIs(ModelTestCase):
             User.create(username=username)
 
         vl = ValuesList([('huey',), ('zaizee',)], columns=['username'])
-        query = (User
-                 .select(vl.c.username)
-                 .join(vl, on=(User.username == vl.c.username))
-                 .order_by(vl.c.username.desc()))
-        self.assertEqual([user.username for user in query], ['zaizee', 'huey'])
+        with self.assertQueryCount(1):
+            query = (User
+                     .select(vl.c.username)
+                     .join(vl, on=(User.username == vl.c.username))
+                     .order_by(vl.c.username.desc()))
+            self.assertEqual([u.username for u in query], ['zaizee', 'huey'])
 
     @skip_if(IS_SQLITE_OLD or IS_MYSQL)
     @requires_models(User)
@@ -1109,30 +1106,33 @@ class TestModelAPIs(ModelTestCase):
         t1_1 = Tweet.create(user=u1, content='u1-t1')
         t1_2 = Tweet.create(user=u1, content='u1-t2')
         t2_1 = Tweet.create(user=u2, content='u2-t1')
-        q1 = Tweet.select(Tweet, User).join(User).where(User.id == 1)
-        q2 = Tweet.select(Tweet, User).join(User)
-        union = q1 | q2
-        self.assertSQL(union, (
-            'SELECT "t1"."id", "t1"."user_id", "t1"."content", '
-            '"t1"."timestamp", "t2"."id", "t2"."username" '
-            'FROM "tweet" AS "t1" '
-            'INNER JOIN "users" AS "t2" ON ("t1"."user_id" = "t2"."id") '
-            'WHERE ("t2"."id" = ?) '
-            'UNION '
-            'SELECT "t3"."id", "t3"."user_id", "t3"."content", '
-            '"t3"."timestamp", "t4"."id", "t4"."username" '
-            'FROM "tweet" AS "t3" '
-            'INNER JOIN "users" AS "t4" ON ("t3"."user_id" = "t4"."id")'), [1])
 
         with self.assertQueryCount(1):
+            q1 = Tweet.select(Tweet, User).join(User).where(User.id == 1)
+            q2 = Tweet.select(Tweet, User).join(User)
+            union = q1 | q2
+
+            self.assertSQL(union, (
+                'SELECT "t1"."id", "t1"."user_id", "t1"."content", '
+                '"t1"."timestamp", "t2"."id", "t2"."username" '
+                'FROM "tweet" AS "t1" '
+                'INNER JOIN "users" AS "t2" ON ("t1"."user_id" = "t2"."id") '
+                'WHERE ("t2"."id" = ?) '
+                'UNION '
+                'SELECT "t3"."id", "t3"."user_id", "t3"."content", '
+                '"t3"."timestamp", "t4"."id", "t4"."username" '
+                'FROM "tweet" AS "t3" '
+                'INNER JOIN "users" AS "t4" ON ("t3"."user_id" = "t4"."id")'),
+                [1])
+
             results = [(t.id, t.content, t.user.username) for t in union]
             self.assertEqual(sorted(results), [
                 (1, 'u1-t1', 'u1'),
                 (2, 'u1-t2', 'u1'),
                 (3, 'u2-t1', 'u2')])
 
-        union_flat = (q1 | q2).objects()
         with self.assertQueryCount(1):
+            union_flat = (q1 | q2).objects()
             results = [(t.id, t.content, t.username) for t in union_flat]
             self.assertEqual(sorted(results), [
                 (1, 'u1-t1', 'u1'),
@@ -1174,20 +1174,20 @@ class TestModelAPIs(ModelTestCase):
             for t in ts:
                 Tweet.create(user=u, content='%s-%s' % (u.username, t))
 
-        q1 = (User
-              .select(User, Tweet)
-              .join(Tweet, on=(Tweet.user == User.id).alias('foo')))
-        q2 = (User
-              .select(User, Tweet)
-              .join(Tweet, on=(Tweet.user == User.id).alias('foo')))
-
         with self.assertQueryCount(1):
+            q1 = (User
+                  .select(User, Tweet)
+                  .join(Tweet, on=(Tweet.user == User.id).alias('foo')))
+            q2 = (User
+                  .select(User, Tweet)
+                  .join(Tweet, on=(Tweet.user == User.id).alias('foo')))
+
             self.assertEqual(
                 sorted([(user.username, user.foo.content) for user in q1]),
                 [('u1', 'u1-t1'), ('u1', 'u1-t2'), ('u2', 'u2-t1')])
 
-        uq = q1.union_all(q2)
         with self.assertQueryCount(1):
+            uq = q1.union_all(q2)
             result = [(user.username, user.foo.content) for user in uq]
             self.assertEqual(sorted(result), [
                 ('u1', 'u1-t1'),
@@ -1263,16 +1263,17 @@ class TestModelAPIs(ModelTestCase):
     def test_from_multi_table(self):
         self.add_tweets(self.add_user('huey'), 'meow', 'hiss', 'purr')
         self.add_tweets(self.add_user('mickey'), 'woof', 'wheeze')
-        query = (Tweet
-                 .select(Tweet, User)
-                 .from_(Tweet, User)
-                 .where(
-                     (Tweet.user == User.id) &
-                     (User.username == 'huey'))
-                 .order_by(Tweet.id)
-                 .dicts())
 
         with self.assertQueryCount(1):
+            query = (Tweet
+                     .select(Tweet, User)
+                     .from_(Tweet, User)
+                     .where(
+                         (Tweet.user == User.id) &
+                         (User.username == 'huey'))
+                     .order_by(Tweet.id)
+                     .dicts())
+
             self.assertEqual([t['content'] for t in query],
                              ['meow', 'hiss', 'purr'])
             self.assertEqual([t['username'] for t in query],
@@ -1283,23 +1284,25 @@ class TestModelAPIs(ModelTestCase):
         for x, y in ((1, 1), (1, 2), (10, 10), (10, 20)):
             Point.create(x=x, y=y)
 
-        PA = Point.alias('pa')
-        subq = PA.select(fn.SUM(PA.y)).where(PA.x == Point.x)
-        query = (Point
-                 .select(Point.x, Point.y, subq.alias('sy'))
-                 .order_by(Point.x, Point.y))
-        self.assertEqual(list(query.tuples()), [
-            (1, 1, 3),
-            (1, 2, 3),
-            (10, 10, 30),
-            (10, 20, 30)])
+        with self.assertQueryCount(1):
+            PA = Point.alias('pa')
+            subq = PA.select(fn.SUM(PA.y)).where(PA.x == Point.x)
+            query = (Point
+                     .select(Point.x, Point.y, subq.alias('sy'))
+                     .order_by(Point.x, Point.y))
+            self.assertEqual(list(query.tuples()), [
+                (1, 1, 3),
+                (1, 2, 3),
+                (10, 10, 30),
+                (10, 20, 30)])
 
-        query = (Point
-                 .select(Point.x, (Point.y + subq).alias('sy'))
-                 .order_by(Point.x, Point.y))
-        self.assertEqual(list(query.tuples()), [
-            (1, 4), (1, 5),
-            (10, 40), (10, 50)])
+        with self.assertQueryCount(1):
+            query = (Point
+                     .select(Point.x, (Point.y + subq).alias('sy'))
+                     .order_by(Point.x, Point.y))
+            self.assertEqual(list(query.tuples()), [
+                (1, 4), (1, 5),
+                (10, 40), (10, 50)])
 
     @requires_models(User, Tweet)
     def test_filtering(self):
@@ -1309,13 +1312,15 @@ class TestModelAPIs(ModelTestCase):
             self.add_tweets(huey, 'meow', 'hiss', 'purr')
             self.add_tweets(mickey, 'woof', 'wheeze')
 
-        query = Tweet.filter(user__username='huey').order_by(Tweet.content)
-        self.assertEqual([row.content for row in query],
-                         ['hiss', 'meow', 'purr'])
+        with self.assertQueryCount(1):
+            query = Tweet.filter(user__username='huey').order_by(Tweet.content)
+            self.assertEqual([row.content for row in query],
+                             ['hiss', 'meow', 'purr'])
 
-        query = User.filter(tweets__content__ilike='w%')
-        self.assertEqual([user.username for user in query],
-                         ['mickey', 'mickey'])
+        with self.assertQueryCount(1):
+            query = User.filter(tweets__content__ilike='w%')
+            self.assertEqual([user.username for user in query],
+                             ['mickey', 'mickey'])
 
     def test_deferred_fk(self):
         class Note(TestModel):
@@ -1622,23 +1627,23 @@ class TestDefaultValues(ModelTestCase):
         sm1 = SampleMeta.create(sample=s, value=1.)
         sm2 = SampleMeta.create(sample=s, value=2.)
 
-        # Simple query.
-        query = SampleMeta.select(SampleMeta.sample).order_by(SampleMeta.value)
-
         # Defaults are not present when doing a read query.
         with self.assertQueryCount(1):
+            # Simple query.
+            query = (SampleMeta.select(SampleMeta.sample)
+                     .order_by(SampleMeta.value))
             sm1_db, sm2_db = list(query)
             self.assertIsNone(sm1_db.value)
             self.assertIsNone(sm2_db.value)
 
-        # Join-graph query.
-        query = (SampleMeta
-                 .select(SampleMeta.sample,
-                         Sample.counter)
-                 .join(Sample)
-                 .order_by(SampleMeta.value))
-
         with self.assertQueryCount(1):
+            # Join-graph query.
+            query = (SampleMeta
+                     .select(SampleMeta.sample,
+                             Sample.counter)
+                     .join(Sample)
+                     .order_by(SampleMeta.value))
+
             sm1_db, sm2_db = list(query)
             self.assertIsNone(sm1_db.value)
             self.assertIsNone(sm2_db.value)
@@ -1842,12 +1847,13 @@ class TestJoinModelAlias(ModelTestCase):
         # joining from User -> Tweet -> User (as "foo").
         TA = Tweet.alias('ta')
         UA = User.alias('ua')
-        query = (User
-                 .select(User, TA, UA)
-                 .join(TA)
-                 .join(UA, on=(TA.user_id == UA.id).alias('foo'))
-                 .order_by(User.username, TA.content))
         with self.assertQueryCount(1):
+            query = (User
+                     .select(User, TA, UA)
+                     .join(TA)
+                     .join(UA, on=(TA.user_id == UA.id).alias('foo'))
+                     .order_by(User.username, TA.content))
+
             data = [(row.username, row.tweet.content, row.tweet.foo.username)
                     for row in query]
 
@@ -1861,19 +1867,21 @@ class TestJoinModelAlias(ModelTestCase):
         UA = User.alias('ua')
         lookups = ({'ua__username': 'huey'}, {'user__username': 'huey'})
         for lookup in lookups:
-            query = (Tweet
-                     .select(Tweet.content, UA.username)
-                     .join(UA)
-                     .filter(**lookup)
-                     .order_by(Tweet.content))
-            self.assertSQL(query, (
-                'SELECT "t1"."content", "ua"."username" '
-                'FROM "tweet" AS "t1" '
-                'INNER JOIN "users" AS "ua" '
-                'ON ("t1"."user_id" = "ua"."id") '
-                'WHERE ("ua"."username" = ?) '
-                'ORDER BY "t1"."content"'), ['huey'])
             with self.assertQueryCount(1):
+                query = (Tweet
+                         .select(Tweet.content, UA.username)
+                         .join(UA)
+                         .filter(**lookup)
+                         .order_by(Tweet.content))
+
+                self.assertSQL(query, (
+                    'SELECT "t1"."content", "ua"."username" '
+                    'FROM "tweet" AS "t1" '
+                    'INNER JOIN "users" AS "ua" '
+                    'ON ("t1"."user_id" = "ua"."id") '
+                    'WHERE ("ua"."username" = ?) '
+                    'ORDER BY "t1"."content"'), ['huey'])
+
                 data = [(t.content, t.user.username) for t in query]
                 self.assertEqual(data, [('meow', 'huey'), ('purr', 'huey')])
 
@@ -3808,13 +3816,13 @@ class TestMaxAlias(ModelTestCase):
             for user, amount in data:
                 Transaction.create(user=user, amount=amount)
 
-        amount = fn.MAX(Transaction.amount).alias('amount')
-        query = (Transaction
-                 .select(amount, TUser.username)
-                 .join(TUser)
-                 .group_by(TUser.username)
-                 .order_by(TUser.username))
         with self.assertQueryCount(1):
+            amount = fn.MAX(Transaction.amount).alias('amount')
+            query = (Transaction
+                     .select(amount, TUser.username)
+                     .join(TUser)
+                     .group_by(TUser.username)
+                     .order_by(TUser.username))
             data = [(txn.amount, txn.user.username) for txn in query]
 
         self.assertEqual(data, [
