@@ -2130,6 +2130,14 @@ class CompoundSelectQuery(SelectBase):
         elif csq_setting == CSQ_PARENTHESES_ALWAYS:
             return True
         elif csq_setting == CSQ_PARENTHESES_UNNESTED:
+            if ctx.state.in_expr or ctx.state.in_function:
+                # If this compound select query is being used inside an
+                # expression, e.g., an IN or EXISTS().
+                return False
+
+            # If the query on the left or right is itself a compound select
+            # query, then we do not apply parentheses. However, if it is a
+            # regular SELECT query, we will apply parentheses.
             return not isinstance(subq, CompoundSelectQuery)
 
     def __sql__(self, ctx):

@@ -965,3 +965,17 @@ class TestLikeColumnValue(ModelTestCase):
                 ('u1', 'i am u1'),
                 ('u1', 'u1 is my name'),
                 ('u3', 'hey u3 is me')])
+
+
+class TestUnionParenthesesRegression(ModelTestCase):
+    requires = [User]
+
+    def test_union_parentheses_regression(self):
+        ua, ub, uc = [User.create(username=u) for u in 'abc']
+        lhs = User.select(User.id).where(User.username == 'a')
+        rhs = User.select(User.id).where(User.username == 'c')
+        union = lhs.union_all(rhs)
+        self.assertEqual(sorted([u.id for u in union]), [ua.id, uc.id])
+
+        query = User.select().where(User.id.in_(union)).order_by(User.id)
+        self.assertEqual([u.username for u in query], ['a', 'c'])
