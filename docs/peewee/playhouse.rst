@@ -202,6 +202,11 @@ Registering user-defined functions:
     # particular group or groups, you can:
     register_aggregate_groups(db, 'DATE')
 
+    # If you only wish to register a single function, then you can:
+    from playhouse.sqlite_udf import gzip, gunzip
+    db.register_function(gzip, 'gzip')
+    db.register_function(gunzip, 'gunzip')
+
 Using a library function ("hostname"):
 
 .. code-block:: python
