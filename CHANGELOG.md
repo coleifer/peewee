@@ -7,6 +7,10 @@ https://github.com/coleifer/peewee/releases
 
 ## master
 
+[View commits](https://github.com/coleifer/peewee/compare/3.11.0...master)
+
+## 3.11.0
+
 * Fixes #1991. This particular issue involves joining 3 models together in a
   chain, where the outer two models are empty. Previously peewee would make the
   middle model an empty model instance (since a link might be needed from the
@@ -15,7 +19,7 @@ https://github.com/coleifer/peewee/releases
   rather than an empty instance.
 * An unrelated fix came out of the work on #1991 where hashing a model whose
   primary-key happened to be a foreign-key could trigger the FK resolution
-  query. This patch fixes the Model._pk and Model.get_id() interfaces so they
+  query. This patch fixes the `Model._pk` and `get_id()` interfaces so they
   no longer introduce the possibility of accidentally resolving the FK.
 * Allow `Field.contains()`, `startswith()` and `endswith()` to compare against
   another column-like object or expression.
@@ -39,7 +43,7 @@ https://github.com/coleifer/peewee/releases
 * Fix issue where `PostgresqlExtDatabase` and `MySQLConnectorDatabase` did not
   respect the `autoconnect` setting.
 
-[View commits](https://github.com/coleifer/peewee/compare/3.10.0...master)
+[View commits](https://github.com/coleifer/peewee/compare/3.10.0...3.11.0)
 
 ## 3.10.0
 
