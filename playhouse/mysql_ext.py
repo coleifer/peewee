@@ -21,7 +21,10 @@ class MySQLConnectorDatabase(MySQLDatabase):
 
     def cursor(self, commit=None):
         if self.is_closed():
-            self.connect()
+            if self.autoconnect:
+                self.connect()
+            else:
+                raise InterfaceError('Error, database connection not opened.')
         return self._state.conn.cursor(buffered=True)
 
 

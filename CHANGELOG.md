@@ -36,6 +36,8 @@ https://github.com/coleifer/peewee/releases
 * Extend the mysql `ReconnectMixin` helper to work with mysql-connector.
 * Fix mapping of double-precision float in postgres schema reflection.
   Previously it mapped to single-precision, now it correctly uses a double.
+* Fix issue where `PostgresqlExtDatabase` and `MySQLConnectorDatabase` did not
+  respect the `autoconnect` setting.
 
 [View commits](https://github.com/coleifer/peewee/compare/3.10.0...master)
 

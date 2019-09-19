@@ -452,7 +452,10 @@ class PostgresqlExtDatabase(PostgresqlDatabase):
 
     def cursor(self, commit=None):
         if self.is_closed():
-            self.connect()
+            if self.autoconnect:
+                self.connect()
+            else:
+                raise InterfaceError('Error, database connection not opened.')
         if commit is __named_cursor__:
             return self._state.conn.cursor(name=str(uuid.uuid1()))
         return self._state.conn.cursor()
