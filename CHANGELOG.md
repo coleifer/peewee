@@ -17,6 +17,25 @@ https://github.com/coleifer/peewee/releases
   primary-key happened to be a foreign-key could trigger the FK resolution
   query. This patch fixes the Model._pk and Model.get_id() interfaces so they
   no longer introduce the possibility of accidentally resolving the FK.
+* Allow `Field.contains()`, `startswith()` and `endswith()` to compare against
+  another column-like object or expression.
+* Workaround for MySQL prior to 8 and MariaDB handling of union queries inside
+  of parenthesized expressions (like IN).
+* Be more permissive in letting invalid values be stored in a field whose type
+  is INTEGER or REAL, since Sqlite allows this.
+* `TimestampField` resolution cleanup. Now values 0 *and* 1 will resolve to a
+  timestamp resolution of 1 second. Values 2-6 specify the number of decimal
+  places (hundredths to microsecond), or alternatively the resolution can still
+  be provided as a power of 10, e.g. 10, 1000 (millisecond), 1e6 (microsecond).
+* When self-referential foreign-keys are inherited, the foreign-key on the
+  subclass will also be self-referential (rather than pointing to the parent
+  model).
+* Add TSV import/export option to the `dataset` extension.
+* Add item interface to the `dataset.Table` class for doing primary-key lookup,
+  assignment, or deletion.
+* Extend the mysql `ReconnectMixin` helper to work with mysql-connector.
+* Fix mapping of double-precision float in postgres schema reflection.
+  Previously it mapped to single-precision, now it correctly uses a double.
 
 [View commits](https://github.com/coleifer/peewee/compare/3.10.0...master)
 
