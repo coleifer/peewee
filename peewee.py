@@ -4422,6 +4422,8 @@ class Field(ColumnBase):
             accum.append(SQL('PRIMARY KEY'))
         if self.sequence:
             accum.append(SQL("DEFAULT NEXTVAL('%s')" % self.sequence))
+        if self.help_text:
+            accum.append(SQL("COMMENT('%s')" % self.help_text))
         if self.constraints:
             accum.extend(self.constraints)
         if self.collation:
