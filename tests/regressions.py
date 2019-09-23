@@ -979,3 +979,22 @@ class TestUnionParenthesesRegression(ModelTestCase):
 
         query = User.select().where(User.id.in_(union)).order_by(User.id)
         self.assertEqual([u.username for u in query], ['a', 'c'])
+
+
+class NoPK(TestModel):
+    data = IntegerField()
+    class Meta:
+        primary_key = False
+
+
+class TestNoPKHashRegression(ModelTestCase):
+    requires = [NoPK]
+
+    def test_no_pk_hash_regression(self):
+        npk = NoPK.create(data=1)
+        npk_db = NoPK.get(NoPK.data == 1)
+        # When a model does not define a primary key, we cannot test equality.
+        self.assertTrue(npk != npk_db)
+
+        # Their hash is the same, though they are not equal.
+        self.assertEqual(hash(npk), hash(npk_db))

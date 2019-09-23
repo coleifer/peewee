@@ -6291,7 +6291,8 @@ class Model(with_metaclass(ModelBase, Node)):
         # the primary-key is a foreign-key. So we use the safe_name attribute,
         # which defaults to the field-name, but will be the object_id_name for
         # foreign-key fields.
-        return getattr(self, self._meta.primary_key.safe_name)
+        if self._meta.primary_key is not False:
+            return getattr(self, self._meta.primary_key.safe_name)
 
     _pk = property(get_id)
 
