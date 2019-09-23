@@ -7,10 +7,14 @@ https://github.com/coleifer/peewee/releases
 
 ## master
 
+[View commits](https://github.com/coleifer/peewee/compare/3.11.1...master)
+
+## 3.11.1
+
 * Fix bug in new `_pk` / `get_id()` implementation for models that explicitly
   have disabled a primary-key.
 
-[View commits](https://github.com/coleifer/peewee/compare/3.11.0...master)
+[View commits](https://github.com/coleifer/peewee/compare/3.11.0...3.11.1)
 
 ## 3.11.0
 
