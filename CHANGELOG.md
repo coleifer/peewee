@@ -7,10 +7,14 @@ https://github.com/coleifer/peewee/releases
 
 ## master
 
+[View commits](https://github.com/coleifer/peewee/compare/3.11.2...master)
+
+## 3.11.2
+
 * Implement `hash` interface for `Alias` instances, allowing them to be used in
   multi-source queries.
 
-[View commits](https://github.com/coleifer/peewee/compare/3.11.1...master)
+[View commits](https://github.com/coleifer/peewee/compare/3.11.1...3.11.2)
 
 ## 3.11.1
 
