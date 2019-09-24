@@ -629,6 +629,19 @@ class TestJSONFieldFunctions(ModelTestCase):
         for k in self.Q.where(KeyData.key.in_(['a', 'b'])):
             self.assertEqual(k.data, {'foo': 'bar'})
 
+    def test_children(self):
+        children = KeyData.data.children().alias('children')
+        query = (KeyData
+                 .select(children.c.fullkey.alias('fullkey'))
+                 .from_(KeyData, children)
+                 .order_by(KeyData.id, SQL('fullkey')))
+        accum = [row.fullkey for row in query]
+        self.assertEqual(accum, [
+            '$.k1', '$.x1',
+            '$.k2', '$.x2',
+            '$.k1', '$.k2',
+            '$.x1', '$.l1', '$.l2'])
+
     def test_tree(self):
         tree = KeyData.data.tree().alias('tree')
         query = (KeyData
