@@ -634,12 +634,12 @@ class TestJSONFieldFunctions(ModelTestCase):
         query = (KeyData
                  .select(KeyData.key, children.c.fullkey.alias('fullkey'))
                  .from_(KeyData, children)
+                 .where(~children.c.fullkey.contains('k'))
                  .order_by(KeyData.id, SQL('fullkey')))
         accum = [(row.key, row.fullkey) for row in query]
         self.assertEqual(accum, [
-            ('a', '$.k1'), ('a', '$.x1'),
-            ('b', '$.k2'), ('b', '$.x2'),
-            ('c', '$.k1'), ('c', '$.k2'),
+            ('a', '$.x1'),
+            ('b', '$.x2'),
             ('d', '$.x1'),
             ('e', '$.l1'), ('e', '$.l2')])
 
