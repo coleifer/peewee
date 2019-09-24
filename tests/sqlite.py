@@ -632,15 +632,16 @@ class TestJSONFieldFunctions(ModelTestCase):
     def test_children(self):
         children = KeyData.data.children().alias('children')
         query = (KeyData
-                 .select(children.c.fullkey.alias('fullkey'))
+                 .select(KeyData.key, children.c.fullkey.alias('fullkey'))
                  .from_(KeyData, children)
                  .order_by(KeyData.id, SQL('fullkey')))
-        accum = [row.fullkey for row in query]
+        accum = [(row.key, row.fullkey) for row in query]
         self.assertEqual(accum, [
-            '$.k1', '$.x1',
-            '$.k2', '$.x2',
-            '$.k1', '$.k2',
-            '$.x1', '$.l1', '$.l2'])
+            ('a', '$.k1'), ('a', '$.x1'),
+            ('b', '$.k2'), ('b', '$.x2'),
+            ('c', '$.k1'), ('c', '$.k2'),
+            ('d', '$.x1'),
+            ('e', '$.l1'), ('e', '$.l2')])
 
     def test_tree(self):
         tree = KeyData.data.tree().alias('tree')
