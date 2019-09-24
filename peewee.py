@@ -1245,6 +1245,9 @@ class Alias(WrappedNode):
         super(Alias, self).__init__(node)
         self._alias = alias
 
+    def __hash__(self):
+        return hash(self._alias)
+
     def alias(self, alias=None):
         if alias is None:
             return self.node
