@@ -365,6 +365,20 @@ class IntervalField(Field):
     field_type = 'INTERVAL'
 
 
+class IdentityField(AutoField):
+    field_type = 'INT'
+
+    def __init__(self, generate_always=False, **kwargs):
+        self._generate_always = generate_always
+        super(IdentityField, self).__init__(**kwargs)
+
+    def ddl(self, ctx):
+        node_list = super(IdentityField, self).ddl(ctx)
+        sql = SQL('GENERATED %s AS IDENTITY' %
+                  ('ALWAYS' if self._generate_always else 'BY DEFAULT'))
+        return NodeList((node_list, sql))
+
+
 class FetchManyCursor(object):
     __slots__ = ('cursor', 'array_size', 'exhausted', 'iterable')
 
