@@ -396,6 +396,24 @@ class TestModelAPIs(ModelTestCase):
         iq = User.insert_from(query, ['username']).returning()
         self.assertEqual(iq.execute(), 2)
 
+    @skip_if(IS_POSTGRESQL, 'requires sqlite or mysql')
+    @requires_models(Emp)
+    def test_replace_rowcount(self):
+        Emp.create(first='beanie', last='cat', empno='998')
+
+        data = [
+            ('beanie', 'cat', '999'),
+            ('mickey', 'dog', '123')]
+        fields = (Emp.first, Emp.last, Emp.empno)
+
+        # MySQL returns 3, Sqlite 2.
+        self.assertTrue(Emp.replace_many(data, fields=fields) in (2, 3))
+
+        query = Emp.select(Emp.first, Emp.last, Emp.empno).order_by(Emp.last)
+        self.assertEqual(list(query.tuples()), [
+            ('beanie', 'cat', '999'),
+            ('mickey', 'dog', '123')])
+
     @requires_models(User, Tweet)
     def test_get_shortcut(self):
         huey = self.add_user('huey')

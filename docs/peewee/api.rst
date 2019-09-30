@@ -3961,6 +3961,7 @@ Model
 
         :param rows: An iterable that yields rows to insert.
         :param list fields: List of fields being inserted.
+        :return: number of rows modified (see note).
 
         INSERT multiple rows of data.
 
@@ -4030,10 +4031,17 @@ Model
             * `Changing run-time limits <https://www.sqlite.org/c3ref/limit.html>`_
             * `SQLite compile-time flags <https://www.sqlite.org/compile.html>`_
 
+        .. note::
+            The default return value is the number of rows modified. However,
+            when using Postgres, Peewee will return a cursor by default that
+            yields the primary-keys of the inserted rows. To disable this
+            functionality with Postgres, use an empty call to ``returning()``.
+
     .. py:classmethod:: insert_from(query, fields)
 
         :param Select query: SELECT query to use as source of data.
         :param fields: Fields to insert data into.
+        :return: number of rows modified (see note).
 
         INSERT data using a SELECT query as the source. This API should be used
         for queries of the form *INSERT INTO ... SELECT FROM ...*.
@@ -4050,6 +4058,12 @@ Model
             UserTweetDenorm.insert_from(
                 source,
                 [UserTweetDenorm.username, UserTweetDenorm.num_tweets]).execute()
+
+        .. note::
+            The default return value is the number of rows modified. However,
+            when using Postgres, Peewee will return a cursor by default that
+            yields the primary-keys of the inserted rows. To disable this
+            functionality with Postgres, use an empty call to ``returning()``.
 
     .. py:classmethod:: replace([__data=None[, **insert]])
 
