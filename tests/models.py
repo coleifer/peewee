@@ -406,8 +406,9 @@ class TestModelAPIs(ModelTestCase):
             ('mickey', 'dog', '123')]
         fields = (Emp.first, Emp.last, Emp.empno)
 
-        # MySQL returns 3, Sqlite 2.
-        self.assertTrue(Emp.replace_many(data, fields=fields) in (2, 3))
+        # MySQL returns 3, Sqlite 2. However, older stdlib sqlite3 does not
+        # work properly, so we don't assert a result count here.
+        Emp.replace_many(data, fields=fields).execute()
 
         query = Emp.select(Emp.first, Emp.last, Emp.empno).order_by(Emp.last)
         self.assertEqual(list(query.tuples()), [
