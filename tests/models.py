@@ -369,6 +369,33 @@ class TestModelAPIs(ModelTestCase):
         self.assertEqual(list(sorted(CPK.select().tuples())), [
             ('k1', 1, 10), ('k2', 2, 2), ('k3', 3, 30)])
 
+    @requires_models(User)
+    def test_insert_rowcount(self):
+        User.create(username='u0')  # Ensure that last insert ID != rowcount.
+
+        iq = User.insert_many([(u,) for u in ('u1', 'u2', 'u3')])
+        if IS_POSTGRESQL:
+            iq = iq.returning()
+        self.assertEqual(iq.execute(), 3)
+
+        # Now explicitly specify empty returning() for all DBs.
+        iq = User.insert_many([(u,) for u in ('u4', 'u5')]).returning()
+        self.assertEqual(iq.execute(), 2)
+
+        query = (User
+                 .select(User.username.concat('-x'))
+                 .where(User.username.in_(['u1', 'u2'])))
+        iq = User.insert_from(query, ['username'])
+        if IS_POSTGRESQL:
+            iq = iq.returning()
+        self.assertEqual(iq.execute(), 2)
+
+        query = (User
+                 .select(User.username.concat('-y'))
+                 .where(User.username.in_(['u3', 'u4'])))
+        iq = User.insert_from(query, ['username']).returning()
+        self.assertEqual(iq.execute(), 2)
+
     @requires_models(User, Tweet)
     def test_get_shortcut(self):
         huey = self.add_user('huey')

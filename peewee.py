@@ -2627,6 +2627,8 @@ class Insert(_WriteQuery):
     def handle_result(self, database, cursor):
         if self._return_cursor:
             return cursor
+        if self._query_type != Insert.SIMPLE and not self._returning:
+            return database.rows_affected(cursor)
         return database.last_insert_id(cursor, self._query_type)
 
 
@@ -3651,7 +3653,7 @@ class PostgresqlDatabase(Database):
 
     def last_insert_id(self, cursor, query_type=None):
         try:
-            return cursor if query_type else cursor[0][0]
+            return cursor if query_type != Insert.SIMPLE else cursor[0][0]
         except (IndexError, KeyError, TypeError):
             pass
 

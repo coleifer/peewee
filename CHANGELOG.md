@@ -7,6 +7,13 @@ https://github.com/coleifer/peewee/releases
 
 ## master
 
+* Bulk insert (`insert_many()` and `insert_from()`) will now return the row
+  count instead of the last insert ID. If you are using Postgres, peewee will
+  continue to return a cursor that provides an iterator over the newly-inserted
+  primary-key values by default. This behavior is being retained by default for
+  compatibility. Postgres users can simply specify an empty `returning()` call
+  to disable the cursor and retrieve the rowcount instead.
+
 [View commits](https://github.com/coleifer/peewee/compare/3.11.2...master)
 
 ## 3.11.2
