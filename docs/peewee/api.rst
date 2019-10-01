@@ -2817,7 +2817,12 @@ Fields
 
     Field class for storing auto-incrementing primary keys using 64-bits.
 
-.. py:class:: IdentityField
+.. py:class:: IdentityField([generate_always=False])
+
+    :param bool generate_always: if specified, then the identity will always be
+        generated (and specifying the value explicitly during INSERT will raise
+        a programming error). Otherwise, the identity value is only generated
+        as-needed.
 
     Field class for storing auto-incrementing primary keys using the new
     Postgres 10 *IDENTITY* column type. The column definition ends up looking
