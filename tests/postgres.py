@@ -663,6 +663,10 @@ def pg10():
     with db:
         return db.connection().server_version >= 100000
 
+def pg12():
+    with db:
+        return db.connection().server_version >= 120000
+
 JSON_SUPPORT = (JsonModel is not None) and pg93()
 
 
@@ -1164,3 +1168,20 @@ class TestPostgresIsolationLevel(DatabaseTestCase):
         self.database.close()
         conn = self.database.connection()
         self.assertEqual(conn.isolation_level, 3)
+
+
+@skip_unless(pg12(), 'cte materialization requires pg >= 12')
+class TestPostgresCTEMaterialization(ModelTestCase):
+    database = db
+    requires = [Register]
+
+    def test_postgres_cte_materialization(self):
+        Register.insert_many([(i,) for i in (1, 2, 3)]).execute()
+
+        for materialized in (None, False, True):
+            cte = Register.select().cte('t', materialized=materialized)
+            query = (cte
+                     .select_from(cte.c.value)
+                     .where(cte.c.value != 2)
+                     .order_by(cte.c.value))
+            self.assertEqual([r.value for r in query], [1, 3])

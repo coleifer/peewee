@@ -768,8 +768,9 @@ class Source(Node):
     def left_outer_join(self, dest, on=None):
         return Join(self, dest, JOIN.LEFT_OUTER, on)
 
-    def cte(self, name, recursive=False, columns=None):
-        return CTE(name, self, recursive=recursive, columns=columns)
+    def cte(self, name, recursive=False, columns=None, materialized=None):
+        return CTE(name, self, recursive=recursive, columns=columns,
+                   materialized=materialized)
 
     def get_sort_key(self, ctx):
         if self._alias:
@@ -1019,10 +1020,12 @@ class ValuesList(_HashableSource, BaseTable):
 
 
 class CTE(_HashableSource, Source):
-    def __init__(self, name, query, recursive=False, columns=None):
+    def __init__(self, name, query, recursive=False, columns=None,
+                 materialized=None):
         self._alias = name
         self._query = query
         self._recursive = recursive
+        self._materialized = materialized
         if columns is not None:
             columns = [Entity(c) if isinstance(c, basestring) else c
                        for c in columns]
@@ -1063,6 +1066,12 @@ class CTE(_HashableSource, Source):
             if self._columns:
                 ctx.literal(' ').sql(EnclosedNodeList(self._columns))
             ctx.literal(' AS ')
+
+            if self._materialized:
+                ctx.literal('MATERIALIZED ')
+            elif self._materialized is False:
+                ctx.literal('NOT MATERIALIZED ')
+
             with ctx.scope_normal(parentheses=True):
                 ctx.sql(self._query)
         return ctx

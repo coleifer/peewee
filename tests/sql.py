@@ -334,6 +334,22 @@ class TestSelectQuery(BaseTestCase):
             'WHERE ("t1"."is_staff" = ?)) '
             'SELECT "c1"."username", "c2"."username" FROM "c1", "c2"'), [1, 1])
 
+    def test_materialize_cte(self):
+        cases = (
+            (True, 'MATERIALIZED '),
+            (False, 'NOT MATERIALIZED '),
+            (None, ''))
+        for materialized, clause in cases:
+            cte = (User
+                   .select(User.c.id)
+                   .cte('user_ids', materialized=materialized))
+            query = cte.select_from(cte.c.id).where(cte.c.id < 10)
+            self.assertSQL(query, (
+                'WITH "user_ids" AS %s('
+                'SELECT "t1"."id" FROM "users" AS "t1") '
+                'SELECT "user_ids"."id" FROM "user_ids" '
+                'WHERE ("user_ids"."id" < ?)') % clause, [10])
+
     def test_fibonacci_cte(self):
         q1 = Select(columns=(
             Value(1).alias('n'),
