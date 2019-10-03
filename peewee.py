@@ -3546,7 +3546,7 @@ class SqliteDatabase(Database):
     def get_primary_keys(self, table, schema=None):
         cursor = self.execute_sql('PRAGMA "%s".table_info("%s")' %
                                   (schema or 'main', table))
-        return [row[1] for row in filter(lambda r: r[-1], cursor.fetchall())]
+        return [row[1] for row in (r for r in cursor.fetchall() if r[-1])]
 
     def get_foreign_keys(self, table, schema=None):
         cursor = self.execute_sql('PRAGMA "%s".foreign_key_list("%s")' %
@@ -3890,7 +3890,7 @@ class MySQLDatabase(Database):
     def get_primary_keys(self, table, schema=None):
         cursor = self.execute_sql('SHOW INDEX FROM `%s`' % table)
         return [row[4] for row in
-                filter(lambda row: row[2] == 'PRIMARY', cursor.fetchall())]
+                (row for row in cursor.fetchall() if row[2] == 'PRIMARY')]
 
     def get_foreign_keys(self, table, schema=None):
         query = """

@@ -741,7 +741,7 @@ class SqliteMigrator(SchemaMigrator):
 
         # Re-create user-defined indexes. User-defined indexes will have a
         # non-empty SQL attribute.
-        for index in filter(lambda idx: idx.sql, indexes):
+        for index in (idx for idx in indexes if idx.sql):
             if column_to_update not in index.columns:
                 queries.append(SQL(index.sql))
             elif new_column:
