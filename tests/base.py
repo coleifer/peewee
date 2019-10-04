@@ -222,6 +222,8 @@ class ModelTestCase(ModelDatabaseTestCase):
 
     def tearDown(self):
         # Restore the model's previous database object.
+        if not self.database.is_closed():
+            self.database.rollback()
         try:
             if self.requires:
                 self.database.drop_tables(self.requires, safe=True)
