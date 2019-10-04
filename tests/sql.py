@@ -671,6 +671,37 @@ class TestSelectQuery(BaseTestCase):
             'HAVING ("ct" > ?) '
             'ORDER BY "ct" DESC'), [1, 10])
 
+    def test_order_by_collate(self):
+        query = (User
+                 .select(User.c.username)
+                 .order_by(User.c.username.asc(collation='binary')))
+        self.assertSQL(query, (
+            'SELECT "t1"."username" FROM "users" AS "t1" '
+            'ORDER BY "t1"."username" ASC COLLATE binary'), [])
+
+    def test_order_by_nulls(self):
+        query = (User
+                 .select(User.c.username)
+                 .order_by(User.c.ts.desc(nulls='LAST')))
+        self.assertSQL(query, (
+            'SELECT "t1"."username" FROM "users" AS "t1" '
+            'ORDER BY "t1"."ts" DESC NULLS LAST'), [], nulls_ordering=True)
+        self.assertSQL(query, (
+            'SELECT "t1"."username" FROM "users" AS "t1" '
+            'ORDER BY CASE WHEN ("t1"."ts" IS ?) THEN ? ELSE ? END, '
+            '"t1"."ts" DESC'), [None, 1, 0], nulls_ordering=False)
+
+        query = (User
+                 .select(User.c.username)
+                 .order_by(User.c.ts.desc(nulls='first')))
+        self.assertSQL(query, (
+            'SELECT "t1"."username" FROM "users" AS "t1" '
+            'ORDER BY "t1"."ts" DESC NULLS first'), [], nulls_ordering=True)
+        self.assertSQL(query, (
+            'SELECT "t1"."username" FROM "users" AS "t1" '
+            'ORDER BY CASE WHEN ("t1"."ts" IS ?) THEN ? ELSE ? END, '
+            '"t1"."ts" DESC'), [None, 0, 1], nulls_ordering=False)
+
     def test_in_value_representation(self):
         query = (User
                  .select(User.c.id)

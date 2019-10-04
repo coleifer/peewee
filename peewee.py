@@ -3264,6 +3264,7 @@ class SqliteDatabase(Database):
         self._attached = {}
         self.register_function(_sqlite_date_part, 'date_part', 2)
         self.register_function(_sqlite_date_trunc, 'date_trunc', 2)
+        self.nulls_ordering = self.server_version >= (3, 30, 0)
 
     def init(self, database, pragmas=None, timeout=5, **kwargs):
         if pragmas is not None:
