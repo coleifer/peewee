@@ -776,3 +776,33 @@ class TestAttachDatabase(ModelTestCase):
 
         tables = self.database.get_tables(schema='cache')
         self.assertEqual(tables, ['cache_data'])
+
+
+class TestDatabaseConnection(DatabaseTestCase):
+    def test_is_connection_usable(self):
+        # Ensure a connection is open.
+        conn = self.database.connection()
+        self.assertTrue(self.database.is_connection_usable())
+
+        self.database.close()
+        self.assertFalse(self.database.is_connection_usable())
+        self.database.connect()
+        self.assertTrue(self.database.is_connection_usable())
+
+    @requires_postgresql
+    def test_is_connection_usable_pg(self):
+        self.database.execute_sql('drop table if exists foo')
+        self.database.execute_sql('create table foo (data text not null)')
+        self.assertTrue(self.database.is_connection_usable())
+
+        with self.assertRaises(IntegrityError):
+            self.database.execute_sql('insert into foo (data) values (NULL)')
+
+        self.assertFalse(self.database.is_closed())
+        self.assertFalse(self.database.is_connection_usable())
+        self.database.rollback()
+        self.assertTrue(self.database.is_connection_usable())
+
+        curs = self.database.execute_sql('select * from foo')
+        self.assertEqual(list(curs), [])
+        self.database.execute_sql('drop table foo')

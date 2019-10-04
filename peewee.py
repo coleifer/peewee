@@ -2987,6 +2987,9 @@ class Database(_callable_context_manager):
     def is_closed(self):
         return self._state.closed
 
+    def is_connection_usable(self):
+        return not self._state.closed
+
     def connection(self):
         if self.is_closed():
             self.connect()
@@ -3660,6 +3663,16 @@ class PostgresqlDatabase(Database):
         self.server_version = conn.server_version
         if self.server_version >= 90600:
             self.safe_create_index = True
+
+    def is_connection_usable(self):
+        if self._state.closed:
+            return False
+
+        # Returns True if we are idle, running a command, or in an active
+        # connection. If the connection is in an error state or the connection
+        # is otherwise unusable, return False.
+        txn_status = self._state.conn.get_transaction_status()
+        return txn_status < pg_extensions.TRANSACTION_STATUS_INERROR
 
     def last_insert_id(self, cursor, query_type=None):
         try:
