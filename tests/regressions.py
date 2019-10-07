@@ -405,7 +405,9 @@ class TestUpdateIntegrationRegressions(ModelTestCase):
             ['meow', 'hiss', 'purr', 'woof-x', 'bark-x'])
 
         # Subquery on the right-hand of the assignment.
-        subq = Tweet.select(fn.COUNT(Tweet.id)).where(Tweet.user == User.id)
+        subq = (Tweet
+                .select(fn.COUNT(Tweet.id).cast('text'))
+                .where(Tweet.user == User.id))
         res = User.update(username=(User.username + '-' + subq)).execute()
 
         self.assertEqual([u.username for u in users.clone()],
@@ -417,7 +419,7 @@ class TestUpdateIntegrationRegressions(ModelTestCase):
                 .select(SA.value)
                 .where(SA.value.in_([1.0, 3.0])))
         res = (Sample
-               .update(counter=(Sample.counter + Sample.value))
+               .update(counter=(Sample.counter + Sample.value.cast('int')))
                .where(Sample.value.in_(subq))
                .execute())
 
@@ -428,7 +430,9 @@ class TestUpdateIntegrationRegressions(ModelTestCase):
         self.assertEqual(list(query.clone()), [(0, 0.), (2, 1.), (2, 2.),
                                                (6, 3.)])
 
-        subq = SA.select(SA.counter - SA.value).where(SA.value == Sample.value)
+        subq = (SA
+                .select(SA.counter - SA.value.cast('int'))
+                .where(SA.value == Sample.value))
         res = (Sample
                .update(counter=subq)
                .where(Sample.value.in_([1., 3.]))

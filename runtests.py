@@ -23,7 +23,8 @@ def get_option_parser():
         '--engine',
         dest='engine',
         help=('Database engine to test, one of '
-              '[sqlite, postgres, mysql, mysqlconnector, apsw, sqlcipher]'))
+              '[sqlite, postgres, mysql, mysqlconnector, apsw, sqlcipher,'
+              ' cockroach]'))
     basic.add_option('-v', '--verbosity', dest='verbosity', default=1,
                      type='int', help='Verbosity of output')
     basic.add_option('-f', '--failfast', action='store_true', default=False,

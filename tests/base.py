@@ -13,6 +13,7 @@ except ImportError:
 from peewee import *
 from peewee import sqlite3
 from playhouse.mysql_ext import MySQLConnectorDatabase
+from playhouse.cockroach import CockroachDatabase
 
 
 logger = logging.getLogger('peewee')
@@ -25,6 +26,7 @@ def db_loader(engine, name='peewee_test', db_class=None, **params):
             MySQLDatabase: ['mysql'],
             PostgresqlDatabase: ['postgres', 'postgresql'],
             MySQLConnectorDatabase: ['mysqlconnector'],
+            CockroachDatabase: ['cockroach', 'cockroachdb', 'crdb'],
         }
         engine_map = dict((alias, db) for db, aliases in engine_aliases.items()
                           for alias in aliases)
@@ -50,6 +52,7 @@ VERBOSITY = int(os.environ.get('PEEWEE_TEST_VERBOSITY') or 1)
 IS_SQLITE = BACKEND in ('sqlite', 'sqlite3')
 IS_MYSQL = BACKEND in ('mysql', 'mysqlconnector')
 IS_POSTGRESQL = BACKEND in ('postgres', 'postgresql')
+IS_CRDB = BACKEND in ('cockroach', 'cockroachdb', 'crdb')
 
 
 def make_db_params(key):
