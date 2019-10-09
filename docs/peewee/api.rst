@@ -4184,13 +4184,17 @@ Model
               :py:meth:`Database.atomic`. Otherwise an error in a batch mid-way
               through could leave the database in an inconsistent state.
 
-    .. py:classmethod:: bulk_update(model_list, fields[, batch_size=None])
+    .. py:classmethod:: bulk_update(model_list, fields[[, batch_size=None], unpack_values=True])
 
         :param iterable model_list: a list or other iterable of
             :py:class:`Model` instances.
         :param list fields: list of fields to update.
         :param int batch_size: number of rows to batch per insert. If
             unspecified, all models will be inserted in a single query.
+        :param bool unpack_values: whether to unpack iterable values
+            into multiple values. Passed as `unpack` parameter to 
+            ``Value``. Useful when updating e.g. ``JSONField`` that is
+            a top-level list object.
         :returns: total number of rows updated.
 
         Efficiently UPDATE multiple model instances.

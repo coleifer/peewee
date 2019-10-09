@@ -6218,7 +6218,7 @@ class Model(with_metaclass(ModelBase, Node)):
                     setattr(model, pk_name, obj_id)
 
     @classmethod
-    def bulk_update(cls, model_list, fields, batch_size=None):
+    def bulk_update(cls, model_list, fields, batch_size=None, unpack_values=True):
         if isinstance(cls._meta.primary_key, CompositeKey):
             raise ValueError('bulk_update() is not supported for models with '
                              'a composite primary key.')
@@ -6244,7 +6244,7 @@ class Model(with_metaclass(ModelBase, Node)):
                 for model in batch:
                     value = getattr(model, attr)
                     if not isinstance(value, Node):
-                        value = Value(value, converter=field.db_value)
+                        value = Value(value, converter=field.db_value, unpack=unpack_values)
                     accum.append((model._pk, value))
                 case = Case(cls._meta.primary_key, accum)
                 update[field] = case
