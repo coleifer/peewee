@@ -121,6 +121,7 @@ class JSONPath(ColumnBase):
 
 class JSONField(TextField):
     field_type = 'JSON'
+    unpack = False
 
     def __init__(self, json_dumps=None, json_loads=None, **kwargs):
         self._json_dumps = json_dumps or json.dumps

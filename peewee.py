@@ -2411,8 +2411,10 @@ class Update(_WriteQuery):
             expressions = []
             for k, v in sorted(self._update.items(), key=ctx.column_sort_key):
                 if not isinstance(v, Node):
-                    converter = k.db_value if isinstance(k, Field) else None
-                    v = Value(v, converter=converter, unpack=False)
+                    if isinstance(k, Field):
+                        v = k.to_value(v)
+                    else:
+                        v = Value(v, unpack=False)
                 if not isinstance(v, Value):
                     v = qualify_names(v)
                 expressions.append(NodeList((k, SQL('='), v)))
@@ -3089,8 +3091,10 @@ class Database(_callable_context_manager):
                     # field object, to apply data-type conversions.
                     if isinstance(k, basestring):
                         k = getattr(query.table, k)
-                    converter = k.db_value if isinstance(k, Field) else None
-                    v = Value(v, converter=converter, unpack=False)
+                    if isinstance(k, Field):
+                        v = k.to_value(v)
+                    else:
+                        v = Value(v, unpack=False)
                 else:
                     v = QualifiedNames(v)
                 updates.append(NodeList((ensure_entity(k), SQL('='), v)))
@@ -3976,8 +3980,10 @@ class MySQLDatabase(Database):
                     # field object, to apply data-type conversions.
                     if isinstance(k, basestring):
                         k = getattr(query.table, k)
-                    converter = k.db_value if isinstance(k, Field) else None
-                    v = Value(v, converter=converter, unpack=False)
+                    if isinstance(k, Field):
+                        v = k.to_value(v)
+                    else:
+                        v = Value(v, unpack=False)
                 updates.append(NodeList((ensure_entity(k), SQL('='), v)))
 
         if updates:
@@ -4351,6 +4357,7 @@ class Field(ColumnBase):
     auto_increment = False
     default_index_type = None
     field_type = 'DEFAULT'
+    unpack = True
 
     def __init__(self, null=False, index=False, unique=False, column_name=None,
                  default=None, primary_key=False, constraints=None,
@@ -4413,6 +4420,9 @@ class Field(ColumnBase):
 
     def python_value(self, value):
         return value if value is None else self.adapt(value)
+
+    def to_value(self, value):
+        return Value(value, self.db_value, self.unpack)
 
     def get_sort_key(self, ctx):
         return self._sort_key
@@ -6244,7 +6254,7 @@ class Model(with_metaclass(ModelBase, Node)):
                 for model in batch:
                     value = getattr(model, attr)
                     if not isinstance(value, Node):
-                        value = Value(value, converter=field.db_value)
+                        value = field.to_value(value)
                     accum.append((model._pk, value))
                 case = Case(cls._meta.primary_key, accum)
                 update[field] = case

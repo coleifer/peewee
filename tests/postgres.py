@@ -654,6 +654,18 @@ class BaseJsonFieldTestCase(object):
 
         self.assertItems((self.M.data['k2']['xxx'] == 'v1'))
 
+    def test_json_bulk_update_top_level_list(self):
+        m1 = self.M.create(data=['a', 'b', 'c'])
+        m2 = self.M.create(data=['d', 'e', 'f'])
+
+        m1.data = ['g', 'h', 'i']
+        m2.data = ['j', 'k', 'l']
+        self.M.bulk_update([m1, m2], fields=[self.M.data])
+        m1_db = self.M.get(self.M.id == m1.id)
+        m2_db = self.M.get(self.M.id == m2.id)
+        self.assertEqual(m1_db.data, ['g', 'h', 'i'])
+        self.assertEqual(m2_db.data, ['j', 'k', 'l'])
+
 
 def pg93():
     with db:

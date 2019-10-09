@@ -458,6 +458,18 @@ class TestJSONField(ModelTestCase):
         kd2_db = KeyData.get(KeyData.key == 'k2')
         self.assertEqual(kd2_db.data, {'k1': 'v1', 'k2': 'v2'})
 
+    def test_json_bulk_update_top_level_list(self):
+        kd1 = KeyData.create(key='k1', data=['a', 'b', 'c'])
+        kd2 = KeyData.create(key='k2', data=['d', 'e', 'f'])
+
+        kd1.data = ['g', 'h', 'i']
+        kd2.data = ['j', 'k', 'l']
+        KeyData.bulk_update([kd1, kd2], fields=[KeyData.data])
+        kd1_db = KeyData.get(KeyData.key == 'k1')
+        kd2_db = KeyData.get(KeyData.key == 'k2')
+        self.assertEqual(kd1_db.data, ['g', 'h', 'i'])
+        self.assertEqual(kd2_db.data, ['j', 'k', 'l'])
+
 
 @skip_unless(json_installed(), 'requires sqlite json1')
 class TestJSONFieldFunctions(ModelTestCase):
