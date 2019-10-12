@@ -6,6 +6,7 @@ from peewee import *
 from playhouse.migrate import *
 from .base import BaseTestCase
 from .base import IS_MYSQL
+from .base import IS_POSTGRESQL
 from .base import IS_SQLITE
 from .base import ModelTestCase
 from .base import TestModel
@@ -609,6 +610,37 @@ class TestSchemaMigration(ModelTestCase):
             ('CREATE INDEX "tag_metadata" ON "tag" USING GIN ("metadata")',
              []),
         ])
+
+    def test_alter_column_type(self):
+        # Convert varchar to text.
+        field = TextField()
+        migrate(self.migrator.alter_column_type('tag', 'tag', field))
+        _, tag = self.database.get_columns('tag')
+        # name, type, null?, primary-key?, table, default.
+        data_type = 'TEXT' if IS_SQLITE else 'text'
+        self.assertEqual(tag, ('tag', data_type, False, False, 'tag', None))
+
+        # Convert date to datetime.
+        field = DateTimeField()
+        migrate(self.migrator.alter_column_type('person', 'dob', field))
+        _, _, _, dob = self.database.get_columns('person')
+        if IS_POSTGRESQL:
+            self.assertTrue(dob.data_type.startswith('timestamp'))
+        else:
+            self.assertEqual(dob.data_type.lower(), 'datetime')
+
+        # Convert text to integer.
+        field = IntegerField()
+        cast = '(tag::integer)' if IS_POSTGRESQL else None
+        migrate(self.migrator.alter_column_type('tag', 'tag', field, cast))
+        _, tag = self.database.get_columns('tag')
+        if IS_SQLITE:
+            data_type = 'INTEGER'
+        elif IS_MYSQL:
+            data_type = 'int'
+        else:
+            data_type = 'integer'
+        self.assertEqual(tag, ('tag', data_type, False, False, 'tag', None))
 
     @requires_sqlite
     def test_valid_column_required(self):

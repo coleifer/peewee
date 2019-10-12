@@ -2954,6 +2954,15 @@ Making a field nullable or not nullable:
         migrator.add_not_null('story', 'modified_date'),
     )
 
+Altering a field's data-type:
+
+.. code-block:: python
+
+    # Change a VARCHAR(50) field to a TEXT field.
+    migrate(
+        migrator.alter_column_type('person', 'email', TextField())
+    )
+
 Renaming a table:
 
 .. code-block:: python
@@ -3063,6 +3072,19 @@ Migrations API
 
         :param str table: Name of table containing column.
         :param str column: Name of the column to make nullable.
+
+    .. py:method:: alter_column_type(table, column, field[, cast=None])
+
+        :param str table: Name of the table.
+        :param str column_name: Name of the column to modify.
+        :param Field field: :py:class:`Field` instance representing new
+            data type.
+        :param cast: (postgres-only) specify a cast expression if the
+            data-types are incompatible, e.g. ``column_name::int``. Can be
+            provided as either a string or a :py:class:`Cast` instance.
+
+        Alter the data-type of a column. This method should be used with care,
+        as using incompatible types may not be well-supported by your database.
 
     .. py:method:: rename_table(old_name, new_name)
 
