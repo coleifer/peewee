@@ -13,6 +13,7 @@ https://github.com/coleifer/peewee/releases
   primary-key values by default. This behavior is being retained by default for
   compatibility. Postgres users can simply specify an empty `returning()` call
   to disable the cursor and retrieve the rowcount instead.
+* Migration extension now supports altering a column's data-type.
 
 [View commits](https://github.com/coleifer/peewee/compare/3.11.2...master)
 
