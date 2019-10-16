@@ -2560,7 +2560,7 @@ Query-builder
 
     .. py:method:: on_conflict_replace([replace=True])
 
-        :param bool ignore: Whether to add ON CONFLICT REPLACE clause.
+        :param bool replace: Whether to add ON CONFLICT REPLACE clause.
 
         Specify REPLACE conflict resolution strategy.
 
