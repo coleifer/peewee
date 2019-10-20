@@ -501,6 +501,13 @@ class TestModelSQL(ModelDatabaseTestCase):
         self.assertSQL(query, (
             'INSERT INTO "person" ("name") VALUES (?)'), ['huey'])
 
+        query = (Person
+                 .insert({Person.name: 'foo'})
+                 .returning(Person.ssn.alias('new_ssn')))
+        self.assertSQL(query, (
+            'INSERT INTO "person" ("name") VALUES (?) '
+            'RETURNING "person"."ssn" AS "new_ssn"'), ['foo'])
+
     def test_insert_get_field_values(self):
         class User(TestModel):
             username = TextField(primary_key=True)

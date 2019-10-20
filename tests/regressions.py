@@ -323,7 +323,7 @@ class TestReturningIntegrationRegressions(ModelTestCase):
                 .where(Tweet.user == User.id))
         query = (User
                  .update(username=(User.username + '-x'))
-                 .returning(subq, User.username))
+                 .returning(subq.alias('ct'), User.username))
         result = query.execute()
         self.assertEqual(sorted([(r.ct, r.username) for r in result]), [
             (0, 'zaizee-x'), (2, 'mickey-x'), (3, 'huey-x')])

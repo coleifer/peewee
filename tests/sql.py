@@ -881,6 +881,13 @@ class TestInsertQuery(BaseTestCase):
             'RETURNING "person"."id", "person"."name", "person"."dob"'),
             [datetime.date(2000, 1, 2), 'zaizee'])
 
+        query = query.returning(Person.id, Person.name.alias('new_name'))
+        self.assertSQL(query, (
+            'INSERT INTO "person" ("dob", "name") '
+            'VALUES (?, ?) '
+            'RETURNING "person"."id", "person"."name" AS "new_name"'),
+            [datetime.date(2000, 1, 2), 'zaizee'])
+
     def test_empty(self):
         class Empty(TestModel): pass
         query = Empty.insert()
@@ -977,6 +984,12 @@ class TestUpdateQuery(BaseTestCase):
             'UPDATE "users" SET "is_admin" = ? WHERE ("users"."username" = ?) '
             'RETURNING "users"."id"'), [True, 'charlie'])
 
+        query = query.returning(User.c.is_admin.alias('new_is_admin'))
+        self.assertSQL(query, (
+            'UPDATE "users" SET "is_admin" = ? WHERE ("users"."username" = ?) '
+            'RETURNING "users"."is_admin" AS "new_is_admin"'),
+            [True, 'charlie'])
+
 
 class TestDeleteQuery(BaseTestCase):
     def test_delete_query(self):
@@ -1037,6 +1050,12 @@ class TestDeleteQuery(BaseTestCase):
             'DELETE FROM "users" '
             'WHERE ("users"."id" > ?) '
             'RETURNING "users"."id", "users"."username", 1'), [2])
+
+        query = query.returning(User.c.id.alias('old_id'))
+        self.assertSQL(query, (
+            'DELETE FROM "users" '
+            'WHERE ("users"."id" > ?) '
+            'RETURNING "users"."id" AS "old_id"'), [2])
 
 
 Register = Table('register', ('id', 'value', 'category'))

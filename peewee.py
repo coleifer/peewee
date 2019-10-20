@@ -2358,7 +2358,7 @@ class _WriteQuery(Query):
 
     def apply_returning(self, ctx):
         if self._returning:
-            with ctx.scope_normal():
+            with ctx.scope_source():
                 ctx.literal(' RETURNING ').sql(CommaNodeList(self._returning))
         return ctx
 

@@ -2286,6 +2286,12 @@ class TestReturningIntegration(ModelTestCase):
         self.assertEqual(row.id, 5)
         self.assertEqual(row.username, 'mickey')
 
+        # Can specify aliases.
+        query = (User
+                 .insert(username='sipp')
+                 .returning(User.username.alias('new_username')))
+        self.assertEqual([x.new_username for x in query.execute()], ['sipp'])
+
     def test_simple_returning_insert_update_delete(self):
         res = User.insert(username='charlie').returning(User).execute()
         self.assertEqual([u.username for u in res], ['charlie'])
