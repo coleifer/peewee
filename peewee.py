@@ -6214,18 +6214,22 @@ class Model(with_metaclass(ModelBase, Node)):
         if cls._meta.auto_increment:
             pk_name = cls._meta.primary_key.name
             field_names.remove(pk_name)
-            ids_returned = cls._meta.database.returning_clause
+
+        if cls._meta.database.returning_clause and \
+           cls._meta.primary_key is not False:
+            pk_fields = cls._meta.get_primary_keys()
         else:
-            ids_returned = False
+            pk_fields = None
 
         fields = [cls._meta.fields[field_name] for field_name in field_names]
         for batch in batches:
             accum = ([getattr(model, f) for f in field_names]
                      for model in batch)
             res = cls.insert_many(accum, fields=fields).execute()
-            if ids_returned and res is not None:
-                for (obj_id,), model in zip(res, batch):
-                    setattr(model, pk_name, obj_id)
+            if pk_fields and res is not None:
+                for row, model in zip(res, batch):
+                    for (pk_field, obj_id) in zip(pk_fields, row):
+                        setattr(model, pk_field.name, obj_id)
 
     @classmethod
     def bulk_update(cls, model_list, fields, batch_size=None):

@@ -216,6 +216,18 @@ class TestModelAPIs(ModelTestCase):
                 Person.bulk_create(people)
         self.assertEqual(Person.select().count(), 0)
 
+    @requires_models(CPK)
+    def test_bulk_create_composite_key(self):
+        self.assertEqual(CPK.select().count(), 0)
+        items = [CPK(key='k1', value=1, extra=1),
+                 CPK(key='k2', value=2, extra=2)]
+        CPK.bulk_create(items)
+        self.assertEqual([(c.key, c.value, c.extra) for c in items],
+                         [('k1', 1, 1), ('k2', 2, 2)])
+
+        query = CPK.select().order_by(CPK.key).tuples()
+        self.assertEqual(list(query), [('k1', 1, 1), ('k2', 2, 2)])
+
     @requires_models(Person)
     def test_bulk_update(self):
         data = [('f%s' % i, 'l%s' % i, datetime.date(1980, i, i))
