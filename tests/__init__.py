@@ -4,7 +4,7 @@ import unittest
 from peewee import OperationalError
 
 # Core modules.
-from .database import *
+from .db_tests import *
 from .expressions import *
 from .fields import *
 from .keys import *

@@ -3725,7 +3725,8 @@ class PostgresqlDatabase(Database):
         query = ('SELECT viewname, definition FROM pg_catalog.pg_views '
                  'WHERE schemaname = %s ORDER BY viewname')
         cursor = self.execute_sql(query, (schema or 'public',))
-        return [ViewMetadata(v, sql.strip()) for (v, sql) in cursor.fetchall()]
+        return [ViewMetadata(view_name, sql.strip(' \t;'))
+                for (view_name, sql) in cursor.fetchall()]
 
     def get_indexes(self, table, schema=None):
         query = """
@@ -3743,8 +3744,9 @@ class PostgresqlDatabase(Database):
             GROUP BY i.relname, idxs.indexdef, idx.indisunique
             ORDER BY idx.indisunique DESC, i.relname;"""
         cursor = self.execute_sql(query, (table, 'r', schema or 'public'))
-        return [IndexMetadata(row[0], row[1], row[3].split(','), row[2], table)
-                for row in cursor.fetchall()]
+        return [IndexMetadata(name, sql.rstrip(' ;'), columns.split(','),
+                              is_unique, table)
+                for name, sql, is_unique, columns in cursor.fetchall()]
 
     def get_columns(self, table, schema=None):
         query = """

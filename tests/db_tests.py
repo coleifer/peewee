@@ -512,7 +512,7 @@ class TestIntrospection(ModelTestCase):
     @requires_models(Note)
     def test_get_views(self):
         def normalize_view_meta(view_meta):
-            sql_ws_norm = re.sub('\n\s+', ' ', view_meta.sql)
+            sql_ws_norm = re.sub('\n\s+', ' ', view_meta.sql.strip('; '))
             return view_meta.name, (sql_ws_norm
                                     .replace('`peewee_test`.', '')
                                     .replace('`notes`.', '')

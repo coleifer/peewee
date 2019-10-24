@@ -674,15 +674,22 @@ class TestCreateAs(ModelTestCase):
     requires = [NoteX]
     test_data = (
         # name, timestamp, status, flags.
-        ('n1', datetime.datetime(2019, 1, 1), 1, 1),
-        ('n2', datetime.datetime(2019, 1, 2), 2, 1),
-        ('n3', datetime.datetime(2019, 1, 3), 9, 1),
-        ('nx', datetime.datetime(2019, 1, 1), 9, 0))
+        (1, 'n1', datetime.datetime(2019, 1, 1), 1, 1),
+        (2, 'n2', datetime.datetime(2019, 1, 2), 2, 1),
+        (3, 'n3', datetime.datetime(2019, 1, 3), 9, 1),
+        (4, 'nx', datetime.datetime(2019, 1, 1), 9, 0))
 
     def setUp(self):
         super(TestCreateAs, self).setUp()
-        fields = (NoteX.content, NoteX.timestamp, NoteX.status, NoteX.flags)
+        fields = NoteX._meta.sorted_fields
         NoteX.insert_many(self.test_data, fields=fields).execute()
+
+    def tearDown(self):
+        class Note2(TestModel):
+            class Meta:
+                database = self.database
+        self.database.drop_tables([Note2])
+        super(TestCreateAs, self).tearDown()
 
     def test_create_as(self):
         status = Case(NoteX.status, (
@@ -694,7 +701,7 @@ class TestCreateAs(ModelTestCase):
                  .select(NoteX.id, NoteX.content, NoteX.timestamp,
                          status.alias('status'))
                  .where(NoteX.flags == SQL('1')))
-        query.create_table('note2', temporary=True)
+        query.create_table('note2')
 
         class Note2(TestModel):
             id = IntegerField()

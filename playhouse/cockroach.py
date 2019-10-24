@@ -1,6 +1,9 @@
 import re
 
 from peewee import *
+from peewee import ColumnMetadata  # (name, data_type, null, primary_key, table, default)
+from peewee import ForeignKeyMetadata  # (column, dest_table, dest_column, table).
+from peewee import IndexMetadata
 
 
 class CockroachDatabase(PostgresqlDatabase):
@@ -11,6 +14,11 @@ class CockroachDatabase(PostgresqlDatabase):
 
     for_update = False
     nulls_ordering = False
+
+    def __init__(self, *args, **kwargs):
+        kwargs.setdefault('user', 'root')
+        kwargs.setdefault('port', 26257)
+        super(CockroachDatabase, self).__init__(*args, **kwargs)
 
     def _set_server_version(self, conn):
         curs = conn.cursor()
@@ -23,6 +31,23 @@ class CockroachDatabase(PostgresqlDatabase):
         else:
             # Fallback to use whatever cockroach tells us via protocol.
             super(CockroachDatabase, self)._set_server_version(conn)
+
+    def _get_pk_constraint(self, table, schema=None):
+        query = ('SELECT constraint_name '
+                 'FROM information_schema.table_constraints '
+                 'WHERE table_name = %s AND table_schema = %s '
+                 'AND constraint_type = %s')
+        cursor = self.execute_sql(query, (table, schema or 'public',
+                                          'PRIMARY KEY'))
+        row = cursor.fetchone()
+        return row and row[0] or None
+
+    def get_indexes(self, table, schema=None):
+        # The primary-key index is returned by default, so we will just strip
+        # it out here.
+        indexes = super(CockroachDatabase, self).get_indexes(table, schema)
+        pkc = self._get_pk_constraint(table, schema)
+        return [idx for idx in indexes if (not pkc) or (idx.name != pkc)]
 
     def conflict_statement(self, on_conflict, query):
         if not on_conflict._action: return
