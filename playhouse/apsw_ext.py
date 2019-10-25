@@ -100,17 +100,19 @@ class APSWDatabase(SqliteExtDatabase):
         self.cursor().execute('begin %s;' % lock_type)
 
     def commit(self):
-        curs = self.cursor()
-        if curs.getconnection().getautocommit():
-            return False
-        curs.execute('commit;')
+        with __exception_wrapper__:
+            curs = self.cursor()
+            if curs.getconnection().getautocommit():
+                return False
+            curs.execute('commit;')
         return True
 
     def rollback(self):
-        curs = self.cursor()
-        if curs.getconnection().getautocommit():
-            return False
-        curs.execute('rollback;')
+        with __exception_wrapper__:
+            curs = self.cursor()
+            if curs.getconnection().getautocommit():
+                return False
+            curs.execute('rollback;')
         return True
 
     def execute_sql(self, sql, params=None, commit=True):

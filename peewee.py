@@ -3200,10 +3200,12 @@ class Database(_callable_context_manager):
             self.connect()
 
     def commit(self):
-        return self._state.conn.commit()
+        with __exception_wrapper__:
+            return self._state.conn.commit()
 
     def rollback(self):
-        return self._state.conn.rollback()
+        with __exception_wrapper__:
+            return self._state.conn.rollback()
 
     def batch_commit(self, it, n):
         for group in chunked(it, n):
@@ -3777,7 +3779,7 @@ class PostgresqlDatabase(Database):
 
     def get_foreign_keys(self, table, schema=None):
         sql = """
-            SELECT
+            SELECT DISTINCT
                 kcu.column_name, ccu.table_name, ccu.column_name
             FROM information_schema.table_constraints AS tc
             JOIN information_schema.key_column_usage AS kcu

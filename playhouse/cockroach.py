@@ -7,7 +7,7 @@ from peewee import IndexMetadata
 
 
 class CockroachDatabase(PostgresqlDatabase):
-    field_types = PostgresqlDatabase.field_types
+    field_types = PostgresqlDatabase.field_types.copy()
     field_types.update({
         'BLOB': 'BYTES',
     })
@@ -76,3 +76,8 @@ class CockroachDatabase(PostgresqlDatabase):
 
     def extract_date(self, date_part, date_field):
         return fn.extract(date_part, date_field)
+
+    def from_timestamp(self, date_field):
+        # CRDB does not allow casting a decimal/float to timestamp, so we first
+        # cast to int, then to timestamptz.
+        return date_field.cast('int').cast('timestamptz')

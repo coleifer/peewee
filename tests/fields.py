@@ -11,6 +11,7 @@ from peewee import NodeList
 from peewee import *
 
 from .base import BaseTestCase
+from .base import IS_CRDB
 from .base import IS_MYSQL
 from .base import IS_POSTGRESQL
 from .base import IS_SQLITE
@@ -242,10 +243,10 @@ class TestDateFields(ModelTestCase):
                  .tuples())
 
         row, = query
-        if IS_SQLITE or IS_MYSQL:
+        if IS_SQLITE or IS_MYSQL or IS_CRDB:
             self.assertEqual(row,
                              (2011, 1, 2, 11, 12, 13, 2012, 2, 3, 3, 13, 37))
-        elif IS_POSTGRESQL:
+        else:
             self.assertEqual(row, (
                 2011., 1., 2., 11., 12., 13.054321, 2012., 2., 3., 3., 13.,
                 37.))
@@ -265,7 +266,7 @@ class TestDateFields(ModelTestCase):
         data = list(query[0])
 
         # Postgres includes timezone info, so strip that for comparison.
-        if IS_POSTGRESQL:
+        if IS_POSTGRESQL or IS_CRDB:
             data = [dt.replace(tzinfo=None) for dt in data]
 
         self.assertEqual(data, [
@@ -417,6 +418,7 @@ class M2(TestModel):
 
 
 @skip_if(IS_MYSQL)
+@skip_if(IS_CRDB, 'crdb does not support deferred foreign-key constraints')
 class TestDeferredForeignKey(ModelTestCase):
     requires = [M1, M2]
 
@@ -746,6 +748,7 @@ class Bare(TestModel):
 class TestFieldValueHandling(ModelTestCase):
     requires = [Item]
 
+    @skip_if(IS_CRDB, 'crdb requires cast to multiply int and float')
     def test_int_float_multi(self):
         i = Item.create(price=10, multiplier=0.75)
 
@@ -1087,7 +1090,7 @@ class TestTimestampField(ModelTestCase):
         if IS_SQLITE:
             expected = dt_utc.strftime('%Y-%m-%d %H:%M:%S')
             self.assertEqual(dt_s, expected)
-        elif IS_POSTGRESQL:
+        elif IS_POSTGRESQL or IS_CRDB:
             # Postgres returns an aware UTC datetime. Strip this to compare
             # against our naive UTC datetime.
             self.assertEqual(dt_s.replace(tzinfo=None), dt_utc)

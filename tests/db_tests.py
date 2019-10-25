@@ -14,6 +14,7 @@ from peewee import sort_models
 
 from .base import BaseTestCase
 from .base import DatabaseTestCase
+from .base import IS_CRDB
 from .base import IS_MYSQL
 from .base import IS_POSTGRESQL
 from .base import IS_SQLITE
@@ -563,10 +564,18 @@ class TestIntrospection(ModelTestCase):
             assertViews([
                 ('notes_deleted',
                  ('SELECT notes.content FROM notes '
-                  'WHERE (notes.status = 9) ORDER BY notes.id DESC;')),
+                  'WHERE (notes.status = 9) ORDER BY notes.id DESC')),
                 ('notes_public',
                  ('SELECT notes.content, notes.ts FROM notes '
-                  'WHERE (notes.status = 1) ORDER BY notes.ts DESC;'))])
+                  'WHERE (notes.status = 1) ORDER BY notes.ts DESC'))])
+        elif IS_CRDB:
+            assertViews([
+                ('notes_deleted',
+                 ('SELECT content FROM peewee_test.public.notes '
+                  'WHERE status = 9 ORDER BY id DESC')),
+                ('notes_public',
+                 ('SELECT content, ts FROM peewee_test.public.notes '
+                  'WHERE status = 1 ORDER BY ts DESC'))])
 
     @requires_models(User, Tweet, Category)
     def test_get_foreign_keys(self):
