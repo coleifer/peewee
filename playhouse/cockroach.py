@@ -4,6 +4,7 @@ from peewee import *
 from peewee import ColumnMetadata  # (name, data_type, null, primary_key, table, default)
 from peewee import ForeignKeyMetadata  # (column, dest_table, dest_column, table).
 from peewee import IndexMetadata
+from playhouse.pool import _PooledPostgresqlDatabase
 
 
 class CockroachDatabase(PostgresqlDatabase):
@@ -81,3 +82,7 @@ class CockroachDatabase(PostgresqlDatabase):
         # CRDB does not allow casting a decimal/float to timestamp, so we first
         # cast to int, then to timestamptz.
         return date_field.cast('int').cast('timestamptz')
+
+
+class PooledCockroachDatabase(_PooledPostgresqlDatabase, CockroachDatabase):
+    pass
