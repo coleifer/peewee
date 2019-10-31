@@ -308,6 +308,8 @@ class BinaryJSONField(IndexedFieldMixin, JSONField):
     def contains(self, other):
         if isinstance(other, (list, dict)):
             return Expression(self, JSONB_CONTAINS, Json(other))
+        if isinstance(other, (BinaryJSONField, JSONField)):
+            return Expression(self, JSONB_CONTAINS, other)
         return Expression(cast_jsonb(self), JSONB_EXISTS, other)
 
     def contained_by(self, other):
