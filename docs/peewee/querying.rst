@@ -742,7 +742,7 @@ Iterating over large result-sets
 By default peewee will cache the rows returned when iterating over a
 :py:class:`Select` query. This is an optimization to allow multiple iterations
 as well as indexing and slicing without causing additional queries. This
-caching can problematic, however, when you plan to iterate over a large
+caching can be problematic, however, when you plan to iterate over a large
 number of rows.
 
 To reduce the amount of memory used by peewee when iterating over a query, use
