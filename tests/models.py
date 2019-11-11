@@ -124,8 +124,9 @@ class TestModelAPIs(ModelTestCase):
             self.assertEqual(pn.post.content, 'p2')
 
         if not IS_SQLITE:
+            exc_class = ProgrammingError if IS_CRDB else IntegrityError
             with self.database.atomic() as txn:
-                self.assertRaises(IntegrityError, PostNote.create, note='pxn')
+                self.assertRaises(exc_class, PostNote.create, note='pxn')
                 txn.rollback()
 
     @requires_models(User, Tweet)
@@ -356,7 +357,7 @@ class TestModelAPIs(ModelTestCase):
         self.assertEqual(t2.timestamp, datetime.datetime(2019, 1, 3, 0, 0, 0))
         self.assertEqual(t3.timestamp, t3_dt)
 
-    @skip_if(IS_SQLITE_OLD or IS_MYSQL)
+    @skip_if(IS_SQLITE_OLD or IS_MYSQL or IS_CRDB)
     @requires_models(CPK)
     def test_bulk_update_cte(self):
         CPK.insert_many([('k1', 1, 1), ('k2', 2, 2), ('k3', 3, 3)]).execute()
@@ -388,7 +389,7 @@ class TestModelAPIs(ModelTestCase):
         User.create(username='u0')  # Ensure that last insert ID != rowcount.
 
         iq = User.insert_many([(u,) for u in ('u1', 'u2', 'u3')])
-        if IS_POSTGRESQL:
+        if IS_POSTGRESQL or IS_CRDB:
             iq = iq.returning()
         self.assertEqual(iq.execute(), 3)
 
@@ -400,7 +401,7 @@ class TestModelAPIs(ModelTestCase):
                  .select(User.username.concat('-x'))
                  .where(User.username.in_(['u1', 'u2'])))
         iq = User.insert_from(query, ['username'])
-        if IS_POSTGRESQL:
+        if IS_POSTGRESQL or IS_CRDB:
             iq = iq.returning()
         self.assertEqual(iq.execute(), 2)
 
@@ -410,7 +411,7 @@ class TestModelAPIs(ModelTestCase):
         iq = User.insert_from(query, ['username']).returning()
         self.assertEqual(iq.execute(), 2)
 
-    @skip_if(IS_POSTGRESQL, 'requires sqlite or mysql')
+    @skip_if(IS_POSTGRESQL or IS_CRDB, 'requires sqlite or mysql')
     @requires_models(Emp)
     def test_replace_rowcount(self):
         Emp.create(first='beanie', last='cat', empno='998')
@@ -1008,7 +1009,8 @@ class TestModelAPIs(ModelTestCase):
         names = []
         for name, count in sorted(name2count.items()):
             names += [name] * count
-        User.insert_many([(n,) for n in names], [User.username]).execute()
+        User.insert_many([(i, n) for i, n in enumerate(names, 1)],
+                         [User.id, User.username]).execute()
 
         # The results we are trying to obtain.
         expected = [
@@ -1081,7 +1083,7 @@ class TestModelAPIs(ModelTestCase):
                      .order_by(vl.c.username.desc()))
             self.assertEqual([u.username for u in query], ['zaizee', 'huey'])
 
-    @skip_if(IS_SQLITE_OLD or IS_MYSQL)
+    @skip_if(IS_SQLITE_OLD or IS_MYSQL or IS_CRDB)
     @requires_models(User)
     def test_multi_update(self):
         data = [(i, 'u%s' % i) for i in range(1, 4)]
@@ -1147,8 +1149,8 @@ class TestModelAPIs(ModelTestCase):
 
     @requires_models(User, Tweet)
     def test_union_column_resolution(self):
-        u1 = User.create(username='u1')
-        u2 = User.create(username='u2')
+        u1 = User.create(id=1, username='u1')
+        u2 = User.create(id=2, username='u2')
         q1 = User.select().where(User.id == 1)
         q2 = User.select()
         union = q1 | q2
@@ -1163,9 +1165,9 @@ class TestModelAPIs(ModelTestCase):
             (1, 'u1'),
             (2, 'u2')])
 
-        t1_1 = Tweet.create(user=u1, content='u1-t1')
-        t1_2 = Tweet.create(user=u1, content='u1-t2')
-        t2_1 = Tweet.create(user=u2, content='u2-t1')
+        t1_1 = Tweet.create(id=1, user=u1, content='u1-t1')
+        t1_2 = Tweet.create(id=2, user=u1, content='u1-t2')
+        t2_1 = Tweet.create(id=3, user=u2, content='u2-t1')
 
         with self.assertQueryCount(1):
             q1 = Tweet.select(Tweet, User).join(User).where(User.id == 1)
@@ -2547,7 +2549,8 @@ class TestCTEIntegration(ModelTestCase):
         c12 = CC(name='c12', parent=p1)
         c31 = CC(name='c31', parent=p3)
 
-    @skip_if(IS_SQLITE_OLD or (IS_MYSQL and not IS_MYSQL_ADVANCED_FEATURES))
+    @skip_if(IS_SQLITE_OLD or (IS_MYSQL and not IS_MYSQL_ADVANCED_FEATURES)
+             or IS_CRDB)
     @requires_models(Member)
     def test_docs_example(self):
         f = Member.create(name='founder')
@@ -2639,7 +2642,7 @@ class TestCTEIntegration(ModelTestCase):
             ('p3', 'root'),
         ])
 
-    @skip_if(IS_SQLITE_OLD or IS_MYSQL, 'requires recursive cte support')
+    @skip_if(IS_SQLITE_OLD or IS_MYSQL or IS_CRDB, 'requires recursive cte')
     def test_recursive_cte(self):
         def get_parents(cname):
             C1 = Category.alias()
@@ -2700,7 +2703,7 @@ class TestCTEIntegration(ModelTestCase):
         data = [(r.name, r.level, r.path) for r in query]
         self.assertEqual(data, [('root', 1, 'root')])
 
-    @skip_if(IS_SQLITE_OLD or IS_MYSQL, 'requires recursive cte support')
+    @skip_if(IS_SQLITE_OLD or IS_MYSQL or IS_CRDB, 'requires recursive cte')
     def test_recursive_cte2(self):
         hierarchy = (Category
                      .select(Category.name, Value(0).alias('level'))
@@ -2725,7 +2728,7 @@ class TestCTEIntegration(ModelTestCase):
             ('p3', 1),
             ('root', 0)])
 
-    @skip_if(IS_SQLITE_OLD or IS_MYSQL, 'requires recursive cte support')
+    @skip_if(IS_SQLITE_OLD or IS_MYSQL or IS_CRDB, 'requires recursive cte')
     def test_recursive_cte_docs_example(self):
         # Define the base case of our recursive CTE. This will be categories that
         # have a null parent foreign-key.
