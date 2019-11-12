@@ -2414,7 +2414,7 @@ class ModelIndex(Index):
 
         clean_field_names = re.sub('[^\w]+', '', '_'.join(accum))
         meta = model._meta
-        prefix = meta.name if meta.legacy_table_names else meta.table_name
+        prefix = getattr(meta, "table_name", None) or getattr(meta, "db_table", None) or meta.name
         index_name = '_'.join((prefix, clean_field_names))
         if len(index_name) > 64:
             index_hash = hashlib.md5(index_name.encode('utf-8')).hexdigest()
@@ -3955,8 +3955,8 @@ class Field(ColumnBase):
             accum.append(SQL('PRIMARY KEY'))
         if self.sequence:
             accum.append(SQL("DEFAULT NEXTVAL('%s')" % self.sequence))
-        elif default:
-            accum.append(SQL('DEFAULT %s' % default))
+        # elif default:  #  commented becuase it cant be used for altering column
+        #     accum.append(SQL('DEFAULT %s' % default))
         if self.constraints:
             accum.extend(self.constraints)
         if self.collation:
@@ -6689,7 +6689,6 @@ class ForUpdateLockExpression(Node):
         if self.of:
 
             tables = [self.of] if not isinstance(self.of, (list, tuple, set)) else self.of
-            with ctx.scope_values(parentheses=False):
-                ctx.literal(" OF ").sql(CommaNodeList(tables))
+            ctx.literal(" OF ").sql(CommaNodeList(tables))
 
         return ctx
