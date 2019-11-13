@@ -815,3 +815,18 @@ class TestDatabaseConnection(DatabaseTestCase):
         curs = self.database.execute_sql('select * from foo')
         self.assertEqual(list(curs), [])
         self.database.execute_sql('drop table foo')
+
+
+class TestExceptionWrapper(ModelTestCase):
+    database = get_in_memory_db()
+    requires = [User]
+
+    def test_exception_wrapper(self):
+        exc = None
+        try:
+            User.create(username=None)
+        except IntegrityError as e:
+            exc = e
+
+        if exc is None: raise Exception('expected integrity error not raised')
+        self.assertTrue(exc.orig.__module__ != 'peewee')

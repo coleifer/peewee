@@ -2797,7 +2797,10 @@ def _truncate_constraint_name(constraint, maxlen=64):
 # DB-API 2.0 EXCEPTIONS.
 
 
-class PeeweeException(Exception): pass
+class PeeweeException(Exception):
+    def __init__(self, orig, *args):
+        self.orig = orig  # Preserve original exception.
+        super(PeeweeException, self).__init__(*args)
 class ImproperlyConfigured(PeeweeException): pass
 class DatabaseError(PeeweeException): pass
 class DataError(DatabaseError): pass
@@ -2824,7 +2827,7 @@ class ExceptionWrapper(object):
         if exc_type.__name__ in self.exceptions:
             new_type = self.exceptions[exc_type.__name__]
             exc_args = exc_value.args
-            reraise(new_type, new_type(*exc_args), traceback)
+            reraise(new_type, new_type(exc_value, *exc_args), traceback)
 
 
 EXCEPTIONS = {
