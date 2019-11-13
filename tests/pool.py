@@ -6,10 +6,12 @@ import time
 from peewee import *
 from peewee import _savepoint
 from peewee import _transaction
+from playhouse.cockroach import PooledCockroachDatabase
 from playhouse.pool import *
 
 from .base import BACKEND
 from .base import BaseTestCase
+from .base import IS_CRDB
 from .base import IS_MYSQL
 from .base import IS_POSTGRESQL
 from .base import IS_SQLITE
@@ -371,6 +373,8 @@ class TestPooledDatabaseIntegration(ModelTestCase):
             db_class = PooledMySQLDatabase
         elif IS_POSTGRESQL:
             db_class = PooledPostgresqlDatabase
+        elif IS_CRDB:
+            db_class = PooledCockroachDatabase
         else:
             db_class = PooledSqliteDatabase
             params['check_same_thread'] = False

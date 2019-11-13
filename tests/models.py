@@ -15,6 +15,7 @@ from .base import mock
 from .base import new_connection
 from .base import requires_models
 from .base import requires_mysql
+from .base import requires_pglike
 from .base import requires_postgresql
 from .base import requires_sqlite
 from .base import skip_if
@@ -1069,7 +1070,7 @@ class TestModelAPIs(ModelTestCase):
                 ('mickey', 2),
                 ('zaizee', 0)])
 
-    @requires_postgresql
+    @requires_pglike
     @requires_models(User)
     def test_join_on_valueslist(self):
         for username in ('huey', 'mickey', 'zaizee'):
@@ -1787,12 +1788,13 @@ class TestJoinModelAlias(ModelTestCase):
     def setUp(self):
         super(TestJoinModelAlias, self).setUp()
         users = {}
-        for username, tweet in self.data:
+        for pk, (username, tweet) in enumerate(self.data, 1):
             if username not in users:
-                users[username] = user = User.create(username=username)
+                user = User.create(id=len(users) + 1, username=username)
+                users[username] = user
             else:
                 user = users[username]
-            Tweet.create(user=user, content=tweet)
+            Tweet.create(id=pk, user=user, content=tweet)
 
     def _test_query(self, alias_expr):
         UA = alias_expr()
@@ -1948,8 +1950,9 @@ class TestJoinModelAlias(ModelTestCase):
                 self.assertEqual(data, [('meow', 'huey'), ('purr', 'huey')])
 
 
-@skip_unless(IS_POSTGRESQL or IS_MYSQL_ADVANCED_FEATURES or IS_SQLITE_25,
-             'window function')
+@skip_unless(
+    IS_POSTGRESQL or IS_MYSQL_ADVANCED_FEATURES or IS_SQLITE_25 or IS_CRDB,
+    'window function')
 class TestWindowFunctionIntegration(ModelTestCase):
     requires = [Sample]
 
@@ -3043,6 +3046,7 @@ class TestFieldInheritance(BaseTestCase):
         self.assertTrue(Category.itemb_set.model is Category)
 
     @skip_if(IS_SQLITE, 'sqlite is not supported')
+    @skip_if(IS_CRDB, 'crdb is not raising the error in this test(?)')
     def test_deferred_fk_creation(self):
         class B(TestModel):
             a = DeferredForeignKey('A', null=True)
@@ -3416,7 +3420,8 @@ class OnConflictTests(object):
 
 
 def requires_upsert(m):
-    return skip_unless(IS_SQLITE_24 or IS_POSTGRESQL, 'requires upsert')(m)
+    return skip_unless(IS_SQLITE_24 or IS_POSTGRESQL or IS_CRDB,
+                       'requires upsert')(m)
 
 
 class KV(TestModel):
@@ -3553,6 +3558,7 @@ class PGOnConflictTests(OnConflictTests):
         self.assertEqual(KV.select(KV.key, KV.value).tuples()[:], [('k1', 11)])
 
     @requires_upsert
+    @skip_if(IS_CRDB, 'crdb does not support the WHERE clause')
     @requires_models(UKVP)
     def test_conflict_target_constraint_where(self):
         u1 = UKVP.create(key='k1', value=1, extra=1)
@@ -3811,8 +3817,9 @@ class UKVRel(TestModel):
         )
 
 
-@requires_postgresql
+@requires_pglike
 class TestUpsertPostgresql(PGOnConflictTests, ModelTestCase):
+    @requires_postgresql
     @requires_models(UKV)
     def test_conflict_target_constraint(self):
         u1 = UKV.create(key='k1', value='v1')
@@ -4031,8 +4038,8 @@ class TestCompoundSelectModels(ModelTestCase):
         self.ts = lambda i: datetime.datetime(2018, 1, i)
 
         with self.database.atomic():
-            for content in ('note-a', 'note-b', 'note-c'):
-                CNote.create(content=content, timestamp=make_ts())
+            for i, content in enumerate(('note-a', 'note-b', 'note-c'), 1):
+                CNote.create(id=i, content=content, timestamp=make_ts())
 
             file_data = (
                 ('peewee.txt', 'peewee orm'),
@@ -4086,7 +4093,7 @@ class SequenceModel(TestModel):
     key = TextField()
 
 
-@requires_postgresql
+@requires_pglike
 class TestSequence(ModelTestCase):
     requires = [SequenceModel]
 

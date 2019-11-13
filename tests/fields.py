@@ -21,7 +21,7 @@ from .base import db
 from .base import get_in_memory_db
 from .base import requires_models
 from .base import requires_mysql
-from .base import requires_postgresql
+from .base import requires_pglike
 from .base import requires_sqlite
 from .base import skip_if
 from .base_models import Tweet
@@ -1211,7 +1211,7 @@ class TestDateTimeMath(ModelTestCase):
             tnames = [task.name for task in query]
             self.assertEqual(list(names), tnames)
 
-    @requires_postgresql
+    @requires_pglike
     def test_date_time_math_pg(self):
         second = SQL("INTERVAL '1 second'")
         next_occurrence = Task.last_run + (Schedule.interval * second)

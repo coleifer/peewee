@@ -2,7 +2,7 @@ from peewee import *
 
 from .base import ModelTestCase
 from .base import TestModel
-from .base import requires_postgresql
+from .base import requires_pglike
 
 
 class T1(TestModel):
@@ -64,7 +64,7 @@ class TestPrimaryKeySaveHandling(ModelTestCase):
         query = T1.select().order_by(T1.value).tuples()
         self.assertEqual(list(query), [(1337, 2), (t11.pk, 100)])
 
-    @requires_postgresql
+    @requires_pglike
     def test_server_default_pk(self):
         # The new value of the primary-key will be returned to us, since
         # postgres supports RETURNING.
@@ -124,7 +124,7 @@ class TestPrimaryKeySaveHandling(ModelTestCase):
         t4_db = T4[1, 2]
         self.assertEqual(t4_db.value, 30)
 
-    @requires_postgresql
+    @requires_pglike
     def test_returning_object(self):
         query = T2.insert(value=10).returning(T2).objects()
         t2_db, = list(query)

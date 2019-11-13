@@ -272,3 +272,6 @@ def requires_mysql(method):
 
 def requires_postgresql(method):
     return skip_unless(IS_POSTGRESQL, 'requires postgresql')(method)
+
+def requires_pglike(method):
+    return skip_unless(IS_POSTGRESQL or IS_CRDB, 'requires pg-like')(method)

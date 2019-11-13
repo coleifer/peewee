@@ -14,6 +14,7 @@ from .base import TestModel
 from .base import db
 from .base import get_in_memory_db
 from .base import requires_models
+from .base import requires_pglike
 from .base import requires_postgresql
 from .base import requires_sqlite
 from .base import skip_if
@@ -84,7 +85,7 @@ class TestSchemaMigration(ModelTestCase):
         finally:
             self.database.close()
 
-    @requires_postgresql
+    @requires_pglike
     def test_add_table_constraint(self):
         price = FloatField(default=0.)
         migrate(self.migrator.add_column('tag', 'price', price),
@@ -122,7 +123,7 @@ class TestSchemaMigration(ModelTestCase):
         with self.database.atomic():
             self.assertRaises(IntegrityError, Tag2.create, tag='t2', alt_id=1)
 
-    @requires_postgresql
+    @requires_pglike
     def test_drop_table_constraint(self):
         price = FloatField(default=0.)
         migrate(
@@ -599,7 +600,7 @@ class TestSchemaMigration(ModelTestCase):
         self.assertEqual(foreign_key.dest_column, 'id')
         self.assertEqual(foreign_key.dest_table, 'users')
 
-    @requires_postgresql
+    @requires_pglike
     @requires_models(Tag)
     def test_add_column_with_index_type(self):
         from playhouse.postgres_ext import BinaryJSONField

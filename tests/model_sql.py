@@ -5,7 +5,7 @@ from peewee import Database
 from peewee import ModelIndex
 
 from .base import get_in_memory_db
-from .base import requires_postgresql
+from .base import requires_pglike
 from .base import BaseTestCase
 from .base import ModelDatabaseTestCase
 from .base import TestModel
@@ -828,7 +828,7 @@ class TestModelSQL(ModelDatabaseTestCase):
             'WHERE ("t1"."data" = ?)'), ['zaizee'])
 
 
-@requires_postgresql
+@requires_pglike
 class TestOnConflictSQL(ModelDatabaseTestCase):
     requires = [Emp, OCTest, UKVP]
 
