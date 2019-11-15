@@ -94,6 +94,8 @@ Consult your database driver's documentation for the available parameters:
 * MySQL: `pymysql <https://github.com/PyMySQL/PyMySQL/blob/f08f01fe8a59e8acfb5f5add4a8fe874bec2a196/pymysql/connections.py#L494-L513>`_
 * SQLite: `sqlite3 <https://docs.python.org/2/library/sqlite3.html#sqlite3.connect>`_
 
+.. _using_postgresql:
+
 Using Postgresql
 ----------------
 
@@ -168,6 +170,71 @@ parameter, using the symbolic constants in ``psycopg2.extensions``:
             def _initialize_connection(self, conn):
                 conn.set_isolation_level(ISOLATION_LEVEL_SERIALIZABLE)
 
+
+.. _using_crdb:
+
+Using CockroachDB
+-----------------
+
+Connecting to CockroachDB (CRDB) is very similar to :ref:`using_postgresql` -
+in fact, by simply specifying the correct host, port and other settings, the
+:py:class:`PostgresqlDatabase` can typically be used. However, in order to make
+the most of the features provided by CRDB, it is recommended to use the
+:py:class:`CockroachDatabase` database class:
+
+.. code-block:: python
+
+    from playhouse.cockroach import CockroachDatabase
+
+    db = CockroachDatabase('my_app', user='root', port=26257, host='localhost')
+
+
+The ``playhouse.cockroach`` module also contains a :py:func:`run_transaction`
+helper for running a transaction with client-side retry logic:
+
+.. code-block:: python
+
+    from playhouse.cockroach import run_transaction
+
+    def transfer_funds(from_id, to_id, amt):
+        """
+        Returns a 3-tuple of (success?, from balance, to balance). If there are
+        not sufficient funds, then the original balances are returned.
+        """
+        def thunk(db_ref):
+            src, dest = (Account
+                         .select()
+                         .where(Account.id.in_([from_id, to_id])))
+            if src.id != from_id:
+                src, dest = dest, src  # Swap order.
+
+            # Cannot perform transfer, insufficient funds!
+            if src.balance < amt:
+                return False, src.balance, dest.balance
+
+            # Update each account, returning the new balance.
+            src, = (Account
+                    .update(balance=Account.balance - amt)
+                    .where(Account.id == from_id)
+                    .returning(Account.balance)
+                    .execute())
+            dest, = (Account
+                     .update(balance=Account.balance + amt)
+                     .where(Account.id == to_id)
+                     .returning(Account.balance)
+                     .execute())
+            return True, src.balance, dest.balance
+
+        # Perform the queries that comprise a logical transaction. In the
+        # event the transaction fails due to contention, it will be auto-
+        # matically retried (up to 10 times).
+        return run_transaction(db, thunk, max_attempts=10)
+
+For more information, see:
+
+* :ref:`CRDB extension documentation <crdb>`
+* :ref:`Arrays <pgarrays>` (postgres-specific, but applies to CRDB)
+* :ref:`JSON <pgjson>` (postgres-specific, but applies to CRDB)
 
 .. _using_sqlite:
 

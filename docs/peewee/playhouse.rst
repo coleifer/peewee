@@ -1587,6 +1587,9 @@ postgres_ext API notes
             results = Blog.select().where(Blog.search_content.match(terms))
 
 
+.. include:: crdb.rst
+
+
 .. _mysql_ext:
 
 MySQL Extensions

@@ -13,7 +13,7 @@ it easy to learn and intuitive to use.
 
 * a small, expressive ORM
 * python 2.7+ and 3.4+ (developed with 3.6)
-* supports sqlite, mysql and postgresql
+* supports sqlite, mysql, postgresql and cockroachdb
 * :ref:`tons of extensions <playhouse>`
 
 .. image:: postgresql.png
@@ -27,6 +27,10 @@ it easy to learn and intuitive to use.
 .. image:: sqlite.png
     :target: peewee/database.html#using-sqlite
     :alt: sqlite
+
+.. image:: crdb.png
+    :target: peewee/database.html#using-crdb
+    :alt: cockroach
 
 Peewee's source code hosted on `GitHub <https://github.com/coleifer/peewee>`_.
 
