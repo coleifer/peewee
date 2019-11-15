@@ -26,6 +26,10 @@ try:
 except ImportError:
     print('Unable to import APSW extension tests, skipping.')
 try:
+    from .cockroach import *
+except ImportError:
+    print('Unable to import Cockroach tests, skipping.')
+try:
     from .cysqlite import *
 except ImportError:
     print('Unable to import sqlite C extension tests, skipping.')

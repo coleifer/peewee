@@ -1,3 +1,4 @@
+import functools
 import re
 
 from peewee import *
@@ -99,9 +100,12 @@ class CockroachDatabase(PostgresqlDatabase):
     def savepoint(self):
         raise NotImplementedError(TXN_ERR_MSG)
 
-    def retry_transaction(self, cb):
-        def deco():
-            return run_transaction(self, cb)
+    def retry_transaction(self, max_attempts=None):
+        def deco(cb):
+            @functools.wraps(cb)
+            def new_fn():
+                return run_transaction(self, cb, max_attempts)
+            return new_fn
         return deco
 
 
