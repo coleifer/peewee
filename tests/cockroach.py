@@ -190,7 +190,23 @@ class TestCockroachDatabase(ModelTestCase):
             kv_db = KV.get(KV.k == 'k1')
             self.assertEqual(kv.id, kv_db.id)
 
+    @requires_models(KV)
+    def test_transaction_priority(self):
+        with self.database.atomic(priority='HIGH'):
+            KV.create(k='k1', v=1)
+        with self.assertRaises(IntegrityError):
+            with self.database.atomic(priority='LOW'):
+                KV.create(k='k1', v=2)
+        with self.assertRaises(ValueError):
+            with self.database.atomic(priority='HUH'):
+                KV.create(k='k2', v=2)
 
+        self.assertEqual(KV.select().count(), 1)
+        kv = KV.get()
+        self.assertEqual((kv.k, kv.v), ('k1', 1))
+
+
+@skip_unless(IS_CRDB)
 class TestCockroachDatabaseJson(BaseBinaryJsonFieldTestCase, ModelTestCase):
     database = db
     M = JsonModel

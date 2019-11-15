@@ -452,12 +452,12 @@ class DatabaseProxy(Proxy):
     """
     def connection_context(self):
         return ConnectionContext(self)
-    def atomic(self):
-        return _atomic(self)
+    def atomic(self, *args):
+        return _atomic(self, *args)
     def manual_commit(self):
         return _manual(self)
-    def transaction(self):
-        return _transaction(self)
+    def transaction(self, *args):
+        return _transaction(self, *args)
     def savepoint(self):
         return _savepoint(self)
 
@@ -3186,14 +3186,14 @@ class Database(_callable_context_manager):
         if self._state.transactions:
             return self._state.transactions[-1]
 
-    def atomic(self):
-        return _atomic(self)
+    def atomic(self, *args):
+        return _atomic(self, *args)
 
     def manual_commit(self):
         return _manual(self)
 
-    def transaction(self):
-        return _transaction(self)
+    def transaction(self, *args):
+        return _transaction(self, *args)
 
     def savepoint(self):
         return _savepoint(self)
@@ -3535,12 +3535,6 @@ class SqliteDatabase(Database):
         if not self.is_closed():
             self.execute_sql('DETACH DATABASE "%s"' % name)
         return True
-
-    def atomic(self, lock_type=None):
-        return _atomic(self, lock_type=lock_type)
-
-    def transaction(self, lock_type=None):
-        return _transaction(self, lock_type=lock_type)
 
     def begin(self, lock_type=None):
         statement = 'BEGIN %s' % lock_type if lock_type else 'BEGIN'
@@ -4069,10 +4063,9 @@ class _manual(_callable_context_manager):
 
 
 class _atomic(_callable_context_manager):
-    def __init__(self, db, lock_type=None):
+    def __init__(self, db, *args):
         self.db = db
-        self._lock_type = lock_type
-        self._transaction_args = (lock_type,) if lock_type is not None else ()
+        self._transaction_args = args
 
     def __enter__(self):
         if self.db.transaction_depth() == 0:
@@ -4089,15 +4082,12 @@ class _atomic(_callable_context_manager):
 
 
 class _transaction(_callable_context_manager):
-    def __init__(self, db, lock_type=None):
+    def __init__(self, db, *args):
         self.db = db
-        self._lock_type = lock_type
+        self._begin_args = args
 
     def _begin(self):
-        if self._lock_type:
-            self.db.begin(self._lock_type)
-        else:
-            self.db.begin()
+        self.db.begin(*self._begin_args)
 
     def commit(self, begin=True):
         self.db.commit()

@@ -124,26 +124,34 @@ class CockroachDatabase(PostgresqlDatabase):
         # cast to int, then to timestamptz.
         return date_field.cast('int').cast('timestamptz')
 
-    def begin(self, system_time=None):
+    def begin(self, system_time=None, priority=None):
         super(CockroachDatabase, self).begin()
         if system_time is not None:
             self.execute_sql('SET TRANSACTION AS OF SYSTEM TIME %s',
                              (system_time,), commit=False)
+        if priority is not None:
+            priority = priority.lower()
+            if priority not in ('low', 'normal', 'high'):
+                raise ValueError('priority must be low, normal or high')
+            self.execute_sql('SET TRANSACTION PRIORITY %s' % priority,
+                             commit=False)
 
-    def atomic(self, system_time=None):
-        return _crdb_atomic(self, system_time)
+    def atomic(self, system_time=None, priority=None):
+        return _crdb_atomic(self, system_time, priority)
 
-    def transaction(self, system_time=None):
-        return _transaction(self, system_time)
+    def transaction(self, system_time=None, priority=None):
+        return _transaction(self, system_time, priority)
 
     def savepoint(self):
         raise NotImplementedError(TXN_ERR_MSG)
 
-    def retry_transaction(self, max_attempts=None, system_time=None):
+    def retry_transaction(self, max_attempts=None, system_time=None,
+                          priority=None):
         def deco(cb):
             @functools.wraps(cb)
             def new_fn():
-                return run_transaction(self, cb, max_attempts, system_time)
+                return run_transaction(self, cb, max_attempts, system_time,
+                                       priority)
             return new_fn
         return deco
 
@@ -156,7 +164,8 @@ class _crdb_atomic(_atomic):
         return super(_crdb_atomic, self).__enter__()
 
 
-def run_transaction(db, callback, max_attempts=None, system_time=None):
+def run_transaction(db, callback, max_attempts=None, system_time=None,
+                    priority=None):
     """
     Run transactional SQL in a transaction with automatic retries.
 
@@ -171,7 +180,7 @@ def run_transaction(db, callback, max_attempts=None, system_time=None):
     this function is called, as CRDB does not support nested transactions.
     """
     max_attempts = max_attempts or -1
-    with db.atomic(system_time=system_time) as txn:
+    with db.atomic(system_time=system_time, priority=priority) as txn:
         db.execute_sql('SAVEPOINT cockroach_restart')
         while max_attempts != 0:
             try:
