@@ -2839,7 +2839,8 @@ EXCEPTIONS = {
     'InternalError': InternalError,
     'NotSupportedError': NotSupportedError,
     'OperationalError': OperationalError,
-    'ProgrammingError': ProgrammingError}
+    'ProgrammingError': ProgrammingError,
+    'TransactionRollbackError': OperationalError}
 
 __exception_wrapper__ = ExceptionWrapper(EXCEPTIONS)
 

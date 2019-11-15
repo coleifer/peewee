@@ -57,6 +57,71 @@ class TestCockroachDatabase(ModelTestCase):
         self.assertEqual(kv_list, id_list)
 
     @requires_models(KV)
+    def test_retry_transfer_example(self):
+        k1 = KV.create(k='k1', v=100)
+        k2 = KV.create(k='k2', v=1)
+
+        def transfer_funds(from_k, to_k, amt):
+            query = KV.select().where(KV.k.in_((from_k, to_k)))
+            ka, kb = list(query)
+            if from_k != ka.k:
+                ka, kb = kb, ka  # Swap order.
+            if ka.v < amt:
+                return False, ka.v, kb.v
+            from_v, = (KV
+                       .update(v=KV.v - amt)
+                       .where(KV.k == from_k)
+                       .returning(KV.v)
+                       .execute())
+            to_v, = (KV
+                     .update(v=KV.v + amt)
+                     .where(KV.k == to_k)
+                     .returning(KV.v)
+                     .execute())
+            return True, from_v.v, to_v.v
+
+        def thunk(db_ref):
+            return transfer_funds('k1', 'k2', 90)
+        self.assertEqual(run_transaction(self.database, thunk), (True, 10, 91))
+
+        def thunk(db_ref):
+            return transfer_funds('k1', 'k2', 5)
+        self.assertEqual(run_transaction(self.database, thunk), (True, 5, 96))
+
+        def thunk(db_ref):
+            return transfer_funds('k1', 'k2', 6)
+        self.assertEqual(run_transaction(self.database, thunk), (False, 5, 96))
+
+    @requires_models(KV)
+    def test_retry_transfer_example2(self):
+        k1 = KV.create(k='k1', v=100)
+        k2 = KV.create(k='k2', v=1)
+
+        def transfer_funds(from_k, to_k, amount):
+            def thunk(db_ref):
+                src, dest = KV.select().where(KV.k.in_([from_k, to_k]))
+                if src.k != from_k:
+                    src, dest = dest, src
+                if src.v < amount:
+                    return False, src.v, dest.v
+                src, = (KV
+                        .update(v=KV.v - amount)
+                        .where(KV.k == from_k)
+                        .returning(KV.v)
+                        .execute())
+                dest, = (KV
+                         .update(v=KV.v + amount)
+                         .where(KV.k == to_k)
+                         .returning(KV.v)
+                         .execute())
+                return True, src.v, dest.v
+            return run_transaction(self.database, thunk, max_attempts=10)
+
+        self.assertEqual(transfer_funds('k1', 'k2', 90), (True, 10, 91))
+        self.assertEqual(transfer_funds('k1', 'k2', 11), (False, 10, 91))
+        self.assertEqual(transfer_funds('k1', 'k2', 10), (True, 0, 101))
+
+    @requires_models(KV)
     def test_retry_transaction_integrityerror(self):
         KV.create(k='kx', v=0)
 
