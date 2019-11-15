@@ -35,6 +35,10 @@ class RID(TestModel):
     id = RowIDField()
     title = TextField()
 
+class UIDNote(TestModel):
+    uid = ForeignKeyField(UID, backref='notes')
+    note = TextField()
+
 
 @skip_unless(IS_CRDB)
 class TestCockroachDatabase(ModelTestCase):
@@ -204,6 +208,31 @@ class TestCockroachDatabase(ModelTestCase):
         self.assertEqual(KV.select().count(), 1)
         kv = KV.get()
         self.assertEqual((kv.k, kv.v), ('k1', 1))
+
+    @requires_models(UID, UIDNote)
+    def test_uuid_key_as_fk(self):
+        # This is covered thoroughly elsewhere, but added here just for fun.
+        u1, u2, u3 = [UID.create(title='u%s' % i) for i in (1, 2, 3)]
+        UIDNote.create(uid=u1, note='u1-1')
+        UIDNote.create(uid=u2, note='u2-1')
+        UIDNote.create(uid=u2, note='u2-2')
+
+        with self.assertQueryCount(1):
+            query = (UIDNote
+                     .select(UIDNote, UID)
+                     .join(UID)
+                     .where(UID.title == 'u2')
+                     .order_by(UIDNote.note))
+            self.assertEqual([(un.note, un.uid.title) for un in query],
+                             [('u2-1', 'u2'), ('u2-2', 'u2')])
+
+        query = (UID
+                 .select(UID, fn.COUNT(UIDNote.id).alias('note_count'))
+                 .join(UIDNote, JOIN.LEFT_OUTER)
+                 .group_by(UID)
+                 .order_by(fn.COUNT(UIDNote.id).desc()))
+        self.assertEqual([(u.title, u.note_count) for u in query],
+                         [('u2', 2), ('u1', 1), ('u3', 0)])
 
 
 @skip_unless(IS_CRDB)
