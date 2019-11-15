@@ -245,12 +245,12 @@ class TestCockroachDatabase(ModelTestCase):
         kv = KV.create(k='k1', v=1)
 
         # Table doesn't exist yet.
-        with self.assertRaises(ProgrammingError):
+        with self.assertRaises((ProgrammingError, InternalError)):
             with self.database.atomic('-10s'):
                 kv_db = KV.get(KV.k == 'k1')
 
         # Cannot write in a read-only transaction
-        with self.assertRaises(ProgrammingError):
+        with self.assertRaises((ProgrammingError, InternalError)):
             with self.database.atomic(datetime.datetime.now()):
                 KV.create(k='k2', v=2)
 

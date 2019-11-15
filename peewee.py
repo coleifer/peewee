@@ -2798,8 +2798,9 @@ def _truncate_constraint_name(constraint, maxlen=64):
 
 
 class PeeweeException(Exception):
-    def __init__(self, orig, *args):
-        self.orig = orig  # Preserve original exception.
+    def __init__(self, *args):
+        if args and isinstance(args[0], Exception):
+            self.orig, args = args[0], args[1:]
         super(PeeweeException, self).__init__(*args)
 class ImproperlyConfigured(PeeweeException): pass
 class DatabaseError(PeeweeException): pass
