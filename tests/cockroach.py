@@ -6,8 +6,10 @@ from playhouse.cockroach import *
 from .base import IS_CRDB
 from .base import ModelTestCase
 from .base import TestModel
+from .base import db
 from .base import requires_models
 from .base import skip_unless
+from .postgres_helpers import BaseBinaryJsonFieldTestCase
 
 
 class KV(TestModel):
@@ -18,6 +20,13 @@ class KV(TestModel):
 class Arr(TestModel):
     title = TextField()
     tags = ArrayField(TextField, index=False)
+
+
+class JsonModel(TestModel):
+    data = JSONField()
+
+class Normal(TestModel):
+    data = TextField()
 
 
 @skip_unless(IS_CRDB)
@@ -71,3 +80,59 @@ class TestCockroachDatabase(ModelTestCase):
         # Ensure we can filter on arrays.
         a2_db = Arr.get(Arr.tags == ['t2', 't3'])
         self.assertEqual(a2_db.id, a2.id)
+
+        # Item lookups.
+        a1_db = Arr.get(Arr.tags[1] == 't2')
+        self.assertEqual(a1_db.id, a1.id)
+        self.assertRaises(Arr.DoesNotExist, Arr.get, Arr.tags[2] == 'x')
+
+    @requires_models(Arr)
+    def test_array_field_search(self):
+        def assertAM(where, id_list):
+            query = Arr.select().where(where).order_by(Arr.title)
+            self.assertEqual([a.id for a in query], id_list)
+
+        data = (
+            ('a1', ['t1', 't2']),
+            ('a2', ['t2', 't3']),
+            ('a3', ['t3', 't4']))
+        id_list = Arr.insert_many(data).execute()
+        a1, a2, a3 = [pk for pk, in id_list]
+
+        assertAM(Value('t2') == fn.ANY(Arr.tags), [a1, a2])
+        assertAM(Value('t1') == fn.Any(Arr.tags), [a1])
+        assertAM(Value('tx') == fn.Any(Arr.tags), [])
+
+        # Use the contains operator explicitly.
+        assertAM(SQL("tags::text[] @> ARRAY['t2']"), [a1, a2])
+
+        # Use the porcelain.
+        assertAM(Arr.tags.contains('t2'), [a1, a2])
+        assertAM(Arr.tags.contains('t3'), [a2, a3])
+        assertAM(Arr.tags.contains('t1', 't2'), [a1])
+        assertAM(Arr.tags.contains('t3', 't4'), [a3])
+        assertAM(Arr.tags.contains('t2', 't3', 't4'), [])
+
+        assertAM(Arr.tags.contains_any('t2'), [a1, a2])
+        assertAM(Arr.tags.contains_any('t3'), [a2, a3])
+        assertAM(Arr.tags.contains_any('t1', 't2'), [a1, a2])
+        assertAM(Arr.tags.contains_any('t3', 't4'), [a2, a3])
+        assertAM(Arr.tags.contains_any('t2', 't3', 't4'), [a1, a2, a3])
+
+    @requires_models(Arr)
+    def test_array_field_index(self):
+        a1 = Arr.create(title='a1', tags=['a1', 'a2'])
+        a2 = Arr.create(title='a2', tags=['a2', 'a3', 'a4', 'a5'])
+
+        # NOTE: CRDB does not support array slicing.
+        query = (Arr
+                 .select(Arr.tags[1].alias('st'))
+                 .order_by(Arr.title))
+        self.assertEqual([a.st for a in query], ['a2', 'a3'])
+
+
+class TestCockroachDatabaseJsonField(BaseBinaryJsonFieldTestCase, ModelTestCase):
+    database = db
+    M = JsonModel
+    N = Normal
+    requires = [JsonModel, Normal]

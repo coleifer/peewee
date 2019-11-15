@@ -12,8 +12,9 @@ try:
     from playhouse.postgres_ext import ArrayField
     from playhouse.postgres_ext import BinaryJSONField
     from playhouse.postgres_ext import IntervalField
+    JSONField = BinaryJSONField
 except ImportError:  # psycopg2 not installed, ignore.
-    ArrayField = BinaryJSONField = IntervalField = None
+    ArrayField = BinaryJSONField = IntervalField = JSONField = None
 
 
 TXN_ERR_MSG = ('CockroachDB does not support nested transactions. You may '
