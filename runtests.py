@@ -42,7 +42,13 @@ def get_option_parser():
             ('host', 'localhost', os.environ.get('PGHOST', '')),
             ('port', '5432', ''),
             ('user', 'postgres', os.environ.get('PGUSER', '')),
-            ('password', 'blank', os.environ.get('PGPASSWORD', '')))))
+            ('password', 'blank', os.environ.get('PGPASSWORD', '')))),
+        ('Cockroach', 'CRDB', (
+            # param  default disp default val
+            ('host', 'localhost', 'localhost'),
+            ('port', '26257', ''),
+            ('user', 'root', 'root'),
+            ('password', 'blank', ''))))
     for name, prefix, param_list in db_param_map:
         group = optparse.OptionGroup(parser, '%s connection options' % name)
         for param, default_disp, default_val in param_list:
@@ -76,7 +82,7 @@ if __name__ == '__main__':
     if options.engine:
         os.environ['PEEWEE_TEST_BACKEND'] = options.engine
 
-    for db in ('mysql', 'psql'):
+    for db in ('mysql', 'psql', 'crdb'):
         for key in ('host', 'port', 'user', 'password'):
             att_name = '_'.join((db, key))
             value = getattr(options, att_name, None)

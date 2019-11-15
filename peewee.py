@@ -4057,7 +4057,7 @@ class _manual(_callable_context_manager):
 
     def __enter__(self):
         top = self.db.top_transaction()
-        if top and not isinstance(self.db.top_transaction(), _manual):
+        if top is not None and not isinstance(top, _manual):
             raise ValueError('Cannot enter manual commit block while a '
                              'transaction is active.')
         self.db.push_transaction(self)

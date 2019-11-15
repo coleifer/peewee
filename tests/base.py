@@ -37,6 +37,8 @@ def db_loader(engine, name='peewee_test', db_class=None, **params):
         name = '%s.db' % name if name != ':memory:' else name
     elif issubclass(db_class, MySQLDatabase):
         params.update(MYSQL_PARAMS)
+    elif issubclass(db_class, CockroachDatabase):
+        params.update(CRDB_PARAMS)
     elif issubclass(db_class, PostgresqlDatabase):
         params.update(PSQL_PARAMS)
     return db_class(name, **params)
@@ -65,6 +67,7 @@ def make_db_params(key):
             params[param] = int(value) if param == 'port' else value
     return params
 
+CRDB_PARAMS = make_db_params('CRDB')
 MYSQL_PARAMS = make_db_params('MYSQL')
 PSQL_PARAMS = make_db_params('PSQL')
 

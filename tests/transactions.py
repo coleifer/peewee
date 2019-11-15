@@ -1,8 +1,10 @@
 from peewee import *
 
 from .base import DatabaseTestCase
+from .base import IS_CRDB
 from .base import ModelTestCase
 from .base import db
+from .base import skip_if
 from .base_models import Register
 
 
@@ -17,7 +19,40 @@ class BaseTransactionTestCase(ModelTestCase):
         Register.insert([{Register.value: val} for val in vals]).execute()
 
 
+def requires_nested(fn):
+    return skip_if(IS_CRDB, 'nested transaction support is required')(fn)
+
+
 class TestTransaction(BaseTransactionTestCase):
+    def test_simple(self):
+        self.assertFalse(db.in_transaction())
+        with db.atomic():
+            self.assertTrue(db.in_transaction())
+            self._save(1)
+
+        self.assertFalse(db.in_transaction())
+        self.assertRegister([1])
+
+        # Explicit rollback, implicit commit.
+        with db.atomic() as txn:
+            self._save(2)
+            txn.rollback()
+            self.assertTrue(db.in_transaction())
+            self._save(3)
+
+        self.assertFalse(db.in_transaction())
+        self.assertRegister([1, 3])
+
+        # Explicit rollbacks.
+        with db.atomic() as txn:
+            self._save(4)
+            txn.rollback()
+            self._save(5)
+            txn.rollback()
+
+        self.assertRegister([1, 3])
+
+    @requires_nested
     def test_transactions(self):
         self.assertFalse(db.in_transaction())
 
@@ -65,6 +100,7 @@ class TestTransaction(BaseTransactionTestCase):
 
         self.assertRegister([1, 4])
 
+    @requires_nested
     def test_commit_rollback_nested(self):
         with db.atomic() as txn:
             self.test_commit_rollback()
@@ -75,7 +111,7 @@ class TestTransaction(BaseTransactionTestCase):
             self.test_commit_rollback()
         self.assertRegister([1, 4])
 
-    def test_nested_transaction_obj(self):
+    def test_nesting_transaction_obj(self):
         self.assertRegister([])
 
         with db.transaction() as txn:
@@ -87,6 +123,18 @@ class TestTransaction(BaseTransactionTestCase):
             self._save(3)
         self.assertRegister([3])
 
+        with db.transaction() as txn:
+            self._save(4)
+            with db.transaction() as txn2:
+                with db.transaction() as txn3:
+                    self._save(5)
+                    txn3.commit()  # Actually commits.
+            self._save(6)
+            txn2.rollback()
+
+        self.assertRegister([3, 4, 5])
+
+    @requires_nested
     def test_savepoint_commit(self):
         with db.atomic() as txn:
             self._save(1)
@@ -176,6 +224,7 @@ class TestTransaction(BaseTransactionTestCase):
         with db.atomic():
             self.assertRaises(OperationalError, db.close)
 
+    @requires_nested
     def test_db_context_manager(self):
         db.close()
         self.assertTrue(db.is_closed())
@@ -208,6 +257,7 @@ class TestTransaction(BaseTransactionTestCase):
         self.assertRegister([1, 2, 4])
 
 
+@requires_nested
 class TestSession(BaseTransactionTestCase):
     def test_session(self):
         self.assertTrue(db.session_start())

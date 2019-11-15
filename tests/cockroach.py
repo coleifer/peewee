@@ -46,3 +46,10 @@ class TestCockroachDatabase(ModelTestCase):
         self.assertEqual(KV.select().count(), 1)
         kv = KV.get(KV.k == 'kx')
         self.assertEqual(kv.v, 0)
+
+    def test_run_transaction_helper(self):
+        def succeeds(db):
+            KV.insert_many([('k%s' % i, i) for i in range(10)]).execute()
+        run_transaction(self.database, succeeds)
+        self.assertEqual([(kv.k, kv.v) for kv in KV.select().order_by(KV.k)],
+                         [('k%s' % i, i) for i in range(10)])
