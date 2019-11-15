@@ -582,7 +582,7 @@ class ReconnectMySQLDatabase(ReconnectMixin, MySQLDatabase):
         # The first (0th) query fails, as do all queries after the 2nd (1st).
         if self._query_counter != 1:
             def _fake_execute(self, _):
-                raise OperationalError('2006')
+                raise OperationalError(None, '2006')
             cursor.execute = _fake_execute
         self._query_counter += 1
         return cursor
