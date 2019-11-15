@@ -8,6 +8,12 @@ from peewee import ColumnMetadata  # (name, data_type, null, primary_key, table,
 from peewee import ForeignKeyMetadata  # (column, dest_table, dest_column, table).
 from peewee import IndexMetadata
 from playhouse.pool import _PooledPostgresqlDatabase
+try:
+    from playhouse.postgres_ext import ArrayField
+    from playhouse.postgres_ext import BinaryJSONField
+    from playhouse.postgres_ext import IntervalField
+except ImportError:  # psycopg2 not installed, ignore.
+    ArrayField = BinaryJSONField = IntervalField = None
 
 
 TXN_ERR_MSG = ('CockroachDB does not support nested transactions. You may '
