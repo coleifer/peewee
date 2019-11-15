@@ -1,4 +1,5 @@
 import datetime
+import uuid
 
 from peewee import *
 from playhouse.cockroach import *
@@ -16,11 +17,9 @@ class KV(TestModel):
     k = TextField(unique=True)
     v = IntegerField()
 
-
 class Arr(TestModel):
     title = TextField()
     tags = ArrayField(TextField, index=False)
-
 
 class JsonModel(TestModel):
     data = JSONField()
@@ -28,11 +27,18 @@ class JsonModel(TestModel):
 class Normal(TestModel):
     data = TextField()
 
+class UID(TestModel):
+    id = UUIDKeyField()
+    title = TextField()
+
+class RID(TestModel):
+    id = RowIDField()
+    title = TextField()
+
 
 @skip_unless(IS_CRDB)
 class TestCockroachDatabase(ModelTestCase):
-    requires = [KV]
-
+    @requires_models(KV)
     def test_retry_transaction_ok(self):
         @self.database.retry_transaction()
         def succeeds(db):
@@ -46,6 +52,7 @@ class TestCockroachDatabase(ModelTestCase):
         kv_list = [kv.id for kv in KV.select().order_by(KV.k)]
         self.assertEqual(kv_list, id_list)
 
+    @requires_models(KV)
     def test_retry_transaction_integrityerror(self):
         KV.create(k='kx', v=0)
 
@@ -61,6 +68,7 @@ class TestCockroachDatabase(ModelTestCase):
         kv = KV.get(KV.k == 'kx')
         self.assertEqual(kv.v, 0)
 
+    @requires_models(KV)
     def test_run_transaction_helper(self):
         def succeeds(db):
             KV.insert_many([('k%s' % i, i) for i in range(10)]).execute()
@@ -130,8 +138,60 @@ class TestCockroachDatabase(ModelTestCase):
                  .order_by(Arr.title))
         self.assertEqual([a.st for a in query], ['a2', 'a3'])
 
+    @requires_models(UID)
+    def test_uuid_key_field(self):
+        # UUID primary-key is automatically populated and returned, and is of
+        # the correct type.
+        u1 = UID.create(title='u1')
+        self.assertTrue(u1.id is not None)
+        self.assertTrue(isinstance(u1.id, uuid.UUID))
 
-class TestCockroachDatabaseJsonField(BaseBinaryJsonFieldTestCase, ModelTestCase):
+        # Bulk-insert works as expected.
+        id_list = UID.insert_many([('u2',), ('u3',)]).execute()
+        u2_id, u3_id = [pk for pk, in id_list]
+        self.assertTrue(isinstance(u2_id, uuid.UUID))
+
+        # We can perform lookups using UUID() type.
+        u2 = UID.get(UID.id == u2_id)
+        self.assertEqual(u2.title, 'u2')
+
+        # Get the UUID hex and query using that.
+        u3 = UID.get(UID.id == u3_id.hex)
+        self.assertEqual(u3.title, 'u3')
+
+    @requires_models(RID)
+    def test_rowid_field(self):
+        r1 = RID.create(title='r1')
+        self.assertTrue(r1.id is not None)
+
+        # Bulk-insert works as expected.
+        id_list = RID.insert_many([('r2',), ('r3',)]).execute()
+        r2_id, r3_id = [pk for pk, in id_list]
+
+        r2 = RID.get(RID.id == r2_id)
+        self.assertEqual(r2.title, 'r2')
+
+    @requires_models(KV)
+    def test_readonly_transaction(self):
+        kv = KV.create(k='k1', v=1)
+
+        # Table doesn't exist yet.
+        with self.assertRaises(ProgrammingError):
+            with self.database.atomic('-10s'):
+                kv_db = KV.get(KV.k == 'k1')
+
+        # Cannot write in a read-only transaction
+        with self.assertRaises(ProgrammingError):
+            with self.database.atomic(datetime.datetime.now()):
+                KV.create(k='k2', v=2)
+
+        # Without system time there are no issues.
+        with self.database.atomic():
+            kv_db = KV.get(KV.k == 'k1')
+            self.assertEqual(kv.id, kv_db.id)
+
+
+class TestCockroachDatabaseJson(BaseBinaryJsonFieldTestCase, ModelTestCase):
     database = db
     M = JsonModel
     N = Normal

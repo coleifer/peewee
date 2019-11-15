@@ -4,6 +4,7 @@ import re
 from peewee import *
 from peewee import _atomic
 from peewee import _manual
+from peewee import _transaction
 from peewee import ColumnMetadata  # (name, data_type, null, primary_key, table, default)
 from peewee import ForeignKeyMetadata  # (column, dest_table, dest_column, table).
 from peewee import IndexMetadata
@@ -24,6 +25,27 @@ TXN_ERR_MSG = ('CockroachDB does not support nested transactions. You may '
                'run_transaction() helper.')
 
 class ExceededMaxAttempts(OperationalError): pass
+
+
+class UUIDKeyField(UUIDField):
+    auto_increment = True
+
+    def __init__(self, *args, **kwargs):
+        if kwargs.get('constraints'):
+            raise ValueError('%s cannot specify constraints.' % type(self))
+        kwargs['constraints'] = [SQL('DEFAULT gen_random_uuid()')]
+        kwargs.setdefault('primary_key', True)
+        super(UUIDKeyField, self).__init__(*args, **kwargs)
+
+
+class RowIDField(AutoField):
+    field_type = 'INT'
+
+    def __init__(self, *args, **kwargs):
+        if kwargs.get('constraints'):
+            raise ValueError('%s cannot specify constraints.' % type(self))
+        kwargs['constraints'] = [SQL('DEFAULT unique_rowid()')]
+        super(RowIDField, self).__init__(*args, **kwargs)
 
 
 class CockroachDatabase(PostgresqlDatabase):
@@ -102,17 +124,26 @@ class CockroachDatabase(PostgresqlDatabase):
         # cast to int, then to timestamptz.
         return date_field.cast('int').cast('timestamptz')
 
-    def atomic(self):
-        return _crdb_atomic(self)
+    def begin(self, system_time=None):
+        super(CockroachDatabase, self).begin()
+        if system_time is not None:
+            self.execute_sql('SET TRANSACTION AS OF SYSTEM TIME %s',
+                             (system_time,), commit=False)
+
+    def atomic(self, system_time=None):
+        return _crdb_atomic(self, system_time)
+
+    def transaction(self, system_time=None):
+        return _transaction(self, system_time)
 
     def savepoint(self):
         raise NotImplementedError(TXN_ERR_MSG)
 
-    def retry_transaction(self, max_attempts=None):
+    def retry_transaction(self, max_attempts=None, system_time=None):
         def deco(cb):
             @functools.wraps(cb)
             def new_fn():
-                return run_transaction(self, cb, max_attempts)
+                return run_transaction(self, cb, max_attempts, system_time)
             return new_fn
         return deco
 
@@ -125,7 +156,7 @@ class _crdb_atomic(_atomic):
         return super(_crdb_atomic, self).__enter__()
 
 
-def run_transaction(db, callback, max_attempts=None):
+def run_transaction(db, callback, max_attempts=None, system_time=None):
     """
     Run transactional SQL in a transaction with automatic retries.
 
@@ -140,7 +171,7 @@ def run_transaction(db, callback, max_attempts=None):
     this function is called, as CRDB does not support nested transactions.
     """
     max_attempts = max_attempts or -1
-    with db.atomic() as txn:
+    with db.atomic(system_time=system_time) as txn:
         db.execute_sql('SAVEPOINT cockroach_restart')
         while max_attempts != 0:
             try:
