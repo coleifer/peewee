@@ -174,7 +174,7 @@ def run_transaction(db, callback, max_attempts=None, system_time=None,
       the transaction is running under.
     * Must not attempt to commit, rollback or otherwise manage transactions.
     * May be called more than once.
-    * Should ideally only contain SQL write operations.
+    * Should ideally only contain SQL operations.
 
     Additionally, the database must not have any open transaction at the time
     this function is called, as CRDB does not support nested transactions.

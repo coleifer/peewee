@@ -145,6 +145,16 @@ class TestCockroachDatabase(ModelTestCase):
         self.assertEqual([(kv.k, kv.v) for kv in KV.select().order_by(KV.k)],
                          [('k%s' % i, i) for i in range(10)])
 
+    @requires_models(KV)
+    def test_cannot_nest_run_transaction(self):
+        def insert_row(db):
+            KV.create(k='k1', v=1)
+
+        with self.database.atomic():
+            self.assertRaises(NotImplementedError, run_transaction,
+                              self.database, insert_row)
+        self.assertEqual(KV.select().count(), 0)
+
     @requires_models(Arr)
     def test_array_field(self):
         a1 = Arr.create(title='a1', tags=['t1', 't2'])
