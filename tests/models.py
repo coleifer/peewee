@@ -6,6 +6,7 @@ import unittest
 from peewee import *
 from peewee import Entity
 from peewee import NodeList
+from peewee import SubclassAwareMetadata
 from peewee import sort_models
 
 from .base import db
@@ -3158,6 +3159,44 @@ class TestMetaInheritance(BaseTestCase):
         self.assertTrue(T1._meta.temporary)
         self.assertTrue(T2._meta.temporary)
         self.assertFalse(T3._meta.temporary)
+
+
+class TestModelMetadataMisc(BaseTestCase):
+    database = get_in_memory_db()
+
+    def test_subclass_aware_metadata(self):
+        class SchemaPropagateMetadata(SubclassAwareMetadata):
+            @property
+            def schema(self):
+                return self._schema
+            @schema.setter
+            def schema(self, value):
+                # self.models is a singleton, essentially, shared among all
+                # classes that use this metadata implementation.
+                for model in self.models:
+                    model._meta._schema = value
+
+        class Base(Model):
+            class Meta:
+                database = self.database
+                model_metadata_class = SchemaPropagateMetadata
+
+        class User(Base):
+            username = TextField()
+        class Tweet(Base):
+            user = ForeignKeyField(User, backref='tweets')
+            content = TextField()
+
+        self.assertTrue(User._meta.schema is None)
+        self.assertTrue(Tweet._meta.schema is None)
+
+        Base._meta.schema = 'temp'
+        self.assertEqual(User._meta.schema, 'temp')
+        self.assertEqual(Tweet._meta.schema, 'temp')
+
+        User._meta.schema = None
+        for model in (Base, User, Tweet):
+            self.assertTrue(model._meta.schema is None)
 
 
 class TestModelSetDatabase(BaseTestCase):
