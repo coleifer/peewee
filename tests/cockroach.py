@@ -155,6 +155,18 @@ class TestCockroachDatabase(ModelTestCase):
                               self.database, insert_row)
         self.assertEqual(KV.select().count(), 0)
 
+    @requires_models(KV)
+    def test_retry_transaction_decorator(self):
+        @self.database.retry_transaction()
+        def retry_decorator(db):
+            content = []
+            for i in range(5):
+                kv = KV.create(k='k%s' % i, v=i)
+                content.append(kv.k)
+            return content
+
+        self.assertEqual(retry_decorator(), ['k0', 'k1', 'k2', 'k3', 'k4'])
+
     @requires_models(Arr)
     def test_array_field(self):
         a1 = Arr.create(title='a1', tags=['t1', 't2'])
@@ -316,3 +328,47 @@ class TestCockroachDatabaseJson(BaseBinaryJsonFieldTestCase, ModelTestCase):
     M = JsonModel
     N = Normal
     requires = [JsonModel, Normal]
+
+
+# General integration tests.
+
+class KV2(TestModel):
+    k2 = CharField()
+    v2 = IntegerField()
+
+class Post(TestModel):
+    content = TextField()
+    timestamp = DateTimeField(default=datetime.datetime.now)
+
+class PostNote(TestModel):
+    post = ForeignKeyField(Post, backref='notes', primary_key=True)
+    note = TextField()
+
+
+@skip_unless(IS_CRDB)
+class TestCockroachIntegration(ModelTestCase):
+    @requires_models(KV, KV2)
+    def test_compound_select(self):
+        KV.insert_many([('10', 1), ('40', 4)]).execute()
+        KV2.insert_many([('20', 2), ('30', 3)]).execute()
+
+        lhs = KV.select(KV.k.cast('INT'), KV.v)
+        rhs = KV2.select(KV2.k2.cast('INT'), KV2.v2)
+        query = (lhs | rhs).order_by(SQL('1'))
+        self.assertEqual([(obj.k, obj.v) for obj in query],
+                         [(10, 1), (20, 2), (30, 3), (40, 4)])
+
+    @requires_models(Post, PostNote)
+    def test_primary_key_as_foreign_key(self):
+        p = Post.create(content='p')
+        n = PostNote.create(post=p, note='n')
+
+        p_db = Post.select().get()
+        self.assertEqual([n.note for n in p_db.notes], ['n'])
+
+        with self.assertQueryCount(1):
+            query = (PostNote
+                     .select(PostNote, Post)
+                     .join(Post))
+            self.assertEqual([(n.post.content, n.note) for n in query],
+                             [('p', 'n')])
