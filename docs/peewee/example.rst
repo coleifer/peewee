@@ -171,7 +171,7 @@ resolve inter-model dependencies and call :py:meth:`~Model.create_table` on
 each model, ensuring the tables are created in order.
 
 .. note::
-    Adding fields after the table has been created will required you to
+    Adding fields after the table has been created will require you to
     either drop the table and re-create it or manually add the columns
     using an *ALTER TABLE* query.
 
