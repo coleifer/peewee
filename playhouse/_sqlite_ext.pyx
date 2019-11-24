@@ -1099,7 +1099,7 @@ seeds[:] = [0, 1337, 37, 0xabcd, 0xdead, 0xface, 97, 0xed11, 0xcad9, 0x827b]
 cdef bf_t *bf_create(size_t size):
     cdef bf_t *bf = <bf_t *>calloc(1, sizeof(bf_t))
     bf.size = size
-    bf.bits = malloc(size)
+    bf.bits = calloc(1, size)
     return bf
 
 @cython.cdivision(True)
@@ -1152,6 +1152,9 @@ cdef class BloomFilter(object):
         if self.bf:
             bf_free(self.bf)
 
+    def __len__(self):
+        return self.bf.size
+
     def add(self, *keys):
         cdef bytes bkey
 
@@ -1170,6 +1173,19 @@ cdef class BloomFilter(object):
         # Similarly we wrap in a buffer object so pysqlite preserves the
         # embedded NULL bytes.
         return buf
+
+    @classmethod
+    def from_buffer(cls, data):
+        cdef:
+            char *buf
+            Py_ssize_t buflen
+            BloomFilter bloom
+
+        PyBytes_AsStringAndSize(data, &buf, &buflen)
+
+        bloom = BloomFilter(buflen)
+        memcpy(bloom.bf.bits, <void *>buf, buflen)
+        return bloom
 
     @classmethod
     def calculate_size(cls, double n, double p):

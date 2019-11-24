@@ -376,9 +376,11 @@ class TestBloomFilterIntegration(CyDatabaseTestCase):
 
 
 class TestBloomFilter(BaseTestCase):
+    n = 1024
+
     def setUp(self):
         super(TestBloomFilter, self).setUp()
-        self.bf = BloomFilter(1024)
+        self.bf = BloomFilter(self.n)
 
     def test_bloomfilter(self):
         keys = ('charlie', 'huey', 'mickey', 'zaizee', 'nuggie', 'foo', 'bar',
@@ -391,6 +393,33 @@ class TestBloomFilter(BaseTestCase):
             self.assertFalse(key + '-x' in self.bf)
             self.assertFalse(key + '-y' in self.bf)
             self.assertFalse(key + ' ' in self.bf)
+
+    def test_bloomfilter_buffer(self):
+        self.assertEqual(len(self.bf), self.n)
+
+        # Buffer is all zeroes when uninitialized.
+        buf = self.bf.to_buffer()
+        self.assertEqual(len(buf), self.n)
+        self.assertEqual(buf, b'\x00' * self.n)
+
+        keys = ('alpha', 'beta', 'gamma', 'delta', 'epsilon', 'zeta')
+        self.bf.add(*keys)
+
+        for key in keys:
+            self.assertTrue(key in self.bf)
+            self.assertFalse(key + '-x' in self.bf)
+
+        # Convert to buffer and then populate a 2nd bloom-filter.
+        buf = self.bf.to_buffer()
+        new_bf = BloomFilter.from_buffer(buf)
+        for key in keys:
+            self.assertTrue(key in new_bf)
+            self.assertFalse(key + '-x' in new_bf)
+
+        # Ensure that the two underlying bloom-filter buffers are equal.
+        self.assertEqual(len(new_bf), self.n)
+        new_buf = new_bf.to_buffer()
+        self.assertEqual(buf, new_buf)
 
 
 class DataTypes(TableFunction):
