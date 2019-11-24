@@ -7,15 +7,30 @@ https://github.com/coleifer/peewee/releases
 
 ## master
 
+[View commits](https://github.com/coleifer/peewee/compare/3.12.0...master)
+
+## 3.12.0
+
 * Bulk insert (`insert_many()` and `insert_from()`) will now return the row
   count instead of the last insert ID. If you are using Postgres, peewee will
   continue to return a cursor that provides an iterator over the newly-inserted
   primary-key values by default. This behavior is being retained by default for
   compatibility. Postgres users can simply specify an empty `returning()` call
   to disable the cursor and retrieve the rowcount instead.
-* Migration extension now supports altering a column's data-type.
+* Migration extension now supports altering a column's data-type, via the new
+  `alter_column_type()` method.
+* Added `Database.is_connection_usabe()` method, which attempts to look at the
+  status of the underlying DB-API connection to determine whether the
+  connection is usable.
+* Common table expressions include a `materialized` parameter, which can be
+  used to control Postgres' optimization fencing around CTEs.
+* Added `BloomFilter.from_buffer()` method for populating a bloom-filter from
+  the output of a previous call to the `to_buffer()` method.
+* Fixed APSW extension's `commit()` and `rollback()` methods to no-op if the
+  database is in auto-commit mode.
+* Added `generate_always=` option to the `IdentityField` (defaults to False).
 
-[View commits](https://github.com/coleifer/peewee/compare/3.11.2...master)
+[View commits](https://github.com/coleifer/peewee/compare/3.11.2...3.12.0)
 
 ## 3.11.2
 
