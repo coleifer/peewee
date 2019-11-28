@@ -998,3 +998,68 @@ class TestNoPKHashRegression(ModelTestCase):
 
         # Their hash is the same, though they are not equal.
         self.assertEqual(hash(npk), hash(npk_db))
+
+
+class Site(TestModel):
+    url = TextField()
+
+class Page(TestModel):
+    site = ForeignKeyField(Site, backref='pages')
+    title = TextField()
+
+class PageItem(TestModel):
+    page = ForeignKeyField(Page, backref='items')
+    content = TextField()
+
+
+class TestModelFilterJoinOrdering(ModelTestCase):
+    requires = [Site, Page, PageItem]
+
+    def setUp(self):
+        super(TestModelFilterJoinOrdering, self).setUp()
+        with self.database.atomic():
+            s1, s2 = [Site.create(url=s) for s in ('s1', 's2')]
+            p11, p12, p21 = [Page.create(site=s, title=t) for s, t in
+                             ((s1, 'p1-1'), (s1, 'p1-2'), (s2, 'p2-1'))]
+            items = (
+                (p11, 's1p1i1'),
+                (p11, 's1p1i2'),
+                (p11, 's1p1i3'),
+                (p12, 's1p2i1'),
+                (p21, 's2p1i1'))
+            PageItem.insert_many(items).execute()
+
+    def test_model_filter_join_ordering(self):
+        q = PageItem.filter(page__site__url='s1').order_by(PageItem.content)
+        self.assertSQL(q, (
+            'SELECT "t1"."id", "t1"."page_id", "t1"."content" '
+            'FROM "page_item" AS "t1" '
+            'INNER JOIN "page" AS "t2" ON ("t1"."page_id" = "t2"."id") '
+            'INNER JOIN "site" AS "t3" ON ("t2"."site_id" = "t3"."id") '
+            'WHERE ("t3"."url" = ?) ORDER BY "t1"."content"'), ['s1'])
+
+        def assertQ(q):
+            with self.assertQueryCount(1):
+                self.assertEqual([pi.content for pi in q],
+                                 ['s1p1i1', 's1p1i2', 's1p1i3', 's1p2i1'])
+
+        assertQ(q)
+
+        sid = Site.get(Site.url == 's1').id
+        q = (PageItem
+             .filter(page__site__url='s1', page__site__id=sid)
+             .order_by(PageItem.content))
+        assertQ(q)
+
+        q = (PageItem
+             .filter(page__site__id=sid)
+             .filter(page__site__url='s1')
+             .order_by(PageItem.content))
+        assertQ(q)
+
+        q = (PageItem
+             .filter(page__site__id=sid)
+             .filter(DQ(page__title='p1-1') | DQ(page__title='p1-2'))
+             .filter(page__site__url='s1')
+             .order_by(PageItem.content))
+        assertQ(q)

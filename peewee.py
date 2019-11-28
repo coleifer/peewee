@@ -7000,7 +7000,8 @@ class ModelSelect(BaseModelSelect, Select):
 
         # dq_node should now be an Expression, lhs = Node(), rhs = ...
         q = collections.deque([dq_node])
-        dq_joins = set()
+        dq_joins = []
+        seen_joins = set()
         while q:
             curr = q.popleft()
             if not isinstance(curr, Expression):
@@ -7008,7 +7009,10 @@ class ModelSelect(BaseModelSelect, Select):
             for side, piece in (('lhs', curr.lhs), ('rhs', curr.rhs)):
                 if isinstance(piece, DQ):
                     query, joins = self.convert_dict_to_node(piece.query)
-                    dq_joins.update(joins)
+                    for join in joins:
+                        if join not in seen_joins:
+                            dq_joins.append(join)
+                            seen_joins.add(join)
                     expression = reduce(operator.and_, query)
                     # Apply values from the DQ object.
                     if piece._negated:

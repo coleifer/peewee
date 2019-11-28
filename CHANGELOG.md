@@ -7,6 +7,9 @@ https://github.com/coleifer/peewee/releases
 
 ## master
 
+* Fix non-deterministic join ordering issue when using the `filter()` API
+  across several tables (#2063).
+
 [View commits](https://github.com/coleifer/peewee/compare/3.12.0...master)
 
 ## 3.12.0
