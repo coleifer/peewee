@@ -21,7 +21,11 @@ try:
 except ImportError:
     pass
 
-from psycopg2.extras import register_hstore
+try:
+    from psycopg2.extras import register_hstore
+except ImportError:
+    def register_hstore(c, globally):
+        pass
 try:
     from psycopg2.extras import Json
 except:
