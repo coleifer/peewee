@@ -176,8 +176,8 @@ parameter, using the symbolic constants in ``psycopg2.extensions``:
 Using CockroachDB
 -----------------
 
-Connecting to CockroachDB (CRDB) using the :py:class:`CockroachDatabase`
-database class, defined in ``playhouse.cockroachdb``:
+Connect to CockroachDB (CRDB) using the :py:class:`CockroachDatabase` database
+class, defined in ``playhouse.cockroachdb``:
 
 .. code-block:: python
 
