@@ -30,7 +30,7 @@ it easy to learn and intuitive to use.
 
 .. image:: crdb.png
     :target: peewee/database.html#using-crdb
-    :alt: cockroach
+    :alt: cockroachdb
 
 Peewee's source code hosted on `GitHub <https://github.com/coleifer/peewee>`_.
 

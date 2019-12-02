@@ -2,7 +2,7 @@ import datetime
 import uuid
 
 from peewee import *
-from playhouse.cockroach import *
+from playhouse.cockroachdb import *
 
 from .base import IS_CRDB
 from .base import ModelTestCase

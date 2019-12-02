@@ -24,7 +24,7 @@ def get_option_parser():
         dest='engine',
         help=('Database engine to test, one of '
               '[sqlite, postgres, mysql, mysqlconnector, apsw, sqlcipher,'
-              ' cockroach]'))
+              ' cockroachdb]'))
     basic.add_option('-v', '--verbosity', dest='verbosity', default=1,
                      type='int', help='Verbosity of output')
     basic.add_option('-f', '--failfast', action='store_true', default=False,
@@ -43,7 +43,7 @@ def get_option_parser():
             ('port', '5432', ''),
             ('user', 'postgres', os.environ.get('PGUSER', '')),
             ('password', 'blank', os.environ.get('PGPASSWORD', '')))),
-        ('Cockroach', 'CRDB', (
+        ('CockroachDB', 'CRDB', (
             # param  default disp default val
             ('host', 'localhost', 'localhost'),
             ('port', '26257', ''),

@@ -13,7 +13,7 @@ except ImportError:
 from peewee import *
 from peewee import sqlite3
 from playhouse.mysql_ext import MySQLConnectorDatabase
-from playhouse.cockroach import CockroachDatabase
+from playhouse.cockroachdb import CockroachDatabase
 
 
 logger = logging.getLogger('peewee')

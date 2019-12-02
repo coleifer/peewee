@@ -35,7 +35,7 @@ matrix:
     - python: 3.7
       dist: xenial
       env:
-      - PEEWEE_TEST_BACKEND=cockroach
+      - PEEWEE_TEST_BACKEND=cockroachdb
       before_install:
         - wget -qO- https://binaries.cockroachdb.com/cockroach-v19.2.0.linux-amd64.tgz | tar xvz
         - ./cockroach-v19.2.0.linux-amd64/cockroach start --insecure --background

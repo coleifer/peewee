@@ -4,7 +4,7 @@ Cockroach Database
 ------------------
 
 `CockroachDB <https://www.cockroachlabs.com>` (CRDB) is well supported by
-peewee. The ``playhouse.cockroach`` extension module provides the following
+peewee. The ``playhouse.cockroachdb`` extension module provides the following
 classes and helpers:
 
 * :py:class:`CockroachDatabase` - a subclass of :py:class:`PostgresqlDatabase`,
@@ -85,7 +85,7 @@ for a transaction that transfers an amount from one account to another:
 
 .. code-block:: python
 
-    from playhouse.cockroach import run_transaction
+    from playhouse.cockroachdb import run_transaction
 
     def transfer_funds(from_id, to_id, amt):
         """
@@ -179,5 +179,5 @@ CRDB APIs
 See also:
 
 * :py:class:`BinaryJSONField` from the Postgresql extension (available in the
-  ``cockroach`` extension module, and aliased to ``JSONField``).
+  ``cockroachdb`` extension module, and aliased to ``JSONField``).
 * :py:class:`ArrayField` from the Postgresql extension.

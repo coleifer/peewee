@@ -71,7 +71,7 @@ class CockroachDatabase(PostgresqlDatabase):
             clean = '%d%02d%02d' % tuple(int(i) for i in match_obj.groups())
             self.server_version = int(clean)  # 19.1.5 -> 190105.
         else:
-            # Fallback to use whatever cockroach tells us via protocol.
+            # Fallback to use whatever cockroachdb tells us via protocol.
             super(CockroachDatabase, self)._set_server_version(conn)
 
     def _get_pk_constraint(self, table, schema=None):
@@ -99,8 +99,8 @@ class CockroachDatabase(PostgresqlDatabase):
             return SQL('UPSERT')
         elif action not in ('ignore', 'nothing', 'update'):
             raise ValueError('Un-supported action for conflict resolution. '
-                             'Cockroach supports REPLACE (UPSERT), IGNORE and '
-                             'UPDATE.')
+                             'CockroachDB supports REPLACE (UPSERT), IGNORE '
+                             'and UPDATE.')
 
     def conflict_update(self, oc, query):
         action = oc._action.lower() if oc._action else ''
@@ -111,7 +111,7 @@ class CockroachDatabase(PostgresqlDatabase):
             # the statement with UPSERT instead of INSERT.
             return
         elif oc._conflict_constraint:
-            raise ValueError('Cockroach does not support the usage of a '
+            raise ValueError('CockroachDB does not support the usage of a '
                              'constraint name. Use the column(s) instead.')
 
         return super(CockroachDatabase, self).conflict_update(oc, query)

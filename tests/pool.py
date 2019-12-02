@@ -6,7 +6,7 @@ import time
 from peewee import *
 from peewee import _savepoint
 from peewee import _transaction
-from playhouse.cockroach import PooledCockroachDatabase
+from playhouse.cockroachdb import PooledCockroachDatabase
 from playhouse.pool import *
 
 from .base import BACKEND

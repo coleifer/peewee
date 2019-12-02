@@ -25,7 +25,7 @@ try:
 except ImportError:
     postgres_ext = None
 try:
-    from playhouse.cockroach import CockroachDatabase
+    from playhouse.cockroachdb import CockroachDatabase
 except ImportError:
     CockroachDatabase = None
 
@@ -224,7 +224,7 @@ class PostgresqlMetadata(Metadata):
         16: BooleanField,
         17: BlobField,
         20: BigIntegerField,
-        21: IntegerField,
+        21: SmallIntegerField,
         23: IntegerField,
         25: TextField,
         700: FloatField,
@@ -237,7 +237,7 @@ class PostgresqlMetadata(Metadata):
         1083: TimeField,
         1266: TimeField,
         1700: DecimalField,
-        2950: TextField, # UUID
+        2950: UUIDField, # UUID
     }
     array_types = {
         1000: BooleanField,
@@ -319,14 +319,14 @@ class PostgresqlMetadata(Metadata):
         return super(PostgresqlMetadata, self).get_indexes(table, schema)
 
 
-class CockroachMetadata(PostgresqlMetadata):
+class CockroachDBMetadata(PostgresqlMetadata):
     # CRDB treats INT the same as BIGINT, so we just map bigint type OIDs to
     # regular IntegerField.
     column_map = PostgresqlMetadata.column_map.copy()
     column_map[20] = IntegerField
     array_types = PostgresqlMetadata.array_types.copy()
     array_types[1016] = IntegerField
-    extension_import = 'from playhouse.cockroach import *'
+    extension_import = 'from playhouse.cockroachdb import *'
 
     def __init__(self, database):
         Metadata.__init__(self, database)
@@ -339,10 +339,7 @@ class CockroachMetadata(PostgresqlMetadata):
             results = cursor.fetchall()
 
             for oid, typname, formatted_type in results:
-                # TODO: crdb-specific field classes?
-                if typname == 'json':
-                    self.column_map[oid] = postgres_ext.JSONField
-                elif typname == 'jsonb':
+                if typname == 'jsonb':
                     self.column_map[oid] = postgres_ext.BinaryJSONField
 
             for oid in self.array_types:
@@ -493,7 +490,7 @@ class Introspector(object):
     @classmethod
     def from_database(cls, database, schema=None):
         if CockroachDatabase and isinstance(database, CockroachDatabase):
-            metadata = CockroachMetadata(database)
+            metadata = CockroachDBMetadata(database)
         elif isinstance(database, PostgresqlDatabase):
             metadata = PostgresqlMetadata(database)
         elif isinstance(database, MySQLDatabase):
