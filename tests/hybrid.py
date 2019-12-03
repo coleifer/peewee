@@ -147,5 +147,5 @@ class TestHybridWithRelationship(ModelTestCase):
                  .select(Order.name, Order.quantity.alias('sql_qt'))
                  .join(Item, JOIN.LEFT_OUTER)
                  .group_by(Order.name)
-                 .order_by(Order.quantity.desc()))
-        self.assertEqual([o.sql_qt for o in query], [None, 1337, 10])
+                 .order_by(Order.name))
+        self.assertEqual([o.sql_qt for o in query], [10, 1337, None])
