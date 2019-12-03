@@ -1625,6 +1625,39 @@ class TestSelectFeatures(BaseTestCase):
             ['charlie'],
             for_update=True)
 
+    def test_for_update_options(self):
+        query = (Person
+                 .select(Person.id)
+                 .where(Person.name == 'huey')
+                 .for_update(of=Person, nowait=True))
+        self.assertSQL(query, (
+            'SELECT "t1"."id" FROM "person" AS "t1" WHERE ("t1"."name" = ?) '
+            'FOR UPDATE OF "t1" NOWAIT'), ['huey'], for_update=True)
+
+        # Check default behavior.
+        query = query.for_update()
+        self.assertSQL(query, (
+            'SELECT "t1"."id" FROM "person" AS "t1" WHERE ("t1"."name" = ?) '
+            'FOR UPDATE'), ['huey'], for_update=True)
+
+        # Clear flag.
+        query = query.for_update(None)
+        self.assertSQL(query, (
+            'SELECT "t1"."id" FROM "person" AS "t1" WHERE ("t1"."name" = ?)'),
+            ['huey'])
+
+        # Old-style is still supported.
+        query = query.for_update('FOR UPDATE NOWAIT')
+        self.assertSQL(query, (
+            'SELECT "t1"."id" FROM "person" AS "t1" WHERE ("t1"."name" = ?) '
+            'FOR UPDATE NOWAIT'), ['huey'], for_update=True)
+
+        # Mix of old and new is OK.
+        query = query.for_update('FOR SHARE NOWAIT', of=Person)
+        self.assertSQL(query, (
+            'SELECT "t1"."id" FROM "person" AS "t1" WHERE ("t1"."name" = ?) '
+            'FOR SHARE OF "t1" NOWAIT'), ['huey'], for_update=True)
+
     def test_parentheses(self):
         query = (Person
                  .select(fn.MAX(

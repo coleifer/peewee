@@ -320,13 +320,13 @@ FIELD = attrdict(
 #: Join helpers (for convenience) -- all join types are supported, this object
 #: is just to help avoid introducing errors by using strings everywhere.
 JOIN = attrdict(
-    INNER='INNER',
-    LEFT_OUTER='LEFT OUTER',
-    RIGHT_OUTER='RIGHT OUTER',
-    FULL='FULL',
-    FULL_OUTER='FULL OUTER',
-    CROSS='CROSS',
-    NATURAL='NATURAL')
+    INNER='INNER JOIN',
+    LEFT_OUTER='LEFT OUTER JOIN',
+    RIGHT_OUTER='RIGHT OUTER JOIN',
+    FULL='FULL JOIN',
+    FULL_OUTER='FULL OUTER JOIN',
+    CROSS='CROSS JOIN',
+    NATURAL='NATURAL JOIN')
 
 # Row representations.
 ROW = attrdict(
@@ -762,7 +762,7 @@ class Source(Node):
             columns = (SQL('*'),)
         return Select((self,), columns)
 
-    def join(self, dest, join_type='INNER', on=None):
+    def join(self, dest, join_type=JOIN.INNER, on=None):
         return Join(self, dest, join_type, on)
 
     def left_outer_join(self, dest, on=None):
@@ -828,7 +828,7 @@ def __bind_database__(meth):
     return inner
 
 
-def __join__(join_type='INNER', inverted=False):
+def __join__(join_type=JOIN.INNER, inverted=False):
     def method(self, other):
         if inverted:
             self, other = other, self
@@ -977,7 +977,7 @@ class Join(BaseTable):
     def __sql__(self, ctx):
         (ctx
          .sql(self.lhs)
-         .literal(' %s JOIN ' % self.join_type)
+         .literal(' %s ' % self.join_type)
          .sql(self.rhs))
         if self._on is not None:
             ctx.literal(' ON ').sql(self._on)
@@ -1654,6 +1654,28 @@ class WindowAlias(Node):
         return ctx.literal(self.window._alias or 'w')
 
 
+class ForUpdate(Node):
+    def __init__(self, expr, of=None, nowait=None):
+        expr = 'FOR UPDATE' if expr is True else expr
+        if expr.lower().endswith('nowait'):
+            expr = expr[:-7]  # Strip off the "nowait" bit.
+            nowait = True
+
+        self._expr = expr
+        if of is not None and not isinstance(of, (list, set, tuple)):
+            of = (of,)
+        self._of = of
+        self._nowait = nowait
+
+    def __sql__(self, ctx):
+        ctx.literal(self._expr)
+        if self._of is not None:
+            ctx.literal(' OF ').sql(CommaNodeList(self._of))
+        if self._nowait:
+            ctx.literal(' NOWAIT')
+        return ctx
+
+
 def Case(predicate, expression_tuples, default=None):
     clauses = [SQL('CASE')]
     if predicate is not None:
@@ -2182,7 +2204,7 @@ class CompoundSelectQuery(SelectBase):
 class Select(SelectBase):
     def __init__(self, from_list=None, columns=None, group_by=None,
                  having=None, distinct=None, windows=None, for_update=None,
-                 **kwargs):
+                 for_update_of=None, nowait=None, **kwargs):
         super(Select, self).__init__(**kwargs)
         self._from_list = (list(from_list) if isinstance(from_list, tuple)
                            else from_list) or []
@@ -2190,7 +2212,9 @@ class Select(SelectBase):
         self._group_by = group_by
         self._having = having
         self._windows = None
-        self._for_update = 'FOR UPDATE' if for_update is True else for_update
+        self._for_update = for_update  # XXX: consider reorganizing.
+        self._for_update_of = for_update_of
+        self._for_update_nowait = nowait
 
         self._distinct = self._simple_distinct = None
         if distinct:
@@ -2221,7 +2245,7 @@ class Select(SelectBase):
         self._from_list = list(sources)
 
     @Node.copy
-    def join(self, dest, join_type='INNER', on=None):
+    def join(self, dest, join_type=JOIN.INNER, on=None):
         if not self._from_list:
             raise ValueError('No sources to join on.')
         item = self._from_list.pop()
@@ -2266,8 +2290,12 @@ class Select(SelectBase):
         self._windows = windows if windows else None
 
     @Node.copy
-    def for_update(self, for_update=True):
-        self._for_update = 'FOR UPDATE' if for_update is True else for_update
+    def for_update(self, for_update=True, of=None, nowait=None):
+        if not for_update and (of is not None or nowait):
+            for_update = True
+        self._for_update = for_update
+        self._for_update_of = of
+        self._for_update_nowait = nowait
 
     def _get_query_key(self):
         return self._alias
@@ -2332,7 +2360,8 @@ class Select(SelectBase):
                     raise ValueError('FOR UPDATE specified but not supported '
                                      'by database.')
                 ctx.literal(' ')
-                ctx.sql(SQL(self._for_update))
+                ctx.sql(ForUpdate(self._for_update, self._for_update_of,
+                                  self._for_update_nowait))
 
         # If the subquery is inside a function -or- we are evaluating a
         # subquery on either side of an expression w/o an explicit alias, do
@@ -6923,7 +6952,7 @@ class ModelSelect(BaseModelSelect, Select):
         return to_field, False
 
     @Node.copy
-    def join(self, dest, join_type='INNER', on=None, src=None, attr=None):
+    def join(self, dest, join_type=JOIN.INNER, on=None, src=None, attr=None):
         src = self._join_ctx if src is None else src
 
         if join_type != JOIN.CROSS:
@@ -6940,7 +6969,7 @@ class ModelSelect(BaseModelSelect, Select):
         item = self._from_list.pop()
         self._from_list.append(Join(item, dest, join_type, on))
 
-    def join_from(self, src, dest, join_type='INNER', on=None, attr=None):
+    def join_from(self, src, dest, join_type=JOIN.INNER, on=None, attr=None):
         return self.join(dest, join_type, on, src, attr)
 
     def _get_model_cursor_wrapper(self, cursor):
@@ -7414,7 +7443,7 @@ class ModelCursorWrapper(BaseModelCursorWrapper):
             # If no fields were set on either the source or the destination,
             # then we have nothing to do here.
             if instance not in set_keys and dest not in set_keys \
-               and join_type.endswith('OUTER'):
+               and join_type.endswith('OUTER JOIN'):
                 continue
 
             if is_dict:

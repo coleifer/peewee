@@ -2270,7 +2270,7 @@ Query-builder
     Class representing a compound SELECT query.
 
 
-.. py:class:: Select([from_list=None[, columns=None[, group_by=None[, having=None[, distinct=None[, windows=None[, for_update=None[, **kwargs]]]]]]]])
+.. py:class:: Select([from_list=None[, columns=None[, group_by=None[, having=None[, distinct=None[, windows=None[, for_update=None[, for_update_of=None[, for_update_nowait=None[, **kwargs]]]]]]]]]])
 
     :param list from_list: List of sources for FROM clause.
     :param list columns: Columns or values to select.
@@ -2279,6 +2279,8 @@ Query-builder
     :param distinct: Either a boolean or a list of column-like objects.
     :param list windows: List of :py:class:`Window` clauses.
     :param for_update: Boolean or str indicating if SELECT...FOR UPDATE.
+    :param for_update_of: One or more tables for FOR UPDATE OF clause.
+    :param bool for_update_nowait: Specify NOWAIT locking.
 
     Class representing a SELECT query.
 
@@ -2451,10 +2453,12 @@ Query-builder
                      .window(window)  # Note call to ".window()"
                      .order_by(Sample.counter))
 
-    .. py:method:: for_update([for_update=True])
+    .. py:method:: for_update([for_update=True[, of=None[, nowait=None]]])
 
         :param for_update: Either a boolean or a string indicating the
-            desired expression, e.g. "FOR UPDATE NOWAIT".
+            desired expression, e.g. "FOR SHARE".
+        :param of: One or more models to restrict locking to.
+        :param bool nowait: Specify NOWAIT option when locking.
 
 
 .. py:class:: _WriteQuery(table[, returning=None[, **kwargs]])

@@ -2188,7 +2188,7 @@ class TestWindowFunctionIntegration(ModelTestCase):
 
 @skip_if(IS_SQLITE or (IS_MYSQL and not IS_MYSQL_ADVANCED_FEATURES))
 class TestForUpdateIntegration(ModelTestCase):
-    requires = [User]
+    requires = [User, Tweet]
 
     def setUp(self):
         super(TestForUpdateIntegration, self).setUp()
@@ -2197,7 +2197,12 @@ class TestForUpdateIntegration(ModelTestCase):
             class Meta:
                 database = self.alt_db
                 table_name = User._meta.table_name
+        class AltTweet(Tweet):
+            class Meta:
+                database = self.alt_db
+                table_name = Tweet._meta.table_name
         self.AltUser = AltUser
+        self.AltTweet = AltTweet
 
     def tearDown(self):
         self.alt_db.close()
@@ -2210,12 +2215,19 @@ class TestForUpdateIntegration(ModelTestCase):
         AltUser = self.AltUser
 
         with self.database.manual_commit():
-            users = User.select(User.username == 'zaizee').for_update()
+            users = User.select().where(User.username == 'zaizee').for_update()
             updated = (User
                        .update(username='ziggy')
                        .where(User.username == 'zaizee')
                        .execute())
             self.assertEqual(updated, 1)
+
+            if IS_POSTGRESQL:
+                nrows = (AltUser
+                         .update(username='huey-x')
+                         .where(AltUser.username == 'huey')
+                         .execute())
+                self.assertEqual(nrows, 1)
 
             query = (AltUser
                      .select(AltUser.username)
@@ -2224,6 +2236,15 @@ class TestForUpdateIntegration(ModelTestCase):
 
             self.database.commit()
             self.assertEqual(query.get().username, 'ziggy')
+
+    def test_for_update_nested(self):
+        User.insert_many([(u,) for u in 'abc']).execute()
+        subq = User.select().where(User.username != 'b').for_update()
+        nrows = (User
+                 .delete()
+                 .where(User.id.in_(subq))
+                 .execute())
+        self.assertEqual(nrows, 2)
 
     def test_for_update_nowait(self):
         User.create(username='huey')
@@ -2235,17 +2256,63 @@ class TestForUpdateIntegration(ModelTestCase):
             users = (User
                      .select(User.username)
                      .where(User.username == 'zaizee')
-                     .for_update('FOR UPDATE NOWAIT')
+                     .for_update(nowait=True)
                      .execute())
 
             def will_fail():
                 return (AltUser
                         .select()
                         .where(AltUser.username == 'zaizee')
-                        .for_update('FOR UPDATE NOWAIT')
+                        .for_update(nowait=True)
                         .get())
 
             self.assertRaises((OperationalError, InternalError), will_fail)
+
+    @requires_postgresql
+    @requires_models(User, Tweet)
+    def test_for_update_of(self):
+        h = User.create(username='huey')
+        z = User.create(username='zaizee')
+        Tweet.create(user=h, content='h')
+        Tweet.create(user=z, content='z')
+
+        AltUser, AltTweet = self.AltUser, self.AltTweet
+
+        with self.database.manual_commit():
+            # Lock tweets by huey.
+            query = (Tweet
+                     .select()
+                     .join(User)
+                     .where(User.username == 'huey')
+                     .for_update(of=Tweet, nowait=True))
+            qr = query.execute()
+
+            # No problem updating zaizee's tweet or huey's user.
+            nrows = (AltTweet
+                     .update(content='zx')
+                     .where(AltTweet.user == z.id)
+                     .execute())
+            self.assertEqual(nrows, 1)
+
+            nrows = (AltUser
+                     .update(username='huey-x')
+                     .where(AltUser.username == 'huey')
+                     .execute())
+            self.assertEqual(nrows, 1)
+
+            def will_fail():
+                (AltTweet
+                 .select()
+                 .where(AltTweet.user == h)
+                 .for_update(nowait=True)
+                 .get())
+            self.assertRaises((OperationalError, InternalError), will_fail)
+
+            self.database.commit()
+
+        query = Tweet.select(Tweet, User).join(User).order_by(Tweet.id)
+        self.assertEqual([(t.content, t.user.username) for t in query],
+                         [('h', 'huey-x'), ('zx', 'zaizee')])
 
 
 class ServerDefault(TestModel):
