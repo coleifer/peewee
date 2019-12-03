@@ -183,49 +183,58 @@ The desired SQL is:
 .. code-block:: sql
 
     SELECT * FROM
-      (SELECT t2.id, t2.username FROM user AS t2) AS uq
+      (SELECT id, username FROM user) AS uq
        LEFT JOIN LATERAL
-      (SELECT t2.message, t2.created_date
-       FROM tweet AS t2
-       WHERE (t2.user_id = uq.id)
-       ORDER BY t2.created_date DESC LIMIT 3)
+      (SELECT message, created_date
+       FROM tweet
+       WHERE (user_id = uq.id)
+       ORDER BY created_date DESC LIMIT 3)
       AS pq ON true
 
-To accomplish this with peewee we'll need to express the lateral join as a :py:class:`Clause`, which gives us greater flexibility than the :py:meth:`~Query.join` method.
+To accomplish this with peewee is quite straightforward:
 
 .. code-block:: python
 
-    # We'll reference `Tweet` twice, so keep an alias handy.
-    TweetAlias = Tweet.alias()
+    subq = (Tweet
+            .select(Tweet.message, Tweet.created_date)
+            .where(Tweet.user == User.id)
+            .order_by(Tweet.created_date.desc())
+            .limit(3))
 
-    # The "outer loop" will be iterating over the users whose
-    # tweets we are trying to find.
-    user_query = User.select(User.id, User.username).alias('uq')
+    query = (User
+             .select(User, subq.c.content, subq.c.created_date)
+             .join(subq, JOIN.LEFT_LATERAL)
+             .order_by(User.username, subq.c.created_date.desc()))
 
-    # The inner loop will select tweets and is correlated to the
-    # outer loop via the WHERE clause. Note that we are using a
-    # LIMIT clause.
-    tweet_query = (TweetAlias
-                   .select(TweetAlias.message, TweetAlias.created_date)
-                   .where(TweetAlias.user == user_query.c.id)
-                   .order_by(TweetAlias.created_date.desc())
-                   .limit(3)
-                   .alias('pq'))
+    # We queried from the "perspective" of user, so the rows are User instances
+    # with the addition of a "content" and "created_date" attribute for each of
+    # the (up-to) 3 most-recent tweets for each user.
+    for row in query:
+        print(row.username, row.content, row.created_date)
 
-    # Now we join the outer and inner queries using the LEFT LATERAL
-    # JOIN. The join predicate is *ON TRUE*, since we're effectively
-    # joining in the tweet subquery's WHERE clause.
-    join_clause = NodeList((
-        user_query,
-        SQL('LEFT JOIN LATERAL'),
-        tweet_query,
-        SQL('ON %s', [True])))
+To implement an equivalent query from the "perspective" of the Tweet model, we
+can instead write:
 
-    # Finally, we'll wrap these up and SELECT from the result.
+.. code-block:: python
+
+    # subq is the same as the above example.
+    subq = (Tweet
+            .select(Tweet.message, Tweet.created_date)
+            .where(Tweet.user == User.id)
+            .order_by(Tweet.created_date.desc())
+            .limit(3))
+
     query = (Tweet
-             .select(user_query.c.username, tweet_query.c.message,
-                     tweet_query.c.created_date)
-             .from_(join_clause))
+             .select(User.username, subq.c.content, subq.c.created_date)
+             .from_(User)
+             .join(subq, JOIN.LEFT_LATERAL)
+             .order_by(User.username, subq.c.created_date.desc()))
+
+    # Each row is a "tweet" instance with an additional "username" attribute.
+    # This will print the (up-to) 3 most-recent tweets from each user.
+    for tweet in query:
+        print(tweet.username, tweet.content, tweet.created_date)
+
 
 Window functions
 ^^^^^^^^^^^^^^^^

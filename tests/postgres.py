@@ -1,5 +1,6 @@
 #coding:utf-8
 import datetime
+import functools
 import uuid
 from decimal import Decimal as Dc
 from types import MethodType
@@ -15,6 +16,8 @@ from .base import db_loader
 from .base import requires_models
 from .base import skip_unless
 from .base_models import Register
+from .base_models import Tweet
+from .base_models import User
 
 
 db = db_loader('postgres', db_class=PostgresqlExtDatabase)
@@ -1197,3 +1200,59 @@ class TestPostgresCTEMaterialization(ModelTestCase):
                      .where(cte.c.value != 2)
                      .order_by(cte.c.value))
             self.assertEqual([r.value for r in query], [1, 3])
+
+
+@skip_unless(pg93(), 'lateral join requires pg >= 9.3')
+class TestPostgresLateralJoin(ModelTestCase):
+    database = db
+    test_data = (
+        ('a', (('a1', 1),
+               ('a2', 2),
+               ('a10', 10))),
+        ('b', (('b3', 3),
+               ('b4', 4),
+               ('b7', 7))),
+        ('c', ()))
+    ts = functools.partial(datetime.datetime, 2019, 1)
+
+    def create_data(self):
+        with self.database.atomic():
+            for username, tweets in self.test_data:
+                user = User.create(username=username)
+                for c, d in tweets:
+                    Tweet.create(user=user, content=c, timestamp=self.ts(d))
+
+    @requires_models(User, Tweet)
+    def test_lateral_top_n(self):
+        self.create_data()
+
+        subq = (Tweet
+                .select(Tweet.content, Tweet.timestamp)
+                .where(Tweet.user == User.id)
+                .order_by(Tweet.timestamp.desc())
+                .limit(2))
+        query = (User
+                 .select(User, subq.c.content)
+                 .join(subq, JOIN.LEFT_LATERAL)
+                 .order_by(subq.c.timestamp.desc(nulls='last')))
+        results = [(u.username, u.content) for u in query]
+        self.assertEqual(results, [
+            ('a', 'a10'),
+            ('b', 'b7'),
+            ('b', 'b4'),
+            ('a', 'a2'),
+            ('c', None)])
+
+        query = (Tweet
+                 .select(User.username, subq.c.content)
+                 .from_(User)
+                 .join(subq, JOIN.LEFT_LATERAL)
+                 .order_by(User.username, subq.c.timestamp))
+
+        results = [(t.username, t.content) for t in query]
+        self.assertEqual(results, [
+            ('a', 'a2'),
+            ('a', 'a10'),
+            ('b', 'b4'),
+            ('b', 'b7'),
+            ('c', None)])

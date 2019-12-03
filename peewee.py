@@ -326,7 +326,9 @@ JOIN = attrdict(
     FULL='FULL JOIN',
     FULL_OUTER='FULL OUTER JOIN',
     CROSS='CROSS JOIN',
-    NATURAL='NATURAL JOIN')
+    NATURAL='NATURAL JOIN',
+    LATERAL='LATERAL',
+    LEFT_LATERAL='LEFT JOIN LATERAL')
 
 # Row representations.
 ROW = attrdict(
@@ -6955,7 +6957,9 @@ class ModelSelect(BaseModelSelect, Select):
     def join(self, dest, join_type=JOIN.INNER, on=None, src=None, attr=None):
         src = self._join_ctx if src is None else src
 
-        if join_type != JOIN.CROSS:
+        if join_type == JOIN.LATERAL or join_type == JOIN.LEFT_LATERAL:
+            on = True
+        elif join_type != JOIN.CROSS:
             on, attr, constructor = self._normalize_join(src, dest, on, attr)
             if attr:
                 self._joins.setdefault(src, [])
