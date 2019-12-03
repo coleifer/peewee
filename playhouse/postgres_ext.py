@@ -72,6 +72,8 @@ class _JsonLookupBase(_LookupNode):
         clone = self.as_json(True)
         if isinstance(other, (list, dict)):
             return Expression(clone, JSONB_CONTAINS, Json(other))
+        if isinstance(other, int):
+            return Expression(clone, JSONB_CONTAINS, Json([other]))
         return Expression(clone, JSONB_EXISTS, other)
 
     def contains_any(self, *keys):
