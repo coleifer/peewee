@@ -32,9 +32,9 @@ provides some basic, database-specific configuration options.
     pg_db = PostgresqlDatabase('my_app', user='postgres', password='secret',
                                host='10.1.0.9', port=5432)
 
-Peewee provides advanced support for SQLite and Postgres via database-specific
-extension modules. To use the extended-functionality, import the appropriate
-database-specific module and use the database class provided:
+Peewee provides advanced support for SQLite, Postgres and CockroachDB via
+database-specific extension modules. To use the extended-functionality, import
+the appropriate database-specific module and use the database class provided:
 
 .. code-block:: python
 
@@ -50,11 +50,18 @@ database-specific module and use the database class provided:
     # Use Postgres (and register hstore extension).
     db = PostgresqlExtDatabase('my_app', user='postgres', register_hstore=True)
 
+
+    from playhouse.cockroachdb import CockroachDatabase
+
+    # Use CockroachDB.
+    db = CockroachDatabase('my_app', user='root', port=26257, host='10.1.0.8')
+
 For more information on database extensions, see:
 
 * :ref:`postgres_ext`
 * :ref:`sqlite_ext`
-* :ref:`sqlcipher_ext`
+* :ref:`crdb`
+* :ref:`sqlcipher_ext` (encrypted SQLite database).
 * :ref:`apsw`
 * :ref:`sqliteq`
 
@@ -93,6 +100,7 @@ Consult your database driver's documentation for the available parameters:
 * MySQL: `MySQLdb <http://mysql-python.sourceforge.net/MySQLdb.html#some-mysql-examples>`_
 * MySQL: `pymysql <https://github.com/PyMySQL/PyMySQL/blob/f08f01fe8a59e8acfb5f5add4a8fe874bec2a196/pymysql/connections.py#L494-L513>`_
 * SQLite: `sqlite3 <https://docs.python.org/2/library/sqlite3.html#sqlite3.connect>`_
+* CockroachDB: see `psycopg2 <http://initd.org/psycopg/docs/module.html#psycopg2.connect>`_
 
 .. _using_postgresql:
 
