@@ -193,47 +193,30 @@ class, defined in ``playhouse.cockroachdb``:
 
     db = CockroachDatabase('my_app', user='root', port=26257, host='localhost')
 
+CRDB provides client-side transaction retries, which are available using a
+special :py:meth:`CockroachDatabase.run_transaction` helper-method. This method
+accepts a callable, which is responsible for executing any transactional
+statements that may need to be retried.
 
-The ``playhouse.cockroachdb`` module also contains a :py:func:`run_transaction`
-helper for running a transaction with client-side retry logic:
+Simplest possible example of :py:meth:`~CockroachDatabase.run_transaction`:
 
 .. code-block:: python
 
-    from playhouse.cockroachdb import run_transaction
+    def create_user(email):
+        # Callable that accepts a single argument (the database instance) and
+        # which is responsible for executing the transactional SQL.
+        def callback(db_ref):
+            return User.create(email=email)
 
-    def transfer_funds(from_id, to_id, amt):
-        """
-        Returns a 3-tuple of (success?, from balance, to balance). If there are
-        not sufficient funds, then the original balances are returned.
-        """
-        def thunk(db_ref):
-            src, dest = (Account
-                         .select()
-                         .where(Account.id.in_([from_id, to_id])))
-            if src.id != from_id:
-                src, dest = dest, src  # Swap order.
+        return db.run_transaction(callback, max_attempts=10)
 
-            # Cannot perform transfer, insufficient funds!
-            if src.balance < amt:
-                return False, src.balance, dest.balance
+    huey = create_user('huey@example.com')
 
-            # Update each account, returning the new balance.
-            src, = (Account
-                    .update(balance=Account.balance - amt)
-                    .where(Account.id == from_id)
-                    .returning(Account.balance)
-                    .execute())
-            dest, = (Account
-                     .update(balance=Account.balance + amt)
-                     .where(Account.id == to_id)
-                     .returning(Account.balance)
-                     .execute())
-            return True, src.balance, dest.balance
-
-        # Perform the queries that comprise a logical transaction. In the
-        # event the transaction fails due to contention, it will be auto-
-        # matically retried (up to 10 times).
-        return run_transaction(db, thunk, max_attempts=10)
+.. note::
+    The ``cockroachdb.ExceededMaxAttempts`` exception will be raised if the
+    transaction cannot be committed after the given number of attempts. If the
+    SQL is mal-formed, violates a constraint, etc., then the function will
+    raise the exception to the caller.
 
 For more information, see:
 

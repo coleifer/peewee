@@ -10,6 +10,7 @@ from .base import TestModel
 from .base import db
 from .base import requires_models
 from .base import skip_unless
+from .base_models import User
 from .postgres_helpers import BaseBinaryJsonFieldTestCase
 
 
@@ -154,6 +155,19 @@ class TestCockroachDatabase(ModelTestCase):
             self.assertRaises(NotImplementedError, run_transaction,
                               self.database, insert_row)
         self.assertEqual(KV.select().count(), 0)
+
+    @requires_models(User)
+    def test_retry_transaction_docs_example(self):
+        def create_user(username):
+            def thunk(db_ref):
+                return User.create(username=username)
+            return self.database.run_transaction(thunk, max_attempts=5)
+
+        users = [create_user(u) for u in 'abc']
+        self.assertEqual([u.username for u in users], ['a', 'b', 'c'])
+
+        query = User.select().order_by(User.username)
+        self.assertEqual([u.username for u in query], ['a', 'b', 'c'])
 
     @requires_models(KV)
     def test_retry_transaction_decorator(self):

@@ -3,16 +3,24 @@
 Cockroach Database
 ------------------
 
-`CockroachDB <https://www.cockroachlabs.com>` (CRDB) is well supported by
-peewee. The ``playhouse.cockroachdb`` extension module provides the following
-classes and helpers:
+`CockroachDB <https://www.cockroachlabs.com>`_ (CRDB) is well supported by
+peewee.
+
+.. code-block:: python
+
+    from playhouse.cockroachdb import CockroachDatabase
+
+    db = CockroachDatabase('my_app', user='root', host='10.1.0.8')
+
+The ``playhouse.cockroachdb`` extension module provides the following classes
+and helpers:
 
 * :py:class:`CockroachDatabase` - a subclass of :py:class:`PostgresqlDatabase`,
   designed specifically for working with CRDB.
 * :py:class:`PooledCockroachDatabase` - like the above, but implements
   connection-pooling.
-* :py:func:`run_transaction` - runs a function inside a transaction and
-  provides automatic client-side retry logic.
+* :py:meth:`~CockroachDatabase.run_transaction` - runs a function inside a
+  transaction and provides automatic client-side retry logic.
 
 Special field-types that may be useful when using CRDB:
 
@@ -26,11 +34,10 @@ Special field-types that may be useful when using CRDB:
   multi-dimensional arrays).
 
 CRDB is compatible with Postgres' wire protocol and exposes a very similar
-SQL interface, so it is possible (though not recommended) to use
-:py:class:`PostgresqlDatabase` with CRDB. There are a number of reasons for
-this:
+SQL interface, so it is possible (though **not recommended**) to use
+:py:class:`PostgresqlDatabase` with CRDB:
 
-1. CRDB does not support nested transactions, so the
+1. CRDB does not support nested transactions (savepoints), so the
    :py:meth:`~Database.atomic` method has been implemented to enforce this when
    using :py:class:`CockroachDatabase`. For more info :ref:`crdb-transactions`.
 2. CRDB may have subtle differences in field-types, date functions and
@@ -44,12 +51,13 @@ this:
 CRDB Transactions
 ^^^^^^^^^^^^^^^^^
 
-CRDB does not support nested transactions, so the :py:meth:`~Database.atomic`
-method on the :py:class:`CockroachDatabase` has been modified to raise an
-exception if an invalid nesting is encountered. If you would like to be able to
-nest transactional code, you can use the :py:meth:`~Database.transaction`
-method, which will ensure that the outer-most block will manage the
-transaction (e.g., exiting a nested-block will not cause an early commit).
+CRDB does not support nested transactions (savepoints), so the
+:py:meth:`~Database.atomic` method on the :py:class:`CockroachDatabase` has
+been modified to raise an exception if an invalid nesting is encountered. If
+you would like to be able to nest transactional code, you can use the
+:py:meth:`~Database.transaction` method, which will ensure that the outer-most
+block will manage the transaction (e.g., exiting a nested-block will not cause
+an early commit).
 
 Example:
 
@@ -63,9 +71,10 @@ Example:
         with db.transaction() as txn:
             # do some stuff...
 
-            # This function is wrapped in a transaction, but it will be
-            # ignored, as we are already in a wrapped-block (via the context
-            # manager).
+            # This function is wrapped in a transaction, but the nested
+            # transaction will be ignored and folded into the outer
+            # transaction, as we are already in a wrapped-block (via the
+            # context manager).
             create_user('some_user@example.com')
 
             # do other stuff.
@@ -76,16 +85,40 @@ Example:
 
 
 CRDB provides client-side transaction retries, which are available using a
-special :py:func:`run_transaction` helper. This helper function accepts a
-database instance as well as a callable, which is responsible for executing any
-transactional statements that may need to be retried.
+special :py:meth:`~CockroachDatabase.run_transaction` helper. This helper
+method accepts a callable, which is responsible for executing any transactional
+statements that may need to be retried.
 
-Example of using :py:func:`run_transaction` to implement client-side retries
-for a transaction that transfers an amount from one account to another:
+Simplest possible example of :py:meth:`~CockroachDatabase.run_transaction`:
 
 .. code-block:: python
 
-    from playhouse.cockroachdb import run_transaction
+    def create_user(email):
+        # Callable that accepts a single argument (the database instance) and
+        # which is responsible for executing the transactional SQL.
+        def callback(db_ref):
+            return User.create(email=email)
+
+        return db.run_transaction(callback, max_attempts=10)
+
+    huey = create_user('huey@example.com')
+
+.. note::
+    The ``cockroachdb.ExceededMaxAttempts`` exception will be raised if the
+    transaction cannot be committed after the given number of attempts. If the
+    SQL is mal-formed, violates a constraint, etc., then the function will
+    raise the exception to the caller.
+
+Example of using :py:meth:`~CockroachDatabase.run_transaction` to implement
+client-side retries for a transaction that transfers an amount from one account
+to another:
+
+.. code-block:: python
+
+    from playhouse.cockroachdb import CockroachDatabase
+
+    db = CockroachDatabase('my_app')
+
 
     def transfer_funds(from_id, to_id, amt):
         """
@@ -119,7 +152,7 @@ for a transaction that transfers an amount from one account to another:
         # Perform the queries that comprise a logical transaction. In the
         # event the transaction fails due to contention, it will be auto-
         # matically retried (up to 10 times).
-        return run_transaction(db, thunk, max_attempts=10)
+        return db.run_transaction(thunk, max_attempts=10)
 
 CRDB APIs
 ^^^^^^^^^
@@ -133,6 +166,45 @@ CRDB APIs
     constructor, and may be used to specify the database ``user``, ``port``,
     etc.
 
+    .. py:method:: run_transaction(callback[, max_attempts=None[, system_time=None[, priority=None]]])
+
+        :param CockroachDatabase db: database instance.
+        :param callback: callable that accepts a single ``db`` parameter (which
+            will be the same as the value passed above).
+        :param int max_attempts: max number of times to try before giving up.
+        :param datetime system_time: execute the transaction ``AS OF SYSTEM TIME``
+            with respect to the given value.
+        :param str priority: either "low", "normal" or "high".
+        :return: returns the value returned by the callback.
+        :raises: ``ExceededMaxAttempts`` if ``max_attempts`` is exceeded.
+
+        Run SQL in a transaction with automatic client-side retries.
+
+        User-provided ``callback``:
+
+        * **Must** accept one parameter, the ``db`` instance representing the
+          connection the transaction is running under.
+        * **Must** not attempt to commit, rollback or otherwise manage the
+          transaction.
+        * **May** be called more than one time.
+        * **Should** ideally only contain SQL operations.
+
+        Additionally, the database must not have any open transactions at the
+        time this function is called, as CRDB does not support nested
+        transactions. Attempting to do so will raise a ``NotImplementedError``.
+
+        Simplest possible example:
+
+        .. code-block:: python
+
+            def create_user(email):
+                def callback(db_ref):
+                    return User.create(email=email)
+
+                return db.run_transaction(callback, max_attempts=10)
+
+            user = create_user('huey@example.com')
+
 .. py:class:: PooledCockroachDatabase(database[, **kwargs])
 
     CockroachDB connection-pooling implementation, based on
@@ -141,30 +213,12 @@ CRDB APIs
 
 .. py:function:: run_transaction(db, callback[, max_attempts=None[, system_time=None[, priority=None]]])
 
-    :param CockroachDatabase db: database instance.
-    :param callback: callable that accepts a single ``db`` parameter (which
-        will be the same as the value passed above).
-    :param int max_attempts: max number of times to try before giving up.
-    :param datetime system_time: execute the transaction ``AS OF SYSTEM TIME``
-        with respect to the given value.
-    :param str priority: either "low", "normal" or "high".
-    :return: returns the value returned by the callback.
-    :raises: ``ExceededMaxAttempts`` if ``max_attempts`` is exceeded.
+    Run SQL in a transaction with automatic client-side retries. See
+    :py:meth:`CockroachDatabase.run_transaction` for details.
 
-    Run transactional SQL in a transaction with automatic retries.
-
-    User-provided ``callback``:
-
-    * **Must** accept one parameter, the ``db`` instance representing the
-      connection the transaction is running under.
-    * **Must** not attempt to commit, rollback or otherwise manage the
-      transaction.
-    * **May** be called more than one time.
-    * **Should** ideally only contain SQL operations.
-
-    Additionally, the database must not have any open transactions at the time
-    this function is called, as CRDB does not support nested transactions.
-    Attempting to do so will raise a ``NotImplementedError``.
+    .. note::
+        This function is equivalent to the identically-named method on
+        the :py:class:`CockroachDatabase` class.
 
 .. py:class:: UUIDKeyField()
 

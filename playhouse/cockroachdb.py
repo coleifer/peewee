@@ -155,6 +155,10 @@ class CockroachDatabase(PostgresqlDatabase):
             return new_fn
         return deco
 
+    def run_transaction(self, cb, max_attempts=None, system_time=None,
+                        priority=None):
+        return run_transaction(self, cb, max_attempts, system_time, priority)
+
 
 class _crdb_atomic(_atomic):
     def __enter__(self):
