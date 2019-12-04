@@ -7,6 +7,26 @@ https://github.com/coleifer/peewee/releases
 
 ## master
 
+### CockroachDB support added
+
+This will be a notable release as it adds support for
+[CockroachDB](https://cockroachlabs.com/), a distributed, horizontally-scalable
+SQL database.
+
+* [CockroachDB usage overview](http://docs.peewee-orm.com/en/latest/peewee/database.html#using-crdb)
+* [CockroachDB API documentation](http://docs.peewee-orm.com/en/latest/peewee/playhouse.html#crdb)
+
+### Other features and fixes
+
+* Allow `FOR UPDATE` clause to specify one or more tables (`FOR UPDATE OF...`).
+* Support for Postgres `LATERAL` join.
+* Properly wrap exceptions raised during explicit commit/rollback in the
+  appropriate peewee-specific exception class.
+* Capture original exception object and expose it as `exc.orig` on the
+  wrapped exception.
+* Properly introspect `SMALLINT` columns in Postgres schema reflection.
+* More flexible handling of passing database-specific arguments to `atomic()`
+  and `transaction()` context-manager/decorator.
 * Fix non-deterministic join ordering issue when using the `filter()` API
   across several tables (#2063).
 
