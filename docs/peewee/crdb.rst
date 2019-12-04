@@ -168,9 +168,8 @@ CRDB APIs
 
     .. py:method:: run_transaction(callback[, max_attempts=None[, system_time=None[, priority=None]]])
 
-        :param CockroachDatabase db: database instance.
         :param callback: callable that accepts a single ``db`` parameter (which
-            will be the same as the value passed above).
+            will be the database instance this method is called from).
         :param int max_attempts: max number of times to try before giving up.
         :param datetime system_time: execute the transaction ``AS OF SYSTEM TIME``
             with respect to the given value.
@@ -215,6 +214,10 @@ CRDB APIs
 
     Run SQL in a transaction with automatic client-side retries. See
     :py:meth:`CockroachDatabase.run_transaction` for details.
+
+    :param CockroachDatabase db: database instance.
+    :param callback: callable that accepts a single ``db`` parameter (which
+        will be the same as the value passed above).
 
     .. note::
         This function is equivalent to the identically-named method on
