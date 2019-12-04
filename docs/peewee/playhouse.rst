@@ -19,6 +19,7 @@ make up the ``playhouse``.
 * :ref:`apsw`
 * :ref:`sqlcipher_ext`
 * :ref:`postgres_ext`
+* :ref:`crdb`
 * :ref:`mysql_ext`
 
 **High-level features**
