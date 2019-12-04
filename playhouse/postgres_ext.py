@@ -154,7 +154,6 @@ class IndexedFieldMixin(object):
 
 class ArrayField(IndexedFieldMixin, Field):
     passthrough = True
-    unpack = False
 
     def __init__(self, field_class=IntegerField, field_kwargs=None,
                  dimensions=1, convert_values=False, *args, **kwargs):
@@ -238,7 +237,6 @@ class DateTimeTZField(DateTimeField):
 
 class HStoreField(IndexedFieldMixin, Field):
     field_type = 'HSTORE'
-    unpack = False
     __hash__ = Field.__hash__
 
     def __getitem__(self, key):
@@ -284,7 +282,6 @@ class HStoreField(IndexedFieldMixin, Field):
 
 class JSONField(Field):
     field_type = 'JSON'
-    unpack = False
     _json_datatype = 'json'
 
     def __init__(self, dumps=None, *args, **kwargs):

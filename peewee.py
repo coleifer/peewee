@@ -4452,7 +4452,7 @@ class Field(ColumnBase):
         return value if value is None else self.adapt(value)
 
     def to_value(self, value):
-        return Value(value, self.db_value, self.unpack)
+        return Value(value, self.db_value, unpack=False)
 
     def get_sort_key(self, ctx):
         return self._sort_key

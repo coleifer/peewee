@@ -1,4 +1,5 @@
 import datetime
+import json
 
 from peewee import *
 from playhouse.hybrid import *
@@ -1067,3 +1068,43 @@ class TestModelFilterJoinOrdering(ModelTestCase):
              .filter(page__site__url='s1')
              .order_by(PageItem.content))
         assertQ(q)
+
+
+class JsonField(TextField):
+    def db_value(self, value):
+        return json.dumps(value) if value is not None else None
+    def python_value(self, value):
+        if value is not None:
+            return json.loads(value)
+
+class JM(TestModel):
+    key = TextField()
+    data = JsonField()
+
+
+class TestListValueConversion(ModelTestCase):
+    requires = [JM]
+
+    def test_list_value_conversion(self):
+        jm = JM.create(key='k1', data=['i0', 'i1'])
+        jm.key = 'k1-x'
+        jm.save()
+
+        jm_db = JM.get(JM.key == 'k1-x')
+        self.assertEqual(jm_db.data, ['i0', 'i1'])
+
+        JM.update(data=['i1', 'i2']).execute()
+        jm_db = JM.get(JM.key == 'k1-x')
+        self.assertEqual(jm_db.data, ['i1', 'i2'])
+
+        jm2 = JM.create(key='k2', data=['i3', 'i4'])
+
+        jm_db.data = ['i1', 'i2', 'i3']
+        jm2.data = ['i4', 'i5']
+
+        JM.bulk_update([jm_db, jm2], fields=[JM.key, JM.data])
+
+        jm = JM.get(JM.key == 'k1-x')
+        self.assertEqual(jm.data, ['i1', 'i2', 'i3'])
+        jm2 = JM.get(JM.key == 'k2')
+        self.assertEqual(jm2.data, ['i4', 'i5'])
