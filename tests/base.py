@@ -79,8 +79,8 @@ if VERBOSITY > 2:
     handler.setLevel(logging.DEBUG)
 
 
-def new_connection():
-    return db_loader(BACKEND, 'peewee_test')
+def new_connection(**kwargs):
+    return db_loader(BACKEND, 'peewee_test', **kwargs)
 
 
 db = new_connection()

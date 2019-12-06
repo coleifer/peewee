@@ -2,9 +2,12 @@ from peewee import *
 
 from .base import DatabaseTestCase
 from .base import IS_CRDB
+from .base import IS_SQLITE
 from .base import ModelTestCase
 from .base import db
+from .base import new_connection
 from .base import skip_if
+from .base import skip_unless
 from .base_models import Register
 
 
@@ -345,3 +348,31 @@ class TestSession(BaseTransactionTestCase):
 
         self.assertTrue(db.session_rollback())
         self.assertRegister([1, 2, 3])
+
+
+@skip_unless(IS_SQLITE, 'requires sqlite for transaction lock type')
+class TestTransactionLockType(BaseTransactionTestCase):
+    def test_lock_type(self):
+        db2 = new_connection(timeout=0.001)
+        db2.connect()
+
+        with self.database.atomic(lock_type='EXCLUSIVE') as txn:
+            with self.assertRaises(OperationalError):
+                with db2.atomic(lock_type='IMMEDIATE') as t2:
+                    self._save(1)
+            self._save(2)
+        self.assertRegister([2])
+
+        with self.database.atomic('IMMEDIATE') as txn:
+            with self.assertRaises(OperationalError):
+                with db2.atomic('EXCLUSIVE') as t2:
+                    self._save(3)
+            self._save(4)
+        self.assertRegister([2, 4])
+
+        with self.database.transaction(lock_type='DEFERRED') as txn:
+            self._save(5)  # Deferred -> Exclusive after our write.
+            with self.assertRaises(OperationalError):
+                with db2.transaction(lock_type='IMMEDIATE') as t2:
+                    self._save(6)
+        self.assertRegister([2, 4, 5])

@@ -452,12 +452,12 @@ class DatabaseProxy(Proxy):
     """
     def connection_context(self):
         return ConnectionContext(self)
-    def atomic(self, *args):
-        return _atomic(self, *args)
+    def atomic(self, *args, **kwargs):
+        return _atomic(self, *args, **kwargs)
     def manual_commit(self):
         return _manual(self)
-    def transaction(self, *args):
-        return _transaction(self, *args)
+    def transaction(self, *args, **kwargs):
+        return _transaction(self, *args, **kwargs)
     def savepoint(self):
         return _savepoint(self)
 
@@ -3188,14 +3188,14 @@ class Database(_callable_context_manager):
         if self._state.transactions:
             return self._state.transactions[-1]
 
-    def atomic(self, *args):
-        return _atomic(self, *args)
+    def atomic(self, *args, **kwargs):
+        return _atomic(self, *args, **kwargs)
 
     def manual_commit(self):
         return _manual(self)
 
-    def transaction(self, *args):
-        return _transaction(self, *args)
+    def transaction(self, *args, **kwargs):
+        return _transaction(self, *args, **kwargs)
 
     def savepoint(self):
         return _savepoint(self)
@@ -4065,13 +4065,14 @@ class _manual(_callable_context_manager):
 
 
 class _atomic(_callable_context_manager):
-    def __init__(self, db, *args):
+    def __init__(self, db, *args, **kwargs):
         self.db = db
-        self._transaction_args = args
+        self._transaction_args = (args, kwargs)
 
     def __enter__(self):
         if self.db.transaction_depth() == 0:
-            self._helper = self.db.transaction(*self._transaction_args)
+            args, kwargs = self._transaction_args
+            self._helper = self.db.transaction(*args, **kwargs)
         elif isinstance(self.db.top_transaction(), _manual):
             raise ValueError('Cannot enter atomic commit block while in '
                              'manual commit mode.')
@@ -4084,12 +4085,13 @@ class _atomic(_callable_context_manager):
 
 
 class _transaction(_callable_context_manager):
-    def __init__(self, db, *args):
+    def __init__(self, db, *args, **kwargs):
         self.db = db
-        self._begin_args = args
+        self._begin_args = (args, kwargs)
 
     def _begin(self):
-        self.db.begin(*self._begin_args)
+        args, kwargs = self._begin_args
+        self.db.begin(*args, **kwargs)
 
     def commit(self, begin=True):
         self.db.commit()
