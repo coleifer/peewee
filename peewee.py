@@ -2883,10 +2883,13 @@ class _ConnectionState(object):
         self.transactions = []
 
 
+class _ConnectionThreadingLocal(_ConnectionState, threading.local): pass
+
+
 class _ConnectionLocal(_ConnectionState):
     def __init__(self, **kwargs):
         super(_ConnectionLocal, self).__setattr__('_astate', None)
-        super(_ConnectionLocal, self).__setattr__('state', None)
+        super(_ConnectionLocal, self).__setattr__('_state', None)
         if contextvars is not None:
             super(_ConnectionLocal, self).__setattr__('_astate', {})
             self._astate['closed'] = contextvars.ContextVar('closed', default=True)
@@ -2894,7 +2897,7 @@ class _ConnectionLocal(_ConnectionState):
             self._astate['ctx'] = contextvars.ContextVar('ctx', default=[])
             self._astate['transactions'] = contextvars.ContextVar('transactions', default=[])
         else:
-            super(_ConnectionLocal, self).__setattr__('_state', threading.local())
+            super(_ConnectionLocal, self).__setattr__('_state', _ConnectionThreadingLocal())
         super(_ConnectionLocal, self).__init__(**kwargs)
 
     def __setattr__(self, name, value):
