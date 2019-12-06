@@ -7,7 +7,15 @@ https://github.com/coleifer/peewee/releases
 
 ## master
 
-[View commits](https://github.com/coleifer/peewee/compare/3.13.0...master)
+[View commits](https://github.com/coleifer/peewee/compare/3.13.1...master)
+
+## 3.13.1
+
+Fix a regression when specifying keyword arguments to the `atomic()` or
+`transaction()` helper methods. Note: this only occurs if you were using Sqlite
+and were explicitly setting the `lock_type=` parameter.
+
+[View commits](https://github.com/coleifer/peewee/compare/3.13.0...3.13.1)
 
 ## 3.13.0
 
