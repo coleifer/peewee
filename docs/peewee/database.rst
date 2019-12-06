@@ -1399,7 +1399,7 @@ Then you can use that dependency in the *path operations* that need to use the d
 
 Doing this the connection will only be created for the *path operations* that need it.
 
-And after the ``yield``, you can close the connection as normally.
+And after the ``yield``, you can then close the connection.
 
 .. code-block:: python
 
@@ -1451,7 +1451,7 @@ FastAPI will still run concurrently, but it will run those functions in a thread
 
 .. note::
     If you used ``async def`` instead of normal ``def`` functions while using Peewee, it
-    would degrade performance, as most of the operations are blocking.
+    would degrade performance, as most of the operations are I/O-blocking.
 
 As the functions will be run in a threadpool, you have to tell the ``SqliteDatabase``
 to allow different threads with ``check_same_thread=False``.
