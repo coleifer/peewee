@@ -7,6 +7,10 @@ https://github.com/coleifer/peewee/releases
 
 ## master
 
+[View commits](https://github.com/coleifer/peewee/compare/3.13.0...master)
+
+## 3.13.0
+
 ### CockroachDB support added
 
 This will be a notable release as it adds support for
@@ -30,7 +34,7 @@ SQL database.
 * Fix non-deterministic join ordering issue when using the `filter()` API
   across several tables (#2063).
 
-[View commits](https://github.com/coleifer/peewee/compare/3.12.0...master)
+[View commits](https://github.com/coleifer/peewee/compare/3.12.0...3.13.0)
 
 ## 3.12.0
 
