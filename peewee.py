@@ -21,6 +21,10 @@ import time
 import uuid
 import warnings
 try:
+    import contextvars
+except ImportError:
+    contextvars = None
+try:
     from collections.abc import Mapping
 except ImportError:
     from collections import Mapping
@@ -2879,7 +2883,37 @@ class _ConnectionState(object):
         self.transactions = []
 
 
-class _ConnectionLocal(_ConnectionState, threading.local): pass
+class _ConnectionLocal(_ConnectionState):
+    def __init__(self, **kwargs):
+        super(_ConnectionLocal, self).__setattr__('_astate', None)
+        super(_ConnectionLocal, self).__setattr__('state', None)
+        if contextvars is not None:
+            super(_ConnectionLocal, self).__setattr__('_astate', {})
+            self._astate['closed'] = contextvars.ContextVar('closed', default=True)
+            self._astate['conn'] = contextvars.ContextVar('conn', default=None)
+            self._astate['ctx'] = contextvars.ContextVar('ctx', default=[])
+            self._astate['transactions'] = contextvars.ContextVar('transactions', default=[])
+        else:
+            super(_ConnectionLocal, self).__setattr__('_state', threading.local())
+        super(_ConnectionLocal, self).__init__(**kwargs)
+
+    def __setattr__(self, name, value):
+        # Any attribute starting with _ will be set directly, e.g. _state, _astate
+        if name.startswith('_'):
+            super(_ConnectionLocal, self).__setattr__(name, value)
+
+        if self._astate is not None:
+            self._astate[name].set(value)
+        else:
+            setattr(self._state, name, value)
+
+    def __getattr__(self, name):
+        if self._astate is not None:
+            return self._astate[name].get()
+        else:
+            return getattr(self._state, name)
+
+
 class _NoopLock(object):
     __slots__ = ()
     def __enter__(self): return self
