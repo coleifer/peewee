@@ -232,6 +232,29 @@ class TestSelectQuery(BaseTestCase):
             'WHERE (("t1"."dob" > ?) OR ("t1"."dob" < ?))'),
             [datetime.date(1980, 1, 1), datetime.date(1950, 1, 1)])
 
+    def test_limit(self):
+        base = User.select(User.c.id)
+        self.assertSQL(base.limit(None), (
+            'SELECT "t1"."id" FROM "users" AS "t1"'), [])
+        self.assertSQL(base.limit(10), (
+            'SELECT "t1"."id" FROM "users" AS "t1" LIMIT ?'), [10])
+        self.assertSQL(base.limit(10).offset(3), (
+            'SELECT "t1"."id" FROM "users" AS "t1" '
+            'LIMIT ? OFFSET ?'), [10, 3])
+        self.assertSQL(base.limit(0), (
+            'SELECT "t1"."id" FROM "users" AS "t1" LIMIT ?'), [0])
+
+        self.assertSQL(base.offset(3), (
+            'SELECT "t1"."id" FROM "users" AS "t1" OFFSET ?'), [3],
+            limit_max=None)
+        # Some databases do not support offset without corresponding LIMIT:
+        self.assertSQL(base.offset(3), (
+            'SELECT "t1"."id" FROM "users" AS "t1" LIMIT ? OFFSET ?'), [-1, 3],
+            limit_max=-1)
+        self.assertSQL(base.limit(0).offset(3), (
+            'SELECT "t1"."id" FROM "users" AS "t1" LIMIT ? OFFSET ?'), [0, 3],
+            limit_max=-1)
+
     def test_simple_join(self):
         query = (User
                  .select(
