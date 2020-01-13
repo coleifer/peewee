@@ -285,6 +285,25 @@ class TestArrayField(ModelTestCase):
             tags=['alpha', 'beta', 'gamma', 'delta'],
             ints=[[1, 2], [3, 4], [5, 6]])
 
+    def test_index_expression(self):
+        data = (
+            (['a', 'b', 'c'], []),
+            (['b', 'c', 'd', 'e'], []))
+        am_ids = []
+        for tags, ints in data:
+            am = ArrayModel.create(tags=tags, ints=ints)
+            am_ids.append(am.id)
+
+        last_tag = fn.array_upper(ArrayModel.tags, 1)
+        query = ArrayModel.select(ArrayModel.tags[last_tag]).tuples()
+        self.assertEqual(sorted([t for t, in query]), ['c', 'e'])
+
+        q = ArrayModel.select().where(ArrayModel.tags[last_tag] < 'd')
+        self.assertEqual([a.id for a in q], [am_ids[0]])
+
+        q = ArrayModel.select().where(ArrayModel.tags[last_tag] > 'd')
+        self.assertEqual([a.id for a in q], [am_ids[1]])
+
     def test_array_get_set(self):
         am = self.create_sample()
         am_db = ArrayModel.get(ArrayModel.id == am.id)

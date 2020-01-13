@@ -131,14 +131,20 @@ class ObjectSlice(_LookupNode):
             parts = [value.start or 0, value.stop or 0]
         elif isinstance(value, int):
             parts = [value]
+        elif isinstance(value, Node):
+            parts = value
         else:
-            parts = map(int, value.split(':'))
+            # Assumes colon-separated integer indexes.
+            parts = [int(i) for i in value.split(':')]
         return cls(node, parts)
 
     def __sql__(self, ctx):
-        return (ctx
-                .sql(self.node)
-                .literal('[%s]' % ':'.join(str(p + 1) for p in self.parts)))
+        ctx.sql(self.node)
+        if isinstance(self.parts, Node):
+            ctx.literal('[').sql(self.parts).literal(']')
+        else:
+            ctx.literal('[%s]' % ':'.join(str(p + 1) for p in self.parts))
+        return ctx
 
     def __getitem__(self, value):
         return ObjectSlice.create(self, value)
