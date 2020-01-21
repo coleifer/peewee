@@ -7497,6 +7497,7 @@ class PrefetchQuery(collections.namedtuple('_PrefetchQuery', (
                 rel_instances = id_map.get(key, [])
                 for inst in rel_instances:
                     setattr(inst, attname, instance)
+                    inst._dirty.clear()
                 setattr(instance, field.backref, rel_instances)
 
     def store_instance(self, instance, id_map):

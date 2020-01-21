@@ -493,3 +493,13 @@ class TestPrefetch(ModelTestCase):
                 self.assertEqual(package.barcode, barcode)
                 self.assertEqual([item.name for item in package.items],
                                  list(items))
+
+    def test_prefetch_mark_dirty_regression(self):
+        people = Person.select().order_by(Person.name)
+        query = people.prefetch(Note, NoteItem)
+        for person in query:
+            self.assertEqual(person.dirty_fields, [])
+            for note in person.notes:
+                self.assertEqual(note.dirty_fields, [])
+                for item in note.items:
+                    self.assertEqual(item.dirty_fields, [])
