@@ -1617,6 +1617,29 @@ class TestSelectFeatures(BaseTestCase):
             'FILTER (WHERE ("t1"."dob" < ?)) '
             'FROM "person" AS "t1"'), [datetime.date(2000, 1, 1)])
 
+    def test_ordered_aggregate(self):
+        agg = fn.array_agg(Person.name).order_by(Person.id.desc())
+        self.assertSQL(Person.select(agg.alias('names')), (
+            'SELECT array_agg("t1"."name" ORDER BY "t1"."id" DESC) AS "names" '
+            'FROM "person" AS "t1"'), [])
+
+        agg = fn.string_agg(Person.name, ',').order_by(Person.dob, Person.id)
+        self.assertSQL(Person.select(agg), (
+            'SELECT string_agg("t1"."name", ? ORDER BY "t1"."dob", "t1"."id")'
+            ' FROM "person" AS "t1"'), [','])
+
+        agg = (fn.string_agg(Person.name.concat('-x'), ',')
+               .order_by(Person.name.desc(), Person.dob.asc()))
+        self.assertSQL(Person.select(agg), (
+            'SELECT string_agg(("t1"."name" || ?), ? ORDER BY "t1"."name" DESC'
+            ', "t1"."dob" ASC) '
+            'FROM "person" AS "t1"'), ['-x', ','])
+
+        agg = agg.order_by()
+        self.assertSQL(Person.select(agg), (
+            'SELECT string_agg(("t1"."name" || ?), ?) '
+            'FROM "person" AS "t1"'), ['-x', ','])
+
     def test_for_update(self):
         query = (Person
                  .select()

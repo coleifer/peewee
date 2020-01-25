@@ -1483,6 +1483,7 @@ class Function(ColumnBase):
         self.name = name
         self.arguments = arguments
         self._filter = None
+        self._order_by = None
         self._python_value = python_value
         if name and name.lower() in ('sum', 'count', 'cast'):
             self._coerce = False
@@ -1497,6 +1498,10 @@ class Function(ColumnBase):
     @Node.copy
     def filter(self, where=None):
         self._filter = where
+
+    @Node.copy
+    def order_by(self, *ordering):
+        self._order_by = ordering
 
     @Node.copy
     def python_value(self, func=None):
@@ -1520,11 +1525,21 @@ class Function(ColumnBase):
         if not len(self.arguments):
             ctx.literal('()')
         else:
+            args = self.arguments
+
+            # If this is an ordered aggregate, then we will modify the last
+            # argument to append the ORDER BY ... clause. We do this to avoid
+            # double-wrapping any expression args in parentheses, as NodeList
+            # has a special check (hack) in place to work around this.
+            if self._order_by:
+                args = list(args)
+                args[-1] = NodeList((args[-1], SQL('ORDER BY'),
+                                     CommaNodeList(self._order_by)))
+
             with ctx(in_function=True, function_arg_count=len(self.arguments)):
                 ctx.sql(EnclosedNodeList([
-                    (argument if isinstance(argument, Node)
-                     else Value(argument, False))
-                    for argument in self.arguments]))
+                    (arg if isinstance(arg, Node) else Value(arg, False))
+                    for arg in args]))
 
         if self._filter:
             ctx.literal(' FILTER (WHERE ').sql(self._filter).literal(')')
