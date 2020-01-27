@@ -159,6 +159,17 @@ class TestModelAPIs(ModelTestCase):
         self.assertEqual(pd2['content'], 'p2')
         self.assertEqual(pd2['timestamp'], ts2)
 
+    @requires_models(User)
+    def test_insert_many(self):
+        data = [('u%02d' % i,) for i in range(100)]
+        with self.database.atomic():
+            for chunk in chunked(data, 10):
+                User.insert_many(chunk).execute()
+
+        self.assertEqual(User.select().count(), 100)
+        names = [u.username for u in User.select().order_by(User.username)]
+        self.assertEqual(names, ['u%02d' % i for i in range(100)])
+
     @requires_models(User, Tweet)
     def test_create(self):
         with self.assertQueryCount(1):
