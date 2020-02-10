@@ -85,6 +85,17 @@ class Event(TestModel):
     venue = ForeignKeyField(Venue, backref='events', null=True)
 
 
+class Node(TestModel):
+    id = AutoField()
+    name = CharField()
+
+
+class Edge(TestModel):
+    a = ForeignKeyField(Node, column_name='a')
+    b = ForeignKeyField(Node, column_name='b')
+
+
+
 class TestModelAPIs(ModelTestCase):
     def add_user(self, username):
         return User.create(username=username)
@@ -2780,6 +2791,49 @@ class TestCTEIntegration(ModelTestCase):
             ('p2', 2, 'root->p2'),
             ('p3', 2, 'root->p3'),
             ('c31', 3, 'root->p3->c31')])
+
+    @requires_models(Node, Edge)
+    @skip_if(IS_SQLITE_OLD or IS_MYSQL or IS_CRDB, 'requires recursive cte')
+    def test_recursive_cte_graph(self):
+        #    A
+        #   / \
+        #  B   C
+        #   \ /
+        #    D
+        a, b, c, d = (Node.create(name=x) for x in 'abcd')
+        Edge.create(a=a, b=b)
+        Edge.create(a=a, b=c)
+        Edge.create(a=b, b=d)
+        Edge.create(a=c, b=d)
+
+        # We query for the transitive closure of A (excluding A itself)
+        Base = Edge.alias()
+        base_case = (Base
+                     .select(Base.a, Base.b)
+                     .where(Base.a == a)
+                     .cte('base', recursive=True))
+
+        RTerm = Edge.alias()
+        recursive = (RTerm
+                     .select(base_case.c.a, RTerm.b)
+                     .join(base_case, on=(RTerm.a == base_case.c.b)))
+
+        def nodes_of(cte):
+            query = (cte
+                     .select_from(cte.c.b)
+                     .select(Node.name)
+                     .join(Node, on=(Node.id == cte.c.b))
+                     .order_by(Node.name.asc()))
+            return [x.name for x in query]
+
+        data = nodes_of(base_case.union_all(recursive))
+        self.assertEqual(data, ['b', 'c', 'd', 'd'])
+
+        # Add a cycle from D->A. union_all would spin forever
+        Edge.create(a=d, b=a)
+
+        data = nodes_of(base_case.union(recursive))
+        self.assertEqual(data, ['a', 'b', 'c', 'd'])
 
     @requires_models(Sample)
     @skip_if(IS_SQLITE_OLD or IS_MYSQL, 'sqlite too old for ctes, mysql flaky')
