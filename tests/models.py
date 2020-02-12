@@ -2829,6 +2829,9 @@ class TestCTEIntegration(ModelTestCase):
         data = nodes_of(base_case.union_all(recursive))
         self.assertEqual(data, ['b', 'c', 'd', 'd'])
 
+        data = nodes_of(base_case.union(recursive))
+        self.assertEqual(data, ['b', 'c', 'd'])  # duplicate 'd' is removed
+
         # Add a cycle from D->A. union_all would spin forever
         Edge.create(a=d, b=a)
 
