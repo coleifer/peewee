@@ -7,6 +7,17 @@ https://github.com/coleifer/peewee/releases
 
 ## master
 
+* Allow aggregate functions to support an `ORDER BY` clause, via the addition
+  of an `order_by()` method to the function (`fn`) instance. Refs #2094.
+* Ensure postgres introspection methods return the columns for multi-column
+  indexes in the correct order. Fixes #2104.
+* Fix `prefetch()` bug, where related "backref" instances were marked as dirty,
+  even though they had no changes. Fixes #2091.
+* Support `LIMIT 0`. Previously a limit of 0 would be translated into
+  effectively an unlimited query on MySQL. References #2084.
+* Support indexing into arrays using expressions with Postgres array fields.
+  References #2085.
+
 [View commits](https://github.com/coleifer/peewee/compare/3.13.1...master)
 
 ## 3.13.1
