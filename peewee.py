@@ -3749,16 +3749,16 @@ class PostgresqlDatabase(Database):
         query = """
             SELECT
                 i.relname, idxs.indexdef, idx.indisunique,
-                array_to_string(array_agg(cols.attname), ',')
+                array_to_string(ARRAY(
+                    SELECT pg_get_indexdef(idx.indexrelid, k + 1, TRUE)
+                    FROM generate_subscripts(idx.indkey, 1) AS k
+                    ORDER BY k), ',')
             FROM pg_catalog.pg_class AS t
             INNER JOIN pg_catalog.pg_index AS idx ON t.oid = idx.indrelid
             INNER JOIN pg_catalog.pg_class AS i ON idx.indexrelid = i.oid
             INNER JOIN pg_catalog.pg_indexes AS idxs ON
                 (idxs.tablename = t.relname AND idxs.indexname = i.relname)
-            LEFT OUTER JOIN pg_catalog.pg_attribute AS cols ON
-                (cols.attrelid = t.oid AND cols.attnum = ANY(idx.indkey))
             WHERE t.relname = %s AND t.relkind = %s AND idxs.schemaname = %s
-            GROUP BY i.relname, idxs.indexdef, idx.indisunique
             ORDER BY idx.indisunique DESC, i.relname;"""
         cursor = self.execute_sql(query, (table, 'r', schema or 'public'))
         return [IndexMetadata(name, sql.rstrip(' ;'), columns.split(','),

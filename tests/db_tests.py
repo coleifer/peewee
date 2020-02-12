@@ -452,8 +452,18 @@ class Note(TestModel):
         table_name = 'notes'
 
 
+class Person(TestModel):
+    first = CharField()
+    last = CharField()
+    email = CharField()
+    class Meta:
+        indexes = (
+            (('last', 'first'), False),
+        )
+
+
 class TestIntrospection(ModelTestCase):
-    requires = [Category, User, UniqueModel, IndexedModel]
+    requires = [Category, User, UniqueModel, IndexedModel, Person]
 
     def test_table_exists(self):
         self.assertTrue(self.database.table_exists(User._meta.table_name))
@@ -485,6 +495,15 @@ class TestIntrospection(ModelTestCase):
              'indexed_model'),
             ('indexed_model_first_last_dob', ['first', 'last', 'dob'], True,
              'indexed_model')])
+
+        # Multi-column index where columns are in different order than declared
+        # on the table.
+        indexes = self.database.get_indexes('person')
+        data = [(index.name, index.columns, index.unique)
+                for index in indexes
+                if index.name not in ('person_pkey', 'PRIMARY')]
+        self.assertEqual(data, [
+            ('person_last_first', ['last', 'first'], False)])
 
     def test_get_columns(self):
         columns = self.database.get_columns('indexed_model')
