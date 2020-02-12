@@ -1057,6 +1057,11 @@ class CTE(_HashableSource, Source):
         return CTE(self._alias, clone + rhs, self._recursive, self._columns)
     __add__ = union_all
 
+    def union(self, rhs):
+        clone = self._query.clone()
+        return CTE(self._alias, clone | rhs, self._recursive, self._columns)
+    __or__ = union
+
     def __sql__(self, ctx):
         if ctx.scope != SCOPE_CTE:
             return ctx.sql(Entity(self._alias))

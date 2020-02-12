@@ -384,18 +384,22 @@ class TestSelectQuery(BaseTestCase):
             q1.c.next_fib_n,
             q1.c.fib_n + q1.c.next_fib_n)).from_(q1).where(n < 10)
 
-        cte = q1.union_all(rterm)
-        query = cte.select_from(cte.c.n, cte.c.fib_n)
-        self.assertSQL(query, (
-            'WITH RECURSIVE "fibonacci" AS ('
-            'SELECT ? AS "n", ? AS "fib_n", ? AS "next_fib_n" '
-            'UNION ALL '
-            'SELECT ("fibonacci"."n" + ?) AS "n", "fibonacci"."next_fib_n", '
-            '("fibonacci"."fib_n" + "fibonacci"."next_fib_n") '
-            'FROM "fibonacci" '
-            'WHERE ("n" < ?)) '
-            'SELECT "fibonacci"."n", "fibonacci"."fib_n" '
-            'FROM "fibonacci"'), [1, 0, 1, 1, 10])
+        cases = (
+            (q1.union_all, 'UNION ALL'),
+            (q1.union, 'UNION'))
+        for method, clause in cases:
+            cte = method(rterm)
+            query = cte.select_from(cte.c.n, cte.c.fib_n)
+            self.assertSQL(query, (
+                'WITH RECURSIVE "fibonacci" AS ('
+                'SELECT ? AS "n", ? AS "fib_n", ? AS "next_fib_n" '
+                '%s '
+                'SELECT ("fibonacci"."n" + ?) AS "n", "fibonacci"."next_fib_n", '
+                '("fibonacci"."fib_n" + "fibonacci"."next_fib_n") '
+                'FROM "fibonacci" '
+                'WHERE ("n" < ?)) '
+                'SELECT "fibonacci"."n", "fibonacci"."fib_n" '
+                'FROM "fibonacci"' % clause), [1, 0, 1, 1, 10])
 
     def test_cte_with_count(self):
         cte = User.select(User.c.id).cte('user_ids')
