@@ -251,6 +251,7 @@ class PostgresqlMetadata(Metadata):
         1115: DateTimeField,
         1182: DateField,
         1183: TimeField,
+        2951: UUIDField,
     }
     extension_import = 'from playhouse.postgres_ext import *'
 
