@@ -1063,7 +1063,7 @@ class TestTimestampField(ModelTestCase):
         y, m, d, H, M, S = ts_s
         self.assertEqual(y, 2019)
         self.assertEqual(m, 1)
-        self.assertEqual(d, 2)
+        self.assertEqual(d, dt_utc.day)
         self.assertEqual(H, dt_utc.hour)
         self.assertEqual(M, 4)
         self.assertEqual(S, 5)
