@@ -288,7 +288,7 @@ class PostgresqlMetadata(Metadata):
             postgres_ext.HStoreField)) if postgres_ext is not None else set()
 
         # Look up the actual column type for each column.
-        identifier = '%s.%s' % (schema, table)
+        identifier = '%s."%s"' % (schema, table)
         cursor = self.execute(
             'SELECT attname, atttypid FROM pg_catalog.pg_attribute '
             'WHERE attrelid = %s::regclass AND attnum > %s', identifier, 0)
