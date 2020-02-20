@@ -26,7 +26,7 @@ provides some basic, database-specific configuration options.
 
     # Connect to a MySQL database on network.
     mysql_db = MySQLDatabase('my_app', user='app', password='db_password',
-                             host='10.1.0.8', port=3316)
+                             host='10.1.0.8', port=3306)
 
     # Connect to a Postgres database.
     pg_db = PostgresqlDatabase('my_app', user='postgres', password='secret',
