@@ -67,7 +67,7 @@ class AsyncCursor(object):
         if not self._ready:
             self._wait()
         if self._exc is not None:
-            raise self._exec
+            raise self._exc
         return self
 
     def next(self):
