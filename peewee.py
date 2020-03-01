@@ -814,10 +814,14 @@ class _HashableSource(object):
         return self._hash
 
     def __eq__(self, other):
-        return self._hash == other._hash
+        if isinstance(other, _HashableSource):
+            return self._hash == other._hash
+        return Expression(self, OP.EQ, other)
 
     def __ne__(self, other):
-        return not (self == other)
+        if isinstance(other, _HashableSource):
+            return self._hash != other._hash
+        return Expression(self, OP.NE, other)
 
 
 def __bind_database__(meth):

@@ -1108,3 +1108,17 @@ class TestListValueConversion(ModelTestCase):
         self.assertEqual(jm.data, ['i1', 'i2', 'i3'])
         jm2 = JM.get(JM.key == 'k2')
         self.assertEqual(jm2.data, ['i4', 'i5'])
+
+
+class TestCountSubqueryEquals(ModelTestCase):
+    requires = [User, Tweet]
+
+    def test_count_subquery_equals(self):
+        a, b, c = [User.create(username=u) for u in 'abc']
+        Tweet.insert_many([(a, 'a1'), (b, 'b1')]).execute()
+
+        subq = (Tweet
+                .select(fn.COUNT(Tweet.id))
+                .where(Tweet.user == User.id))
+        query = User.select().where(subq == 0)
+        self.assertEqual([u.username for u in query], ['c'])
