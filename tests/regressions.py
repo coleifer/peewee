@@ -1122,3 +1122,25 @@ class TestCountSubqueryEquals(ModelTestCase):
                 .where(Tweet.user == User.id))
         query = User.select().where(subq == 0)
         self.assertEqual([u.username for u in query], ['c'])
+
+
+class BoolModel(TestModel):
+    key = TextField()
+    active = BooleanField()
+
+
+class TestBooleanCompare(ModelTestCase):
+    requires = [BoolModel]
+
+    def test_boolean_compare(self):
+        b1 = BoolModel.create(key='b1', active=True)
+        b2 = BoolModel.create(key='b2', active=False)
+
+        expr2key = (
+            ((BoolModel.active == True), 'b1'),
+            ((BoolModel.active == False), 'b2'),
+            ((BoolModel.active != True), 'b2'),
+            ((BoolModel.active != False), 'b1'))
+        for expr, key in expr2key:
+            q = BoolModel.select().where(expr)
+            self.assertEqual([b.key for b in q], [key])
