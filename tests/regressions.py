@@ -1144,3 +1144,32 @@ class TestBooleanCompare(ModelTestCase):
         for expr, key in expr2key:
             q = BoolModel.select().where(expr)
             self.assertEqual([b.key for b in q], [key])
+
+
+class CPK(TestModel):
+    name = TextField()
+
+class CPKFK(TestModel):
+    key = CharField()
+    cpk = ForeignKeyField(CPK)
+    class Meta:
+        primary_key = CompositeKey('key', 'cpk')
+
+
+class TestCompositePKwithFK(ModelTestCase):
+    requires = [CPK, CPKFK]
+
+    def test_composite_pk_with_fk(self):
+        c1 = CPK.create(name='c1')
+        c2 = CPK.create(name='c2')
+        CPKFK.create(key='k1', cpk=c1)
+        CPKFK.create(key='k2', cpk=c1)
+        CPKFK.create(key='k3', cpk=c2)
+
+        query = (CPKFK
+                 .select(CPKFK.key, CPK)
+                 .join(CPK)
+                 .order_by(CPKFK.key, CPK.name))
+        with self.assertQueryCount(1):
+            self.assertEqual([(r.key, r.cpk.name) for r in query],
+                             [('k1', 'c1'), ('k2', 'c1'), ('k3', 'c2')])

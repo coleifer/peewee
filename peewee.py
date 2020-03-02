@@ -5400,11 +5400,21 @@ class CompositeKey(MetaField):
 
     def __init__(self, *field_names):
         self.field_names = field_names
+        self._safe_field_names = None
+
+    @property
+    def safe_field_names(self):
+        if self._safe_field_names is None:
+            if self.model is None:
+                return self.field_names
+
+            self._safe_field_names = [self.model._meta.fields[f].safe_name
+                                      for f in self.field_names]
+        return self._safe_field_names
 
     def __get__(self, instance, instance_type=None):
         if instance is not None:
-            return tuple([getattr(instance, field_name)
-                          for field_name in self.field_names])
+            return tuple([getattr(instance, f) for f in self.safe_field_names])
         return self
 
     def __set__(self, instance, value):
