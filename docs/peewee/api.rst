@@ -4737,6 +4737,12 @@ Model
                 for tweet in user.tweets:
                     print('  *', tweet.content)
 
+        .. note::
+            Because ``prefetch`` must reconstruct a graph of models, it is
+            necessary to be sure that the foreign-key/primary-key of any
+            related models are selected, so that the related objects can be
+            mapped correctly.
+
 
 .. py:function:: prefetch(sq, *subqueries)
 
@@ -4766,6 +4772,12 @@ Model
             print(user.username)
             for tweet in user.tweets:  # Does not require additional query.
                 print('    ', tweet.content)
+
+    .. note::
+        Because ``prefetch`` must reconstruct a graph of models, it is
+        necessary to be sure that the foreign-key/primary-key of any
+        related models are selected, so that the related objects can be
+        mapped correctly.
 
 
 Query-builder Internals
