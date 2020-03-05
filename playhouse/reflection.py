@@ -176,7 +176,14 @@ class Metadata(object):
         if len(pk_names) == 1:
             pk = pk_names[0]
             if column_types[pk] is IntegerField:
-                column_types[pk] = AutoField
+                if isinstance(self.database, SqliteDatabase):
+                    column_types[pk] = AutoField
+                elif isinstance(self.database, PostgresqlDatabase) and \
+                        metadata[pk].default is not None:
+                    column_types[pk] = AutoField
+                elif isinstance(self.database, MySQLDatabase) and \
+                        metadata[pk].extra == 'auto_increment':
+                    column_types[pk] = AutoField
             elif column_types[pk] is BigIntegerField:
                 column_types[pk] = BigAutoField
 

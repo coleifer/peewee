@@ -2879,7 +2879,7 @@ IndexMetadata = collections.namedtuple(
     ('name', 'sql', 'columns', 'unique', 'table'))
 ColumnMetadata = collections.namedtuple(
     'ColumnMetadata',
-    ('name', 'data_type', 'null', 'primary_key', 'table', 'default'))
+    ('name', 'data_type', 'null', 'primary_key', 'table', 'default', 'extra'))
 ForeignKeyMetadata = collections.namedtuple(
     'ForeignKeyMetadata',
     ('column', 'dest_table', 'dest_column', 'table'))
@@ -3614,8 +3614,9 @@ class SqliteDatabase(Database):
     def get_columns(self, table, schema=None):
         cursor = self.execute_sql('PRAGMA "%s".table_info("%s")' %
                                   (schema or 'main', table))
-        return [ColumnMetadata(r[1], r[2], not r[3], bool(r[5]), table, r[4])
-                for r in cursor.fetchall()]
+        return [ColumnMetadata(
+            r[1], r[2], not r[3], bool(r[5]), table, r[4], None
+        ) for r in cursor.fetchall()]
 
     def get_primary_keys(self, table, schema=None):
         cursor = self.execute_sql('PRAGMA "%s".table_info("%s")' %
@@ -3782,8 +3783,9 @@ class PostgresqlDatabase(Database):
             ORDER BY ordinal_position"""
         cursor = self.execute_sql(query, (table, schema or 'public'))
         pks = set(self.get_primary_keys(table, schema))
-        return [ColumnMetadata(name, dt, null == 'YES', name in pks, table, df)
-                for name, null, dt, df in cursor.fetchall()]
+        return [ColumnMetadata(
+            name, dt, null == 'YES', name in pks, table, df, None
+        ) for name, null, dt, df in cursor.fetchall()]
 
     def get_primary_keys(self, table, schema=None):
         query = """
@@ -3965,13 +3967,14 @@ class MySQLDatabase(Database):
 
     def get_columns(self, table, schema=None):
         sql = """
-            SELECT column_name, is_nullable, data_type, column_default
+            SELECT column_name, is_nullable, data_type, column_default, extra
             FROM information_schema.columns
             WHERE table_name = %s AND table_schema = DATABASE()"""
         cursor = self.execute_sql(sql, (table,))
         pks = set(self.get_primary_keys(table))
-        return [ColumnMetadata(name, dt, null == 'YES', name in pks, table, df)
-                for name, null, dt, df in cursor.fetchall()]
+        return [ColumnMetadata(
+            name, dt, null == 'YES', name in pks, table, df, extra
+        ) for name, null, dt, df, extra in cursor.fetchall()]
 
     def get_primary_keys(self, table, schema=None):
         cursor = self.execute_sql('SHOW INDEX FROM `%s`' % table)

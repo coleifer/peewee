@@ -6,6 +6,7 @@ from peewee import *
 from playhouse.reflection import *
 
 from .base import IS_CRDB
+from .base import IS_SQLITE
 from .base import IS_SQLITE_OLD
 from .base import ModelTestCase
 from .base import TestModel
@@ -15,6 +16,10 @@ from .base import requires_sqlite
 from .base import skip_if
 from .base_models import Tweet
 from .base_models import User
+
+
+class IntegerFieldPrimaryKey(TestModel):
+    id = IntegerField(primary_key=True)
 
 
 class ColTypes(TestModel):
@@ -75,8 +80,8 @@ class BaseReflectionTestCase(ModelTestCase):
 
 
 class TestReflection(BaseReflectionTestCase):
-    requires = [ColTypes, Nullable, RelModel, FKPK, Underscores, Category,
-                Nugget]
+    requires = [IntegerFieldPrimaryKey, ColTypes, Nullable, RelModel, FKPK,
+                Underscores, Category, Nugget]
 
     def test_generate_models(self):
         models = self.introspector.generate_models()
@@ -84,6 +89,7 @@ class TestReflection(BaseReflectionTestCase):
             'category',
             'col_types',
             'fkpk',
+            'integer_field_primary_key',
             'nugget',
             'nullable',
             'rel_model',
@@ -233,6 +239,8 @@ class TestReflection(BaseReflectionTestCase):
          indexes) = self.introspector.introspect()
 
         expected = (
+            ('integer_field_primary_key', (
+                ('id', AutoField if IS_SQLITE else IntegerField, False),)),
             ('col_types', (
                 ('f1', (BigIntegerField, IntegerField), False),
                 # There do not appear to be separate constants for the blob and
@@ -386,6 +394,12 @@ class TestReflection(BaseReflectionTestCase):
          indexes) = self.introspector.introspect()
 
         expected = (
+            ('integer_field_primary_key', (
+                ('id', 'id = %s' %
+                 ('AutoField()'
+                 if IS_SQLITE
+                 else 'IntegerField(primary_key=True)')),
+            )),
             ('col_types', (
                 ('f1', ('f1 = BigIntegerField(index=True)',
                         'f1 = IntegerField(index=True)')),
