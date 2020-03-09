@@ -1089,7 +1089,7 @@ postgres_ext API notes
     :param select_query: a :py:class:`SelectQuery` instance.
     :rtype generator:
 
-    Wrap the given select query in a transaction, and call it's
+    Wrap the given select query in a transaction, and call its
     :py:meth:`~SelectQuery.iterator` method to avoid caching row instances. In
     order for the server-side resources to be released, be sure to exhaust the
     generator (iterate over all the rows).
@@ -3390,7 +3390,7 @@ connections are recycled, as well as an upper bound on the number of open
 connections.
 
 In a multi-threaded application, up to `max_connections` will be opened. Each
-thread (or, if using gevent, greenlet) will have it's own connection.
+thread (or, if using gevent, greenlet) will have its own connection.
 
 In a single-threaded application, only one connection will be created. It will
 be continually recycled until either it exceeds the stale timeout or is closed
@@ -3554,7 +3554,7 @@ Database Wrapper
 ^^^^^^^^^^^^^^^^
 
 The :py:class:`FlaskDB` class is a wrapper for configuring and referencing a
-Peewee database from within a Flask application. Don't let it's name fool you:
+Peewee database from within a Flask application. Don't let its name fool you:
 it is **not the same thing as a peewee database**. ``FlaskDB`` is designed to
 remove the following boilerplate from your flask app:
 
@@ -3650,7 +3650,7 @@ Using a peewee :py:class:`Database` object:
 Database with Application Factory
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-If you prefer to use the `application factory pattern <http://flask.pocoo.org/docs/0.10/patterns/appfactories/>`_,
+If you prefer to use the `application factory pattern <https://flask.palletsprojects.com/en/1.1.x/patterns/appfactories/>`_,
 the :py:class:`FlaskDB` class implements an ``init_app()`` method.
 
 Using as a factory:
