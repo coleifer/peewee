@@ -1076,3 +1076,21 @@ class TestModelIndex(BaseTestCase):
         self.assertSQL(aidx, (
             'CREATE UNIQUE INDEX IF NOT EXISTS "article_timestamp" '
             'ON "article" ("timestamp" DESC, ("flags" & ?))'), [4])
+
+
+class TestModelArgument(BaseTestCase):
+    database = SqliteDatabase(None)
+
+    def test_model_as_argument(self):
+        class Post(TestModel):
+            content = TextField()
+            timestamp = DateTimeField()
+            class Meta:
+                database = self.database
+
+        query = (Post
+                 .select(Post.id, fn.score(Post).alias('score'))
+                 .order_by(Post.timestamp))
+        self.assertSQL(query, (
+            'SELECT "t1"."id", score("t1") AS "score" '
+            'FROM "post" AS "t1" ORDER BY "t1"."timestamp"'), [])

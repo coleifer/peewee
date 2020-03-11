@@ -1344,6 +1344,14 @@ class Value(ColumnBase):
             # For multi-part values (e.g. lists of IDs).
             return ctx.sql(EnclosedNodeList(self.values))
 
+        # Under certain circumstances, we could end-up treating a model-class
+        # itself as a value. This check ensures that we drop the table alias
+        # into the query instead of trying to parameterize a model (for
+        # instance, when passing a model as a function argument).
+        if is_model(self.value):
+            with ctx.scope_column():
+                return ctx.sql(self.value)
+
         return ctx.value(self.value, self.converter)
 
 
@@ -6152,6 +6160,9 @@ class ModelBase(type):
         return self.select().count()
     def __bool__(self): return True
     __nonzero__ = __bool__  # Python 2.
+
+    def __sql__(self, ctx):
+        return ctx.sql(self._meta.table)
 
 
 class _BoundModelsContext(_callable_context_manager):
