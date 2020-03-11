@@ -3015,6 +3015,17 @@ Adding or dropping table constraints:
     # Add a UNIQUE constraint on the first and last names.
     migrate(migrator.add_unique('person', 'first_name', 'last_name'))
 
+.. note::
+    Postgres users may need to set the search-path when using a non-standard
+    schema. This can be done as follows:
+
+    .. code-block:: python
+
+        new_field = TextField(default='', null=False)
+        migrator = PostgresqlMigrator(db)
+        migrate(migrator.set_search_path('my_schema_name'),
+                migrator.add_column('table', 'field_name', new_field))
+
 
 Migrations API
 ^^^^^^^^^^^^^^
