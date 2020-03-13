@@ -7315,6 +7315,11 @@ class BaseModelCursorWrapper(DictCursorWrapper):
                     # that if a TypeError or ValueError occurs during
                     # conversion we can just fall-back to the raw cursor value.
                     first = node.arguments[0].unwrap()
+                    while True:
+                        if isinstance(first, Function):
+                            first = first.arguments[0].unwrap()
+                        else:
+                            break
                     if isinstance(first, Entity):
                         path = first._path[-1]  # Try to look-up by name.
                         first = combined.get(path)
