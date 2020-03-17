@@ -63,14 +63,16 @@ try:
 
     class JsonModelNull(TestModel):
         data = JSONField(null=True)
-except:
-    JsonModel = JsonModelNull = None
 
-try:
     class BJson(TestModel):
         data = BinaryJSONField()
+
+    class JData(TestModel):
+        d1 = BinaryJSONField()
+        d2 = BinaryJSONField()
 except:
-    BJson = None
+    BJson = JData = None
+    JsonModel = JsonModelNull = None
 
 
 class Normal(TestModel):
@@ -624,6 +626,22 @@ class TestBinaryJsonFieldBulkUpdate(ModelTestCase):
         b2_db = BJson.get(BJson.id == b2.id)
         self.assertEqual(b1_db.data, {'k1': 'v1-x'})
         self.assertEqual(b2_db.data, {'k2': 'v2-y'})
+
+
+@skip_unless(JSON_SUPPORT, 'json support unavailable')
+class TestJsonFieldRegressions(ModelTestCase):
+    database = db
+    requires = [JData]
+
+    def test_json_field_concat(self):
+        jd = JData.create(
+            d1={'k1': {'x1': 'y1'}, 'k2': 'v2', 'k3': 'v3'},
+            d2={'k1': {'x2': 'y2'}, 'k2': 'v2-x', 'k4': 'v4'})
+
+        query = JData.select(JData.d1.concat(JData.d2).alias('data'))
+        obj = query.get()
+        self.assertEqual(obj.data, {
+            'k1': {'x2': 'y2'}, 'k2': 'v2-x', 'k3': 'v3', 'k4': 'v4'})
 
 
 class TestIntervalField(ModelTestCase):

@@ -76,7 +76,9 @@ class _JsonLookupBase(_LookupNode):
         self._as_json = as_json
 
     def concat(self, rhs):
-        return Expression(self.as_json(True), OP.CONCAT, Json(rhs))
+        if not isinstance(rhs, Node):
+            rhs = Json(rhs)
+        return Expression(self.as_json(True), OP.CONCAT, rhs)
 
     def contains(self, other):
         clone = self.as_json(True)
@@ -310,7 +312,9 @@ class JSONField(Field):
         return JsonPath(self, keys)
 
     def concat(self, value):
-        return super(JSONField, self).concat(Json(value))
+        if not isinstance(value, Node):
+            value = Json(value)
+        return super(JSONField, self).concat(value)
 
 
 def cast_jsonb(node):
