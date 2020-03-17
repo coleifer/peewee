@@ -667,7 +667,7 @@ class SqliteMigrator(SchemaMigrator):
     """
     column_re = re.compile('(.+?)\((.+)\)')
     column_split_re = re.compile(r'(?:[^,(]|\([^)]*\))+')
-    column_name_re = re.compile(r'["`\']?([\w]+)')
+    column_name_re = re.compile(r'''["`']?([\w]+)''')
     fk_re = re.compile(r'FOREIGN KEY\s+\("?([\w]+)"?\)\s+', re.I)
 
     def _get_column_names(self, table):
