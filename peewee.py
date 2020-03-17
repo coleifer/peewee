@@ -2814,7 +2814,7 @@ class ModelIndex(Index):
             raise ValueError('Unable to generate a name for the index, please '
                              'explicitly specify a name.')
 
-        clean_field_names = re.sub('[^\w]+', '', '_'.join(accum))
+        clean_field_names = re.sub(r'[^\w]+', '', '_'.join(accum))
         meta = model._meta
         prefix = meta.name if meta.legacy_table_names else meta.table_name
         return _truncate_constraint_name('_'.join((prefix, clean_field_names)))
@@ -5803,7 +5803,7 @@ class Metadata(object):
 
     def make_table_name(self):
         if self.legacy_table_names:
-            return re.sub('[^\w]+', '_', self.name)
+            return re.sub(r'[^\w]+', '_', self.name)
         return make_snake_case(self.model.__name__)
 
     def model_graph(self, refs=True, backrefs=True, depth_first=True):

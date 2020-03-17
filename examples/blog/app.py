@@ -82,7 +82,7 @@ class Entry(flask_db.Model):
     def save(self, *args, **kwargs):
         # Generate a URL-friendly representation of the entry's title.
         if not self.slug:
-            self.slug = re.sub('[^\w]+', '-', self.title.lower()).strip('-')
+            self.slug = re.sub(r'[^\w]+', '-', self.title.lower()).strip('-')
         ret = super(Entry, self).save(*args, **kwargs)
 
         # Store search content.

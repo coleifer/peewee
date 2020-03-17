@@ -519,7 +519,7 @@ class Introspector(object):
     def make_model_name(self, table, snake_case=True):
         if snake_case:
             table = make_snake_case(table)
-        model = re.sub('[^\w]+', '', table)
+        model = re.sub(r'[^\w]+', '', table)
         model_name = ''.join(sub.title() for sub in model.split('_'))
         if not model_name[0].isalpha():
             model_name = 'T' + model_name
@@ -536,7 +536,7 @@ class Introspector(object):
             column = re.sub('_id$', '', column) or column
 
         # Remove characters that are invalid for Python identifiers.
-        column = re.sub('[^\w]+', '_', column)
+        column = re.sub(r'[^\w]+', '_', column)
         if column in RESERVED_WORDS:
             column += '_'
         if len(column) and column[0].isdigit():
@@ -599,7 +599,7 @@ class Introspector(object):
 
             for col_name, column in table_columns.items():
                 if literal_column_names:
-                    new_name = re.sub('[^\w]+', '_', col_name)
+                    new_name = re.sub(r'[^\w]+', '_', col_name)
                 else:
                     new_name = self.make_column_name(col_name, col_name in fks,
                                                      snake_case)
