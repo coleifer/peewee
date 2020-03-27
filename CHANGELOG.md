@@ -7,6 +7,10 @@ https://github.com/coleifer/peewee/releases
 
 ## master
 
+[View commits](https://github.com/coleifer/peewee/compare/3.13.2...master)
+
+## 3.13.2
+
 * Allow aggregate functions to support an `ORDER BY` clause, via the addition
   of an `order_by()` method to the function (`fn`) instance. Refs #2094.
 * Fix `prefetch()` bug, where related "backref" instances were marked as dirty,
@@ -28,7 +32,7 @@ https://github.com/coleifer/peewee/releases
   Refs #2131.
 * Ensure postgres `JSONField.concat()` accepts expressions as arguments.
 
-[View commits](https://github.com/coleifer/peewee/compare/3.13.1...master)
+[View commits](https://github.com/coleifer/peewee/compare/3.13.1...3.13.2)
 
 ## 3.13.1
 
