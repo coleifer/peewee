@@ -9,14 +9,24 @@ https://github.com/coleifer/peewee/releases
 
 * Allow aggregate functions to support an `ORDER BY` clause, via the addition
   of an `order_by()` method to the function (`fn`) instance. Refs #2094.
-* Ensure postgres introspection methods return the columns for multi-column
-  indexes in the correct order. Fixes #2104.
 * Fix `prefetch()` bug, where related "backref" instances were marked as dirty,
   even though they had no changes. Fixes #2091.
 * Support `LIMIT 0`. Previously a limit of 0 would be translated into
   effectively an unlimited query on MySQL. References #2084.
 * Support indexing into arrays using expressions with Postgres array fields.
   References #2085.
+* Ensure postgres introspection methods return the columns for multi-column
+  indexes in the correct order. Fixes #2104.
+* Add support for arrays of UUIDs to postgres introspection.
+* Fix introspection of columns w/capitalized table names in postgres (#2110).
+* Fix to ensure correct exception is raised in SqliteQueueDatabase when
+  iterating over cursor/result-set.
+* Fix bug comparing subquery against a scalar value. Fixes #2118.
+* Fix issue resolving composite primary-keys that include foreign-keys when
+  building the model-graph. Fixes #2115.
+* Allow model-classes to be passed as arguments, e.g., to a table function.
+  Refs #2131.
+* Ensure postgres `JSONField.concat()` accepts expressions as arguments.
 
 [View commits](https://github.com/coleifer/peewee/compare/3.13.1...master)
 
