@@ -1843,10 +1843,12 @@ you wish to export:
 API
 ^^^
 
-.. py:class:: DataSet(url)
+.. py:class:: DataSet(url, **kwargs)
 
     :param url: A database URL or a :py:class:`Database` instance. For
         details on using a URL, see :ref:`db_url` for examples.
+    :param kwargs: additional keyword arguments passed to
+        :py:meth:`Introspector.generate_models` when introspecting the db.
 
     The *DataSet* class provides a high-level API for working with relational
     databases.

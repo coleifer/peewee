@@ -25,7 +25,7 @@ else:
 
 
 class DataSet(object):
-    def __init__(self, url, bare_fields=False):
+    def __init__(self, url, **kwargs):
         if isinstance(url, Database):
             self._url = None
             self._database = url
@@ -45,7 +45,7 @@ class DataSet(object):
         self._models = self._introspector.generate_models(
             skip_invalid=True,
             literal_column_names=True,
-            bare_fields=bare_fields)
+            **kwargs)
         self._migrator = SchemaMigrator.from_database(self._database)
 
         class BaseModel(Model):
