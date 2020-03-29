@@ -1173,3 +1173,23 @@ class TestCompositePKwithFK(ModelTestCase):
         with self.assertQueryCount(1):
             self.assertEqual([(r.key, r.cpk.name) for r in query],
                              [('k1', 'c1'), ('k2', 'c1'), ('k3', 'c2')])
+
+
+class TestChainWhere(ModelTestCase):
+    requires = [User]
+
+    def test_chain_where(self):
+        for username in 'abcd':
+            User.create(username=username)
+
+        q = (User.select()
+             .where(User.username != 'a')
+             .where(User.username != 'd')
+             .order_by(User.username))
+        self.assertEqual([u.username for u in q], ['b', 'c'])
+
+        q = (User.select()
+             .where(User.username != 'a')
+             .where(User.username != 'd')
+             .where(User.username == 'b'))
+        self.assertEqual([u.username for u in q], ['b'])
