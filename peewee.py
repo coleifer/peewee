@@ -823,6 +823,15 @@ class _HashableSource(object):
             return self._hash != other._hash
         return Expression(self, OP.NE, other)
 
+    def _e(op):
+        def inner(self, rhs):
+            return Expression(self, op, rhs)
+        return inner
+    __lt__ = _e(OP.LT)
+    __le__ = _e(OP.LTE)
+    __gt__ = _e(OP.GT)
+    __ge__ = _e(OP.GTE)
+
 
 def __bind_database__(meth):
     @wraps(meth)
