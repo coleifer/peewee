@@ -1193,3 +1193,26 @@ class TestChainWhere(ModelTestCase):
              .where(User.username != 'd')
              .where(User.username == 'b'))
         self.assertEqual([u.username for u in q], ['b'])
+
+
+class BCUser(TestModel):
+    username = CharField(unique=True)
+
+class BCTweet(TestModel):
+    user = ForeignKeyField(BCUser, field=BCUser.username)
+    content = TextField()
+
+
+class TestBulkCreateWithFK(ModelTestCase):
+    requires = [BCUser, BCTweet]
+
+    def test_bulk_create_with_fk(self):
+        u1 = BCUser.create(username='u1')
+        u2 = BCUser.create(username='u2')
+        with self.assertQueryCount(1):
+            BCTweet.bulk_create([
+                BCTweet(user='u1', content='t%s' % i)
+                for i in range(4)])
+
+        self.assertEqual(BCTweet.select().where(BCTweet.user == 'u1').count(), 4)
+        self.assertEqual(BCTweet.select().where(BCTweet.user != 'u1').count(), 0)

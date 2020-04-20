@@ -5153,7 +5153,7 @@ class ForeignKeyField(Field):
 
     def db_value(self, value):
         if isinstance(value, self.rel_model):
-            value = value.get_id()
+            value = getattr(value, self.rel_field.name)
         return self.rel_field.db_value(value)
 
     def python_value(self, value):
@@ -6309,8 +6309,15 @@ class Model(with_metaclass(ModelBase, Node)):
             pk_fields = None
 
         fields = [cls._meta.fields[field_name] for field_name in field_names]
+        attrs = []
+        for field in fields:
+            if isinstance(field, ForeignKeyField):
+                attrs.append(field.object_id_name)
+            else:
+                attrs.append(field.name)
+
         for batch in batches:
-            accum = ([getattr(model, f) for f in field_names]
+            accum = ([getattr(model, f) for f in attrs]
                      for model in batch)
             res = cls.insert_many(accum, fields=fields).execute()
             if pk_fields and res is not None:
