@@ -1,5 +1,6 @@
 import datetime
 import json
+import uuid
 
 from peewee import *
 from playhouse.hybrid import *
@@ -1216,3 +1217,23 @@ class TestBulkCreateWithFK(ModelTestCase):
 
         self.assertEqual(BCTweet.select().where(BCTweet.user == 'u1').count(), 4)
         self.assertEqual(BCTweet.select().where(BCTweet.user != 'u1').count(), 0)
+
+
+class UUIDReg(TestModel):
+    id = UUIDField(primary_key=True, default=uuid.uuid4)
+    key = TextField()
+
+
+class TestBulkUpdateUUIDPK(ModelTestCase):
+    requires = [UUIDReg]
+
+    def test_bulk_update_uuid_pk(self):
+        r1 = UUIDReg.create(key='k1')
+        r2 = UUIDReg.create(key='k2')
+        r1.key = 'k1-x'
+        r2.key = 'k2-x'
+        UUIDReg.bulk_update((r1, r2), (UUIDReg.key,))
+
+        r1_db, r2_db = UUIDReg.select().order_by(UUIDReg.key)
+        self.assertEqual(r1_db.key, 'k1-x')
+        self.assertEqual(r2_db.key, 'k2-x')

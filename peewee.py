@@ -6344,6 +6344,8 @@ class Model(with_metaclass(ModelBase, Node)):
             batches = [model_list]
 
         n = 0
+        pk = cls._meta.primary_key
+
         for batch in batches:
             id_list = [model._pk for model in batch]
             update = {}
@@ -6353,8 +6355,8 @@ class Model(with_metaclass(ModelBase, Node)):
                     value = getattr(model, attr)
                     if not isinstance(value, Node):
                         value = field.to_value(value)
-                    accum.append((model._pk, value))
-                case = Case(cls._meta.primary_key, accum)
+                    accum.append((pk.to_value(model._pk), value))
+                case = Case(pk, accum)
                 update[field] = case
 
             n += (cls.update(update)
