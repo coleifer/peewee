@@ -1,5 +1,6 @@
 import datetime
 import json
+import sys
 import uuid
 
 from peewee import *
@@ -1227,6 +1228,7 @@ class UUIDReg(TestModel):
 class TestBulkUpdateUUIDPK(ModelTestCase):
     requires = [UUIDReg]
 
+    @skip_if(sys.version_info[0] == 2)
     def test_bulk_update_uuid_pk(self):
         r1 = UUIDReg.create(key='k1')
         r2 = UUIDReg.create(key='k2')
