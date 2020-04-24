@@ -62,6 +62,9 @@ class _LookupNode(ColumnBase):
     def clone(self):
         return type(self)(self.node, list(self.parts))
 
+    def __hash__(self):
+        return hash((self.__class__.__name__, id(self)))
+
 
 class _JsonLookupBase(_LookupNode):
     def __init__(self, node, parts, as_json=False):

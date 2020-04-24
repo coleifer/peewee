@@ -6237,8 +6237,10 @@ class Model(with_metaclass(ModelBase, Node)):
                     field = (key if isinstance(key, Field)
                              else cls._meta.combined[key])
                 except KeyError:
-                    raise ValueError('Unrecognized field name: "%s" in %s.' %
-                                     (key, data))
+                    if not isinstance(key, Node):
+                        raise ValueError('Unrecognized field name: "%s" in %s.'
+                                         % (key, data))
+                    field = key
                 normalized[field] = data[key]
         if kwargs:
             for key in kwargs:

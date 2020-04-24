@@ -306,6 +306,18 @@ class TestArrayField(ModelTestCase):
         q = ArrayModel.select().where(ArrayModel.tags[last_tag] > 'd')
         self.assertEqual([a.id for a in q], [am_ids[1]])
 
+    def test_hashable_objectslice(self):
+        ArrayModel.create(tags=[], ints=[[0, 1], [2, 3]])
+        ArrayModel.create(tags=[], ints=[[4, 5], [6, 7]])
+        n = (ArrayModel
+             .update({ArrayModel.ints[0][0]: ArrayModel.ints[0][0] + 1})
+             .execute())
+        self.assertEqual(n, 2)
+
+        am1, am2 = ArrayModel.select().order_by(ArrayModel.id)
+        self.assertEqual(am1.ints, [[1, 1], [2, 3]])
+        self.assertEqual(am2.ints, [[5, 5], [6, 7]])
+
     def test_array_get_set(self):
         am = self.create_sample()
         am_db = ArrayModel.get(ArrayModel.id == am.id)
