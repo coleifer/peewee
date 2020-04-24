@@ -7,7 +7,20 @@ https://github.com/coleifer/peewee/releases
 
 ## master
 
-[View commits](https://github.com/coleifer/peewee/compare/3.13.2...master)
+[View commits](https://github.com/coleifer/peewee/compare/3.13.3...master)
+
+## 3.13.3
+
+* Allow arbitrary keyword arguments to be passed to `DataSet` constructor,
+  which are then passed to the instrospector.
+* Allow scalar subqueries to be compared using numeric operands.
+* Fix `bulk_create()` when model being inserted uses FK identifiers.
+* Fix `bulk_update()` so that PK values are properly coerced to the right
+  data-type (e.g. UUIDs to strings for Sqlite).
+* Allow array indices to be used as dict keys, e.g. for the purposes of
+  updating a single array index value.
+
+[View commits](https://github.com/coleifer/peewee/compare/3.13.2...3.13.3)
 
 ## 3.13.2
 
