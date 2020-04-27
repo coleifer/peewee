@@ -4417,7 +4417,12 @@ class ObjectIdAccessor(object):
 
     def __get__(self, instance, instance_type=None):
         if instance is not None:
-            return instance.__data__.get(self.field.name)
+            value = instance.__data__.get(self.field.name)
+            # Pull the object-id from the related object if it is not set.
+            if value is None and self.field.name in instance.__rel__:
+                rel_obj = instance.__rel__[self.field.name]
+                value = getattr(rel_obj, self.field.rel_field.name)
+            return value
         return self.field
 
     def __set__(self, instance, value):

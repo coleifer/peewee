@@ -631,9 +631,10 @@ class TestModelAPIs(ModelTestCase):
 
         self.assertTrue(user.save())
         self.assertTrue(user.id is not None)
-        self.assertTrue(tweet.user_id is None)
-        self.assertTrue(tweet.save())
-        self.assertEqual(tweet.user_id, user.id)
+        with self.assertQueryCount(1):
+            self.assertEqual(tweet.user_id, user.id)
+            self.assertTrue(tweet.save())
+            self.assertEqual(tweet.user_id, user.id)
 
         tweet_db = Tweet.get(Tweet.content == 'foo')
         self.assertEqual(tweet_db.user.username, 'charlie')

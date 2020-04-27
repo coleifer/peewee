@@ -1206,8 +1206,7 @@ class BCTweet(TestModel):
 
 
 class TestBulkCreateWithFK(ModelTestCase):
-    requires = [BCUser, BCTweet]
-
+    @requires_models(BCUser, BCTweet)
     def test_bulk_create_with_fk(self):
         u1 = BCUser.create(username='u1')
         u2 = BCUser.create(username='u2')
@@ -1218,6 +1217,35 @@ class TestBulkCreateWithFK(ModelTestCase):
 
         self.assertEqual(BCTweet.select().where(BCTweet.user == 'u1').count(), 4)
         self.assertEqual(BCTweet.select().where(BCTweet.user != 'u1').count(), 0)
+
+        u = BCUser(username='u3')
+        t = BCTweet(user=u, content='tx')
+        with self.assertQueryCount(2):
+            BCUser.bulk_create([u])
+            BCTweet.bulk_create([t])
+
+        with self.assertQueryCount(1):
+            t_db = (BCTweet
+                    .select(BCTweet, BCUser)
+                    .join(BCUser)
+                    .where(BCUser.username == 'u3')
+                    .get())
+            self.assertEqual(t_db.content, 'tx')
+            self.assertEqual(t_db.user.username, 'u3')
+
+    @requires_postgresql
+    @requires_models(User, Tweet)
+    def test_bulk_create_related_objects(self):
+        u = User(username='u1')
+        t = Tweet(user=u, content='t1')
+        with self.assertQueryCount(2):
+            User.bulk_create([u])
+            Tweet.bulk_create([t])
+
+        with self.assertQueryCount(1):
+            t_db = Tweet.select(Tweet, User).join(User).get()
+            self.assertEqual(t_db.content, 't1')
+            self.assertEqual(t_db.user.username, 'u1')
 
 
 class UUIDReg(TestModel):
