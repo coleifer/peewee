@@ -6491,6 +6491,9 @@ class Model(with_metaclass(ModelBase, Node)):
         self._populate_unsaved_relations(field_dict)
         rows = 1
 
+        if self._meta.auto_increment and pk_value is None:
+            field_dict.pop(pk_field.name, None)
+
         if pk_value is not None and not force_insert:
             if self._meta.composite_key:
                 for pk_part_name in pk_field.field_names:

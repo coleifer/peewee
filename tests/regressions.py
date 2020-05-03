@@ -1267,3 +1267,18 @@ class TestBulkUpdateUUIDPK(ModelTestCase):
         r1_db, r2_db = UUIDReg.select().order_by(UUIDReg.key)
         self.assertEqual(r1_db.key, 'k1-x')
         self.assertEqual(r2_db.key, 'k2-x')
+
+
+class TestSaveClearingPK(ModelTestCase):
+    requires = [User, Tweet]
+
+    def test_save_clear_pk(self):
+        u = User.create(username='u1')
+        t1 = Tweet.create(content='t1', user=u)
+        orig_id, t1.id = t1.id, None
+        t1.content = 't2'
+        t1.save()
+        self.assertTrue(t1.id is not None)
+        self.assertTrue(t1.id != orig_id)
+        tweets = [t.content for t in u.tweets.order_by(Tweet.id)]
+        self.assertEqual(tweets, ['t1', 't2'])
