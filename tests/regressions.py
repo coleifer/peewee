@@ -1282,3 +1282,40 @@ class TestSaveClearingPK(ModelTestCase):
         self.assertTrue(t1.id != orig_id)
         tweets = [t.content for t in u.tweets.order_by(Tweet.id)]
         self.assertEqual(tweets, ['t1', 't2'])
+
+
+class Bits(TestModel):
+    b1 = BitField(default=1)
+    b1_1 = b1.flag(1)
+    b1_2 = b1.flag(2)
+
+    b2 = BitField(default=0)
+    b2_1 = b2.flag()
+    b2_2 = b2.flag()
+
+
+class TestBitFieldName(ModelTestCase):
+    requires = [Bits]
+
+    def test_bit_field_name(self):
+        bf = Bits.create()
+        self.assertTrue(bf.b1_1)
+        self.assertFalse(bf.b1_2)
+        self.assertFalse(bf.b2_1)
+        self.assertFalse(bf.b2_2)
+
+        bf.b1_2 = True
+        bf.b2_1 = True
+        bf.save()
+
+        bf = Bits.get(Bits.id == bf.id)
+        self.assertTrue(bf.b1_1)
+        self.assertTrue(bf.b1_2)
+        self.assertTrue(bf.b2_1)
+        self.assertFalse(bf.b2_2)
+
+        self.assertEqual(bf.b1, 3)
+        self.assertEqual(bf.b2, 1)
+
+        self.assertEqual(Bits.select().where(Bits.b1_1).count(), 1)
+        self.assertEqual(Bits.select().where(Bits.b2_2).count(), 0)
