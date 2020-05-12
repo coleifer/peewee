@@ -1297,25 +1297,28 @@ class Bits(TestModel):
 class TestBitFieldName(ModelTestCase):
     requires = [Bits]
 
+    def assertBits(self, bf, expected):
+        b1_1, b1_2, b2_1, b2_2 = expected
+        self.assertEqual(bf.b1_1, b1_1)
+        self.assertEqual(bf.b1_2, b1_2)
+        self.assertEqual(bf.b2_1, b2_1)
+        self.assertEqual(bf.b2_2, b2_2)
+
     def test_bit_field_name(self):
         bf = Bits.create()
-        self.assertTrue(bf.b1_1)
-        self.assertFalse(bf.b1_2)
-        self.assertFalse(bf.b2_1)
-        self.assertFalse(bf.b2_2)
+        self.assertBits(bf, (True, False, False, False))
 
+        bf.b1_1 = False
         bf.b1_2 = True
         bf.b2_1 = True
         bf.save()
+        self.assertBits(bf, (False, True, True, False))
 
         bf = Bits.get(Bits.id == bf.id)
-        self.assertTrue(bf.b1_1)
-        self.assertTrue(bf.b1_2)
-        self.assertTrue(bf.b2_1)
-        self.assertFalse(bf.b2_2)
+        self.assertBits(bf, (False, True, True, False))
 
-        self.assertEqual(bf.b1, 3)
+        self.assertEqual(bf.b1, 2)
         self.assertEqual(bf.b2, 1)
 
-        self.assertEqual(Bits.select().where(Bits.b1_1).count(), 1)
+        self.assertEqual(Bits.select().where(Bits.b1_2).count(), 1)
         self.assertEqual(Bits.select().where(Bits.b2_2).count(), 0)
