@@ -5,6 +5,8 @@ import uuid
 
 from peewee import *
 from playhouse.hybrid import *
+from playhouse.migrate import migrate
+from playhouse.migrate import SchemaMigrator
 
 from .base import BaseTestCase
 from .base import IS_MYSQL
@@ -1322,3 +1324,31 @@ class TestBitFieldName(ModelTestCase):
 
         self.assertEqual(Bits.select().where(Bits.b1_2).count(), 1)
         self.assertEqual(Bits.select().where(Bits.b2_2).count(), 0)
+
+
+class FKMA(TestModel):
+    name = TextField()
+
+class FKMB(TestModel):
+    name = TextField()
+    fkma = ForeignKeyField(FKMA, backref='fkmb_set', null=True)
+
+
+class TestFKMigrationRegression(ModelTestCase):
+    requires = [FKMA, FKMB]
+
+    def test_fk_migration(self):
+        migrator = SchemaMigrator.from_database(self.database)
+        migrate(migrator.drop_column(
+            FKMB._meta.table_name,
+            FKMB.fkma.column_name))
+
+        migrate(migrator.add_column(
+            FKMB._meta.table_name,
+            FKMB.fkma.column_name,
+            FKMB.fkma))
+
+        fa = FKMA.create(name='fa')
+        FKMB.create(name='fb', fkma=fa)
+        obj = FKMB.select().first()
+        self.assertEqual(obj.name, 'fb')

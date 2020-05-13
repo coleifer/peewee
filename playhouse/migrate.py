@@ -234,7 +234,12 @@ class SchemaMigrator(object):
         # Make field null at first.
         ctx = self.make_context()
         field_null, field.null = field.null, True
-        field.name = field.column_name = column_name
+
+        # Set the field's column-name and name, if it is not set or doesn't
+        # match the new value.
+        if field.column_name != column_name:
+            field.name = field.column_name = column_name
+
         (self
          ._alter_table(ctx, table)
          .literal(' ADD COLUMN ')
