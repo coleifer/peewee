@@ -622,3 +622,42 @@ class TestReconnectMixin(DatabaseTestCase):
         curs = self.database.execute_sql(sql)
         self.assertEqual(curs.fetchone(), (2,))
         self.assertEqual(self.database._close_counter, 1)
+
+
+class MMA(TestModel):
+    key = TextField()
+    value = IntegerField()
+
+class MMB(TestModel):
+    key = TextField()
+
+class MMC(TestModel):
+    key = TextField()
+    value = IntegerField()
+    misc = TextField(null=True)
+
+
+class TestResolveMultiModelQuery(ModelTestCase):
+    requires = [MMA, MMB, MMC]
+
+    def test_resolve_multimodel_query(self):
+        MMA.insert_many([('k0', 0), ('k1', 1)]).execute()
+        MMB.insert_many([('k10',), ('k11',)]).execute()
+        MMC.insert_many([('k20', 20, 'a'), ('k21', 21, 'b')]).execute()
+
+        mma = MMA.select(MMA.key, MMA.value)
+        mmb = MMB.select(MMB.key, Value(99).alias('value'))
+        mmc = MMC.select(MMC.key, MMC.value)
+        query = (mma | mmb | mmc).order_by(SQL('1'))
+        data = [obj for obj in resolve_multimodel_query(query)]
+
+        expected = [
+            MMA(key='k0', value=0), MMA(key='k1', value=1),
+            MMB(key='k10', value=99), MMB(key='k11', value=99),
+            MMC(key='k20', value=20), MMC(key='k21', value=21)]
+        self.assertEqual(len(data), len(expected))
+
+        for row, exp_row in zip(data, expected):
+            self.assertEqual(row.__class__, exp_row.__class__)
+            self.assertEqual(row.key, exp_row.key)
+            self.assertEqual(row.value, exp_row.value)
