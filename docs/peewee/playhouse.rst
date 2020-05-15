@@ -2548,6 +2548,20 @@ helpers for serializing models to dictionaries and vice-versa.
 
     Update a model instance with the given data dictionary.
 
+
+.. py:function:: resolve_multimodel_query(query[, key='_model_identifier'])
+
+    :param query: a compound select query.
+    :param str key: key to use for storing model identifier
+    :return: an iteratable cursor that yields the proper model instance for
+        each row selected in the compound select query.
+
+    Helper for resolving rows returned in a compound select query to the
+    correct model instance type. For example, if you have a union of two
+    different tables, this helper will resolve each row to the proper model
+    when iterating over the query results.
+
+
 .. _signals:
 
 Signal support
