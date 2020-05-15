@@ -2973,7 +2973,7 @@ class Database(_callable_context_manager):
         self.thread_safe = thread_safe
         if thread_safe:
             self._state = _ConnectionLocal()
-            self._lock = threading.Lock()
+            self._lock = threading.RLock()
         else:
             self._state = _ConnectionState()
             self._lock = _NoopLock()
