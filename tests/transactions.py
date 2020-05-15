@@ -280,6 +280,15 @@ class TestSession(BaseTransactionTestCase):
         self.assertTrue(db.session_rollback())
         self.assertRegister([1])
 
+    def test_session_with_closed_db(self):
+        db.close()
+        self.assertTrue(db.session_start())
+        self.assertFalse(db.is_closed())
+        self.assertRaises(OperationalError, db.close)
+        self._save(1)
+        self.assertTrue(db.session_rollback())
+        self.assertRegister([])
+
     def test_session_inside_context_manager(self):
         with db.atomic():
             self.assertTrue(db.session_start())
