@@ -616,8 +616,6 @@ class Context(object):
     def value(self, value, converter=None, add_param=True):
         if converter:
             value = converter(value)
-            if isinstance(value, Node):
-                return self.sql(value)
         elif converter is None and self.state.converter:
             # Explicitly check for None so that "False" can be used to signify
             # that no conversion should be applied.
@@ -625,6 +623,13 @@ class Context(object):
 
         if isinstance(value, Node):
             with self(converter=None):
+                return self.sql(value)
+        elif is_model(value):
+            # Under certain circumstances, we could end-up treating a model-
+            # class itself as a value. This check ensures that we drop the
+            # table alias into the query instead of trying to parameterize a
+            # model (for instance, passing a model as a function argument).
+            with self.scope_column():
                 return self.sql(value)
 
         self._values.append(value)
@@ -1352,14 +1357,6 @@ class Value(ColumnBase):
         if self.multi:
             # For multi-part values (e.g. lists of IDs).
             return ctx.sql(EnclosedNodeList(self.values))
-
-        # Under certain circumstances, we could end-up treating a model-class
-        # itself as a value. This check ensures that we drop the table alias
-        # into the query instead of trying to parameterize a model (for
-        # instance, when passing a model as a function argument).
-        if is_model(self.value):
-            with ctx.scope_column():
-                return ctx.sql(self.value)
 
         return ctx.value(self.value, self.converter)
 

@@ -1352,3 +1352,28 @@ class TestFKMigrationRegression(ModelTestCase):
         FKMB.create(name='fb', fkma=fa)
         obj = FKMB.select().first()
         self.assertEqual(obj.name, 'fb')
+
+
+class ModelTypeField(CharField):
+    def db_value(self, value):
+        if value is not None:
+            return value._meta.name
+    def python_value(self, value):
+        if value is not None:
+            return {'user': User, 'tweet': Tweet}[value]
+
+
+class MTF(TestModel):
+    name = TextField()
+    mtype = ModelTypeField()
+
+
+class TestFieldValueRegression(ModelTestCase):
+    requires = [MTF]
+
+    def test_field_value_regression(self):
+        u = MTF.create(name='user', mtype=User)
+        u_db = MTF.get()
+
+        self.assertEqual(u_db.name, 'user')
+        self.assertTrue(u_db.mtype is User)
