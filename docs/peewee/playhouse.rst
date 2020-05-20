@@ -685,7 +685,7 @@ currently:
 * :py:class:`JSONField` field type, for storing JSON data.
 * :py:class:`BinaryJSONField` field type for the ``jsonb`` JSON data type.
 * :py:class:`TSVectorField` field type, for storing full-text search data.
-* :py:class:`DateTimeTZ` field type, a timezone-aware datetime field.
+* :py:class:`DateTimeTZField` field type, a timezone-aware datetime field.
 
 In the future I would like to add support for more of postgresql's features.
 If there is a particular feature you would like to see added, please
