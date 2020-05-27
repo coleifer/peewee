@@ -24,16 +24,17 @@ on your pageview data.
 """
 import datetime
 import os
-from urlparse import parse_qsl, urlparse
+from urllib.parse import parse_qsl, urlparse
+import binascii
 
-from flask import Flask, Response, abort, request, g
+from flask import Flask, Response, abort, g, request
 from peewee import *
-from playhouse.postgres_ext import HStoreField
-from playhouse.postgres_ext import PostgresqlExtDatabase
-
+from playhouse.postgres_ext import HStoreField, PostgresqlExtDatabase
 
 # Analytics settings.
-BEACON = '47494638396101000100800000dbdfef00000021f90401000000002c00000000010001000002024401003b'.decode('hex')  # 1px gif.
+# 1px gif.
+BEACON = binascii.unhexlify(
+    '47494638396101000100800000dbdfef00000021f90401000000002c00000000010001000002024401003b')
 DATABASE_NAME = 'analytics'
 DOMAIN = 'http://analytics.yourdomain.com'  # TODO: change me.
 JAVASCRIPT = """(function(id){
@@ -53,9 +54,11 @@ database = PostgresqlExtDatabase(
     register_hstore=True,
     user='postgres')
 
+
 class BaseModel(Model):
     class Meta:
         database = database
+
 
 class Account(BaseModel):
     domain = CharField()
@@ -64,6 +67,7 @@ class Account(BaseModel):
         netloc = urlparse(url).netloc
         url_domain = '.'.join(netloc.split('.')[-2:])  # Ignore subdomains.
         return self.domain == url_domain
+
 
 class PageView(BaseModel):
     account = ForeignKeyField(Account, backref='pageviews')
@@ -89,6 +93,7 @@ class PageView(BaseModel):
             headers=dict(request.headers),
             params=params)
 
+
 @app.route('/a.gif')
 def analyze():
     # Make sure an account id and url were specified.
@@ -113,6 +118,7 @@ def analyze():
     response.headers['Cache-Control'] = 'private, no-cache'
     return response
 
+
 @app.route('/a.js')
 def script():
     account_id = request.args.get('id')
@@ -122,16 +128,20 @@ def script():
             mimetype='text/javascript')
     return Response('', mimetype='text/javascript')
 
+
 @app.errorhandler(404)
 def not_found(e):
     return Response('<h3>Not found.</h3>')
 
 # Request handlers -- these two hooks are provided by flask and we will use them
 # to create and tear down a database connection on each request.
+
+
 @app.before_request
 def before_request():
     g.db = database
     g.db.connection()
+
 
 @app.after_request
 def after_request(response):
