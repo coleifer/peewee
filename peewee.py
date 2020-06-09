@@ -6189,12 +6189,14 @@ class _BoundModelsContext(_callable_context_manager):
         self._orig_database = []
         for model in self.models:
             self._orig_database.append(model._meta.database)
-            model.bind(self.database, self.bind_refs, self.bind_backrefs)
+            model.bind(self.database, self.bind_refs, self.bind_backrefs,
+                       _exclude=set(self.models))
         return self.models
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         for model, db in zip(self.models, self._orig_database):
-            model.bind(db, self.bind_refs, self.bind_backrefs)
+            model.bind(db, self.bind_refs, self.bind_backrefs,
+                       _exclude=set(self.models))
 
 
 class Model(with_metaclass(ModelBase, Node)):
@@ -6569,13 +6571,17 @@ class Model(with_metaclass(ModelBase, Node)):
                              converter=self._meta.primary_key.db_value))
 
     @classmethod
-    def bind(cls, database, bind_refs=True, bind_backrefs=True):
+    def bind(cls, database, bind_refs=True, bind_backrefs=True, _exclude=None):
         is_different = cls._meta.database is not database
         cls._meta.set_database(database)
         if bind_refs or bind_backrefs:
+            if _exclude is None:
+                _exclude = set()
             G = cls._meta.model_graph(refs=bind_refs, backrefs=bind_backrefs)
             for _, model, is_backref in G:
-                model._meta.set_database(database)
+                if model not in _exclude:
+                    model._meta.set_database(database)
+                    _exclude.add(model)
         return is_different
 
     @classmethod

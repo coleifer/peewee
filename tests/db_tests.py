@@ -242,6 +242,39 @@ class TestDatabase(DatabaseTestCase):
         db.close()
         alt_db.close()
 
+    def test_bind_regression(self):
+        class Base(Model):
+            class Meta:
+                database = None
+
+        class A(Base): pass
+        class B(Base): pass
+        class AB(Base):
+            a = ForeignKeyField(A)
+            b = ForeignKeyField(B)
+
+        self.assertTrue(A._meta.database is None)
+
+        db = get_in_memory_db()
+        with db.bind_ctx([A, B]):
+            self.assertEqual(A._meta.database, db)
+            self.assertEqual(B._meta.database, db)
+            self.assertEqual(AB._meta.database, db)
+
+        self.assertTrue(A._meta.database is None)
+        self.assertTrue(B._meta.database is None)
+        self.assertTrue(AB._meta.database is None)
+
+        class C(Base):
+            a = ForeignKeyField(A)
+
+        with db.bind_ctx([C], bind_refs=False):
+            self.assertEqual(C._meta.database, db)
+            self.assertTrue(A._meta.database is None)
+
+        self.assertTrue(C._meta.database is None)
+        self.assertTrue(A._meta.database is None)
+
     def test_batch_commit(self):
         class PatchCommitDatabase(SqliteDatabase):
             commits = 0
