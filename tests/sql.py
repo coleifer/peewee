@@ -1729,6 +1729,17 @@ class TestSelectFeatures(BaseTestCase):
             'WHERE ("t2"."username" = "t1"."name"))'), [])
 
 
+class TestExpressionSQL(BaseTestCase):
+    def test_parentheses_functions(self):
+        expr = (User.c.income + 100)
+        expr2 = expr * expr
+        query = User.select(fn.sum(expr), fn.avg(expr2))
+        self.assertSQL(query, (
+            'SELECT sum("t1"."income" + ?), '
+            'avg(("t1"."income" + ?) * ("t1"."income" + ?)) '
+            'FROM "users" AS "t1"'), [100, 100, 100])
+
+
 #Person = Table('person', ['id', 'name', 'dob'])
 
 class TestOnConflictSqlite(BaseTestCase):

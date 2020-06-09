@@ -1733,10 +1733,12 @@ class NodeList(ColumnBase):
         self.nodes = nodes
         self.glue = glue
         self.parens = parens
-        if parens and len(self.nodes) == 1:
-            if isinstance(self.nodes[0], Expression):
-                # Hack to avoid double-parentheses.
-                self.nodes[0].flat = True
+        if parens and len(self.nodes) == 1 and \
+           isinstance(self.nodes[0], Expression) and \
+           not self.nodes[0].flat:
+            # Hack to avoid double-parentheses.
+            self.nodes[0] = self.nodes[0].clone()
+            self.nodes[0].flat = True
 
     def __sql__(self, ctx):
         n_nodes = len(self.nodes)
