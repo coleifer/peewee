@@ -2247,7 +2247,7 @@ class CompoundSelectQuery(SelectBase):
 class Select(SelectBase):
     def __init__(self, from_list=None, columns=None, group_by=None,
                  having=None, distinct=None, windows=None, for_update=None,
-                 for_update_of=None, nowait=None, **kwargs):
+                 for_update_of=None, nowait=None, lateral=None, **kwargs):
         super(Select, self).__init__(**kwargs)
         self._from_list = (list(from_list) if isinstance(from_list, tuple)
                            else from_list) or []
@@ -2258,6 +2258,7 @@ class Select(SelectBase):
         self._for_update = for_update  # XXX: consider reorganizing.
         self._for_update_of = for_update_of
         self._for_update_nowait = nowait
+        self._lateral = lateral
 
         self._distinct = self._simple_distinct = None
         if distinct:
@@ -2340,6 +2341,10 @@ class Select(SelectBase):
         self._for_update_of = of
         self._for_update_nowait = nowait
 
+    @Node.copy
+    def lateral(self, lateral=True):
+        self._lateral = lateral
+
     def _get_query_key(self):
         return self._alias
 
@@ -2349,6 +2354,9 @@ class Select(SelectBase):
     def __sql__(self, ctx):
         if ctx.scope == SCOPE_COLUMN:
             return self.apply_column(ctx)
+
+        if self._lateral and ctx.scope == SCOPE_SOURCE:
+            ctx.literal('LATERAL ')
 
         is_subquery = ctx.subquery
         state = {

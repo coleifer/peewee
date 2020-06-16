@@ -936,3 +936,26 @@ class TestPostgresLateralJoin(ModelTestCase):
             ('b', 'b4'),
             ('b', 'b7'),
             ('c', None)])
+
+    @requires_models(User, Tweet)
+    def test_lateral_helper(self):
+        self.create_data()
+
+        subq = (Tweet
+                .select(Tweet.content, Tweet.timestamp)
+                .where(Tweet.user == User.id)
+                .order_by(Tweet.timestamp.desc())
+                .limit(2)
+                .lateral())
+
+        query = (User
+                 .select(User, subq.c.content)
+                 .join(subq, on=True)
+                 .order_by(subq.c.timestamp.desc(nulls='last')))
+        with self.assertQueryCount(1):
+            results = [(u.username, u.tweet.content) for u in query]
+            self.assertEqual(results, [
+                ('a', 'a10'),
+                ('b', 'b7'),
+                ('b', 'b4'),
+                ('a', 'a2')])
