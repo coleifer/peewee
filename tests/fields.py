@@ -243,7 +243,7 @@ class TestDateFields(ModelTestCase):
                  .tuples())
 
         row, = query
-        if IS_SQLITE or IS_MYSQL or IS_CRDB:
+        if IS_SQLITE or IS_MYSQL:
             self.assertEqual(row,
                              (2011, 1, 2, 11, 12, 13, 2012, 2, 3, 3, 13, 37))
         else:

@@ -152,7 +152,7 @@ class TestCockroachDatabase(ModelTestCase):
             KV.create(k='k1', v=1)
 
         with self.database.atomic():
-            self.assertRaises(NotImplementedError, run_transaction,
+            self.assertRaises(Exception, run_transaction,
                               self.database, insert_row)
         self.assertEqual(KV.select().count(), 0)
 

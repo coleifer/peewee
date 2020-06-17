@@ -14,6 +14,7 @@ from peewee import *
 from peewee import sqlite3
 from playhouse.mysql_ext import MySQLConnectorDatabase
 from playhouse.cockroachdb import CockroachDatabase
+from playhouse.cockroachdb import NESTED_TX_MIN_VERSION
 
 
 logger = logging.getLogger('peewee')
@@ -108,6 +109,13 @@ if IS_MYSQL:
     db.close()
     if not IS_MYSQL_ADVANCED_FEATURES:
         logger.warning('MySQL too old to test certain advanced features.')
+
+if IS_CRDB:
+    db.connect()
+    IS_CRDB_NESTED_TX = db.server_version >= NESTED_TX_MIN_VERSION
+    db.close()
+else:
+    IS_CRDB_NESTED_TX = False
 
 
 class TestModel(Model):

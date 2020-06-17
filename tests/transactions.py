@@ -2,6 +2,7 @@ from peewee import *
 
 from .base import DatabaseTestCase
 from .base import IS_CRDB
+from .base import IS_CRDB_NESTED_TX
 from .base import IS_SQLITE
 from .base import ModelTestCase
 from .base import db
@@ -23,7 +24,8 @@ class BaseTransactionTestCase(ModelTestCase):
 
 
 def requires_nested(fn):
-    return skip_if(IS_CRDB, 'nested transaction support is required')(fn)
+    return skip_if(IS_CRDB and not IS_CRDB_NESTED_TX,
+                   'nested transaction support is required')(fn)
 
 
 class TestTransaction(BaseTransactionTestCase):

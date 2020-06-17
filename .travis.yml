@@ -37,9 +37,9 @@ matrix:
       env:
       - PEEWEE_TEST_BACKEND=cockroachdb
       before_install:
-        - wget -qO- https://binaries.cockroachdb.com/cockroach-v19.2.0.linux-amd64.tgz | tar xvz
-        - ./cockroach-v19.2.0.linux-amd64/cockroach start --insecure --background
-        - ./cockroach-v19.2.0.linux-amd64/cockroach sql --insecure -e 'create database peewee_test;'
+        - wget -qO- https://binaries.cockroachdb.com/cockroach-v20.1.1.linux-amd64.tgz | tar xvz
+        - ./cockroach-v20.1.1.linux-amd64/cockroach start --insecure --background
+        - ./cockroach-v20.1.1.linux-amd64/cockroach sql --insecure -e 'create database peewee_test;'
   allow_failures:
 addons:
   postgresql: "9.6"

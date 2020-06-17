@@ -4,7 +4,6 @@ import re
 from peewee import *
 from peewee import _atomic
 from peewee import _manual
-from peewee import _transaction
 from peewee import ColumnMetadata  # (name, data_type, null, primary_key, table, default)
 from peewee import ForeignKeyMetadata  # (column, dest_table, dest_column, table).
 from peewee import IndexMetadata
@@ -17,6 +16,8 @@ try:
 except ImportError:  # psycopg2 not installed, ignore.
     ArrayField = BinaryJSONField = IntervalField = JSONField = None
 
+
+NESTED_TX_MIN_VERSION = 200100
 
 TXN_ERR_MSG = ('CockroachDB does not support nested transactions. You may '
                'alternatively use the @transaction context-manager/decorator, '
@@ -56,6 +57,7 @@ class CockroachDatabase(PostgresqlDatabase):
 
     for_update = False
     nulls_ordering = False
+    release_after_rollback = True
 
     def __init__(self, *args, **kwargs):
         kwargs.setdefault('user', 'root')
@@ -137,13 +139,14 @@ class CockroachDatabase(PostgresqlDatabase):
                              commit=False)
 
     def atomic(self, system_time=None, priority=None):
-        return _crdb_atomic(self, system_time, priority)
-
-    def transaction(self, system_time=None, priority=None):
-        return _transaction(self, system_time, priority)
+        if self.server_version < NESTED_TX_MIN_VERSION:
+            return _crdb_atomic(self, system_time, priority)
+        return super(CockroachDatabase, self).atomic(system_time, priority)
 
     def savepoint(self):
-        raise NotImplementedError(TXN_ERR_MSG)
+        if self.server_version < NESTED_TX_MIN_VERSION:
+            raise NotImplementedError(TXN_ERR_MSG)
+        return super(CockroachDatabase, self).savepoint()
 
     def retry_transaction(self, max_attempts=None, system_time=None,
                           priority=None):
