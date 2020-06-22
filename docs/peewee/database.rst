@@ -1315,7 +1315,7 @@ The connection handling code can be placed in a `middleware component
         def process_request(self, req, resp):
             database.connect()
 
-        def process_response(self, req, resp, resource):
+        def process_response(self, req, resp, resource, req_succeeded):
             if not database.is_closed():
                 database.close()
 
