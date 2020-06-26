@@ -68,7 +68,7 @@ class CockroachDatabase(PostgresqlDatabase):
         curs = conn.cursor()
         curs.execute('select version()')
         raw, = curs.fetchone()
-        match_obj = re.match('^CockroachDB.+?v(\d+)\.(\d+)\.(\d+)', raw)
+        match_obj = re.match(r'^CockroachDB.+?v(\d+)\.(\d+)\.(\d+)', raw)
         if match_obj is not None:
             clean = '%d%02d%02d' % tuple(int(i) for i in match_obj.groups())
             self.server_version = int(clean)  # 19.1.5 -> 190105.
