@@ -1377,3 +1377,20 @@ class TestFieldValueRegression(ModelTestCase):
 
         self.assertEqual(u_db.name, 'user')
         self.assertTrue(u_db.mtype is User)
+
+
+class NLM(TestModel):
+    a = IntegerField()
+    b = IntegerField()
+
+class TestRegressionNodeListClone(ModelTestCase):
+    requires = [NLM]
+
+    def test_node_list_clone_expr(self):
+        expr = (NLM.a + NLM.b)
+        query = NLM.select(expr.alias('expr')).order_by(expr).distinct(expr)
+        self.assertSQL(query, (
+            'SELECT DISTINCT ON ("t1"."a" + "t1"."b") '
+            '("t1"."a" + "t1"."b") AS "expr" '
+            'FROM "nlm" AS "t1" '
+            'ORDER BY ("t1"."a" + "t1"."b")'), [])

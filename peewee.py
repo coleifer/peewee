@@ -1737,7 +1737,7 @@ class NodeList(ColumnBase):
            isinstance(self.nodes[0], Expression) and \
            not self.nodes[0].flat:
             # Hack to avoid double-parentheses.
-            self.nodes[0] = self.nodes[0].clone()
+            self.nodes = (self.nodes[0].clone(),)
             self.nodes[0].flat = True
 
     def __sql__(self, ctx):
