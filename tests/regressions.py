@@ -1394,3 +1394,35 @@ class TestRegressionNodeListClone(ModelTestCase):
             '("t1"."a" + "t1"."b") AS "expr" '
             'FROM "nlm" AS "t1" '
             'ORDER BY ("t1"."a" + "t1"."b")'), [])
+
+
+class LK(TestModel):
+    key = TextField()
+
+class TestLikeEscape(ModelTestCase):
+    requires = [LK]
+
+    def setUp(self):
+        super(TestLikeEscape, self).setUp()
+        names = ('foo', 'foo%', 'foo%bar', 'foo_bar', 'fooxba', 'fooba')
+        LK.insert_many([(n,) for n in names]).execute()
+
+    def assertNames(self, expr, expected):
+        query = LK.select().where(expr).order_by(LK.id)
+        self.assertEqual([lk.key for lk in query], expected)
+
+    def test_like_escape(self):
+        cases = (
+            (LK.key.contains('bar'), ['foo%bar', 'foo_bar']),
+            (LK.key.contains('%'), ['foo%', 'foo%bar']),
+            (LK.key.contains('_'), ['foo_bar']),
+            (LK.key.contains('o%b'), ['foo%bar']),
+            (LK.key.startswith('foo%'), ['foo%', 'foo%bar']),
+            (LK.key.startswith('foo_'), ['foo_bar']),
+            (LK.key.startswith('bar'), []),
+            (LK.key.endswith('ba'), ['fooxba', 'fooba']),
+            (LK.key.endswith('_bar'), ['foo_bar']),
+            (LK.key.endswith('fo'), []),
+        )
+        for expr, expected in cases:
+            self.assertNames(expr, expected)

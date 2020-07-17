@@ -797,6 +797,36 @@ class TestSelectQuery(BaseTestCase):
             'SELECT "t1"."id", "t1"."content", "t1"."user_id" '
             'FROM "notes" AS "t1" WHERE ("t1"."user_id" IS ?)'), [None])
 
+    def test_like_escape(self):
+        T = Table('tbl', ('key',))
+        def assertLike(expr, expected):
+            query = T.select().where(expr)
+            sql, params = __sql__(T.select().where(expr))
+            match_obj = re.search(r'\("t1"."key" (ILIKE[^\)]+)\)', sql)
+            if match_obj is None:
+                raise AssertionError('LIKE expression not found in query.')
+            like, = match_obj.groups()
+            self.assertEqual((like, params), expected)
+
+        cases = (
+            (T.key.contains('base'), ('ILIKE ?', ['%base%'])),
+            (T.key.contains('x_y'), ("ILIKE ? ESCAPE ?", ['%x\\_y%', '\\'])),
+            (T.key.contains('__y'), ("ILIKE ? ESCAPE ?", ['%\\_\\_y%', '\\'])),
+            (T.key.contains('%'), ("ILIKE ? ESCAPE ?", ['%\\%%', '\\'])),
+            (T.key.contains('_%'), ("ILIKE ? ESCAPE ?", ['%\\_\\%%', '\\'])),
+            (T.key.startswith('base'), ("ILIKE ?", ['base%'])),
+            (T.key.startswith('x_y'), ("ILIKE ? ESCAPE ?", ['x\\_y%', '\\'])),
+            (T.key.startswith('x%'), ("ILIKE ? ESCAPE ?", ['x\\%%', '\\'])),
+            (T.key.startswith('_%'), ("ILIKE ? ESCAPE ?", ['\\_\\%%', '\\'])),
+            (T.key.endswith('base'), ("ILIKE ?", ['%base'])),
+            (T.key.endswith('x_y'), ("ILIKE ? ESCAPE ?", ['%x\\_y', '\\'])),
+            (T.key.endswith('x%'), ("ILIKE ? ESCAPE ?", ['%x\\%', '\\'])),
+            (T.key.endswith('_%'), ("ILIKE ? ESCAPE ?", ['%\\_\\%', '\\'])),
+        )
+
+        for expr, expected in cases:
+            assertLike(expr, expected)
+
 
 class TestInsertQuery(BaseTestCase):
     def test_insert_simple(self):
