@@ -1179,8 +1179,8 @@ class ColumnBase(Node):
         return Expression(self, op, None)
 
     def _escape_like_expr(self, s, template):
-        if s.find('_') >= 0 or s.find('%') >= 0:
-            s = s.replace('_', '\\_').replace('%', '\\%')
+        if s.find('_') >= 0 or s.find('%') >= 0 or s.find('\\') >= 0:
+            s = s.replace('\\', '\\\\').replace('_', '\\_').replace('%', '\\%')
             return NodeList((template % s, SQL('ESCAPE'), '\\'))
         return template % s
     def contains(self, rhs):

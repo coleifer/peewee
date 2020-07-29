@@ -1402,16 +1402,14 @@ class LK(TestModel):
 class TestLikeEscape(ModelTestCase):
     requires = [LK]
 
-    def setUp(self):
-        super(TestLikeEscape, self).setUp()
-        names = ('foo', 'foo%', 'foo%bar', 'foo_bar', 'fooxba', 'fooba')
-        LK.insert_many([(n,) for n in names]).execute()
-
     def assertNames(self, expr, expected):
         query = LK.select().where(expr).order_by(LK.id)
         self.assertEqual([lk.key for lk in query], expected)
 
     def test_like_escape(self):
+        names = ('foo', 'foo%', 'foo%bar', 'foo_bar', 'fooxba', 'fooba')
+        LK.insert_many([(n,) for n in names]).execute()
+
         cases = (
             (LK.key.contains('bar'), ['foo%bar', 'foo_bar']),
             (LK.key.contains('%'), ['foo%', 'foo%bar']),
@@ -1423,6 +1421,18 @@ class TestLikeEscape(ModelTestCase):
             (LK.key.endswith('ba'), ['fooxba', 'fooba']),
             (LK.key.endswith('_bar'), ['foo_bar']),
             (LK.key.endswith('fo'), []),
+        )
+        for expr, expected in cases:
+            self.assertNames(expr, expected)
+
+    def test_like_escape_backslash(self):
+        names = ('foo_bar\\baz', 'bar\\', 'fbar\\baz', 'foo_bar')
+        LK.insert_many([(n,) for n in names]).execute()
+
+        cases = (
+            (LK.key.contains('\\'), ['foo_bar\\baz', 'bar\\', 'fbar\\baz']),
+            (LK.key.contains('_bar\\'), ['foo_bar\\baz']),
+            (LK.key.contains('bar\\'), ['foo_bar\\baz', 'bar\\', 'fbar\\baz']),
         )
         for expr, expected in cases:
             self.assertNames(expr, expected)
