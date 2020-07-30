@@ -3051,6 +3051,9 @@ class Database(_callable_context_manager):
                 self._initialize_connection(self._state.conn)
         return True
 
+    def ping(self):
+        pass
+
     def _initialize_connection(self, conn):
         pass
 
@@ -3094,6 +3097,8 @@ class Database(_callable_context_manager):
                 self.connect()
             else:
                 raise InterfaceError('Error, database connection not opened.')
+
+        self.ping()
         return self._state.conn.cursor()
 
     def execute_sql(self, sql, params=None, commit=SENTINEL):
@@ -3945,6 +3950,9 @@ class MySQLDatabase(Database):
             raise ImproperlyConfigured('MySQL driver not installed!')
         conn = mysql.connect(db=self.database, **self.connect_params)
         return conn
+
+    def ping(self):
+        self._state.conn.ping(reconnect=True)
 
     def _set_server_version(self, conn):
         try:
