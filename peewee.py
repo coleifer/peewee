@@ -21,6 +21,11 @@ import time
 import uuid
 import warnings
 try:
+    import ujson as json
+except ImportError:
+    import json
+
+try:
     from collections.abc import Mapping
 except ImportError:
     from collections import Mapping
@@ -4691,6 +4696,29 @@ class TextField(_StringField):
     field_type = 'TEXT'
 
 
+class JSONField(CharField):
+    def __init__(self, ensure_ascii=False, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.ensure_ascii = ensure_ascii
+
+
+    def db_value(self, value):
+        if "" == value or 0 == len(value):
+        	value = "{}"
+
+        elif (value) and (isinstance(value, list) or isinstance(value, dict)):
+            ensure_ascii = self.ensure_ascii
+            value = json.dumps(value, ensure_ascii=ensure_ascii)  # list -> str
+
+        elif not is_json(value):
+            raise ValueError
+
+        return value
+
+    def python_value(self, value):
+        return json.loads(value)
+
+
 class BlobField(Field):
     field_type = 'BLOB'
 
@@ -7682,3 +7710,14 @@ def prefetch(sq, *subqueries):
                     rel.populate_instance(instance, deps[rel.model])
 
     return list(pq.query)
+
+
+def is_json(myjson):
+    try:
+        json_object = json.loads(myjson)
+        resoinse = True
+    except TypeError as e:
+        response = False
+
+    return response
+    
