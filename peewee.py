@@ -2785,13 +2785,19 @@ class Index(Node):
                 index_name = Entity(self._name)
                 table_name = self._table
 
+            ctx.sql(index_name)
+            if self._using is not None and \
+               ctx.state.index_using_precedes_table:
+                ctx.literal(' USING %s' % self._using)  # MySQL style.
+
             (ctx
-             .sql(index_name)
              .literal(' ON ')
              .sql(table_name)
              .literal(' '))
-            if self._using is not None:
-                ctx.literal('USING %s ' % self._using)
+
+            if self._using is not None and not \
+               ctx.state.index_using_precedes_table:
+                ctx.literal('USING %s ' % self._using)  # Postgres/default.
 
             ctx.sql(EnclosedNodeList([
                 SQL(expr) if isinstance(expr, basestring) else expr
@@ -2963,6 +2969,7 @@ class Database(_callable_context_manager):
     compound_select_parentheses = CSQ_PARENTHESES_NEVER
     for_update = False
     index_schema_prefix = False
+    index_using_precedes_table = False
     limit_max = None
     nulls_ordering = False
     returning_clause = False
@@ -3135,6 +3142,7 @@ class Database(_callable_context_manager):
             'conflict_update': self.conflict_update,
             'for_update': self.for_update,
             'index_schema_prefix': self.index_schema_prefix,
+            'index_using_precedes_table': self.index_using_precedes_table,
             'limit_max': self.limit_max,
             'nulls_ordering': self.nulls_ordering,
         }
@@ -3925,6 +3933,7 @@ class MySQLDatabase(Database):
     commit_select = True
     compound_select_parentheses = CSQ_PARENTHESES_UNNESTED
     for_update = True
+    index_using_precedes_table = True
     limit_max = 2 ** 64 - 1
     safe_create_index = False
     safe_drop_index = False

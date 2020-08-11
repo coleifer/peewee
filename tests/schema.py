@@ -174,6 +174,13 @@ class TestModelDDL(ModelDatabaseTestCase):
             ('CREATE INDEX "event_timestamp" ON "event" '
              'USING BRIN ("timestamp")', [])])
 
+        # Check that we support MySQL-style USING clause.
+        idx, = Event._meta.fields_to_index()
+        self.assertSQL(idx, (
+            'CREATE INDEX IF NOT EXISTS "event_timestamp" '
+            'USING BRIN ON "event" ("timestamp")'), [],
+            index_using_precedes_table=True)
+
     def test_model_indexes_custom_tablename(self):
         class KV(TestModel):
             key = TextField()
