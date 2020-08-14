@@ -1103,6 +1103,12 @@ class CTE(_HashableSource, Source):
 
 
 class ColumnBase(Node):
+    _converter = None
+
+    @Node.copy
+    def converter(self, converter=None):
+        self._converter = converter
+
     def alias(self, alias):
         if alias:
             return Alias(self, alias)
@@ -1254,6 +1260,7 @@ class WrappedNode(ColumnBase):
     def __init__(self, node):
         self.node = node
         self._coerce = getattr(node, '_coerce', True)
+        self._converter = None
 
     def is_alias(self):
         return self.node.is_alias()
@@ -7361,6 +7368,8 @@ class BaseModelCursorWrapper(DictCursorWrapper):
                 fields[idx] = node
                 if not raw_node.is_alias():
                     self.columns[idx] = node.name
+            elif isinstance(node, ColumnBase) and node._converter:
+                converters[idx] = node._converter
             elif isinstance(node, Function) and node._coerce:
                 if node._python_value is not None:
                     converters[idx] = node._python_value
