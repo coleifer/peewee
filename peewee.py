@@ -1260,7 +1260,7 @@ class WrappedNode(ColumnBase):
     def __init__(self, node):
         self.node = node
         self._coerce = getattr(node, '_coerce', True)
-        self._converter = None
+        self._converter = getattr(node, '_converter', None)
 
     def is_alias(self):
         return self.node.is_alias()
@@ -7368,8 +7368,8 @@ class BaseModelCursorWrapper(DictCursorWrapper):
                 fields[idx] = node
                 if not raw_node.is_alias():
                     self.columns[idx] = node.name
-            elif isinstance(node, ColumnBase) and node._converter:
-                converters[idx] = node._converter
+            elif isinstance(node, ColumnBase) and raw_node._converter:
+                converters[idx] = raw_node._converter
             elif isinstance(node, Function) and node._coerce:
                 if node._python_value is not None:
                     converters[idx] = node._python_value
