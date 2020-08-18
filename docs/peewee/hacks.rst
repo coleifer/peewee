@@ -438,7 +438,7 @@ some code that will tell us which tasks we should run at a given time:
         command = TextField()  # Run this command.
         last_run = DateTimeField()  # When was this run last?
 
-Our logic will essentially boil down to::
+Our logic will essentially boil down to:
 
 .. code-block:: python
 
