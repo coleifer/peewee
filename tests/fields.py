@@ -635,16 +635,10 @@ class TestBitFields(ModelTestCase):
         query = Bits.select().where(Bits.is_sticky).order_by(Bits.id)
         self.assertEqual([x.id for x in query], [b1.id, b3.id])
 
-        query = Bits.select().where(Bits.is_sticky != 0).order_by(Bits.id)
-        self.assertEqual([x.id for x in query], [b1.id, b3.id])
-
         query = Bits.select().where(Bits.is_favorite).order_by(Bits.id)
         self.assertEqual([x.id for x in query], [b2.id, b3.id])
 
         query = Bits.select().where(~Bits.is_favorite).order_by(Bits.id)
-        self.assertEqual([x.id for x in query], [b1.id])
-
-        query = Bits.select().where(Bits.is_favorite == 0).order_by(Bits.id)
         self.assertEqual([x.id for x in query], [b1.id])
 
         # "&" operator does bitwise and for BitField.

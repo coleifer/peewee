@@ -4775,10 +4775,7 @@ class BitField(BitwiseMixin, BigIntegerField):
                     value &= ~self._value
                 setattr(instance, self._field.name, value)
             def __sql__(self, ctx):
-                if ctx.state.in_expr:
-                    return ctx.sql(self._field.bin_and(self._value))
-                else:
-                    return ctx.sql(self._field.bin_and(self._value) != 0)
+                return ctx.sql(self._field.bin_and(self._value) != 0)
         return FlagDescriptor(self, value)
 
 
