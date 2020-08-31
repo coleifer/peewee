@@ -2916,6 +2916,28 @@ Fields
         # Query for sticky + favorite posts:
         query = Post.select().where(Post.is_sticky & Post.is_favorite)
 
+    When bulk-updating one or more bits in a :py:class:`BitField`, you can use
+    bitwise operators to set or clear one or more bits:
+
+    .. code-block:: python
+
+        # Set the 4th bit on all Post objects.
+        Post.update(flags=Post.flags | 8).execute()
+
+        # Clear the 1st and 3rd bits on all Post objects.
+        Post.update(flags=Post.flags & ~(1 | 4)).execute()
+
+    For simple operations, the flags provide handy ``set()`` and ``clear()``
+    methods for setting or clearing an individual bit:
+
+    .. code-block:: python
+
+        # Set the "is_deleted" bit on all posts.
+        Post.update(flags=Post.is_deleted.set()).execute()
+
+        # Clear the "is_deleted" bit on all posts.
+        Post.update(flags=Post.is_deleted.clear()).execute()
+
     .. py:method:: flag([value=None])
 
         :param int value: Value associated with flag, typically a power of 2.

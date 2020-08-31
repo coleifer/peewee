@@ -4751,13 +4751,18 @@ class BitField(BitwiseMixin, BigIntegerField):
         else:
             self.__current_flag = value << 1
 
-        class FlagDescriptor(object):
+        class FlagDescriptor(ColumnBase):
             def __init__(self, field, value):
                 self._field = field
                 self._value = value
+                super(FlagDescriptor, self).__init__()
+            def clear(self):
+                return self._field.bin_and(~self._value)
+            def set(self):
+                return self._field.bin_or(self._value)
             def __get__(self, instance, instance_type=None):
                 if instance is None:
-                    return self._field.bin_and(self._value) != 0
+                    return self
                 value = getattr(instance, self._field.name) or 0
                 return (value & self._value) != 0
             def __set__(self, instance, is_set):
@@ -4769,6 +4774,11 @@ class BitField(BitwiseMixin, BigIntegerField):
                 else:
                     value &= ~self._value
                 setattr(instance, self._field.name, value)
+            def __sql__(self, ctx):
+                if ctx.state.in_expr:
+                    return ctx.sql(self._field.bin_and(self._value))
+                else:
+                    return ctx.sql(self._field.bin_and(self._value) != 0)
         return FlagDescriptor(self, value)
 
 

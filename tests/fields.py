@@ -561,6 +561,31 @@ class TestIPField(ModelTestCase):
 class TestBitFields(ModelTestCase):
     requires = [Bits]
 
+    def test_bit_field_update(self):
+        def assertFlags(expected):
+            query = Bits.select().order_by(Bits.id)
+            self.assertEqual([b.flags for b in query], expected)
+
+        # Bits - flags (1=sticky, 2=favorite, 4=minimized)
+        for i in range(1, 5):
+            Bits.create(flags=i)
+
+        Bits.update(flags=Bits.flags & ~2).execute()
+        assertFlags([1, 0, 1, 4])
+
+        Bits.update(flags=Bits.flags | 2).execute()
+        assertFlags([3, 2, 3, 6])
+
+        Bits.update(flags=Bits.is_favorite.clear()).execute()
+        assertFlags([1, 0, 1, 4])
+
+        Bits.update(flags=Bits.is_favorite.set()).execute()
+        assertFlags([3, 2, 3, 6])
+
+        # Clear multiple bits in one operation.
+        Bits.update(flags=Bits.flags & ~(1 | 4)).execute()
+        assertFlags([2, 2, 2, 2])
+
     def test_bit_field_auto_flag(self):
         class Bits2(TestModel):
             flags = BitField()
@@ -610,15 +635,28 @@ class TestBitFields(ModelTestCase):
         query = Bits.select().where(Bits.is_sticky).order_by(Bits.id)
         self.assertEqual([x.id for x in query], [b1.id, b3.id])
 
+        query = Bits.select().where(Bits.is_sticky != 0).order_by(Bits.id)
+        self.assertEqual([x.id for x in query], [b1.id, b3.id])
+
         query = Bits.select().where(Bits.is_favorite).order_by(Bits.id)
         self.assertEqual([x.id for x in query], [b2.id, b3.id])
 
         query = Bits.select().where(~Bits.is_favorite).order_by(Bits.id)
         self.assertEqual([x.id for x in query], [b1.id])
 
+        query = Bits.select().where(Bits.is_favorite == 0).order_by(Bits.id)
+        self.assertEqual([x.id for x in query], [b1.id])
+
         # "&" operator does bitwise and for BitField.
         query = Bits.select().where((Bits.flags & 1) == 1).order_by(Bits.id)
         self.assertEqual([x.id for x in query], [b1.id, b3.id])
+
+        # Test combining multiple bit expressions.
+        query = Bits.select().where(Bits.is_sticky & Bits.is_favorite)
+        self.assertEqual([x.id for x in query], [b3.id])
+
+        query = Bits.select().where(Bits.is_sticky & ~Bits.is_favorite)
+        self.assertEqual([x.id for x in query], [b1.id])
 
     def test_bigbit_field_instance_data(self):
         b = Bits()
