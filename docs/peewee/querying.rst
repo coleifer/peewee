@@ -158,14 +158,15 @@ It is also a good practice to wrap the bulk insert in a transaction:
     SQLite users should be aware of some caveats when using bulk inserts.
     Specifically, your SQLite3 version must be 3.7.11.0 or newer to take
     advantage of the bulk insert API. Additionally, by default SQLite limits
-    the number of bound variables in a SQL query to ``999``.
+    the number of bound variables in a SQL query to ``999`` for SQLite versions
+    prior to 3.32.0 (2020-05-22) and 32766 for SQLite versions after 3.32.0. 
 
 Inserting rows in batches
 ^^^^^^^^^^^^^^^^^^^^^^^^^
 
 Depending on the number of rows in your data source, you may need to break it
-up into chunks. SQLite in particular typically has a `limit of 999 <https://www.sqlite.org/limits.html#max_variable_number>`_
-variables-per-query (batch size would then be roughly 1000 / row length).
+up into chunks. SQLite in particular typically has a `limit of 999 or 32766 <https://www.sqlite.org/limits.html#max_variable_number>`_
+variables-per-query (batch size would then be 999 // row length or 32766 // row length).
 
 You can write a loop to batch your data into chunks (in which case it is
 **strongly recommended** you use a transaction):
