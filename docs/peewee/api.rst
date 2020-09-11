@@ -4051,7 +4051,9 @@ Model
             or newer to take advantage of bulk inserts.
 
         .. note::
-            SQLite has a default limit of 999 bound variables per statement.
+            SQLite version prior to 3.32.0 (2020-05-22) generally have a default
+            limit of 999 bound variables per statement (32766 for SQLite versions
+            after 3.32.0).
             This limit can be modified at compile-time or at run-time, **but**
             if modifying at run-time, you can only specify a *lower* value than
             the default limit.
@@ -4203,8 +4205,10 @@ Model
             * The primary-key value for the newly-created models will only be
               set if you are using Postgresql (which supports the ``RETURNING``
               clause).
-            * SQLite generally has a limit of 999 bound parameters for a query,
-              so the batch size should be roughly 1000 / number-of-fields.
+            * SQLite version prior to 3.32.0 (2020-05-22) generally have a default
+              limit of 999 bound variables for a query (32766 for SQLite versions
+              after 3.32.0), so the batch size should be 999 // number-of-fields or
+              32766 // number-of-fields.
             * When a batch-size is provided it is **strongly recommended** that
               you wrap the call in a transaction or savepoint using
               :py:meth:`Database.atomic`. Otherwise an error in a batch mid-way
@@ -4247,7 +4251,9 @@ Model
 
         .. warning::
 
-            * SQLite generally has a limit of 999 bound parameters for a query.
+            * SQLite version prior to 3.32.0 (2020-05-22) generally have a default
+              limit of 999 bound variables for a query (32766 for SQLite versions
+              after 3.32.0).
             * When a batch-size is provided it is **strongly recommended** that
               you wrap the call in a transaction or savepoint using
               :py:meth:`Database.atomic`. Otherwise an error in a batch mid-way
