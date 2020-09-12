@@ -4051,9 +4051,9 @@ Model
             or newer to take advantage of bulk inserts.
 
         .. note::
-            SQLite has a default limit of 999 bound variables per statement.
-            This limit can be modified at compile-time or at run-time, **but**
-            if modifying at run-time, you can only specify a *lower* value than
+            SQLite has a default limit of bound variables per statement. This
+            limit can be modified at compile-time or at run-time, **but** if
+            modifying at run-time, you can only specify a *lower* value than
             the default limit.
 
             For more information, check out the following SQLite documents:
@@ -4203,8 +4203,10 @@ Model
             * The primary-key value for the newly-created models will only be
               set if you are using Postgresql (which supports the ``RETURNING``
               clause).
-            * SQLite generally has a limit of 999 bound parameters for a query,
-              so the batch size should be roughly 1000 / number-of-fields.
+            * SQLite generally has a limit of bound parameters for a query,
+              so the maximum batch size should be param-limit / number-of-fields.
+              This limit is typically 999 for Sqlite < 3.32.0, and 32766 for
+              newer versions.
             * When a batch-size is provided it is **strongly recommended** that
               you wrap the call in a transaction or savepoint using
               :py:meth:`Database.atomic`. Otherwise an error in a batch mid-way
@@ -4247,7 +4249,9 @@ Model
 
         .. warning::
 
-            * SQLite generally has a limit of 999 bound parameters for a query.
+            * SQLite generally has a limit of bound parameters for a query.
+              This limit is typically 999 for Sqlite < 3.32.0, and 32766 for
+              newer versions.
             * When a batch-size is provided it is **strongly recommended** that
               you wrap the call in a transaction or savepoint using
               :py:meth:`Database.atomic`. Otherwise an error in a batch mid-way
