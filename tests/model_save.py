@@ -163,3 +163,10 @@ class TestSaveNoData(ModelTestCase):
     def test_save_no_data3(self):
         t5 = T5.create()
         self.assertRaises(ValueError, t5.save)
+
+    def test_save_only_no_data(self):
+        t5 = T5.create(val=1)
+        t5.val = 2
+        self.assertRaises(ValueError, t5.save, only=[])
+        t5_db = T5.get(T5.id == t5.id)
+        self.assertEqual(t5_db.val, 1)

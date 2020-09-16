@@ -6518,7 +6518,7 @@ class Model(with_metaclass(ModelBase, Node)):
             pk_value = self._pk
         else:
             pk_field = pk_value = None
-        if only:
+        if only is not None:
             field_dict = self._prune_fields(field_dict, only)
         elif self._meta.only_save_dirty and not force_insert:
             field_dict = self._prune_fields(field_dict, self.dirty_fields)
