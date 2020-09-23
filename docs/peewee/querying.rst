@@ -159,7 +159,7 @@ It is also a good practice to wrap the bulk insert in a transaction:
     Specifically, your SQLite3 version must be 3.7.11.0 or newer to take
     advantage of the bulk insert API. Additionally, by default SQLite limits
     the number of bound variables in a SQL query to ``999`` for SQLite versions
-    prior to 3.32.0 (2020-05-22) and 32766 for SQLite versions after 3.32.0. 
+    prior to 3.32.0 (2020-05-22) and 32766 for SQLite versions after 3.32.0.
 
 Inserting rows in batches
 ^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -1941,7 +1941,7 @@ recursive CTE:
     level = Value(1).alias('level')
     path = Base.name.alias('path')
     base_case = (Base
-                 .select(Base.name, Base.parent, level, path)
+                 .select(Base.id, Base.name, Base.parent, level, path)
                  .where(Base.parent.is_null())
                  .cte('base', recursive=True))
 
@@ -1950,7 +1950,7 @@ recursive CTE:
     rlevel = (base_case.c.level + 1).alias('level')
     rpath = base_case.c.path.concat('->').concat(RTerm.name).alias('path')
     recursive = (RTerm
-                 .select(RTerm.name, RTerm.parent, rlevel, rpath)
+                 .select(RTerm.id, RTerm.name, RTerm.parent, rlevel, rpath)
                  .join(base_case, on=(RTerm.parent == base_case.c.id)))
 
     # The recursive CTE is created by taking the base case and UNION ALL with
