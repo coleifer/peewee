@@ -4,7 +4,6 @@ python:
   - 3.4
   - 3.5
   - 3.6
-dist: trusty
 env:
   - PEEWEE_TEST_BACKEND=sqlite
   - PEEWEE_TEST_BACKEND=postgresql
@@ -13,22 +12,17 @@ matrix:
   include:
     - python: 3.7
       dist: xenial
-      sudo: true
       env: PEEWEE_TEST_BACKEND=sqlite
     - python: 3.7
       dist: xenial
-      sudo: true
       env: PEEWEE_TEST_BACKEND=postgresql
     - python: 3.7
       dist: xenial
-      sudo: true
       env: PEEWEE_TEST_BACKEND=mysql
-    - python: 3.8-dev
+    - python: 3.8
       dist: xenial
-      sudo: true
     - python: 3.7
       dist: xenial
-      sudo: true
       env:
       - PEEWEE_TEST_BUILD_SQLITE=1
       - PEEWEE_CLOSURE_EXTENSION=/usr/local/lib/closure.so
@@ -38,6 +32,15 @@ matrix:
         - ./.travis_deps.sh
         - sudo ldconfig
       script: "python runtests.py -v2"
+    - python: 3.7
+      dist: xenial
+      env:
+      - PEEWEE_TEST_BACKEND=cockroachdb
+      before_install:
+        - wget -qO- https://binaries.cockroachdb.com/cockroach-v20.1.1.linux-amd64.tgz | tar xvz
+        - ./cockroach-v20.1.1.linux-amd64/cockroach start --insecure --background
+        - ./cockroach-v20.1.1.linux-amd64/cockroach sql --insecure -e 'create database peewee_test;'
+  allow_failures:
 addons:
   postgresql: "9.6"
   mariadb: "10.3"
@@ -50,7 +53,9 @@ before_script:
   - psql -c 'drop database if exists peewee_test;' -U postgres
   - psql -c 'create database peewee_test;' -U postgres
   - psql peewee_test -c 'create extension hstore;' -U postgres
+  - mysql -e 'drop user if exists travis@localhost;'
+  - mysql -e 'create user travis@localhost;'
   - mysql -e 'drop database if exists peewee_test;'
   - mysql -e 'create database peewee_test;'
-  - mysql -e 'grant all on *.* to travis@localhost;'
+  - mysql -e 'grant all on *.* to travis@localhost;' || true
 script: "python runtests.py"

@@ -42,7 +42,9 @@ Models
 
 * :py:class:`BaseModel` has been renamed to :py:class:`ModelBase`
 * Accessing raw model data is now done using ``__data__`` instead of ``_data``
-* The `_prepare_instance()` Model method has been removed.
+* The ``_prepare_instance()`` Model method has been removed.
+* The ``sqlall()`` method, which output the DDL statements to generate a model
+  and its associated indexes, has been removed.
 
 Fields
 ^^^^^^
@@ -64,6 +66,9 @@ Fields
 
 Querying
 ^^^^^^^^
+
+``JOIN_INNER``, ``JOIN_LEFT_OUTER``, etc are now ``JOIN.INNER``,
+``JOIN.LEFT_OUTER``, etc.
 
 The C extension that contained implementations of the query result wrappers has
 been removed.

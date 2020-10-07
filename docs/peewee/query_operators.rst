@@ -250,8 +250,9 @@ Comparisons use the :ref:`query-operators`:
     # user has logged in less than 5 times
     User.login_count < 5
 
-Comparisons can be combined using bitwise *and* and *or*.  Operator precedence
-is controlled by python and comparisons can be nested to an arbitrary depth:
+Comparisons can be combined using **bitwise** *and* and *or*. Operator
+precedence is controlled by python and comparisons can be nested to an
+arbitrary depth:
 
 .. code-block:: python
 
@@ -277,7 +278,7 @@ against other expressions. Expressions also support arithmetic operations:
     # in at least 10 times
     (User.failed_logins > (User.login_count * .5)) & (User.login_count > 10)
 
-Expressions allow us to do atomic updates:
+Expressions allow us to do *atomic updates*:
 
 .. code-block:: python
 
@@ -285,6 +286,62 @@ Expressions allow us to do atomic updates:
     User.update(login_count=User.login_count + 1).where(User.id == user_id)
 
 Expressions can be used in all parts of a query, so experiment!
+
+Row values
+^^^^^^^^^^
+
+Many databases support `row values <https://www.sqlite.org/rowvalue.html>`_,
+which are similar to Python `tuple` objects. In Peewee, it is possible to use
+row-values in expressions via :py:class:`Tuple`. For example,
+
+.. code-block:: python
+
+    # If for some reason your schema stores dates in separate columns ("year",
+    # "month" and "day"), you can use row-values to find all rows that happened
+    # in a given month:
+    Tuple(Event.year, Event.month) == (2019, 1)
+
+The more common use for row-values is to compare against multiple columns from
+a subquery in a single expression. There are other ways to express these types
+of queries, but row-values may offer a concise and readable approach.
+
+For example, assume we have a table "EventLog" which contains an event type, an
+event source, and some metadata. We also have an "IncidentLog", which has
+incident type, incident source, and metadata columns. We can use row-values to
+correlate incidents with certain events:
+
+.. code-block:: python
+
+    class EventLog(Model):
+        event_type = TextField()
+        source = TextField()
+        data = TextField()
+        timestamp = TimestampField()
+
+    class IncidentLog(Model):
+        incident_type = TextField()
+        source = TextField()
+        traceback = TextField()
+        timestamp = TimestampField()
+
+    # Get a list of all the incident types and sources that have occured today.
+    incidents = (IncidentLog
+                 .select(IncidentLog.incident_type, IncidentLog.source)
+                 .where(IncidentLog.timestamp >= datetime.date.today()))
+
+    # Find all events that correlate with the type and source of the
+    # incidents that occured today.
+    events = (EventLog
+              .select()
+              .where(Tuple(EventLog.event_type, EventLog.source).in_(incidents))
+              .order_by(EventLog.timestamp))
+
+Other ways to express this type of query would be to use a :ref:`join <relationships>`
+or to :ref:`join on a subquery <join-subquery>`. The above example is there
+just to give you and idea how :py:class:`Tuple` might be used.
+
+You can also use row-values to update multiple columns in a table, when the new
+data is derived from a subquery. For an example, see `here <https://www.sqlite.org/rowvalue.html#update_multiple_columns_of_a_table_based_on_a_query>`_.
 
 SQL Functions
 -------------

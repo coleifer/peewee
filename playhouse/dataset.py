@@ -18,10 +18,14 @@ from playhouse.reflection import Introspector
 if sys.version_info[0] == 3:
     basestring = str
     from functools import reduce
+    def open_file(f, mode):
+        return open(f, mode, encoding='utf8')
+else:
+    open_file = open
 
 
 class DataSet(object):
-    def __init__(self, url, bare_fields=False):
+    def __init__(self, url, **kwargs):
         if isinstance(url, Database):
             self._url = None
             self._database = url
@@ -41,7 +45,7 @@ class DataSet(object):
         self._models = self._introspector.generate_models(
             skip_invalid=True,
             literal_column_names=True,
-            bare_fields=bare_fields)
+            **kwargs)
         self._migrator = SchemaMigrator.from_database(self._database)
 
         class BaseModel(Model):
@@ -57,12 +61,14 @@ class DataSet(object):
     def get_export_formats(self):
         return {
             'csv': CSVExporter,
-            'json': JSONExporter}
+            'json': JSONExporter,
+            'tsv': TSVExporter}
 
     def get_import_formats(self):
         return {
             'csv': CSVImporter,
-            'json': JSONImporter}
+            'json': JSONImporter,
+            'tsv': TSVImporter}
 
     def __getitem__(self, table):
         if table not in self._models and table in self.tables:
@@ -94,6 +100,7 @@ class DataSet(object):
                 dependencies.extend(self.get_table_dependencies(table))
         else:
             dependencies = None  # Update all tables.
+            self._models = {}
         updated = self._introspector.generate_models(
             skip_invalid=True,
             table_names=dependencies,
@@ -146,7 +153,7 @@ class DataSet(object):
                **kwargs):
         self._check_arguments(filename, file_obj, format, self._export_formats)
         if filename:
-            file_obj = open(filename, 'w')
+            file_obj = open_file(filename, 'w')
 
         exporter = self._export_formats[format](query)
         exporter.export(file_obj, **kwargs)
@@ -158,7 +165,7 @@ class DataSet(object):
              strict=False, **kwargs):
         self._check_arguments(filename, file_obj, format, self._export_formats)
         if filename:
-            file_obj = open(filename, 'r')
+            file_obj = open_file(filename, 'r')
 
         importer = self._import_formats[format](self[table], strict)
         count = importer.load(file_obj, **kwargs)
@@ -238,6 +245,29 @@ class Table(object):
             migrate(*operations)
 
             self.dataset.update_cache(self.name)
+
+    def __getitem__(self, item):
+        try:
+            return self.model_class[item]
+        except self.model_class.DoesNotExist:
+            pass
+
+    def __setitem__(self, item, value):
+        if not isinstance(value, dict):
+            raise ValueError('Table.__setitem__() value must be a dict')
+
+        pk = self.model_class._meta.primary_key
+        value[pk.name] = item
+
+        try:
+            with self.dataset.transaction() as txn:
+                self.insert(**value)
+        except IntegrityError:
+            self.dataset.update_cache(self.name)
+            self.update(columns=[pk.name], **value)
+
+    def __delitem__(self, item):
+        del self.model_class[item]
 
     def insert(self, **data):
         self._migrate_new_columns(data)
@@ -338,6 +368,12 @@ class CSVExporter(Exporter):
             writer.writerow(row)
 
 
+class TSVExporter(CSVExporter):
+    def export(self, file_obj, header=True, **kwargs):
+        kwargs.setdefault('delimiter', '\t')
+        return super(TSVExporter, self).export(file_obj, header, **kwargs)
+
+
 class Importer(object):
     def __init__(self, table, strict=False):
         self.table = table
@@ -408,3 +444,9 @@ class CSVImporter(Importer):
             count += 1
 
         return count
+
+
+class TSVImporter(CSVImporter):
+    def load(self, file_obj, header=True, **kwargs):
+        kwargs.setdefault('delimiter', '\t')
+        return super(TSVImporter, self).load(file_obj, header, **kwargs)

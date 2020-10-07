@@ -128,7 +128,13 @@ from peewee import Expression
 from peewee import Node
 from peewee import NodeList
 from peewee import OP
+from peewee import callable_
 from peewee import sort_models
+from peewee import _truncate_constraint_name
+try:
+    from playhouse.cockroachdb import CockroachDatabase
+except ImportError:
+    CockroachDatabase = None
 
 
 class Operation(object):
@@ -188,7 +194,9 @@ class SchemaMigrator(object):
 
     @classmethod
     def from_database(cls, database):
-        if isinstance(database, PostgresqlDatabase):
+        if CockroachDatabase and isinstance(database, CockroachDatabase):
+            return CockroachDBMigrator(database)
+        elif isinstance(database, PostgresqlDatabase):
             return PostgresqlMigrator(database)
         elif isinstance(database, MySQLDatabase):
             return MySQLMigrator(database)
@@ -199,7 +207,7 @@ class SchemaMigrator(object):
     @operation
     def apply_default(self, table, column_name, field):
         default = field.default
-        if callable(default):
+        if callable_(default):
             default = default()
 
         return (self.make_context()
@@ -226,7 +234,12 @@ class SchemaMigrator(object):
         # Make field null at first.
         ctx = self.make_context()
         field_null, field.null = field.null, True
-        field.name = field.column_name = column_name
+
+        # Set the field's column-name and name, if it is not set or doesn't
+        # match the new value.
+        if field.column_name != column_name:
+            field.name = field.column_name = column_name
+
         (self
          ._alter_table(ctx, table)
          .literal(' ADD COLUMN ')
@@ -282,7 +295,7 @@ class SchemaMigrator(object):
                .literal('ALTER TABLE ')
                .sql(Entity(table))
                .literal(' ADD CONSTRAINT ')
-               .sql(Entity(constraint))
+               .sql(Entity(_truncate_constraint_name(constraint)))
                .literal(' FOREIGN KEY ')
                .sql(EnclosedNodeList((Entity(column_name),)))
                .literal(' REFERENCES ')
@@ -379,6 +392,20 @@ class SchemaMigrator(object):
                 .literal(' DROP NOT NULL'))
 
     @operation
+    def alter_column_type(self, table, column, field, cast=None):
+        # ALTER TABLE <table> ALTER COLUMN <column>
+        ctx = self.make_context()
+        ctx = (self
+               ._alter_column(ctx, table, column)
+               .literal(' TYPE ')
+               .sql(field.ddl_datatype(ctx)))
+        if cast is not None:
+            if not isinstance(cast, Node):
+                cast = SQL(cast)
+            ctx = ctx.literal(' USING ').sql(cast)
+        return ctx
+
+    @operation
     def rename_table(self, old_name, new_name):
         return (self
                 ._alter_table(self.make_context(), old_name)
@@ -448,6 +475,21 @@ class PostgresqlMigrator(SchemaMigrator):
         return operations
 
 
+class CockroachDBMigrator(PostgresqlMigrator):
+    explicit_create_foreign_key = True
+
+    def add_inline_fk_sql(self, ctx, field):
+        pass
+
+    @operation
+    def drop_index(self, table, index_name):
+        return (self
+                .make_context()
+                .literal('DROP INDEX ')
+                .sql(Entity(index_name))
+                .literal(' CASCADE'))
+
+
 class MySQLColumn(namedtuple('_Column', ('name', 'definition', 'null', 'pk',
                                          'default', 'extra'))):
     @property
@@ -487,6 +529,12 @@ class MySQLMigrator(SchemaMigrator):
     explicit_create_foreign_key = True
     explicit_delete_foreign_key = True
 
+    def _alter_column(self, ctx, table, column):
+        return (self
+                ._alter_table(ctx, table)
+                .literal(' MODIFY ')
+                .sql(Entity(column)))
+
     @operation
     def rename_table(self, old_name, new_name):
         return (self
@@ -497,7 +545,7 @@ class MySQLMigrator(SchemaMigrator):
                 .sql(Entity(new_name)))
 
     def _get_column_definition(self, table, column_name):
-        cursor = self.database.execute_sql('DESCRIBE %s;' % table)
+        cursor = self.database.execute_sql('DESCRIBE `%s`;' % table)
         rows = cursor.fetchall()
         for row in rows:
             column = MySQLColumn(*row)
@@ -526,9 +574,7 @@ class MySQLMigrator(SchemaMigrator):
     def drop_foreign_key_constraint(self, table, column_name):
         fk_constraint = self.get_foreign_key_constraint(table, column_name)
         return (self
-                .make_context()
-                .literal('ALTER TABLE ')
-                .sql(Entity(table))
+                ._alter_table(self.make_context(), table)
                 .literal(' DROP FOREIGN KEY ')
                 .sql(Entity(fk_constraint)))
 
@@ -539,11 +585,9 @@ class MySQLMigrator(SchemaMigrator):
     def add_not_null(self, table, column):
         column_def = self._get_column_definition(table, column)
         add_not_null = (self
-                         .make_context()
-                         .literal('ALTER TABLE ')
-                         .sql(Entity(table))
-                         .literal(' MODIFY ')
-                         .sql(column_def.sql(is_null=False)))
+                        ._alter_table(self.make_context(), table)
+                        .literal(' MODIFY ')
+                        .sql(column_def.sql(is_null=False)))
 
         fk_objects = dict(
             (fk.column, fk)
@@ -566,9 +610,7 @@ class MySQLMigrator(SchemaMigrator):
         if column.is_pk:
             raise ValueError('Primary keys can not be null')
         return (self
-                .make_context()
-                .literal('ALTER TABLE ')
-                .sql(Entity(table))
+                ._alter_table(self.make_context(), table)
                 .literal(' MODIFY ')
                 .sql(column.sql(is_null=True)))
 
@@ -581,9 +623,7 @@ class MySQLMigrator(SchemaMigrator):
 
         column = self._get_column_definition(table, old_name)
         rename_ctx = (self
-                      .make_context()
-                      .literal('ALTER TABLE ')
-                      .sql(Entity(table))
+                      ._alter_table(self.make_context(), table)
                       .literal(' CHANGE ')
                       .sql(Entity(old_name))
                       .literal(' ')
@@ -603,6 +643,19 @@ class MySQLMigrator(SchemaMigrator):
             return rename_ctx
 
     @operation
+    def alter_column_type(self, table, column, field, cast=None):
+        if cast is not None:
+            raise ValueError('alter_column_type() does not support cast with '
+                             'MySQL.')
+        ctx = self.make_context()
+        return (self
+                ._alter_table(ctx, table)
+                .literal(' MODIFY ')
+                .sql(Entity(column))
+                .literal(' ')
+                .sql(field.ddl(ctx)))
+
+    @operation
     def drop_index(self, table, index_name):
         return (self
                 .make_context()
@@ -619,8 +672,8 @@ class SqliteMigrator(SchemaMigrator):
     """
     column_re = re.compile('(.+?)\((.+)\)')
     column_split_re = re.compile(r'(?:[^,(]|\([^)]*\))+')
-    column_name_re = re.compile('["`\']?([\w]+)')
-    fk_re = re.compile('FOREIGN KEY\s+\("?([\w]+)"?\)\s+', re.I)
+    column_name_re = re.compile(r'''["`']?([\w]+)''')
+    fk_re = re.compile(r'FOREIGN KEY\s+\("?([\w]+)"?\)\s+', re.I)
 
     def _get_column_names(self, table):
         res = self.database.execute_sql('select * from "%s" limit 1' % table)
@@ -664,6 +717,7 @@ class SqliteMigrator(SchemaMigrator):
         new_column_defs = []
         new_column_names = []
         original_column_names = []
+        constraint_terms = ('foreign ', 'primary ', 'constraint ')
 
         for column_def in column_defs:
             column_name, = self.column_name_re.match(column_def).groups()
@@ -678,7 +732,9 @@ class SqliteMigrator(SchemaMigrator):
                     new_column_names.append(column_name)
             else:
                 new_column_defs.append(column_def)
-                if not column_name.lower().startswith(('foreign', 'primary')):
+
+                # Avoid treating constraints as columns.
+                if not column_def.lower().startswith(constraint_terms):
                     new_column_names.append(column_name)
                     original_column_names.append(column_name)
 
@@ -772,7 +828,7 @@ class SqliteMigrator(SchemaMigrator):
         clean = []
         for column in columns:
             if re.match('%s(?:[\'"`\]]?\s|$)' % column_to_update, column):
-                column = new_columne + column[len(column_to_update):]
+                column = new_column + column[len(column_to_update):]
             clean.append(column)
 
         return '%s(%s)' % (lhs, ', '.join('"%s"' % c for c in clean))
@@ -798,6 +854,18 @@ class SqliteMigrator(SchemaMigrator):
         def _drop_not_null(column_name, column_def):
             return column_def.replace('NOT NULL', '')
         return self._update_column(table, column, _drop_not_null)
+
+    @operation
+    def alter_column_type(self, table, column, field, cast=None):
+        if cast is not None:
+            raise ValueError('alter_column_type() does not support cast with '
+                             'Sqlite.')
+        ctx = self.make_context()
+        def _alter_column_type(column_name, column_def):
+            node_list = field.ddl(ctx)
+            sql, _ = ctx.sql(Entity(column)).sql(node_list).query()
+            return sql
+        return self._update_column(table, column, _alter_column_type)
 
     @operation
     def add_constraint(self, table, name, constraint):

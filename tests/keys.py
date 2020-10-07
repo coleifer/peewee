@@ -282,13 +282,13 @@ class TestCompositePrimaryKey(ModelTestCase):
 
         tag = Tag.select().where(Tag.tag == 't1').get()
         post = Post.select().where(Post.title == 'p1').get()
-        self.assertEqual(tpt._pk, (tag, post))
+        self.assertEqual(tpt._pk, (tag.id, post.id))
 
         # set_id is a no-op.
         with self.assertRaisesCtx(TypeError):
             tpt._pk = None
 
-        self.assertEqual(tpt._pk, (tag, post))
+        self.assertEqual(tpt._pk, (tag.id, post.id))
         t3 = Tag.get(Tag.tag == 't3')
         p3 = Post.get(Post.title == 'p3')
         tpt._pk = (t3, p3)

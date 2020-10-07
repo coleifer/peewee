@@ -8,6 +8,10 @@ import re
 
 from peewee import *
 from peewee import _StringField
+from peewee import _query_val_transform
+from peewee import CommaNodeList
+from peewee import SCOPE_VALUES
+from peewee import make_snake_case
 from peewee import text_type
 try:
     from pymysql.constants import FIELD_TYPE
@@ -20,6 +24,10 @@ try:
     from playhouse import postgres_ext
 except ImportError:
     postgres_ext = None
+try:
+    from playhouse.cockroachdb import CockroachDatabase
+except ImportError:
+    CockroachDatabase = None
 
 RESERVED_WORDS = set([
     'and', 'as', 'assert', 'break', 'class', 'continue', 'def', 'del', 'elif',
@@ -216,11 +224,11 @@ class PostgresqlMetadata(Metadata):
         16: BooleanField,
         17: BlobField,
         20: BigIntegerField,
-        21: IntegerField,
+        21: SmallIntegerField,
         23: IntegerField,
         25: TextField,
         700: FloatField,
-        701: FloatField,
+        701: DoubleField,
         1042: CharField, # blank-padded CHAR
         1043: CharField,
         1082: DateField,
@@ -229,7 +237,7 @@ class PostgresqlMetadata(Metadata):
         1083: TimeField,
         1266: TimeField,
         1700: DecimalField,
-        2950: TextField, # UUID
+        2950: UUIDField, # UUID
     }
     array_types = {
         1000: BooleanField,
@@ -243,6 +251,7 @@ class PostgresqlMetadata(Metadata):
         1115: DateTimeField,
         1182: DateField,
         1183: TimeField,
+        2951: UUIDField,
     }
     extension_import = 'from playhouse.postgres_ext import *'
 
@@ -279,13 +288,13 @@ class PostgresqlMetadata(Metadata):
             postgres_ext.HStoreField)) if postgres_ext is not None else set()
 
         # Look up the actual column type for each column.
-        identifier = '"%s"."%s"' % (schema, table)
-        cursor = self.execute('SELECT * FROM %s LIMIT 1' % identifier)
+        identifier = '%s."%s"' % (schema, table)
+        cursor = self.execute(
+            'SELECT attname, atttypid FROM pg_catalog.pg_attribute '
+            'WHERE attrelid = %s::regclass AND attnum > %s', identifier, 0)
 
         # Store column metadata in dictionary keyed by column name.
-        for column_description in cursor.description:
-            name = column_description.name
-            oid = column_description.type_code
+        for name, oid in cursor.fetchall():
             column_types[name] = self.column_map.get(oid, UnknownField)
             if column_types[name] in extension_types:
                 self.requires_extension = True
@@ -309,6 +318,33 @@ class PostgresqlMetadata(Metadata):
     def get_indexes(self, table, schema=None):
         schema = schema or 'public'
         return super(PostgresqlMetadata, self).get_indexes(table, schema)
+
+
+class CockroachDBMetadata(PostgresqlMetadata):
+    # CRDB treats INT the same as BIGINT, so we just map bigint type OIDs to
+    # regular IntegerField.
+    column_map = PostgresqlMetadata.column_map.copy()
+    column_map[20] = IntegerField
+    array_types = PostgresqlMetadata.array_types.copy()
+    array_types[1016] = IntegerField
+    extension_import = 'from playhouse.cockroachdb import *'
+
+    def __init__(self, database):
+        Metadata.__init__(self, database)
+        self.requires_extension = True
+
+        if postgres_ext is not None:
+            # Attempt to add JSON types.
+            cursor = self.execute('select oid, typname, format_type(oid, NULL)'
+                                  ' from pg_type;')
+            results = cursor.fetchall()
+
+            for oid, typname, formatted_type in results:
+                if typname == 'jsonb':
+                    self.column_map[oid] = postgres_ext.BinaryJSONField
+
+            for oid in self.array_types:
+                self.column_map[oid] = postgres_ext.ArrayField
 
 
 class MySQLMetadata(Metadata):
@@ -367,16 +403,19 @@ class SqliteMetadata(Metadata):
         'date': DateField,
         'datetime': DateTimeField,
         'decimal': DecimalField,
+        'float': FloatField,
         'integer': IntegerField,
         'integer unsigned': IntegerField,
         'int': IntegerField,
         'long': BigIntegerField,
+        'numeric': DecimalField,
         'real': FloatField,
         'smallinteger': IntegerField,
         'smallint': IntegerField,
         'smallint unsigned': IntegerField,
         'text': TextField,
         'time': TimeField,
+        'varchar': CharField,
     }
 
     begin = '(?:["\[\(]+)?'
@@ -396,7 +435,10 @@ class SqliteMetadata(Metadata):
             field_class = CharField
         else:
             column_type = re.sub('\(.+\)', '', raw_column_type)
-            field_class = self.column_map.get(column_type, UnknownField)
+            if column_type == '':
+                field_class = BareField
+            else:
+                field_class = self.column_map.get(column_type, UnknownField)
         return field_class
 
     def get_column_types(self, table, schema=None):
@@ -448,7 +490,9 @@ class Introspector(object):
 
     @classmethod
     def from_database(cls, database, schema=None):
-        if isinstance(database, PostgresqlDatabase):
+        if CockroachDatabase and isinstance(database, CockroachDatabase):
+            metadata = CockroachDBMetadata(database)
+        elif isinstance(database, PostgresqlDatabase):
             metadata = PostgresqlMetadata(database)
         elif isinstance(database, MySQLDatabase):
             metadata = MySQLMetadata(database)
@@ -472,16 +516,27 @@ class Introspector(object):
             return '\n' + self.metadata.extension_import
         return ''
 
-    def make_model_name(self, table):
-        model = re.sub('[^\w]+', '', table)
+    def make_model_name(self, table, snake_case=True):
+        if snake_case:
+            table = make_snake_case(table)
+        model = re.sub(r'[^\w]+', '', table)
         model_name = ''.join(sub.title() for sub in model.split('_'))
         if not model_name[0].isalpha():
             model_name = 'T' + model_name
         return model_name
 
-    def make_column_name(self, column):
-        column = re.sub('_id$', '', column.lower().strip()) or column.lower()
-        column = re.sub('[^\w]+', '_', column)
+    def make_column_name(self, column, is_foreign_key=False, snake_case=True):
+        column = column.strip()
+        if snake_case:
+            column = make_snake_case(column)
+        column = column.lower()
+        if is_foreign_key:
+            # Strip "_id" from foreign keys, unless the foreign-key happens to
+            # be named "_id", in which case the name is retained.
+            column = re.sub('_id$', '', column) or column
+
+        # Remove characters that are invalid for Python identifiers.
+        column = re.sub(r'[^\w]+', '_', column)
         if column in RESERVED_WORDS:
             column += '_'
         if len(column) and column[0].isdigit():
@@ -489,7 +544,7 @@ class Introspector(object):
         return column
 
     def introspect(self, table_names=None, literal_column_names=False,
-                   include_views=False):
+                   include_views=False, snake_case=True):
         # Retrieve all the tables in the database.
         tables = self.metadata.database.get_tables(schema=self.schema)
         if include_views:
@@ -534,16 +589,20 @@ class Introspector(object):
                             tables.append(foreign_key.dest_table)
                             table_set.add(foreign_key.dest_table)
 
-            model_names[table] = self.make_model_name(table)
+            model_names[table] = self.make_model_name(table, snake_case)
 
+            # Collect sets of all the column names as well as all the
+            # foreign-key column names.
             lower_col_names = set(column_name.lower()
                                   for column_name in table_columns)
+            fks = set(fk_col.column for fk_col in foreign_keys[table])
 
             for col_name, column in table_columns.items():
                 if literal_column_names:
-                    new_name = re.sub('[^\w]+', '_', col_name)
+                    new_name = re.sub(r'[^\w]+', '_', col_name)
                 else:
-                    new_name = self.make_column_name(col_name)
+                    new_name = self.make_column_name(col_name, col_name in fks,
+                                                     snake_case)
 
                 # If we have two columns, "parent" and "parent_id", ensure
                 # that when we don't introduce naming conflicts.
@@ -710,3 +769,65 @@ class Introspector(object):
 def introspect(database, schema=None):
     introspector = Introspector.from_database(database, schema=schema)
     return introspector.introspect()
+
+
+def generate_models(database, schema=None, **options):
+    introspector = Introspector.from_database(database, schema=schema)
+    return introspector.generate_models(**options)
+
+
+def print_model(model, indexes=True, inline_indexes=False):
+    print(model._meta.name)
+    for field in model._meta.sorted_fields:
+        parts = ['  %s %s' % (field.name, field.field_type)]
+        if field.primary_key:
+            parts.append(' PK')
+        elif inline_indexes:
+            if field.unique:
+                parts.append(' UNIQUE')
+            elif field.index:
+                parts.append(' INDEX')
+        if isinstance(field, ForeignKeyField):
+            parts.append(' FK: %s.%s' % (field.rel_model.__name__,
+                                         field.rel_field.name))
+        print(''.join(parts))
+
+    if indexes:
+        index_list = model._meta.fields_to_index()
+        if not index_list:
+            return
+
+        print('\nindex(es)')
+        for index in index_list:
+            parts = ['  ']
+            ctx = model._meta.database.get_sql_context()
+            with ctx.scope_values(param='%s', quote='""'):
+                ctx.sql(CommaNodeList(index._expressions))
+                if index._where:
+                    ctx.literal(' WHERE ')
+                    ctx.sql(index._where)
+                sql, params = ctx.query()
+
+            clean = sql % tuple(map(_query_val_transform, params))
+            parts.append(clean.replace('"', ''))
+
+            if index._unique:
+                parts.append(' UNIQUE')
+            print(''.join(parts))
+
+
+def get_table_sql(model):
+    sql, params = model._schema._create_table().query()
+    if model._meta.database.param != '%s':
+        sql = sql.replace(model._meta.database.param, '%s')
+
+    # Format and indent the table declaration, simplest possible approach.
+    match_obj = re.match('^(.+?\()(.+)(\).*)', sql)
+    create, columns, extra = match_obj.groups()
+    indented = ',\n'.join('  %s' % column for column in columns.split(', '))
+
+    clean = '\n'.join((create, indented, extra)).strip()
+    return clean % tuple(map(_query_val_transform, params))
+
+def print_table_sql(model):
+    print(get_table_sql(model))

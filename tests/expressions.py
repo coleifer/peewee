@@ -80,7 +80,8 @@ class TestValueConversion(ModelTestCase):
                   .update({UpperModel.name: 'zaizee'})
                   .where(UpperModel.id == uid))
         self.assertSQL(update, (
-            'UPDATE "upper_model" SET "name" = UPPER(?) WHERE ("id" = ?)'),
+            'UPDATE "upper_model" SET "name" = UPPER(?) '
+            'WHERE ("upper_model"."id" = ?)'),
             ['zaizee', uid])
         update.execute()
 
@@ -95,7 +96,8 @@ class TestValueConversion(ModelTestCase):
         # Ensure it works with DELETE.
         delete = UpperModel.delete().where(UpperModel.name == 'zaizee')
         self.assertSQL(delete, (
-            'DELETE FROM "upper_model" WHERE ("name" = UPPER(?))'), ['zaizee'])
+            'DELETE FROM "upper_model" '
+            'WHERE ("upper_model"."name" = UPPER(?))'), ['zaizee'])
         self.assertEqual(delete.execute(), 1)
 
     def test_value_conversion_mixed(self):
@@ -127,6 +129,13 @@ class TestValueConversion(ModelTestCase):
         self.assertSQL(sq, (
             'SELECT "t1"."id", "t1"."name" FROM "upper_model" AS "t1" '
             'WHERE ("t1"."name" = ?)'), ['huey'])
+        self.assertRaises(UpperModel.DoesNotExist, sq.get)
+
+        # Function arguments are not coerced.
+        sq = UpperModel.select().where(UpperModel.name == fn.LOWER('huey'))
+        self.assertSQL(sq, (
+            'SELECT "t1"."id", "t1"."name" FROM "upper_model" AS "t1" '
+            'WHERE ("t1"."name" = LOWER(?))'), ['huey'])
         self.assertRaises(UpperModel.DoesNotExist, sq.get)
 
     def test_value_conversion_query(self):

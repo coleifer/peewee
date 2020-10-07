@@ -5,12 +5,16 @@ from functools import partial
 from peewee import *
 from playhouse.migrate import *
 from .base import BaseTestCase
+from .base import IS_CRDB
 from .base import IS_MYSQL
+from .base import IS_POSTGRESQL
 from .base import IS_SQLITE
 from .base import ModelTestCase
 from .base import TestModel
 from .base import db
+from .base import get_in_memory_db
 from .base import requires_models
+from .base import requires_pglike
 from .base import requires_postgresql
 from .base import requires_sqlite
 from .base import skip_if
@@ -81,7 +85,7 @@ class TestSchemaMigration(ModelTestCase):
         finally:
             self.database.close()
 
-    @requires_postgresql
+    @requires_pglike
     def test_add_table_constraint(self):
         price = FloatField(default=0.)
         migrate(self.migrator.add_column('tag', 'price', price),
@@ -119,7 +123,7 @@ class TestSchemaMigration(ModelTestCase):
         with self.database.atomic():
             self.assertRaises(IntegrityError, Tag2.create, tag='t2', alt_id=1)
 
-    @requires_postgresql
+    @requires_pglike
     def test_drop_table_constraint(self):
         price = FloatField(default=0.)
         migrate(
@@ -319,7 +323,8 @@ class TestSchemaMigration(ModelTestCase):
         # We cannot make the `dob` field not null because there is currently
         # a null value there.
         if self._exception_add_not_null:
-            self.assertRaises(IntegrityError, addNotNull)
+            with self.assertRaisesCtx((IntegrityError, InternalError)):
+                addNotNull()
 
         (Person
          .update(dob=datetime.date(2000, 1, 2))
@@ -361,7 +366,8 @@ class TestSchemaMigration(ModelTestCase):
                 migrate(self.migrator.add_not_null('page', 'user_id'))
 
         if self._exception_add_not_null:
-            self.assertRaises(IntegrityError, addNotNull)
+            with self.assertRaisesCtx((IntegrityError, InternalError)):
+                addNotNull()
 
         with self.database.transaction():
             Page.update(user=user).where(Page.user.is_null()).execute()
@@ -411,6 +417,8 @@ class TestSchemaMigration(ModelTestCase):
                 Tag.create,
                 tag='t3')
 
+        self.database.execute_sql('drop table tag_asdf')
+
     def test_add_index(self):
         # Create a unique index on first and last names.
         columns = ('first_name', 'last_name')
@@ -418,11 +426,8 @@ class TestSchemaMigration(ModelTestCase):
 
         Person.create(first_name='first', last_name='last')
         with self.database.transaction():
-            self.assertRaises(
-                IntegrityError,
-                Person.create,
-                first_name='first',
-                last_name='last')
+            with self.assertRaisesCtx((IntegrityError, InternalError)):
+                Person.create(first_name='first', last_name='last')
 
     def test_add_unique_column(self):
         uf = CharField(default='', unique=True)
@@ -522,6 +527,8 @@ class TestSchemaMigration(ModelTestCase):
                 last='Leifer',
                 field_default='bazer')
 
+        self.database.execute_sql('drop table person_nugg;')
+
     def test_add_foreign_key(self):
         if hasattr(Person, 'newtag_set'):
             delattr(Person, 'newtag_set')
@@ -563,6 +570,7 @@ class TestSchemaMigration(ModelTestCase):
             ['id', 'name'])
         self.assertEqual(self.database.get_foreign_keys('page'), [])
 
+    @skip_if(IS_CRDB, 'crdb does not clean up old constraint')
     def test_rename_foreign_key(self):
         migrate(self.migrator.rename_column('page', 'user_id', 'huey_id'))
         columns = self.database.get_columns('page')
@@ -577,6 +585,7 @@ class TestSchemaMigration(ModelTestCase):
         self.assertEqual(foreign_key.dest_column, 'id')
         self.assertEqual(foreign_key.dest_table, 'users')
 
+    @skip_if(IS_CRDB, 'crdb does not clean up old constraint')
     def test_rename_unique_foreign_key(self):
         migrate(self.migrator.rename_column('session', 'user_id', 'huey_id'))
         columns = self.database.get_columns('session')
@@ -591,7 +600,7 @@ class TestSchemaMigration(ModelTestCase):
         self.assertEqual(foreign_key.dest_column, 'id')
         self.assertEqual(foreign_key.dest_table, 'users')
 
-    @requires_postgresql
+    @requires_pglike
     @requires_models(Tag)
     def test_add_column_with_index_type(self):
         from playhouse.postgres_ext import BinaryJSONField
@@ -604,6 +613,38 @@ class TestSchemaMigration(ModelTestCase):
             ('CREATE INDEX "tag_metadata" ON "tag" USING GIN ("metadata")',
              []),
         ])
+
+    @skip_if(IS_CRDB, 'crdb is still finnicky about changing types.')
+    def test_alter_column_type(self):
+        # Convert varchar to text.
+        field = TextField()
+        migrate(self.migrator.alter_column_type('tag', 'tag', field))
+        _, tag = self.database.get_columns('tag')
+        # name, type, null?, primary-key?, table, default.
+        data_type = 'TEXT' if IS_SQLITE else 'text'
+        self.assertEqual(tag, ('tag', data_type, False, False, 'tag', None))
+
+        # Convert date to datetime.
+        field = DateTimeField()
+        migrate(self.migrator.alter_column_type('person', 'dob', field))
+        _, _, _, dob = self.database.get_columns('person')
+        if IS_POSTGRESQL or IS_CRDB:
+            self.assertTrue(dob.data_type.startswith('timestamp'))
+        else:
+            self.assertEqual(dob.data_type.lower(), 'datetime')
+
+        # Convert text to integer.
+        field = IntegerField()
+        cast = '(tag::integer)' if IS_POSTGRESQL or IS_CRDB else None
+        migrate(self.migrator.alter_column_type('tag', 'tag', field, cast))
+        _, tag = self.database.get_columns('tag')
+        if IS_SQLITE:
+            data_type = 'INTEGER'
+        elif IS_MYSQL:
+            data_type = 'int'
+        else:
+            data_type = 'integer'
+        self.assertEqual(tag, ('tag', data_type, False, False, 'tag', None))
 
     @requires_sqlite
     def test_valid_column_required(self):
@@ -692,6 +733,8 @@ class TestSchemaMigration(ModelTestCase):
         self.assertEqual(queries, [
             ('ALTER TABLE "category" ADD COLUMN "parent_id" '
              'INTEGER REFERENCES "category" ("id") ON DELETE SET NULL', []),
+            ('CREATE INDEX "category_parent_id" ON "category" ("parent_id")',
+             []),
         ])
 
     @requires_sqlite
@@ -797,6 +840,7 @@ class TestSchemaMigration(ModelTestCase):
             # Add new foreign-key field with appropriate constraint.
             ('ALTER TABLE "page" ADD COLUMN "user_id" VARCHAR(20) '
              'REFERENCES "users" ("id") ON DELETE CASCADE', []),
+            ('CREATE INDEX "page_user_id" ON "page" ("user_id")', []),
         ])
 
         self.database.pragma('foreign_keys', 1)
@@ -820,3 +864,50 @@ class TestSchemaMigration(ModelTestCase):
         ]
         name = make_index_name('very_long_table_name', columns)
         self.assertEqual(len(name), 64)
+
+
+class BadNames(TestModel):
+    primary_data = TextField()
+    foreign_data = TextField()
+    data = TextField()
+
+    class Meta:
+        constraints = [
+            SQL('CONSTRAINT const1 UNIQUE (primary_data)'),
+            SQL('CONSTRAINT const2 UNIQUE (foreign_data)')]
+
+
+class TestSqliteColumnNameRegression(ModelTestCase):
+    database = get_in_memory_db()
+    requires = [BadNames]
+
+    def test_sqlite_column_name_regression(self):
+        BadNames.create(primary_data='pd', foreign_data='fd', data='d')
+
+        migrator = SchemaMigrator.from_database(self.database)
+        new_data = TextField(default='foo')
+        migrate(migrator.add_column('bad_names', 'new_data', new_data),
+                migrator.drop_column('bad_names', 'data'))
+
+        columns = self.database.get_columns('bad_names')
+        column_names = [column.name for column in columns]
+        self.assertEqual(column_names, ['id', 'primary_data', 'foreign_data',
+                                        'new_data'])
+
+        BNT = Table('bad_names', ('id', 'primary_data', 'foreign_data',
+                                  'new_data')).bind(self.database)
+        self.assertEqual([row for row in BNT.select()], [{
+            'id': 1,
+            'primary_data': 'pd',
+            'foreign_data': 'fd',
+            'new_data': 'foo'}])
+
+        # Verify constraints were carried over.
+        data = {'primary_data': 'pd', 'foreign_data': 'xx', 'new_data': 'd'}
+        self.assertRaises(IntegrityError, BNT.insert(data).execute)
+
+        data.update(primary_data='px', foreign_data='fd')
+        self.assertRaises(IntegrityError, BNT.insert(data).execute)
+
+        data.update(foreign_data='fx')
+        self.assertTrue(BNT.insert(data).execute())

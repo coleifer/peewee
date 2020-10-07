@@ -14,6 +14,7 @@ from peewee import sort_models
 
 from .base import BaseTestCase
 from .base import DatabaseTestCase
+from .base import IS_CRDB
 from .base import IS_MYSQL
 from .base import IS_POSTGRESQL
 from .base import IS_SQLITE
@@ -147,6 +148,24 @@ class TestDatabase(DatabaseTestCase):
         conn = self.database.connection()
         self.assertFalse(self.database.is_closed())
 
+    def test_db_context_manager(self):
+        self.database.close()
+        self.assertTrue(self.database.is_closed())
+
+        with self.database:
+            self.assertFalse(self.database.is_closed())
+
+        self.assertTrue(self.database.is_closed())
+        self.database.connect()
+        self.assertFalse(self.database.is_closed())
+
+        # Enter context with an already-open db.
+        with self.database:
+            self.assertFalse(self.database.is_closed())
+
+        # Closed after exit.
+        self.assertTrue(self.database.is_closed())
+
     def test_connection_initialization(self):
         state = {'count': 0}
         class TestDatabase(SqliteDatabase):
@@ -223,6 +242,39 @@ class TestDatabase(DatabaseTestCase):
         db.close()
         alt_db.close()
 
+    def test_bind_regression(self):
+        class Base(Model):
+            class Meta:
+                database = None
+
+        class A(Base): pass
+        class B(Base): pass
+        class AB(Base):
+            a = ForeignKeyField(A)
+            b = ForeignKeyField(B)
+
+        self.assertTrue(A._meta.database is None)
+
+        db = get_in_memory_db()
+        with db.bind_ctx([A, B]):
+            self.assertEqual(A._meta.database, db)
+            self.assertEqual(B._meta.database, db)
+            self.assertEqual(AB._meta.database, db)
+
+        self.assertTrue(A._meta.database is None)
+        self.assertTrue(B._meta.database is None)
+        self.assertTrue(AB._meta.database is None)
+
+        class C(Base):
+            a = ForeignKeyField(A)
+
+        with db.bind_ctx([C], bind_refs=False):
+            self.assertEqual(C._meta.database, db)
+            self.assertTrue(A._meta.database is None)
+
+        self.assertTrue(C._meta.database is None)
+        self.assertTrue(A._meta.database is None)
+
     def test_batch_commit(self):
         class PatchCommitDatabase(SqliteDatabase):
             commits = 0
@@ -252,6 +304,35 @@ class TestDatabase(DatabaseTestCase):
         assertBatches(12, 11, 2)
         assertBatches(12, 12, 1)
         assertBatches(12, 13, 1)
+
+    def test_server_version(self):
+        class FakeDatabase(Database):
+            server_version = None
+            def _connect(self):
+                return 1
+            def _close(self, conn):
+                pass
+            def _set_server_version(self, conn):
+                self.server_version = (1, 33, 7)
+
+        db = FakeDatabase(':memory:')
+        self.assertTrue(db.server_version is None)
+        db.connect()
+        self.assertEqual(db.server_version, (1, 33, 7))
+        db.close()
+        self.assertEqual(db.server_version, (1, 33, 7))
+
+        db.server_version = (1, 2, 3)
+        db.connect()
+        self.assertEqual(db.server_version, (1, 2, 3))
+        db.close()
+
+    def test_explicit_connect(self):
+        db = get_in_memory_db(autoconnect=False)
+        self.assertRaises(InterfaceError, db.execute_sql, 'pragma cache_size')
+        with db:
+            db.execute_sql('pragma cache_size')
+        self.assertRaises(InterfaceError, db.cursor)
 
 
 class TestThreadSafety(ModelTestCase):
@@ -404,8 +485,18 @@ class Note(TestModel):
         table_name = 'notes'
 
 
+class Person(TestModel):
+    first = CharField()
+    last = CharField()
+    email = CharField()
+    class Meta:
+        indexes = (
+            (('last', 'first'), False),
+        )
+
+
 class TestIntrospection(ModelTestCase):
-    requires = [Category, User, UniqueModel, IndexedModel]
+    requires = [Category, User, UniqueModel, IndexedModel, Person]
 
     def test_table_exists(self):
         self.assertTrue(self.database.table_exists(User._meta.table_name))
@@ -438,6 +529,15 @@ class TestIntrospection(ModelTestCase):
             ('indexed_model_first_last_dob', ['first', 'last', 'dob'], True,
              'indexed_model')])
 
+        # Multi-column index where columns are in different order than declared
+        # on the table.
+        indexes = self.database.get_indexes('person')
+        data = [(index.name, index.columns, index.unique)
+                for index in indexes
+                if index.name not in ('person_pkey', 'PRIMARY')]
+        self.assertEqual(data, [
+            ('person_last_first', ['last', 'first'], False)])
+
     def test_get_columns(self):
         columns = self.database.get_columns('indexed_model')
         data = [(c.name, c.null, c.primary_key, c.table)
@@ -465,7 +565,7 @@ class TestIntrospection(ModelTestCase):
     @requires_models(Note)
     def test_get_views(self):
         def normalize_view_meta(view_meta):
-            sql_ws_norm = re.sub('\n\s+', ' ', view_meta.sql)
+            sql_ws_norm = re.sub(r'[\n\s]+', ' ', view_meta.sql.strip('; '))
             return view_meta.name, (sql_ws_norm
                                     .replace('`peewee_test`.', '')
                                     .replace('`notes`.', '')
@@ -481,8 +581,8 @@ class TestIntrospection(ModelTestCase):
                                       'WHERE status = 9 ORDER BY id DESC')
             try:
                 views = self.database.get_views()
-                self.assertEqual([normalize_view_meta(v) for v in views],
-                                 expected)
+                normalized = sorted([normalize_view_meta(v) for v in views])
+                self.assertEqual(normalized, expected)
 
                 # Ensure that we can use get_columns to introspect views.
                 columns = self.database.get_columns('notes_deleted')
@@ -516,10 +616,18 @@ class TestIntrospection(ModelTestCase):
             assertViews([
                 ('notes_deleted',
                  ('SELECT notes.content FROM notes '
-                  'WHERE (notes.status = 9) ORDER BY notes.id DESC;')),
+                  'WHERE (notes.status = 9) ORDER BY notes.id DESC')),
                 ('notes_public',
                  ('SELECT notes.content, notes.ts FROM notes '
-                  'WHERE (notes.status = 1) ORDER BY notes.ts DESC;'))])
+                  'WHERE (notes.status = 1) ORDER BY notes.ts DESC'))])
+        elif IS_CRDB:
+            assertViews([
+                ('notes_deleted',
+                 ('SELECT content FROM peewee_test.public.notes '
+                  'WHERE status = 9 ORDER BY id DESC')),
+                ('notes_public',
+                 ('SELECT content, ts FROM peewee_test.public.notes '
+                  'WHERE status = 1 ORDER BY ts DESC'))])
 
     @requires_models(User, Tweet, Category)
     def test_get_foreign_keys(self):
@@ -598,6 +706,29 @@ class TestDBProxy(BaseTestCase):
         self.assertFalse(User._meta.database.is_closed())
         self.assertFalse(Tweet._meta.database.is_closed())
         sqlite_db.close()
+
+    def test_proxy_decorator(self):
+        db = DatabaseProxy()
+
+        @db.connection_context()
+        def with_connection():
+            self.assertFalse(db.is_closed())
+
+        @db.atomic()
+        def with_transaction():
+            self.assertTrue(db.in_transaction())
+
+        @db.manual_commit()
+        def with_manual_commit():
+            self.assertTrue(db.in_transaction())
+
+        db.initialize(SqliteDatabase(':memory:'))
+        with_connection()
+        self.assertTrue(db.is_closed())
+        with_transaction()
+        self.assertFalse(db.in_transaction())
+        with_manual_commit()
+        self.assertFalse(db.in_transaction())
 
 
 class Data(TestModel):
@@ -706,3 +837,48 @@ class TestAttachDatabase(ModelTestCase):
 
         tables = self.database.get_tables(schema='cache')
         self.assertEqual(tables, ['cache_data'])
+
+
+class TestDatabaseConnection(DatabaseTestCase):
+    def test_is_connection_usable(self):
+        # Ensure a connection is open.
+        conn = self.database.connection()
+        self.assertTrue(self.database.is_connection_usable())
+
+        self.database.close()
+        self.assertFalse(self.database.is_connection_usable())
+        self.database.connect()
+        self.assertTrue(self.database.is_connection_usable())
+
+    @requires_postgresql
+    def test_is_connection_usable_pg(self):
+        self.database.execute_sql('drop table if exists foo')
+        self.database.execute_sql('create table foo (data text not null)')
+        self.assertTrue(self.database.is_connection_usable())
+
+        with self.assertRaises(IntegrityError):
+            self.database.execute_sql('insert into foo (data) values (NULL)')
+
+        self.assertFalse(self.database.is_closed())
+        self.assertFalse(self.database.is_connection_usable())
+        self.database.rollback()
+        self.assertTrue(self.database.is_connection_usable())
+
+        curs = self.database.execute_sql('select * from foo')
+        self.assertEqual(list(curs), [])
+        self.database.execute_sql('drop table foo')
+
+
+class TestExceptionWrapper(ModelTestCase):
+    database = get_in_memory_db()
+    requires = [User]
+
+    def test_exception_wrapper(self):
+        exc = None
+        try:
+            User.create(username=None)
+        except IntegrityError as e:
+            exc = e
+
+        if exc is None: raise Exception('expected integrity error not raised')
+        self.assertTrue(exc.orig.__module__ != 'peewee')

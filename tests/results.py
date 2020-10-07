@@ -1,3 +1,5 @@
+import datetime
+
 from peewee import *
 
 from .base import get_in_memory_db
@@ -171,3 +173,38 @@ class TestModelObjectCursorWrapper(ModelTestCase):
                 (1, 't1', 'u1'),
                 (2, 't2', 'u1'),
                 (3, 't3', 'u1')])
+
+
+class Reg(TestModel):
+    key = TextField()
+    ts = DateTimeField()
+
+class TestSpecifyConverter(ModelTestCase):
+    requires = [Reg]
+
+    def test_specify_converter(self):
+        D = lambda d: datetime.datetime(2020, 1, d)
+        for i in range(1, 4):
+            Reg.create(key='k%s' % i, ts=D(i))
+
+        RA = Reg.alias()
+        subq = RA.select(RA.key, RA.ts, RA.ts.alias('aliased'))
+
+        ra_a = subq.c.aliased.alias('aliased')
+        q = (Reg
+             .select(Reg.key, subq.c.ts.alias('ts'),
+                     ra_a.converter(Reg.ts.python_value))
+             .join(subq, on=(Reg.key == subq.c.key).alias('rsub'))
+             .order_by(Reg.key))
+        results = [(r.key, r.ts, r.aliased) for r in q.objects()]
+        self.assertEqual(results, [
+            ('k1', D(1), D(1)),
+            ('k2', D(2), D(2)),
+            ('k3', D(3), D(3))])
+
+        results2 = [(r.key, r.rsub.ts, r.rsub.aliased)
+                    for r in q]
+        self.assertEqual(results, [
+            ('k1', D(1), D(1)),
+            ('k2', D(2), D(2)),
+            ('k3', D(3), D(3))])

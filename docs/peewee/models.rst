@@ -21,6 +21,7 @@ connection and model classes.
 
 .. code-block:: python
 
+    import datetime
     from peewee import *
 
     db = SqliteDatabase('my_app.db')
@@ -46,7 +47,7 @@ connection and model classes.
 
     The ``db`` object will be used to manage the connections to the Sqlite
     database. In this example we're using :py:class:`SqliteDatabase`, but you
-    could also use one of the other :ref:`database engines <databases>`.
+    could also use one of the other :ref:`database engines <database>`.
 
 2. Create a base model class which specifies our database.
 
@@ -109,7 +110,8 @@ an example:
 
 In the above example, because none of the fields are initialized with
 ``primary_key=True``, an auto-incrementing primary key will automatically be
-created and named "id".
+created and named "id". Peewee uses :py:class:`AutoField` to signify an
+auto-incrementing integer primary key, which implies ``primary_key=True``.
 
 There is one special type of field, :py:class:`ForeignKeyField`, which allows
 you to represent foreign-key relationships between models in an intuitive way:
@@ -148,18 +150,18 @@ Field types table
 =====================   =================   =================   =================
 Field Type              Sqlite              Postgresql          MySQL
 =====================   =================   =================   =================
+``AutoField``           integer             serial              integer
+``BigAutoField``        integer             bigserial           bigint
 ``IntegerField``        integer             integer             integer
 ``BigIntegerField``     integer             bigint              bigint
 ``SmallIntegerField``   integer             smallint            smallint
-``AutoField``           integer             serial              integer
-``BigAutoField``        integer             bigserial           bigint
 ``IdentityField``       not supported       int identity        not supported
 ``FloatField``          real                real                real
 ``DoubleField``         real                double precision    double precision
 ``DecimalField``        decimal             numeric             numeric
 ``CharField``           varchar             varchar             varchar
 ``FixedCharField``      char                char                char
-``TextField``           text                text                longtext
+``TextField``           text                text                text
 ``BlobField``           blob                bytea               blob
 ``BitField``            integer             bigint              bigint
 ``BigBitField``         blob                bytea               blob
@@ -200,6 +202,7 @@ Parameters accepted by all field types and their default values:
 * ``choices = None`` -- optional iterable containing 2-tuples of ``value``, ``display``
 * ``help_text = None`` -- string representing any helpful text for this field
 * ``verbose_name = None`` -- string representing the "user-friendly" name of this field
+* ``index_type = None`` -- specify a custom index-type, e.g. for Postgres you might specify a ``'BRIN'`` or ``'GIN'`` index.
 
 Some fields take special parameters...
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -224,6 +227,7 @@ Some fields take special parameters...
 +--------------------------------+------------------------------------------------+
 | :py:class:`ForeignKeyField`    | ``model``, ``field``, ``backref``,             |
 |                                | ``on_delete``, ``on_update``, ``deferrable``   |
+|                                | ``lazy_load``                                  |
 +--------------------------------+------------------------------------------------+
 | :py:class:`BareField`          | ``adapt``                                      |
 +--------------------------------+------------------------------------------------+
@@ -319,20 +323,21 @@ entire related object, e.g.:
     tweets = (Tweet
               .select(Tweet, User)
               .join(User)
-              .order_by(Tweet.create_date.desc()))
+              .order_by(Tweet.created_date.desc()))
     for tweet in tweets:
         print(tweet.user.username, tweet.message)
 
-In the example above the ``User`` data was selected as part of the query. For
-more examples of this technique, see the :ref:`Avoiding N+1 <nplusone>`
-document.
+.. note::
+    In the example above the ``User`` data was selected as part of the query.
+    For more examples of this technique, see the :ref:`Avoiding N+1 <nplusone>`
+    document.
 
-If we did not select the ``User``, though, then an additional query would be
-issued to fetch the associated ``User`` data:
+If we did not select the ``User``, though, then an **additional query** would
+be issued to fetch the associated ``User`` data:
 
 .. code-block:: python
 
-    tweets = Tweet.select().order_by(Tweet.create_date.desc())
+    tweets = Tweet.select().order_by(Tweet.created_date.desc())
     for tweet in tweets:
         # WARNING: an additional query will be issued for EACH tweet
         # to fetch the associated User data.
@@ -350,6 +355,40 @@ foreign key field's name:
         # Instead of "tweet.user", we will just get the raw ID value stored
         # in the column.
         print(tweet.user_id, tweet.message)
+
+To prevent accidentally resolving a foreign-key and triggering an additional
+query, :py:class:`ForeignKeyField` supports an initialization paramater
+``lazy_load`` which, when disabled, behaves like the ``"_id"`` attribute. For
+example:
+
+.. code-block:: python
+
+    class Tweet(Model):
+        # ... same fields, except we declare the user FK to have
+        # lazy-load disabled:
+        user = ForeignKeyField(User, backref='tweets', lazy_load=False)
+
+    for tweet in Tweet.select():
+        print(tweet.user, tweet.message)
+
+    # With lazy-load disabled, accessing tweet.user will not perform an extra
+    # query and the user ID value is returned instead.
+    # e.g.:
+    # 1  tweet from user1
+    # 1  another from user1
+    # 2  tweet from user2
+
+    # However, if we eagerly load the related user object, then the user
+    # foreign key will behave like usual:
+    for tweet in Tweet.select(Tweet, User).join(User):
+        print(tweet.user.username, tweet.message)
+
+    # user1  tweet from user1
+    # user1  another from user1
+    # user2  tweet from user1
+
+ForeignKeyField Back-references
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 :py:class:`ForeignKeyField` allows for a backreferencing property to be bound
 to the target model. Implicitly, this property will be named ``classname_set``,
@@ -467,6 +506,28 @@ Since the :py:class:`BitField` is stored in an integer, there is a maximum of
 storing arbitrarily large bitmaps, you can instead use :py:class:`BigBitField`,
 which uses an automatically managed buffer of bytes, stored in a
 :py:class:`BlobField`.
+
+When bulk-updating one or more bits in a :py:class:`BitField`, you can use
+bitwise operators to set or clear one or more bits:
+
+.. code-block:: python
+
+    # Set the 4th bit on all Post objects.
+    Post.update(flags=Post.flags | 8).execute()
+
+    # Clear the 1st and 3rd bits on all Post objects.
+    Post.update(flags=Post.flags & ~(1 | 4)).execute()
+
+For simple operations, the flags provide handy ``set()`` and ``clear()``
+methods for setting or clearing an individual bit:
+
+.. code-block:: python
+
+    # Set the "is_deleted" bit on all posts.
+    Post.update(flags=Post.is_deleted.set()).execute()
+
+    # Clear the "is_deleted" bit on all posts.
+    Post.update(flags=Post.is_deleted.clear()).execute()
 
 Example usage:
 
@@ -704,11 +765,11 @@ relationships, and more).
 .. code-block:: pycon
 
     >>> Person._meta.fields
-    {'id': <peewee.PrimaryKeyField object at 0x7f51a2e92750>,
+    {'id': <peewee.AutoField object at 0x7f51a2e92750>,
      'name': <peewee.CharField object at 0x7f51a2f0a510>}
 
     >>> Person._meta.primary_key
-    <peewee.PrimaryKeyField object at 0x7f51a2e92750>
+    <peewee.AutoField object at 0x7f51a2e92750>
 
     >>> Person._meta.database
     <peewee.SqliteDatabase object at 0x7f519bff6dd0>
@@ -729,9 +790,9 @@ Option                  Meaning                                                I
 ``schema``              the database schema for the model                      yes
 ``only_save_dirty``     when calling model.save(), only save dirty fields      yes
 ``options``             dictionary of options for create table extensions      yes
+``table_settings``      list of setting strings to go after close parentheses  yes
 ``temporary``           indicate temporary table                               yes
 ``legacy_table_names``  use legacy table name generation (enabled by default)  yes
-``table_alias``         an alias to use for the table in queries               no
 ``depends_on``          indicate this table depends on another for creation    no
 ``without_rowid``       indicate table should not have rowid (SQLite only)     no
 ======================  ====================================================== ====================
@@ -1008,8 +1069,76 @@ You can also implement ``CHECK`` constraints at the table level:
 
 .. _non_integer_primary_keys:
 
-Non-integer Primary Keys, Composite Keys and other Tricks
----------------------------------------------------------
+Primary Keys, Composite Keys and other Tricks
+---------------------------------------------
+
+The :py:class:`AutoField` is used to identify an auto-incrementing integer
+primary key. If you do not specify a primary key, Peewee will automatically
+create an auto-incrementing primary key named "id".
+
+To specify an auto-incrementing ID using a different field name, you can write:
+
+.. code-block:: python
+
+    class Event(Model):
+        event_id = AutoField()  # Event.event_id will be auto-incrementing PK.
+        name = CharField()
+        timestamp = DateTimeField(default=datetime.datetime.now)
+        metadata = BlobField()
+
+You can identify a different field as the primary key, in which case an "id"
+column will not be created. In this example we will use a person's email
+address as the primary key:
+
+.. code-block:: python
+
+    class Person(Model):
+        email = CharField(primary_key=True)
+        name = TextField()
+        dob = DateField()
+
+.. warning::
+    I frequently see people write the following, expecting an auto-incrementing
+    integer primary key:
+
+    .. code-block:: python
+
+        class MyModel(Model):
+            id = IntegerField(primary_key=True)
+
+    Peewee understands the above model declaration as a model with an integer
+    primary key, but the value of that ID is determined by the application. To
+    create an auto-incrementing integer primary key, you would instead write:
+
+    .. code-block:: python
+
+        class MyModel(Model):
+            id = AutoField()  # primary_key=True is implied.
+
+Composite primary keys can be declared using :py:class:`CompositeKey`. Note
+that doing this may cause issues with :py:class:`ForeignKeyField`, as Peewee
+does not support the concept of a "composite foreign-key". As such, I've found
+it only advisable to use composite primary keys in a handful of situations,
+such as trivial many-to-many junction tables:
+
+.. code-block:: python
+
+    class Image(Model):
+        filename = TextField()
+        mimetype = CharField()
+
+    class Tag(Model):
+        label = CharField()
+
+    class ImageTag(Model):  # Many-to-many relationship.
+        image = ForeignKeyField(Image)
+        tag = ForeignKeyField(Tag)
+
+        class Meta:
+            primary_key = CompositeKey('image', 'tag')
+
+In the extremely rare case you wish to declare a model with *no* primary key,
+you can specify ``primary_key = False`` in the model ``Meta`` options.
 
 Non-integer primary keys
 ^^^^^^^^^^^^^^^^^^^^^^^^
@@ -1109,7 +1238,7 @@ to use the :py:meth:`Model.insert_many` API:
         User.insert_many(data, fields=fields).execute()
 
 If you *always* want to have control over the primary key, simply do not use
-the :py:class:`PrimaryKeyField` field type, but use a normal
+the :py:class:`AutoField` field type, but use a normal
 :py:class:`IntegerField` (or other column type):
 
 .. code-block:: python

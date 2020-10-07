@@ -11,8 +11,11 @@ from .base import TestModel
 
 
 PASSPHRASE = 'testing sqlcipher'
-db = SqlCipherDatabase('peewee_test.dbc', passphrase=PASSPHRASE)
-ext_db = SqlCipherExtDatabase('peewee_test.dbx', passphrase=PASSPHRASE)
+PRAGMAS = {'kdf_iter': 10}  # Much faster for testing. Totally unsafe.
+db = SqlCipherDatabase('peewee_test.dbc', passphrase=PASSPHRASE,
+                       pragmas=PRAGMAS)
+ext_db = SqlCipherExtDatabase('peewee_test.dbx', passphrase=PASSPHRASE,
+                              pragmas=PRAGMAS)
 
 
 @ext_db.func('shazam')
@@ -64,7 +67,8 @@ class SqlCipherTestCase(CleanUpModelTestCase):
 
         self.database.rekey('a new passphrase')
 
-        db2 = SqlCipherDatabase(db.database, passphrase='a new passphrase')
+        db2 = SqlCipherDatabase(db.database, passphrase='a new passphrase',
+                                pragmas=PRAGMAS)
         cursor = db2.execute_sql('select name from thing order by name;')
         self.assertEqual([name for name, in cursor], ['t1', 't2', 't3'])
 
@@ -77,16 +81,41 @@ class SqlCipherTestCase(CleanUpModelTestCase):
         query = Thing.select().order_by(Thing.name)
         self.assertEqual([t.name for t in query], ['t1', 't2', 't3'])
 
-    def test_passphrase_length(self):
-        db = SqlCipherDatabase(':memory:', passphrase='x')
-        self.assertRaises(ImproperlyConfigured, db.connect)
+        # Re-set to the original passphrase.
+        self.database.rekey(PASSPHRASE)
 
+    def test_empty_passphrase(self):
         db = SqlCipherDatabase(':memory:')
-        self.assertRaises(ImproperlyConfigured, db.connect)
 
-    def test_kdf_iter(self):
-        db = SqlCipherDatabase(':memory:', kdf_iter=9999)
-        self.assertRaises(ImproperlyConfigured, db.connect)
+        class CM(TestModel):
+            data = TextField()
+            class Meta:
+                database = db
+
+        db.connect()
+        db.create_tables([CM])
+        cm = CM.create(data='foo')
+        cm_db = CM.get(CM.data == 'foo')
+        self.assertEqual(cm_db.id, cm.id)
+        self.assertEqual(cm_db.data, 'foo')
+
+
+config_db = SqlCipherDatabase('peewee_test.dbc', pragmas={
+    'kdf_iter': 1234,
+    'cipher_page_size': 8192}, passphrase=PASSPHRASE)
+
+class TestSqlCipherConfiguration(CleanUpModelTestCase):
+    database = config_db
+
+    def test_configuration_via_pragma(self):
+        # Write some data so the database file is created.
+        self.database.execute_sql('create table foo (data TEXT)')
+        self.database.close()
+
+        self.database.connect()
+        self.assertEqual(int(self.database.pragma('kdf_iter')), 1234)
+        self.assertEqual(int(self.database.pragma('cipher_page_size')), 8192)
+        self.assertTrue('foo' in self.database.get_tables())
 
 
 class SqlCipherExtTestCase(CleanUpModelTestCase):

@@ -1,6 +1,5 @@
 import hashlib
 import zlib
-from random import randint
 
 cimport cython
 from cpython cimport datetime
@@ -8,12 +7,12 @@ from cpython.bytes cimport PyBytes_AsStringAndSize
 from cpython.bytes cimport PyBytes_Check
 from cpython.bytes cimport PyBytes_FromStringAndSize
 from cpython.bytes cimport PyBytes_AS_STRING
-from cpython.mem cimport PyMem_Free
-from cpython.mem cimport PyMem_Malloc
 from cpython.object cimport PyObject
 from cpython.ref cimport Py_INCREF, Py_DECREF
 from cpython.unicode cimport PyUnicode_AsUTF8String
 from cpython.unicode cimport PyUnicode_Check
+from cpython.unicode cimport PyUnicode_DecodeUTF8
+from cpython.version cimport PY_MAJOR_VERSION
 from libc.float cimport DBL_MAX
 from libc.math cimport ceil, log, sqrt
 from libc.math cimport pow as cpow
@@ -32,10 +31,10 @@ import traceback
 
 
 cdef struct sqlite3_index_constraint:
-    int iColumn
-    unsigned char op
-    unsigned char usable
-    int iTermOffset
+    int iColumn  # Column constrained, -1 for rowid.
+    unsigned char op  # Constraint operator.
+    unsigned char usable  # True if this constraint is usable.
+    int iTermOffset  # Used internally - xBestIndex should ignore.
 
 
 cdef struct sqlite3_index_orderby:
@@ -44,7 +43,7 @@ cdef struct sqlite3_index_orderby:
 
 
 cdef struct sqlite3_index_constraint_usage:
-    int argvIndex
+    int argvIndex  # if > 0, constraint is part of argv to xFilter.
     unsigned char omit
 
 
@@ -83,9 +82,9 @@ cdef extern from "sqlite3.h" nogil:
 
     ctypedef struct sqlite3_module:
         int iVersion
-        int (*xCreate)(sqlite3*, void *pAux, int argc, char **argv,
+        int (*xCreate)(sqlite3*, void *pAux, int argc, const char *const*argv,
                        sqlite3_vtab **ppVTab, char**)
-        int (*xConnect)(sqlite3*, void *pAux, int argc, char **argv,
+        int (*xConnect)(sqlite3*, void *pAux, int argc, const char *const*argv,
                         sqlite3_vtab **ppVTab, char**)
         int (*xBestIndex)(sqlite3_vtab *pVTab, sqlite3_index_info*)
         int (*xDisconnect)(sqlite3_vtab *pVTab)
@@ -116,6 +115,8 @@ cdef extern from "sqlite3.h" nogil:
     cdef int sqlite3_declare_vtab(sqlite3 *db, const char *zSQL)
     cdef int sqlite3_create_module(sqlite3 *db, const char *zName,
                                    const sqlite3_module *p, void *pClientData)
+
+    cdef const char sqlite3_version[]
 
     # Encoding.
     cdef int SQLITE_UTF8 = 1
@@ -165,6 +166,8 @@ cdef extern from "sqlite3.h" nogil:
     cdef int sqlite3_value_numeric_type(sqlite3_value*)
 
     # Converting from Python -> Sqlite.
+    cdef void sqlite3_result_blob(sqlite3_context*, const void *, int,
+                                  void(*)(void*))
     cdef void sqlite3_result_double(sqlite3_context*, double)
     cdef void sqlite3_result_error(sqlite3_context*, const char*, int)
     cdef void sqlite3_result_error_toobig(sqlite3_context*)
@@ -286,9 +289,78 @@ cdef extern from "_pysqlite/connection.h":
         sqlite3* db
         double timeout
         int initialized
-        PyObject* isolation_level
-        char* begin_statement
 
+
+cdef sqlite_to_python(int argc, sqlite3_value **params):
+    cdef:
+        int i
+        int vtype
+        list pyargs = []
+
+    for i in range(argc):
+        vtype = sqlite3_value_type(params[i])
+        if vtype == SQLITE_INTEGER:
+            pyval = sqlite3_value_int(params[i])
+        elif vtype == SQLITE_FLOAT:
+            pyval = sqlite3_value_double(params[i])
+        elif vtype == SQLITE_TEXT:
+            pyval = PyUnicode_DecodeUTF8(
+                <const char *>sqlite3_value_text(params[i]),
+                <Py_ssize_t>sqlite3_value_bytes(params[i]), NULL)
+        elif vtype == SQLITE_BLOB:
+            pyval = PyBytes_FromStringAndSize(
+                <const char *>sqlite3_value_blob(params[i]),
+                <Py_ssize_t>sqlite3_value_bytes(params[i]))
+        elif vtype == SQLITE_NULL:
+            pyval = None
+        else:
+            pyval = None
+
+        pyargs.append(pyval)
+
+    return pyargs
+
+
+cdef python_to_sqlite(sqlite3_context *context, value):
+    if value is None:
+        sqlite3_result_null(context)
+    elif isinstance(value, (int, long)):
+        sqlite3_result_int64(context, <sqlite3_int64>value)
+    elif isinstance(value, float):
+        sqlite3_result_double(context, <double>value)
+    elif isinstance(value, unicode):
+        bval = PyUnicode_AsUTF8String(value)
+        sqlite3_result_text(
+            context,
+            <const char *>bval,
+            len(bval),
+            <sqlite3_destructor_type>-1)
+    elif isinstance(value, bytes):
+        if PY_MAJOR_VERSION > 2:
+            sqlite3_result_blob(
+                context,
+                <void *>(<char *>value),
+                len(value),
+                <sqlite3_destructor_type>-1)
+        else:
+            sqlite3_result_text(
+                context,
+                <const char *>value,
+                len(value),
+                <sqlite3_destructor_type>-1)
+    else:
+        sqlite3_result_error(
+            context,
+            encode('Unsupported type %s' % type(value)),
+            -1)
+        return SQLITE_ERROR
+
+    return SQLITE_OK
+
+
+cdef int SQLITE_CONSTRAINT = 19  # Abort due to constraint violation.
+
+USE_SQLITE_CONSTRAINT = sqlite3_version[:4] >= b'3.26'
 
 # The peewee_vtab struct embeds the base sqlite3_vtab struct, and adds a field
 # to store a reference to the Python implementation.
@@ -311,12 +383,12 @@ ctypedef struct peewee_cursor:
 
 # We define an xConnect function, but leave xCreate NULL so that the
 # table-function can be called eponymously.
-cdef int pwConnect(sqlite3 *db, void *pAux, int argc, char **argv,
+cdef int pwConnect(sqlite3 *db, void *pAux, int argc, const char *const*argv,
                    sqlite3_vtab **ppVtab, char **pzErr) with gil:
     cdef:
         int rc
         object table_func_cls = <object>pAux
-        peewee_vtab *pNew
+        peewee_vtab *pNew = <peewee_vtab *>0
 
     rc = sqlite3_declare_vtab(
         db,
@@ -348,7 +420,7 @@ cdef int pwDisconnect(sqlite3_vtab *pBase) with gil:
 cdef int pwOpen(sqlite3_vtab *pBase, sqlite3_vtab_cursor **ppCursor) with gil:
     cdef:
         peewee_vtab *pVtab = <peewee_vtab *>pBase
-        peewee_cursor *pCur
+        peewee_cursor *pCur = <peewee_cursor *>0
         object table_func_cls = <object>pVtab.table_func_cls
 
     pCur = <peewee_cursor *>sqlite3_malloc(sizeof(pCur[0]))
@@ -425,30 +497,7 @@ cdef int pwColumn(sqlite3_vtab_cursor *pBase, sqlite3_context *ctx,
         return SQLITE_ERROR
 
     row_data = <tuple>pCur.row_data
-    value = row_data[iCol]
-    if value is None:
-        sqlite3_result_null(ctx)
-    elif isinstance(value, (int, long)):
-        sqlite3_result_int64(ctx, <sqlite3_int64>value)
-    elif isinstance(value, float):
-        sqlite3_result_double(ctx, <double>value)
-    elif isinstance(value, basestring):
-        bval = encode(value)
-        sqlite3_result_text(
-            ctx,
-            <const char *>bval,
-            -1,
-            <sqlite3_destructor_type>-1)
-    elif isinstance(value, bool):
-        sqlite3_result_int(ctx, int(value))
-    else:
-        sqlite3_result_error(
-            ctx,
-            encode('Unsupported type %s' % type(value)),
-            -1)
-        return SQLITE_ERROR
-
-    return SQLITE_OK
+    return python_to_sqlite(ctx, row_data[iCol])
 
 
 cdef int pwRowid(sqlite3_vtab_cursor *pBase, sqlite3_int64 *pRowid):
@@ -462,9 +511,7 @@ cdef int pwRowid(sqlite3_vtab_cursor *pBase, sqlite3_int64 *pRowid):
 cdef int pwEof(sqlite3_vtab_cursor *pBase):
     cdef:
         peewee_cursor *pCur = <peewee_cursor *>pBase
-    if pCur.stopped:
-        return 1
-    return 0
+    return 1 if pCur.stopped else 0
 
 
 # The filter method is called on the first iteration. This method is where we
@@ -483,30 +530,19 @@ cdef int pwFilter(sqlite3_vtab_cursor *pBase, int idxNum,
 
     if not idxStr or argc == 0 and len(table_func.params):
         return SQLITE_ERROR
-    elif idxStr:
+    elif len(idxStr):
         params = decode(idxStr).split(',')
     else:
         params = []
+
+    py_values = sqlite_to_python(argc, argv)
 
     for idx, param in enumerate(params):
         value = argv[idx]
         if not value:
             query[param] = None
-            continue
-
-        value_type = sqlite3_value_type(value)
-        if value_type == SQLITE_INTEGER:
-            query[param] = sqlite3_value_int(value)
-        elif value_type == SQLITE_FLOAT:
-            query[param] = sqlite3_value_double(value)
-        elif value_type == SQLITE_TEXT:
-            query[param] = decode(sqlite3_value_text(value))
-        elif value_type == SQLITE_BLOB:
-            query[param] = <bytes>sqlite3_value_blob(value)
-        elif value_type == SQLITE_NULL:
-            query[param] = None
         else:
-            query[param] = None
+            query[param] = py_values[idx]
 
     try:
         table_func.initialize(**query)
@@ -540,14 +576,13 @@ cdef int pwBestIndex(sqlite3_vtab *pBase, sqlite3_index_info *pIdxInfo) \
         int idxNum = 0, nArg = 0
         peewee_vtab *pVtab = <peewee_vtab *>pBase
         object table_func_cls = <object>pVtab.table_func_cls
-        sqlite3_index_constraint *pConstraint
+        sqlite3_index_constraint *pConstraint = <sqlite3_index_constraint *>0
         list columns = []
         char *idxStr
         int nParams = len(table_func_cls.params)
 
-    pConstraint = <sqlite3_index_constraint*>0
     for i in range(pIdxInfo.nConstraint):
-        pConstraint = &pIdxInfo.aConstraint[i]
+        pConstraint = pIdxInfo.aConstraint + i
         if not pConstraint.usable:
             continue
         if pConstraint.op != SQLITE_INDEX_CONSTRAINT_EQ:
@@ -559,7 +594,7 @@ cdef int pwBestIndex(sqlite3_vtab *pBase, sqlite3_index_info *pIdxInfo) \
         pIdxInfo.aConstraintUsage[i].argvIndex = nArg
         pIdxInfo.aConstraintUsage[i].omit = 1
 
-    if nArg > 0:
+    if nArg > 0 or nParams == 0:
         if nArg == nParams:
             # All parameters are present, this is ideal.
             pIdxInfo.estimatedCost = <double>1
@@ -576,6 +611,8 @@ cdef int pwBestIndex(sqlite3_vtab *pBase, sqlite3_index_info *pIdxInfo) \
         idxStr[len(joinedCols)] = '\x00'
         pIdxInfo.idxStr = idxStr
         pIdxInfo.needToFreeIdxStr = 0
+    elif USE_SQLITE_CONSTRAINT:
+        return SQLITE_CONSTRAINT
     else:
         pIdxInfo.estimatedCost = DBL_MAX
         pIdxInfo.estimatedRows = 100000
@@ -731,14 +768,29 @@ cdef inline unicode decode(key):
     return ukey
 
 
+cdef double *get_weights(int ncol, tuple raw_weights):
+    cdef:
+        int argc = len(raw_weights)
+        int icol
+        double *weights = <double *>malloc(sizeof(double) * ncol)
+
+    for icol in range(ncol):
+        if argc == 0:
+            weights[icol] = 1.0
+        elif icol < argc:
+            weights[icol] = <double>raw_weights[icol]
+        else:
+            weights[icol] = 0.0
+    return weights
+
+
 def peewee_rank(py_match_info, *raw_weights):
     cdef:
         unsigned int *match_info
         unsigned int *phrase_info
         bytes _match_info_buf = bytes(py_match_info)
         char *match_info_buf = _match_info_buf
-        int argc = len(raw_weights)
-        int ncol, nphrase, icol, iphrase, hits, global_hits
+        int nphrase, ncol, icol, iphrase, hits, global_hits
         int P_O = 0, C_O = 1, X_O = 2
         double score = 0.0, weight
         double *weights
@@ -746,20 +798,25 @@ def peewee_rank(py_match_info, *raw_weights):
     match_info = <unsigned int *>match_info_buf
     nphrase = match_info[P_O]
     ncol = match_info[C_O]
+    weights = get_weights(ncol, raw_weights)
 
-    weights = <double *>malloc(sizeof(double) * ncol)
-    for icol in range(ncol):
-        if icol < argc:
-            weights[icol] = <double>raw_weights[icol]
-        else:
-            weights[icol] = 1.0
-
+    # matchinfo X value corresponds to, for each phrase in the search query, a
+    # list of 3 values for each column in the search table.
+    # So if we have a two-phrase search query and three columns of data, the
+    # following would be the layout:
+    # p0 : c0=[0, 1, 2],   c1=[3, 4, 5],    c2=[6, 7, 8]
+    # p1 : c0=[9, 10, 11], c1=[12, 13, 14], c2=[15, 16, 17]
     for iphrase in range(nphrase):
         phrase_info = &match_info[X_O + iphrase * ncol * 3]
         for icol in range(ncol):
             weight = weights[icol]
             if weight == 0:
                 continue
+
+            # The idea is that we count the number of times the phrase appears
+            # in this column of the current row, compared to how many times it
+            # appears in this column across all rows. The ratio of these values
+            # provides a rough way to score based on "high value" terms.
             hits = phrase_info[3 * icol]
             global_hits = phrase_info[3 * icol + 1]
             if hits > 0:
@@ -773,46 +830,35 @@ def peewee_lucene(py_match_info, *raw_weights):
     # Usage: peewee_lucene(matchinfo(table, 'pcnalx'), 1)
     cdef:
         unsigned int *match_info
-        unsigned int *phrase_info
         bytes _match_info_buf = bytes(py_match_info)
         char *match_info_buf = _match_info_buf
-        int argc = len(raw_weights)
-        int term_count, col_count
+        int nphrase, ncol
         double total_docs, term_frequency
         double doc_length, docs_with_term, avg_length
         double idf, weight, rhs, denom
         double *weights
         int P_O = 0, C_O = 1, N_O = 2, L_O, X_O
-        int i, j, x
-
+        int iphrase, icol, x
         double score = 0.0
 
     match_info = <unsigned int *>match_info_buf
-    term_count = match_info[P_O]
-    col_count = match_info[C_O]
+    nphrase = match_info[P_O]
+    ncol = match_info[C_O]
     total_docs = match_info[N_O]
 
-    L_O = 3 + col_count
-    X_O = L_O + col_count
+    L_O = 3 + ncol
+    X_O = L_O + ncol
+    weights = get_weights(ncol, raw_weights)
 
-    weights = <double *>malloc(sizeof(double) * col_count)
-    for i in range(col_count):
-        if argc == 0:
-            weights[i] = 1.
-        elif i < argc:
-            weights[i] = <double>raw_weights[i]
-        else:
-            weights[i] = 0
-
-    for i in range(term_count):
-        for j in range(col_count):
-            weight = weights[j]
+    for iphrase in range(nphrase):
+        for icol in range(ncol):
+            weight = weights[icol]
             if weight == 0:
                 continue
-            doc_length = match_info[L_O + j]
-            x = X_O + (3 * j * (i + 1))
-            term_frequency = match_info[x]
-            docs_with_term = match_info[x + 2]
+            doc_length = match_info[L_O + icol]
+            x = X_O + (3 * (icol + iphrase * ncol))
+            term_frequency = match_info[x]  # f(qi)
+            docs_with_term = match_info[x + 2] or 1. # n(qi)
             idf = log(total_docs / (docs_with_term + 1.))
             tf = sqrt(term_frequency)
             fieldNorms = 1.0 / sqrt(doc_length)
@@ -828,65 +874,66 @@ def peewee_bm25(py_match_info, *raw_weights):
     # the 3rd and 4th specify k and b.
     cdef:
         unsigned int *match_info
-        unsigned int *phrase_info
         bytes _match_info_buf = bytes(py_match_info)
         char *match_info_buf = _match_info_buf
-        int argc = len(raw_weights)
-        int term_count, col_count
-        double B = 0.75, K = 1.2, D
+        int nphrase, ncol
+        double B = 0.75, K = 1.2
         double total_docs, term_frequency
         double doc_length, docs_with_term, avg_length
-        double idf, weight, rhs, denom
+        double idf, weight, ratio, num, b_part, denom, pc_score
         double *weights
         int P_O = 0, C_O = 1, N_O = 2, A_O = 3, L_O, X_O
-        int i, j, x
-
+        int iphrase, icol, x
         double score = 0.0
 
     match_info = <unsigned int *>match_info_buf
-    term_count = match_info[P_O]
-    col_count = match_info[C_O]
-    total_docs = match_info[N_O]
+    # PCNALX = matchinfo format.
+    # P = 1 = phrase count within query.
+    # C = 1 = searchable columns in table.
+    # N = 1 = total rows in table.
+    # A = c = for each column, avg number of tokens
+    # L = c = for each column, length of current row (in tokens)
+    # X = 3 * c * p = for each phrase and table column,
+    # * phrase count within column for current row.
+    # * phrase count within column for all rows.
+    # * total rows for which column contains phrase.
+    nphrase = match_info[P_O]  # n
+    ncol = match_info[C_O]
+    total_docs = match_info[N_O]  # N
 
-    L_O = A_O + col_count
-    X_O = L_O + col_count
+    L_O = A_O + ncol
+    X_O = L_O + ncol
+    weights = get_weights(ncol, raw_weights)
 
-    weights = <double *>malloc(sizeof(double) * col_count)
-    for i in range(col_count):
-        if argc == 0:
-            weights[i] = 1.
-        elif i < argc:
-            weights[i] = <double>raw_weights[i]
-        else:
-            weights[i] = 0
-
-    for i in range(term_count):
-        for j in range(col_count):
-            weight = weights[j]
+    for iphrase in range(nphrase):
+        for icol in range(ncol):
+            weight = weights[icol]
             if weight == 0:
                 continue
-            avg_length = match_info[A_O + j]
-            doc_length = match_info[L_O + j]
-            if avg_length == 0:
-                D = 0
-            else:
-                D = 1 - B + (B * (doc_length / avg_length))
 
-            x = X_O + (3 * j * (i + 1))
-            term_frequency = match_info[x]
-            docs_with_term = match_info[x + 2]
-            idf = max(
-                log(
+            x = X_O + (3 * (icol + iphrase * ncol))
+            term_frequency = match_info[x]  # f(qi, D)
+            docs_with_term = match_info[x + 2]  # n(qi)
+
+            # log( (N - n(qi) + 0.5) / (n(qi) + 0.5) )
+            idf = log(
                     (total_docs - docs_with_term + 0.5) /
-                    (docs_with_term + 0.5)),
-                0)
-            denom = term_frequency + (K * D)
-            if denom == 0:
-                rhs = 0
-            else:
-                rhs = (term_frequency * (K + 1)) / denom
+                    (docs_with_term + 0.5))
+            if idf <= 0.0:
+                idf = 1e-6
 
-            score += (idf * rhs) * weight
+            doc_length = match_info[L_O + icol]  # |D|
+            avg_length = match_info[A_O + icol]  # avgdl
+            if avg_length == 0:
+                avg_length = 1
+            ratio = doc_length / avg_length
+
+            num = term_frequency * (K + 1)
+            b_part = 1 - B + (B * ratio)
+            denom = term_frequency + (K * b_part)
+
+            pc_score = idf * (num / denom)
+            score += (pc_score * weight)
 
     free(weights)
     return -1 * score
@@ -898,63 +945,58 @@ def peewee_bm25f(py_match_info, *raw_weights):
     # the 3rd and 4th specify k and b.
     cdef:
         unsigned int *match_info
-        unsigned int *phrase_info
         bytes _match_info_buf = bytes(py_match_info)
         char *match_info_buf = _match_info_buf
-        int argc = len(raw_weights)
-        int term_count, col_count
-        double B = 0.75, K1 = 1.2, D, epsilon
+        int nphrase, ncol
+        double B = 0.75, K = 1.2, epsilon
         double total_docs, term_frequency, docs_with_term
         double doc_length = 0.0, avg_length = 0.0
-        double idf, weight, rhs, denom
+        double idf, weight, ratio, num, b_part, denom, pc_score
         double *weights
         int P_O = 0, C_O = 1, N_O = 2, A_O = 3, L_O, X_O
-        int i, j, current_x
-
+        int iphrase, icol, x
         double score = 0.0
 
     match_info = <unsigned int *>match_info_buf
-    term_count = match_info[P_O]
-    col_count = match_info[C_O]
-    total_docs = match_info[N_O]
+    nphrase = match_info[P_O]  # n
+    ncol = match_info[C_O]
+    total_docs = match_info[N_O]  # N
 
-    L_O = A_O + col_count
-    X_O = L_O + col_count
+    L_O = A_O + ncol
+    X_O = L_O + ncol
 
-    for j in range(col_count):
-        avg_length += match_info[A_O + j]
-        doc_length += match_info[L_O + j]
+    for icol in range(ncol):
+        avg_length += match_info[A_O + icol]
+        doc_length += match_info[L_O + icol]
 
     epsilon = 1.0 / (total_docs * avg_length)
+    if avg_length == 0:
+        avg_length = 1
+    ratio = doc_length / avg_length
+    weights = get_weights(ncol, raw_weights)
 
-    weights = <double *>malloc(sizeof(double) * col_count)
-    for i in range(col_count):
-        if argc == 0:
-            weights[i] = 1.
-        elif i < argc:
-            weights[i] = <double>raw_weights[i]
-        else:
-            weights[i] = 0
-
-    for i in range(term_count):
-        for j in range(col_count):
-            weight = weights[j]
+    for iphrase in range(nphrase):
+        for icol in range(ncol):
+            weight = weights[icol]
             if weight == 0:
                 continue
-            current_x = X_O + (3 * j * (i + 1))
-            term_frequency = match_info[current_x]
-            docs_with_term = match_info[current_x + 2]
+
+            x = X_O + (3 * (icol + iphrase * ncol))
+            term_frequency = match_info[x]  # f(qi, D)
+            docs_with_term = match_info[x + 2]  # n(qi)
+
+            # log( (N - n(qi) + 0.5) / (n(qi) + 0.5) )
             idf = log(
                 (total_docs - docs_with_term + 0.5) /
                 (docs_with_term + 0.5))
-            idf = epsilon if idf < 0 else idf
+            idf = epsilon if idf <= 0 else idf
 
-            D = (term_frequency +
-                 (K1 * (1 - B + (B * (doc_length / avg_length)))))
-            rhs = (term_frequency * (K1 + 1)) / D
-            rhs += 1.
+            num = term_frequency * (K + 1)
+            b_part = 1 - B + (B * ratio)
+            denom = term_frequency + (K * b_part)
 
-            score += (idf * rhs) * weight
+            pc_score = idf * ((num / denom) + 1.)
+            score += (pc_score * weight)
 
     free(weights)
     return -1 * score
@@ -1055,9 +1097,9 @@ seeds[:] = [0, 1337, 37, 0xabcd, 0xdead, 0xface, 97, 0xed11, 0xcad9, 0x827b]
 
 
 cdef bf_t *bf_create(size_t size):
-    cdef bf_t *bf = <bf_t *>calloc(1, sizeof(bf[0]))
+    cdef bf_t *bf = <bf_t *>calloc(1, sizeof(bf_t))
     bf.size = size
-    bf.bits = malloc(size)
+    bf.bits = calloc(1, size)
     return bf
 
 @cython.cdivision(True)
@@ -1110,6 +1152,9 @@ cdef class BloomFilter(object):
         if self.bf:
             bf_free(self.bf)
 
+    def __len__(self):
+        return self.bf.size
+
     def add(self, *keys):
         cdef bytes bkey
 
@@ -1128,6 +1173,19 @@ cdef class BloomFilter(object):
         # Similarly we wrap in a buffer object so pysqlite preserves the
         # embedded NULL bytes.
         return buf
+
+    @classmethod
+    def from_buffer(cls, data):
+        cdef:
+            char *buf
+            Py_ssize_t buflen
+            BloomFilter bloom
+
+        PyBytes_AsStringAndSize(data, &buf, &buflen)
+
+        bloom = BloomFilter(buflen)
+        memcpy(bloom.bf.bits, <void *>buf, buflen)
+        return bloom
 
     @classmethod
     def calculate_size(cls, double n, double p):
@@ -1407,7 +1465,7 @@ cdef class ConnectionHelper(object):
         Replace the default busy handler with one that introduces some "jitter"
         into the amount of time delayed between checks.
         """
-        cdef int n = timeout * 1000
+        cdef sqlite3_int64 n = timeout * 1000
         sqlite3_busy_handler(self.conn.db, _aggressive_busy_handler, <void *>n)
         return True
 
@@ -1441,8 +1499,8 @@ cdef void _rollback_callback(void *userData) with gil:
     fn()
 
 
-cdef void _update_callback(void *userData, int queryType, char *database,
-                            char *table, sqlite3_int64 rowid) with gil:
+cdef void _update_callback(void *userData, int queryType, const char *database,
+                           const char *table, sqlite3_int64 rowid) with gil:
     # C-callback that delegates to a Python function that is executed whenever
     # the database is updated (insert/update/delete queries). The Python
     # callback receives a string indicating the query type, the name of the
@@ -1516,7 +1574,7 @@ cdef int _aggressive_busy_handler(void *ptr, int n) nogil:
     # ensure that this doesn't happen. Furthermore, this function makes more
     # attempts in the same time period than the default handler.
     cdef:
-        int busyTimeout = <int>ptr
+        sqlite3_int64 busyTimeout = <sqlite3_int64>ptr
         int current, total
 
     if n < 20:

@@ -74,3 +74,33 @@ class B(TestModel):
 class C(TestModel):
     b = ForeignKeyField(B, backref='cs')
     c = TextField()
+
+
+class Emp(TestModel):
+    first = CharField()
+    last = CharField()
+    empno = CharField(unique=True)
+
+    class Meta:
+        indexes = (
+            (('first', 'last'), True),
+        )
+
+
+class OCTest(TestModel):
+    a = CharField(unique=True)
+    b = IntegerField(default=0)
+    c = IntegerField(default=0)
+
+
+class UKVP(TestModel):
+    key = TextField()
+    value = IntegerField()
+    extra = IntegerField()
+
+    class Meta:
+        # Partial index, the WHERE clause must be reflected in the conflict
+        # target.
+        indexes = [
+            SQL('CREATE UNIQUE INDEX "ukvp_kve" ON "ukvp" ("key", "value") '
+                'WHERE "extra" > 1')]

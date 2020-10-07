@@ -158,14 +158,15 @@ It is also a good practice to wrap the bulk insert in a transaction:
     SQLite users should be aware of some caveats when using bulk inserts.
     Specifically, your SQLite3 version must be 3.7.11.0 or newer to take
     advantage of the bulk insert API. Additionally, by default SQLite limits
-    the number of bound variables in a SQL query to ``999``.
+    the number of bound variables in a SQL query to ``999`` for SQLite versions
+    prior to 3.32.0 (2020-05-22) and 32766 for SQLite versions after 3.32.0.
 
 Inserting rows in batches
 ^^^^^^^^^^^^^^^^^^^^^^^^^
 
 Depending on the number of rows in your data source, you may need to break it
-up into chunks. SQLite in particular typically has a `limit of 999 <https://www.sqlite.org/limits.html#max_variable_number>`_
-variables-per-query (batch size would then be roughly 1000 / row length).
+up into chunks. SQLite in particular typically has a `limit of 999 or 32766 <https://www.sqlite.org/limits.html#max_variable_number>`_
+variables-per-query (batch size would then be 999 // row length or 32766 // row length).
 
 You can write a loop to batch your data into chunks (in which case it is
 **strongly recommended** you use a transaction):
@@ -214,6 +215,32 @@ the :py:meth:`~Model.bulk_create` API:
     If you are using Postgresql (which supports the ``RETURNING`` clause), then
     the previously-unsaved model instances will have their new primary key
     values automatically populated.
+
+In addition, Peewee also offers :py:meth:`Model.bulk_update`, which can
+efficiently update one or more columns on a list of models. For example:
+
+.. code-block:: python
+
+    # First, create 3 users with usernames u1, u2, u3.
+    u1, u2, u3 = [User.create(username='u%s' % i) for i in (1, 2, 3)]
+
+    # Now we'll modify the user instances.
+    u1.username = 'u1-x'
+    u2.username = 'u2-y'
+    u3.username = 'u3-z'
+
+    # Update all three users with a single UPDATE query.
+    User.bulk_update([u1, u2, u3], fields=[User.username])
+
+.. note::
+    For large lists of objects, you should specify a reasonable batch_size and
+    wrap the call to :py:meth:`~Model.bulk_update` with
+    :py:meth:`Database.atomic`:
+
+    .. code-block:: python
+
+        with database.atomic():
+            User.bulk_update(list_of_users, fields=['username'], batch_size=50)
 
 Alternatively, you can use the :py:meth:`Database.batch_commit` helper to
 process chunks of rows inside *batch*-sized transactions. This method also
@@ -286,8 +313,8 @@ where the keys correspond to the model's field names:
     >>> query.execute()  # Returns the number of rows that were updated.
     4
 
-For more information, see the documentation on :py:meth:`Model.update` and
-:py:class:`Update`.
+For more information, see the documentation on :py:meth:`Model.update`,
+:py:class:`Update` and :py:meth:`Model.bulk_update`.
 
 .. note::
     If you would like more information on performing atomic updates (such as
@@ -432,6 +459,39 @@ column will be updated, and no duplicate rows will be created.
 .. note::
     The main difference between MySQL and Postgresql/SQLite is that Postgresql
     and SQLite require that you specify a ``conflict_target``.
+
+Here is a more advanced (if contrived) example using the :py:class:`EXCLUDED`
+namespace. The :py:class:`EXCLUDED` helper allows us to reference values in the
+conflicting data. For our example, we'll assume a simple table mapping a unique
+key (string) to a value (integer):
+
+.. code-block:: python
+
+    class KV(Model):
+        key = CharField(unique=True)
+        value = IntegerField()
+
+    # Create one row.
+    KV.create(key='k1', value=1)
+
+    # Demonstrate usage of EXCLUDED.
+    # Here we will attempt to insert a new value for a given key. If that
+    # key already exists, then we will update its value with the *sum* of its
+    # original value and the value we attempted to insert -- provided that
+    # the new value is larger than the original value.
+    query = (KV.insert(key='k1', value=10)
+             .on_conflict(conflict_target=[KV.key],
+                          update={KV.value: KV.value + EXCLUDED.value},
+                          where=(EXCLUDED.value > KV.value)))
+
+    # Executing the above query will result in the following data being
+    # present in the "kv" table:
+    # (key='k1', value=11)
+    query.execute()
+
+    # If we attempted to execute the query *again*, then nothing would be
+    # updated, as the new value (10) is now less than the value in the
+    # original row (11).
 
 For more information, see :py:meth:`Insert.on_conflict` and
 :py:class:`OnConflict`.
@@ -683,7 +743,7 @@ Iterating over large result-sets
 By default peewee will cache the rows returned when iterating over a
 :py:class:`Select` query. This is an optimization to allow multiple iterations
 as well as indexing and slicing without causing additional queries. This
-caching can problematic, however, when you plan to iterate over a large
+caching can be problematic, however, when you plan to iterate over a large
 number of rows.
 
 To reduce the amount of memory used by peewee when iterating over a query, use
@@ -710,6 +770,21 @@ dictionaries, namedtuples or tuples. The following methods can be used on any
 * :py:meth:`~BaseQuery.dicts`
 * :py:meth:`~BaseQuery.namedtuples`
 * :py:meth:`~BaseQuery.tuples`
+
+Don't forget to append the :py:meth:`~BaseQuery.iterator` method call to also
+reduce memory consumption. For example, the above code might look like:
+
+.. code-block:: python
+
+    # Let's assume we've got 10 million stat objects to dump to a csv file.
+    stats = Stat.select()
+
+    # Our imaginary serializer class
+    serializer = CSVSerializer()
+
+    # Loop over all the stats (rendered as tuples, without caching) and serialize.
+    for stat_tuple in stats.tuples().iterator():
+        serializer.serialize_tuple(stat_tuple)
 
 When iterating over a large number of rows that contain columns from multiple
 tables, peewee will reconstruct the model graph for each row returned. This
@@ -1407,10 +1482,41 @@ each window has a unique alias:
     # 2           3.     34.      2.
     # 3         100     134.    100.
 
+Similarly, if you have multiple window definitions that share similar
+definitions, it is possible to extend a previously-defined window definition.
+For example, here we will be partitioning the data-set by the counter value, so
+we'll be doing our aggregations with respect to the counter. Then we'll define
+a second window that extends this partitioning, and adds an ordering clause:
+
+.. code-block:: python
+
+    w1 = Window(partition_by=[Sample.counter]).alias('w1')
+
+    # By extending w1, this window definition will also be partitioned
+    # by "counter".
+    w2 = Window(extends=w1, order_by=[Sample.value.desc()]).alias('w2')
+
+    query = (Sample
+             .select(Sample.counter, Sample.value,
+                     fn.SUM(Sample.value).over(w1).alias('group_sum'),
+                     fn.RANK().over(w2).alias('revrank'))
+             .window(w1, w2)
+             .order_by(Sample.id))
+
+    for sample in query:
+        print(sample.counter, sample.value, sample.group_sum, sample.revrank)
+
+    # counter  value   group_sum   revrank
+    # 1        10.     30.         2
+    # 1        20.     30.         1
+    # 2        1.      4.          2
+    # 2        3.      4.          1
+    # 3        100.    100.        1
+
 .. _window-frame-types:
 
-Frame types: RANGE vs ROWS
-^^^^^^^^^^^^^^^^^^^^^^^^^^
+Frame types: RANGE vs ROWS vs GROUPS
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 Depending on the frame type, the database will process ordered groups
 differently. Let's create two additional ``Sample`` rows to visualize the
@@ -1443,6 +1549,7 @@ frame type, we can use either:
 
 * :py:attr:`Window.RANGE`
 * :py:attr:`Window.ROWS`
+* :py:attr:`Window.GROUPS`
 
 The behavior of :py:attr:`~Window.RANGE`, when there are logical duplicates,
 may lead to unexpected results:
@@ -1504,6 +1611,37 @@ Peewee uses these rules for determining what frame-type to use:
 * If the user did not specify frame type or start/end boundaries, Peewee will
   use the database default, which is ``RANGE``.
 
+The :py:attr:`Window.GROUPS` frame type looks at the window range specification
+in terms of groups of rows, based on the ordering term(s). Using ``GROUPS``, we
+can define the frame so it covers distinct groupings of rows. Let's look at an
+example:
+
+.. code-block:: python
+
+    query = (Sample
+             .select(Sample.counter, Sample.value,
+                     fn.SUM(Sample.value).over(
+                        order_by=[Sample.counter, Sample.value],
+                        frame_type=Window.GROUPS,
+                        start=Window.preceding(1)).alias('gsum'))
+             .order_by(Sample.counter, Sample.value))
+
+    for sample in query:
+        print(sample.counter, sample.value, sample.gsum)
+
+    #  counter   value    gsum
+    #  1         10       10
+    #  1         20       50
+    #  1         20       50   (10) + (20+0)
+    #  2         1        42
+    #  2         1        42   (20+20) + (1+1)
+    #  2         3        5    (1+1) + 3
+    #  3         100      103  (3) + 100
+
+As you can hopefully infer, the window is grouped by its ordering term, which
+is ``(counter, value)``. We are looking at a window that extends between one
+previous group and the current group.
+
 .. note::
     For information about the window function APIs, see:
 
@@ -1511,9 +1649,13 @@ Peewee uses these rules for determining what frame-type to use:
     * :py:meth:`Function.filter`
     * :py:class:`Window`
 
-    For general information on window functions, the
-    `postgresql docs <http://www.postgresql.org/docs/9.1/static/tutorial-window.html>`_.
-    have a good overview.
+    For general information on window functions, read the postgres `window functions tutorial <https://www.postgresql.org/docs/current/tutorial-window.html>`_
+
+    Additionally, the `postgres docs <https://www.postgresql.org/docs/current/sql-select.html#SQL-WINDOW>`_
+    and the `sqlite docs <https://www.sqlite.org/windowfunctions.html>`_
+    contain a lot of good information.
+
+.. _rowtypes:
 
 Retrieving row tuples / dictionaries / namedtuples
 --------------------------------------------------
@@ -1562,6 +1704,20 @@ Returning Clause
 ``INSERT`` and ``DELETE`` queries. Specifying a ``RETURNING`` clause allows you
 to iterate over the rows accessed by the query.
 
+By default, the return values upon execution of the different queries are:
+
+* ``INSERT`` - auto-incrementing primary key value of the newly-inserted row.
+  When not using an auto-incrementing primary key, Postgres will return the new
+  row's primary key, but SQLite and MySQL will not.
+* ``UPDATE`` - number of rows modified
+* ``DELETE`` - number of rows deleted
+
+When a returning clause is used the return value upon executing a query will be
+an iterable cursor object.
+
+Postgresql allows, via the ``RETURNING`` clause, to return data from the rows
+inserted or modified by a query.
+
 For example, let's say you have an :py:class:`Update` that deactivates all
 user accounts whose registration has expired. After deactivating them, you want
 to send each user an email letting them know their account was deactivated.
@@ -1577,7 +1733,7 @@ this in a single ``UPDATE`` query with a ``RETURNING`` clause:
 
     # Send an email to every user that was deactivated.
     for deactivate_user in query.execute():
-        send_deactivation_email(deactivated_user)
+        send_deactivation_email(deactivated_user.email)
 
 The ``RETURNING`` clause is also available on :py:class:`Insert` and
 :py:class:`Delete`. When used with ``INSERT``, the newly-created rows will be
@@ -1587,6 +1743,39 @@ The only limitation of the ``RETURNING`` clause is that it can only consist of
 columns from tables listed in the query's ``FROM`` clause. To select all
 columns from a particular table, you can simply pass in the :py:class:`Model`
 class.
+
+As another example, let's add a user and set their creation-date to the
+server-generated current timestamp. We'll create and retrieve the new user's
+ID, Email and the creation timestamp in a single query:
+
+.. code-block:: python
+
+    query = (User
+             .insert(email='foo@bar.com', created=fn.now())
+             .returning(User))  # Shorthand for all columns on User.
+
+    # When using RETURNING, execute() returns a cursor.
+    cursor = query.execute()
+
+    # Get the user object we just inserted and log the data:
+    user = cursor[0]
+    logger.info('Created user %s (id=%s) at %s', user.email, user.id, user.created)
+
+By default the cursor will return :py:class:`Model` instances, but you can
+specify a different row type:
+
+.. code-block:: python
+
+    data = [{'name': 'charlie'}, {'name': 'huey'}, {'name': 'mickey'}]
+    query = (User
+             .insert_many(data)
+             .returning(User.id, User.username)
+             .dicts())
+
+    for new_user in query.execute():
+        print('Added user "%s", id=%s' % (new_user['username'], new_user['id']))
+
+Just as with :py:class:`Select` queries, you can specify various :ref:`result row types <rowtypes>`.
 
 .. _cte:
 
@@ -1752,7 +1941,7 @@ recursive CTE:
     level = Value(1).alias('level')
     path = Base.name.alias('path')
     base_case = (Base
-                 .select(Base.name, Base.parent, level, path)
+                 .select(Base.id, Base.name, Base.parent, level, path)
                  .where(Base.parent.is_null())
                  .cte('base', recursive=True))
 
@@ -1761,7 +1950,7 @@ recursive CTE:
     rlevel = (base_case.c.level + 1).alias('level')
     rpath = base_case.c.path.concat('->').concat(RTerm.name).alias('path')
     recursive = (RTerm
-                 .select(RTerm.name, RTerm.parent, rlevel, rpath)
+                 .select(RTerm.id, RTerm.name, RTerm.parent, rlevel, rpath)
                  .join(base_case, on=(RTerm.parent == base_case.c.id)))
 
     # The recursive CTE is created by taking the base case and UNION ALL with

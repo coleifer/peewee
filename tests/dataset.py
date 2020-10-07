@@ -3,6 +3,8 @@ import datetime
 import json
 import operator
 import os
+import sys
+import tempfile
 try:
     from StringIO import StringIO
 except ImportError:
@@ -13,6 +15,7 @@ from playhouse.dataset import DataSet
 from playhouse.dataset import Table
 
 from .base import db_loader
+from .base import skip_if
 from .base import ModelTestCase
 from .base import TestModel
 
@@ -57,6 +60,33 @@ class TestDataSet(ModelTestCase):
         users = dataset['users']
         users.insert(username='charlie')
         self.assertEqual(list(users), [{'id': 1, 'username': 'charlie'}])
+
+    def test_item_apis(self):
+        dataset = DataSet('sqlite:///:memory:')
+        users = dataset['users']
+        users.insert(username='charlie')
+        self.assertEqual(list(users), [{'id': 1, 'username': 'charlie'}])
+
+        users[2] = {'username': 'huey', 'color': 'white'}
+        self.assertEqual(list(users), [
+            {'id': 1, 'username': 'charlie', 'color': None},
+            {'id': 2, 'username': 'huey', 'color': 'white'}])
+
+        users[2] = {'username': 'huey-x', 'kind': 'cat'}
+        self.assertEqual(list(users), [
+            {'id': 1, 'username': 'charlie', 'color': None, 'kind': None},
+            {'id': 2, 'username': 'huey-x', 'color': 'white', 'kind': 'cat'}])
+
+        del users[2]
+        self.assertEqual(list(users), [
+            {'id': 1, 'username': 'charlie', 'color': None, 'kind': None}])
+
+        users[1] = {'kind': 'person'}
+        users[2] = {'username': 'zaizee'}
+        users[2] = {'kind': 'cat'}
+        self.assertEqual(list(users), [
+            {'id': 1, 'username': 'charlie', 'color': None, 'kind': 'person'},
+            {'id': 2, 'username': 'zaizee', 'color': None, 'kind': 'cat'}])
 
     def create_users(self, n=2):
         user = self.dataset['user']
@@ -121,6 +151,15 @@ class TestDataSet(ModelTestCase):
         Foo = self.dataset['foo']
         self.assertEqual(sorted(Foo.columns), ['data', 'id'])
         self.assertTrue('foo' in self.dataset._models)
+
+        self.dataset._models['foo'].drop_table()
+        self.dataset.update_cache()
+        self.assertTrue('foo' not in self.database.get_tables())
+
+        # This will create the table again.
+        Foo = self.dataset['foo']
+        self.assertTrue('foo' in self.database.get_tables())
+        self.assertEqual(Foo.columns, ['id'])
 
     def assertQuery(self, query, expected, sort_key='id'):
         key = operator.itemgetter(sort_key)
@@ -316,6 +355,32 @@ class TestDataSet(ModelTestCase):
             'username',
             'charlie',
             'huey'])
+
+    @skip_if(sys.version_info[0] < 3, 'requires python 3.x')
+    def test_freeze_thaw_csv_utf8(self):
+        self._test_freeze_thaw_utf8('csv')
+
+    def test_freeze_thaw_json_utf8(self):
+        self._test_freeze_thaw_utf8('json')
+
+    def _test_freeze_thaw_utf8(self, fmt):
+        username_bytes = b'\xd0\x92obby'  # Bobby with cyrillic "B".
+        username_str = username_bytes.decode('utf8')
+        u = User.create(username=username_str)
+
+        # Freeze the data as a the given format.
+        user = self.dataset['user']
+        filename = tempfile.mktemp()  # Get a filename.
+        self.dataset.freeze(user.all(), fmt, filename)
+
+        # Clear out the table and reload.
+        User.delete().execute()
+        self.assertEqual(list(user.all()), [])
+
+        # Thaw the frozen data.
+        n = user.thaw(format=fmt, filename=filename)
+        self.assertEqual(n, 1)
+        self.assertEqual(list(user.all()), [{'username': username_str}])
 
     def test_freeze_thaw(self):
         user = self.dataset['user']

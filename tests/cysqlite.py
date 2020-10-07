@@ -1,12 +1,15 @@
 import os
 
 from peewee import *
+from peewee import sqlite3
 from playhouse.sqlite_ext import CYTHON_SQLITE_EXTENSIONS
 from playhouse.sqlite_ext import *
 from playhouse._sqlite_ext import BloomFilter
 
 from .base import BaseTestCase
 from .base import DatabaseTestCase
+from .base import db_loader
+from .base import skip_unless
 
 
 database = CSqliteExtDatabase('peewee_test.db', timeout=100,
@@ -357,9 +360,9 @@ class TestBloomFilterIntegration(CyDatabaseTestCase):
         all_keys = self.populate()
 
         curs = self.execute('select bloomfilter(data, ?) from register',
-                            1024 * 16)
+                            1024 * 128)
         buf, = curs.fetchone()
-        self.assertEqual(len(buf), 1024 * 16)
+        self.assertEqual(len(buf), 1024 * 128)
         for key in all_keys:
             curs = self.execute('select bloomfilter_contains(?, ?)',
                                 key, buf)
@@ -373,9 +376,11 @@ class TestBloomFilterIntegration(CyDatabaseTestCase):
 
 
 class TestBloomFilter(BaseTestCase):
+    n = 1024
+
     def setUp(self):
         super(TestBloomFilter, self).setUp()
-        self.bf = BloomFilter(1024)
+        self.bf = BloomFilter(self.n)
 
     def test_bloomfilter(self):
         keys = ('charlie', 'huey', 'mickey', 'zaizee', 'nuggie', 'foo', 'bar',
@@ -388,3 +393,72 @@ class TestBloomFilter(BaseTestCase):
             self.assertFalse(key + '-x' in self.bf)
             self.assertFalse(key + '-y' in self.bf)
             self.assertFalse(key + ' ' in self.bf)
+
+    def test_bloomfilter_buffer(self):
+        self.assertEqual(len(self.bf), self.n)
+
+        # Buffer is all zeroes when uninitialized.
+        buf = self.bf.to_buffer()
+        self.assertEqual(len(buf), self.n)
+        self.assertEqual(buf, b'\x00' * self.n)
+
+        keys = ('alpha', 'beta', 'gamma', 'delta', 'epsilon', 'zeta')
+        self.bf.add(*keys)
+
+        for key in keys:
+            self.assertTrue(key in self.bf)
+            self.assertFalse(key + '-x' in self.bf)
+
+        # Convert to buffer and then populate a 2nd bloom-filter.
+        buf = self.bf.to_buffer()
+        new_bf = BloomFilter.from_buffer(buf)
+        for key in keys:
+            self.assertTrue(key in new_bf)
+            self.assertFalse(key + '-x' in new_bf)
+
+        # Ensure that the two underlying bloom-filter buffers are equal.
+        self.assertEqual(len(new_bf), self.n)
+        new_buf = new_bf.to_buffer()
+        self.assertEqual(buf, new_buf)
+
+
+class DataTypes(TableFunction):
+    columns = ('key', 'value')
+    params = ()
+    name = 'data_types'
+
+    def initialize(self):
+        self.values = (
+            None,
+            1,
+            2.,
+            u'unicode str',
+            b'byte str',
+            False,
+            True)
+        self.idx = 0
+        self.n = len(self.values)
+
+    def iterate(self, idx):
+        if idx < self.n:
+            return ('k%s' % idx, self.values[idx])
+        raise StopIteration
+
+
+@skip_unless(sqlite3.sqlite_version_info >= (3, 9), 'requires sqlite >= 3.9')
+class TestDataTypesTableFunction(CyDatabaseTestCase):
+    database = db_loader('sqlite')
+
+    def test_data_types_table_function(self):
+        self.database.register_table_function(DataTypes)
+        cursor = self.database.execute_sql('SELECT key, value '
+                                           'FROM data_types() ORDER BY key')
+        self.assertEqual(cursor.fetchall(), [
+            ('k0', None),
+            ('k1', 1),
+            ('k2', 2.),
+            ('k3', u'unicode str'),
+            ('k4', b'byte str'),
+            ('k5', 0),
+            ('k6', 1),
+        ])

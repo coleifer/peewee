@@ -46,6 +46,9 @@ class Category(TestModel):
 class OddColumnNames(TestModel):
     spaces = CharField(column_name='s p aces')
     symbols = CharField(column_name='w/-nug!')
+    camelCaseName = CharField(column_name='camelCaseName')
+    class Meta:
+        table_name = 'oddColumnNames'
 
 
 class Event(TestModel):
@@ -67,7 +70,7 @@ class capture_output(object):
 EXPECTED = """
 from peewee import *
 
-database = SqliteDatabase('peewee_test.db', **{})
+database = SqliteDatabase('peewee_test.db')
 
 class UnknownField(object):
     def __init__(self, *_, **__): pass
@@ -107,7 +110,7 @@ class Note(BaseModel):
 EXPECTED_ORDERED = """
 from peewee import *
 
-database = SqliteDatabase('peewee_test.db', **{})
+database = SqliteDatabase('peewee_test.db')
 
 class UnknownField(object):
     def __init__(self, *_, **__): pass
@@ -188,6 +191,43 @@ class TestPwizOrdered(BasePwizTestCase):
         self.assertEqual(output.data.strip(), EXPECTED_ORDERED)
 
 
+class TestPwizUnknownField(BasePwizTestCase):
+    header = ('from peewee import *\n\n'
+              'database = SqliteDatabase(\'peewee_test.db\')\n\n')
+    unknown = ('class UnknownField(object):\n'
+               '    def __init__(self, *_, **__): pass\n\n')
+    basemodel = ('class BaseModel(Model):\n    class Meta:\n'
+                 '        database = database\n\n')
+
+    def setUp(self):
+        super(TestPwizUnknownField, self).setUp()
+        self.database.execute_sql(
+            'CREATE TABLE "foo" ("id" INTEGER NOT NULL PRIMARY KEY, '
+            '"unk1", "unk2" BIZBAZ NOT NULL)')
+
+    def test_unknown_field(self):
+        with capture_output() as output:
+            print_models(self.introspector)
+
+        self.assertEqual(output.data.strip(), (
+            self.header + self.unknown + self.basemodel +
+            'class Foo(BaseModel):\n'
+            '    unk1 = BareField(null=True)\n'
+            '    unk2 = UnknownField()  # BIZBAZ\n\n'
+            '    class Meta:\n        table_name = \'foo\''))
+
+    def test_ignore_unknown(self):
+        with capture_output() as output:
+            print_models(self.introspector, ignore_unknown=True)
+
+        self.assertEqual(output.data.strip(), (
+            self.header + self.basemodel +
+            'class Foo(BaseModel):\n'
+            '    unk1 = BareField(null=True)\n'
+            '    # unk2 - BIZBAZ\n\n'
+            '    class Meta:\n        table_name = \'foo\''))
+
+
 class TestPwizInvalidColumns(BasePwizTestCase):
     requires = [OddColumnNames]
 
@@ -198,11 +238,29 @@ class TestPwizInvalidColumns(BasePwizTestCase):
         result = output.data.strip()
         expected = textwrap.dedent("""
             class OddColumnNames(BaseModel):
+                camel_case_name = CharField(column_name='camelCaseName')
                 s_p_aces = CharField(column_name='s p aces')
                 w_nug_ = CharField(column_name='w/-nug!')
 
                 class Meta:
-                    table_name = 'odd_column_names'""").strip()
+                    table_name = 'oddColumnNames'""").strip()
+
+        actual = result[-len(expected):]
+        self.assertEqual(actual, expected)
+
+    def test_odd_columns_legacy(self):
+        with capture_output() as output:
+            print_models(self.introspector, snake_case=False)
+
+        result = output.data.strip()
+        expected = textwrap.dedent("""
+            class Oddcolumnnames(BaseModel):
+                camelcasename = CharField(column_name='camelCaseName')
+                s_p_aces = CharField(column_name='s p aces')
+                w_nug_ = CharField(column_name='w/-nug!')
+
+                class Meta:
+                    table_name = 'oddColumnNames'""").strip()
 
         actual = result[-len(expected):]
         self.assertEqual(actual, expected)

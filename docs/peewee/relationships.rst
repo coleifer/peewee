@@ -421,6 +421,8 @@ selected and reconstructed the model graph:
     zaizee liked meow by huey
     zaizee liked purr by huey
 
+.. _join-subquery:
+
 Subqueries
 ----------
 
@@ -804,8 +806,7 @@ Modeling students and courses using :py:class:`ManyToManyField`:
 .. code-block:: python
 
     from peewee import *
-    from playhouse.fields import ManyToManyField
-
+    
     db = SqliteDatabase('school.db')
 
     class BaseModel(Model):
@@ -859,6 +860,21 @@ Modeling students and courses using :py:class:`ManyToManyField`:
     referenced will need to be saved first. In order to create relationships in
     the many-to-many through table, Peewee needs to know the primary keys of
     the models being referenced.
+
+.. warning::
+    It is **strongly recommended** that you do not attempt to subclass models
+    containing :py:class:`ManyToManyField` instances.
+
+    A :py:class:`ManyToManyField`, despite its name, is not a field in the
+    usual sense. Instead of being a column on a table, the many-to-many field
+    covers the fact that behind-the-scenes there's actually a separate table
+    with two foreign-key pointers (the *through table*).
+
+    Therefore, when a subclass is created that inherits a many-to-many field,
+    what actually needs to be inherited is the *through table*. Because of the
+    potential for subtle bugs, Peewee does not attempt to automatically
+    subclass the through model and modify its foreign-key pointers. As a
+    result, many-to-many fields typically will not work with inheritance.
 
 For more examples, see:
 

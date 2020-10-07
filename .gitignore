@@ -11,3 +11,4 @@ MANIFEST
 peewee_test.db
 closure.so
 lsm.so
+regexp.so

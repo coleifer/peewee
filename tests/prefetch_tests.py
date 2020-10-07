@@ -174,6 +174,12 @@ class TestPrefetch(ModelTestCase):
                  .select(Like, LikePerson.name)
                  .join(LikePerson, on=(Like.person == LikePerson.id)))
 
+        # Five queries:
+        # - person (outermost query)
+        # - notes for people
+        # - items for notes
+        # - flags for notes
+        # - likes for notes (includes join to person)
         with self.assertQueryCount(5):
             query = prefetch(people, notes, items, flags, likes)
             accum = []
@@ -281,6 +287,48 @@ class TestPrefetch(ModelTestCase):
             ('p2-2', []),
         ])
 
+    @requires_models(Category)
+    def test_prefetch_adjacency_list(self):
+        def cc(name, parent=None):
+            return Category.create(name=name, parent=parent)
+
+        tree = ('root', (
+            ('n1', (
+                ('c11', ()),
+                ('c12', ()))),
+            ('n2', (
+                ('c21', ()),
+                ('c22', (
+                    ('g221', ()),
+                    ('g222', ()))),
+                ('c23', ()),
+                ('c24', (
+                    ('g241', ()),
+                    ('g242', ()),
+                    ('g243', ())))))))
+        stack = [(None, tree)]
+        while stack:
+            parent, (name, children) = stack.pop()
+            node = cc(name, parent)
+            for child_tree in children:
+                stack.insert(0, (node, child_tree))
+
+        C = Category.alias('c')
+        G = Category.alias('g')
+        GG = Category.alias('gg')
+        GGG = Category.alias('ggg')
+        query = Category.select().where(Category.name == 'root')
+        with self.assertQueryCount(5):
+            pf = prefetch(query, C, (G, C), (GG, G), (GGG, GG))
+            def gather(c):
+                children = sorted([gather(ch) for ch in c.children])
+                return (c.name, tuple(children))
+            nodes = list(pf)
+            self.assertEqual(len(nodes), 1)
+            pf_tree = gather(nodes[0])
+
+        self.assertEqual(tree, pf_tree)
+
     def test_prefetch_specific_model(self):
         # Person -> Note
         #        -> Like (has fks to both person and note)
@@ -363,6 +411,42 @@ class TestPrefetch(ModelTestCase):
                 ('huey', 'charlie'),
                 ('zaizee', 'charlie')])
 
+        m = Person.create(name='mickey')
+        RC(h, m)
+
+        def assertNames(p, ns):
+            self.assertEqual([r.to_person.name for r in p.relationships], ns)
+
+        # Use prefetch to go Person -> Relationship <- Person (PA).
+        with self.assertQueryCount(3):
+            people = (Person
+                      .select()
+                      .where(Person.name != 'mickey')
+                      .order_by(Person.name))
+            relationships = Relationship.select().order_by(Relationship.id)
+            PA = Person.alias()
+            query = prefetch(people, relationships, PA)
+            cp, hp, zp = list(query)
+            assertNames(cp, ['huey', 'zaizee'])
+            assertNames(hp, ['charlie', 'mickey'])
+            assertNames(zp, ['charlie'])
+
+        # User prefetch to go Person -> Relationship+Person (PA).
+        with self.assertQueryCount(2):
+            people = (Person
+                      .select()
+                      .where(Person.name != 'mickey')
+                      .order_by(Person.name))
+            rels = (Relationship
+                    .select(Relationship, PA)
+                    .join(PA, on=(Relationship.to_person == PA.id))
+                    .order_by(Relationship.id))
+            query = prefetch(people, rels)
+            cp, hp, zp = list(query)
+            assertNames(cp, ['huey', 'zaizee'])
+            assertNames(hp, ['charlie', 'mickey'])
+            assertNames(zp, ['charlie'])
+
     def test_prefetch_through_manytomany(self):
         Like.create(note=Note.get(Note.content == 'meow'),
                     person=Person.get(Person.name == 'zaizee'))
@@ -409,3 +493,13 @@ class TestPrefetch(ModelTestCase):
                 self.assertEqual(package.barcode, barcode)
                 self.assertEqual([item.name for item in package.items],
                                  list(items))
+
+    def test_prefetch_mark_dirty_regression(self):
+        people = Person.select().order_by(Person.name)
+        query = people.prefetch(Note, NoteItem)
+        for person in query:
+            self.assertEqual(person.dirty_fields, [])
+            for note in person.notes:
+                self.assertEqual(note.dirty_fields, [])
+                for item in note.items:
+                    self.assertEqual(item.dirty_fields, [])

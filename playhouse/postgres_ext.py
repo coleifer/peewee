@@ -3,6 +3,7 @@ Collection of postgres-specific extensions, currently including:
 
 * Support for hstore, a key/value type storage
 """
+import json
 import logging
 import uuid
 
@@ -20,7 +21,11 @@ try:
 except ImportError:
     pass
 
-from psycopg2.extras import register_hstore
+try:
+    from psycopg2.extras import register_hstore
+except ImportError:
+    def register_hstore(c, globally):
+        pass
 try:
     from psycopg2.extras import Json
 except:
@@ -41,9 +46,11 @@ ACONTAINS_ANY = '&&'
 TS_MATCH = '@@'
 JSONB_CONTAINS = '@>'
 JSONB_CONTAINED_BY = '<@'
+JSONB_CONTAINS_KEY = '?'
 JSONB_CONTAINS_ANY_KEY = '?|'
 JSONB_CONTAINS_ALL_KEYS = '?&'
 JSONB_EXISTS = '?'
+JSONB_REMOVE = '-'
 
 
 class _LookupNode(ColumnBase):
@@ -54,6 +61,9 @@ class _LookupNode(ColumnBase):
 
     def clone(self):
         return type(self)(self.node, list(self.parts))
+
+    def __hash__(self):
+        return hash((self.__class__.__name__, id(self)))
 
 
 class _JsonLookupBase(_LookupNode):
@@ -67,6 +77,11 @@ class _JsonLookupBase(_LookupNode):
     @Node.copy
     def as_json(self, as_json=True):
         self._as_json = as_json
+
+    def concat(self, rhs):
+        if not isinstance(rhs, Node):
+            rhs = Json(rhs)
+        return Expression(self.as_json(True), OP.CONCAT, rhs)
 
     def contains(self, other):
         clone = self.as_json(True)
@@ -85,6 +100,9 @@ class _JsonLookupBase(_LookupNode):
             self.as_json(True),
             JSONB_CONTAINS_ALL_KEYS,
             Value(list(keys), unpack=False))
+
+    def has_key(self, key):
+        return Expression(self.as_json(True), JSONB_CONTAINS_KEY, key)
 
 
 class JsonLookup(_JsonLookupBase):
@@ -118,33 +136,34 @@ class ObjectSlice(_LookupNode):
             parts = [value.start or 0, value.stop or 0]
         elif isinstance(value, int):
             parts = [value]
+        elif isinstance(value, Node):
+            parts = value
         else:
-            parts = map(int, value.split(':'))
+            # Assumes colon-separated integer indexes.
+            parts = [int(i) for i in value.split(':')]
         return cls(node, parts)
 
     def __sql__(self, ctx):
-        return (ctx
-                .sql(self.node)
-                .literal('[%s]' % ':'.join(str(p + 1) for p in self.parts)))
+        ctx.sql(self.node)
+        if isinstance(self.parts, Node):
+            ctx.literal('[').sql(self.parts).literal(']')
+        else:
+            ctx.literal('[%s]' % ':'.join(str(p + 1) for p in self.parts))
+        return ctx
 
     def __getitem__(self, value):
         return ObjectSlice.create(self, value)
 
 
 class IndexedFieldMixin(object):
-    default_index_type = 'GiST'
+    default_index_type = 'GIN'
 
-    def __init__(self, index_type=None, *args, **kwargs):
+    def __init__(self, *args, **kwargs):
         kwargs.setdefault('index', True)  # By default, use an index.
         super(IndexedFieldMixin, self).__init__(*args, **kwargs)
-        if self.index:
-            self.index_type = index_type or self.default_index_type
-        else:
-            self.index_type = None
 
 
 class ArrayField(IndexedFieldMixin, Field):
-    default_index_type = 'GIN'
     passthrough = True
 
     def __init__(self, field_class=IntegerField, field_kwargs=None,
@@ -274,18 +293,19 @@ class HStoreField(IndexedFieldMixin, Field):
 
 class JSONField(Field):
     field_type = 'JSON'
+    _json_datatype = 'json'
 
     def __init__(self, dumps=None, *args, **kwargs):
         if Json is None:
             raise Exception('Your version of psycopg2 does not support JSON.')
-        self.dumps = dumps
+        self.dumps = dumps or json.dumps
         super(JSONField, self).__init__(*args, **kwargs)
 
     def db_value(self, value):
         if value is None:
             return value
         if not isinstance(value, Json):
-            return Json(value, dumps=self.dumps)
+            return Cast(self.dumps(value), self._json_datatype)
         return value
 
     def __getitem__(self, value):
@@ -294,6 +314,11 @@ class JSONField(Field):
     def path(self, *keys):
         return JsonPath(self, keys)
 
+    def concat(self, value):
+        if not isinstance(value, Node):
+            value = Json(value)
+        return super(JSONField, self).concat(value)
+
 
 def cast_jsonb(node):
     return NodeList((node, SQL('::jsonb')), glue='')
@@ -301,12 +326,14 @@ def cast_jsonb(node):
 
 class BinaryJSONField(IndexedFieldMixin, JSONField):
     field_type = 'JSONB'
-    default_index_type = 'GIN'
+    _json_datatype = 'jsonb'
     __hash__ = Field.__hash__
 
     def contains(self, other):
         if isinstance(other, (list, dict)):
             return Expression(self, JSONB_CONTAINS, Json(other))
+        elif isinstance(other, JSONField):
+            return Expression(self, JSONB_CONTAINS, other)
         return Expression(cast_jsonb(self), JSONB_EXISTS, other)
 
     def contained_by(self, other):
@@ -324,15 +351,24 @@ class BinaryJSONField(IndexedFieldMixin, JSONField):
             JSONB_CONTAINS_ALL_KEYS,
             Value(list(items), unpack=False))
 
+    def has_key(self, key):
+        return Expression(cast_jsonb(self), JSONB_CONTAINS_KEY, key)
+
+    def remove(self, *items):
+        return Expression(
+            cast_jsonb(self),
+            JSONB_REMOVE,
+            Value(list(items), unpack=False))
+
 
 class TSVectorField(IndexedFieldMixin, TextField):
     field_type = 'TSVECTOR'
-    default_index_type = 'GIN'
     __hash__ = Field.__hash__
 
-    def match(self, query, language=None):
+    def match(self, query, language=None, plain=False):
         params = (language, query) if language is not None else (query,)
-        return Expression(self, TS_MATCH, fn.to_tsquery(*params))
+        func = fn.plainto_tsquery if plain else fn.to_tsquery
+        return Expression(self, TS_MATCH, func(*params))
 
 
 def Match(field, query, language=None):
@@ -435,7 +471,10 @@ class PostgresqlExtDatabase(PostgresqlDatabase):
 
     def cursor(self, commit=None):
         if self.is_closed():
-            self.connect()
+            if self.autoconnect:
+                self.connect()
+            else:
+                raise InterfaceError('Error, database connection not opened.')
         if commit is __named_cursor__:
             return self._state.conn.cursor(name=str(uuid.uuid1()))
         return self._state.conn.cursor()

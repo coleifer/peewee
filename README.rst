@@ -7,7 +7,7 @@ Peewee is a simple and small ORM. It has few (but expressive) concepts, making i
 
 * a small, expressive ORM
 * python 2.7+ and 3.4+ (developed with 3.6)
-* supports sqlite, mysql and postgresql
+* supports sqlite, mysql, postgresql and cockroachdb
 * tons of `extensions <http://docs.peewee-orm.com/en/latest/peewee/playhouse.html>`_
 
 .. image:: https://travis-ci.org/coleifer/peewee.svg?branch=master
@@ -17,6 +17,7 @@ New to peewee? These may help:
 
 * `Quickstart <http://docs.peewee-orm.com/en/latest/peewee/quickstart.html#quickstart>`_
 * `Example twitter app <http://docs.peewee-orm.com/en/latest/peewee/example.html>`_
+* `Using peewee interactively <http://docs.peewee-orm.com/en/latest/peewee/interactive.html>`_
 * `Models and fields <http://docs.peewee-orm.com/en/latest/peewee/models.html>`_
 * `Querying <http://docs.peewee-orm.com/en/latest/peewee/querying.html>`_
 * `Relationships and joins <http://docs.peewee-orm.com/en/latest/peewee/relationships.html>`_

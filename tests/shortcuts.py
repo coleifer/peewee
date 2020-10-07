@@ -3,10 +3,13 @@ import operator
 from peewee import *
 from playhouse.shortcuts import *
 
+from .base import DatabaseTestCase
 from .base import ModelTestCase
 from .base import TestModel
+from .base import db_loader
 from .base import get_in_memory_db
 from .base import requires_models
+from .base import requires_mysql
 from .base_models import Category
 
 
@@ -59,6 +62,24 @@ class StudentCourse(TestModel):
     course = ForeignKeyField(Course)
 
 StudentCourseProxy.set_model(StudentCourse)
+
+class Host(TestModel):
+    name = TextField()
+
+class Service(TestModel):
+    host = ForeignKeyField(Host, backref='services')
+    name = TextField()
+
+class Device(TestModel):
+    host = ForeignKeyField(Host, backref='+')
+    name = TextField()
+
+class Basket(TestModel):
+    id = IntegerField(primary_key=True)
+
+class Item(TestModel):
+    id = IntegerField(primary_key=True)
+    basket = ForeignKeyField(Basket)
 
 
 class TestModelToDict(ModelTestCase):
@@ -420,6 +441,31 @@ class TestModelToDict(ModelTestCase):
                 {'content': '1'},
                 {'content': '2'}]})
 
+    @requires_models(Host, Service, Device)
+    def test_model_to_dict_disabled_backref(self):
+        host = Host.create(name='pi')
+        Device.create(host=host, name='raspberry pi')
+        Service.create(host=host, name='ssh')
+        Service.create(host=host, name='vpn')
+
+        data = model_to_dict(host, recurse=True, backrefs=True)
+        services = sorted(data.pop('services'), key=operator.itemgetter('id'))
+        self.assertEqual(data, {'id': 1, 'name': 'pi'})
+        self.assertEqual(services, [
+            {'id': 1, 'name': 'ssh'},
+            {'id': 2, 'name': 'vpn'}])
+
+    @requires_models(Basket, Item)
+    def test_empty_vs_null_fk(self):
+        b = Basket.create(id=0)
+        i = Item.create(id=0, basket=b)
+
+        data = model_to_dict(i)
+        self.assertEqual(data, {'id': 0, 'basket': {'id': 0}})
+
+        data = model_to_dict(i, recurse=False)
+        self.assertEqual(data, {'id': 0, 'basket': 0})
+
 
 class TestDictToModel(ModelTestCase):
     database = get_in_memory_db()
@@ -505,3 +551,113 @@ class TestDictToModel(ModelTestCase):
 
         inst = dict_to_model(User, data, ignore_unknown=True)
         self.assertEqual(inst.xx, 'does not exist')
+
+    def test_ignore_id_attribute(self):
+        class Register(Model):
+            key = CharField(primary_key=True)
+
+        data = {'id': 100, 'key': 'k1'}
+        self.assertRaises(AttributeError, dict_to_model, Register, data)
+
+        inst = dict_to_model(Register, data, ignore_unknown=True)
+        self.assertEqual(inst.__data__, {'key': 'k1'})
+
+        class Base(Model):
+            class Meta:
+                primary_key = False
+
+        class Register2(Model):
+            key = CharField(primary_key=True)
+
+        self.assertRaises(AttributeError, dict_to_model, Register2, data)
+
+        inst = dict_to_model(Register2, data, ignore_unknown=True)
+        self.assertEqual(inst.__data__, {'key': 'k1'})
+
+
+class ReconnectMySQLDatabase(ReconnectMixin, MySQLDatabase):
+    def cursor(self, commit):
+        cursor = super(ReconnectMySQLDatabase, self).cursor(commit)
+
+        # The first (0th) query fails, as do all queries after the 2nd (1st).
+        if self._query_counter != 1:
+            def _fake_execute(self, _):
+                raise OperationalError('2006')
+            cursor.execute = _fake_execute
+        self._query_counter += 1
+        return cursor
+
+    def close(self):
+        self._close_counter += 1
+        return super(ReconnectMySQLDatabase, self).close()
+
+    def _reset_mock(self):
+        self._close_counter = 0
+        self._query_counter = 0
+
+
+@requires_mysql
+class TestReconnectMixin(DatabaseTestCase):
+    database = db_loader('mysql', db_class=ReconnectMySQLDatabase)
+
+    def test_reconnect_mixin(self):
+        # Verify initial state.
+        self.database._reset_mock()
+        self.assertEqual(self.database._close_counter, 0)
+
+        sql = 'select 1 + 1'
+        curs = self.database.execute_sql(sql)
+        self.assertEqual(curs.fetchone(), (2,))
+        self.assertEqual(self.database._close_counter, 1)
+
+        # Due to how we configured our mock, our queries are now failing and we
+        # can verify a reconnect is occuring *AND* the exception is propagated.
+        self.assertRaises(OperationalError, self.database.execute_sql, sql)
+        self.assertEqual(self.database._close_counter, 2)
+
+        # We reset the mock counters. The first query we execute will fail. The
+        # second query will succeed (which happens automatically, thanks to the
+        # retry logic).
+        self.database._reset_mock()
+        curs = self.database.execute_sql(sql)
+        self.assertEqual(curs.fetchone(), (2,))
+        self.assertEqual(self.database._close_counter, 1)
+
+
+class MMA(TestModel):
+    key = TextField()
+    value = IntegerField()
+
+class MMB(TestModel):
+    key = TextField()
+
+class MMC(TestModel):
+    key = TextField()
+    value = IntegerField()
+    misc = TextField(null=True)
+
+
+class TestResolveMultiModelQuery(ModelTestCase):
+    requires = [MMA, MMB, MMC]
+
+    def test_resolve_multimodel_query(self):
+        MMA.insert_many([('k0', 0), ('k1', 1)]).execute()
+        MMB.insert_many([('k10',), ('k11',)]).execute()
+        MMC.insert_many([('k20', 20, 'a'), ('k21', 21, 'b')]).execute()
+
+        mma = MMA.select(MMA.key, MMA.value)
+        mmb = MMB.select(MMB.key, Value(99).alias('value'))
+        mmc = MMC.select(MMC.key, MMC.value)
+        query = (mma | mmb | mmc).order_by(SQL('1'))
+        data = [obj for obj in resolve_multimodel_query(query)]
+
+        expected = [
+            MMA(key='k0', value=0), MMA(key='k1', value=1),
+            MMB(key='k10', value=99), MMB(key='k11', value=99),
+            MMC(key='k20', value=20), MMC(key='k21', value=21)]
+        self.assertEqual(len(data), len(expected))
+
+        for row, exp_row in zip(data, expected):
+            self.assertEqual(row.__class__, exp_row.__class__)
+            self.assertEqual(row.key, exp_row.key)
+            self.assertEqual(row.value, exp_row.value)

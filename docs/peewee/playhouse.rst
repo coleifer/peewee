@@ -19,6 +19,7 @@ make up the ``playhouse``.
 * :ref:`apsw`
 * :ref:`sqlcipher_ext`
 * :ref:`postgres_ext`
+* :ref:`crdb`
 * :ref:`mysql_ext`
 
 **High-level features**
@@ -201,6 +202,11 @@ Registering user-defined functions:
     # If you only wish to register, say, the aggregate functions for a
     # particular group or groups, you can:
     register_aggregate_groups(db, 'DATE')
+
+    # If you only wish to register a single function, then you can:
+    from playhouse.sqlite_udf import gzip, gunzip
+    db.register_function(gzip, 'gzip')
+    db.register_function(gunzip, 'gunzip')
 
 Using a library function ("hostname"):
 
@@ -564,22 +570,18 @@ Sqlcipher backend
 
 * Although this extention's code is short, it has not been properly
   peer-reviewed yet and may have introduced vulnerabilities.
-* The code contains minimum values for `passphrase` length and
-  `kdf_iter`, as well as a default value for the later.
-  **Do not** regard these numbers as advice. Consult the docs at
-  http://sqlcipher.net/sqlcipher-api/ and security experts.
 
 Also note that this code relies on pysqlcipher_ and sqlcipher_, and
 the code there might have vulnerabilities as well, but since these
 are widely used crypto modules, we can expect "short zero days" there.
 
-..  _pysqlcipher: https://pypi.python.org/pypi/pysqlcipher
+..  _pysqlcipher: https://pypi.python.org/pypi/pysqlcipher3
 ..  _sqlcipher: http://sqlcipher.net
 
 sqlcipher_ext API notes
 ^^^^^^^^^^^^^^^^^^^^^^^
 
-.. py:class:: SqlCipherDatabase(database, passphrase, kdf_iter=64000, **kwargs)
+.. py:class:: SqlCipherDatabase(database, passphrase, **kwargs)
 
     Subclass of :py:class:`SqliteDatabase` that stores the database
     encrypted. Instead of the standard ``sqlite3`` backend, it uses pysqlcipher_:
@@ -589,15 +591,15 @@ sqlcipher_ext API notes
 
     :param database: Path to encrypted database filename to open [or create].
     :param passphrase: Database encryption passphrase: should be at least 8 character
-        long (or an error is raised), but it is *strongly advised* to enforce better
-        `passphrase strength`_ criteria in your implementation.
-    :param kdf_iter: [Optional] number of PBKDF2_ iterations.
+        long, but it is *strongly advised* to enforce better `passphrase strength`_
+        criteria in your implementation.
 
     * If the ``database`` file doesn't exist, it will be *created* with
-      encryption by a key derived from ``passhprase`` with ``kdf_iter``
-      PBKDF2_ iterations.
-    * When trying to open an existing database, ``passhprase`` and ``kdf_iter``
-      should be *identical* to the ones used when it was created.
+      encryption by a key derived from ``passhprase``.
+    * When trying to open an existing database, ``passhprase`` should be
+      identical to the ones used when it was created. If the passphrase is
+      incorrect, an error will be raised when first attempting to access the
+      database.
 
     .. py:method:: rekey(passphrase)
 
@@ -605,29 +607,30 @@ sqlcipher_ext API notes
 
         Change the passphrase for database.
 
-.. _PBKDF2: https://en.wikipedia.org/wiki/PBKDF2
 .. _passphrase strength: https://en.wikipedia.org/wiki/Password_strength
 
-Notes:
+.. note::
+    SQLCipher can be configured using a number of extension PRAGMAs. The list
+    of PRAGMAs and their descriptions can be found in the `SQLCipher documentation <https://www.zetetic.net/sqlcipher/sqlcipher-api/>`_.
 
-    * [Hopefully] there's no way to tell whether the passphrase is wrong
-      or the file is corrupt.
-      In both cases -- *the first time we try to access the database* -- a
-      :py:class:`DatabaseError` error is raised,
-      with the *exact* message: ``"file is encrypted or is not a database"``.
+    For example to specify the number of PBKDF2 iterations for the key
+    derivation (64K in SQLCipher 3.x, 256K in SQLCipher 4.x by default):
 
-      As mentioned above, this only happens when you *access* the database,
-      so if you need to know *right away* whether the passphrase was correct,
-      you can trigger this check by calling [e.g.]
-      :py:meth:`~Database.get_tables()` (see example below).
+    .. code-block:: python
 
-    * Most applications can expect failed attempts to open the database
-      (common case: prompting the user for ``passphrase``), so
-      the database can't be hardwired into the :py:class:`Meta` of
-      model classes. To defer initialization, pass `None` in to the
-      database.
+        # Use 1,000,000 iterations.
+        db = SqlCipherDatabase('my_app.db', pragmas={'kdf_iter': 1000000})
 
-Example:
+    To use a cipher page-size of 16KB and a cache-size of 10,000 pages:
+
+    .. code-block:: python
+
+        db = SqlCipherDatabase('my_app.db', passphrase='secret!!!', pragmas={
+            'cipher_page_size': 1024 * 16,
+            'cache_size': 10000})  # 10,000 16KB pages, or 160MB.
+
+
+Example of prompting the user for a passphrase:
 
 .. code-block:: python
 
@@ -682,7 +685,7 @@ currently:
 * :py:class:`JSONField` field type, for storing JSON data.
 * :py:class:`BinaryJSONField` field type for the ``jsonb`` JSON data type.
 * :py:class:`TSVectorField` field type, for storing full-text search data.
-* :py:class:`DateTimeTZ` field type, a timezone-aware datetime field.
+* :py:class:`DateTimeTZField` field type, a timezone-aware datetime field.
 
 In the future I would like to add support for more of postgresql's features.
 If there is a particular feature you would like to see added, please
@@ -1010,10 +1013,10 @@ changes:
 
 .. code-block:: python
 
-    def blog_search(query):
+    def blog_search(search_term):
         return Blog.select().where(
             (Blog.status == Blog.STATUS_PUBLISHED) &
-            Match(Blog.content, query))
+            Match(Blog.content, search_term))
 
 The :py:func:`Match` function will automatically convert the left-hand operand
 to a ``tsvector``, and the right-hand operand to a ``tsquery``. For better
@@ -1033,6 +1036,9 @@ dedicated column for storing ``tsvector`` data:
         content = TextField()
         search_content = TSVectorField()
 
+.. note::
+    :py:class:`TSVectorField`, will automatically be created with a GIN index.
+
 You will need to explicitly convert the incoming text data to ``tsvector`` when
 inserting or updating the ``search_content`` field:
 
@@ -1043,7 +1049,14 @@ inserting or updating the ``search_content`` field:
         content=content,
         search_content=fn.to_tsvector(content))
 
-.. note:: If you are using the :py:class:`TSVectorField`, it will automatically be created with a GIN index.
+To perform a full-text search, use :py:meth:`TSVectorField.match`:
+
+.. code-block:: python
+
+    terms = 'python & (sqlite | postgres)'
+    results = Blog.select().where(Blog.search_content.match(terms))
+
+For more information, see the `Postgres full-text search docs <https://www.postgresql.org/docs/current/textsearch.html>`_.
 
 
 postgres_ext API notes
@@ -1076,7 +1089,7 @@ postgres_ext API notes
     :param select_query: a :py:class:`SelectQuery` instance.
     :rtype generator:
 
-    Wrap the given select query in a transaction, and call it's
+    Wrap the given select query in a transaction, and call its
     :py:meth:`~SelectQuery.iterator` method to avoid caching row instances. In
     order for the server-side resources to be released, be sure to exhaust the
     generator (iterate over all the rows).
@@ -1503,6 +1516,19 @@ postgres_ext API notes
             APIResponse.select().where(
                 APIResponse.data.contained_by(big_doc))
 
+    .. py:method:: concat(data)
+
+        Concatentate two field data and the provided data. Note that this
+        operation does not merge or do a "deep concat".
+
+    .. py:method:: has_key(key)
+
+        Test whether the key exists at the top-level of the JSON object.
+
+    .. py:method:: remove(*keys)
+
+        Remove one or more keys from the top-level of the JSON object.
+
 
 .. py:function:: Match(field, query)
 
@@ -1514,10 +1540,10 @@ postgres_ext API notes
 
     .. code-block:: python
 
-        def blog_search(query):
+        def blog_search(search_term):
             return Blog.select().where(
                 (Blog.status == Blog.STATUS_PUBLISHED) &
-                Match(Blog.content, query))
+                Match(Blog.content, search_term))
 
 .. py:class:: TSVectorField
 
@@ -1546,6 +1572,24 @@ postgres_ext API notes
               content=content,
               search_content=fn.to_tsvector(content))  # Note `to_tsvector()`.
 
+    .. py:method:: match(query[, language=None[, plain=False]])
+
+        :param str query: the full-text search query.
+        :param str language: language name (optional).
+        :param bool plain: parse search query using plain (simple) parser.
+        :returns: an expression representing full-text search/match.
+
+        Example:
+
+        .. code-block:: python
+
+            # Perform a search using the "match" method.
+            terms = 'python & (sqlite | postgres)'
+            results = Blog.select().where(Blog.search_content.match(terms))
+
+
+.. include:: crdb.rst
+
 
 .. _mysql_ext:
 
@@ -1564,6 +1608,25 @@ Example usage:
 
     # MySQL database implementation that utilizes mysql-connector driver.
     db = MySQLConnectorDatabase('my_database', host='1.2.3.4', user='mysql')
+
+Additional MySQL-specific helpers:
+
+.. py:class:: JSONField()
+
+    Extends :py:class:`TextField` and implements transparent JSON encoding and
+    decoding in Python.
+
+.. py:function:: Match(columns, expr[, modifier=None])
+
+    :param columns: a single :py:class:`Field` or a tuple of multiple fields.
+    :param str expr: the full-text search expression.
+    :param str modifier: optional modifiers for the search, e.g. *'in boolean mode'*.
+
+    Helper class for constructing MySQL full-text search queries of the form:
+
+    .. code-block:: sql
+
+        MATCH (columns, ...) AGAINST (expr[ modifier])
 
 .. _dataset:
 
@@ -1591,13 +1654,33 @@ A minimal data-loading script might look like this:
     table.insert(name='Mickey', age=5, gender='male')
 
     huey = table.find_one(name='Huey')
-    print huey
+    print(huey)
     # {'age': 3, 'gender': None, 'id': 1, 'name': 'Huey'}
 
     for obj in table:
-        print obj
+        print(obj)
     # {'age': 3, 'gender': None, 'id': 1, 'name': 'Huey'}
     # {'age': 5, 'gender': 'male', 'id': 2, 'name': 'Mickey'}
+
+You can insert, update or delete using the dictionary APIs as well:
+
+.. code-block:: python
+
+    huey = table.find_one(name='Huey')
+    # {'age': 3, 'gender': None, 'id': 1, 'name': 'Huey'}
+
+    # Perform an update by supplying a partial record of changes.
+    table[1] = {'gender': 'male', 'age': 4}
+    print(table[1])
+    # {'age': 4, 'gender': 'male', 'id': 1, 'name': 'Huey'}
+
+    # Or insert a new record:
+    table[3] = {'name': 'Zaizee', 'age': 2}
+    print(table[3])
+    # {'age': 2, 'gender': None, 'id': 3, 'name': 'Zaizee'}
+
+    # Or delete a record:
+    del table[3]  # Remove the row we just added.
 
 You can export or import data using :py:meth:`~DataSet.freeze` and
 :py:meth:`~DataSet.thaw`:
@@ -1760,10 +1843,12 @@ you wish to export:
 API
 ^^^
 
-.. py:class:: DataSet(url)
+.. py:class:: DataSet(url, **kwargs)
 
     :param url: A database URL or a :py:class:`Database` instance. For
         details on using a URL, see :ref:`db_url` for examples.
+    :param kwargs: additional keyword arguments passed to
+        :py:meth:`Introspector.generate_models` when introspecting the db.
 
     The *DataSet* class provides a high-level API for working with relational
     databases.
@@ -1819,6 +1904,8 @@ API
         Close the connection to the underlying database.
 
 .. py:class:: Table(dataset, name, model_class)
+
+    :noindex:
 
     Provides a high-level API for working with rows in a given table.
 
@@ -2150,6 +2237,9 @@ dictionary.
     Table is created automatically (if it doesn't exist) when the ``KeyValue``
     is instantiated.
 
+    Uses efficient upsert implementation for setting and updating/overwriting
+    key/value pairs.
+
     Basic examples:
 
     .. code-block:: python
@@ -2161,7 +2251,7 @@ dictionary.
         # Set (or overwrite) the value for "k1".
         KV['k1'] = 'v1'
 
-        # Set (or update) multiple keys at once.
+        # Set (or update) multiple keys at once (uses an efficient upsert).
         KV.update(k2='v2', k3='v3')
 
         # Getting values works as you'd expect.
@@ -2321,11 +2411,6 @@ dictionary.
             >>> dict(KV)
             {'k1': 1, 'k2': -2, 'k3': 3, 'k4': 4}
 
-        .. attention::
-            Because Postgresql does not support INSERT + REPLACE, the
-            :py:meth:`KeyValue.update` method is not supported for Postgresql
-            databases (as it cannot be implemented efficiently).
-
     .. py:method:: get(expr[, default=None])
 
         :param expr: a single key or an expression.
@@ -2410,6 +2495,12 @@ helpers for serializing models to dictionaries and vice-versa.
         >>> model_to_dict(t2, recurse=False)
         {'id': 1, 'message': 'tweet-2', 'user': 1}
 
+    The implementation of ``model_to_dict`` is fairly complex, owing to the
+    various usages it attempts to support. If you have a special usage, I
+    strongly advise that you do **not** attempt to shoe-horn some crazy
+    combination of parameters into this function. Just write a simple function
+    that accomplishes exactly what you're attempting to do.
+
 .. py:function:: dict_to_model(model_class, data[, ignore_unknown=False])
 
     :param Model model_class: The model class to construct.
@@ -2456,6 +2547,20 @@ helpers for serializing models to dictionaries and vice-versa.
     :param bool ignore_unknown: Whether to allow unrecognized (non-field) attributes.
 
     Update a model instance with the given data dictionary.
+
+
+.. py:function:: resolve_multimodel_query(query[, key='_model_identifier'])
+
+    :param query: a compound select query.
+    :param str key: key to use for storing model identifier
+    :return: an iteratable cursor that yields the proper model instance for
+        each row selected in the compound select query.
+
+    Helper for resolving rows returned in a compound select query to the
+    correct model instance type. For example, if you have a union of two
+    different tables, this helper will resolve each row to the proper model
+    when iterating over the query results.
+
 
 .. _signals:
 
@@ -2869,6 +2974,15 @@ Making a field nullable or not nullable:
         migrator.add_not_null('story', 'modified_date'),
     )
 
+Altering a field's data-type:
+
+.. code-block:: python
+
+    # Change a VARCHAR(50) field to a TEXT field.
+    migrate(
+        migrator.alter_column_type('person', 'email', TextField())
+    )
+
 Renaming a table:
 
 .. code-block:: python
@@ -2916,6 +3030,17 @@ Adding or dropping table constraints:
 
     # Add a UNIQUE constraint on the first and last names.
     migrate(migrator.add_unique('person', 'first_name', 'last_name'))
+
+.. note::
+    Postgres users may need to set the search-path when using a non-standard
+    schema. This can be done as follows:
+
+    .. code-block:: python
+
+        new_field = TextField(default='', null=False)
+        migrator = PostgresqlMigrator(db)
+        migrate(migrator.set_search_path('my_schema_name'),
+                migrator.add_column('table', 'field_name', new_field))
 
 
 Migrations API
@@ -2978,6 +3103,19 @@ Migrations API
 
         :param str table: Name of table containing column.
         :param str column: Name of the column to make nullable.
+
+    .. py:method:: alter_column_type(table, column, field[, cast=None])
+
+        :param str table: Name of the table.
+        :param str column_name: Name of the column to modify.
+        :param Field field: :py:class:`Field` instance representing new
+            data type.
+        :param cast: (postgres-only) specify a cast expression if the
+            data-types are incompatible, e.g. ``column_name::int``. Can be
+            provided as either a string or a :py:class:`Cast` instance.
+
+        Alter the data-type of a column. This method should be used with care,
+        as using incompatible types may not be well-supported by your database.
 
     .. py:method:: rename_table(old_name, new_name)
 
@@ -3047,6 +3185,106 @@ Reflection
 The reflection module contains helpers for introspecting existing databases.
 This module is used internally by several other modules in the playhouse,
 including :ref:`dataset` and :ref:`pwiz`.
+
+.. py:function:: generate_models(database[, schema=None[, **options]])
+
+    :param Database database: database instance to introspect.
+    :param str schema: optional schema to introspect.
+    :param options: arbitrary options, see :py:meth:`Introspector.generate_models` for details.
+    :returns: a ``dict`` mapping table names to model classes.
+
+    Generate models for the tables in the given database. For an example of how
+    to use this function, see the section :ref:`interactive`.
+
+    Example:
+
+    .. code-block:: pycon
+
+        >>> from peewee import *
+        >>> from playhouse.reflection import generate_models
+        >>> db = PostgresqlDatabase('my_app')
+        >>> models = generate_models(db)
+        >>> list(models.keys())
+        ['account', 'customer', 'order', 'orderitem', 'product']
+
+        >>> globals().update(models)  # Inject models into namespace.
+        >>> for cust in customer.select():  # Query using generated model.
+        ...     print(cust.name)
+        ...
+
+        Huey Kitty
+        Mickey Dog
+
+.. py:function:: print_model(model)
+
+    :param Model model: model class to print
+    :returns: no return value
+
+    Print a user-friendly description of a model class, useful for debugging or
+    interactive use. Currently this prints the table name, and all fields along
+    with their data-types. The :ref:`interactive` section contains an example.
+
+    Example output:
+
+    .. code-block:: pycon
+
+        >>> from playhouse.reflection import print_model
+        >>> print_model(User)
+        user
+          id AUTO PK
+          email TEXT
+          name TEXT
+          dob DATE
+
+        index(es)
+          email UNIQUE
+
+        >>> print_model(Tweet)
+        tweet
+          id AUTO PK
+          user INT FK: User.id
+          title TEXT
+          content TEXT
+          timestamp DATETIME
+          is_published BOOL
+
+        index(es)
+          user_id
+          is_published, timestamp
+
+.. py:function:: print_table_sql(model)
+
+    :param Model model: model to print
+    :returns: no return value
+
+    Prints the SQL ``CREATE TABLE`` for the given model class, which may be
+    useful for debugging or interactive use. See the :ref:`interactive` section
+    for example usage. Note that indexes and constraints are not included in
+    the output of this function.
+
+    Example output:
+
+    .. code-block:: pycon
+
+        >>> from playhouse.reflection import print_table_sql
+        >>> print_table_sql(User)
+        CREATE TABLE IF NOT EXISTS "user" (
+          "id" INTEGER NOT NULL PRIMARY KEY,
+          "email" TEXT NOT NULL,
+          "name" TEXT NOT NULL,
+          "dob" DATE NOT NULL
+        )
+
+        >>> print_table_sql(Tweet)
+        CREATE TABLE IF NOT EXISTS "tweet" (
+          "id" INTEGER NOT NULL PRIMARY KEY,
+          "user_id" INTEGER NOT NULL,
+          "title" TEXT NOT NULL,
+          "content" TEXT NOT NULL,
+          "timestamp" DATETIME NOT NULL,
+          "is_published" INTEGER NOT NULL,
+          FOREIGN KEY ("user_id") REFERENCES "user" ("id")
+        )
 
 .. py:class:: Introspector(metadata[, schema=None])
 
@@ -3179,7 +3417,7 @@ connections are recycled, as well as an upper bound on the number of open
 connections.
 
 In a multi-threaded application, up to `max_connections` will be opened. Each
-thread (or, if using gevent, greenlet) will have it's own connection.
+thread (or, if using gevent, greenlet) will have its own connection.
 
 In a single-threaded application, only one connection will be created. It will
 be continually recycled until either it exceeds the stale timeout or is closed
@@ -3343,7 +3581,7 @@ Database Wrapper
 ^^^^^^^^^^^^^^^^
 
 The :py:class:`FlaskDB` class is a wrapper for configuring and referencing a
-Peewee database from within a Flask application. Don't let it's name fool you:
+Peewee database from within a Flask application. Don't let its name fool you:
 it is **not the same thing as a peewee database**. ``FlaskDB`` is designed to
 remove the following boilerplate from your flask app:
 
@@ -3439,7 +3677,7 @@ Using a peewee :py:class:`Database` object:
 Database with Application Factory
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-If you prefer to use the `application factory pattern <http://flask.pocoo.org/docs/0.10/patterns/appfactories/>`_,
+If you prefer to use the `application factory pattern <https://flask.palletsprojects.com/en/1.1.x/patterns/appfactories/>`_,
 the :py:class:`FlaskDB` class implements an ``init_app()`` method.
 
 Using as a factory:

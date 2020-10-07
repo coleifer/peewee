@@ -5,6 +5,7 @@ import re
 from peewee import *
 from playhouse.reflection import *
 
+from .base import IS_CRDB
 from .base import IS_SQLITE_OLD
 from .base import ModelTestCase
 from .base import TestModel
@@ -175,9 +176,28 @@ class TestReflection(BaseReflectionTestCase):
             ))
 
     def test_make_column_name(self):
+        # Tests for is_foreign_key=False.
         tests = (
             ('Column', 'column'),
-            ('Foo_iD', 'foo'),
+            ('Foo_id', 'foo_id'),
+            ('foo_id', 'foo_id'),
+            ('foo_id_id', 'foo_id_id'),
+            ('foo', 'foo'),
+            ('_id', '_id'),
+            ('a123', 'a123'),
+            ('and', 'and_'),
+            ('Class', 'class_'),
+            ('Class_ID', 'class_id'),
+            ('camelCase', 'camel_case'),
+            ('ABCdefGhi', 'ab_cdef_ghi'),
+        )
+        for col_name, expected in tests:
+            self.assertEqual(
+                self.introspector.make_column_name(col_name), expected)
+
+        # Tests for is_foreign_key=True.
+        tests = (
+            ('Foo_id', 'foo'),
             ('foo_id', 'foo'),
             ('foo_id_id', 'foo_id'),
             ('foo', 'foo'),
@@ -186,10 +206,12 @@ class TestReflection(BaseReflectionTestCase):
             ('and', 'and_'),
             ('Class', 'class_'),
             ('Class_ID', 'class_'),
+            ('camelCase', 'camel_case'),
+            ('ABCdefGhi', 'ab_cdef_ghi'),
         )
         for col_name, expected in tests:
             self.assertEqual(
-                self.introspector.make_column_name(col_name), expected)
+                self.introspector.make_column_name(col_name, True), expected)
 
     def test_make_model_name(self):
         tests = (
@@ -539,6 +561,7 @@ class TestReflectViews(BaseReflectionTestCase):
         self.assertTrue(isinstance(NotesPublic.timestamp, DateTimeField))
 
     @skip_if(IS_SQLITE_OLD)
+    @skip_if(IS_CRDB, 'crdb does not respect order by in view def')
     def test_introspect_view_integration(self):
         for i, (ct, st) in enumerate([('n1', 1), ('n2', 2), ('n3', 1)]):
             Note.create(content=ct, status=st,
@@ -549,3 +572,30 @@ class TestReflectViews(BaseReflectionTestCase):
         self.assertEqual([(np.content, np.timestamp) for np in NP.select()], [
             ('n3', datetime.datetime(2018, 1, 3)),
             ('n1', datetime.datetime(2018, 1, 1))])
+
+
+class Event(TestModel):
+    key = TextField()
+    timestamp = DateTimeField(index=True)
+    metadata = TextField(default='')
+
+
+class TestInteractiveHelpers(ModelTestCase):
+    requires = [Category, Event]
+
+    def test_generate_models(self):
+        M = generate_models(self.database)
+        self.assertTrue('category' in M)
+        self.assertTrue('event' in M)
+
+        def assertFields(m, expected):
+            actual = [(f.name, f.field_type) for f in m._meta.sorted_fields]
+            self.assertEqual(actual, expected)
+
+        assertFields(M['category'], [('id', 'AUTO'), ('name', 'VARCHAR'),
+                                     ('parent', 'INT')])
+        assertFields(M['event'], [
+            ('id', 'AUTO'),
+            ('key', 'TEXT'),
+            ('timestamp', 'DATETIME'),
+            ('metadata', 'TEXT')])

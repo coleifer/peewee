@@ -11,21 +11,17 @@ from .base_models import User
 class User(TestModel):
     username = TextField(unique=True)
 
-
 class Note(TestModel):
     text = TextField()
     users = ManyToManyField(User)
-
 
 NoteUserThrough = Note.users.get_through_model()
 
 AltThroughDeferred = DeferredThroughModel()
 
-
 class AltNote(TestModel):
     text = TextField()
     users = ManyToManyField(User, through_model=AltThroughDeferred)
-
 
 class AltThroughModel(TestModel):
     user = ForeignKeyField(User, backref='_xx_rel')
@@ -34,8 +30,180 @@ class AltThroughModel(TestModel):
     class Meta:
         primary_key = CompositeKey('user', 'note')
 
-
 AltThroughDeferred.set_model(AltThroughModel)
+
+class Student(TestModel):
+    name = TextField()
+
+CourseStudentDeferred = DeferredThroughModel()
+
+class Course(TestModel):
+    name = TextField()
+    students = ManyToManyField(Student, backref='+')
+    students2 = ManyToManyField(Student, through_model=CourseStudentDeferred)
+
+CourseStudent = Course.students.get_through_model()
+
+class CourseStudent2(TestModel):
+    course = ForeignKeyField(Course, backref='+')
+    student = ForeignKeyField(Student, backref='+')
+
+CourseStudentDeferred.set_model(CourseStudent2)
+
+
+class Color(TestModel):
+    name = TextField(unique=True)
+
+LogoColorDeferred = DeferredThroughModel()
+
+class Logo(TestModel):
+    name = TextField(unique=True)
+    colors = ManyToManyField(Color, through_model=LogoColorDeferred)
+
+class LogoColor(TestModel):
+    logo = ForeignKeyField(Logo, field=Logo.name)
+    color = ForeignKeyField(Color, field=Color.name)  # FK to non-PK column.
+
+LogoColorDeferred.set_model(LogoColor)
+
+
+class TestManyToManyFKtoNonPK(ModelTestCase):
+    database = get_in_memory_db()
+    requires = [Color, Logo, LogoColor]
+
+    def test_manytomany_fk_to_non_pk(self):
+        red = Color.create(name='red')
+        green = Color.create(name='green')
+        blue = Color.create(name='blue')
+        lrg = Logo.create(name='logo-rg')
+        lrb = Logo.create(name='logo-rb')
+        lrgb = Logo.create(name='logo-rgb')
+        lrg.colors.add([red, green])
+        lrb.colors.add([red, blue])
+        lrgb.colors.add([red, green, blue])
+
+        def assertColors(logo, expected):
+            colors = [c.name for c in logo.colors.order_by(Color.name)]
+            self.assertEqual(colors, expected)
+
+        assertColors(lrg, ['green', 'red'])
+        assertColors(lrb, ['blue', 'red'])
+        assertColors(lrgb, ['blue', 'green', 'red'])
+
+        def assertLogos(color, expected):
+            logos = [l.name for l in color.logos.order_by(Logo.name)]
+            self.assertEqual(logos, expected)
+
+        assertLogos(red, ['logo-rb', 'logo-rg', 'logo-rgb'])
+        assertLogos(green, ['logo-rg', 'logo-rgb'])
+        assertLogos(blue, ['logo-rb', 'logo-rgb'])
+
+        # Verify we can delete data as well.
+        lrg.colors.remove(red)
+        self.assertEqual([c.name for c in lrg.colors], ['green'])
+
+        blue.logos.remove(lrb)
+        self.assertEqual([c.name for c in lrb.colors], ['red'])
+
+        # Verify we can insert using a SELECT query.
+        lrg.colors.add(Color.select().where(Color.name != 'blue'), True)
+        assertColors(lrg, ['green', 'red'])
+
+        lrb.colors.add(Color.select().where(Color.name == 'blue'))
+        assertColors(lrb, ['blue', 'red'])
+
+        # Verify we can insert logos using a SELECT query.
+        black = Color.create(name='black')
+        black.logos.add(Logo.select().where(Logo.name != 'logo-rgb'))
+        assertLogos(black, ['logo-rb', 'logo-rg'])
+        assertColors(lrb, ['black', 'blue', 'red'])
+        assertColors(lrg, ['black', 'green', 'red'])
+        assertColors(lrgb, ['blue', 'green', 'red'])
+
+        # Verify we can delete using a SELECT query.
+        lrg.colors.remove(Color.select().where(Color.name == 'red'))
+        assertColors(lrg, ['black', 'green'])
+
+        black.logos.remove(Logo.select().where(Logo.name == 'logo-rg'))
+        assertLogos(black, ['logo-rb'])
+
+        # Verify we can clear.
+        lrg.colors.clear()
+        assertColors(lrg, [])
+        assertColors(lrb, ['black', 'blue', 'red'])  # Not affected.
+
+        black.logos.clear()
+        assertLogos(black, [])
+        assertLogos(red, ['logo-rb', 'logo-rgb'])
+
+
+class TestManyToManyBackrefBehavior(ModelTestCase):
+    database = get_in_memory_db()
+    requires = [Student, Course, CourseStudent, CourseStudent2]
+
+    def setUp(self):
+        super(TestManyToManyBackrefBehavior, self).setUp()
+        math = Course.create(name='math')
+        engl = Course.create(name='engl')
+        huey, mickey, zaizee = [Student.create(name=name)
+                                for name in ('huey', 'mickey', 'zaizee')]
+        # Set up relationships.
+        math.students.add([huey, zaizee])
+        engl.students.add([mickey])
+        math.students2.add([mickey])
+        engl.students2.add([huey, zaizee])
+
+    def test_manytomanyfield_disabled_backref(self):
+        math = Course.get(name='math')
+        query = math.students.order_by(Student.name)
+        self.assertEqual([s.name for s in query], ['huey', 'zaizee'])
+
+        huey = Student.get(name='huey')
+        math.students.remove(huey)
+        self.assertEqual([s.name for s in math.students], ['zaizee'])
+
+        # The backref is via the CourseStudent2 through-model.
+        self.assertEqual([c.name for c in huey.courses], ['engl'])
+
+    def test_through_model_disabled_backrefs(self):
+        # Here we're testing the case where the many-to-many field does not
+        # explicitly disable back-references, but the foreign-keys on the
+        # through model have disabled back-references.
+        engl = Course.get(name='engl')
+        query = engl.students2.order_by(Student.name)
+        self.assertEqual([s.name for s in query], ['huey', 'zaizee'])
+
+        zaizee = Student.get(Student.name == 'zaizee')
+        engl.students2.remove(zaizee)
+        self.assertEqual([s.name for s in engl.students2], ['huey'])
+
+        math = Course.get(name='math')
+        self.assertEqual([s.name for s in math.students2], ['mickey'])
+
+
+class TestManyToManyInheritance(ModelTestCase):
+    def test_manytomany_inheritance(self):
+        class BaseModel(TestModel):
+            class Meta:
+                database = self.database
+        class User(BaseModel):
+            username = TextField()
+        class Project(BaseModel):
+            name = TextField()
+            users = ManyToManyField(User, backref='projects')
+
+        def subclass_project():
+            class VProject(Project):
+                pass
+
+        # We cannot subclass Project, because the many-to-many field "users"
+        # will be inherited, but the through-model does not contain a
+        # foreign-key to VProject. The through-model in this case is
+        # ProjectUsers, which has foreign-keys to project and user.
+        self.assertRaises(ValueError, subclass_project)
+        PThrough = Project.users.through_model
+        self.assertTrue(PThrough.project.rel_model is Project)
+        self.assertTrue(PThrough.user.rel_model is User)
 
 
 class TestManyToMany(ModelTestCase):

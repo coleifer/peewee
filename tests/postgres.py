@@ -1,5 +1,6 @@
 #coding:utf-8
 import datetime
+import functools
 import uuid
 from decimal import Decimal as Dc
 from types import MethodType
@@ -8,12 +9,17 @@ from peewee import *
 from playhouse.postgres_ext import *
 
 from .base import BaseTestCase
+from .base import DatabaseTestCase
 from .base import ModelTestCase
 from .base import TestModel
 from .base import db_loader
 from .base import requires_models
 from .base import skip_unless
 from .base_models import Register
+from .base_models import Tweet
+from .base_models import User
+from .postgres_helpers import BaseBinaryJsonFieldTestCase
+from .postgres_helpers import BaseJsonFieldTestCase
 
 
 db = db_loader('postgres', db_class=PostgresqlExtDatabase)
@@ -57,14 +63,16 @@ try:
 
     class JsonModelNull(TestModel):
         data = JSONField(null=True)
-except:
-    JsonModel = JsonModelNull = None
 
-try:
     class BJson(TestModel):
         data = BinaryJSONField()
+
+    class JData(TestModel):
+        d1 = BinaryJSONField()
+        d2 = BinaryJSONField()
 except:
-    BJson = None
+    BJson = JData = None
+    JsonModel = JsonModelNull = None
 
 
 class Normal(TestModel):
@@ -85,13 +93,51 @@ class TestTZField(ModelTestCase):
     requires = [TZModel]
 
     def test_tz_field(self):
-        self.database.execute_sql('set time zone "us/central";')
+        self.database.set_time_zone('us/eastern')
 
-        dt = datetime.datetime.now()
+        # Our naive datetime is treated as if it were in US/Eastern.
+        dt = datetime.datetime(2019, 1, 1, 12)
         tz = TZModel.create(dt=dt)
         self.assertTrue(tz.dt.tzinfo is None)
 
-        tz = TZModel.get(TZModel.id == tz.id)
+        # When we retrieve the row, psycopg2 will attach the appropriate tzinfo
+        # data. The value is returned as an "aware" datetime in US/Eastern.
+        tz_db = TZModel[tz.id]
+        self.assertTrue(tz_db.dt.tzinfo is not None)
+        self.assertEqual(tz_db.dt.timetuple()[:4], (2019, 1, 1, 12))
+        self.assertEqual(tz_db.dt.utctimetuple()[:4], (2019, 1, 1, 17))
+
+        class _UTC(datetime.tzinfo):
+            def utcoffset(self, dt): return datetime.timedelta(0)
+            def tzname(self, dt): return "UTC"
+            def dst(self, dt): return datetime.timedelta(0)
+        UTC = _UTC()
+
+        # We can explicitly insert a row with a different timezone, however.
+        # When we read the row back, it is returned in US/Eastern.
+        dt2 = datetime.datetime(2019, 1, 1, 12, tzinfo=UTC)
+        tz2 = TZModel.create(dt=dt2)
+        tz2_db = TZModel[tz2.id]
+        self.assertEqual(tz2_db.dt.timetuple()[:4], (2019, 1, 1, 7))
+        self.assertEqual(tz2_db.dt.utctimetuple()[:4], (2019, 1, 1, 12))
+
+        # Querying using naive datetime, treated as localtime (US/Eastern).
+        tzq1 = TZModel.get(TZModel.dt == dt)
+        self.assertEqual(tzq1.id, tz.id)
+
+        # Querying using aware datetime, tzinfo is respected.
+        tzq2 = TZModel.get(TZModel.dt == dt2)
+        self.assertEqual(tzq2.id, tz2.id)
+
+        # Change the connection timezone?
+        self.database.set_time_zone('us/central')
+        tz_db = TZModel[tz.id]
+        self.assertEqual(tz_db.dt.timetuple()[:4], (2019, 1, 1, 11))
+        self.assertEqual(tz_db.dt.utctimetuple()[:4], (2019, 1, 1, 17))
+
+        tz2_db = TZModel[tz2.id]
+        self.assertEqual(tz2_db.dt.timetuple()[:4], (2019, 1, 1, 6))
+        self.assertEqual(tz2_db.dt.utctimetuple()[:4], (2019, 1, 1, 12))
 
 
 class TestHStoreField(ModelTestCase):
@@ -241,6 +287,37 @@ class TestArrayField(ModelTestCase):
             tags=['alpha', 'beta', 'gamma', 'delta'],
             ints=[[1, 2], [3, 4], [5, 6]])
 
+    def test_index_expression(self):
+        data = (
+            (['a', 'b', 'c'], []),
+            (['b', 'c', 'd', 'e'], []))
+        am_ids = []
+        for tags, ints in data:
+            am = ArrayModel.create(tags=tags, ints=ints)
+            am_ids.append(am.id)
+
+        last_tag = fn.array_upper(ArrayModel.tags, 1)
+        query = ArrayModel.select(ArrayModel.tags[last_tag]).tuples()
+        self.assertEqual(sorted([t for t, in query]), ['c', 'e'])
+
+        q = ArrayModel.select().where(ArrayModel.tags[last_tag] < 'd')
+        self.assertEqual([a.id for a in q], [am_ids[0]])
+
+        q = ArrayModel.select().where(ArrayModel.tags[last_tag] > 'd')
+        self.assertEqual([a.id for a in q], [am_ids[1]])
+
+    def test_hashable_objectslice(self):
+        ArrayModel.create(tags=[], ints=[[0, 1], [2, 3]])
+        ArrayModel.create(tags=[], ints=[[4, 5], [6, 7]])
+        n = (ArrayModel
+             .update({ArrayModel.ints[0][0]: ArrayModel.ints[0][0] + 1})
+             .execute())
+        self.assertEqual(n, 2)
+
+        am1, am2 = ArrayModel.select().order_by(ArrayModel.id)
+        self.assertEqual(am1.ints, [[1, 1], [2, 3]])
+        self.assertEqual(am2.ints, [[5, 5], [6, 7]])
+
     def test_array_get_set(self):
         am = self.create_sample()
         am_db = ArrayModel.get(ArrayModel.id == am.id)
@@ -334,14 +411,15 @@ class TestArrayFieldConvertValues(ModelTestCase):
     database = db
     requires = [ArrayTSModel]
 
+    def dt(self, day, hour=0, minute=0, second=0):
+        return datetime.datetime(2018, 1, day, hour, minute, second)
+
     def test_value_conversion(self):
-        def dt(day, hour=0, minute=0, second=0):
-            return datetime.datetime(2018, 1, day, hour, minute, second)
 
         data = {
-            'k1': [dt(1), dt(2), dt(3)],
+            'k1': [self.dt(1), self.dt(2), self.dt(3)],
             'k2': [],
-            'k3': [dt(4, 5, 6, 7), dt(10, 11, 12, 13)],
+            'k3': [self.dt(4, 5, 6, 7), self.dt(10, 11, 12, 13)],
         }
         for key in sorted(data):
             ArrayTSModel.create(key=key, timestamps=data[key])
@@ -351,14 +429,37 @@ class TestArrayFieldConvertValues(ModelTestCase):
             self.assertEqual(am.timestamps, data[key])
 
         # Perform lookup using timestamp values.
-        ts = ArrayTSModel.get(ArrayTSModel.timestamps.contains(dt(3)))
+        ts = ArrayTSModel.get(ArrayTSModel.timestamps.contains(self.dt(3)))
         self.assertEqual(ts.key, 'k1')
 
-        ts = ArrayTSModel.get(ArrayTSModel.timestamps.contains(dt(4, 5, 6, 7)))
+        ts = ArrayTSModel.get(
+            ArrayTSModel.timestamps.contains(self.dt(4, 5, 6, 7)))
         self.assertEqual(ts.key, 'k3')
 
         self.assertRaises(ArrayTSModel.DoesNotExist, ArrayTSModel.get,
-                          ArrayTSModel.timestamps.contains(dt(4, 5, 6)))
+                          ArrayTSModel.timestamps.contains(self.dt(4, 5, 6)))
+
+    def test_get_with_array_values(self):
+        a1 = ArrayTSModel.create(key='k1', timestamps=[self.dt(1)])
+        a2 = ArrayTSModel.create(key='k2', timestamps=[self.dt(2), self.dt(3)])
+
+        query = (ArrayTSModel
+                 .select()
+                 .where(ArrayTSModel.timestamps == [self.dt(1)]))
+        a1_db = query.get()
+        self.assertEqual(a1_db.id, a1.id)
+
+        query = (ArrayTSModel
+                 .select()
+                 .where(ArrayTSModel.timestamps == [self.dt(2), self.dt(3)]))
+        a2_db = query.get()
+        self.assertEqual(a2_db.id, a2.id)
+
+        a1_db = ArrayTSModel.get(timestamps=[self.dt(1)])
+        self.assertEqual(a1_db.id, a1.id)
+
+        a2_db = ArrayTSModel.get(timestamps=[self.dt(2), self.dt(3)])
+        self.assertEqual(a2_db.id, a2.id)
 
 
 class TestArrayUUIDField(ModelTestCase):
@@ -437,156 +538,25 @@ class TestTSVectorField(ModelTestCase):
         self.assertMessages(M('god | things'), [1, 2, 4])
         self.assertMessages(M('god & things'), [])
 
-
-class BaseJsonFieldTestCase(object):
-    M = None  # Subclasses must define this.
-
-    def test_json_field(self):
-        data = {'k1': ['a1', 'a2'], 'k2': {'k3': 'v3'}}
-        j = self.M.create(data=data)
-        j_db = self.M.get(j._pk_expr())
-        self.assertEqual(j_db.data, data)
-
-    def test_joining_on_json_key(self):
-        values = [
-            {'foo': 'bar', 'baze': {'nugget': 'alpha'}},
-            {'foo': 'bar', 'baze': {'nugget': 'beta'}},
-            {'herp': 'derp', 'baze': {'nugget': 'epsilon'}},
-            {'herp': 'derp', 'bar': {'nuggie': 'alpha'}},
-        ]
-        for data in values:
-            self.M.create(data=data)
-
-        for value in ['alpha', 'beta', 'gamma', 'delta']:
-            Normal.create(data=value)
-
-        query = (self.M
-                 .select()
-                 .join(Normal, on=(
-                     Normal.data == self.M.data['baze']['nugget']))
-                 .order_by(self.M.id))
-        results = [jm.data for jm in query]
-        self.assertEqual(results, [
-            {'foo': 'bar', 'baze': {'nugget': 'alpha'}},
-            {'foo': 'bar', 'baze': {'nugget': 'beta'}},
-        ])
-
-    def test_json_lookup_methods(self):
-        data = {
-            'gp1': {
-                'p1': {'c1': 'foo'},
-                'p2': {'c2': 'bar'}},
-            'gp2': {}}
-        j = self.M.create(data=data)
-
-        def assertLookup(lookup, expected):
-            query = (self.M
-                     .select(lookup)
-                     .where(j._pk_expr())
-                     .dicts())
-            self.assertEqual(query.get(), expected)
-
-        expr = self.M.data['gp1']['p1']
-        assertLookup(expr.alias('p1'), {'p1': '{"c1": "foo"}'})
-        assertLookup(expr.as_json().alias('p2'), {'p2': {'c1': 'foo'}})
-
-        expr = self.M.data['gp1']['p1']['c1']
-        assertLookup(expr.alias('c1'), {'c1': 'foo'})
-        assertLookup(expr.as_json().alias('c2'), {'c2': 'foo'})
-
-        j.data = [
-            {'i1': ['foo', 'bar', 'baz']},
-            ['nugget', 'mickey']]
-        j.save()
-
-        expr = self.M.data[0]['i1']
-        assertLookup(expr.alias('i1'), {'i1': '["foo", "bar", "baz"]'})
-        assertLookup(expr.as_json().alias('i2'), {'i2': ['foo', 'bar', 'baz']})
-
-        expr = self.M.data[1][1]
-        assertLookup(expr.alias('l1'), {'l1': 'mickey'})
-        assertLookup(expr.as_json().alias('l2'), {'l2': 'mickey'})
-
-    def test_json_cast(self):
-        self.M.create(data={'foo': {'bar': 3}})
-        self.M.create(data={'foo': {'bar': 5}})
-        query = (self.M
-                 .select(Cast(self.M.data['foo']['bar'], 'float') * 1.5)
-                 .order_by(self.M.id)
-                 .tuples())
-        self.assertEqual(query[:], [(4.5,), (7.5,)])
-
-    def test_json_path(self):
-        data = {
-            'foo': {
-                'baz': {
-                    'bar': ['i1', 'i2', 'i3'],
-                    'baze': ['j1', 'j2'],
-                }}}
-        j = self.M.create(data=data)
-
-        def assertPath(path, expected):
-            query = (self.M
-                     .select(path)
-                     .where(j._pk_expr())
-                     .dicts())
-            self.assertEqual(query.get(), expected)
-
-        expr = self.M.data.path('foo', 'baz', 'bar')
-        assertPath(expr.alias('p1'), {'p1': '["i1", "i2", "i3"]'})
-        assertPath(expr.as_json().alias('p2'), {'p2': ['i1', 'i2', 'i3']})
-
-        expr = self.M.data.path('foo', 'baz', 'baze', 1)
-        assertPath(expr.alias('p1'), {'p1': 'j2'})
-        assertPath(expr.as_json().alias('p2'), {'p2': 'j2'})
-
-    def test_json_field_sql(self):
-        j = (self.M
-             .select()
-             .where(self.M.data == {'foo': 'bar'}))
-        table = self.M._meta.table_name
-        self.assertSQL(j, (
-            'SELECT "t1"."id", "t1"."data" '
-            'FROM "%s" AS "t1" WHERE ("t1"."data" = ?)') % table)
-
-        j = (self.M
-             .select()
-             .where(self.M.data['foo'] == 'bar'))
-        self.assertSQL(j, (
-            'SELECT "t1"."id", "t1"."data" '
-            'FROM "%s" AS "t1" WHERE ("t1"."data"->>? = ?)') % table)
-
-    def assertItems(self, where, *items):
-        query = (self.M
-                 .select()
-                 .where(where)
-                 .order_by(self.M.id))
-        self.assertEqual(
-            [item.id for item in query],
-            [item.id for item in items])
-
-    def test_lookup(self):
-        t1 = self.M.create(data={'k1': 'v1', 'k2': {'k3': 'v3'}})
-        t2 = self.M.create(data={'k1': 'x1', 'k2': {'k3': 'x3'}})
-        t3 = self.M.create(data={'k1': 'v1', 'j2': {'j3': 'v3'}})
-        self.assertItems((self.M.data['k2']['k3'] == 'v3'), t1)
-        self.assertItems((self.M.data['k1'] == 'v1'), t1, t3)
-
-        # Valid key, no matching value.
-        self.assertItems((self.M.data['k2'] == 'v1'))
-
-        # Non-existent key.
-        self.assertItems((self.M.data['not-here'] == 'v1'))
-
-        # Non-existent nested key.
-        self.assertItems((self.M.data['not-here']['xxx'] == 'v1'))
-
-        self.assertItems((self.M.data['k2']['xxx'] == 'v1'))
+        # Using the plain parser we cannot express "OR", but individual term
+        # match works like we expect and multi-term is AND-ed together.
+        self.assertMessages(M('god | things', plain=True), [])
+        self.assertMessages(M('god', plain=True), [1])
+        self.assertMessages(M('thing', plain=True), [2, 4])
+        self.assertMessages(M('faith things', plain=True), [2, 4])
 
 
 def pg93():
     with db:
         return db.connection().server_version >= 90300
+
+def pg10():
+    with db:
+        return db.connection().server_version >= 100000
+
+def pg12():
+    with db:
+        return db.connection().server_version >= 120000
 
 JSON_SUPPORT = (JsonModel is not None) and pg93()
 
@@ -594,6 +564,7 @@ JSON_SUPPORT = (JsonModel is not None) and pg93()
 @skip_unless(JSON_SUPPORT, 'json support unavailable')
 class TestJsonField(BaseJsonFieldTestCase, ModelTestCase):
     M = JsonModel
+    N = Normal
     database = db
     requires = [JsonModel, Normal, JsonModelNull]
 
@@ -612,123 +583,31 @@ class TestJsonField(BaseJsonFieldTestCase, ModelTestCase):
 
 
 @skip_unless(JSON_SUPPORT, 'json support unavailable')
-class TestBinaryJsonField(BaseJsonFieldTestCase, ModelTestCase):
+class TestBinaryJsonField(BaseBinaryJsonFieldTestCase, ModelTestCase):
     M = BJson
+    N = Normal
     database = db
     requires = [BJson, Normal]
 
-    def _create_test_data(self):
-        data = [
-            {'k1': 'v1', 'k2': 'v2', 'k3': {'k4': ['i1', 'i2'], 'k5': {}}},
-            ['a1', 'a2', {'a3': 'a4'}],
-            {'a1': 'x1', 'a2': 'x2', 'k4': ['i1', 'i2']},
-            list(range(10)),
-            list(range(5, 15)),
-            ['k4', 'k1']]
+    @skip_unless(pg10(), 'jsonb remove support requires pg >= 10')
+    def test_remove_data(self):
+        BJson.delete().execute()  # Clear out db.
+        BJson.create(data={
+            'k1': 'v1',
+            'k2': 'v2',
+            'k3': {'x1': 'z1', 'x2': 'z2'},
+            'k4': [0, 1, 2]})
 
-        self._bjson_objects = []
-        for json_value in data:
-            self._bjson_objects.append(BJson.create(data=json_value))
+        def assertData(exp_list, expected_data):
+            query = BJson.select(BJson.data.remove(*exp_list)).tuples()
+            data = query[:][0][0]
+            self.assertEqual(data, expected_data)
 
-    def assertObjects(self, expr, *indexes):
-        query = (BJson
-                 .select()
-                 .where(expr)
-                 .order_by(BJson.id))
-        self.assertEqual(
-            [bjson.data for bjson in query],
-            [self._bjson_objects[index].data for index in indexes])
-
-    def test_contained_by(self):
-        self._create_test_data()
-
-        item1 = ['a1', 'a2', {'a3': 'a4'}, 'a5']
-        self.assertObjects(BJson.data.contained_by(item1), 1)
-
-        item2 = {'a1': 'x1', 'a2': 'x2', 'k4': ['i0', 'i1', 'i2'], 'x': 'y'}
-        self.assertObjects(BJson.data.contained_by(item2), 2)
-
-    def test_equality(self):
-        data = {'k1': ['a1', 'a2'], 'k2': {'k3': 'v3'}}
-        j = BJson.create(data=data)
-        j_db = BJson.get(BJson.data == data)
-        self.assertEqual(j.id, j_db.id)
-
-    def test_subscript_contains(self):
-        self._create_test_data()
         D = BJson.data
-
-        # 'k3' is mapped to another dictioary {'k4': [...]}. Therefore,
-        # 'k3' is said to contain 'k4', but *not* ['k4'] or ['k4', 'k5'].
-        self.assertObjects(D['k3'].contains('k4'), 0)
-        self.assertObjects(D['k3'].contains(['k4']))
-        self.assertObjects(D['k3'].contains(['k4', 'k5']))
-
-        # We can check for the keys this way, though.
-        self.assertObjects(D['k3'].contains_all('k4', 'k5'), 0)
-        self.assertObjects(D['k3'].contains_any('k4', 'kx'), 0)
-
-        # However, in test object index=2, 'k4' can be said to contain
-        # both 'i1' and ['i1'].
-        self.assertObjects(D['k4'].contains('i1'), 2)
-        self.assertObjects(D['k4'].contains(['i1']), 2)
-
-        # Interestingly, we can also specify the list of contained values
-        # out-of-order.
-        self.assertObjects(D['k4'].contains(['i2', 'i1']), 2)
-
-        # We can test whether an object contains another JSON object fragment.
-        self.assertObjects(D['k3'].contains({'k4': ['i1']}), 0)
-        self.assertObjects(D['k3'].contains({'k4': ['i1', 'i2']}), 0)
-
-        # Check multiple levels of nesting / containment.
-        self.assertObjects(D['k3']['k4'].contains('i2'), 0)
-        self.assertObjects(D['k3']['k4'].contains_all('i1', 'i2'), 0)
-        self.assertObjects(D['k3']['k4'].contains_all('i0', 'i2'))
-        self.assertObjects(D['k4'].contains_all('i1', 'i2'), 2)
-
-        # Check array indexes.
-        self.assertObjects(D[2].contains('a3'), 1)
-        self.assertObjects(D[0].contains('a1'), 1)
-        self.assertObjects(D[0].contains('k1'))
-
-    def test_contains(self):
-        self._create_test_data()
-        D = BJson.data
-
-        # Test for keys. 'k4' is both an object key and an array element.
-        self.assertObjects(D.contains('k4'), 2, 5)
-        self.assertObjects(D.contains('a1'), 1, 2)
-        self.assertObjects(D.contains('k3'), 0)
-
-        # We can test for multiple top-level keys/indexes.
-        self.assertObjects(D.contains_all('a1', 'a2'), 1, 2)
-
-        # If we test for both with .contains(), though, it is treated as
-        # an object match.
-        self.assertObjects(D.contains(['a1', 'a2']), 1)
-
-        # Check numbers.
-        self.assertObjects(D.contains([2, 5, 6, 7, 8]), 3)
-        self.assertObjects(D.contains([5, 6, 7, 8, 9]), 3, 4)
-
-        # We can check for partial objects.
-        self.assertObjects(D.contains({'a1': 'x1'}), 2)
-        self.assertObjects(D.contains({'k3': {'k4': []}}), 0)
-        self.assertObjects(D.contains([{'a3': 'a4'}]), 1)
-
-        # Check for simple keys.
-        self.assertObjects(D.contains('a1'), 1, 2)
-        self.assertObjects(D.contains('k3'), 0)
-
-        # Contains any.
-        self.assertObjects(D.contains_any('a1', 'k1'), 0, 1, 2, 5)
-        self.assertObjects(D.contains_any('k4', 'xx', 'yy', '2'), 2, 5)
-        self.assertObjects(D.contains_any('i1', 'i2', 'a3'))
-
-        # Contains all.
-        self.assertObjects(D.contains_all('k1', 'k2', 'k3'), 0)
-        self.assertObjects(D.contains_all('k1', 'k2', 'k3', 'k4'))
+        assertData(['k3'], {'k1': 'v1', 'k2': 'v2', 'k4': [0, 1, 2]})
+        assertData(['k1', 'k3'], {'k2': 'v2', 'k4': [0, 1, 2]})
+        assertData(['k1', 'kx', 'ky', 'k3'], {'k2': 'v2', 'k4': [0, 1, 2]})
+        assertData(['k4', 'k3'], {'k1': 'v1', 'k2': 'v2'})
 
     def test_integer_index_weirdness(self):
         self._create_test_data()
@@ -742,33 +621,39 @@ class TestBinaryJsonField(BaseJsonFieldTestCase, ModelTestCase):
         # Complains of a missing cast/conversion for the data-type?
         self.assertRaises(ProgrammingError, fails)
 
-    def test_selecting(self):
-        self._create_test_data()
-        query = (BJson
-                 .select(BJson.data['k3']['k4'].as_json().alias('k3k4'))
-                 .order_by(BJson.id))
-        k3k4_data = [obj.k3k4 for obj in query]
-        self.assertEqual(k3k4_data, [
-            ['i1', 'i2'],
-            None,
-            None,
-            None,
-            None,
-            None])
 
-        query = (BJson
-                 .select(
-                     BJson.data[0].as_json(),
-                     BJson.data[2].as_json())
-                 .order_by(BJson.id)
-                 .tuples())
-        self.assertEqual(list(query), [
-            (None, None),
-            ('a1', {'a3': 'a4'}),
-            (None, None),
-            (0, 2),
-            (5, 7),
-            ('k4', None)])
+@skip_unless(JSON_SUPPORT, 'json support unavailable')
+class TestBinaryJsonFieldBulkUpdate(ModelTestCase):
+    database = db
+    requires = [BJson]
+
+    def test_binary_json_field_bulk_update(self):
+        b1 = BJson.create(data={'k1': 'v1'})
+        b2 = BJson.create(data={'k2': 'v2'})
+        b1.data['k1'] = 'v1-x'
+        b2.data['k2'] = 'v2-y'
+        BJson.bulk_update([b1, b2], fields=[BJson.data])
+
+        b1_db = BJson.get(BJson.id == b1.id)
+        b2_db = BJson.get(BJson.id == b2.id)
+        self.assertEqual(b1_db.data, {'k1': 'v1-x'})
+        self.assertEqual(b2_db.data, {'k2': 'v2-y'})
+
+
+@skip_unless(JSON_SUPPORT, 'json support unavailable')
+class TestJsonFieldRegressions(ModelTestCase):
+    database = db
+    requires = [JData]
+
+    def test_json_field_concat(self):
+        jd = JData.create(
+            d1={'k1': {'x1': 'y1'}, 'k2': 'v2', 'k3': 'v3'},
+            d2={'k1': {'x2': 'y2'}, 'k2': 'v2-x', 'k4': 'v4'})
+
+        query = JData.select(JData.d1.concat(JData.d2).alias('data'))
+        obj = query.get()
+        self.assertEqual(obj.data, {
+            'k1': {'x2': 'y2'}, 'k2': 'v2-x', 'k3': 'v3', 'k4': 'v4'})
 
 
 class TestIntervalField(ModelTestCase):
@@ -794,7 +679,7 @@ class TestIntervalField(ModelTestCase):
 class TestIndexedField(BaseTestCase):
     def test_indexed_field_ddl(self):
         class FakeIndexedField(IndexedFieldMixin, CharField):
-            index_type = 'FAKE'
+            default_index_type = 'GiST'
 
         class IndexedModel(TestModel):
             array_index = ArrayField(CharField)
@@ -828,6 +713,59 @@ class TestIndexedField(BaseTestCase):
              'USING MAGIC ("fake_index_with_type")')])
 
 
+class IDAlways(TestModel):
+    id = IdentityField(generate_always=True)
+    data = CharField()
+
+
+class IDByDefault(TestModel):
+    id = IdentityField()
+    data = CharField()
+
+
+@skip_unless(pg10(), 'identity field requires pg >= 10')
+class TestIdentityField(ModelTestCase):
+    database = db
+    requires = [IDAlways, IDByDefault]
+
+    def test_identity_field_always(self):
+        iq = IDAlways.insert_many([(d,) for d in ('d1', 'd2', 'd3')])
+        curs = iq.execute()
+        self.assertEqual(list(curs), [(1,), (2,), (3,)])
+
+        # Cannot specify id when generate always is true.
+        with self.assertRaises(ProgrammingError):
+            with self.database.atomic():
+                IDAlways.create(id=10, data='d10')
+
+        query = IDAlways.select().order_by(IDAlways.id)
+        self.assertEqual(list(query.tuples()), [
+            (1, 'd1'), (2, 'd2'), (3, 'd3')])
+
+    def test_identity_field_by_default(self):
+        iq = IDByDefault.insert_many([(d,) for d in ('d1', 'd2', 'd3')])
+        curs = iq.execute()
+        self.assertEqual(list(curs), [(1,), (2,), (3,)])
+
+        # Cannot specify id when generate always is true.
+        IDByDefault.create(id=10, data='d10')
+
+        query = IDByDefault.select().order_by(IDByDefault.id)
+        self.assertEqual(list(query.tuples()), [
+            (1, 'd1'), (2, 'd2'), (3, 'd3'), (10, 'd10')])
+
+    def test_schema(self):
+        sql, params = IDAlways._schema._create_table(False).query()
+        self.assertEqual(sql, (
+            'CREATE TABLE "id_always" ("id" INT GENERATED ALWAYS AS IDENTITY '
+            'NOT NULL PRIMARY KEY, "data" VARCHAR(255) NOT NULL)'))
+
+        sql, params = IDByDefault._schema._create_table(False).query()
+        self.assertEqual(sql, (
+            'CREATE TABLE "id_by_default" ("id" INT GENERATED BY DEFAULT AS '
+            'IDENTITY NOT NULL PRIMARY KEY, "data" VARCHAR(255) NOT NULL)'))
+
+
 class TestServerSide(ModelTestCase):
     database = db
     requires = [Register]
@@ -849,3 +787,175 @@ class TestServerSide(ModelTestCase):
 
         ss_query = ServerSide(query.where(SQL('1 = 0')))
         self.assertEqual(list(ss_query), [])
+
+
+class KX(TestModel):
+    key = CharField(unique=True)
+    value = IntegerField()
+
+class TestAutocommitIntegration(ModelTestCase):
+    database = db
+    requires = [KX]
+
+    def setUp(self):
+        super(TestAutocommitIntegration, self).setUp()
+        with self.database.atomic():
+            kx1 = KX.create(key='k1', value=1)
+
+    def force_integrity_error(self):
+        # Force an integrity error, then verify that the current
+        # transaction has been aborted.
+        self.assertRaises(IntegrityError, KX.create, key='k1', value=10)
+        self.assertRaises(InternalError, KX.get, key='k1')
+
+    def test_autocommit_default(self):
+        kx2 = KX.create(key='k2', value=2)  # Will be committed.
+        self.assertTrue(kx2.id > 0)
+        self.force_integrity_error()
+        self.database.rollback()
+
+        self.assertEqual(KX.select().count(), 2)
+        self.assertEqual([(kx.key, kx.value)
+                          for kx in KX.select().order_by(KX.key)],
+                         [('k1', 1), ('k2', 2)])
+
+    def test_autocommit_disabled(self):
+        with self.database.manual_commit():
+            kx2 = KX.create(key='k2', value=2)  # Not committed.
+            self.assertTrue(kx2.id > 0)  # Yes, we have a primary key.
+            self.force_integrity_error()
+            self.database.rollback()
+
+        self.assertEqual(KX.select().count(), 1)
+        kx1_db = KX.get(KX.key == 'k1')
+        self.assertEqual(kx1_db.value, 1)
+
+    def test_atomic_block(self):
+        with self.database.atomic() as txn:
+            kx2 = KX.create(key='k2', value=2)
+            self.assertTrue(kx2.id > 0)
+            self.force_integrity_error()
+            txn.rollback(False)
+
+        self.assertEqual(KX.select().count(), 1)
+        kx1_db = KX.get(KX.key == 'k1')
+        self.assertEqual(kx1_db.value, 1)
+
+    def test_atomic_block_exception(self):
+        with self.assertRaises(IntegrityError):
+            with self.database.atomic():
+                KX.create(key='k2', value=2)
+                KX.create(key='k1', value=10)
+
+        self.assertEqual(KX.select().count(), 1)
+
+
+class TestPostgresIsolationLevel(DatabaseTestCase):
+    database = db_loader('postgres', isolation_level=3)  # SERIALIZABLE.
+
+    def test_isolation_level(self):
+        conn = self.database.connection()
+        self.assertEqual(conn.isolation_level, 3)
+
+        conn.set_isolation_level(2)
+        self.assertEqual(conn.isolation_level, 2)
+
+        self.database.close()
+        conn = self.database.connection()
+        self.assertEqual(conn.isolation_level, 3)
+
+
+@skip_unless(pg12(), 'cte materialization requires pg >= 12')
+class TestPostgresCTEMaterialization(ModelTestCase):
+    database = db
+    requires = [Register]
+
+    def test_postgres_cte_materialization(self):
+        Register.insert_many([(i,) for i in (1, 2, 3)]).execute()
+
+        for materialized in (None, False, True):
+            cte = Register.select().cte('t', materialized=materialized)
+            query = (cte
+                     .select_from(cte.c.value)
+                     .where(cte.c.value != 2)
+                     .order_by(cte.c.value))
+            self.assertEqual([r.value for r in query], [1, 3])
+
+
+@skip_unless(pg93(), 'lateral join requires pg >= 9.3')
+class TestPostgresLateralJoin(ModelTestCase):
+    database = db
+    test_data = (
+        ('a', (('a1', 1),
+               ('a2', 2),
+               ('a10', 10))),
+        ('b', (('b3', 3),
+               ('b4', 4),
+               ('b7', 7))),
+        ('c', ()))
+    ts = functools.partial(datetime.datetime, 2019, 1)
+
+    def create_data(self):
+        with self.database.atomic():
+            for username, tweets in self.test_data:
+                user = User.create(username=username)
+                for c, d in tweets:
+                    Tweet.create(user=user, content=c, timestamp=self.ts(d))
+
+    @requires_models(User, Tweet)
+    def test_lateral_top_n(self):
+        self.create_data()
+
+        subq = (Tweet
+                .select(Tweet.content, Tweet.timestamp)
+                .where(Tweet.user == User.id)
+                .order_by(Tweet.timestamp.desc())
+                .limit(2))
+        query = (User
+                 .select(User, subq.c.content)
+                 .join(subq, JOIN.LEFT_LATERAL)
+                 .order_by(subq.c.timestamp.desc(nulls='last')))
+        results = [(u.username, u.content) for u in query]
+        self.assertEqual(results, [
+            ('a', 'a10'),
+            ('b', 'b7'),
+            ('b', 'b4'),
+            ('a', 'a2'),
+            ('c', None)])
+
+        query = (Tweet
+                 .select(User.username, subq.c.content)
+                 .from_(User)
+                 .join(subq, JOIN.LEFT_LATERAL)
+                 .order_by(User.username, subq.c.timestamp))
+
+        results = [(t.username, t.content) for t in query]
+        self.assertEqual(results, [
+            ('a', 'a2'),
+            ('a', 'a10'),
+            ('b', 'b4'),
+            ('b', 'b7'),
+            ('c', None)])
+
+    @requires_models(User, Tweet)
+    def test_lateral_helper(self):
+        self.create_data()
+
+        subq = (Tweet
+                .select(Tweet.content, Tweet.timestamp)
+                .where(Tweet.user == User.id)
+                .order_by(Tweet.timestamp.desc())
+                .limit(2)
+                .lateral())
+
+        query = (User
+                 .select(User, subq.c.content)
+                 .join(subq, on=True)
+                 .order_by(subq.c.timestamp.desc(nulls='last')))
+        with self.assertQueryCount(1):
+            results = [(u.username, u.tweet.content) for u in query]
+            self.assertEqual(results, [
+                ('a', 'a10'),
+                ('b', 'b7'),
+                ('b', 'b4'),
+                ('a', 'a2')])

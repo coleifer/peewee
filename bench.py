@@ -31,7 +31,7 @@ def timed(fn):
             start = time.time()
             fn(i, *args, **kwargs)
             times.append(time.time() - start)
-        print('%0.2f ... %s' % (round(sum(times) / N, 2), fn.__name__))
+        print('%0.3f ... %s' % (round(sum(times) / N, 3), fn.__name__))
     return inner
 
 def populate_register(s, n):

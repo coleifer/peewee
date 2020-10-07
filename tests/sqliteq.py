@@ -80,15 +80,17 @@ class BaseTestQueueDatabase(object):
 
         self.database.start()
 
-        users = list(qr)
-        huey = User.create(name='huey')
-        mickey = User.create(name='mickey')
+        try:
+            users = list(qr)
+            huey = User.create(name='huey')
+            mickey = User.create(name='mickey')
 
-        self.assertTrue(huey.id is not None)
-        self.assertTrue(mickey.id is not None)
-        self.assertEqual(self.database.queue_size(), 0)
+            self.assertTrue(huey.id is not None)
+            self.assertTrue(mickey.id is not None)
+            self.assertEqual(self.database.queue_size(), 0)
 
-        self.database.stop()
+        finally:
+            self.database.stop()
 
     def create_thread(self, fn, *args):
         raise NotImplementedError

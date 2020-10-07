@@ -37,7 +37,12 @@ class KeyValue(object):
         self._ordered = ordered
         self._database = database or SqliteExtDatabase(':memory:')
         self._table_name = table_name
-        self._has_upsert = not isinstance(self._database, PostgresqlDatabase)
+        if isinstance(self._database, PostgresqlDatabase):
+            self.upsert = self._postgres_upsert
+            self.update = self._postgres_update
+        else:
+            self.upsert = self._upsert
+            self.update = self._update
 
         self.model = self.create_model()
         self.key = self.model.key
@@ -90,20 +95,18 @@ class KeyValue(object):
          .on_conflict('replace')
          .execute())
 
+    def _postgres_upsert(self, key, value):
+        (self.model
+         .insert(key=key, value=value)
+         .on_conflict(conflict_target=[self.key],
+                      preserve=[self.value])
+         .execute())
+
     def __setitem__(self, expr, value):
         if isinstance(expr, Expression):
             self.model.update(value=value).where(expr).execute()
-        elif self._has_upsert:
-            self._upsert(expr, value)
         else:
-            try:
-                with self._database.atomic():
-                    self.model.create(key=expr, value=value)
-            except IntegrityError:
-                (self.model
-                 .update(value=value)
-                 .where(self.key == expr)
-                 .execute())
+            self.upsert(expr, value)
 
     def __delitem__(self, expr):
         converted, _ = self.convert_expression(expr)
@@ -121,11 +124,7 @@ class KeyValue(object):
     def items(self):
         return iter(self.query().execute())
 
-    def update(self, __data=None, **mapping):
-        if not self._has_upsert:
-            raise ValueError('%s database does not support update API.' %
-                             type(self._database))
-
+    def _update(self, __data=None, **mapping):
         if __data is not None:
             mapping.update(__data)
         return (self.model
@@ -134,10 +133,27 @@ class KeyValue(object):
                 .on_conflict('replace')
                 .execute())
 
+    def _postgres_update(self, __data=None, **mapping):
+        if __data is not None:
+            mapping.update(__data)
+        return (self.model
+                .insert_many(list(mapping.items()),
+                             fields=[self.key, self.value])
+                .on_conflict(conflict_target=[self.key],
+                             preserve=[self.value])
+                .execute())
+
     def get(self, key, default=None):
         try:
             return self[key]
         except KeyError:
+            return default
+
+    def setdefault(self, key, default=None):
+        try:
+            return self[key]
+        except KeyError:
+            self[key] = default
             return default
 
     def pop(self, key, default=Sentinel):

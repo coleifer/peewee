@@ -30,7 +30,7 @@ from playhouse.sqlite_ext import SqliteExtDatabase
 
 
 class APSWDatabase(SqliteExtDatabase):
-    _sqlite_version = tuple(int(i) for i in apsw.sqlitelibversion().split('.'))
+    server_version = tuple(int(i) for i in apsw.sqlitelibversion().split('.'))
 
     def __init__(self, database, **kwargs):
         self._modules = {}
@@ -100,10 +100,20 @@ class APSWDatabase(SqliteExtDatabase):
         self.cursor().execute('begin %s;' % lock_type)
 
     def commit(self):
-        self.cursor().execute('commit;')
+        with __exception_wrapper__:
+            curs = self.cursor()
+            if curs.getconnection().getautocommit():
+                return False
+            curs.execute('commit;')
+        return True
 
     def rollback(self):
-        self.cursor().execute('rollback;')
+        with __exception_wrapper__:
+            curs = self.cursor()
+            if curs.getconnection().getautocommit():
+                return False
+            curs.execute('rollback;')
+        return True
 
     def execute_sql(self, sql, params=None, commit=True):
         logger.debug((sql, params))

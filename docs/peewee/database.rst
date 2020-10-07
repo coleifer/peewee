@@ -26,15 +26,15 @@ provides some basic, database-specific configuration options.
 
     # Connect to a MySQL database on network.
     mysql_db = MySQLDatabase('my_app', user='app', password='db_password',
-                             host='10.1.0.8', port=3316)
+                             host='10.1.0.8', port=3306)
 
     # Connect to a Postgres database.
     pg_db = PostgresqlDatabase('my_app', user='postgres', password='secret',
                                host='10.1.0.9', port=5432)
 
-Peewee provides advanced support for SQLite and Postgres via database-specific
-extension modules. To use the extended-functionality, import the appropriate
-database-specific module and use the database class provided:
+Peewee provides advanced support for SQLite, Postgres and CockroachDB via
+database-specific extension modules. To use the extended-functionality, import
+the appropriate database-specific module and use the database class provided:
 
 .. code-block:: python
 
@@ -50,11 +50,18 @@ database-specific module and use the database class provided:
     # Use Postgres (and register hstore extension).
     db = PostgresqlExtDatabase('my_app', user='postgres', register_hstore=True)
 
+
+    from playhouse.cockroachdb import CockroachDatabase
+
+    # Use CockroachDB.
+    db = CockroachDatabase('my_app', user='root', port=26257, host='10.1.0.8')
+
 For more information on database extensions, see:
 
 * :ref:`postgres_ext`
 * :ref:`sqlite_ext`
-* :ref:`sqlcipher_ext`
+* :ref:`crdb`
+* :ref:`sqlcipher_ext` (encrypted SQLite database).
 * :ref:`apsw`
 * :ref:`sqliteq`
 
@@ -93,6 +100,9 @@ Consult your database driver's documentation for the available parameters:
 * MySQL: `MySQLdb <http://mysql-python.sourceforge.net/MySQLdb.html#some-mysql-examples>`_
 * MySQL: `pymysql <https://github.com/PyMySQL/PyMySQL/blob/f08f01fe8a59e8acfb5f5add4a8fe874bec2a196/pymysql/connections.py#L494-L513>`_
 * SQLite: `sqlite3 <https://docs.python.org/2/library/sqlite3.html#sqlite3.connect>`_
+* CockroachDB: see `psycopg2 <http://initd.org/psycopg/docs/module.html#psycopg2.connect>`_
+
+.. _using_postgresql:
 
 Using Postgresql
 ----------------
@@ -131,6 +141,88 @@ If you would like to use these awesome features, use the
     from playhouse.postgres_ext import PostgresqlExtDatabase
 
     psql_db = PostgresqlExtDatabase('my_database', user='postgres')
+
+
+Isolation level
+^^^^^^^^^^^^^^^
+
+As of Peewee 3.9.7, the isolation level can be specified as an initialization
+parameter, using the symbolic constants in ``psycopg2.extensions``:
+
+.. code-block:: python
+
+    from psycopg2.extensions import ISOLATION_LEVEL_SERIALIZABLE
+
+    db = PostgresqlDatabase('my_app', user='postgres', host='db-host',
+                            isolation_level=ISOLATION_LEVEL_SERIALIZABLE)
+
+.. note::
+
+    In older versions, you can manually set the isolation level on the
+    underlying psycopg2 connection. This can be done in a one-off fashion:
+
+    .. code-block:: python
+
+        db = PostgresqlDatabase(...)
+        conn = db.connection()  # returns current connection.
+
+        from psycopg2.extensions import ISOLATION_LEVEL_SERIALIZABLE
+        conn.set_isolation_level(ISOLATION_LEVEL_SERIALIZABLE)
+
+    To run this every time a connection is created, subclass and implement
+    the ``_initialize_database()`` hook, which is designed for this purpose:
+
+    .. code-block:: python
+
+        class SerializedPostgresqlDatabase(PostgresqlDatabase):
+            def _initialize_connection(self, conn):
+                conn.set_isolation_level(ISOLATION_LEVEL_SERIALIZABLE)
+
+
+.. _using_crdb:
+
+Using CockroachDB
+-----------------
+
+Connect to CockroachDB (CRDB) using the :py:class:`CockroachDatabase` database
+class, defined in ``playhouse.cockroachdb``:
+
+.. code-block:: python
+
+    from playhouse.cockroachdb import CockroachDatabase
+
+    db = CockroachDatabase('my_app', user='root', port=26257, host='localhost')
+
+CRDB provides client-side transaction retries, which are available using a
+special :py:meth:`CockroachDatabase.run_transaction` helper-method. This method
+accepts a callable, which is responsible for executing any transactional
+statements that may need to be retried.
+
+Simplest possible example of :py:meth:`~CockroachDatabase.run_transaction`:
+
+.. code-block:: python
+
+    def create_user(email):
+        # Callable that accepts a single argument (the database instance) and
+        # which is responsible for executing the transactional SQL.
+        def callback(db_ref):
+            return User.create(email=email)
+
+        return db.run_transaction(callback, max_attempts=10)
+
+    huey = create_user('huey@example.com')
+
+.. note::
+    The ``cockroachdb.ExceededMaxAttempts`` exception will be raised if the
+    transaction cannot be committed after the given number of attempts. If the
+    SQL is mal-formed, violates a constraint, etc., then the function will
+    raise the exception to the caller.
+
+For more information, see:
+
+* :ref:`CRDB extension documentation <crdb>`
+* :ref:`Arrays <pgarrays>` (postgres-specific, but applies to CRDB)
+* :ref:`JSON <pgjson>` (postgres-specific, but applies to CRDB)
 
 .. _using_sqlite:
 
@@ -549,7 +641,7 @@ database name and any additional keyword arguments:
 
 .. code-block:: python
 
-    database_name = raw_input('What is the name of the db? ')
+    database_name = input('What is the name of the db? ')
     database.init(database_name, host='localhost', user='postgres')
 
 For even more control over initializing your database, see the next section,
@@ -561,14 +653,14 @@ Dynamically defining a database
 -------------------------------
 
 For even more control over how your database is defined/initialized, you can
-use the :py:class:`Proxy` helper. :py:class:`Proxy` objects act as a
-placeholder, and then at run-time you can swap it out for a different object.
-In the example below, we will swap out the database depending on how the app is
-configured:
+use the :py:class:`DatabaseProxy` helper. :py:class:`DatabaseProxy` objects act
+as a placeholder, and then at run-time you can swap it out for a different
+object. In the example below, we will swap out the database depending on how
+the app is configured:
 
 .. code-block:: python
 
-    database_proxy = Proxy()  # Create a proxy for our db.
+    database_proxy = DatabaseProxy()  # Create a proxy for our db.
 
     class BaseModel(Model):
         class Meta:
@@ -591,13 +683,109 @@ configured:
 .. warning::
     Only use this method if your actual database driver varies at run-time. For
     instance, if your tests and local dev environment run on SQLite, but your
-    deployed app uses PostgreSQL, you can use the :py:class:`Proxy` to swap out
-    engines at run-time.
+    deployed app uses PostgreSQL, you can use the :py:class:`DatabaseProxy` to
+    swap out engines at run-time.
 
     However, if it is only connection values that vary at run-time, such as the
     path to the database file, or the database host, you should instead use
     :py:meth:`Database.init`. See :ref:`deferring_initialization` for more
     details.
+
+.. note::
+    It may be easier to avoid the use of :py:class:`DatabaseProxy` and instead
+    use :py:meth:`Database.bind` and related methods to set or change the
+    database. See :ref:`binding_database` for details.
+
+.. _binding_database:
+
+Setting the database at run-time
+--------------------------------
+
+We have seen three ways that databases can be configured with Peewee:
+
+.. code-block:: python
+
+    # The usual way:
+    db = SqliteDatabase('my_app.db', pragmas={'journal_mode': 'wal'})
+
+
+    # Specify the details at run-time:
+    db = SqliteDatabase(None)
+    ...
+    db.init(db_filename, pragmas={'journal_mode': 'wal'})
+
+
+    # Or use a placeholder:
+    db = DatabaseProxy()
+    ...
+    db.initialize(SqliteDatabase('my_app.db', pragmas={'journal_mode': 'wal'}))
+
+Peewee can also set or change the database for your model classes. This
+technique is used by the Peewee test suite to bind test model classes to
+various database instances when running the tests.
+
+There are two sets of complementary methods:
+
+* :py:meth:`Database.bind` and :py:meth:`Model.bind` - bind one or more models
+  to a database.
+* :py:meth:`Database.bind_ctx` and :py:meth:`Model.bind_ctx` - which are the
+  same as their ``bind()`` counterparts, but return a context-manager and are
+  useful when the database should only be changed temporarily.
+
+As an example, we'll declare two models **without** specifying any database:
+
+.. code-block:: python
+
+    class User(Model):
+        username = TextField()
+
+    class Tweet(Model):
+        user = ForeignKeyField(User, backref='tweets')
+        content = TextField()
+        timestamp = TimestampField()
+
+Bind the models to a database at run-time:
+
+.. code-block:: python
+
+    postgres_db = PostgresqlDatabase('my_app', user='postgres')
+    sqlite_db = SqliteDatabase('my_app.db')
+
+    # At this point, the User and Tweet models are NOT bound to any database.
+
+    # Let's bind them to the Postgres database:
+    postgres_db.bind([User, Tweet])
+
+    # Now we will temporarily bind them to the sqlite database:
+    with sqlite_db.bind_ctx([User, Tweet]):
+        # User and Tweet are now bound to the sqlite database.
+        assert User._meta.database is sqlite_db
+
+    # User and Tweet are once again bound to the Postgres database.
+    assert User._meta.database is postgres_db
+
+The :py:meth:`Model.bind` and :py:meth:`Model.bind_ctx` methods work the same
+for binding a given model class:
+
+.. code-block:: python
+
+    # Bind the user model to the sqlite db. By default, Peewee will also
+    # bind any models that are related to User via foreign-key as well.
+    User.bind(sqlite_db)
+
+    assert User._meta.database is sqlite_db
+    assert Tweet._meta.database is sqlite_db  # Related models bound too.
+
+    # Here we will temporarily bind *just* the User model to the postgres db.
+    with User.bind_ctx(postgres_db, bind_backrefs=False):
+        assert User._meta.database is postgres_db
+        assert Tweet._meta.database is sqlite_db  # Has not changed.
+
+    # And now User is back to being bound to the sqlite_db.
+    assert User._meta.database is sqlite_db
+
+The :ref:`testing` section of this document also contains some examples of
+using the ``bind()`` methods.
 
 Connection Management
 ---------------------
@@ -664,16 +852,26 @@ You can test whether the database is closed using the
     >>> db.is_closed()
     True
 
-A note of caution
+Using autoconnect
 ^^^^^^^^^^^^^^^^^
 
-Although it is not necessary to explicitly connect to the database before using
-it, managing connections explicitly is considered a **best practice**. For
-example, if the connection fails, the exception will be caught when the
+It is not necessary to explicitly connect to the database before using
+it if the database is initialized with ``autoconnect=True`` (the default).
+Managing connections explicitly is considered a **best practice**, therefore
+you may consider disabling the ``autoconnect`` behavior.
+
+It is very helpful to be explicit about your connection lifetimes. If the
+connection fails, for instance, the exception will be caught when the
 connection is being opened, rather than some arbitrary time later when a query
-is executed. Furthermore, if you are using a :ref:`connection pool <pool>`, it
-is necessary to call :py:meth:`~Database.connect` and
-:py:meth:`~Database.close` to ensure connections are recycled properly.
+is executed. Furthermore, if using a :ref:`connection pool <pool>`, it is
+necessary to call :py:meth:`~Database.connect` and :py:meth:`~Database.close`
+to ensure connections are recycled properly.
+
+For the best guarantee of correctness, disable ``autoconnect``:
+
+.. code-block:: python
+
+    db = PostgresqlDatabase('my_app', user='postgres', autoconnect=False)
 
 Thread Safety
 ^^^^^^^^^^^^^
@@ -961,6 +1159,19 @@ class:
     from my_blog.db import database  # Import the peewee database instance.
 
 
+    def PeeweeConnectionMiddleware(get_response):
+        def middleware(request):
+            database.connect()
+            try:
+                response = get_response(request)
+            finally:
+                if not database.is_closed():
+                    database.close()
+            return response
+        return middleware
+
+
+    # Older Django < 1.10 middleware.
     class PeeweeConnectionMiddleware(object):
         def process_request(self, request):
             database.connect()
@@ -1104,7 +1315,7 @@ The connection handling code can be placed in a `middleware component
         def process_request(self, req, resp):
             database.connect()
 
-        def process_response(self, req, resp, resource):
+        def process_response(self, req, resp, resource, req_succeeded):
             if not database.is_closed():
                 database.close()
 
@@ -1178,6 +1389,36 @@ response middleware `sanic middleware <http://sanic.readthedocs.io/en/latest/san
     async def handle_response(request, response):
         if not db.is_closed():
             db.close()
+
+FastAPI
+^^^^^^^
+
+Similar to Flask, FastAPI provides two event based hooks which we will use to open and
+close our db connection. We'll open the connection when a request is received,
+then close it when the response is returned.
+
+.. code-block:: python
+
+    from fastapi import FastAPI
+    from peewee import *
+
+    db = SqliteDatabase('my_app.db')
+    app = FastAPI()
+
+    # This hook ensures that a connection is opened to handle any queries
+    # generated by the request.
+    @app.on_event("startup")
+    def startup():
+        db.connect()
+
+
+    # This hook ensures that the connection is closed when we've finished
+    # processing the request.
+    @app.on_event("shutdown")
+    def shutdown():
+        if not db.is_closed():
+            db.close()
+
 
 Other frameworks
 ^^^^^^^^^^^^^^^^

@@ -67,7 +67,7 @@ class AsyncCursor(object):
         if not self._ready:
             self._wait()
         if self._exc is not None:
-            raise self._exec
+            raise self._exc
         return self
 
     def next(self):
@@ -224,15 +224,16 @@ class SqliteQueueDatabase(SqliteExtDatabase):
         return GreenletHelper if use_gevent else ThreadHelper
 
     def _validate_journal_mode(self, pragmas=None):
-        if pragmas:
-            pdict = dict((k.lower(), v) for (k, v) in pragmas)
-            if pdict.get('journal_mode', 'wal').lower() != 'wal':
-                raise ValueError(self.WAL_MODE_ERROR_MESSAGE)
+        if not pragmas:
+            return {'journal_mode': 'wal'}
 
-            return [(k, v) for (k, v) in pragmas
-                    if k != 'journal_mode'] + [('journal_mode', 'wal')]
-        else:
-            return [('journal_mode', 'wal')]
+        if not isinstance(pragmas, dict):
+            pragmas = dict((k.lower(), v) for (k, v) in pragmas)
+        if pragmas.get('journal_mode', 'wal').lower() != 'wal':
+            raise ValueError(self.WAL_MODE_ERROR_MESSAGE)
+
+        pragmas['journal_mode'] = 'wal'
+        return pragmas
 
     def _create_write_queue(self):
         self._write_queue = self._thread_helper.queue()

@@ -2,9 +2,7 @@ from peewee import IntegerField
 from playhouse.kv import KeyValue
 
 from .base import DatabaseTestCase
-from .base import IS_POSTGRESQL
 from .base import db
-from .base import skip_if
 
 
 class TestKeyValue(DatabaseTestCase):
@@ -57,16 +55,23 @@ class TestKeyValue(DatabaseTestCase):
         self.assertTrue(KV.get('kx') is None)
         self.assertEqual(KV.get('kx', 'vx'), 'vx')
 
+        self.assertTrue(KV.get('k4') is None)
+        self.assertEqual(KV.setdefault('k4', 'v4'), 'v4')
+        self.assertEqual(KV.get('k4'), 'v4')
+        self.assertEqual(KV.get('k4', 'v5'),  'v4')
+
         KV.clear()
         self.assertEqual(len(KV), 0)
 
-    @skip_if(IS_POSTGRESQL, 'requires replace support')
     def test_update(self):
         KV = self.create_kv()
-        KV.update(k1='v1', k2='v2', k3='v3')
+        with self.assertQueryCount(1):
+            KV.update(k1='v1', k2='v2', k3='v3')
+
         self.assertEqual(len(KV), 3)
 
-        KV.update(k1='v1-x', k3='v3-x', k4='v4')
+        with self.assertQueryCount(1):
+            KV.update(k1='v1-x', k3='v3-x', k4='v4')
         self.assertEqual(len(KV), 4)
 
         self.assertEqual(dict(KV), {

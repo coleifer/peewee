@@ -29,6 +29,22 @@ class TestDBUrl(BaseTestCase):
         self.assertEqual(cfg['baz'], '3.4.5')
         self.assertEqual(cfg['boolz'], False)
 
+    def test_db_url_quoted_password(self):
+        # By default, the password is not unescaped.
+        cfg = parse('mysql://usr:pwd%23%20@hst:123/db')
+        self.assertEqual(cfg['user'], 'usr')
+        self.assertEqual(cfg['passwd'], 'pwd%23%20')
+        self.assertEqual(cfg['host'], 'hst')
+        self.assertEqual(cfg['database'], 'db')
+        self.assertEqual(cfg['port'], 123)
+
+        cfg = parse('mysql://usr:pwd%23%20@hst:123/db', unquote_password=True)
+        self.assertEqual(cfg['user'], 'usr')
+        self.assertEqual(cfg['passwd'], 'pwd# ')
+        self.assertEqual(cfg['host'], 'hst')
+        self.assertEqual(cfg['database'], 'db')
+        self.assertEqual(cfg['port'], 123)
+
     def test_db_url(self):
         db = connect('sqlite:///:memory:')
         self.assertTrue(isinstance(db, SqliteDatabase))

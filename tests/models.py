@@ -4,8 +4,9 @@ import time
 import unittest
 
 from peewee import *
+from peewee import Entity
 from peewee import NodeList
-from peewee import QualifiedNames
+from peewee import SubclassAwareMetadata
 from peewee import sort_models
 
 from .base import db
@@ -14,10 +15,13 @@ from .base import mock
 from .base import new_connection
 from .base import requires_models
 from .base import requires_mysql
+from .base import requires_pglike
 from .base import requires_postgresql
+from .base import requires_sqlite
 from .base import skip_if
 from .base import skip_unless
 from .base import BaseTestCase
+from .base import IS_CRDB
 from .base import IS_MYSQL
 from .base import IS_MYSQL_ADVANCED_FEATURES
 from .base import IS_POSTGRESQL
@@ -26,6 +30,7 @@ from .base import IS_SQLITE_OLD
 from .base import IS_SQLITE_15  # Row-values.
 from .base import IS_SQLITE_24  # Upsert.
 from .base import IS_SQLITE_25  # Window functions.
+from .base import IS_SQLITE_30  # FILTER clause functions.
 from .base import IS_SQLITE_9
 from .base import ModelTestCase
 from .base import TestModel
@@ -57,6 +62,27 @@ class Point(TestModel):
     y = IntegerField()
     class Meta:
         primary_key = False
+
+
+class CPK(TestModel):
+    key = CharField()
+    value = IntegerField()
+    extra = IntegerField()
+    class Meta:
+        primary_key = CompositeKey('key', 'value')
+
+
+class City(TestModel):
+    name = CharField()
+
+class Venue(TestModel):
+    name = CharField()
+    city = ForeignKeyField(City, backref='venues')
+    city_n = ForeignKeyField(City, backref='venues_n', null=True)
+
+class Event(TestModel):
+    name = CharField()
+    venue = ForeignKeyField(Venue, backref='events', null=True)
 
 
 class TestModelAPIs(ModelTestCase):
@@ -98,7 +124,11 @@ class TestModelAPIs(ModelTestCase):
                   .get())
             self.assertEqual(pn.post.content, 'p2')
 
-        self.assertRaises(Post.DoesNotExist, PostNote.create, note='pxn')
+        if not IS_SQLITE:
+            exc_class = ProgrammingError if IS_CRDB else IntegrityError
+            with self.database.atomic() as txn:
+                self.assertRaises(exc_class, PostNote.create, note='pxn')
+                txn.rollback()
 
     @requires_models(User, Tweet)
     def test_assertQueryCount(self):
@@ -128,6 +158,17 @@ class TestModelAPIs(ModelTestCase):
         self.assertEqual(pd1['timestamp'], ts)
         self.assertEqual(pd2['content'], 'p2')
         self.assertEqual(pd2['timestamp'], ts2)
+
+    @requires_models(User)
+    def test_insert_many(self):
+        data = [('u%02d' % i,) for i in range(100)]
+        with self.database.atomic():
+            for chunk in chunked(data, 10):
+                User.insert_many(chunk).execute()
+
+        self.assertEqual(User.select().count(), 100)
+        names = [u.username for u in User.select().order_by(User.username)]
+        self.assertEqual(names, ['u%02d' % i for i in range(100)])
 
     @requires_models(User, Tweet)
     def test_create(self):
@@ -162,6 +203,11 @@ class TestModelAPIs(ModelTestCase):
                              [user.id for user in users])
 
     @requires_models(User)
+    def test_bulk_create_empty(self):
+        self.assertEqual(User.select().count(), 0)
+        User.bulk_create([])
+
+    @requires_models(User)
     def test_bulk_create_batching(self):
         users = [User(username=str(i)) for i in range(10)]
         with self.assertQueryCount(4):
@@ -185,6 +231,217 @@ class TestModelAPIs(ModelTestCase):
                 Person.bulk_create(people)
         self.assertEqual(Person.select().count(), 0)
 
+    @requires_models(CPK)
+    def test_bulk_create_composite_key(self):
+        self.assertEqual(CPK.select().count(), 0)
+        items = [CPK(key='k1', value=1, extra=1),
+                 CPK(key='k2', value=2, extra=2)]
+        CPK.bulk_create(items)
+        self.assertEqual([(c.key, c.value, c.extra) for c in items],
+                         [('k1', 1, 1), ('k2', 2, 2)])
+
+        query = CPK.select().order_by(CPK.key).tuples()
+        self.assertEqual(list(query), [('k1', 1, 1), ('k2', 2, 2)])
+
+    @requires_models(Person)
+    def test_bulk_update(self):
+        data = [('f%s' % i, 'l%s' % i, datetime.date(1980, i, i))
+                for i in range(1, 5)]
+        Person.insert_many(data).execute()
+
+        p1, p2, p3, p4 = list(Person.select().order_by(Person.id))
+        p1.first = 'f1-x'
+        p1.last = 'l1-x'
+        p2.first = 'f2-y'
+        p3.last = 'l3-z'
+
+        with self.assertQueryCount(1):
+            n = Person.bulk_update([p1, p2, p3, p4], ['first', 'last'])
+            self.assertEqual(n, 3 if IS_MYSQL else 4)
+
+        query = Person.select().order_by(Person.id)
+        self.assertEqual([(p.first, p.last) for p in query], [
+            ('f1-x', 'l1-x'),
+            ('f2-y', 'l2'),
+            ('f3', 'l3-z'),
+            ('f4', 'l4')])
+
+        # Modify multiple fields, but only update "first".
+        p1.first = 'f1-x2'
+        p1.last = 'l1-x2'
+        p2.first = 'f2-y2'
+        p3.last = 'f3-z2'
+        with self.assertQueryCount(2):  # Two batches, so two queries.
+            n = Person.bulk_update([p1, p2, p3, p4], [Person.first], 2)
+            self.assertEqual(n, 2 if IS_MYSQL else 4)
+
+        query = Person.select().order_by(Person.id)
+        self.assertEqual([(p.first, p.last) for p in query], [
+            ('f1-x2', 'l1-x'),
+            ('f2-y2', 'l2'),
+            ('f3', 'l3-z'),
+            ('f4', 'l4')])
+
+    @requires_models(User, Tweet)
+    def test_bulk_update_foreign_key(self):
+        for username in ('charlie', 'huey', 'zaizee'):
+            user = User.create(username=username)
+            for i in range(2):
+                Tweet.create(user=user, content='%s-%s' % (username, i))
+
+        c, h, z = list(User.select().order_by(User.id))
+        c0, c1, h0, h1, z0, z1 = list(Tweet.select().order_by(Tweet.id))
+        c0.content = 'charlie-0x'
+        c1.user = h
+        h0.user = z
+        h1.content = 'huey-1x'
+        z0.user = c
+        z0.content = 'zaizee-0x'
+
+        with self.assertQueryCount(1):
+            Tweet.bulk_update([c0, c1, h0, h1, z0, z1], ['user', 'content'])
+
+        query = (Tweet
+                 .select(Tweet.content, User.username)
+                 .join(User)
+                 .order_by(Tweet.id)
+                 .objects())
+        self.assertEqual([(t.username, t.content) for t in query], [
+            ('charlie', 'charlie-0x'),
+            ('huey', 'charlie-1'),
+            ('zaizee', 'huey-0'),
+            ('huey', 'huey-1x'),
+            ('charlie', 'zaizee-0x'),
+            ('zaizee', 'zaizee-1')])
+
+    @requires_models(Person)
+    def test_bulk_update_integrityerror(self):
+        people = [Person(first='f%s' % i, last='l%s' % i, dob='1980-01-01')
+                  for i in range(10)]
+        Person.bulk_create(people)
+
+        # Get list of people w/the IDs populated. They will not be set if the
+        # underlying DB is Sqlite or MySQL.
+        people = list(Person.select().order_by(Person.id))
+
+        # First we'll just modify all the first and last names.
+        for person in people:
+            person.first += '-x'
+            person.last += '-x'
+
+        # Now we'll introduce an issue that will cause an integrity error.
+        p3, p7 = people[3], people[7]
+        p3.first = p7.first = 'fx'
+        p3.last = p7.last = 'lx'
+        with self.assertRaises(IntegrityError):
+            with self.assertQueryCount(1):
+                with self.database.atomic():
+                    Person.bulk_update(people, fields=['first', 'last'])
+
+        with self.assertRaises(IntegrityError):
+            # 10 objects, batch size=4, so 0-3, 4-7, 8&9. But we never get to 8
+            # and 9 because of the integrity error processing the 2nd batch.
+            with self.assertQueryCount(2):
+                with self.database.atomic():
+                    Person.bulk_update(people, ['first', 'last'], 4)
+
+        # Ensure no changes were made.
+        vals = [(p.first, p.last) for p in Person.select().order_by(Person.id)]
+        self.assertEqual(vals, [('f%s' % i, 'l%s' % i) for i in range(10)])
+
+    @requires_models(User, Tweet)
+    def test_bulk_update_apply_dbvalue(self):
+        u = User.create(username='u')
+        t1, t2, t3 = [Tweet.create(user=u, content=str(i)) for i in (1, 2, 3)]
+
+        # If we don't end up applying the field's db_value() to these timestamp
+        # values, then we will end up with bad data or an error when attempting
+        # to do the update.
+        t1.timestamp = datetime.datetime(2019, 1, 2, 3, 4, 5)
+        t2.timestamp = datetime.date(2019, 1, 3)
+        t3.timestamp = 1337133700  # 2012-05-15T21:1:40.
+        t3_dt = datetime.datetime.fromtimestamp(1337133700)
+        Tweet.bulk_update([t1, t2, t3], fields=['timestamp'])
+
+        # Ensure that the values were handled appropriately.
+        t1, t2, t3 = list(Tweet.select().order_by(Tweet.id))
+        self.assertEqual(t1.timestamp, datetime.datetime(2019, 1, 2, 3, 4, 5))
+        self.assertEqual(t2.timestamp, datetime.datetime(2019, 1, 3, 0, 0, 0))
+        self.assertEqual(t3.timestamp, t3_dt)
+
+    @skip_if(IS_SQLITE_OLD or IS_MYSQL or IS_CRDB)
+    @requires_models(CPK)
+    def test_bulk_update_cte(self):
+        CPK.insert_many([('k1', 1, 1), ('k2', 2, 2), ('k3', 3, 3)]).execute()
+
+        # We can also do a bulk-update using ValuesList when the primary-key of
+        # the model is a composite-pk.
+        new_values = [('k1', 1, 10), ('k3', 3, 30)]
+        cte = ValuesList(new_values).cte('new_values', columns=('k', 'v', 'x'))
+
+        # We have to use a subquery to update the individual column, as SQLite
+        # does not support UPDATE/FROM syntax.
+        subq = (cte
+                .select(cte.c.x)
+                .where(CPK._meta.primary_key == (cte.c.k, cte.c.v)))
+
+        # Perform the update, assigning extra the new value from the values
+        # list, and restricting the overall update using the composite pk.
+        res = (CPK
+               .update(extra=subq)
+               .where(CPK._meta.primary_key.in_(cte.select(cte.c.k, cte.c.v)))
+               .with_cte(cte)
+               .execute())
+
+        self.assertEqual(list(sorted(CPK.select().tuples())), [
+            ('k1', 1, 10), ('k2', 2, 2), ('k3', 3, 30)])
+
+    @requires_models(User)
+    def test_insert_rowcount(self):
+        User.create(username='u0')  # Ensure that last insert ID != rowcount.
+
+        iq = User.insert_many([(u,) for u in ('u1', 'u2', 'u3')])
+        if IS_POSTGRESQL or IS_CRDB:
+            iq = iq.returning()
+        self.assertEqual(iq.execute(), 3)
+
+        # Now explicitly specify empty returning() for all DBs.
+        iq = User.insert_many([(u,) for u in ('u4', 'u5')]).returning()
+        self.assertEqual(iq.execute(), 2)
+
+        query = (User
+                 .select(User.username.concat('-x'))
+                 .where(User.username.in_(['u1', 'u2'])))
+        iq = User.insert_from(query, ['username'])
+        if IS_POSTGRESQL or IS_CRDB:
+            iq = iq.returning()
+        self.assertEqual(iq.execute(), 2)
+
+        query = (User
+                 .select(User.username.concat('-y'))
+                 .where(User.username.in_(['u3', 'u4'])))
+        iq = User.insert_from(query, ['username']).returning()
+        self.assertEqual(iq.execute(), 2)
+
+    @skip_if(IS_POSTGRESQL or IS_CRDB, 'requires sqlite or mysql')
+    @requires_models(Emp)
+    def test_replace_rowcount(self):
+        Emp.create(first='beanie', last='cat', empno='998')
+
+        data = [
+            ('beanie', 'cat', '999'),
+            ('mickey', 'dog', '123')]
+        fields = (Emp.first, Emp.last, Emp.empno)
+
+        # MySQL returns 3, Sqlite 2. However, older stdlib sqlite3 does not
+        # work properly, so we don't assert a result count here.
+        Emp.replace_many(data, fields=fields).execute()
+
+        query = Emp.select(Emp.first, Emp.last, Emp.empno).order_by(Emp.last)
+        self.assertEqual(list(query.tuples()), [
+            ('beanie', 'cat', '999'),
+            ('mickey', 'dog', '123')])
+
     @requires_models(User, Tweet)
     def test_get_shortcut(self):
         huey = self.add_user('huey')
@@ -192,6 +449,11 @@ class TestModelAPIs(ModelTestCase):
         mickey = self.add_user('mickey')
         self.add_tweets(mickey, 'woof', 'yip')
 
+        # Lookup using just the ID.
+        huey_db = User.get(huey.id)
+        self.assertEqual(huey.id, huey_db.id)
+
+        # Lookup using an expression.
         huey_db = User.get(User.username == 'huey')
         self.assertEqual(huey.id, huey_db.id)
         mickey_db = User.get(User.username == 'mickey')
@@ -364,26 +626,21 @@ class TestModelAPIs(ModelTestCase):
 
     @requires_models(User, Tweet)
     def test_populate_unsaved_relations(self):
-        u = User(username='huey')
-        t = Tweet(user=u, content='meow')
-        u.save()
-        t.save()
-        t_db = Tweet.get(Tweet.content == 'meow')
-        self.assertEqual(t_db.user.username, 'huey')
+        user = User(username='charlie')
+        tweet = Tweet(user=user, content='foo')
+
+        self.assertTrue(user.save())
+        self.assertTrue(user.id is not None)
+        with self.assertQueryCount(1):
+            self.assertEqual(tweet.user_id, user.id)
+            self.assertTrue(tweet.save())
+            self.assertEqual(tweet.user_id, user.id)
+
+        tweet_db = Tweet.get(Tweet.content == 'foo')
+        self.assertEqual(tweet_db.user.username, 'charlie')
 
     @requires_models(User, Tweet)
     def test_model_select(self):
-        query = (Tweet
-                 .select(Tweet.content, User.username)
-                 .join(User)
-                 .order_by(User.username, Tweet.content))
-        self.assertSQL(query, (
-            'SELECT "t1"."content", "t2"."username" '
-            'FROM "tweet" AS "t1" '
-            'INNER JOIN "users" AS "t2" '
-            'ON ("t1"."user_id" = "t2"."id") '
-            'ORDER BY "t2"."username", "t1"."content"'), [])
-
         huey = self.add_user('huey')
         mickey = self.add_user('mickey')
         zaizee = self.add_user('zaizee')
@@ -392,6 +649,17 @@ class TestModelAPIs(ModelTestCase):
         self.add_tweets(mickey, 'woof', 'whine')
 
         with self.assertQueryCount(1):
+            query = (Tweet
+                     .select(Tweet.content, User.username)
+                     .join(User)
+                     .order_by(User.username, Tweet.content))
+            self.assertSQL(query, (
+                'SELECT "t1"."content", "t2"."username" '
+                'FROM "tweet" AS "t1" '
+                'INNER JOIN "users" AS "t2" '
+                'ON ("t1"."user_id" = "t2"."id") '
+                'ORDER BY "t2"."username", "t1"."content"'), [])
+
             tweets = list(query)
             self.assertEqual([(t.content, t.user.username) for t in tweets], [
                 ('hiss', 'huey'),
@@ -411,16 +679,16 @@ class TestModelAPIs(ModelTestCase):
             Favorite.create(user=mickey, tweet=h_m)
             Favorite.create(user=mickey, tweet=h_p)
 
-        UA = User.alias()
-
-        query = (Favorite
-                 .select(Favorite, Tweet, User, UA)
-                 .join(Tweet)
-                 .join(User)
-                 .switch(Favorite)
-                 .join(UA, on=Favorite.user)
-                 .order_by(Favorite.id))
         with self.assertQueryCount(1):
+            UA = User.alias()
+            query = (Favorite
+                     .select(Favorite, Tweet, User, UA)
+                     .join(Tweet)
+                     .join(User)
+                     .switch(Favorite)
+                     .join(UA, on=Favorite.user)
+                     .order_by(Favorite.id))
+
             accum = [(f.tweet.user.username, f.tweet.content, f.user.username)
                      for f in query]
 
@@ -429,15 +697,16 @@ class TestModelAPIs(ModelTestCase):
             ('huey', 'meow', 'mickey'),
             ('huey', 'purr', 'mickey')])
 
-        # Test intermediate models not selected.
-        query = (Favorite
-                 .select()
-                 .join(Tweet)
-                 .switch(Favorite)
-                 .join(User)
-                 .where(User.username == 'mickey')
-                 .order_by(Favorite.id))
         with self.assertQueryCount(5):
+            # Test intermediate models not selected.
+            query = (Favorite
+                     .select()
+                     .join(Tweet)
+                     .switch(Favorite)
+                     .join(User)
+                     .where(User.username == 'mickey')
+                     .order_by(Favorite.id))
+
             accum = [(f.user.username, f.tweet.content) for f in query]
 
         self.assertEqual(accum, [('mickey', 'meow'), ('mickey', 'purr')])
@@ -448,12 +717,8 @@ class TestModelAPIs(ModelTestCase):
         b1 = B.create(a=a1, b='b1')
         c1 = C.create(b=b1, c='c1')
 
-        query = (C
-                 .select()
-                 .join(B)
-                 .join(A)
-                 .where(A.a == 'a1'))
         with self.assertQueryCount(3):
+            query = C.select().join(B).join(A).where(A.a == 'a1')
             accum = [(c.c, c.b.b, c.b.a.a) for c in query]
 
         self.assertEqual(accum, [('c1', 'b1', 'a1')])
@@ -469,29 +734,74 @@ class TestModelAPIs(ModelTestCase):
         c112 = C.create(b=b11, c='c112')
         c211 = C.create(b=b21, c='c211')
 
-        query = (C
-                 .select(C, A.a)
-                 .join(B)
-                 .join(A)
-                 .order_by(C.c))
         with self.assertQueryCount(1):
+            query = C.select(C, A.a).join(B).join(A).order_by(C.c)
             accum = [(c.c, c.b.a.a) for c in query]
+
         self.assertEqual(accum, [
             ('c111', 'a1'),
             ('c112', 'a1'),
             ('c211', 'a2')])
 
-        query = (C
-                 .select(C, B, A)
-                 .join(B)
-                 .join(A)
-                 .order_by(C.c))
         with self.assertQueryCount(1):
+            query = C.select(C, B, A).join(B).join(A).order_by(C.c)
             accum = [(c.c, c.b.b, c.b.a.a) for c in query]
+
         self.assertEqual(accum, [
             ('c111', 'b11', 'a1'),
             ('c112', 'b11', 'a1'),
             ('c211', 'b21', 'a2')])
+
+    @requires_models(City, Venue, Event)
+    def test_join_empty_relations(self):
+        with self.database.atomic():
+            city = City.create(name='Topeka')
+            venue1 = Venue.create(name='House', city=city, city_n=city)
+            venue2 = Venue.create(name='Nowhere', city=city, city_n=None)
+
+            event1 = Event.create(name='House Party', venue=venue1)
+            event2 = Event.create(name='Holiday')
+            event3 = Event.create(name='Nowhere Party', venue=venue2)
+
+        with self.assertQueryCount(1):
+            query = (Event
+                     .select(Event, Venue, City)
+                     .join(Venue, JOIN.LEFT_OUTER)
+                     .join(City, JOIN.LEFT_OUTER, on=Venue.city)
+                     .order_by(Event.id))
+
+            # Here we have two left-outer joins, and the second Event
+            # ("Holiday"), does not have an associated Venue (hence, no City).
+            # Peewee would attach an empty Venue() model to the event, however.
+            # It did this since we are selecting from Venue/City and Venue is
+            # an intermediary model. It is more correct for Event.venue to be
+            # None in this case. This is now patched / fixed.
+            r = [(e.name, e.venue and e.venue.city.name or None)
+                 for e in query]
+            self.assertEqual(r, [
+                ('House Party', 'Topeka'),
+                ('Holiday', None),
+                ('Nowhere Party', 'Topeka')])
+
+        with self.assertQueryCount(1):
+            query = (Event
+                     .select(Event, Venue, City)
+                     .join(Venue, JOIN.INNER)
+                     .join(City, JOIN.LEFT_OUTER, on=Venue.city_n)
+                     .order_by(Event.id))
+
+            # Here we have an inner join and a left-outer join. The furthest
+            # object (City) will be NULL for the "Nowhere Party". Make sure
+            # that the object is left as None and not populated with an empty
+            # City instance.
+            accum = []
+            for event in query:
+                city_name = event.venue.city_n and event.venue.city_n.name
+                accum.append((event.name, event.venue.name, city_name))
+
+            self.assertEqual(accum, [
+                ('House Party', 'House', 'Topeka'),
+                ('Nowhere Party', 'Nowhere', None)])
 
     @requires_models(Relationship, Person)
     def test_join_same_model_twice(self):
@@ -508,13 +818,13 @@ class TestModelAPIs(ModelTestCase):
             Relationship.create(from_person=src, to_person=dest)
 
         PA = Person.alias()
-        query = (Relationship
-                 .select(Relationship, Person, PA)
-                 .join(Person, on=Relationship.from_person)
-                 .switch(Relationship)
-                 .join(PA, on=Relationship.to_person)
-                 .order_by(Relationship.id))
         with self.assertQueryCount(1):
+            query = (Relationship
+                     .select(Relationship, Person, PA)
+                     .join(Person, on=Relationship.from_person)
+                     .switch(Relationship)
+                     .join(PA, on=Relationship.to_person)
+                     .order_by(Relationship.id))
             results = [(r.from_person.first, r.to_person.first) for r in query]
 
         self.assertEqual(results, [
@@ -527,35 +837,14 @@ class TestModelAPIs(ModelTestCase):
         for username in ('huey', 'mickey', 'zaizee'):
             self.add_user(username)
 
-        query = User.select(User.username).order_by(User.username).dicts()
         with self.assertQueryCount(1):
+            query = User.select(User.username).order_by(User.username).dicts()
             self.assertEqual(query.peek(n=1), {'username': 'huey'})
             self.assertEqual(query.peek(n=2), [{'username': 'huey'},
                                                {'username': 'mickey'}])
 
     @requires_models(User, Tweet, Favorite)
     def test_multi_join(self):
-        TweetUser = User.alias('u2')
-
-        query = (Favorite
-                 .select(Favorite.id,
-                         Tweet.content,
-                         User.username,
-                         TweetUser.username)
-                 .join(Tweet)
-                 .join(TweetUser, on=(Tweet.user == TweetUser.id))
-                 .switch(Favorite)
-                 .join(User)
-                 .order_by(Tweet.content, Favorite.id))
-        self.assertSQL(query, (
-            'SELECT '
-            '"t1"."id", "t2"."content", "t3"."username", "u2"."username" '
-            'FROM "favorite" AS "t1" '
-            'INNER JOIN "tweet" AS "t2" ON ("t1"."tweet_id" = "t2"."id") '
-            'INNER JOIN "users" AS "u2" ON ("t2"."user_id" = "u2"."id") '
-            'INNER JOIN "users" AS "t3" ON ("t1"."user_id" = "t3"."id") '
-            'ORDER BY "t2"."content", "t1"."id"'), [])
-
         u1 = User.create(username='u1')
         u2 = User.create(username='u2')
         u3 = User.create(username='u3')
@@ -571,7 +860,28 @@ class TestModelAPIs(ModelTestCase):
         for user, tweet in favorites:
             Favorite.create(user=user, tweet=tweet)
 
+        TweetUser = User.alias('u2')
+
         with self.assertQueryCount(1):
+            query = (Favorite
+                     .select(Favorite.id,
+                             Tweet.content,
+                             User.username,
+                             TweetUser.username)
+                     .join(Tweet)
+                     .join(TweetUser, on=(Tweet.user == TweetUser.id))
+                     .switch(Favorite)
+                     .join(User)
+                     .order_by(Tweet.content, Favorite.id))
+            self.assertSQL(query, (
+                'SELECT '
+                '"t1"."id", "t2"."content", "t3"."username", "u2"."username" '
+                'FROM "favorite" AS "t1" '
+                'INNER JOIN "tweet" AS "t2" ON ("t1"."tweet_id" = "t2"."id") '
+                'INNER JOIN "users" AS "u2" ON ("t2"."user_id" = "u2"."id") '
+                'INNER JOIN "users" AS "t3" ON ("t1"."user_id" = "t3"."id") '
+                'ORDER BY "t2"."content", "t1"."id"'), [])
+
             accum = [(f.tweet.user.username, f.tweet.content, f.user.username)
                      for f in query]
             self.assertEqual(accum, [
@@ -602,24 +912,24 @@ class TestModelAPIs(ModelTestCase):
         self._create_user_tweets()
 
         # Select note user and timestamp of most recent tweet.
-        TA = Tweet.alias()
-        max_q = (TA
-                 .select(TA.user, fn.MAX(TA.timestamp).alias('max_ts'))
-                 .group_by(TA.user)
-                 .alias('max_q'))
-
-        predicate = ((Tweet.user == max_q.c.user_id) &
-                     (Tweet.timestamp == max_q.c.max_ts))
-        latest = (Tweet
-                  .select(Tweet.user, Tweet.content, Tweet.timestamp)
-                  .join(max_q, on=predicate)
-                  .alias('latest'))
-
-        query = (User
-                 .select(User, latest.c.content, latest.c.timestamp)
-                 .join(latest, on=(User.id == latest.c.user_id)))
-
         with self.assertQueryCount(1):
+            TA = Tweet.alias()
+            max_q = (TA
+                     .select(TA.user, fn.MAX(TA.timestamp).alias('max_ts'))
+                     .group_by(TA.user)
+                     .alias('max_q'))
+
+            predicate = ((Tweet.user == max_q.c.user_id) &
+                         (Tweet.timestamp == max_q.c.max_ts))
+            latest = (Tweet
+                      .select(Tweet.user, Tweet.content, Tweet.timestamp)
+                      .join(max_q, on=predicate)
+                      .alias('latest'))
+
+            query = (User
+                     .select(User, latest.c.content, latest.c.timestamp)
+                     .join(latest, on=(User.id == latest.c.user_id)))
+
             data = [(user.username, user.tweet.content) for user in query]
 
         # Failing on travis-ci...old SQLite?
@@ -628,12 +938,12 @@ class TestModelAPIs(ModelTestCase):
                 ('huey', 'hiss'),
                 ('mickey', 'grr')])
 
-        query = (Tweet
-                 .select(Tweet, User)
-                 .join(max_q, on=predicate)
-                 .switch(Tweet)
-                 .join(User))
         with self.assertQueryCount(1):
+            query = (Tweet
+                     .select(Tweet, User)
+                     .join(max_q, on=predicate)
+                     .switch(Tweet)
+                     .join(User))
             data = [(note.user.username, note.content) for note in query]
 
         self.assertEqual(data, [
@@ -644,24 +954,26 @@ class TestModelAPIs(ModelTestCase):
     def test_join_subquery_2(self):
         self._create_user_tweets()
 
-        users = (User
-                 .select(User.id, User.username)
-                 .where(User.username.in_(['huey', 'zaizee'])))
-        query = (Tweet
-                 .select(Tweet.content.alias('content'),
-                         users.c.username.alias('username'))
-                 .join(users, on=(Tweet.user == users.c.id))
-                 .order_by(Tweet.id))
-
-        self.assertSQL(query, (
-            'SELECT "t1"."content" AS "content", "t2"."username" AS "username"'
-            ' FROM "tweet" AS "t1" '
-            'INNER JOIN (SELECT "t3"."id", "t3"."username" '
-            'FROM "users" AS "t3" '
-            'WHERE ("t3"."username" IN (?, ?))) AS "t2" '
-            'ON ("t1"."user_id" = "t2"."id") '
-            'ORDER BY "t1"."id"'), ['huey', 'zaizee'])
         with self.assertQueryCount(1):
+            users = (User
+                     .select(User.id, User.username)
+                     .where(User.username.in_(['huey', 'zaizee'])))
+            query = (Tweet
+                     .select(Tweet.content.alias('content'),
+                             users.c.username.alias('username'))
+                     .join(users, on=(Tweet.user == users.c.id))
+                     .order_by(Tweet.id))
+
+            self.assertSQL(query, (
+                'SELECT "t1"."content" AS "content", '
+                '"t2"."username" AS "username"'
+                ' FROM "tweet" AS "t1" '
+                'INNER JOIN (SELECT "t3"."id", "t3"."username" '
+                'FROM "users" AS "t3" '
+                'WHERE ("t3"."username" IN (?, ?))) AS "t2" '
+                'ON ("t1"."user_id" = "t2"."id") '
+                'ORDER BY "t1"."id"'), ['huey', 'zaizee'])
+
             results = [(t.content, t.user.username) for t in query]
             self.assertEqual(results, [
                 ('meow', 'huey'),
@@ -678,20 +990,21 @@ class TestModelAPIs(ModelTestCase):
                .where(User.username.in_(['huey', 'zaizee']))\
                .cte('cats'))
 
-        # Attempt join with subquery as common-table expression.
-        query = (Tweet
-                 .select(Tweet.content, cte.c.username)
-                 .join(cte, on=(Tweet.user == cte.c.id))
-                 .order_by(Tweet.id)
-                 .with_cte(cte))
-        self.assertSQL(query, (
-            'WITH "cats" AS ('
-            'SELECT "t1"."id", "t1"."username" FROM "users" AS "t1" '
-            'WHERE ("t1"."username" IN (?, ?))) '
-            'SELECT "t2"."content", "cats"."username" FROM "tweet" AS "t2" '
-            'INNER JOIN "cats" ON ("t2"."user_id" = "cats"."id") '
-            'ORDER BY "t2"."id"'), ['huey', 'zaizee'])
         with self.assertQueryCount(1):
+            # Attempt join with subquery as common-table expression.
+            query = (Tweet
+                     .select(Tweet.content, cte.c.username)
+                     .join(cte, on=(Tweet.user == cte.c.id))
+                     .order_by(Tweet.id)
+                     .with_cte(cte))
+            self.assertSQL(query, (
+                'WITH "cats" AS ('
+                'SELECT "t1"."id", "t1"."username" FROM "users" AS "t1" '
+                'WHERE ("t1"."username" IN (?, ?))) '
+                'SELECT "t2"."content", "cats"."username" FROM "tweet" AS "t2" '
+                'INNER JOIN "cats" ON ("t2"."user_id" = "cats"."id") '
+                'ORDER BY "t2"."id"'), ['huey', 'zaizee'])
+
             self.assertEqual([t.content for t in query],
                              ['meow', 'purr', 'hiss'])
 
@@ -709,7 +1022,8 @@ class TestModelAPIs(ModelTestCase):
         names = []
         for name, count in sorted(name2count.items()):
             names += [name] * count
-        User.insert_many([(n,) for n in names], [User.username]).execute()
+        User.insert_many([(i, n) for i, n in enumerate(names, 1)],
+                         [User.id, User.username]).execute()
 
         # The results we are trying to obtain.
         expected = [
@@ -719,28 +1033,30 @@ class TestModelAPIs(ModelTestCase):
             ('pipey', 15),
             ('zaizee', 16), ('zaizee', 17)]
 
-        # Using a self-join.
-        UA = User.alias()
-        query = (User
-                 .select(User.username, UA.id)
-                 .join(UA, on=((UA.username == User.username) &
-                               (UA.id >= User.id)))
-                 .group_by(User.username, UA.id)
-                 .having(fn.COUNT(UA.id) < 3)
-                 .order_by(User.username, UA.id))
-        self.assertEqual(query.tuples()[:], expected)
+        with self.assertQueryCount(1):
+            # Using a self-join.
+            UA = User.alias()
+            query = (User
+                     .select(User.username, UA.id)
+                     .join(UA, on=((UA.username == User.username) &
+                                   (UA.id >= User.id)))
+                     .group_by(User.username, UA.id)
+                     .having(fn.COUNT(UA.id) < 3)
+                     .order_by(User.username, UA.id))
+            self.assertEqual(query.tuples()[:], expected)
 
-        # Using a correlated subquery.
-        subq = (UA
-                .select(UA.id)
-                .where(User.username == UA.username)
-                .order_by(UA.id)
-                .limit(2))
-        query = (User
-                 .select(User.username, User.id)
-                 .where(User.id.in_(subq.alias('subq')))
-                 .order_by(User.username, User.id))
-        self.assertEqual(query.tuples()[:], expected)
+        with self.assertQueryCount(1):
+            # Using a correlated subquery.
+            subq = (UA
+                    .select(UA.id)
+                    .where(User.username == UA.username)
+                    .order_by(UA.id)
+                    .limit(2))
+            query = (User
+                     .select(User.username, User.id)
+                     .where(User.id.in_(subq.alias('subq')))
+                     .order_by(User.username, User.id))
+            self.assertEqual(query.tuples()[:], expected)
 
     @requires_models(User, Tweet)
     def test_subquery_alias_selection(self):
@@ -754,14 +1070,52 @@ class TestModelAPIs(ModelTestCase):
                 for tweet in tweets:
                     Tweet.create(user=user, content=tweet)
 
-        subq = Tweet.select(fn.COUNT(Tweet.id)).where(Tweet.user == User.id)
-        query = (User
-                 .select(User.username, subq.alias('tweet_count'))
-                 .order_by(User.id))
-        self.assertEqual([(u.username, u.tweet_count) for u in query], [
-            ('huey', 3),
-            ('mickey', 2),
-            ('zaizee', 0)])
+        with self.assertQueryCount(1):
+            subq = (Tweet
+                    .select(fn.COUNT(Tweet.id))
+                    .where(Tweet.user == User.id))
+            query = (User
+                     .select(User.username, subq.alias('tweet_count'))
+                     .order_by(User.id))
+            self.assertEqual([(u.username, u.tweet_count) for u in query], [
+                ('huey', 3),
+                ('mickey', 2),
+                ('zaizee', 0)])
+
+    @requires_pglike
+    @requires_models(User)
+    def test_join_on_valueslist(self):
+        for username in ('huey', 'mickey', 'zaizee'):
+            User.create(username=username)
+
+        vl = ValuesList([('huey',), ('zaizee',)], columns=['username'])
+        with self.assertQueryCount(1):
+            query = (User
+                     .select(vl.c.username)
+                     .join(vl, on=(User.username == vl.c.username))
+                     .order_by(vl.c.username.desc()))
+            self.assertEqual([u.username for u in query], ['zaizee', 'huey'])
+
+    @skip_if(IS_SQLITE_OLD or IS_MYSQL or IS_CRDB)
+    @requires_models(User)
+    def test_multi_update(self):
+        data = [(i, 'u%s' % i) for i in range(1, 4)]
+        User.insert_many(data, fields=[User.id, User.username]).execute()
+
+        data = [(i, 'u%sx' % i) for i in range(1, 3)]
+        vl = ValuesList(data)
+        cte = vl.select().cte('uv', columns=('id', 'username'))
+        subq = cte.select(cte.c.username).where(cte.c.id == User.id)
+        res = (User
+               .update(username=subq)
+               .where(User.id.in_(cte.select(cte.c.id)))
+               .with_cte(cte)
+               .execute())
+        query = User.select().order_by(User.id)
+        self.assertEqual([(u.id, u.username) for u in query], [
+            (1, 'u1x'),
+            (2, 'u2x'),
+            (3, 'u3')])
 
     @requires_models(User, Tweet)
     def test_insert_query_value(self):
@@ -808,8 +1162,8 @@ class TestModelAPIs(ModelTestCase):
 
     @requires_models(User, Tweet)
     def test_union_column_resolution(self):
-        u1 = User.create(username='u1')
-        u2 = User.create(username='u2')
+        u1 = User.create(id=1, username='u1')
+        u2 = User.create(id=2, username='u2')
         q1 = User.select().where(User.id == 1)
         q2 = User.select()
         union = q1 | q2
@@ -824,38 +1178,69 @@ class TestModelAPIs(ModelTestCase):
             (1, 'u1'),
             (2, 'u2')])
 
-        t1_1 = Tweet.create(user=u1, content='u1-t1')
-        t1_2 = Tweet.create(user=u1, content='u1-t2')
-        t2_1 = Tweet.create(user=u2, content='u2-t1')
-        q1 = Tweet.select(Tweet, User).join(User).where(User.id == 1)
-        q2 = Tweet.select(Tweet, User).join(User)
-        union = q1 | q2
-        self.assertSQL(union, (
-            'SELECT "t1"."id", "t1"."user_id", "t1"."content", '
-            '"t1"."timestamp", "t2"."id", "t2"."username" '
-            'FROM "tweet" AS "t1" '
-            'INNER JOIN "users" AS "t2" ON ("t1"."user_id" = "t2"."id") '
-            'WHERE ("t2"."id" = ?) '
-            'UNION '
-            'SELECT "t3"."id", "t3"."user_id", "t3"."content", '
-            '"t3"."timestamp", "t4"."id", "t4"."username" '
-            'FROM "tweet" AS "t3" '
-            'INNER JOIN "users" AS "t4" ON ("t3"."user_id" = "t4"."id")'), [1])
+        t1_1 = Tweet.create(id=1, user=u1, content='u1-t1')
+        t1_2 = Tweet.create(id=2, user=u1, content='u1-t2')
+        t2_1 = Tweet.create(id=3, user=u2, content='u2-t1')
 
         with self.assertQueryCount(1):
+            q1 = Tweet.select(Tweet, User).join(User).where(User.id == 1)
+            q2 = Tweet.select(Tweet, User).join(User)
+            union = q1 | q2
+
+            self.assertSQL(union, (
+                'SELECT "t1"."id", "t1"."user_id", "t1"."content", '
+                '"t1"."timestamp", "t2"."id", "t2"."username" '
+                'FROM "tweet" AS "t1" '
+                'INNER JOIN "users" AS "t2" ON ("t1"."user_id" = "t2"."id") '
+                'WHERE ("t2"."id" = ?) '
+                'UNION '
+                'SELECT "t3"."id", "t3"."user_id", "t3"."content", '
+                '"t3"."timestamp", "t4"."id", "t4"."username" '
+                'FROM "tweet" AS "t3" '
+                'INNER JOIN "users" AS "t4" ON ("t3"."user_id" = "t4"."id")'),
+                [1])
+
             results = [(t.id, t.content, t.user.username) for t in union]
             self.assertEqual(sorted(results), [
                 (1, 'u1-t1', 'u1'),
                 (2, 'u1-t2', 'u1'),
                 (3, 'u2-t1', 'u2')])
 
-        union_flat = (q1 | q2).objects()
         with self.assertQueryCount(1):
+            union_flat = (q1 | q2).objects()
             results = [(t.id, t.content, t.username) for t in union_flat]
             self.assertEqual(sorted(results), [
                 (1, 'u1-t1', 'u1'),
                 (2, 'u1-t2', 'u1'),
                 (3, 'u2-t1', 'u2')])
+
+    @requires_models(User, Tweet)
+    def test_compound_select_as_subquery(self):
+        with self.database.atomic():
+            for i in range(5):
+                user = User.create(username='u%s' % i)
+                for j in range(i * 2):
+                    Tweet.create(user=user, content='t%s-%s' % (i, j))
+
+        q1 = (Tweet
+              .select(Tweet.id, Tweet.content, User.username)
+              .join(User)
+              .where(User.username == 'u3'))
+        q2 = (Tweet
+              .select(Tweet.id, Tweet.content, User.username)
+              .join(User)
+              .where(User.username.in_(['u2', 'u4'])))
+        union = (q1 | q2)
+
+        q = (union
+             .select_from(union.c.username, fn.COUNT(union.c.id).alias('ct'))
+             .group_by(union.c.username)
+             .order_by(fn.COUNT(union.c.id).desc())
+             .dicts())
+        self.assertEqual(list(q), [
+            {'username': 'u4', 'ct': 8},
+            {'username': 'u3', 'ct': 6},
+            {'username': 'u2', 'ct': 4}])
 
     @requires_models(User, Tweet)
     def test_union_with_join(self):
@@ -864,20 +1249,20 @@ class TestModelAPIs(ModelTestCase):
             for t in ts:
                 Tweet.create(user=u, content='%s-%s' % (u.username, t))
 
-        q1 = (User
-              .select(User, Tweet)
-              .join(Tweet, on=(Tweet.user == User.id).alias('foo')))
-        q2 = (User
-              .select(User, Tweet)
-              .join(Tweet, on=(Tweet.user == User.id).alias('foo')))
-
         with self.assertQueryCount(1):
+            q1 = (User
+                  .select(User, Tweet)
+                  .join(Tweet, on=(Tweet.user == User.id).alias('foo')))
+            q2 = (User
+                  .select(User, Tweet)
+                  .join(Tweet, on=(Tweet.user == User.id).alias('foo')))
+
             self.assertEqual(
                 sorted([(user.username, user.foo.content) for user in q1]),
                 [('u1', 'u1-t1'), ('u1', 'u1-t2'), ('u2', 'u2-t1')])
 
-        uq = q1.union_all(q2)
         with self.assertQueryCount(1):
+            uq = q1.union_all(q2)
             result = [(user.username, user.foo.content) for user in uq]
             self.assertEqual(sorted(result), [
                 ('u1', 'u1-t1'),
@@ -953,20 +1338,46 @@ class TestModelAPIs(ModelTestCase):
     def test_from_multi_table(self):
         self.add_tweets(self.add_user('huey'), 'meow', 'hiss', 'purr')
         self.add_tweets(self.add_user('mickey'), 'woof', 'wheeze')
-        query = (Tweet
-                 .select(Tweet, User)
-                 .from_(Tweet, User)
-                 .where(
-                     (Tweet.user == User.id) &
-                     (User.username == 'huey'))
-                 .order_by(Tweet.id)
-                 .dicts())
 
         with self.assertQueryCount(1):
+            query = (Tweet
+                     .select(Tweet, User)
+                     .from_(Tweet, User)
+                     .where(
+                         (Tweet.user == User.id) &
+                         (User.username == 'huey'))
+                     .order_by(Tweet.id)
+                     .dicts())
+
             self.assertEqual([t['content'] for t in query],
                              ['meow', 'hiss', 'purr'])
             self.assertEqual([t['username'] for t in query],
                              ['huey', 'huey', 'huey'])
+
+    @requires_models(Point)
+    def test_subquery_in_select_expression(self):
+        for x, y in ((1, 1), (1, 2), (10, 10), (10, 20)):
+            Point.create(x=x, y=y)
+
+        with self.assertQueryCount(1):
+            PA = Point.alias('pa')
+            subq = PA.select(fn.SUM(PA.y)).where(PA.x == Point.x)
+            query = (Point
+                     .select(Point.x, Point.y, subq.alias('sy'))
+                     .order_by(Point.x, Point.y))
+            self.assertEqual(list(query.tuples()), [
+                (1, 1, 3),
+                (1, 2, 3),
+                (10, 10, 30),
+                (10, 20, 30)])
+
+        with self.assertQueryCount(1):
+            query = (Point
+                     .select(Point.x, (Point.y + subq).alias('sy'))
+                     .order_by(Point.x, Point.y))
+            self.assertEqual(list(query.tuples()), [
+                (1, 4), (1, 5),
+                (10, 40), (10, 50)])
 
     @requires_models(User, Tweet)
     def test_filtering(self):
@@ -976,13 +1387,15 @@ class TestModelAPIs(ModelTestCase):
             self.add_tweets(huey, 'meow', 'hiss', 'purr')
             self.add_tweets(mickey, 'woof', 'wheeze')
 
-        query = Tweet.filter(user__username='huey').order_by(Tweet.content)
-        self.assertEqual([row.content for row in query],
-                         ['hiss', 'meow', 'purr'])
+        with self.assertQueryCount(1):
+            query = Tweet.filter(user__username='huey').order_by(Tweet.content)
+            self.assertEqual([row.content for row in query],
+                             ['hiss', 'meow', 'purr'])
 
-        query = User.filter(tweets__content__ilike='w%')
-        self.assertEqual([user.username for user in query],
-                         ['mickey', 'mickey'])
+        with self.assertQueryCount(1):
+            query = User.filter(tweets__content__ilike='w%')
+            self.assertEqual([user.username for user in query],
+                             ['mickey', 'mickey'])
 
     def test_deferred_fk(self):
         class Note(TestModel):
@@ -1141,12 +1554,15 @@ class TestDeleteInstance(ModelTestCase):
         queries = [logrecord.msg for logrecord in self._qh.queries[-5:]]
         self.assertEqual(sorted(queries), [
             ('DELETE FROM "favorite" WHERE ('
-             '"tweet_id" IN (SELECT "t1"."id" FROM "tweet" AS "t1" WHERE ('
+             '"favorite"."tweet_id" IN ('
+             'SELECT "t1"."id" FROM "tweet" AS "t1" WHERE ('
              '"t1"."user_id" = ?)))', [huey.id]),
-            ('DELETE FROM "favorite" WHERE ("user_id" = ?)', [huey.id]),
-            ('DELETE FROM "tweet" WHERE ("user_id" = ?)', [huey.id]),
-            ('DELETE FROM "users" WHERE ("id" = ?)', [huey.id]),
-            ('UPDATE "account" SET "user_id" = ? WHERE ("user_id" = ?)',
+            ('DELETE FROM "favorite" WHERE ("favorite"."user_id" = ?)',
+             [huey.id]),
+            ('DELETE FROM "tweet" WHERE ("tweet"."user_id" = ?)', [huey.id]),
+            ('DELETE FROM "users" WHERE ("users"."id" = ?)', [huey.id]),
+            ('UPDATE "account" SET "user_id" = ? '
+             'WHERE ("account"."user_id" = ?)',
              [None, huey.id]),
         ])
 
@@ -1177,13 +1593,16 @@ class TestDeleteInstance(ModelTestCase):
         # Get the last 5 delete queries.
         queries = [logrecord.msg for logrecord in self._qh.queries[-5:]]
         self.assertEqual(sorted(queries), [
-            ('DELETE FROM "account" WHERE ("user_id" = ?)', [huey.id]),
+            ('DELETE FROM "account" WHERE ("account"."user_id" = ?)',
+             [huey.id]),
             ('DELETE FROM "favorite" WHERE ('
-             '"tweet_id" IN (SELECT "t1"."id" FROM "tweet" AS "t1" WHERE ('
+             '"favorite"."tweet_id" IN ('
+             'SELECT "t1"."id" FROM "tweet" AS "t1" WHERE ('
              '"t1"."user_id" = ?)))', [huey.id]),
-            ('DELETE FROM "favorite" WHERE ("user_id" = ?)', [huey.id]),
-            ('DELETE FROM "tweet" WHERE ("user_id" = ?)', [huey.id]),
-            ('DELETE FROM "users" WHERE ("id" = ?)', [huey.id]),
+            ('DELETE FROM "favorite" WHERE ("favorite"."user_id" = ?)',
+             [huey.id]),
+            ('DELETE FROM "tweet" WHERE ("tweet"."user_id" = ?)', [huey.id]),
+            ('DELETE FROM "users" WHERE ("users"."id" = ?)', [huey.id]),
         ])
 
         self.assertEqual(User.select().count(), 1)
@@ -1283,23 +1702,23 @@ class TestDefaultValues(ModelTestCase):
         sm1 = SampleMeta.create(sample=s, value=1.)
         sm2 = SampleMeta.create(sample=s, value=2.)
 
-        # Simple query.
-        query = SampleMeta.select(SampleMeta.sample).order_by(SampleMeta.value)
-
         # Defaults are not present when doing a read query.
         with self.assertQueryCount(1):
+            # Simple query.
+            query = (SampleMeta.select(SampleMeta.sample)
+                     .order_by(SampleMeta.value))
             sm1_db, sm2_db = list(query)
             self.assertIsNone(sm1_db.value)
             self.assertIsNone(sm2_db.value)
 
-        # Join-graph query.
-        query = (SampleMeta
-                 .select(SampleMeta.sample,
-                         Sample.counter)
-                 .join(Sample)
-                 .order_by(SampleMeta.value))
-
         with self.assertQueryCount(1):
+            # Join-graph query.
+            query = (SampleMeta
+                     .select(SampleMeta.sample,
+                             Sample.counter)
+                     .join(Sample)
+                     .order_by(SampleMeta.value))
+
             sm1_db, sm2_db = list(query)
             self.assertIsNone(sm1_db.value)
             self.assertIsNone(sm2_db.value)
@@ -1323,6 +1742,38 @@ class TestFunctionCoerce(ModelTestCase):
 
         query = Sample.select(counter_group.alias('counter_group'))
         self.assertEqual(query.get().counter_group, '0,1,2')
+
+        query = Sample.select(counter_group)
+        self.assertEqual(query.scalar(), '0,1,2')
+
+    def test_safe_python_value(self):
+        for i in range(3):
+            Sample.create(counter=i, value=i)
+
+        counter_group = fn.GROUP_CONCAT(Sample.counter)
+        query = Sample.select(counter_group.alias('counter'))
+        self.assertEqual(query.get().counter, '0,1,2')
+        self.assertEqual(query.scalar(), '0,1,2')
+
+        query = Sample.select(counter_group.alias('counter_group'))
+        self.assertEqual(query.get().counter_group, '0,1,2')
+        self.assertEqual(query.scalar(), '0,1,2')
+
+    def test_conv_using_python_value(self):
+        for i in range(3):
+            Sample.create(counter=i, value=i)
+
+        counter = (fn
+                   .GROUP_CONCAT(Sample.counter)
+                   .python_value(lambda x: [int(i) for i in x.split(',')]))
+        query = Sample.select(counter.alias('counter'))
+        self.assertEqual(query.get().counter, [0, 1, 2])
+
+        query = Sample.select(counter.alias('counter_group'))
+        self.assertEqual(query.get().counter_group, [0, 1, 2])
+
+        query = Sample.select(counter)
+        self.assertEqual(query.scalar(), [0, 1, 2])
 
     @requires_models(Category)
     def test_no_coerce_count(self):
@@ -1349,12 +1800,13 @@ class TestJoinModelAlias(ModelTestCase):
     def setUp(self):
         super(TestJoinModelAlias, self).setUp()
         users = {}
-        for username, tweet in self.data:
+        for pk, (username, tweet) in enumerate(self.data, 1):
             if username not in users:
-                users[username] = user = User.create(username=username)
+                user = User.create(id=len(users) + 1, username=username)
+                users[username] = user
             else:
                 user = users[username]
-            Tweet.create(user=user, content=tweet)
+            Tweet.create(id=pk, user=user, content=tweet)
 
     def _test_query(self, alias_expr):
         UA = alias_expr()
@@ -1471,12 +1923,13 @@ class TestJoinModelAlias(ModelTestCase):
         # joining from User -> Tweet -> User (as "foo").
         TA = Tweet.alias('ta')
         UA = User.alias('ua')
-        query = (User
-                 .select(User, TA, UA)
-                 .join(TA)
-                 .join(UA, on=(TA.user_id == UA.id).alias('foo'))
-                 .order_by(User.username, TA.content))
         with self.assertQueryCount(1):
+            query = (User
+                     .select(User, TA, UA)
+                     .join(TA)
+                     .join(UA, on=(TA.user_id == UA.id).alias('foo'))
+                     .order_by(User.username, TA.content))
+
             data = [(row.username, row.tweet.content, row.tweet.foo.username)
                     for row in query]
 
@@ -1490,25 +1943,28 @@ class TestJoinModelAlias(ModelTestCase):
         UA = User.alias('ua')
         lookups = ({'ua__username': 'huey'}, {'user__username': 'huey'})
         for lookup in lookups:
-            query = (Tweet
-                     .select(Tweet.content, UA.username)
-                     .join(UA)
-                     .filter(**lookup)
-                     .order_by(Tweet.content))
-            self.assertSQL(query, (
-                'SELECT "t1"."content", "ua"."username" '
-                'FROM "tweet" AS "t1" '
-                'INNER JOIN "users" AS "ua" '
-                'ON ("t1"."user_id" = "ua"."id") '
-                'WHERE ("ua"."username" = ?) '
-                'ORDER BY "t1"."content"'), ['huey'])
             with self.assertQueryCount(1):
+                query = (Tweet
+                         .select(Tweet.content, UA.username)
+                         .join(UA)
+                         .filter(**lookup)
+                         .order_by(Tweet.content))
+
+                self.assertSQL(query, (
+                    'SELECT "t1"."content", "ua"."username" '
+                    'FROM "tweet" AS "t1" '
+                    'INNER JOIN "users" AS "ua" '
+                    'ON ("t1"."user_id" = "ua"."id") '
+                    'WHERE ("ua"."username" = ?) '
+                    'ORDER BY "t1"."content"'), ['huey'])
+
                 data = [(t.content, t.user.username) for t in query]
                 self.assertEqual(data, [('meow', 'huey'), ('purr', 'huey')])
 
 
-@skip_unless(IS_POSTGRESQL or IS_MYSQL_ADVANCED_FEATURES or IS_SQLITE_25,
-             'window function')
+@skip_unless(
+    IS_POSTGRESQL or IS_MYSQL_ADVANCED_FEATURES or IS_SQLITE_25 or IS_CRDB,
+    'window function')
 class TestWindowFunctionIntegration(ModelTestCase):
     requires = [Sample]
 
@@ -1628,7 +2084,7 @@ class TestWindowFunctionIntegration(ModelTestCase):
     def test_empty_over(self):
         query = (Sample
                  .select(Sample.counter, Sample.value,
-                         fn.LAG(Sample.counter, 1).over())
+                         fn.LAG(Sample.counter, 1).over(order_by=[Sample.id]))
                  .order_by(Sample.id)
                  .tuples())
         self.assertEqual(list(query), [
@@ -1734,10 +2190,24 @@ class TestWindowFunctionIntegration(ModelTestCase):
             (3, 100., 103.),
         ])
 
+    @skip_if(IS_MYSQL or (IS_SQLITE and not IS_SQLITE_30),
+             'requires FILTER with aggregates')
+    def test_filter_with_aggregate(self):
+        condsum = fn.SUM(Sample.value).filter(Sample.counter > 1)
+        query = (Sample
+                 .select(Sample.counter, condsum.alias('cs'))
+                 .group_by(Sample.counter)
+                 .order_by(Sample.counter))
+        self.assertEqual(list(query.tuples()), [
+            (1, None),
+            (2, 4.),
+            (3, 100.)])
+
 
 @skip_if(IS_SQLITE or (IS_MYSQL and not IS_MYSQL_ADVANCED_FEATURES))
+@skip_unless(db.for_update, 'requires for update')
 class TestForUpdateIntegration(ModelTestCase):
-    requires = [User]
+    requires = [User, Tweet]
 
     def setUp(self):
         super(TestForUpdateIntegration, self).setUp()
@@ -1746,7 +2216,12 @@ class TestForUpdateIntegration(ModelTestCase):
             class Meta:
                 database = self.alt_db
                 table_name = User._meta.table_name
+        class AltTweet(Tweet):
+            class Meta:
+                database = self.alt_db
+                table_name = Tweet._meta.table_name
         self.AltUser = AltUser
+        self.AltTweet = AltTweet
 
     def tearDown(self):
         self.alt_db.close()
@@ -1759,12 +2234,19 @@ class TestForUpdateIntegration(ModelTestCase):
         AltUser = self.AltUser
 
         with self.database.manual_commit():
-            users = User.select(User.username == 'zaizee').for_update()
+            users = User.select().where(User.username == 'zaizee').for_update()
             updated = (User
                        .update(username='ziggy')
                        .where(User.username == 'zaizee')
                        .execute())
             self.assertEqual(updated, 1)
+
+            if IS_POSTGRESQL:
+                nrows = (AltUser
+                         .update(username='huey-x')
+                         .where(AltUser.username == 'huey')
+                         .execute())
+                self.assertEqual(nrows, 1)
 
             query = (AltUser
                      .select(AltUser.username)
@@ -1774,6 +2256,16 @@ class TestForUpdateIntegration(ModelTestCase):
             self.database.commit()
             self.assertEqual(query.get().username, 'ziggy')
 
+    def test_for_update_nested(self):
+        User.insert_many([(u,) for u in 'abc']).execute()
+        subq = User.select().where(User.username != 'b').for_update()
+        nrows = (User
+                 .delete()
+                 .where(User.id.in_(subq))
+                 .execute())
+        self.assertEqual(nrows, 2)
+
+    @skip_if(IS_CRDB, 'crdb does not support "nowait" option')
     def test_for_update_nowait(self):
         User.create(username='huey')
         zaizee = User.create(username='zaizee')
@@ -1784,17 +2276,63 @@ class TestForUpdateIntegration(ModelTestCase):
             users = (User
                      .select(User.username)
                      .where(User.username == 'zaizee')
-                     .for_update('FOR UPDATE NOWAIT')
+                     .for_update(nowait=True)
                      .execute())
 
             def will_fail():
                 return (AltUser
                         .select()
                         .where(AltUser.username == 'zaizee')
-                        .for_update('FOR UPDATE NOWAIT')
+                        .for_update(nowait=True)
                         .get())
 
             self.assertRaises((OperationalError, InternalError), will_fail)
+
+    @requires_postgresql
+    @requires_models(User, Tweet)
+    def test_for_update_of(self):
+        h = User.create(username='huey')
+        z = User.create(username='zaizee')
+        Tweet.create(user=h, content='h')
+        Tweet.create(user=z, content='z')
+
+        AltUser, AltTweet = self.AltUser, self.AltTweet
+
+        with self.database.manual_commit():
+            # Lock tweets by huey.
+            query = (Tweet
+                     .select()
+                     .join(User)
+                     .where(User.username == 'huey')
+                     .for_update(of=Tweet, nowait=True))
+            qr = query.execute()
+
+            # No problem updating zaizee's tweet or huey's user.
+            nrows = (AltTweet
+                     .update(content='zx')
+                     .where(AltTweet.user == z.id)
+                     .execute())
+            self.assertEqual(nrows, 1)
+
+            nrows = (AltUser
+                     .update(username='huey-x')
+                     .where(AltUser.username == 'huey')
+                     .execute())
+            self.assertEqual(nrows, 1)
+
+            def will_fail():
+                (AltTweet
+                 .select()
+                 .where(AltTweet.user == h)
+                 .for_update(nowait=True)
+                 .get())
+            self.assertRaises((OperationalError, InternalError), will_fail)
+
+            self.database.commit()
+
+        query = Tweet.select(Tweet, User).join(User).order_by(Tweet.id)
+        self.assertEqual([(t.content, t.user.username) for t in query],
+                         [('h', 'huey-x'), ('zx', 'zaizee')])
 
 
 class ServerDefault(TestModel):
@@ -1808,14 +2346,21 @@ class TestReturningIntegration(ModelTestCase):
     def test_simple_returning(self):
         query = User.insert(username='charlie')
         self.assertSQL(query, (
-            'INSERT INTO "users" ("username") VALUES (?) RETURNING "id"'),
+            'INSERT INTO "users" ("username") VALUES (?) '
+            'RETURNING "users"."id"'),
             ['charlie'])
 
         self.assertEqual(query.execute(), 1)
 
+        # By default returns a tuple.
         query = User.insert(username='huey')
         self.assertEqual(query.execute(), 2)
         self.assertEqual(list(query), [(2,)])
+
+        # If we specify a returning clause we get user instances.
+        query = User.insert(username='snoobie').returning(User)
+        query.execute()
+        self.assertEqual([x.username for x in query], ['snoobie'])
 
         query = (User
                  .insert(username='zaizee')
@@ -1823,11 +2368,11 @@ class TestReturningIntegration(ModelTestCase):
                  .dicts())
         self.assertSQL(query, (
             'INSERT INTO "users" ("username") VALUES (?) '
-            'RETURNING "id", "username"'), ['zaizee'])
+            'RETURNING "users"."id", "users"."username"'), ['zaizee'])
 
         cursor = query.execute()
         row, = list(cursor)
-        self.assertEqual(row, {'id': 3, 'username': 'zaizee'})
+        self.assertEqual(row, {'id': 4, 'username': 'zaizee'})
 
         query = (User
                  .insert(username='mickey')
@@ -1835,11 +2380,54 @@ class TestReturningIntegration(ModelTestCase):
                  .objects())
         self.assertSQL(query, (
             'INSERT INTO "users" ("username") VALUES (?) '
-            'RETURNING "id", "username"'), ['mickey'])
+            'RETURNING "users"."id", "users"."username"'), ['mickey'])
         cursor = query.execute()
         row, = list(cursor)
-        self.assertEqual(row.id, 4)
+        self.assertEqual(row.id, 5)
         self.assertEqual(row.username, 'mickey')
+
+        # Can specify aliases.
+        query = (User
+                 .insert(username='sipp')
+                 .returning(User.username.alias('new_username')))
+        self.assertEqual([x.new_username for x in query.execute()], ['sipp'])
+
+    def test_simple_returning_insert_update_delete(self):
+        res = User.insert(username='charlie').returning(User).execute()
+        self.assertEqual([u.username for u in res], ['charlie'])
+
+        res = (User
+               .update(username='charlie2')
+               .where(User.id == 1)
+               .returning(User)
+               .execute())
+        # Subsequent iterations are cached.
+        for _ in range(2):
+            self.assertEqual([u.username for u in res], ['charlie2'])
+
+        res = (User
+               .delete()
+               .where(User.id == 1)
+               .returning(User)
+               .execute())
+        # Subsequent iterations are cached.
+        for _ in range(2):
+            self.assertEqual([u.username for u in res], ['charlie2'])
+
+    def test_simple_insert_update_delete_no_returning(self):
+        query = User.insert(username='charlie')
+        self.assertEqual(query.execute(), 1)
+
+        query = User.insert(username='huey')
+        self.assertEqual(query.execute(), 2)
+
+        query = User.update(username='huey2').where(User.username == 'huey')
+        self.assertEqual(query.execute(), 1)
+        self.assertEqual(query.execute(), 0)  # No rows updated!
+
+        query = User.delete().where(User.username == 'huey2')
+        self.assertEqual(query.execute(), 1)
+        self.assertEqual(query.execute(), 0)  # No rows updated!
 
     @requires_models(ServerDefault)
     def test_returning_server_defaults(self):
@@ -1849,7 +2437,8 @@ class TestReturningIntegration(ModelTestCase):
         self.assertSQL(query, (
             'INSERT INTO "server_default" '
             'DEFAULT VALUES '
-            'RETURNING "id", "timestamp"'), [])
+            'RETURNING "server_default"."id", "server_default"."timestamp"'),
+            [])
 
         with self.assertQueryCount(1):
             cursor = query.dicts().execute()
@@ -1872,8 +2461,8 @@ class TestReturningIntegration(ModelTestCase):
     def test_non_int_pk_returning(self):
         query = Category.insert(name='root')
         self.assertSQL(query, (
-            'INSERT INTO "category" ("name") VALUES (?) RETURNING "name"'),
-            ['root'])
+            'INSERT INTO "category" ("name") VALUES (?) '
+            'RETURNING "category"."name"'), ['root'])
 
         self.assertEqual(query.execute(), 'root')
 
@@ -1881,8 +2470,8 @@ class TestReturningIntegration(ModelTestCase):
         data = [{'username': 'huey'}, {'username': 'mickey'}]
         query = User.insert_many(data)
         self.assertSQL(query, (
-            'INSERT INTO "users" ("username") VALUES (?), (?) RETURNING "id"'),
-            ['huey', 'mickey'])
+            'INSERT INTO "users" ("username") VALUES (?), (?) '
+            'RETURNING "users"."id"'), ['huey', 'mickey'])
 
         data = query.execute()
 
@@ -1912,7 +2501,7 @@ class TestReturningIntegration(ModelTestCase):
         self.assertSQL(query, (
             'INSERT INTO "users" ("username") '
             'SELECT "t1"."name" FROM "category" AS "t1" ORDER BY "t1"."name" '
-            'RETURNING "id"'), [])
+            'RETURNING "users"."id"'), [])
 
         data = query.execute()
 
@@ -1931,8 +2520,8 @@ class TestReturningIntegration(ModelTestCase):
                  .returning(User.id, User.username))
         self.assertSQL(query, (
             'UPDATE "users" SET "username" = ? '
-            'WHERE ("username" = ?) '
-            'RETURNING "id", "username"'), ['ziggy', 'zaizee'])
+            'WHERE ("users"."username" = ?) '
+            'RETURNING "users"."id", "users"."username"'), ['ziggy', 'zaizee'])
         data = query.execute()
         user = data[0]
         self.assertEqual(user.username, 'ziggy')
@@ -1948,8 +2537,8 @@ class TestReturningIntegration(ModelTestCase):
                  .where(User.username == 'zaizee')
                  .returning(User.id, User.username))
         self.assertSQL(query, (
-            'DELETE FROM "users" WHERE ("username" = ?) '
-            'RETURNING "id", "username"'), ['zaizee'])
+            'DELETE FROM "users" WHERE ("users"."username" = ?) '
+            'RETURNING "users"."id", "users"."username"'), ['zaizee'])
         data = query.execute()
         user = data[0]
         self.assertEqual(user.username, 'zaizee')
@@ -1975,7 +2564,8 @@ class TestCTEIntegration(ModelTestCase):
         c12 = CC(name='c12', parent=p1)
         c31 = CC(name='c31', parent=p3)
 
-    @skip_if(IS_SQLITE_OLD or (IS_MYSQL and not IS_MYSQL_ADVANCED_FEATURES))
+    @skip_if(IS_SQLITE_OLD or (IS_MYSQL and not IS_MYSQL_ADVANCED_FEATURES)
+             or IS_CRDB)
     @requires_models(Member)
     def test_docs_example(self):
         f = Member.create(name='founder')
@@ -2067,7 +2657,7 @@ class TestCTEIntegration(ModelTestCase):
             ('p3', 'root'),
         ])
 
-    @skip_if(IS_SQLITE_OLD or IS_MYSQL, 'requires recursive cte support')
+    @skip_if(IS_SQLITE_OLD or IS_MYSQL or IS_CRDB, 'requires recursive cte')
     def test_recursive_cte(self):
         def get_parents(cname):
             C1 = Category.alias()
@@ -2128,7 +2718,7 @@ class TestCTEIntegration(ModelTestCase):
         data = [(r.name, r.level, r.path) for r in query]
         self.assertEqual(data, [('root', 1, 'root')])
 
-    @skip_if(IS_SQLITE_OLD or IS_MYSQL, 'requires recursive cte support')
+    @skip_if(IS_SQLITE_OLD or IS_MYSQL or IS_CRDB, 'requires recursive cte')
     def test_recursive_cte2(self):
         hierarchy = (Category
                      .select(Category.name, Value(0).alias('level'))
@@ -2153,7 +2743,7 @@ class TestCTEIntegration(ModelTestCase):
             ('p3', 1),
             ('root', 0)])
 
-    @skip_if(IS_SQLITE_OLD or IS_MYSQL, 'requires recursive cte support')
+    @skip_if(IS_SQLITE_OLD or IS_MYSQL or IS_CRDB, 'requires recursive cte')
     def test_recursive_cte_docs_example(self):
         # Define the base case of our recursive CTE. This will be categories that
         # have a null parent foreign-key.
@@ -2224,7 +2814,7 @@ class TestCTEIntegration(ModelTestCase):
             (2, .4)])
 
 
-@skip_unless(IS_POSTGRESQL or IS_SQLITE_15, 'requires row-value support')
+@skip_if(not IS_SQLITE_15, 'requires row-values')
 class TestTupleComparison(ModelTestCase):
     requires = [User]
 
@@ -2238,6 +2828,35 @@ class TestTupleComparison(ModelTestCase):
         self.assertEqual(query.count(), 1)
         obj = query.get()
         self.assertEqual(obj, ub)
+
+    def test_tuple_subquery(self):
+        ua, ub, uc = [User.create(username=username) for username in 'abc']
+        UA = User.alias()
+        subquery = (UA
+                    .select(UA.username, UA.id)
+                    .where(UA.username != 'b'))
+
+        query = (User
+                 .select(User.username)
+                 .where(Tuple(User.username, User.id).in_(subquery))
+                 .order_by(User.username))
+        self.assertEqual([u.username for u in query], ['a', 'c'])
+
+    @requires_models(CPK)
+    def test_row_value_composite_key(self):
+        CPK.insert_many([('k1', 1, 1), ('k2', 2, 2), ('k3', 3, 3)]).execute()
+
+        cpk = CPK.get(CPK._meta.primary_key == ('k2', 2))
+        self.assertEqual(cpk._pk, ('k2', 2))
+
+        cpk = CPK['k3', 3]
+        self.assertEqual(cpk._pk, ('k3', 3))
+
+        uq = CPK.update(extra=20).where(CPK._meta.primary_key != ('k2', 2))
+        uq.execute()
+
+        self.assertEqual(list(sorted(CPK.select().tuples())), [
+            ('k1', 1, 20), ('k2', 2, 2), ('k3', 3, 20)])
 
 
 class TestModelGraph(BaseTestCase):
@@ -2439,6 +3058,7 @@ class TestFieldInheritance(BaseTestCase):
         self.assertTrue(Category.itemb_set.model is Category)
 
     @skip_if(IS_SQLITE, 'sqlite is not supported')
+    @skip_if(IS_CRDB, 'crdb is not raising the error in this test(?)')
     def test_deferred_fk_creation(self):
         class B(TestModel):
             a = DeferredForeignKey('A', null=True)
@@ -2587,7 +3207,6 @@ class TestMetaInheritance(BaseTestCase):
                 only_save_dirty = True
                 options = {'key': 'value'}
                 schema = 'magic'
-                table_alias = 'ba'
 
         class Child(Base): pass
         class GrandChild(Child): pass
@@ -2599,7 +3218,6 @@ class TestMetaInheritance(BaseTestCase):
             self.assertEqual(ModelClass._meta.options, {'key': 'value'})
             self.assertTrue(ModelClass._meta.only_save_dirty)
             self.assertEqual(ModelClass._meta.schema, 'magic')
-            self.assertTrue(ModelClass._meta.table_alias is None)
 
         class Overrides(Base):
             class Meta:
@@ -2630,6 +3248,44 @@ class TestMetaInheritance(BaseTestCase):
         self.assertTrue(T1._meta.temporary)
         self.assertTrue(T2._meta.temporary)
         self.assertFalse(T3._meta.temporary)
+
+
+class TestModelMetadataMisc(BaseTestCase):
+    database = get_in_memory_db()
+
+    def test_subclass_aware_metadata(self):
+        class SchemaPropagateMetadata(SubclassAwareMetadata):
+            @property
+            def schema(self):
+                return self._schema
+            @schema.setter
+            def schema(self, value):
+                # self.models is a singleton, essentially, shared among all
+                # classes that use this metadata implementation.
+                for model in self.models:
+                    model._meta._schema = value
+
+        class Base(Model):
+            class Meta:
+                database = self.database
+                model_metadata_class = SchemaPropagateMetadata
+
+        class User(Base):
+            username = TextField()
+        class Tweet(Base):
+            user = ForeignKeyField(User, backref='tweets')
+            content = TextField()
+
+        self.assertTrue(User._meta.schema is None)
+        self.assertTrue(Tweet._meta.schema is None)
+
+        Base._meta.schema = 'temp'
+        self.assertEqual(User._meta.schema, 'temp')
+        self.assertEqual(Tweet._meta.schema, 'temp')
+
+        User._meta.schema = None
+        for model in (Base, User, Tweet):
+            self.assertTrue(model._meta.schema is None)
 
 
 class TestModelSetDatabase(BaseTestCase):
@@ -2747,24 +3403,7 @@ class TestModelAliasFieldProperties(ModelTestCase):
         self.assertSQL(query, expected_sql, expected_params)
 
 
-class Emp(TestModel):
-    first = CharField()
-    last = CharField()
-    empno = CharField(unique=True)
-
-    class Meta:
-        indexes = (
-            (('first', 'last'), True),
-        )
-
-
-class OCTest(TestModel):
-    a = CharField(unique=True)
-    b = IntegerField(default=0)
-    c = IntegerField(default=0)
-
-
-class OnConflictTestCase(ModelTestCase):
+class OnConflictTests(object):
     requires = [Emp]
     test_data = (
         ('huey', 'cat', '123'),
@@ -2773,7 +3412,7 @@ class OnConflictTestCase(ModelTestCase):
     )
 
     def setUp(self):
-        super(OnConflictTestCase, self).setUp()
+        super(OnConflictTests, self).setUp()
         for first, last, empno in self.test_data:
             Emp.create(first=first, last=last, empno=empno)
 
@@ -2792,8 +3431,192 @@ class OnConflictTestCase(ModelTestCase):
         self.assertData(list(self.test_data))
 
 
+def requires_upsert(m):
+    return skip_unless(IS_SQLITE_24 or IS_POSTGRESQL or IS_CRDB,
+                       'requires upsert')(m)
+
+
+class KV(TestModel):
+    key = CharField(unique=True)
+    value = IntegerField()
+
+
+class PGOnConflictTests(OnConflictTests):
+    @requires_upsert
+    def test_update(self):
+        # Conflict on empno - we'll preserve name and update the ID. This will
+        # overwrite the previous row and set a new ID.
+        res = (Emp
+               .insert(first='foo', last='bar', empno='125')
+               .on_conflict(
+                   conflict_target=(Emp.empno,),
+                   preserve=(Emp.first, Emp.last),
+                   update={Emp.empno: '125.1'})
+               .execute())
+        self.assertData([
+            ('huey', 'cat', '123'),
+            ('zaizee', 'cat', '124'),
+            ('foo', 'bar', '125.1')])
+
+        # Conflicts on first/last name. The first name is preserved while the
+        # last-name is updated. The new empno is thrown out.
+        res = (Emp
+               .insert(first='foo', last='bar', empno='126')
+               .on_conflict(
+                   conflict_target=(Emp.first, Emp.last),
+                   preserve=(Emp.first,),
+                   update={Emp.last: 'baze'})
+               .execute())
+        self.assertData([
+            ('huey', 'cat', '123'),
+            ('zaizee', 'cat', '124'),
+            ('foo', 'baze', '125.1')])
+
+    @requires_upsert
+    @requires_models(OCTest)
+    def test_update_atomic(self):
+        # Add a new row with the given "a" value. If a conflict occurs,
+        # re-insert with b=b+2.
+        query = OCTest.insert(a='foo', b=1).on_conflict(
+            conflict_target=(OCTest.a,),
+            update={OCTest.b: OCTest.b + 2})
+
+        # First execution returns rowid=1. Second execution hits the conflict-
+        # resolution, and will update the value in "b" from 1 -> 3.
+        rowid1 = query.execute()
+        rowid2 = query.clone().execute()
+        self.assertEqual(rowid1, rowid2)
+
+        obj = OCTest.get()
+        self.assertEqual(obj.a, 'foo')
+        self.assertEqual(obj.b, 3)
+
+        query = OCTest.insert(a='foo', b=4, c=5).on_conflict(
+            conflict_target=[OCTest.a],
+            preserve=[OCTest.c],
+            update={OCTest.b: OCTest.b + 100})
+        self.assertEqual(query.execute(), rowid2)
+
+        obj = OCTest.get()
+        self.assertEqual(obj.a, 'foo')
+        self.assertEqual(obj.b, 103)
+        self.assertEqual(obj.c, 5)
+
+    @requires_upsert
+    @requires_models(OCTest)
+    def test_update_where_clause(self):
+        # Add a new row with the given "a" value. If a conflict occurs,
+        # re-insert with b=b+2 so long as the original b < 3.
+        query = OCTest.insert(a='foo', b=1).on_conflict(
+            conflict_target=(OCTest.a,),
+            update={OCTest.b: OCTest.b + 2},
+            where=(OCTest.b < 3))
+
+        # First execution returns rowid=1. Second execution hits the conflict-
+        # resolution, and will update the value in "b" from 1 -> 3.
+        rowid1 = query.execute()
+        rowid2 = query.clone().execute()
+        self.assertEqual(rowid1, rowid2)
+
+        obj = OCTest.get()
+        self.assertEqual(obj.a, 'foo')
+        self.assertEqual(obj.b, 3)
+
+        # Third execution also returns rowid=1. The WHERE clause prevents us
+        # from updating "b" again. If this is SQLite, we get the rowid back, if
+        # this is Postgresql we get None (since nothing happened).
+        rowid3 = query.clone().execute()
+        if IS_SQLITE:
+            self.assertEqual(rowid1, rowid3)
+        else:
+            self.assertTrue(rowid3 is None)
+
+        # Because we didn't satisfy the WHERE clause, the value in "b" is
+        # not incremented again.
+        obj = OCTest.get()
+        self.assertEqual(obj.a, 'foo')
+        self.assertEqual(obj.b, 3)
+
+    @requires_upsert
+    @requires_models(Emp)  # Has unique on first/last, unique on empno.
+    def test_conflict_update_excluded(self):
+        e1 = Emp.create(first='huey', last='c', empno='10')
+        e2 = Emp.create(first='zaizee', last='c', empno='20')
+
+        res = (Emp.insert(first='huey', last='c', empno='30')
+               .on_conflict(conflict_target=(Emp.first, Emp.last),
+                            update={Emp.empno: Emp.empno + EXCLUDED.empno},
+                            where=(EXCLUDED.empno != Emp.empno))
+               .execute())
+
+        data = sorted(Emp.select(Emp.first, Emp.last, Emp.empno).tuples())
+        self.assertEqual(data, [('huey', 'c', '1030'), ('zaizee', 'c', '20')])
+
+    @requires_upsert
+    @requires_models(KV)
+    def test_conflict_update_excluded2(self):
+        KV.create(key='k1', value=1)
+
+        query = (KV.insert(key='k1', value=10)
+                 .on_conflict(conflict_target=[KV.key],
+                              update={KV.value: KV.value + EXCLUDED.value},
+                              where=(EXCLUDED.value > KV.value)))
+        query.execute()
+        self.assertEqual(KV.select(KV.key, KV.value).tuples()[:], [('k1', 11)])
+
+        # Running it again will have no effect this time, since the new value
+        # (10) is not greater than the pre-existing row value (11).
+        query.execute()
+        self.assertEqual(KV.select(KV.key, KV.value).tuples()[:], [('k1', 11)])
+
+    @requires_upsert
+    @skip_if(IS_CRDB, 'crdb does not support the WHERE clause')
+    @requires_models(UKVP)
+    def test_conflict_target_constraint_where(self):
+        u1 = UKVP.create(key='k1', value=1, extra=1)
+        u2 = UKVP.create(key='k2', value=2, extra=2)
+
+        fields = [UKVP.key, UKVP.value, UKVP.extra]
+        data = [('k1', 1, 2), ('k2', 2, 3)]
+
+        # XXX: SQLite does not seem to accept parameterized values for the
+        # conflict target WHERE clause (e.g., the partial index). So we have to
+        # express this literally as ("extra" > 1) rather than using an
+        # expression which will be parameterized. Hopefully SQLite's authors
+        # decide this is a bug and fix it.
+        if IS_SQLITE:
+            conflict_where = UKVP.extra > SQL('1')
+        else:
+            conflict_where = UKVP.extra > 1
+
+        res = (UKVP.insert_many(data, fields)
+               .on_conflict(conflict_target=(UKVP.key, UKVP.value),
+                            conflict_where=conflict_where,
+                            preserve=(UKVP.extra,))
+               .execute())
+
+        # How many rows exist? The first one would not have triggered the
+        # conflict resolution, since the existing k1/1 row's "extra" value was
+        # not greater than 1, thus it did not satisfy the index condition.
+        # The second row (k2/2/3) would have triggered the resolution.
+        self.assertEqual(UKVP.select().count(), 3)
+        query = (UKVP
+                 .select(UKVP.key, UKVP.value, UKVP.extra)
+                 .order_by(UKVP.key, UKVP.value, UKVP.extra)
+                 .tuples())
+
+        self.assertEqual(list(query), [
+            ('k1', 1, 1),
+            ('k1', 1, 2),
+            ('k2', 2, 3)])
+
+        # Verify the primary-key of k2 did not change.
+        u2_db = UKVP.get(UKVP.key == 'k2')
+        self.assertEqual(u2_db.id, u2.id)
+
+
 @requires_mysql
-class TestUpsertMySQL(OnConflictTestCase):
+class TestUpsertMySQL(OnConflictTests, ModelTestCase):
     def test_replace(self):
         # Unique constraint on first/last would fail - replace.
         query = (Emp
@@ -2880,7 +3703,7 @@ class TestUpsertMySQL(OnConflictTestCase):
         self.assertEqual(oc.c, 6)
 
 
-class TestUpsertSqlite(OnConflictTestCase):
+class TestReplaceSqlite(OnConflictTests, ModelTestCase):
     database = get_in_memory_db()
 
     def test_replace(self):
@@ -2939,6 +3762,11 @@ class TestUpsertSqlite(OnConflictTestCase):
             ('z', 'cat', '124'),
             ('b', 'cat', '125')])
 
+
+@requires_sqlite
+class TestUpsertSqlite(PGOnConflictTests, ModelTestCase):
+    database = get_in_memory_db()
+
     @skip_if(IS_SQLITE_24, 'requires sqlite < 3.24')
     def test_no_preserve_update_where(self):
         # Ensure on SQLite < 3.24 we cannot update or preserve values.
@@ -2967,107 +3795,6 @@ class TestUpsertSqlite(OnConflictTestCase):
         self.assertRaises(ValueError, no_conflict_target.execute)
 
     @skip_unless(IS_SQLITE_24, 'requires sqlite >= 3.24')
-    def test_update(self):
-        # Conflict on empno - we'll preserve name and update the ID. This will
-        # overwrite the previous row and set a new ID.
-        res = (Emp
-               .insert(first='foo', last='bar', empno='125')
-               .on_conflict(
-                   conflict_target=(Emp.empno,),
-                   preserve=(Emp.first, Emp.last),
-                   update={Emp.empno: '125.1'})
-               .execute())
-        self.assertData([
-            ('huey', 'cat', '123'),
-            ('zaizee', 'cat', '124'),
-            ('foo', 'bar', '125.1')])
-
-        # Conflicts on first/last name. The first name is preserved while the
-        # last-name is updated. The new empno is thrown out.
-        res = (Emp
-               .insert(first='foo', last='bar', empno='126')
-               .on_conflict(
-                   conflict_target=(Emp.first, Emp.last),
-                   preserve=(Emp.first,),
-                   update={Emp.last: 'baze'})
-               .execute())
-        self.assertData([
-            ('huey', 'cat', '123'),
-            ('zaizee', 'cat', '124'),
-            ('foo', 'baze', '125.1')])
-
-    @skip_unless(IS_SQLITE_24, 'requires sqlite >= 3.24')
-    @requires_models(OCTest)
-    def test_update_atomic(self):
-        # Add a new row with the given "a" value. If a conflict occurs,
-        # re-insert with b=b+2.
-        query = OCTest.insert(a='foo', b=1).on_conflict(
-            conflict_target=(OCTest.a,),
-            update={OCTest.b: OCTest.b + 2})
-
-        # Sanity-check the SQL.
-        self.assertSQL(query, (
-            'INSERT INTO "oc_test" ("a", "b", "c") VALUES (?, ?, ?) '
-            'ON CONFLICT ("a") '
-            'DO UPDATE SET "b" = ("oc_test"."b" + ?)'), ['foo', 1, 0, 2])
-
-        # First execution returns rowid=1. Second execution hits the conflict-
-        # resolution, and will update the value in "b" from 1 -> 3.
-        rowid1 = query.execute()
-        rowid2 = query.clone().execute()
-        self.assertEqual(rowid1, rowid2)
-
-        obj = OCTest.get()
-        self.assertEqual(obj.a, 'foo')
-        self.assertEqual(obj.b, 3)
-
-        query = OCTest.insert(a='foo', b=4, c=5).on_conflict(
-            conflict_target=[OCTest.a],
-            preserve=[OCTest.c],
-            update={OCTest.b: OCTest.b + 100})
-        self.assertEqual(query.execute(), rowid2)
-
-        obj = OCTest.get()
-        self.assertEqual(obj.a, 'foo')
-        self.assertEqual(obj.b, 103)
-        self.assertEqual(obj.c, 5)
-
-    @skip_unless(IS_SQLITE_24, 'requires sqlite >= 3.24')
-    @requires_models(OCTest)
-    def test_update_where_clause(self):
-        # Add a new row with the given "a" value. If a conflict occurs,
-        # re-insert with b=b+2 so long as the original b < 3.
-        query = OCTest.insert(a='foo', b=1).on_conflict(
-            conflict_target=(OCTest.a,),
-            update={OCTest.b: OCTest.b + 2},
-            where=(OCTest.b < 3))
-        self.assertSQL(query, (
-            'INSERT INTO "oc_test" ("a", "b", "c") VALUES (?, ?, ?) '
-            'ON CONFLICT ("a") DO UPDATE SET "b" = ("oc_test"."b" + ?) '
-            'WHERE ("oc_test"."b" < ?)'), ['foo', 1, 0, 2, 3])
-
-        # First execution returns rowid=1. Second execution hits the conflict-
-        # resolution, and will update the value in "b" from 1 -> 3.
-        rowid1 = query.execute()
-        rowid2 = query.clone().execute()
-        self.assertEqual(rowid1, rowid2)
-
-        obj = OCTest.get()
-        self.assertEqual(obj.a, 'foo')
-        self.assertEqual(obj.b, 3)
-
-        # Third execution also returns rowid=1. The WHERE clause prevents us
-        # from updating "b" again, so it remains 3.
-        rowid3 = query.clone().execute()
-        self.assertEqual(rowid1, rowid3)
-
-        # Because we didn't satisfy the WHERE clause, the value in "b" is
-        # not incremented again.
-        obj = OCTest.get()
-        self.assertEqual(obj.a, 'foo')
-        self.assertEqual(obj.b, 3)
-
-    @skip_unless(IS_SQLITE_24, 'requires sqlite >= 3.24')
     def test_do_nothing(self):
         query = (Emp
                  .insert(first='foo', last='bar', empno='123')
@@ -3080,104 +3807,99 @@ class TestUpsertSqlite(OnConflictTestCase):
         self.assertData(list(self.test_data))
 
 
-@requires_postgresql
-class TestUpsertPostgresql(OnConflictTestCase):
-    def test_update(self):
-        # Conflict on empno - we'll preserve name and update the ID. This will
-        # overwrite the previous row and set a new ID.
-        res = (Emp
-               .insert(first='foo', last='bar', empno='125')
-               .on_conflict(
-                   conflict_target=(Emp.empno,),
-                   preserve=(Emp.first, Emp.last),
-                   update={Emp.empno: '125.1'})
+class UKV(TestModel):
+    key = TextField()
+    value = TextField()
+    extra = TextField(default='')
+
+    class Meta:
+        constraints = [
+            SQL('constraint ukv_key_value unique(key, value)'),
+        ]
+
+
+class UKVRel(TestModel):
+    key = TextField()
+    value = TextField()
+    extra = TextField()
+
+    class Meta:
+        indexes = (
+            (('key', 'value'), True),
+        )
+
+
+@requires_pglike
+class TestUpsertPostgresql(PGOnConflictTests, ModelTestCase):
+    @requires_postgresql
+    @requires_models(UKV)
+    def test_conflict_target_constraint(self):
+        u1 = UKV.create(key='k1', value='v1')
+        u2 = UKV.create(key='k2', value='v2')
+
+        ret = (UKV.insert(key='k1', value='v1', extra='e1')
+               .on_conflict(conflict_target=(UKV.key, UKV.value),
+                            preserve=(UKV.extra,))
                .execute())
-        self.assertData([
-            ('huey', 'cat', '123'),
-            ('zaizee', 'cat', '124'),
-            ('foo', 'bar', '125.1')])
+        self.assertEqual(ret, u1.id)
 
-        # Conflicts on first/last name. The first name is preserved while the
-        # last-name is updated. The new empno is thrown out.
-        res = (Emp
-               .insert(first='foo', last='bar', empno='126')
-               .on_conflict(
-                   conflict_target=(Emp.first, Emp.last),
-                   preserve=(Emp.first,),
-                   update={Emp.last: 'baze'})
+        # Changes were saved successfully.
+        u1_db = UKV.get(UKV.key == 'k1')
+        self.assertEqual(u1_db.key, 'k1')
+        self.assertEqual(u1_db.value, 'v1')
+        self.assertEqual(u1_db.extra, 'e1')
+        self.assertEqual(UKV.select().count(), 2)
+
+        ret = (UKV.insert(key='k2', value='v2', extra='e2')
+               .on_conflict(conflict_constraint='ukv_key_value',
+                            preserve=(UKV.extra,))
                .execute())
-        self.assertData([
-            ('huey', 'cat', '123'),
-            ('zaizee', 'cat', '124'),
-            ('foo', 'baze', '125.1')])
+        self.assertEqual(ret, u2.id)
 
-    @requires_models(OCTest)
-    def test_update_atomic(self):
-        # Add a new row with the given "a" value. If a conflict occurs,
-        # re-insert with b=b+2.
-        query = OCTest.insert(a='foo', b=1).on_conflict(
-            conflict_target=(OCTest.a,),
-            update={OCTest.b: OCTest.b + 2})
+        # Changes were saved successfully.
+        u2_db = UKV.get(UKV.key == 'k2')
+        self.assertEqual(u2_db.key, 'k2')
+        self.assertEqual(u2_db.value, 'v2')
+        self.assertEqual(u2_db.extra, 'e2')
+        self.assertEqual(UKV.select().count(), 2)
+
+        ret = (UKV.insert(key='k3', value='v3', extra='e3')
+               .on_conflict(conflict_target=[UKV.key, UKV.value],
+                            preserve=[UKV.extra])
+               .execute())
+        self.assertTrue(ret > u2_db.id)
+        self.assertEqual(UKV.select().count(), 3)
+
+    @requires_models(UKV, UKVRel)
+    def test_conflict_ambiguous_column(self):
+        # k1/v1/e1, k2/v2/e0, k3/v3/e1
+        for i in [1, 2, 3]:
+            UKV.create(key='k%s' % i, value='v%s' % i, extra='e%s' % (i % 2))
+
+        UKVRel.create(key='k1', value='v1', extra='x1')
+        UKVRel.create(key='k2', value='v2', extra='x2')
+
+        subq = UKV.select(UKV.key, UKV.value, UKV.extra)
+        query = (UKVRel
+                 .insert_from(subq, [UKVRel.key, UKVRel.value, UKVRel.extra])
+                 .on_conflict(conflict_target=[UKVRel.key, UKVRel.value],
+                              preserve=[UKVRel.extra],
+                              where=(UKVRel.key != 'k2')))
         self.assertSQL(query, (
-            'INSERT INTO "oc_test" ("a", "b", "c") VALUES (?, ?, ?) '
-            'ON CONFLICT ("a") DO UPDATE SET "b" = ("oc_test"."b" + ?) '
-            'RETURNING "id"'), ['foo', 1, 0, 2])
+            'INSERT INTO "ukv_rel" ("key", "value", "extra") '
+            'SELECT "t1"."key", "t1"."value", "t1"."extra" FROM "ukv" AS "t1" '
+            'ON CONFLICT ("key", "value") DO UPDATE '
+            'SET "extra" = EXCLUDED."extra" '
+            'WHERE ("ukv_rel"."key" != ?) RETURNING "ukv_rel"."id"'), ['k2'])
 
-        # First execution returns rowid=1. Second execution hits the conflict-
-        # resolution, and will update the value in "b" from 1 -> 3.
-        rowid1 = query.execute()
-        rowid2 = query.clone().execute()
-        self.assertEqual(rowid1, rowid2)
-
-        obj = OCTest.get()
-        self.assertEqual(obj.a, 'foo')
-        self.assertEqual(obj.b, 3)
-
-        query = OCTest.insert(a='foo', b=4, c=5).on_conflict(
-            conflict_target=[OCTest.a],
-            preserve=[OCTest.c],
-            update={OCTest.b: OCTest.b + 100})
-        self.assertEqual(query.execute(), rowid2)
-
-        obj = OCTest.get()
-        self.assertEqual(obj.a, 'foo')
-        self.assertEqual(obj.b, 103)
-        self.assertEqual(obj.c, 5)
-
-    @requires_models(OCTest)
-    def test_update_where_clause(self):
-        # Add a new row with the given "a" value. If a conflict occurs,
-        # re-insert with b=b+2 so long as the original b < 3.
-        query = OCTest.insert(a='foo', b=1).on_conflict(
-            conflict_target=(OCTest.a,),
-            update={OCTest.b: OCTest.b + 2},
-            where=(OCTest.b < 3))
-        self.assertSQL(query, (
-            'INSERT INTO "oc_test" ("a", "b", "c") VALUES (?, ?, ?) '
-            'ON CONFLICT ("a") DO UPDATE SET "b" = ("oc_test"."b" + ?) '
-            'WHERE ("oc_test"."b" < ?) '
-            'RETURNING "id"'), ['foo', 1, 0, 2, 3])
-
-        # First execution returns rowid=1. Second execution hits the conflict-
-        # resolution, and will update the value in "b" from 1 -> 3.
-        rowid1 = query.execute()
-        rowid2 = query.clone().execute()
-        self.assertEqual(rowid1, rowid2)
-
-        obj = OCTest.get()
-        self.assertEqual(obj.a, 'foo')
-        self.assertEqual(obj.b, 3)
-
-        # Third execution returns rowid=None. The WHERE clause prevents us
-        # from updating "b" again, so nothing happened.
-        rowid3 = query.clone().execute()
-        self.assertTrue(rowid3 is None)
-
-        # Because we didn't satisfy the WHERE clause, the value in "b" is
-        # not incremented again.
-        obj = OCTest.get()
-        self.assertEqual(obj.a, 'foo')
-        self.assertEqual(obj.b, 3)
+        query.execute()
+        query = (UKVRel
+                 .select(UKVRel.key, UKVRel.value, UKVRel.extra)
+                 .order_by(UKVRel.key))
+        self.assertEqual(list(query.tuples()), [
+            ('k1', 'v1', 'e1'),
+            ('k2', 'v2', 'x2'),
+            ('k3', 'v3', 'e1')])
 
 
 class TestJoinSubquery(ModelTestCase):
@@ -3289,13 +4011,13 @@ class TestMaxAlias(ModelTestCase):
             for user, amount in data:
                 Transaction.create(user=user, amount=amount)
 
-        amount = fn.MAX(Transaction.amount).alias('amount')
-        query = (Transaction
-                 .select(amount, TUser.username)
-                 .join(TUser)
-                 .group_by(TUser.username)
-                 .order_by(TUser.username))
         with self.assertQueryCount(1):
+            amount = fn.MAX(Transaction.amount).alias('amount')
+            query = (Transaction
+                     .select(amount, TUser.username)
+                     .join(TUser)
+                     .group_by(TUser.username)
+                     .order_by(TUser.username))
             data = [(txn.amount, txn.user.username) for txn in query]
 
         self.assertEqual(data, [
@@ -3328,8 +4050,8 @@ class TestCompoundSelectModels(ModelTestCase):
         self.ts = lambda i: datetime.datetime(2018, 1, i)
 
         with self.database.atomic():
-            for content in ('note-a', 'note-b', 'note-c'):
-                CNote.create(content=content, timestamp=make_ts())
+            for i, content in enumerate(('note-a', 'note-b', 'note-c'), 1):
+                CNote.create(id=i, content=content, timestamp=make_ts())
 
             file_data = (
                 ('peewee.txt', 'peewee orm'),
@@ -3383,7 +4105,7 @@ class SequenceModel(TestModel):
     key = TextField()
 
 
-@requires_postgresql
+@requires_pglike
 class TestSequence(ModelTestCase):
     requires = [SequenceModel]
 
@@ -3415,9 +4137,9 @@ class TestUpdateFromIntegration(ModelTestCase):
         data = [(u1.id, 'u1-x'), (u2.id, 'u2-x')]
         vl = ValuesList(data, columns=('id', 'username'), alias='tmp')
         (User
-         .update({User.username: QualifiedNames(vl.c.username)})
+         .update({User.username: vl.c.username})
          .from_(vl)
-         .where(QualifiedNames(User.id == vl.c.id))
+         .where(User.id == vl.c.id)
          .execute())
 
         usernames = [u.username for u in User.select().order_by(User.username)]
@@ -3429,9 +4151,9 @@ class TestUpdateFromIntegration(ModelTestCase):
         vl = ValuesList(data, columns=('id', 'username'), alias='tmp')
         subq = vl.select(vl.c.id, vl.c.username)
         (User
-         .update({User.username: QualifiedNames(subq.c.username)})
+         .update({User.username: subq.c.username})
          .from_(subq)
-         .where(QualifiedNames(User.id == subq.c.id))
+         .where(User.id == subq.c.id)
          .execute())
 
         usernames = [u.username for u in User.select().order_by(User.username)]
@@ -3444,7 +4166,7 @@ class TestUpdateFromIntegration(ModelTestCase):
         t2 = Tweet.create(user=u, content='t2')
 
         (User
-         .update({User.username: QualifiedNames(Tweet.content)})
+         .update({User.username: Tweet.content})
          .from_(Tweet)
          .where(Tweet.content == 't2')
          .execute())
@@ -3568,6 +4290,7 @@ class Product(TestModel):
     name = TextField()
     price = IntegerField()
     flags = IntegerField(constraints=[SQL('DEFAULT 99')])
+    status = CharField(constraints=[Check("status IN ('a', 'b', 'c')")])
 
     class Meta:
         constraints = [Check('price > 0')]
@@ -3578,13 +4301,14 @@ class TestModelConstraints(ModelTestCase):
 
     @skip_if(IS_MYSQL)  # MySQL fails intermittently on Travis-CI (?).
     def test_model_constraints(self):
-        p = Product.create(name='p1', price=1)
+        p = Product.create(name='p1', price=1, status='a')
         self.assertTrue(p.flags is None)
 
         # Price was saved successfully, flags got server-side default value.
         p_db = Product.get(Product.id == p.id)
         self.assertEqual(p_db.price, 1)
         self.assertEqual(p_db.flags, 99)
+        self.assertEqual(p_db.status, 'a')
 
         # Cannot update price with invalid value, must be > 0.
         with self.database.atomic():
@@ -3594,7 +4318,18 @@ class TestModelConstraints(ModelTestCase):
         # Nor can we create a new product with an invalid price.
         with self.database.atomic():
             self.assertRaises(IntegrityError, Product.create, name='p2',
-                              price=0)
+                              price=0, status='a')
+
+        # Cannot set status to a value other than 1, 2 or 3.
+        with self.database.atomic():
+            p.price = 1
+            p.status = 'd'
+            self.assertRaises(IntegrityError, p.save)
+
+        # Cannot create a new product with invalid status.
+        with self.database.atomic():
+            self.assertRaises(IntegrityError, Product.create, name='p3',
+                              price=1, status='x')
 
 
 class TestModelFieldReprs(BaseTestCase):
@@ -3703,3 +4438,102 @@ class TestDatabaseExecuteQuery(ModelTestCase):
         query = User.select().order_by(User.username.desc())
         cursor = self.database.execute(query)
         self.assertEqual([row[1] for row in cursor], ['zaizee', 'huey'])
+
+
+class Datum(TestModel):
+    key = TextField()
+    value = IntegerField(null=True)
+
+class TestNullOrdering(ModelTestCase):
+    requires = [Datum]
+
+    def test_null_ordering(self):
+        values = [('k1', 1), ('ka', None), ('k2', 2), ('kb', None)]
+        Datum.insert_many(values, fields=[Datum.key, Datum.value]).execute()
+
+        def assertOrder(ordering, expected):
+            query = Datum.select().order_by(*ordering)
+            self.assertEqual([d.key for d in query], expected)
+
+        # Ascending order.
+        nulls_last = (Datum.value.asc(nulls='last'), Datum.key)
+        assertOrder(nulls_last, ['k1', 'k2', 'ka', 'kb'])
+
+        nulls_first = (Datum.value.asc(nulls='first'), Datum.key)
+        assertOrder(nulls_first, ['ka', 'kb', 'k1', 'k2'])
+
+        # Descending order.
+        nulls_last = (Datum.value.desc(nulls='last'), Datum.key)
+        assertOrder(nulls_last, ['k2', 'k1', 'ka', 'kb'])
+
+        nulls_first = (Datum.value.desc(nulls='first'), Datum.key)
+        assertOrder(nulls_first, ['ka', 'kb', 'k2', 'k1'])
+
+        # Invalid values.
+        self.assertRaises(ValueError, Datum.value.desc, nulls='bar')
+        self.assertRaises(ValueError, Datum.value.asc, nulls='foo')
+
+
+class Student(TestModel):
+    name = TextField()
+
+class Course(TestModel):
+    name = TextField()
+
+class Attendance(TestModel):
+    student = ForeignKeyField(Student)
+    course = ForeignKeyField(Course)
+
+
+class TestManyToManyJoining(ModelTestCase):
+    requires = [Student, Course, Attendance]
+
+    def setUp(self):
+        super(TestManyToManyJoining, self).setUp()
+
+        data = (
+            ('charlie', ('eng101', 'cs101', 'cs111')),
+            ('huey', ('cats1', 'cats2', 'cats3')),
+            ('zaizee', ('cats2', 'cats3')))
+        c = {}
+        with self.database.atomic():
+            for name, courses in data:
+                student = Student.create(name=name)
+                for course in courses:
+                    if course not in c:
+                        c[course] = Course.create(name=course)
+                    Attendance.create(student=student, course=c[course])
+
+    def assertQuery(self, query):
+        with self.assertQueryCount(1):
+            query = query.order_by(Attendance.id)
+            results = [(a.student.name, a.course.name) for a in query]
+            self.assertEqual(results, [
+                ('charlie', 'eng101'),
+                ('charlie', 'cs101'),
+                ('charlie', 'cs111'),
+                ('huey', 'cats1'),
+                ('huey', 'cats2'),
+                ('zaizee', 'cats2')])
+
+    def test_join_subquery(self):
+        courses = (Course
+                   .select(Course.id, Course.name)
+                   .order_by(Course.id)
+                   .limit(5))
+        query = (Attendance
+                 .select(Attendance, Student, courses.c.name)
+                 .join_from(Attendance, Student)
+                 .join_from(Attendance, courses,
+                            on=(Attendance.course == courses.c.id)))
+        self.assertQuery(query)
+
+    @skip_if(IS_MYSQL)
+    def test_join_where_subquery(self):
+        courses = Course.select().order_by(Course.id).limit(5)
+        query = (Attendance
+                 .select(Attendance, Student, Course)
+                 .join_from(Attendance, Student)
+                 .join_from(Attendance, Course)
+                 .where(Attendance.course.in_(courses)))
+        self.assertQuery(query)

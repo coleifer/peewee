@@ -99,3 +99,53 @@ class TestHybridProperties(ModelTestCase):
         query = Person.select().where(Person.full_name.startswith('huey c'))
         huey_db = query.get()
         self.assertEqual(huey_db.id, huey.id)
+
+    def test_hybrid_model_alias(self):
+        Person.create(first='huey', last='cat')
+        PA = Person.alias()
+        query = PA.select(PA.full_name).where(PA.last == 'cat')
+        self.assertSQL(query, (
+            'SELECT (("t1"."first" || ?) || "t1"."last") '
+            'FROM "person" AS "t1" WHERE ("t1"."last" = ?)'), [' ', 'cat'])
+        self.assertEqual(query.tuples()[0], ('huey cat',))
+
+
+class Order(TestModel):
+    name = TextField()
+
+    @hybrid_property
+    def quantity(self):
+        return sum([item.qt for item in self.items])
+
+    @quantity.expression
+    def quantity(cls):
+        return fn.SUM(Item.qt).alias('quantity')
+
+class Item(TestModel):
+    order = ForeignKeyField(Order, backref='items')
+    qt = IntegerField()
+
+
+class TestHybridWithRelationship(ModelTestCase):
+    database = get_in_memory_db()
+    requires = [Order, Item]
+
+    def test_hybrid_with_relationship(self):
+        data = (
+            ('a', (4, 3, 2, 1)),
+            ('b', (1000, 300, 30, 7)),
+            ('c', ()))
+        for name, qts in data:
+            o = Order.create(name=name)
+            for qt in qts:
+                Item.create(order=o, qt=qt)
+
+        query = Order.select().order_by(Order.name)
+        self.assertEqual([o.quantity for o in query], [10, 1337, 0])
+
+        query = (Order
+                 .select(Order.name, Order.quantity.alias('sql_qt'))
+                 .join(Item, JOIN.LEFT_OUTER)
+                 .group_by(Order.name)
+                 .order_by(Order.name))
+        self.assertEqual([o.sql_qt for o in query], [10, 1337, None])

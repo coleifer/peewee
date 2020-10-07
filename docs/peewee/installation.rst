@@ -12,7 +12,6 @@ Most users will want to simply install the latest version, hosted on PyPI:
 Peewee comes with a couple C extensions that will be built if Cython is
 available.
 
-* Speedups, which includes miscellaneous functions re-implemented with Cython.
 * Sqlite extensions, which includes Cython implementations of the SQLite date
   manipulation functions, the REGEXP operator, and full-text search result
   ranking algorithms.
@@ -80,10 +79,10 @@ Optional dependencies
     out there, such as ``pymysql`` or ``psycopg2`` for MySQL and Postgres
     respectively.
 
-* `Cython <http://cython.org/>`_: used for various speedups. Can give a big
-  boost to certain operations, particularly if you use SQLite. Since the
-  generated C files are included with the package distribution, Cython is no
-  longer required to use the C extensions (as of v3.6.0).
+* `Cython <http://cython.org/>`_: used to expose additional functionality when
+  using SQLite and to implement things like search result ranking in a
+  performant manner. Since the generated C files are included with the package
+  distribution, Cython is no longer required to use the C extensions.
 * `apsw <https://github.com/rogerbinns/apsw>`_: an optional 3rd-party SQLite
   binding offering greater performance and comprehensive support for SQLite's C
   APIs. Use with :py:class:`APSWDatabase`.
@@ -109,7 +108,7 @@ If, however, you receive errors like the following when attempting to install
 Peewee, you can explicitly disable the compilation of the SQLite C extensions
 by settings the ``NO_SQLITE`` environment variable.
 
-.. code-block::
+.. code-block:: console
 
     fatal error: sqlite3.h: No such file or directory
 

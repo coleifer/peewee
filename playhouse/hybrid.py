@@ -1,6 +1,9 @@
+from peewee import ModelDescriptor
+
+
 # Hybrid methods/attributes, based on similar functionality in SQLAlchemy:
 # http://docs.sqlalchemy.org/en/improve_toc/orm/extensions/hybrid.html
-class hybrid_method(object):
+class hybrid_method(ModelDescriptor):
     def __init__(self, func, expr=None):
         self.func = func
         self.expr = expr or func
@@ -15,7 +18,7 @@ class hybrid_method(object):
         return self
 
 
-class hybrid_property(object):
+class hybrid_property(ModelDescriptor):
     def __init__(self, fget, fset=None, fdel=None, expr=None):
         self.fget = fget
         self.fset = fset

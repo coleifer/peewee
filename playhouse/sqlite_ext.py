@@ -69,6 +69,11 @@ class AutoIncrementField(AutoField):
         return NodeList((node_list, SQL('AUTOINCREMENT')))
 
 
+class TDecimalField(DecimalField):
+    field_type = 'TEXT'
+    def get_modifiers(self): pass
+
+
 class JSONPath(ColumnBase):
     def __init__(self, field, path=None):
         super(JSONPath, self).__init__()
@@ -88,11 +93,11 @@ class JSONPath(ColumnBase):
 
     def set(self, value, as_json=None):
         if as_json or isinstance(value, (list, dict)):
-            value = fn.json(json.dumps(value))
+            value = fn.json(self._field._json_dumps(value))
         return fn.json_set(self._field, self.path, value)
 
     def update(self, value):
-        return self.set(fn.json_patch(self, json.dumps(value)))
+        return self.set(fn.json_patch(self, self._field._json_dumps(value)))
 
     def remove(self):
         return fn.json_remove(self._field, self.path)
@@ -116,17 +121,39 @@ class JSONPath(ColumnBase):
 
 class JSONField(TextField):
     field_type = 'JSON'
+    unpack = False
+
+    def __init__(self, json_dumps=None, json_loads=None, **kwargs):
+        self._json_dumps = json_dumps or json.dumps
+        self._json_loads = json_loads or json.loads
+        super(JSONField, self).__init__(**kwargs)
 
     def python_value(self, value):
         if value is not None:
             try:
-                return json.loads(value)
+                return self._json_loads(value)
             except (TypeError, ValueError):
                 return value
 
     def db_value(self, value):
         if value is not None:
-            return json.dumps(value)
+            if not isinstance(value, Node):
+                value = fn.json(self._json_dumps(value))
+            return value
+
+    def _e(op):
+        def inner(self, rhs):
+            if isinstance(rhs, (list, dict)):
+                rhs = Value(rhs, converter=self.db_value, unpack=False)
+            return Expression(self, op, rhs)
+        return inner
+    __eq__ = _e(OP.EQ)
+    __ne__ = _e(OP.NE)
+    __gt__ = _e(OP.GT)
+    __ge__ = _e(OP.GTE)
+    __lt__ = _e(OP.LT)
+    __le__ = _e(OP.LTE)
+    __hash__ = Field.__hash__
 
     def __getitem__(self, item):
         return JSONPath(self)[item]
@@ -174,6 +201,9 @@ class SearchField(Field):
                              'arguments: %s.' % sorted(k))
         super(SearchField, self).__init__(unindexed=unindexed,
                                           column_name=column_name, null=True)
+
+    def match(self, term):
+        return match(self, term)
 
 
 class VirtualTableSchemaManager(SchemaManager):
@@ -418,7 +448,7 @@ _alphanum = (set('\t ,"(){}*:_+0123456789') |
              set(_alphabet.upper()) |
              set((chr(26),)))
 _invalid_ascii = set(chr(p) for p in range(128) if chr(p) not in _alphanum)
-_quote_re = re.compile('(?:[^\s"]|"(?:\\.|[^"])*")+')
+_quote_re = re.compile(r'(?:[^\s"]|"(?:\\.|[^"])*")+')
 
 
 class FTS5Model(BaseFTSModel):
@@ -616,7 +646,7 @@ class FTS5Model(BaseFTSModel):
                 .order_by(order_by))
 
     @classmethod
-    def _fts_cmd(cls, cmd, **extra_params):
+    def _fts_cmd_sql(cls, cmd, **extra_params):
         tbl = cls._meta.entity
         columns = [tbl]
         values = [cmd]
@@ -624,14 +654,17 @@ class FTS5Model(BaseFTSModel):
             columns.append(Entity(key))
             values.append(value)
 
-        inner_clause = EnclosedClause(tbl)
-        clause = Clause(
+        return NodeList((
             SQL('INSERT INTO'),
             cls._meta.entity,
-            EnclosedClause(*columns),
+            EnclosedNodeList(columns),
             SQL('VALUES'),
-            EnclosedClause(*values))
-        return cls._meta.database.execute(clause)
+            EnclosedNodeList(values)))
+
+    @classmethod
+    def _fts_cmd(cls, cmd, **extra_params):
+        query = cls._fts_cmd_sql(cmd, **extra_params)
+        return cls._meta.database.execute(query)
 
     @classmethod
     def automerge(cls, level):
@@ -1096,6 +1129,15 @@ def _parse_match_info(buf):
     bufsize = len(buf)  # Length in bytes.
     return [struct.unpack('@I', buf[i:i+4])[0] for i in range(0, bufsize, 4)]
 
+def get_weights(ncol, raw_weights):
+    if not raw_weights:
+        return [1] * ncol
+    else:
+        weights = [0] * ncol
+        for i, weight in enumerate(raw_weights):
+            weights[i] = weight
+    return weights
+
 # Ranking implementation, which parse matchinfo.
 def rank(raw_match_info, *raw_weights):
     # Handle match_info called w/default args 'pcx' - based on the example rank
@@ -1104,13 +1146,14 @@ def rank(raw_match_info, *raw_weights):
     score = 0.0
 
     p, c = match_info[:2]
-    if not raw_weights:
-        weights = [1] * c
-    else:
-        weights = [0] * c
-        for i, weight in enumerate(raw_weights):
-            weights[i] = weight
+    weights = get_weights(c, raw_weights)
 
+    # matchinfo X value corresponds to, for each phrase in the search query, a
+    # list of 3 values for each column in the search table.
+    # So if we have a two-phrase search query and three columns of data, the
+    # following would be the layout:
+    # p0 : c0=[0, 1, 2],   c1=[3, 4, 5],    c2=[6, 7, 8]
+    # p1 : c0=[9, 10, 11], c1=[12, 13, 14], c2=[15, 16, 17]
     for phrase_num in range(p):
         phrase_info_idx = 2 + (phrase_num * c * 3)
         for col_num in range(c):
@@ -1119,9 +1162,15 @@ def rank(raw_match_info, *raw_weights):
                 continue
 
             col_idx = phrase_info_idx + (col_num * 3)
-            x1, x2 = match_info[col_idx:col_idx + 2]
-            if x1 > 0:
-                score += weight * (float(x1) / x2)
+
+            # The idea is that we count the number of times the phrase appears
+            # in this column of the current row, compared to how many times it
+            # appears in this column across all rows. The ratio of these values
+            # provides a rough way to score based on "high value" terms.
+            row_hits = match_info[col_idx]
+            all_rows_hits = match_info[col_idx + 1]
+            if row_hits > 0:
+                score += weight * (float(row_hits) / all_rows_hits)
 
     return -score
 
@@ -1140,19 +1189,41 @@ def bm25(raw_match_info, *args):
     B = 0.75
     score = 0.0
 
-    P_O, C_O, N_O, A_O = range(4)
-    term_count = match_info[P_O]
+    P_O, C_O, N_O, A_O = range(4)  # Offsets into the matchinfo buffer.
+    term_count = match_info[P_O]  # n
     col_count = match_info[C_O]
-    total_docs = match_info[N_O]
+    total_docs = match_info[N_O]  # N
     L_O = A_O + col_count
     X_O = L_O + col_count
 
-    if not args:
-        weights = [1] * col_count
-    else:
-        weights = [0] * col_count
-        for i, weight in enumerate(args):
-            weights[i] = args[i]
+    # Worked example of pcnalx for two columns and two phrases, 100 docs total.
+    # {
+    #   p  = 2
+    #   c  = 2
+    #   n  = 100
+    #   a0 = 4   -- avg number of tokens for col0, e.g. title
+    #   a1 = 40  -- avg number of tokens for col1, e.g. body
+    #   l0 = 5   -- curr doc has 5 tokens in col0
+    #   l1 = 30  -- curr doc has 30 tokens in col1
+    #
+    #   x000     -- hits this row for phrase0, col0
+    #   x001     -- hits all rows for phrase0, col0
+    #   x002     -- rows with phrase0 in col0 at least once
+    #
+    #   x010     -- hits this row for phrase0, col1
+    #   x011     -- hits all rows for phrase0, col1
+    #   x012     -- rows with phrase0 in col1 at least once
+    #
+    #   x100     -- hits this row for phrase1, col0
+    #   x101     -- hits all rows for phrase1, col0
+    #   x102     -- rows with phrase1 in col0 at least once
+    #
+    #   x110     -- hits this row for phrase1, col1
+    #   x111     -- hits all rows for phrase1, col1
+    #   x112     -- rows with phrase1 in col1 at least once
+    # }
+
+    weights = get_weights(col_count, args)
 
     for i in range(term_count):
         for j in range(col_count):
@@ -1160,29 +1231,27 @@ def bm25(raw_match_info, *args):
             if weight == 0:
                 continue
 
-            avg_length = float(match_info[A_O + j])
-            doc_length = float(match_info[L_O + j])
-            if avg_length == 0:
-                D = 0
-            else:
-                D = 1 - B + (B * (doc_length / avg_length))
+            x = X_O + (3 * (j + i * col_count))
+            term_frequency = float(match_info[x])  # f(qi, D)
+            docs_with_term = float(match_info[x + 2])  # n(qi)
 
-            x = X_O + (3 * j * (i + 1))
-            term_frequency = float(match_info[x])
-            docs_with_term = float(match_info[x + 2])
-
-            idf = max(
-                math.log(
+            # log( (N - n(qi) + 0.5) / (n(qi) + 0.5) )
+            idf = math.log(
                     (total_docs - docs_with_term + 0.5) /
-                    (docs_with_term + 0.5)),
-                0)
-            denom = term_frequency + (K * D)
-            if denom == 0:
-                rhs = 0
-            else:
-                rhs = (term_frequency * (K + 1)) / denom
+                    (docs_with_term + 0.5))
+            if idf <= 0.0:
+                idf = 1e-6
 
-            score += (idf * rhs) * weight
+            doc_length = float(match_info[L_O + j])  # |D|
+            avg_length = float(match_info[A_O + j]) or 1.  # avgdl
+            ratio = doc_length / avg_length
+
+            num = term_frequency * (K + 1.0)
+            b_part = 1.0 - B + (B * ratio)
+            denom = term_frequency + (K * b_part)
+
+            pc_score = idf * (num / denom)
+            score += (pc_score * weight)
 
     return -score
 

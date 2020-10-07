@@ -1,13 +1,17 @@
+import calendar
 import datetime
 import sqlite3
+import time
 import uuid
 from decimal import Decimal as D
 from decimal import ROUND_UP
 
 from peewee import bytes_type
+from peewee import NodeList
 from peewee import *
 
 from .base import BaseTestCase
+from .base import IS_CRDB
 from .base import IS_MYSQL
 from .base import IS_POSTGRESQL
 from .base import IS_SQLITE
@@ -16,6 +20,8 @@ from .base import TestModel
 from .base import db
 from .base import get_in_memory_db
 from .base import requires_models
+from .base import requires_mysql
+from .base import requires_pglike
 from .base import requires_sqlite
 from .base import skip_if
 from .base_models import Tweet
@@ -240,10 +246,66 @@ class TestDateFields(ModelTestCase):
         if IS_SQLITE or IS_MYSQL:
             self.assertEqual(row,
                              (2011, 1, 2, 11, 12, 13, 2012, 2, 3, 3, 13, 37))
-        elif IS_POSTGRESQL:
+        else:
             self.assertEqual(row, (
                 2011., 1., 2., 11., 12., 13.054321, 2012., 2., 3., 3., 13.,
                 37.))
+
+    def test_truncate_date(self):
+        dm = DateModel.create(
+            date_time=datetime.datetime(2001, 2, 3, 4, 5, 6, 7),
+            date=datetime.date(2002, 3, 4))
+
+        accum = []
+        for p in ('year', 'month', 'day', 'hour', 'minute', 'second'):
+            accum.append(DateModel.date_time.truncate(p))
+        for p in ('year', 'month', 'day'):
+            accum.append(DateModel.date.truncate(p))
+
+        query = DateModel.select(*accum).tuples()
+        data = list(query[0])
+
+        # Postgres includes timezone info, so strip that for comparison.
+        if IS_POSTGRESQL or IS_CRDB:
+            data = [dt.replace(tzinfo=None) for dt in data]
+
+        self.assertEqual(data, [
+            datetime.datetime(2001, 1, 1, 0, 0, 0),
+            datetime.datetime(2001, 2, 1, 0, 0, 0),
+            datetime.datetime(2001, 2, 3, 0, 0, 0),
+            datetime.datetime(2001, 2, 3, 4, 0, 0),
+            datetime.datetime(2001, 2, 3, 4, 5, 0),
+            datetime.datetime(2001, 2, 3, 4, 5, 6),
+            datetime.datetime(2002, 1, 1, 0, 0, 0),
+            datetime.datetime(2002, 3, 1, 0, 0, 0),
+            datetime.datetime(2002, 3, 4, 0, 0, 0)])
+
+    def test_to_timestamp(self):
+        dt = datetime.datetime(2019, 1, 2, 3, 4, 5)
+        ts = calendar.timegm(dt.utctimetuple())
+
+        dt2 = datetime.datetime(2019, 1, 3)
+        ts2 = calendar.timegm(dt2.utctimetuple())
+
+        DateModel.create(date_time=dt, date=dt2.date())
+
+        query = DateModel.select(
+            DateModel.id,
+            DateModel.date_time.to_timestamp().alias('dt_ts'),
+            DateModel.date.to_timestamp().alias('dt2_ts'))
+        obj = query.get()
+
+        self.assertEqual(obj.dt_ts, ts)
+        self.assertEqual(obj.dt2_ts, ts2)
+
+        ts3 = ts + 86400
+        query = (DateModel.select()
+                 .where((DateModel.date_time.to_timestamp() + 86400) < ts3))
+        self.assertRaises(DateModel.DoesNotExist, query.get)
+
+        query = (DateModel.select()
+                 .where((DateModel.date.to_timestamp() + 86400) > ts3))
+        self.assertEqual(query.get().id, obj.id)
 
     def test_distinct_date_part(self):
         years = (1980, 1990, 2000, 2010)
@@ -356,6 +418,7 @@ class M2(TestModel):
 
 
 @skip_if(IS_MYSQL)
+@skip_if(IS_CRDB, 'crdb does not support deferred foreign-key constraints')
 class TestDeferredForeignKey(ModelTestCase):
     requires = [M1, M2]
 
@@ -369,6 +432,68 @@ class TestDeferredForeignKey(ModelTestCase):
 
         m2_db = M2.get(M2.name == 'm2')
         self.assertEqual(m2_db.m1.name, 'm1')
+
+
+class TestDeferredForeignKeyResolution(ModelTestCase):
+    def test_unresolved_deferred_fk(self):
+        class Photo(Model):
+            album = DeferredForeignKey('Album', column_name='id_album')
+            class Meta:
+                database = get_in_memory_db()
+        self.assertSQL(Photo.select(), (
+            'SELECT "t1"."id", "t1"."id_album" FROM "photo" AS "t1"'), [])
+
+    def test_deferred_foreign_key_resolution(self):
+        class Base(Model):
+            class Meta:
+                database = get_in_memory_db()
+
+        class Photo(Base):
+            album = DeferredForeignKey('Album', column_name='id_album',
+                                       null=False, backref='pictures')
+            alt_album = DeferredForeignKey('Album', column_name='id_Alt_album',
+                                           field='alt_id', backref='alt_pix',
+                                           null=True)
+
+        class Album(Base):
+            name = TextField()
+            alt_id = IntegerField(column_name='_Alt_id')
+
+        self.assertTrue(Photo.album.rel_model is Album)
+        self.assertTrue(Photo.album.rel_field is Album.id)
+        self.assertEqual(Photo.album.column_name, 'id_album')
+        self.assertFalse(Photo.album.null)
+
+        self.assertTrue(Photo.alt_album.rel_model is Album)
+        self.assertTrue(Photo.alt_album.rel_field is Album.alt_id)
+        self.assertEqual(Photo.alt_album.column_name, 'id_Alt_album')
+        self.assertTrue(Photo.alt_album.null)
+
+        self.assertSQL(Photo._schema._create_table(), (
+            'CREATE TABLE IF NOT EXISTS "photo" ('
+            '"id" INTEGER NOT NULL PRIMARY KEY, '
+            '"id_album" INTEGER NOT NULL, '
+            '"id_Alt_album" INTEGER)'), [])
+
+        self.assertSQL(Photo._schema._create_foreign_key(Photo.album), (
+            'ALTER TABLE "photo" ADD CONSTRAINT "fk_photo_id_album_refs_album"'
+            ' FOREIGN KEY ("id_album") REFERENCES "album" ("id")'))
+        self.assertSQL(Photo._schema._create_foreign_key(Photo.alt_album), (
+            'ALTER TABLE "photo" ADD CONSTRAINT '
+            '"fk_photo_id_Alt_album_refs_album"'
+            ' FOREIGN KEY ("id_Alt_album") REFERENCES "album" ("_Alt_id")'))
+
+        self.assertSQL(Photo.select(), (
+            'SELECT "t1"."id", "t1"."id_album", "t1"."id_Alt_album" '
+            'FROM "photo" AS "t1"'), [])
+
+        a = Album(id=3, alt_id=4)
+        self.assertSQL(a.pictures, (
+            'SELECT "t1"."id", "t1"."id_album", "t1"."id_Alt_album" '
+            'FROM "photo" AS "t1" WHERE ("t1"."id_album" = ?)'), [3])
+        self.assertSQL(a.alt_pix, (
+            'SELECT "t1"."id", "t1"."id_album", "t1"."id_Alt_album" '
+            'FROM "photo" AS "t1" WHERE ("t1"."id_Alt_album" = ?)'), [4])
 
 
 class Composite(TestModel):
@@ -436,6 +561,31 @@ class TestIPField(ModelTestCase):
 class TestBitFields(ModelTestCase):
     requires = [Bits]
 
+    def test_bit_field_update(self):
+        def assertFlags(expected):
+            query = Bits.select().order_by(Bits.id)
+            self.assertEqual([b.flags for b in query], expected)
+
+        # Bits - flags (1=sticky, 2=favorite, 4=minimized)
+        for i in range(1, 5):
+            Bits.create(flags=i)
+
+        Bits.update(flags=Bits.flags & ~2).execute()
+        assertFlags([1, 0, 1, 4])
+
+        Bits.update(flags=Bits.flags | 2).execute()
+        assertFlags([3, 2, 3, 6])
+
+        Bits.update(flags=Bits.is_favorite.clear()).execute()
+        assertFlags([1, 0, 1, 4])
+
+        Bits.update(flags=Bits.is_favorite.set()).execute()
+        assertFlags([3, 2, 3, 6])
+
+        # Clear multiple bits in one operation.
+        Bits.update(flags=Bits.flags & ~(1 | 4)).execute()
+        assertFlags([2, 2, 2, 2])
+
     def test_bit_field_auto_flag(self):
         class Bits2(TestModel):
             flags = BitField()
@@ -488,9 +638,19 @@ class TestBitFields(ModelTestCase):
         query = Bits.select().where(Bits.is_favorite).order_by(Bits.id)
         self.assertEqual([x.id for x in query], [b2.id, b3.id])
 
+        query = Bits.select().where(~Bits.is_favorite).order_by(Bits.id)
+        self.assertEqual([x.id for x in query], [b1.id])
+
         # "&" operator does bitwise and for BitField.
         query = Bits.select().where((Bits.flags & 1) == 1).order_by(Bits.id)
         self.assertEqual([x.id for x in query], [b1.id, b3.id])
+
+        # Test combining multiple bit expressions.
+        query = Bits.select().where(Bits.is_sticky & Bits.is_favorite)
+        self.assertEqual([x.id for x in query], [b3.id])
+
+        query = Bits.select().where(Bits.is_sticky & ~Bits.is_favorite)
+        self.assertEqual([x.id for x in query], [b1.id])
 
     def test_bigbit_field_instance_data(self):
         b = Bits()
@@ -561,6 +721,31 @@ class TestBlobField(ModelTestCase):
         db.initialize(db_obj)
         self.assertTrue(NewBlobModel.data._constructor is sqlite3.Binary)
 
+    def test_blob_db_hook(self):
+        sentinel = object()
+
+        class FakeDatabase(Database):
+            def get_binary_type(self):
+                return sentinel
+
+        class B(Model):
+            b1 = BlobField()
+            b2 = BlobField()
+
+        B._meta.set_database(FakeDatabase(None))
+        self.assertTrue(B.b1._constructor is sentinel)
+        self.assertTrue(B.b2._constructor is sentinel)
+
+        alt_db = SqliteDatabase(':memory:')
+        with alt_db.bind_ctx([B]):
+            # The constructor has been changed.
+            self.assertTrue(B.b1._constructor is sqlite3.Binary)
+            self.assertTrue(B.b2._constructor is sqlite3.Binary)
+
+        # The constructor has been restored.
+        self.assertTrue(B.b1._constructor is sentinel)
+        self.assertTrue(B.b2._constructor is sentinel)
+
 
 class BigModel(TestModel):
     pk = BigAutoField()
@@ -595,6 +780,7 @@ class Bare(TestModel):
 class TestFieldValueHandling(ModelTestCase):
     requires = [Item]
 
+    @skip_if(IS_CRDB, 'crdb requires cast to multiply int and float')
     def test_int_float_multi(self):
         i = Item.create(price=10, multiplier=0.75)
 
@@ -703,6 +889,20 @@ class TestUUIDField(ModelTestCase):
         u_db2 = UUIDModel.get(UUIDModel.data == uu)
         self.assertEqual(u_db2.id, u.id)
 
+        # Verify we can use hex string.
+        uu = uuid.uuid4()
+        u = UUIDModel.create(data=uu.hex)
+        u_db = UUIDModel.get(UUIDModel.data == uu.hex)
+        self.assertEqual(u.id, u_db.id)
+        self.assertEqual(u_db.data, uu)
+
+        # Verify we can use raw binary representation.
+        uu = uuid.uuid4()
+        u = UUIDModel.create(data=uu.bytes)
+        u_db = UUIDModel.get(UUIDModel.data == uu.bytes)
+        self.assertEqual(u.id, u_db.id)
+        self.assertEqual(u_db.data, uu)
+
     def test_binary_uuid_field(self):
         uu = uuid.uuid4()
         u = UUIDModel.create(bdata=uu)
@@ -714,25 +914,223 @@ class TestUUIDField(ModelTestCase):
         u_db2 = UUIDModel.get(UUIDModel.bdata == uu)
         self.assertEqual(u_db2.id, u.id)
 
+        # Verify we can use hex string.
+        uu = uuid.uuid4()
+        u = UUIDModel.create(bdata=uu.hex)
+        u_db = UUIDModel.get(UUIDModel.bdata == uu.hex)
+        self.assertEqual(u.id, u_db.id)
+        self.assertEqual(u_db.bdata, uu)
+
+        # Verify we can use raw binary representation.
+        uu = uuid.uuid4()
+        u = UUIDModel.create(bdata=uu.bytes)
+        u_db = UUIDModel.get(UUIDModel.bdata == uu.bytes)
+        self.assertEqual(u.id, u_db.id)
+        self.assertEqual(u_db.bdata, uu)
+
+
+class UU1(TestModel):
+    id = UUIDField(default=uuid.uuid4, primary_key=True)
+    name = TextField()
+
+class UU2(TestModel):
+    id = UUIDField(default=uuid.uuid4, primary_key=True)
+    u1 = ForeignKeyField(UU1)
+    name = TextField()
+
+
+class TestForeignKeyUUIDField(ModelTestCase):
+    requires = [UU1, UU2]
+
+    def test_bulk_insert(self):
+        # Create three UU1 instances.
+        UU1.insert_many([{UU1.name: name} for name in 'abc'],
+                       fields=[UU1.id, UU1.name]).execute()
+        ua, ub, uc = UU1.select().order_by(UU1.name)
+
+        # Create several UU2 instances.
+        data = (
+            ('a1', ua),
+            ('b1', ub),
+            ('b2', ub),
+            ('c1', uc))
+        iq = UU2.insert_many([{UU2.name: name, UU2.u1: u} for name, u in data],
+                             fields=[UU2.id, UU2.name, UU2.u1])
+        iq.execute()
+
+        query = UU2.select().order_by(UU2.name)
+        for (name, u1), u2 in zip(data, query):
+            self.assertEqual(u2.name, name)
+            self.assertEqual(u2.u1.id, u1.id)
+
 
 class TSModel(TestModel):
     ts_s = TimestampField()
     ts_us = TimestampField(resolution=10 ** 6)
+    ts_ms = TimestampField(resolution=3)  # Milliseconds.
+    ts_u = TimestampField(null=True, utc=True)
+
+
+class TSR(TestModel):
+    ts_0 = TimestampField(resolution=0)
+    ts_1 = TimestampField(resolution=1)
+    ts_10 = TimestampField(resolution=10)
+    ts_2 = TimestampField(resolution=2)
 
 
 class TestTimestampField(ModelTestCase):
     requires = [TSModel]
 
+    @requires_models(TSR)
+    def test_timestamp_field_resolutions(self):
+        dt = datetime.datetime(2018, 3, 1, 3, 3, 7).replace(microsecond=123456)
+        ts = TSR.create(ts_0=dt, ts_1=dt, ts_10=dt, ts_2=dt)
+        ts_db = TSR[ts.id]
+
+        # Zero and one are both treated as "seconds" resolution.
+        self.assertEqual(ts_db.ts_0, dt.replace(microsecond=0))
+        self.assertEqual(ts_db.ts_1, dt.replace(microsecond=0))
+        self.assertEqual(ts_db.ts_10, dt.replace(microsecond=100000))
+        self.assertEqual(ts_db.ts_2, dt.replace(microsecond=120000))
+
     def test_timestamp_field(self):
         dt = datetime.datetime(2018, 3, 1, 3, 3, 7)
-        dt = dt.replace(microsecond=31337)
-        ts = TSModel.create(ts_s=dt, ts_us=dt)
+        dt = dt.replace(microsecond=31337)  # us=031_337, ms=031.
+        ts = TSModel.create(ts_s=dt, ts_us=dt, ts_ms=dt, ts_u=dt)
         ts_db = TSModel.get(TSModel.id == ts.id)
         self.assertEqual(ts_db.ts_s, dt.replace(microsecond=0))
+        self.assertEqual(ts_db.ts_ms, dt.replace(microsecond=31000))
         self.assertEqual(ts_db.ts_us, dt)
+        self.assertEqual(ts_db.ts_u, dt.replace(microsecond=0))
 
         self.assertEqual(TSModel.get(TSModel.ts_s == dt).id, ts.id)
+        self.assertEqual(TSModel.get(TSModel.ts_ms == dt).id, ts.id)
         self.assertEqual(TSModel.get(TSModel.ts_us == dt).id, ts.id)
+        self.assertEqual(TSModel.get(TSModel.ts_u == dt).id, ts.id)
+
+    def test_timestamp_field_math(self):
+        dt = datetime.datetime(2019, 1, 2, 3, 4, 5, 31337)
+        ts = TSModel.create(ts_s=dt, ts_us=dt, ts_ms=dt)
+
+        # Although these fields use different scales for storing the
+        # timestamps, adding "1" has the effect of adding a single second -
+        # the value will be multiplied by the correct scale via the converter.
+        TSModel.update(
+            ts_s=TSModel.ts_s + 1,
+            ts_us=TSModel.ts_us + 1,
+            ts_ms=TSModel.ts_ms + 1).execute()
+
+        ts_db = TSModel.get(TSModel.id == ts.id)
+        dt2 = dt + datetime.timedelta(seconds=1)
+        self.assertEqual(ts_db.ts_s, dt2.replace(microsecond=0))
+        self.assertEqual(ts_db.ts_us, dt2)
+        self.assertEqual(ts_db.ts_ms, dt2.replace(microsecond=31000))
+
+    def test_timestamp_field_value_as_ts(self):
+        dt = datetime.datetime(2018, 3, 1, 3, 3, 7, 31337)
+        unix_ts = time.mktime(dt.timetuple()) + 0.031337
+        ts = TSModel.create(ts_s=unix_ts, ts_us=unix_ts, ts_ms=unix_ts,
+                            ts_u=unix_ts)
+
+        # Fetch from the DB and validate the values were stored correctly.
+        ts_db = TSModel[ts.id]
+        self.assertEqual(ts_db.ts_s, dt.replace(microsecond=0))
+        self.assertEqual(ts_db.ts_ms, dt.replace(microsecond=31000))
+        self.assertEqual(ts_db.ts_us, dt)
+
+        utc_dt = TimestampField().local_to_utc(dt)
+        self.assertEqual(ts_db.ts_u, utc_dt)
+
+        # Verify we can query using a timestamp.
+        self.assertEqual(TSModel.get(TSModel.ts_s == unix_ts).id, ts.id)
+        self.assertEqual(TSModel.get(TSModel.ts_ms == unix_ts).id, ts.id)
+        self.assertEqual(TSModel.get(TSModel.ts_us == unix_ts).id, ts.id)
+        self.assertEqual(TSModel.get(TSModel.ts_u == unix_ts).id, ts.id)
+
+    def test_timestamp_utc_vs_localtime(self):
+        local_field = TimestampField()
+        utc_field = TimestampField(utc=True)
+
+        dt = datetime.datetime(2019, 1, 1, 12)
+        unix_ts = int(local_field.get_timestamp(dt))
+        utc_ts = int(utc_field.get_timestamp(dt))
+
+        # Local timestamp is unmodified. Verify that when utc=True, the
+        # timestamp is converted from local time to UTC.
+        self.assertEqual(local_field.db_value(dt), unix_ts)
+        self.assertEqual(utc_field.db_value(dt), utc_ts)
+
+        self.assertEqual(local_field.python_value(unix_ts), dt)
+        self.assertEqual(utc_field.python_value(utc_ts), dt)
+
+        # Convert back-and-forth several times.
+        dbv, pyv = local_field.db_value, local_field.python_value
+        self.assertEqual(pyv(dbv(pyv(dbv(dt)))), dt)
+
+        dbv, pyv = utc_field.db_value, utc_field.python_value
+        self.assertEqual(pyv(dbv(pyv(dbv(dt)))), dt)
+
+    def test_timestamp_field_parts(self):
+        dt = datetime.datetime(2019, 1, 2, 3, 4, 5)
+        dt_utc = TimestampField().local_to_utc(dt)
+        ts = TSModel.create(ts_s=dt, ts_us=dt, ts_ms=dt, ts_u=dt_utc)
+
+        fields = (TSModel.ts_s, TSModel.ts_us, TSModel.ts_ms, TSModel.ts_u)
+        attrs = ('year', 'month', 'day', 'hour', 'minute', 'second')
+        selection = []
+        for field in fields:
+            for attr in attrs:
+                selection.append(getattr(field, attr))
+
+        row = TSModel.select(*selection).tuples()[0]
+
+        # First ensure that all 3 fields are returning the same data.
+        ts_s, ts_us, ts_ms, ts_u = row[:6], row[6:12], row[12:18], row[18:]
+        self.assertEqual(ts_s, ts_us)
+        self.assertEqual(ts_s, ts_ms)
+        self.assertEqual(ts_s, ts_u)
+
+        # Now validate that the data is correct. We will receive the data back
+        # as a UTC unix timestamp, however!
+        y, m, d, H, M, S = ts_s
+        self.assertEqual(y, 2019)
+        self.assertEqual(m, 1)
+        self.assertEqual(d, dt_utc.day)
+        self.assertEqual(H, dt_utc.hour)
+        self.assertEqual(M, 4)
+        self.assertEqual(S, 5)
+
+    def test_timestamp_field_from_ts(self):
+        dt = datetime.datetime(2019, 1, 2, 3, 4, 5)
+        dt_utc = TimestampField().local_to_utc(dt)
+
+        ts = TSModel.create(ts_s=dt, ts_us=dt, ts_ms=dt, ts_u=dt_utc)
+        query = TSModel.select(
+            TSModel.ts_s.from_timestamp().alias('dt_s'),
+            TSModel.ts_us.from_timestamp().alias('dt_us'),
+            TSModel.ts_ms.from_timestamp().alias('dt_ms'),
+            TSModel.ts_u.from_timestamp().alias('dt_u'))
+
+        # Get row and unpack into variables corresponding to the fields.
+        row = query.tuples()[0]
+        dt_s, dt_us, dt_ms, dt_u = row
+
+        # Ensure the timestamp values for all 4 fields are the same.
+        self.assertEqual(dt_s, dt_us)
+        self.assertEqual(dt_s, dt_ms)
+        self.assertEqual(dt_s, dt_u)
+        if IS_SQLITE:
+            expected = dt_utc.strftime('%Y-%m-%d %H:%M:%S')
+            self.assertEqual(dt_s, expected)
+        elif IS_POSTGRESQL or IS_CRDB:
+            # Postgres returns an aware UTC datetime. Strip this to compare
+            # against our naive UTC datetime.
+            self.assertEqual(dt_s.replace(tzinfo=None), dt_utc)
+
+    def test_invalid_resolution(self):
+        self.assertRaises(ValueError, TimestampField, resolution=7)
+        self.assertRaises(ValueError, TimestampField, resolution=20)
+        self.assertRaises(ValueError, TimestampField, resolution=10**7)
 
 
 class ListField(TextField):
@@ -802,3 +1200,197 @@ class TestSQLFunctionDBValue(ModelTestCase):
         # If we nest the field in a function, the conversion is not applied.
         expr = fn.SUBSTR(UpperModel.name, 1, 1) == 'z'
         self.assertRaises(UpperModel.DoesNotExist, UpperModel.get, expr)
+
+
+class Schedule(TestModel):
+    interval = IntegerField()
+
+class Task(TestModel):
+    schedule = ForeignKeyField(Schedule)
+    name = TextField()
+    last_run = DateTimeField()
+
+
+class TestDateTimeMath(ModelTestCase):
+    offset_to_names = (
+        (-10, ()),
+        (5, ('s1',)),
+        (10, ('s1', 's10')),
+        (11, ('s1', 's10')),
+        (60, ('s1', 's10', 's60')),
+        (61, ('s1', 's10', 's60')))
+    requires = [Schedule, Task]
+
+    def setUp(self):
+        super(TestDateTimeMath, self).setUp()
+        with self.database.atomic():
+            s1 = Schedule.create(interval=1)
+            s10 = Schedule.create(interval=10)
+            s60 = Schedule.create(interval=60)
+
+            self.dt = datetime.datetime(2019, 1, 1, 12)
+            for s, n in ((s1, 's1'), (s10, 's10'), (s60, 's60')):
+                Task.create(schedule=s, name=n, last_run=self.dt)
+
+    def _do_test_date_time_math(self, next_occurrence_expression):
+        for offset, names in self.offset_to_names:
+            dt = Value(self.dt + datetime.timedelta(seconds=offset))
+            query = (Task
+                     .select(Task, Schedule)
+                     .join(Schedule)
+                     .where(dt >= next_occurrence_expression)
+                     .order_by(Schedule.interval))
+            tnames = [task.name for task in query]
+            self.assertEqual(list(names), tnames)
+
+    @requires_pglike
+    def test_date_time_math_pg(self):
+        second = SQL("INTERVAL '1 second'")
+        next_occurrence = Task.last_run + (Schedule.interval * second)
+        self._do_test_date_time_math(next_occurrence)
+
+    @requires_sqlite
+    def test_date_time_math_sqlite(self):
+        # Convert to a timestamp, add the scheduled seconds, then convert back
+        # to a datetime string for comparison with the last occurrence.
+        next_ts = Task.last_run.to_timestamp() + Schedule.interval
+        next_occurrence = fn.datetime(next_ts, 'unixepoch')
+        self._do_test_date_time_math(next_occurrence)
+
+    @requires_mysql
+    def test_date_time_math_mysql(self):
+        nl = NodeList((SQL('INTERVAL'), Schedule.interval, SQL('SECOND')))
+        next_occurrence = fn.date_add(Task.last_run, nl)
+        self._do_test_date_time_math(next_occurrence)
+
+
+class NQ(TestModel):
+    name = TextField()
+
+class NQItem(TestModel):
+    nq = ForeignKeyField(NQ, backref='items')
+    nq_null = ForeignKeyField(NQ, backref='null_items', null=True)
+    nq_lazy = ForeignKeyField(NQ, lazy_load=False, backref='lazy_items')
+    nq_lazy_null = ForeignKeyField(NQ, lazy_load=False,
+                                   backref='lazy_null_items', null=True)
+
+
+class TestForeignKeyLazyLoad(ModelTestCase):
+    requires = [NQ, NQItem]
+
+    def setUp(self):
+        super(TestForeignKeyLazyLoad, self).setUp()
+        with self.database.atomic():
+            a1, a2, a3, a4 = [NQ.create(name='a%s' % i) for i in range(1, 5)]
+            ai = NQItem.create(nq=a1, nq_null=a2, nq_lazy=a3, nq_lazy_null=a4)
+
+            b = NQ.create(name='b')
+            bi = NQItem.create(nq=b, nq_lazy=b)
+
+    def test_foreign_key_lazy_load(self):
+        a1, a2, a3, a4 = (NQ.select()
+                          .where(NQ.name.startswith('a'))
+                          .order_by(NQ.name))
+        b = NQ.get(NQ.name == 'b')
+        ai = NQItem.get(NQItem.nq_id == a1.id)
+        bi = NQItem.get(NQItem.nq_id == b.id)
+
+        # Accessing the lazy foreign-key fields will not result in any queries
+        # being executed.
+        with self.assertQueryCount(0):
+            self.assertEqual(ai.nq_lazy, a3.id)
+            self.assertEqual(ai.nq_lazy_null, a4.id)
+            self.assertEqual(bi.nq_lazy, b.id)
+            self.assertTrue(bi.nq_lazy_null is None)
+            self.assertTrue(bi.nq_null is None)
+
+        # Accessing the regular foreign-key fields uses a query to get the
+        # related model instance.
+        with self.assertQueryCount(2):
+            self.assertEqual(ai.nq.id, a1.id)
+            self.assertEqual(ai.nq_null.id, a2.id)
+
+        with self.assertQueryCount(1):
+            self.assertEqual(bi.nq.id, b.id)
+
+    def test_fk_lazy_select_related(self):
+        NA, NB, NC, ND = [NQ.alias(a) for a in ('na', 'nb', 'nc', 'nd')]
+        LO = JOIN.LEFT_OUTER
+        query = (NQItem.select(NQItem, NA, NB, NC, ND)
+                 .join_from(NQItem, NA, LO, on=NQItem.nq)
+                 .join_from(NQItem, NB, LO, on=NQItem.nq_null)
+                 .join_from(NQItem, NC, LO, on=NQItem.nq_lazy)
+                 .join_from(NQItem, ND, LO, on=NQItem.nq_lazy_null)
+                 .order_by(NQItem.id))
+
+        # If we explicitly / eagerly select lazy foreign-key models, they
+        # behave just like regular foreign keys.
+        with self.assertQueryCount(1):
+            ai, bi = [ni for ni in query]
+            self.assertEqual(ai.nq.name, 'a1')
+            self.assertEqual(ai.nq_null.name, 'a2')
+            self.assertEqual(ai.nq_lazy.name, 'a3')
+            self.assertEqual(ai.nq_lazy_null.name, 'a4')
+
+            self.assertEqual(bi.nq.name, 'b')
+            self.assertEqual(bi.nq_lazy.name, 'b')
+            self.assertTrue(bi.nq_null is None)
+            self.assertTrue(bi.nq_lazy_null is None)
+
+
+class SM(TestModel):
+    text_field = TextField()
+    char_field = CharField()
+
+
+class TestStringFields(ModelTestCase):
+    requires = [SM]
+
+    def test_string_fields(self):
+        bdata = b'b1'
+        udata = b'u1'.decode('utf8')
+
+        sb = SM.create(text_field=bdata, char_field=bdata)
+        su = SM.create(text_field=udata, char_field=udata)
+
+        sb_db = SM.get(SM.id == sb.id)
+        self.assertEqual(sb_db.text_field, 'b1')
+        self.assertEqual(sb_db.char_field, 'b1')
+
+        su_db = SM.get(SM.id == su.id)
+        self.assertEqual(su_db.text_field, 'u1')
+        self.assertEqual(su_db.char_field, 'u1')
+
+        bvals = (b'b1', u'b1')
+        uvals = (b'u1', u'u1')
+
+        for field in (SM.text_field, SM.char_field):
+            for bval in bvals:
+                sb_db = SM.get(field == bval)
+                self.assertEqual(sb.id, sb_db.id)
+
+            for uval in uvals:
+                sb_db = SM.get(field == uval)
+                self.assertEqual(su.id, su_db.id)
+
+
+class InvalidTypes(TestModel):
+    tfield = TextField()
+    ifield = IntegerField()
+    ffield = FloatField()
+
+
+class TestSqliteInvalidDataTypes(ModelTestCase):
+    database = get_in_memory_db()
+    requires = [InvalidTypes]
+
+    def test_invalid_data_types(self):
+        it = InvalidTypes.create(tfield=100, ifield='five', ffield='pi')
+        it_db1 = InvalidTypes.get(InvalidTypes.tfield == 100)
+        it_db2 = InvalidTypes.get(InvalidTypes.ifield == 'five')
+        it_db3 = InvalidTypes.get(InvalidTypes.ffield == 'pi')
+        self.assertTrue(it.id == it_db1.id == it_db2.id == it_db3.id)
+
+        self.assertEqual(it_db1.tfield, '100')
+        self.assertEqual(it_db1.ifield, 'five')
+        self.assertEqual(it_db1.ffield, 'pi')
