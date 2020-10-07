@@ -159,6 +159,7 @@ if sys.version_info[0] == 2:
     buffer_type = buffer
     izip_longest = itertools.izip_longest
     callable_ = callable
+    multi_types = (list, tuple, frozenset, set)
     exec('def reraise(tp, value, tb=None): raise tp, value, tb')
     def print_(s):
         sys.stdout.write(s)
@@ -178,6 +179,7 @@ else:
     long = int
     print_ = getattr(builtins, 'print')
     izip_longest = itertools.zip_longest
+    multi_types = (list, tuple, frozenset, set, range)
     def reraise(tp, value, tb=None):
         if value.__traceback__ is not tb:
             raise value.with_traceback(tb)
@@ -1352,12 +1354,10 @@ class BitwiseNegated(BitwiseMixin, WrappedNode):
 
 
 class Value(ColumnBase):
-    _multi_types = (list, tuple, frozenset, set)
-
     def __init__(self, value, converter=None, unpack=True):
         self.value = value
         self.converter = converter
-        self.multi = isinstance(self.value, self._multi_types) and unpack
+        self.multi = isinstance(self.value, multi_types) and unpack
         if self.multi:
             self.values = []
             for item in self.value:
