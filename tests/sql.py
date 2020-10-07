@@ -71,6 +71,14 @@ class TestSelectQuery(BaseTestCase):
                 'WHERE ("t1"."name" IN (?, ?))'))
             self.assertEqual(sorted(params), ['charlie', 'huey'])
 
+        query = (Person
+                 .select()
+                 .where(Person.id.in_(range(1, 10, 2))))
+        self.assertSQL(query, (
+            'SELECT "t1"."id", "t1"."name", "t1"."dob" '
+            'FROM "person" AS "t1" '
+            'WHERE ("t1"."id" IN (?, ?, ?, ?, ?))'), [1, 3, 5, 7, 9])
+
     def test_select_subselect_function(self):
         # For functions whose only argument is a subquery, we do not need to
         # include additional parentheses -- in fact, some databases will report
