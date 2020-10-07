@@ -491,3 +491,17 @@ class PostgresqlExtDatabase(PostgresqlDatabase):
         if named_cursor:
             cursor = FetchManyCursor(cursor, array_size)
         return cursor
+
+
+class GeneratedHashField(CharField):
+    def __init__(self, *key_cols, **kwargs):
+        self._key_cols = key_cols
+        super().__init__(**kwargs)
+
+    def ddl(self, ctx):
+        node_list = super().ddl(ctx)
+        columns = " || '-' || ".join(f"coalesce({key}, '')" for key in self._key_cols)
+        sql = SQL(
+            f"GENERATED ALWAYS AS (encode(sha256(({columns})::bytea), 'hex')) STORED"
+        )
+        return NodeList((node_list, sql))
