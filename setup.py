@@ -72,7 +72,7 @@ def _have_sqlite_extension_support():
     customize_compiler(compiler)
     success = False
     try:
-        compiler.link_executable(
+        compiler.link_shared_object(
             compiler.compile([src_file], output_dir=tmp_dir),
             bin_file,
             libraries=['sqlite3'])
