@@ -1055,7 +1055,7 @@ MySQL uses *Rand*:
 .. code-block:: python
 
     # Pick 5 lucky winners:
-    LotterNumber.select().order_by(fn.Rand()).limit(5)
+    LotteryNumber.select().order_by(fn.Rand()).limit(5)
 
 Paginating records
 ------------------
