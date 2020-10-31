@@ -2234,6 +2234,9 @@ class CompoundSelectQuery(SelectBase):
         if ctx.scope == SCOPE_COLUMN:
             return self.apply_column(ctx)
 
+        # Call parent method to handle any CTEs.
+        super(CompoundSelectQuery, self).__sql__(ctx)
+
         outer_parens = ctx.subquery or (ctx.scope == SCOPE_SOURCE)
         with ctx(parentheses=outer_parens):
             # Should the left-hand query be wrapped in parentheses?
