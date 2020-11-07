@@ -7145,11 +7145,16 @@ class ModelSelect(BaseModelSelect, Select):
 
     def filter(self, *args, **kwargs):
         # normalize args and kwargs into a new expression
-        dq_node = ColumnBase()
-        if args:
-            dq_node &= reduce(operator.and_, [a.clone() for a in args])
-        if kwargs:
-            dq_node &= DQ(**kwargs)
+        if args and kwargs:
+            dq_node = (reduce(operator.and_, [a.clone() for a in args]) &
+                       DQ(**kwargs))
+        elif args:
+            dq_node = (reduce(operator.and_, [a.clone() for a in args]) &
+                       ColumnBase())
+        elif kwargs:
+            dq_node = DQ(**kwargs) & ColumnBase()
+        else:
+            return self.clone()
 
         # dq_node should now be an Expression, lhs = Node(), rhs = ...
         q = collections.deque([dq_node])
@@ -7175,7 +7180,8 @@ class ModelSelect(BaseModelSelect, Select):
                 else:
                     q.append(piece)
 
-        dq_node = dq_node.rhs
+        if not args or not kwargs:
+            dq_node = dq_node.lhs
 
         query = self.clone()
         for field in dq_joins:

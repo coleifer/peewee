@@ -206,6 +206,18 @@ class TestModelSQL(ModelDatabaseTestCase):
             'WHERE ((("t1"."id" >= ?) AND ("t1"."id" < ?)) AND '
             '("t1"."username" = ?))'), [1, 5, 'huey'])
 
+        query = User.filter(~DQ(id=1), username__in=('foo', 'bar'))
+        self.assertSQL(query, (
+            'SELECT "t1"."id", "t1"."username" FROM "users" AS "t1" '
+            'WHERE (NOT ("t1"."id" = ?) AND ("t1"."username" IN (?, ?)))'),
+            [1, 'foo', 'bar'])
+
+        query = User.filter((DQ(id=1) | DQ(id=2)), username__in=('foo', 'bar'))
+        self.assertSQL(query, (
+            'SELECT "t1"."id", "t1"."username" FROM "users" AS "t1" '
+            'WHERE ((("t1"."id" = ?) OR ("t1"."id" = ?)) AND '
+            '("t1"."username" IN (?, ?)))'), [1, 2, 'foo', 'bar'])
+
     def test_filter_expressions(self):
         query = User.filter(
             DQ(username__in=['huey', 'zaizee']) |
