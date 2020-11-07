@@ -7,7 +7,47 @@ https://github.com/coleifer/peewee/releases
 
 ## master
 
-[View commits](https://github.com/coleifer/peewee/compare/3.13.3...master)
+[View commits](https://github.com/coleifer/peewee/compare/3.14.0...master)
+
+## 3.14.0
+
+This release has been a bit overdue and there are numerous small improvements
+and bug-fixes. The bugfix that prompted this release is #2293, which is a
+regression in the Django-inspired `.filter()` APIs that could cause some
+filter expressions to be discarded from the generated SQL. Many thanks for the
+excellent bug report, Jakub.
+
+* Add an experimental helper, `shortcuts.resolve_multimodel_query()`, for
+  resolving multiple models used in a compound select query.
+* Add a `lateral()` method to select query for use with lateral joins, refs
+  issue #2205.
+* Added support for nested transactions (savepoints) in cockroach-db (requires
+  20.1 or newer).
+* Automatically escape wildcards passed to string-matching methods, refs #2224.
+* Allow index-type to be specified on MySQL, refs #2242.
+* Added a new API, `converter()` to be used for specifying a function to use to
+  convert a row-value pulled off the cursor, refs #2248.
+* Add `set()` and `clear()` method to the bitfield flag descriptor, refs #2257.
+* Add support for `range` types with `IN` and other expressions.
+* Support CTEs bound to compound select queries, refs #2289.
+
+### Bug-fixes
+
+* Fix to return related object id when accessing via the object-id descriptor,
+  when the related object is not populated, refs #2162.
+* Fix to ensure we do not insert a NULL value for a primary key.
+* Fix to conditionally set the field/column on an added column in a migration,
+  refs #2171.
+* Apply field conversion logic to model-class values. Relocates the logic from
+  issue #2131 and fixes #2185.
+* Clone node before modifying it to be flat in an enclosed nodelist expr, fixes
+  issue #2200.
+* Fix an invalid item assignment in nodelist, refs #2220.
+* Fix an incorrect truthiness check used with `save()` and `only=`, refs #2269.
+* Fix regression in `filter()` where using both `*args` and `**kwargs` caused
+  the expressions passed as `args` to be discarded. See #2293.
+
+[View commits](https://github.com/coleifer/peewee/compare/3.13.3...3.14.0)
 
 ## 3.13.3
 
