@@ -2255,7 +2255,8 @@ Query-builder
     .. py:method:: get(database)
 
         :param Database database: database to execute query against.
-        :return: A single row from the database or ``None``.
+        :return: A single row from the database, or raises a <Model>DoesNotExist
+                 exception if there is none.
 
         Execute the query and return the first row, if it exists. Multiple
         calls will result in multiple queries being executed.
