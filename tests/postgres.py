@@ -609,6 +609,18 @@ class TestBinaryJsonField(BaseBinaryJsonFieldTestCase, ModelTestCase):
         assertData(['k1', 'kx', 'ky', 'k3'], {'k2': 'v2', 'k4': [0, 1, 2]})
         assertData(['k4', 'k3'], {'k1': 'v1', 'k2': 'v2'})
 
+    @skip_unless(pg10(), 'jsonb remove support requires pg >= 10')
+    def test_json_contains_in_list(self):
+        m1 = self.M.create(data=[{'k1': 'v1', 'k2': 'v2'}, {'a1': 'b1'}])
+        m2 = self.M.create(data=[{'k3': 'v3'}, {'k4': 'v4'}])
+        m3 = self.M.create(data=[{'k5': 'v5', 'k6': 'v6'}, {'k1': 'v1'}])
+
+        query = (self.M
+                 .select()
+                 .where(self.M.data.contains([{'k1': 'v1'}]))
+                 .order_by(self.M.id))
+        self.assertEqual([m.id for m in query], [m1.id, m3.id])
+
     def test_integer_index_weirdness(self):
         self._create_test_data()
 
