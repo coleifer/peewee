@@ -427,3 +427,29 @@ class TestForeignKeyConstraints(ModelTestCase):
     def test_disable_constraint(self):
         self.set_foreign_key_pragma(False)
         Note.create(user=0, content='test')
+
+
+class FK_A(TestModel):
+    key = CharField(max_length=16, unique=True)
+
+class FK_B(TestModel):
+    fk_a = ForeignKeyField(FK_A, field='key')
+
+
+class TestFKtoNonPKField(ModelTestCase):
+    requires = [FK_A, FK_B]
+
+    def test_fk_to_non_pk_field(self):
+        a1 = FK_A.create(key='a1')
+        a2 = FK_A.create(key='a2')
+        b1 = FK_B.create(fk_a=a1)
+        b2 = FK_B.create(fk_a=a2)
+
+        args = (b1.fk_a, b1.fk_a_id, a1, a1.key)
+        for arg in args:
+            query = FK_B.select().where(FK_B.fk_a == arg)
+            self.assertSQL(query, (
+                'SELECT "t1"."id", "t1"."fk_a_id" FROM "fk_b" AS "t1" '
+                'WHERE ("t1"."fk_a_id" = ?)'), ['a1'])
+            b1_db = query.get()
+            self.assertEqual(b1_db.id, b1.id)

@@ -1436,3 +1436,45 @@ class TestLikeEscape(ModelTestCase):
         )
         for expr, expected in cases:
             self.assertNames(expr, expected)
+
+
+class FKF_A(TestModel):
+    key = CharField(max_length=16, unique=True)
+
+class FKF_B(TestModel):
+    fk_a_1 = ForeignKeyField(FKF_A, field='key')
+    fk_a_2 = IntegerField()
+
+
+class TestQueryWithModelInstanceParam(ModelTestCase):
+    requires = [FKF_A, FKF_B]
+
+    def test_query_with_model_instance_param(self):
+        a1 = FKF_A.create(key='k1')
+        a2 = FKF_A.create(key='k2')
+        b1 = FKF_B.create(fk_a_1=a1, fk_a_2=a1)
+        b2 = FKF_B.create(fk_a_1=a2, fk_a_2=a2)
+
+        # See also keys.TestFKtoNonPKField test, which replicates much of this.
+        args = (b1.fk_a_1, b1.fk_a_1_id, a1, a1.key)
+        for arg in args:
+            query = FKF_B.select().where(FKF_B.fk_a_1 == arg)
+            self.assertSQL(query, (
+                'SELECT "t1"."id", "t1"."fk_a_1_id", "t1"."fk_a_2" '
+                'FROM "fkf_b" AS "t1" '
+                'WHERE ("t1"."fk_a_1_id" = ?)'), ['k1'])
+            b1_db = query.get()
+            self.assertEqual(b1_db.id, b1.id)
+
+        # When we are handed a model instance and a conversion (an IntegerField
+        # in this case), when the attempted conversion fails we fall back to
+        # using the given model's primary-key.
+        args = (b1.fk_a_2, a1, a1.id)
+        for arg in args:
+            query = FKF_B.select().where(FKF_B.fk_a_2 == arg)
+            self.assertSQL(query, (
+                'SELECT "t1"."id", "t1"."fk_a_1_id", "t1"."fk_a_2" '
+                'FROM "fkf_b" AS "t1" '
+                'WHERE ("t1"."fk_a_2" = ?)'), [a1.id])
+            b1_db = query.get()
+            self.assertEqual(b1_db.id, b1.id)

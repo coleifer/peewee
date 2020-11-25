@@ -6607,10 +6607,21 @@ class Model(with_metaclass(ModelBase, Node)):
         return not self == other
 
     def __sql__(self, ctx):
-        # XXX: when comparing a foreign-key field whose related-field is not a
+        # NOTE: when comparing a foreign-key field whose related-field is not a
         # primary-key, then doing an equality test for the foreign-key with a
-        # model instance will return the wrong value; since we always return
+        # model instance will return the wrong value; since we would return
         # the primary key for a given model instance.
+        #
+        # This checks to see if we have a converter in the scope, and if so,
+        # hands the model instance to the converter rather than blindly
+        # grabbing the primary-key. In the event the provided converter fails
+        # to handle the model instance, then we will return the primary-key.
+        if ctx.state.converter is not None:
+            try:
+                return ctx.sql(Value(self, converter=ctx.state.converter))
+            except (TypeError, ValueError):
+                pass
+
         return ctx.sql(Value(getattr(self, self._meta.primary_key.name),
                              converter=self._meta.primary_key.db_value))
 
