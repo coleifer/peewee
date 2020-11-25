@@ -6607,6 +6607,10 @@ class Model(with_metaclass(ModelBase, Node)):
         return not self == other
 
     def __sql__(self, ctx):
+        # XXX: when comparing a foreign-key field whose related-field is not a
+        # primary-key, then doing an equality test for the foreign-key with a
+        # model instance will return the wrong value; since we always return
+        # the primary key for a given model instance.
         return ctx.sql(Value(getattr(self, self._meta.primary_key.name),
                              converter=self._meta.primary_key.db_value))
 
