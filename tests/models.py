@@ -4537,3 +4537,26 @@ class TestManyToManyJoining(ModelTestCase):
                  .join_from(Attendance, Course)
                  .where(Attendance.course.in_(courses)))
         self.assertQuery(query)
+
+
+class TestColumnNameStripping(ModelTestCase):
+    database = get_in_memory_db()
+    requires = [Person]
+
+    def test_column_name_stripping(self):
+        d1 = datetime.date(1990, 1, 1)
+        d2 = datetime.date(1990, 1, 1)
+        p1 = Person.create(first='f1', last='l1', dob=d1)
+        p2 = Person.create(first='f2', last='l2', dob=d2)
+
+        query = Person.select(
+            fn.MIN(Person.dob),
+            fn.MAX(Person.dob).alias('mdob'))
+        # Get the row as a model.
+        row = query.get()
+        self.assertEqual(row.dob, d1)
+        self.assertEqual(row.mdob, d2)
+
+        row = query.dicts().get()
+        self.assertEqual(row['dob'], d1)
+        self.assertEqual(row['mdob'], d2)
