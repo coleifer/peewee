@@ -7378,7 +7378,7 @@ class BaseModelCursorWrapper(DictCursorWrapper):
             if dot_index != -1:
                 column = column[dot_index + 1:]
 
-            column = column.strip('"')
+            column = column.strip('")')
             self.columns.append(column)
             try:
                 raw_node = self.select[idx]
