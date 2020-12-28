@@ -1,0 +1,51 @@
+name: Tests
+on: [push]
+jobs:
+  tests:
+    name: ${{ matrix.peewee-backend }} - ${{ matrix.python-version }}
+    runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mariadb:latest
+        env:
+          MYSQL_ROOT_PASSWORD: peewee
+          MYSQL_DATABASE: peewee_test
+        ports:
+          - 3306:3306
+      postgres:
+        image: postgres
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: peewee
+          POSTGRES_DB: peewee_test
+        ports:
+          - 5432:5432
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: [2.7, 3.6, 3.9]
+        peewee-backend:
+          - "sqlite"
+          - "postgresql"
+          - "mysql"
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions/setup-python@v2
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: deps
+        env:
+          PGUSER: postgres
+          PGHOST: 127.0.0.1
+          PGPASSWORD: peewee
+        run: |
+          pip install psycopg2-binary cython pymysql apsw mysql-connector
+          python setup.py build_ext -i
+          psql peewee_test -c 'CREATE EXTENSION hstore;'
+      - name: runtests ${{ matrix.peewee-backend }} - ${{ matrix.python-version }}
+        env:
+          PEEWEE_TEST_BACKEND: ${{ matrix.peewee-backend }}
+          PGUSER: postgres
+          PGHOST: 127.0.0.1
+          PGPASSWORD: peewee
+        run: python runtests.py --mysql-user=root --mysql-password=peewee
