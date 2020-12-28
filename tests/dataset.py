@@ -52,6 +52,14 @@ class TestDataSet(ModelTestCase):
         self.dataset.close()
         super(TestDataSet, self).tearDown()
 
+    def test_create_index(self):
+        users = self.dataset['users']
+        users.insert(username='u0')
+
+        users.create_index(['username'], True)
+        with self.assertRaises(IntegrityError):
+            users.insert(username='u0')
+
     def test_pass_database(self):
         db = SqliteDatabase(':memory:')
         dataset = DataSet(db)

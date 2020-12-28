@@ -207,10 +207,9 @@ class Table(object):
             {'Meta': Meta})
 
     def create_index(self, columns, unique=False):
-        self.dataset._database.create_index(
-            self.model_class,
-            columns,
-            unique=unique)
+        index = ModelIndex(self.model_class, columns, unique=unique)
+        self.model_class.add_index(index)
+        self.dataset._database.execute(index)
 
     def _guess_field_type(self, value):
         if isinstance(value, basestring):
