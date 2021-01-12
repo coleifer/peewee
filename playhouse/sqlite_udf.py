@@ -465,6 +465,20 @@ class _range(object):
             return self._max - self._min
         return None
 
+@aggregate(MATH)
+class stddev(object):
+    def __init__(self):
+        self.n = 0
+        self.values = []
+    def step(self, v):
+        self.n += 1
+        self.values.append(v)
+    def finalize(self):
+        if self.n <= 1:
+            return 0
+        mean = sum(self.values) / self.n
+        return math.sqrt(sum((i - mean) ** 2 for i in self.values) / (self.n - 1))
+
 
 if cython_udf is not None:
     damerau_levenshtein_dist = udf(STRING)(cython_udf.damerau_levenshtein_dist)
