@@ -1490,8 +1490,7 @@ class TestModelSelectFromSubquery(ModelTestCase):
 
         UA = User.alias()
         subquery = (UA.select()
-                    .where(UA.username.in_(('u0', 'u2', 'u4')))
-                    .order_by(UA.username.desc()))
+                    .where(UA.username.in_(('u0', 'u2', 'u4'))))
 
         cte = (ValuesList([('u0',), ('u4',)], columns=['username'])
                .cte('user_cte', columns=['username']))
@@ -1500,6 +1499,7 @@ class TestModelSelectFromSubquery(ModelTestCase):
                  .select(subquery.c.id, subquery.c.username)
                  .from_(subquery)
                  .join(cte, on=(subquery.c.username == cte.c.username))
-                 .with_cte(cte))
+                 .with_cte(cte)
+                 .order_by(subquery.c.username.desc()))
         self.assertEqual([u.username for u in query], ['u4', 'u0'])
         self.assertTrue(isinstance(query[0], User))
