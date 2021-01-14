@@ -7558,9 +7558,13 @@ class ModelCursorWrapper(BaseModelCursorWrapper):
             objects[key] = constructor(__no_default__=True)
             object_list.append(objects[key])
 
+        default_instance = objects[self.model]
+
         set_keys = set()
         for idx, key in enumerate(self.column_keys):
-            instance = objects[key]
+            # Get the instance corresponding to the selected column/value,
+            # falling back to the "root" model instance.
+            instance = objects.get(key, default_instance)
             column = self.columns[idx]
             value = row[idx]
             if value is not None:

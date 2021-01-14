@@ -1478,3 +1478,28 @@ class TestQueryWithModelInstanceParam(ModelTestCase):
                 'WHERE ("t1"."fk_a_2" = ?)'), [a1.id])
             b1_db = query.get()
             self.assertEqual(b1_db.id, b1.id)
+
+
+@skip_if(IS_SQLITE_OLD or IS_MYSQL)
+class TestModelSelectFromSubquery(ModelTestCase):
+    requires = [User]
+
+    def test_model_select_from_subquery(self):
+        for i in range(5):
+            User.create(username='u%s' % i)
+
+        UA = User.alias()
+        subquery = (UA.select()
+                    .where(UA.username.in_(('u0', 'u2', 'u4')))
+                    .order_by(UA.username.desc()))
+
+        cte = (ValuesList([('u0',), ('u4',)], columns=['username'])
+               .cte('user_cte', columns=['username']))
+
+        query = (User
+                 .select(subquery.c.id, subquery.c.username)
+                 .from_(subquery)
+                 .join(cte, on=(subquery.c.username == cte.c.username))
+                 .with_cte(cte))
+        self.assertEqual([u.username for u in query], ['u4', 'u0'])
+        self.assertTrue(isinstance(query[0], User))
