@@ -4421,7 +4421,7 @@ class ForeignKeyAccessor(FieldAccessor):
 class NoQueryForeignKeyAccessor(ForeignKeyAccessor):
     def get_rel_instance(self, instance):
         value = instance.__data__.get(self.name)
-        if value is not None:
+        if value is not None or self.name in instance.__rel__:
             return instance.__rel__.get(self.name, value)
         elif not self.field.null:
             raise self.rel_model.DoesNotExist
