@@ -4393,10 +4393,10 @@ class ForeignKeyAccessor(FieldAccessor):
     def get_rel_instance(self, instance):
         value = instance.__data__.get(self.name)
         if value is not None or self.name in instance.__rel__:
-            if self.name not in instance.__rel__:
+            if self.name not in instance.__rel__ and self.field.lazy_load:
                 obj = self.rel_model.get(self.field.rel_field == value)
                 instance.__rel__[self.name] = obj
-            return instance.__rel__[self.name]
+            return instance.__rel__.get(self.name, value)
         elif not self.field.null:
             raise self.rel_model.DoesNotExist
         return value
@@ -4416,15 +4416,6 @@ class ForeignKeyAccessor(FieldAccessor):
             if obj != fk_value and self.name in instance.__rel__:
                 del instance.__rel__[self.name]
         instance._dirty.add(self.name)
-
-
-class NoQueryForeignKeyAccessor(ForeignKeyAccessor):
-    def get_rel_instance(self, instance):
-        value = instance.__data__.get(self.name)
-        if value is not None:
-            return instance.__rel__.get(self.name, value)
-        elif not self.field.null:
-            raise self.rel_model.DoesNotExist
 
 
 class BackrefAccessor(object):
@@ -5146,11 +5137,6 @@ class ForeignKeyField(Field):
                  rel_model=None, to_field=None, object_id_name=None,
                  lazy_load=True, related_name=None, *args, **kwargs):
         kwargs.setdefault('index', True)
-
-        # If lazy_load is disable, we use a different descriptor/accessor that
-        # will ensure we don't accidentally perform a query.
-        if not lazy_load:
-            self.accessor_class = NoQueryForeignKeyAccessor
 
         super(ForeignKeyField, self).__init__(*args, **kwargs)
 

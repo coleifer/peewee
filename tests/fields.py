@@ -1313,6 +1313,17 @@ class TestForeignKeyLazyLoad(ModelTestCase):
         with self.assertQueryCount(1):
             self.assertEqual(bi.nq.id, b.id)
 
+    def test_fk_lazy_load_related_instance(self):
+        nq = NQ(name='b1')
+        nqi = NQItem(nq=nq, nq_null=nq, nq_lazy=nq, nq_lazy_null=nq)
+        nq.save()
+        nqi.save()
+
+        with self.assertQueryCount(1):
+            nqi_db = NQItem.get(NQItem.id == nqi.id)
+            self.assertEqual(nqi_db.nq_lazy, nq.id)
+            self.assertEqual(nqi_db.nq_lazy_null, nq.id)
+
     def test_fk_lazy_select_related(self):
         NA, NB, NC, ND = [NQ.alias(a) for a in ('na', 'nb', 'nc', 'nd')]
         LO = JOIN.LEFT_OUTER
