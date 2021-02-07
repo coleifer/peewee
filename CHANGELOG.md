@@ -7,7 +7,23 @@ https://github.com/coleifer/peewee/releases
 
 ## master
 
-[View commits](https://github.com/coleifer/peewee/compare/3.14.0...master)
+[View commits](https://github.com/coleifer/peewee/compare/3.14.1...master)
+
+## 3.14.1
+
+This release contains primarily bugfixes.
+
+* Properly delegate to a foreign-key field's `db_value()` function when
+  converting model instances. #2304.
+* Strip quote marks and parentheses from column names returned by sqlite
+  cursor when a function-call is projected without an alias. #2305.
+* Fix `DataSet.create_index()` method, #2319.
+* Fix column-to-model mapping in model-select from subquery with joins, #2320.
+* Improvements to foreign-key lazy-loading thanks @conqp, #2328.
+* Preserve and handle `CHECK()` constraints in Sqlite migrator, #2343.
+* Add `stddev` aggregate function to collection of sqlite user-defined funcs.
+
+[View commits](https://github.com/coleifer/peewee/compare/3.14.0...3.14.1)
 
 ## 3.14.0
 
