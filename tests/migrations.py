@@ -877,11 +877,45 @@ class BadNames(TestModel):
             SQL('CONSTRAINT const2 UNIQUE (foreign_data)')]
 
 
+class HasChecks(TestModel):
+    key = TextField()
+    value = IntegerField()
+    class Meta:
+        constraints = [
+            SQL("CHECK (key != '')"),
+            SQL('CHECK (value > 0)')]
+
+
 class TestSqliteColumnNameRegression(ModelTestCase):
     database = get_in_memory_db()
-    requires = [BadNames]
+    requires = [BadNames, HasChecks]
 
-    def test_sqlite_column_name_regression(self):
+    def test_sqlite_check_constraints(self):
+        HasChecks.create(key='k1', value=1)
+
+        migrator = SchemaMigrator.from_database(self.database)
+        extra = TextField(default='')
+        migrate(migrator.add_column('has_checks', 'extra', extra))
+
+        columns = self.database.get_columns('has_checks')
+        self.assertEqual([c.name for c in columns],
+                         ['id', 'key', 'value', 'extra'])
+
+        HC = Table('has_checks', ('id', 'key', 'value', 'extra'))
+        HC = HC.bind(self.database)
+
+        # Sanity-check: ensure we can create a new row.
+        data = {'key': 'k2', 'value': 2, 'extra': 'x2'}
+        self.assertTrue(HC.insert(data).execute())
+
+        # Check constraints preserved.
+        data = {'key': 'k0', 'value': 0, 'extra': 'x0'}
+        self.assertRaises(IntegrityError, HC.insert(data).execute)
+
+        data = {'key': '', 'value': 3, 'extra': 'x3'}
+        self.assertRaises(IntegrityError, HC.insert(data).execute)
+
+    def test_sqlite_column_name_constraint_regression(self):
         BadNames.create(primary_data='pd', foreign_data='fd', data='d')
 
         migrator = SchemaMigrator.from_database(self.database)

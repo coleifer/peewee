@@ -717,7 +717,7 @@ class SqliteMigrator(SchemaMigrator):
         new_column_defs = []
         new_column_names = []
         original_column_names = []
-        constraint_terms = ('foreign ', 'primary ', 'constraint ')
+        constraint_terms = ('foreign ', 'primary ', 'constraint ', 'check ')
 
         for column_def in column_defs:
             column_name, = self.column_name_re.match(column_def).groups()
