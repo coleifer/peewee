@@ -787,6 +787,37 @@ for binding a given model class:
 The :ref:`testing` section of this document also contains some examples of
 using the ``bind()`` methods.
 
+Thread-Safety and Multiple Databases
+------------------------------------
+
+If you plan to change the database at run-time in a multi-threaded application,
+storing the model's database in a thread-local will prevent race-conditions.
+This can be accomplished with a custom model ``Metadata`` class:
+
+.. code-block:: python
+
+    import threading
+    from peewee import Metadata
+
+    class ThreadSafeDatabaseMetadata(Metadata):
+        def __init__(self, *args, **kwargs):
+            # database attribute is stored in a thread-local.
+            self._local = threading.local()
+            super(ThreadSafeDatabaseMetadata, self).__init__(*args, **kwargs)
+
+        def _get_db(self):
+            return getattr(self._local, 'database', self._database)
+        def _set_db(self, db):
+            self._local.database = self._database = db
+        database = property(_get_db, _set_db)
+
+
+    class BaseModel(Model):
+        class Meta:
+            # Instruct peewee to use our thread-safe metadata implementation.
+            model_metadata_class = ThreadSafeDatabaseMetadata
+
+
 Connection Management
 ---------------------
 
