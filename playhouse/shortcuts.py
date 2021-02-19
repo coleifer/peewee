@@ -1,3 +1,5 @@
+import time
+
 from peewee import *
 from peewee import Alias
 from peewee import CompoundSelectQuery
@@ -227,6 +229,32 @@ class ReconnectMixin(object):
                 self.connect()
 
             return super(ReconnectMixin, self).execute_sql(sql, params, commit)
+          
+    def connect(self, *args, **kwargs):
+        delay = 1
+
+        while True:
+            try:
+                return super().connect(*args, **kwargs)
+            except Exception as exc:
+                exc_class = type(exc)
+
+                if exc_class not in self._reconnect_errors:
+                    raise exc
+
+                exc_repr = str(exc).lower()
+                for err_fragment in self._reconnect_errors[exc_class]:
+                    if err_fragment in exc_repr:
+                        break
+                else:
+                    raise exc
+
+                delay = delay * 2
+
+                if delay > 60:
+                    delay = 60
+
+                time.sleep(delay)
 
 
 def resolve_multimodel_query(query, key='_model_identifier'):
