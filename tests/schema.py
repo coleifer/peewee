@@ -40,6 +40,14 @@ class TMConstraints(TestModel):
     value = TextField(collation='NOCASE')
 
 
+class TMNamedConstraints(TestModel):
+    fk = ForeignKeyField('self', null=True, constraint_name='tmc_fk')
+    k = TextField()
+    v = IntegerField(constraints=[Check('v in (1, 2)')])
+    class Meta:
+        constraints = [Check('k != \'kx\'', name='chk_k')]
+
+
 class CacheData(TestModel):
     key = TextField(unique=True)
     value = TextField()
@@ -67,7 +75,8 @@ Article.add_index(SQL('CREATE INDEX "article_foo" ON "article" ("flags" & 3)'))
 class TestModelDDL(ModelDatabaseTestCase):
     database = get_in_memory_db()
     requires = [Article, CacheData, Category, Note, Person, Relationship,
-                TMUnique, TMSequence, TMIndexes, TMConstraints, User]
+                TMUnique, TMSequence, TMIndexes, TMConstraints,
+                TMNamedConstraints, User]
 
     def test_database_required(self):
         class MissingDB(Model):
@@ -472,9 +481,22 @@ class TestModelDDL(ModelDatabaseTestCase):
 
         self.assertCreateTable(TMConstraints, [
             ('CREATE TABLE "tm_constraints" ('
-             '"id" INTEGER NOT NULL PRIMARY KEY,'
-             ' "data" INTEGER CHECK (data < 5), '
+             '"id" INTEGER NOT NULL PRIMARY KEY, '
+             '"data" INTEGER CHECK (data < 5), '
              '"value" TEXT NOT NULL COLLATE NOCASE)')])
+
+        self.assertCreateTable(TMNamedConstraints, [
+            ('CREATE TABLE "tm_named_constraints" ('
+             '"id" INTEGER NOT NULL PRIMARY KEY, '
+             '"fk_id" INTEGER, '
+             '"k" TEXT NOT NULL, '
+             '"v" INTEGER NOT NULL '
+             'CHECK (v in (1, 2)), '
+             'CONSTRAINT "tmc_fk" FOREIGN KEY ("fk_id") '
+             'REFERENCES "tm_named_constraints" ("id"), '
+             'CONSTRAINT "chk_k" CHECK (k != \'kx\'))'),
+            ('CREATE INDEX "tm_named_constraints_fk_id" '
+             'ON "tm_named_constraints" ("fk_id")')])
 
     def test_index_name_truncation(self):
         class LongIndex(TestModel):
@@ -758,3 +780,26 @@ class TestTruncateTable(ModelTestCase):
 
         User.truncate_table()
         self.assertEqual(User.select().count(), 0)
+
+
+class TestNamedConstraintsIntegration(ModelTestCase):
+    requires = [TMNamedConstraints]
+
+    def setUp(self):
+        super(TestNamedConstraintsIntegration, self).setUp()
+        if IS_SQLITE:
+            self.database.pragma('foreign_keys', 'on')
+
+    def test_named_constraints_integration(self):
+        t = TMNamedConstraints.create(k='k1', v=1)  # Sanity test.
+        fails = [
+            {'fk': t.id - 1, 'k': 'k2', 'v': 1},  # Invalid fk.
+            {'fk': t.id, 'k': 'k3', 'v': 0},  # Invalid val.
+            {'fk': t.id, 'k': 'kx', 'v': 1}]  # Invalid key.
+        for f in fails:
+            # MySQL may use OperationalError.
+            with self.assertRaises((IntegrityError, OperationalError)):
+                with self.database.atomic() as tx:
+                    TMNamedConstraints.create(**f)
+
+        self.assertEqual(len(TMNamedConstraints), 1)

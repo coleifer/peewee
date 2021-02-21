@@ -1510,8 +1510,11 @@ class SQL(ColumnBase):
         return ctx
 
 
-def Check(constraint):
-    return SQL('CHECK (%s)' % constraint)
+def Check(constraint, name=None):
+    check = SQL('CHECK (%s)' % constraint)
+    if not name:
+        return check
+    return NodeList((SQL('CONSTRAINT'), Entity(name), check))
 
 
 class Function(ColumnBase):
@@ -5135,7 +5138,8 @@ class ForeignKeyField(Field):
     def __init__(self, model, field=None, backref=None, on_delete=None,
                  on_update=None, deferrable=None, _deferred=None,
                  rel_model=None, to_field=None, object_id_name=None,
-                 lazy_load=True, related_name=None, *args, **kwargs):
+                 lazy_load=True, constraint_name=None, related_name=None,
+                 *args, **kwargs):
         kwargs.setdefault('index', True)
 
         super(ForeignKeyField, self).__init__(*args, **kwargs)
@@ -5164,6 +5168,7 @@ class ForeignKeyField(Field):
         self.deferred = _deferred
         self.object_id_name = object_id_name
         self.lazy_load = lazy_load
+        self.constraint_name = constraint_name
 
     @property
     def field_type(self):
@@ -5227,12 +5232,15 @@ class ForeignKeyField(Field):
                 setattr(self.rel_model, self.backref, BackrefAccessor(self))
 
     def foreign_key_constraint(self):
-        parts = [
+        parts = []
+        if self.constraint_name:
+            parts.extend((SQL('CONSTRAINT'), Entity(self.constraint_name)))
+        parts.extend([
             SQL('FOREIGN KEY'),
             EnclosedNodeList((self,)),
             SQL('REFERENCES'),
             self.rel_model,
-            EnclosedNodeList((self.rel_field,))]
+            EnclosedNodeList((self.rel_field,))])
         if self.on_delete:
             parts.append(SQL('ON DELETE %s' % self.on_delete))
         if self.on_update:

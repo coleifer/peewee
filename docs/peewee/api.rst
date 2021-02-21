@@ -1454,11 +1454,18 @@ Query-builder
     Represent a parameterized SQL query or query-fragment.
 
 
-.. py:function:: Check(constraint)
+.. py:function:: Check(constraint[, name=None])
 
     :param str constraint: Constraint SQL.
+    :param str name: constraint name.
 
     Represent a CHECK constraint.
+
+    .. warning::
+         MySQL may not support a ``name`` parameter when inlining the
+         constraint along with the column definition. The solution is to just
+         put the named ``Check`` constraint in the model's ``Meta.constraints``
+         list instead of in the field instances ``constraints=[...]`` list.
 
 
 .. py:class:: Function(name, arguments[, coerce=True[, python_value=None]])
@@ -3244,7 +3251,7 @@ Fields
     Accepts a special ``coerce`` parameter, a function that takes a value
     coming from the database and converts it into the appropriate Python type.
 
-.. py:class:: ForeignKeyField(model[, field=None[, backref=None[, on_delete=None[, on_update=None[, deferrable=None[, object_id_name=None[, lazy_load=True[, **kwargs]]]]]]]])
+.. py:class:: ForeignKeyField(model[, field=None[, backref=None[, on_delete=None[, on_update=None[, deferrable=None[, object_id_name=None[, lazy_load=True[, constraint_name=None[, **kwargs]]]]]]]]])
 
     :param Model model: Model to reference or the string 'self' if declaring a
         self-referential foreign key.
@@ -3260,6 +3267,7 @@ Fields
         attribute is accessed (if it was not already loaded). If this is
         disabled, accessing the foreign-key field will return the value stored
         in the foreign-key column.
+    :param str constraint_name: (optional) name to use for foreign-key constraint.
 
     Field class for storing a foreign key.
 
