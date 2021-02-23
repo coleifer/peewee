@@ -54,6 +54,7 @@ except OperationalError:
           'the postgres_ext tests.')
 from .pwiz_integration import *
 from .reflection import *
+from .returning import *
 from .shortcuts import *
 from .signals import *
 try:
