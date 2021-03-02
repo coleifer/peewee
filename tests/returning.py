@@ -5,6 +5,7 @@ from peewee import __sqlite_version__
 
 from .base import db
 from .base import skip_unless
+from .base import IS_SQLITE
 from .base import ModelTestCase
 from .base import TestModel
 
@@ -19,7 +20,8 @@ class Reg(TestModel):
         )
 
 
-returning_support = db.returning_clause or (__sqlite_version__ >= (3, 35, 0))
+returning_support = db.returning_clause or (IS_SQLITE and
+                                            __sqlite_version__ >= (3, 35, 0))
 
 
 @skip_unless(returning_support, 'database does not support RETURNING')
