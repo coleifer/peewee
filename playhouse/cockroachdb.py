@@ -93,31 +93,6 @@ class CockroachDatabase(PostgresqlDatabase):
         pkc = self._get_pk_constraint(table, schema)
         return [idx for idx in indexes if (not pkc) or (idx.name != pkc)]
 
-    def get_foreign_keys(self, table, schema=None):
-        # Identical to the Postgres implementation, except we additionally
-        # join table-constraints and key-column-usage on the table name and
-        # schema. See cockroachdb/cockroach issue #42208. This prevents
-        # returning additional rows for foreign-keys that have been renamed.
-        sql = """
-            SELECT DISTINCT
-                kcu.column_name, ccu.table_name, ccu.column_name
-            FROM information_schema.table_constraints AS tc
-            JOIN information_schema.key_column_usage AS kcu
-                ON (tc.constraint_name = kcu.constraint_name AND
-                    tc.constraint_schema = kcu.constraint_schema AND
-                    tc.table_name = kcu.table_name AND
-                    tc.table_schema = kcu.table_schema)
-            JOIN information_schema.constraint_column_usage AS ccu
-                ON (ccu.constraint_name = tc.constraint_name AND
-                    ccu.constraint_schema = tc.constraint_schema)
-            WHERE
-                tc.constraint_type = 'FOREIGN KEY' AND
-                tc.table_name = %s AND
-                tc.table_schema = %s"""
-        cursor = self.execute_sql(sql, (table, schema or 'public'))
-        return [ForeignKeyMetadata(row[0], row[1], row[2], table)
-                for row in cursor.fetchall()]
-
     def conflict_statement(self, on_conflict, query):
         if not on_conflict._action: return
 
