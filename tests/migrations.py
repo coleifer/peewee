@@ -570,7 +570,6 @@ class TestSchemaMigration(ModelTestCase):
             ['id', 'name'])
         self.assertEqual(self.database.get_foreign_keys('page'), [])
 
-    @skip_if(IS_CRDB, 'crdb does not clean up old constraint')
     def test_rename_foreign_key(self):
         migrate(self.migrator.rename_column('page', 'user_id', 'huey_id'))
         columns = self.database.get_columns('page')
@@ -585,7 +584,6 @@ class TestSchemaMigration(ModelTestCase):
         self.assertEqual(foreign_key.dest_column, 'id')
         self.assertEqual(foreign_key.dest_table, 'users')
 
-    @skip_if(IS_CRDB, 'crdb does not clean up old constraint')
     def test_rename_unique_foreign_key(self):
         migrate(self.migrator.rename_column('session', 'user_id', 'huey_id'))
         columns = self.database.get_columns('session')
