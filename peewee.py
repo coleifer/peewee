@@ -53,6 +53,11 @@ try:
         pg_errors = None
 except ImportError:
     psycopg2 = pg_errors = None
+try:
+    from psycopg2.extras import register_uuid as pg_register_uuid
+    pg_register_uuid()
+except Exception:
+    pass
 
 mysql_passwd = False
 try:
@@ -1524,7 +1529,7 @@ class Function(ColumnBase):
         self._filter = None
         self._order_by = None
         self._python_value = python_value
-        if name and name.lower() in ('sum', 'count', 'cast'):
+        if name and name.lower() in ('sum', 'count', 'cast', 'array_agg'):
             self._coerce = False
         else:
             self._coerce = coerce
