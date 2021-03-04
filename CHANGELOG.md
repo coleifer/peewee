@@ -7,7 +7,18 @@ https://github.com/coleifer/peewee/releases
 
 ## master
 
-[View commits](https://github.com/coleifer/peewee/compare/3.14.1...master)
+[View commits](https://github.com/coleifer/peewee/compare/3.14.2...master)
+
+## 3.14.2
+
+This is a small release mainly to get some fixes out.
+
+* Support for named `Check` and foreign-key constraints.
+* Better foreign-key introspection for CockroachDB (and Postgres).
+* Register UUID adapter for Postgres.
+* Add `fn.array_agg()` to blacklist for automatic value coercion.
+
+[View commits](https://github.com/coleifer/peewee/compare/3.14.1...3.14.2)
 
 ## 3.14.1
 
