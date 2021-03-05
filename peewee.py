@@ -2633,11 +2633,15 @@ class Insert(_WriteQuery):
                 if col not in seen:
                     columns.append(col)
 
+        nullable_columns = set()
         value_lookups = {}
         for column in columns:
             lookups = [column, column.name]
-            if isinstance(column, Field) and column.name != column.column_name:
-                lookups.append(column.column_name)
+            if isinstance(column, Field):
+                if column.name != column.column_name:
+                    lookups.append(column.column_name)
+                if column.null:
+                    nullable_columns.add(column)
             value_lookups[column] = lookups
 
         ctx.sql(EnclosedNodeList(columns)).literal(' VALUES ')
@@ -2671,6 +2675,8 @@ class Insert(_WriteQuery):
                         val = defaults[column]
                         if callable_(val):
                             val = val()
+                    elif column in nullable_columns:
+                        val = None
                     else:
                         raise ValueError('Missing value for %s.' % column.name)
 

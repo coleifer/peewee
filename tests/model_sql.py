@@ -23,7 +23,7 @@ class CKM(TestModel):
 
 class TestModelSQL(ModelDatabaseTestCase):
     database = get_in_memory_db()
-    requires = [Category, CKM, Note, Person, Relationship, Sample, User]
+    requires = [Category, CKM, Note, Person, Relationship, Sample, User, DfltM]
 
     def test_select(self):
         query = (Person
@@ -439,6 +439,21 @@ class TestModelSQL(ModelDatabaseTestCase):
         self.assertSQL(Sample.insert_many([s3, s2]), (
             'INSERT INTO "sample" ("counter", "value") VALUES (?, ?), (?, ?)'),
             [3, 1., 2, 2.])
+
+    def test_insert_many_defaults_nulls(self):
+        data = [
+            {'name': 'd1'},
+            {'name': 'd2', 'dflt1': 10},
+            {'name': 'd3', 'dflt2': 30},
+            {'name': 'd4', 'dfltn': 40}]
+        fields = [DfltM.name, DfltM.dflt1, DfltM.dflt2, DfltM.dfltn]
+        self.assertSQL(DfltM.insert_many(data, fields=fields), (
+            'INSERT INTO "dflt_m" ("name", "dflt1", "dflt2", "dfltn") VALUES '
+            '(?, ?, ?, ?), (?, ?, ?, ?), (?, ?, ?, ?), (?, ?, ?, ?)'),
+            ['d1', 1, 2, None,
+             'd2', 10, 2, None,
+             'd3', 1, 30, None,
+             'd4', 1, 2, 40])
 
     def test_insert_many_list_with_fields(self):
         data = [(i,) for i in ('charlie', 'huey', 'zaizee')]

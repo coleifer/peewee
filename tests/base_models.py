@@ -104,3 +104,10 @@ class UKVP(TestModel):
         indexes = [
             SQL('CREATE UNIQUE INDEX "ukvp_kve" ON "ukvp" ("key", "value") '
                 'WHERE "extra" > 1')]
+
+
+class DfltM(TestModel):
+    name = CharField()
+    dflt1 = IntegerField(default=1)
+    dflt2 = IntegerField(default=lambda: 2)
+    dfltn = IntegerField(null=True)

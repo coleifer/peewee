@@ -170,6 +170,25 @@ class TestModelAPIs(ModelTestCase):
         names = [u.username for u in User.select().order_by(User.username)]
         self.assertEqual(names, ['u%02d' % i for i in range(100)])
 
+    @requires_models(DfltM)
+    def test_insert_many_defaults_nullable(self):
+        data = [
+            {'name': 'd1'},
+            {'name': 'd2', 'dflt1': 10},
+            {'name': 'd3', 'dflt2': 30},
+            {'name': 'd4', 'dfltn': 40}]
+        fields = [DfltM.name, DfltM.dflt1, DfltM.dflt2, DfltM.dfltn]
+        DfltM.insert_many(data, fields).execute()
+
+        expected = [
+            ('d1', 1, 2, None),
+            ('d2', 10, 2, None),
+            ('d3', 1, 30, None),
+            ('d4', 1, 2, 40)]
+        query = DfltM.select().order_by(DfltM.name)
+        actual = [(d.name, d.dflt1, d.dflt2, d.dfltn) for d in query]
+        self.assertEqual(actual, expected)
+
     @requires_models(User, Tweet)
     def test_create(self):
         with self.assertQueryCount(1):
