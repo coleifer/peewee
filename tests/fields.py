@@ -101,6 +101,16 @@ class TestNullConstraint(ModelTestCase):
         i_db = IntModel.get(IntModel.value == 1)
         self.assertIsNone(i_db.value_null)
 
+    def test_insert_many(self):
+        IntModel.insert_many([
+            {IntModel.value: 2, IntModel.value_null :None},
+            {IntModel.value: 3}]
+        ).execute()
+        i_db = IntModel.get(IntModel.value == 2)
+        self.assertIsNone(i_db.value_null)
+        i_db = IntModel.get(IntModel.value == 3)
+        self.assertIsNone(i_db.value_null)
+
     def test_empty_value(self):
         with self.database.atomic():
             with self.assertRaisesCtx(IntegrityError):

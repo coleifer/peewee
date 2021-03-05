@@ -2671,6 +2671,8 @@ class Insert(_WriteQuery):
                         val = defaults[column]
                         if callable_(val):
                             val = val()
+                    elif isinstance(column, Field) and column.null:
+                        val = None
                     else:
                         raise ValueError('Missing value for %s.' % column.name)
 
