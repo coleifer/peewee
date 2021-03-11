@@ -7,7 +7,15 @@ https://github.com/coleifer/peewee/releases
 
 ## master
 
-[View commits](https://github.com/coleifer/peewee/compare/3.14.2...master)
+[View commits](https://github.com/coleifer/peewee/compare/3.14.3...master)
+
+## 3.14.3
+
+This release contains a single fix for ensuring NULL values are inserted when
+issuing a bulk-insert of heterogeneous dictionaries which may be missing
+explicit NULL values. Fixes issue #2638.
+
+[View commits](https://github.com/coleifer/peewee/compare/3.14.2...3.14.3)
 
 ## 3.14.2
 
