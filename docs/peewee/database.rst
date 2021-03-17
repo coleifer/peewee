@@ -817,6 +817,7 @@ This can be accomplished with a custom model ``Metadata`` class:
             # Instruct peewee to use our thread-safe metadata implementation.
             model_metadata_class = ThreadSafeDatabaseMetadata
 
+.. _connection_management:
 
 Connection Management
 ---------------------

@@ -3447,7 +3447,7 @@ Simple Postgres pool example code:
             database = db
 
 That's it! If you would like finer-grained control over the pool of
-connections, check out the :ref:`advanced_connection_management` section.
+connections, check out the :ref:`connection_management` section.
 
 Pool APIs
 ^^^^^^^^^
