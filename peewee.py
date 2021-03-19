@@ -1457,6 +1457,7 @@ class Expression(ColumnBase):
         # Set up the appropriate converter if we have a field on the left side.
         if isinstance(node, Field) and raw_node._coerce:
             overrides['converter'] = node.db_value
+            overrides['is_fk_expr'] = isinstance(node, ForeignKeyField)
         else:
             overrides['converter'] = None
 
@@ -6619,11 +6620,12 @@ class Model(with_metaclass(ModelBase, Node)):
         # model instance will return the wrong value; since we would return
         # the primary key for a given model instance.
         #
-        # This checks to see if we have a converter in the scope, and if so,
-        # hands the model instance to the converter rather than blindly
-        # grabbing the primary-key. In the event the provided converter fails
-        # to handle the model instance, then we will return the primary-key.
-        if ctx.state.converter is not None:
+        # This checks to see if we have a converter in the scope, and that we
+        # are converting a foreign-key expression. If so, we hand the model
+        # instance to the converter rather than blindly grabbing the primary-
+        # key. In the event the provided converter fails to handle the model
+        # instance, then we will return the primary-key.
+        if ctx.state.converter is not None and ctx.state.is_fk_expr:
             try:
                 return ctx.sql(Value(self, converter=ctx.state.converter))
             except (TypeError, ValueError):

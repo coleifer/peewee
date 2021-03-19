@@ -1503,3 +1503,36 @@ class TestModelSelectFromSubquery(ModelTestCase):
                  .order_by(subquery.c.username.desc()))
         self.assertEqual([u.username for u in query], ['u4', 'u0'])
         self.assertTrue(isinstance(query[0], User))
+
+
+class CharPK(TestModel):
+    id = CharField(primary_key=True)
+    name = CharField(unique=True)
+
+    def __str__(self):
+        return self.name
+
+class CharFK(TestModel):
+    id = IntegerField(primary_key=True)
+    cpk = ForeignKeyField(CharPK, field=CharPK.name)
+
+
+class TestModelConversionRegression(ModelTestCase):
+    requires = [CharPK, CharFK]
+
+    def test_model_conversion_regression(self):
+        cpks = [CharPK.create(id=str(i), name='u%s' % i) for i in range(3)]
+
+        query = CharPK.select().where(CharPK.id << cpks)
+        self.assertEqual(sorted([c.id for c in query]), ['0', '1', '2'])
+
+        query = CharPK.select().where(CharPK.id.in_(list(CharPK.select())))
+        self.assertEqual(sorted([c.id for c in query]), ['0', '1', '2'])
+
+    def test_model_conversion_fk_retained(self):
+        cpks = [CharPK.create(id=str(i), name='u%s' % i) for i in range(3)]
+        cfks = [CharFK.create(id=i + 1, cpk='u%s' % i) for i in range(3)]
+
+        c0, c1, c2 = cpks
+        query = CharFK.select().where(CharFK.cpk << [c0, c2])
+        self.assertEqual(sorted([f.id for f in query]), [1, 3])
