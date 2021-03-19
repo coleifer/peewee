@@ -7,7 +7,19 @@ https://github.com/coleifer/peewee/releases
 
 ## master
 
-[View commits](https://github.com/coleifer/peewee/compare/3.14.3...master)
+[View commits](https://github.com/coleifer/peewee/compare/3.14.4...master)
+
+## 3.14.4
+
+This release contains an important fix for a regression introduced by commit
+ebe3ad5, which affected the way model instances are converted to parameters for
+use in expressions within a query. The bug could manifest when code uses model
+instances as parameters in expressions against fields that are not
+foreign-keys.
+
+The issue is described in #2376.
+
+[View commits](https://github.com/coleifer/peewee/compare/3.14.3...3.14.4)
 
 ## 3.14.3
 
