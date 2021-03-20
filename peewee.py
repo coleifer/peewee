@@ -4414,7 +4414,7 @@ class ForeignKeyAccessor(FieldAccessor):
                 obj = self.rel_model.get(self.field.rel_field == value)
                 instance.__rel__[self.name] = obj
             return instance.__rel__.get(self.name, value)
-        elif not self.field.null:
+        elif not self.field.null and self.field.lazy_load:
             raise self.rel_model.DoesNotExist
         return value
 
