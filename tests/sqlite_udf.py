@@ -286,12 +286,12 @@ class TestScalarFunctions(BaseTestUDF):
     def test_hostname(self):
         r = json.dumps({'success': True})
         data = (
-            ('http://charlesleifer.com/api/', r),
+            ('https://charlesleifer.com/api/', r),
             ('https://a.charlesleifer.com/api/foo', r),
             ('www.nugget.com', r),
             ('nugz.com', r),
             ('http://a.b.c.peewee/foo', r),
-            ('http://charlesleifer.com/xx', r),
+            ('https://charlesleifer.com/xx', r),
             ('https://charlesleifer.com/xx', r),
         )
         with self.database.atomic():

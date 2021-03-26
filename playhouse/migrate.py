@@ -668,7 +668,7 @@ class MySQLMigrator(SchemaMigrator):
 class SqliteMigrator(SchemaMigrator):
     """
     SQLite supports a subset of ALTER TABLE queries, view the docs for the
-    full details http://sqlite.org/lang_altertable.html
+    full details https://sqlite.org/lang_altertable.html
     """
     column_re = re.compile('(.+?)\((.+)\)')
     column_split_re = re.compile(r'(?:[^,(]|\([^)]*\))+')

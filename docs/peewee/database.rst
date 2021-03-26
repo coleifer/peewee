@@ -312,7 +312,7 @@ the :py:class:`SqliteDatabase` object:
 
 .. note::
     A full list of PRAGMA settings, their meaning and accepted values can be
-    found in the SQLite documentation: http://sqlite.org/pragma.html
+    found in the SQLite documentation: https://sqlite.org/pragma.html
 
 Recommended Settings
 ^^^^^^^^^^^^^^^^^^^^

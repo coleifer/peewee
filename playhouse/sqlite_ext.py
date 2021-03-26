@@ -1125,7 +1125,7 @@ def match(lhs, rhs):
     return Expression(lhs, OP.MATCH, rhs)
 
 def _parse_match_info(buf):
-    # See http://sqlite.org/fts3.html#matchinfo
+    # See https://sqlite.org/fts3.html#matchinfo
     bufsize = len(buf)  # Length in bytes.
     return [struct.unpack('@I', buf[i:i+4])[0] for i in range(0, bufsize, 4)]
 
@@ -1141,7 +1141,7 @@ def get_weights(ncol, raw_weights):
 # Ranking implementation, which parse matchinfo.
 def rank(raw_match_info, *raw_weights):
     # Handle match_info called w/default args 'pcx' - based on the example rank
-    # function http://sqlite.org/fts3.html#appendix_a
+    # function https://sqlite.org/fts3.html#appendix_a
     match_info = _parse_match_info(raw_match_info)
     score = 0.0
 

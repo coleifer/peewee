@@ -27,7 +27,7 @@ database = SqliteDatabase(DATABASE)
 # model definitions -- the standard "pattern" is to define a base model class
 # that specifies which database to use.  then, any subclasses will automatically
 # use the correct storage. for more information, see:
-# http://charlesleifer.com/docs/peewee/peewee/models.html#model-api-smells-like-django
+# https://charlesleifer.com/docs/peewee/peewee/models.html#model-api-smells-like-django
 class BaseModel(Model):
     class Meta:
         database = database
@@ -135,7 +135,7 @@ def object_list(template_name, qr, var_name='object_list', **kwargs):
 # retrieve a single object matching the specified query or 404 -- this uses the
 # shortcut "get" method on model, which retrieves a single object or raises a
 # DoesNotExist exception if no matching object exists
-# http://charlesleifer.com/docs/peewee/peewee/models.html#Model.get)
+# https://charlesleifer.com/docs/peewee/peewee/models.html#Model.get)
 def get_object_or_404(model, *expressions):
     try:
         return model.get(*expressions)

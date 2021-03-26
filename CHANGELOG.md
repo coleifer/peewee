@@ -150,8 +150,8 @@ This will be a notable release as it adds support for
 [CockroachDB](https://cockroachlabs.com/), a distributed, horizontally-scalable
 SQL database.
 
-* [CockroachDB usage overview](http://docs.peewee-orm.com/en/latest/peewee/database.html#using-crdb)
-* [CockroachDB API documentation](http://docs.peewee-orm.com/en/latest/peewee/playhouse.html#crdb)
+* [CockroachDB usage overview](https://docs.peewee-orm.com/en/latest/peewee/database.html#using-crdb)
+* [CockroachDB API documentation](https://docs.peewee-orm.com/en/latest/peewee/playhouse.html#crdb)
 
 ### Other features and fixes
 
@@ -327,7 +327,7 @@ SQL database.
 ## 3.9.4
 
 * Add `Model.bulk_update()` method for bulk-updating fields across multiple
-  model instances. [Docs](http://docs.peewee-orm.com/en/latest/peewee/api.html#Model.bulk_update).
+  model instances. [Docs](https://docs.peewee-orm.com/en/latest/peewee/api.html#Model.bulk_update).
 * Add `lazy_load` parameter to `ForeignKeyField`. When initialized with
   `lazy_load=False`, the foreign-key will not use an additional query to
   resolve the related model instance. Instead, if the related model instance is
@@ -360,14 +360,14 @@ SQL database.
 * Added cross-database support for `NULLS FIRST/LAST` when specifying the
   ordering for a query. Previously this was only supported for Postgres. Peewee
   will now generate an equivalent `CASE` statement for Sqlite and MySQL.
-* Added [EXCLUDED](http://docs.peewee-orm.com/en/latest/peewee/api.html#EXCLUDED)
+* Added [EXCLUDED](https://docs.peewee-orm.com/en/latest/peewee/api.html#EXCLUDED)
   helper for referring to the `EXCLUDED` namespace used with `INSERT...ON CONFLICT`
   queries, when referencing values in the conflicting row data.
 * Added helper method to the model `Metadata` class for setting the table name
   at run-time. Setting the `Model._meta.table_name` directly may have appeared
   to work in some situations, but could lead to subtle bugs. The new API is
   `Model._meta.set_table_name()`.
-* Enhanced helpers for working with Peewee interactively, [see doc](http://docs.peewee-orm.com/en/latest/peewee/interactive.html).
+* Enhanced helpers for working with Peewee interactively, [see doc](https://docs.peewee-orm.com/en/latest/peewee/interactive.html).
 * Fix cache invalidation bug in `DataSet` that was originally reported on the
   sqlite-web project.
 * New example script implementing a [hexastore](https://github.com/coleifer/peewee/blob/master/examples/hexastore.py).
@@ -383,7 +383,7 @@ Includes a bugfix for an `AttributeError` that occurs when using MySQL with the
 
 ## 3.9.0
 
-* Added new document describing how to [use peewee interactively](http://docs.peewee-orm.com/en/latest/peewee/interactive.html).
+* Added new document describing how to [use peewee interactively](https://docs.peewee-orm.com/en/latest/peewee/interactive.html).
 * Added convenience functions for generating model classes from a pre-existing
   database, printing model definitions and printing CREATE TABLE sql for a
   model. See the "use peewee interactively" section for details.
@@ -407,8 +407,8 @@ Includes a bugfix for an `AttributeError` that occurs when using MySQL with the
   expressions using `OR` instead of `AND`. See #391 for old discussion.
 * Added some new examples to the ``examples/`` directory
 * Added `select_from()` API for wrapping a query and selecting one or more
-  columns from the wrapped subquery. [Docs](http://docs.peewee-orm.com/en/latest/peewee/api.html#SelectQuery.select_from).
-* Added documentation on using [row values](http://docs.peewee-orm.com/en/latest/peewee/query_operators.html#row-values).
+  columns from the wrapped subquery. [Docs](https://docs.peewee-orm.com/en/latest/peewee/api.html#SelectQuery.select_from).
+* Added documentation on using [row values](https://docs.peewee-orm.com/en/latest/peewee/query_operators.html#row-values).
 * Removed the (defunct) "speedups" C extension, which as of 3.8.2 only
   contained a barely-faster function for quoting entities.
 
@@ -567,7 +567,7 @@ Includes a bugfix for an `AttributeError` that occurs when using MySQL with the
 
 * Add methods to the migrations extension to support adding and dropping table
   constraints.
-* Add [Model.bulk_create()](http://docs.peewee-orm.com/en/latest/peewee/api.html#Model.bulk_create)
+* Add [Model.bulk_create()](https://docs.peewee-orm.com/en/latest/peewee/api.html#Model.bulk_create)
   method for bulk-inserting unsaved model instances.
 * Add `close_stale()` method to the connection pool to support closing stale
   connections.
@@ -630,7 +630,7 @@ Fixed issue with setup script.
 * Support for Python 3.7, including bugfixes related to new StopIteration
   handling inside of generators.
 * Support for specifying `ROWS` or `RANGE` window frame types. For more
-  information, see the new [frame type documentation](http://docs.peewee-orm.com/en/latest/peewee/querying.html#frame-types-range-vs-rows).
+  information, see the new [frame type documentation](https://docs.peewee-orm.com/en/latest/peewee/querying.html#frame-types-range-vs-rows).
 * Add APIs for user-defined window functions if using [pysqlite3](https://github.com/coleifer/pysqlite3)
   and sqlite 3.25.0 or newer.
 * `TimestampField` now uses 64-bit integer data-type for storage.
@@ -647,11 +647,11 @@ Fixed issue with setup script.
 
 ## 3.5.2
 
-* New guide to using [window functions in Peewee](http://docs.peewee-orm.com/en/latest/peewee/querying.html#window-functions).
+* New guide to using [window functions in Peewee](https://docs.peewee-orm.com/en/latest/peewee/querying.html#window-functions).
 * New and improved table name auto-generation. This feature is not backwards
   compatible, so it is **disabled by default**. To enable, set
   `legacy_table_names=False` in your model's `Meta` options. For more details,
-  see [table names](http://docs.peewee-orm.com/en/latest/peewee/models.html#table_names)
+  see [table names](https://docs.peewee-orm.com/en/latest/peewee/models.html#table_names)
   documentation.
 * Allow passing single fields/columns to window function `order_by` and
   `partition_by` arguments.
@@ -669,7 +669,7 @@ Fixed issue with setup script.
 
 **New features**
 
-* New documentation for working with [relationships](http://docs.peewee-orm.com/en/latest/peewee/relationships.html)
+* New documentation for working with [relationships](https://docs.peewee-orm.com/en/latest/peewee/relationships.html)
   in Peewee.
 * Improved tests and documentation for MySQL upsert functionality.
 * Allow `database` parameter to be specified with `ModelSelect.get()` method.
@@ -702,11 +702,11 @@ Fixed issue with setup script.
 
 * Custom Model `repr` no longer use the convention of overriding `__unicode__`,
   and now use `__str__`.
-* Redesigned the [sqlite json1 integration](http://docs.peewee-orm.com/en/latest/peewee/sqlite_ext.html#sqlite-json1).
+* Redesigned the [sqlite json1 integration](https://docs.peewee-orm.com/en/latest/peewee/sqlite_ext.html#sqlite-json1).
   and changed some of the APIs and semantics of various `JSONField` methods.
   The documentation has been expanded to include more examples and the API has
   been simplified to make it easier to work with. These changes **do not** have
-  any effect on the [Postgresql JSON fields](http://docs.peewee-orm.com/en/latest/peewee/playhouse.html#pgjson).
+  any effect on the [Postgresql JSON fields](https://docs.peewee-orm.com/en/latest/peewee/playhouse.html#pgjson).
 
 **New features**
 
@@ -717,7 +717,7 @@ Fixed issue with setup script.
   use-case of using flags that are powers-of-2.
 * `SqliteDatabase` pragmas can be specified as a `dict` (previously required a
   list of 2-tuples).
-* SQLite `TableFunction` ([docs](http://docs.peewee-orm.com/en/latest/peewee/sqlite_ext.html#sqlite-vtfunc))
+* SQLite `TableFunction` ([docs](https://docs.peewee-orm.com/en/latest/peewee/sqlite_ext.html#sqlite-vtfunc))
   will print Python exception tracebacks raised in the `initialize` and
   `iterate` callbacks, making debugging significantly easier.
 
@@ -826,7 +826,7 @@ Fixed issue with setup script.
 
 ## 3.2.5
 
-* Added `ValuesList` for representing values lists. [Docs](http://docs.peewee-orm.com/en/latest/peewee/api.html#ValuesList).
+* Added `ValuesList` for representing values lists. [Docs](https://docs.peewee-orm.com/en/latest/peewee/api.html#ValuesList).
 * `DateTimeField`, `DateField` and `TimeField` will parse formatted-strings
   before sending to the database. Previously this only occurred when reading
   values from the database.
@@ -878,7 +878,7 @@ are installed Peewee will use *pymysql*.
   [mysql-connector](https://dev.mysql.com/doc/connector-python/en/) driver.
 * Added new field to `ColumnMetadata` class which captures a database column's
   default value. `ColumnMetadata` is returned by `Database.get_columns()`.
-* Added [documentation on making Peewee async](http://docs.peewee-orm.com/en/latest/peewee/database.html#async-with-gevent).
+* Added [documentation on making Peewee async](https://docs.peewee-orm.com/en/latest/peewee/database.html#async-with-gevent).
 
 [View commits](https://github.com/coleifer/peewee/compare/3.2.0...3.2.1)
 
@@ -1007,9 +1007,9 @@ will cause a cursor to be returned, as opposed to the last-inserted row ID.
   accordingly.
 * Improved implementation of `Migrator.add_foreign_key_constraint` so that it
   can be used with Postgresql (in addition to MySQL).
-* Added `PickleField` to the `playhouse.fields` module. [Docs](http://docs.peewee-orm.com/en/latest/peewee/playhouse.html#PickleField).
+* Added `PickleField` to the `playhouse.fields` module. [Docs](https://docs.peewee-orm.com/en/latest/peewee/playhouse.html#PickleField).
 * Fixed bug in implementation of `CompressedField` when using Python 3.
-* Added `KeyValue` API in `playhouse.kv` module. [Docs](http://docs.peewee-orm.com/en/latest/peewee/playhouse.html#key-value-store).
+* Added `KeyValue` API in `playhouse.kv` module. [Docs](https://docs.peewee-orm.com/en/latest/peewee/playhouse.html#key-value-store).
 * More test cases for joining on sub-selects or common table expressions.
 
 [View commits](https://github.com/coleifer/peewee/compare/3.1.0...3.1.1)
@@ -1023,8 +1023,8 @@ match the semantics of the corresponding model methods, `Model.bind()` and
 `Model.bind_ctx()`. The new `Database.bind()` method is a one-time operation
 that binds the given models to the database. See documentation:
 
-* [Database.bind()](http://docs.peewee-orm.com/en/latest/peewee/api.html#Database.bind)
-* [Database.bind_ctx()](http://docs.peewee-orm.com/en/latest/peewee/api.html#Database.bind_ctx)
+* [Database.bind()](https://docs.peewee-orm.com/en/latest/peewee/api.html#Database.bind)
+* [Database.bind_ctx()](https://docs.peewee-orm.com/en/latest/peewee/api.html#Database.bind_ctx)
 
 #### Other changes
 
@@ -1152,7 +1152,7 @@ that binds the given models to the database. See documentation:
 
 ## 3.0.7
 
-* Add `select_extend()` method to extend existing SELECT-ion. [Doc](http://docs.peewee-orm.com/en/latest/peewee/api.html#Select.select_extend).
+* Add `select_extend()` method to extend existing SELECT-ion. [Doc](https://docs.peewee-orm.com/en/latest/peewee/api.html#Select.select_extend).
 * Accept `set()` as iterable value type, fixes #1445
 * Add test for model/field inheritance and fix bug relating to recursion error
   when inheriting foreign-key field. Fixes #1448.
@@ -1171,9 +1171,9 @@ Add constraints for ON UPDATE/ON DELETE to foreign-key constraint - #1443.
 
 Adds Model.index(), a short-hand method for declaring ModelIndex instances.
 
-* [Model.index docs](http://docs.peewee-orm.com/en/latest/peewee/api.html#Model.index)
-* [Model.add_index docs](http://docs.peewee-orm.com/en/latest/peewee/api.html#Model.add_index)
-* [ModelIndex docs](http://docs.peewee-orm.com/en/latest/peewee/api.html#ModelIndex)
+* [Model.index docs](https://docs.peewee-orm.com/en/latest/peewee/api.html#Model.index)
+* [Model.add_index docs](https://docs.peewee-orm.com/en/latest/peewee/api.html#Model.add_index)
+* [ModelIndex docs](https://docs.peewee-orm.com/en/latest/peewee/api.html#ModelIndex)
 
 [View commits](https://github.com/coleifer/peewee/compare/3.0.4...3.0.5)
 
@@ -1203,7 +1203,7 @@ that certain C extensions can be compiled.
 
 * Complete rewrite of SQL AST and code-generation.
 * Inclusion of new, low-level query builder APIs.
-* List of [backwards-incompatible changes](http://docs.peewee-orm.com/en/latest/peewee/changes.html).
+* List of [backwards-incompatible changes](https://docs.peewee-orm.com/en/latest/peewee/changes.html).
 
 [View commits](https://github.com/coleifer/peewee/compare/2.10.2...3.0.0)
 
@@ -1277,10 +1277,10 @@ described in ticket #1264.
 
 In this release there are two notable changes:
 
-* The ``Model.create_or_get()`` method was removed. See the [documentation](http://docs.peewee-orm.com/en/latest/peewee/querying.html#create-or-get)
+* The ``Model.create_or_get()`` method was removed. See the [documentation](https://docs.peewee-orm.com/en/latest/peewee/querying.html#create-or-get)
   for an example of the code one would write to replicate this functionality.
 * The SQLite closure table extension gained support for many-to-many
-  relationships thanks to a nice PR by @necoro. [Docs](http://docs.peewee-orm.com/en/latest/peewee/playhouse.html#ClosureTable).
+  relationships thanks to a nice PR by @necoro. [Docs](https://docs.peewee-orm.com/en/latest/peewee/playhouse.html#ClosureTable).
 
 [View commits](https://github.com/coleifer/peewee/compare/2.8.8...2.9.0)
 
@@ -1319,19 +1319,19 @@ This release contains numerous cleanups.
 * Added properties to the `SqliteExtDatabase` to expose common `PRAGMA`
   settings. For example, to set the cache size to 4MB, `db.cache_size = 1000`.
 * Clarified documentation on calling `commit()` or `rollback()` from within the
-  scope of an atomic block. [See docs](http://docs.peewee-orm.com/en/latest/peewee/transactions.html#transactions).
+  scope of an atomic block. [See docs](https://docs.peewee-orm.com/en/latest/peewee/transactions.html#transactions).
 * Allow table creation dependencies to be specified using new `depends_on` meta
   option. Refs #1076.
 * Allow specification of the lock type used in SQLite transactions. Previously
   this behavior was only present in `playhouse.sqlite_ext.SqliteExtDatabase`,
   but it now exists in `peewee.SqliteDatabase`.
 * Added support for `CROSS JOIN` expressions in select queries.
-* Docs on how to implement [optimistic locking](http://docs.peewee-orm.com/en/latest/peewee/hacks.html#optimistic-locking).
+* Docs on how to implement [optimistic locking](https://docs.peewee-orm.com/en/latest/peewee/hacks.html#optimistic-locking).
 * Documented optional dependencies.
 * Generic support for specifying select queries as locking the selected rows
   `FOR X`, e.g. `FOR UPDATE` or `FOR SHARE`.
 * Support for specifying the frame-of-reference in window queries, e.g.
-  specifying `UNBOUNDED PRECEDING`, etc. [See docs](http://docs.peewee-orm.com/en/latest/peewee/api.html#Window).
+  specifying `UNBOUNDED PRECEDING`, etc. [See docs](https://docs.peewee-orm.com/en/latest/peewee/api.html#Window).
 
 ### Backwards-incompatible changes
 
@@ -1363,11 +1363,11 @@ This release contains two small bugfixes.
 ## 2.8.4
 
 This release contains bugfixes as well as a new playhouse extension module for
-working with [SQLite in multi-threaded / concurrent environments](http://docs.peewee-orm.com/en/latest/peewee/playhouse.html#sqliteq).
+working with [SQLite in multi-threaded / concurrent environments](https://docs.peewee-orm.com/en/latest/peewee/playhouse.html#sqliteq).
 The new module is called `playhouse.sqliteq` and it works by serializing
 queries using a dedicated worker thread (or greenlet). The performance is quite
 good, hopefully this proves useful to someone besides myself! You can learn
-more by reading the [sqliteq documentation](http://docs.peewee-orm.com/en/latest/peewee/playhouse.html#sqliteq).
+more by reading the [sqliteq documentation](https://docs.peewee-orm.com/en/latest/peewee/playhouse.html#sqliteq).
 
 As a miscellaneous note, I did some major refactoring and cleanup in
 `ExtQueryResultsWrapper` and it's corollary in the `speedups` module. The code
@@ -1417,9 +1417,9 @@ way foreign key `ObjectIdDescriptor` is named (issue #1050).
 
 ### New stuff
 
-* [djpeewee](http://docs.peewee-orm.com/en/latest/peewee/playhouse.html#djpeewee) extension
+* [djpeewee](https://docs.peewee-orm.com/en/latest/peewee/playhouse.html#djpeewee) extension
   module now works with Django 1.9.
-* [TimestampField](http://docs.peewee-orm.com/en/latest/peewee/api.html#TimestampField)
+* [TimestampField](https://docs.peewee-orm.com/en/latest/peewee/api.html#TimestampField)
   is now an officially documented field.
 * #1050 - use the `db_column` of a `ForeignKeyField` for the name of the
   `ObjectIdDescriptor`, except when the `db_column` and field `name` are the
@@ -1540,7 +1540,7 @@ Thanks @M157q
 ### New features
 
 * Added a number of [SQLite user-defined functions and
-aggregates](http://docs.peewee-orm.com/en/latest/peewee/playhouse.html#sqlite-udf).
+aggregates](https://docs.peewee-orm.com/en/latest/peewee/playhouse.html#sqlite-udf).
 * Use the DB-API2 `Binary` type for `BlobField`.
 * Implemented the lucene scoring algorithm in the `sqlite_ext` Cython library.
 * #825 - allow a custom base class for `ModelOptions`, providing an extension
@@ -1564,22 +1564,22 @@ This release includes a couple new field types and greatly improved C extension 
 
 ### New features
 
-* [travis-ci builds](http://travis-ci.org/coleifer/peewee/builds/) now include MySQL and Python 3.5. Dropped support for Python 3.2 and 3.3. Builds also will run the C-extension code.
+* [travis-ci builds](https://travis-ci.org/coleifer/peewee/builds/) now include MySQL and Python 3.5. Dropped support for Python 3.2 and 3.3. Builds also will run the C-extension code.
 * C extension speedups now enabled by default, includes faster implementations for `dict` and `tuple` `QueryResultWrapper` classes, faster date formatting, and a faster field and model sorting.
-* C implementations of SQLite functions is now enabled by default. SQLite extension is now compatible with APSW and can be used in standalone form directly from Python. See [SqliteExtDatabase](http://docs.peewee-orm.com/en/latest/peewee/playhouse.html#SqliteExtDatabase) for more details.
+* C implementations of SQLite functions is now enabled by default. SQLite extension is now compatible with APSW and can be used in standalone form directly from Python. See [SqliteExtDatabase](https://docs.peewee-orm.com/en/latest/peewee/playhouse.html#SqliteExtDatabase) for more details.
 * SQLite C extension now supports `murmurhash2`.
 * `UUIDField` is now supported for SQLite and MySQL, using `text` and `varchar` respectively, thanks @foxx!
 * Added `BinaryField`, thanks again, @foxx!
 * Added `PickledField` to `playhouse.fields`.
 * `ManyToManyField` now accepts a list of primary keys when adding or removing values from the through relationship.
-* Added support for SQLite [table-valued functions](http://sqlite.org/vtab.html#tabfunc2) using the [sqlite-vtfunc library](https://github.com/coleifer/sqlite-vtfunc).
+* Added support for SQLite [table-valued functions](https://sqlite.org/vtab.html#tabfunc2) using the [sqlite-vtfunc library](https://github.com/coleifer/sqlite-vtfunc).
 * Significantly simplified the build process for compiling the C extensions.
 
 ### Backwards-incompatible changes
 
-* Instead of using a `Proxy` for defining circular foreign key relationships, you now need to use [DeferredRelation](http://docs.peewee-orm.com/en/latest/peewee/api.html#DeferredRelation).
-* Instead of using a `Proxy` for defining many-to-many through tables, you now need to use [DeferredThroughModel](http://docs.peewee-orm.com/en/latest/peewee/playhouse.html#DeferredThroughModel).
-* SQLite Virtual Models must now use `Meta.extension_module` and `Meta.extension_options` to declare extension and any options. For more details, see [VirtualModel](http://docs.peewee-orm.com/en/latest/peewee/playhouse.html#VirtualModel).
+* Instead of using a `Proxy` for defining circular foreign key relationships, you now need to use [DeferredRelation](https://docs.peewee-orm.com/en/latest/peewee/api.html#DeferredRelation).
+* Instead of using a `Proxy` for defining many-to-many through tables, you now need to use [DeferredThroughModel](https://docs.peewee-orm.com/en/latest/peewee/playhouse.html#DeferredThroughModel).
+* SQLite Virtual Models must now use `Meta.extension_module` and `Meta.extension_options` to declare extension and any options. For more details, see [VirtualModel](https://docs.peewee-orm.com/en/latest/peewee/playhouse.html#VirtualModel).
 * MySQL database will now issue `COMMIT` statements for `SELECT` queries. This was not necessary, but added due to an influx of confused users creating GitHub tickets. Hint: learn to user your damn database, it's not magic!
 
 ### Bugs fixed
@@ -1612,7 +1612,7 @@ This is another small release which adds code to automatically build the SQLite 
 
 ## 2.7.3
 
-Small release which includes some changes to the BM25 sorting algorithm and the addition of a [`JSONField`](http://docs.peewee-orm.com/en/latest/peewee/playhouse.html#JSONField) for use with the new [JSON1 extension](http://sqlite.org/json1.html).
+Small release which includes some changes to the BM25 sorting algorithm and the addition of a [`JSONField`](https://docs.peewee-orm.com/en/latest/peewee/playhouse.html#JSONField) for use with the new [JSON1 extension](https://sqlite.org/json1.html).
 
 ## 2.7.2
 
@@ -1628,12 +1628,12 @@ New APIs, features, and performance improvements.
 
 ### Notable changes and new features
 
-* [`PasswordField`](http://docs.peewee-orm.com/en/latest/peewee/playhouse.html#PasswordField) that uses the `bcrypt` module.
-* Added new Model [`Meta.only_save_dirty`](http://docs.peewee-orm.com/en/latest/peewee/models.html#model-options-and-table-metadata) flag to, by default, only save fields that have been modified.
-* Added support for [`upsert()`](http://docs.peewee-orm.com/en/latest/peewee/api.html#InsertQuery.upsert) on MySQL (in addition to SQLite).
+* [`PasswordField`](https://docs.peewee-orm.com/en/latest/peewee/playhouse.html#PasswordField) that uses the `bcrypt` module.
+* Added new Model [`Meta.only_save_dirty`](https://docs.peewee-orm.com/en/latest/peewee/models.html#model-options-and-table-metadata) flag to, by default, only save fields that have been modified.
+* Added support for [`upsert()`](https://docs.peewee-orm.com/en/latest/peewee/api.html#InsertQuery.upsert) on MySQL (in addition to SQLite).
 * Implemented SQLite ranking functions (``rank`` and ``bm25``) in Cython, and changed both the Cython and Python APIs to accept weight values for every column in the search index. This more closely aligns with the APIs provided by FTS5. In fact, made the APIs for FTS4 and FTS5 result ranking compatible.
 * Major changes to the :ref:`sqlite_ext` module. Function callbacks implemented in Python were implemented in Cython (e.g. date manipulation and regex processing) and will be used if Cython is available when Peewee is installed.
-* Support for the experimental new [FTS5](http://sqlite.org/fts5.html) SQLite search extension.
+* Support for the experimental new [FTS5](https://sqlite.org/fts5.html) SQLite search extension.
 * Added :py:class:`SearchField` for use with the SQLite FTS extensions.
 * Added :py:class:`RowIDField` for working with the special ``rowid`` column in SQLite.
 * Added a model class validation hook to allow model subclasses to perform any validation after class construction. This is currently used to ensure that ``FTS5Model`` subclasses do not violate any rules required by the FTS5 virtual table.
@@ -1693,14 +1693,14 @@ Updating so some of the new APIs are available on pypi.
 
 ### New features
 
-* #647, #649, #650, added support for `RETURNING` clauses. Update, Insert and Delete queries can now be called with `RETURNING` to retrieve the rows that were affected. [See docs](http://docs.peewee-orm.com/en/latest/peewee/querying.html#returning-clause).
+* #647, #649, #650, added support for `RETURNING` clauses. Update, Insert and Delete queries can now be called with `RETURNING` to retrieve the rows that were affected. [See docs](https://docs.peewee-orm.com/en/latest/peewee/querying.html#returning-clause).
 * #685, added web request hook docs.
-* #691, allowed arbitrary model attributes and methods to be serialized by `model_to_dict()`. [Docs](http://docs.peewee-orm.com/en/latest/peewee/playhouse.html#model_to_dict).
+* #691, allowed arbitrary model attributes and methods to be serialized by `model_to_dict()`. [Docs](https://docs.peewee-orm.com/en/latest/peewee/playhouse.html#model_to_dict).
 * #696, allow `model_to_dict()` to introspect query for which fields to serialize.
-* Added backend-agnostic [truncate_date()](http://docs.peewee-orm.com/en/latest/peewee/api.html#Database.truncate_date) implementation.
+* Added backend-agnostic [truncate_date()](https://docs.peewee-orm.com/en/latest/peewee/api.html#Database.truncate_date) implementation.
 * Added a `FixedCharField` which uses column type `CHAR`.
-* Added support for arbitrary `PRAGMA` statements to be run on new SQLite connections. [Docs](http://docs.peewee-orm.com/en/latest/peewee/databases.html#sqlite-pragma).
-* Removed `berkeley_build.sh` script. See instructions [on my blog instead](http://charlesleifer.com/blog/building-the-python-sqlite-driver-for-use-with-berkeleydb/).
+* Added support for arbitrary `PRAGMA` statements to be run on new SQLite connections. [Docs](https://docs.peewee-orm.com/en/latest/peewee/databases.html#sqlite-pragma).
+* Removed `berkeley_build.sh` script. See instructions [on my blog instead](https://charlesleifer.com/blog/building-the-python-sqlite-driver-for-use-with-berkeleydb/).
 
 [View commits](https://github.com/coleifer/peewee/compare/2.6.2...2.6.4)
 
@@ -1717,14 +1717,14 @@ Just a regular old release.
 
 ### New features
 
-* Added [create_or_get()](http://docs.peewee-orm.com/en/latest/peewee/querying.html#create-or-get) as a companion to `get_or_create()`.
-* Added support for `ON CONFLICT` clauses for `UPDATE` and `INSERT` queries. [Docs](http://docs.peewee-orm.com/en/latest/peewee/api.html#UpdateQuery.on_conflict).
-* Added a [JSONKeyStore](http://docs.peewee-orm.com/en/latest/peewee/playhouse.html#JSONKeyStore) to `playhouse.kv`.
+* Added [create_or_get()](https://docs.peewee-orm.com/en/latest/peewee/querying.html#create-or-get) as a companion to `get_or_create()`.
+* Added support for `ON CONFLICT` clauses for `UPDATE` and `INSERT` queries. [Docs](https://docs.peewee-orm.com/en/latest/peewee/api.html#UpdateQuery.on_conflict).
+* Added a [JSONKeyStore](https://docs.peewee-orm.com/en/latest/peewee/playhouse.html#JSONKeyStore) to `playhouse.kv`.
 * Added Cythonized version of `strip_parens()`, with plans to perhaps move more performance-critical code to Cython in the future.
-* Added docs on specifying [vendor-specific database parameters](http://docs.peewee-orm.com/en/latest/peewee/database.html#vendor-specific-parameters).
-* Added docs on specifying [field default values](http://docs.peewee-orm.com/en/latest/peewee/models.html#default-field-values) (both client and server-side).
-* Added docs on [foreign key field back-references](http://docs.peewee-orm.com/en/latest/peewee/models.html#foreignkeyfield).
-* Added docs for [models without a primary key](http://docs.peewee-orm.com/en/latest/peewee/models.html#models-without-a-primary-key).
+* Added docs on specifying [vendor-specific database parameters](https://docs.peewee-orm.com/en/latest/peewee/database.html#vendor-specific-parameters).
+* Added docs on specifying [field default values](https://docs.peewee-orm.com/en/latest/peewee/models.html#default-field-values) (both client and server-side).
+* Added docs on [foreign key field back-references](https://docs.peewee-orm.com/en/latest/peewee/models.html#foreignkeyfield).
+* Added docs for [models without a primary key](https://docs.peewee-orm.com/en/latest/peewee/models.html#models-without-a-primary-key).
 * Cleaned up docs on `prefetch()` and `aggregate_rows()`.
 
 [View commits](https://github.com/coleifer/peewee/compare/2.6.1...2.6.2)
@@ -1743,20 +1743,20 @@ This release contains a number of small fixes and enhancements.
 
 ### New features
 
-* Added [CompressedField](http://docs.peewee-orm.com/en/latest/peewee/playhouse.html#CompressedField) and [AESEncryptedField](http://docs.peewee-orm.com/en/latest/peewee/playhouse.html#AESEncryptedField)
-* #609, #610, added Django-style foreign key ID lookup. [Docs](http://docs.peewee-orm.com/en/latest/peewee/models.html#foreignkeyfield).
-* Added support for [Hybrid Attributes](http://docs.peewee-orm.com/en/latest/peewee/playhouse.html#hybrid-attributes) (cool idea courtesy of SQLAlchemy).
+* Added [CompressedField](https://docs.peewee-orm.com/en/latest/peewee/playhouse.html#CompressedField) and [AESEncryptedField](https://docs.peewee-orm.com/en/latest/peewee/playhouse.html#AESEncryptedField)
+* #609, #610, added Django-style foreign key ID lookup. [Docs](https://docs.peewee-orm.com/en/latest/peewee/models.html#foreignkeyfield).
+* Added support for [Hybrid Attributes](https://docs.peewee-orm.com/en/latest/peewee/playhouse.html#hybrid-attributes) (cool idea courtesy of SQLAlchemy).
 * Added ``upsert`` keyword argument to the `Model.save()` function (SQLite only).
-* #587, added support for ``ON CONFLICT`` SQLite clause for `INSERT` and `UPDATE` queries. [Docs](http://docs.peewee-orm.com/en/latest/peewee/api.html#UpdateQuery.on_conflict)
-* #601, added hook for programmatically defining table names. [Model options docs](http://docs.peewee-orm.com/en/latest/peewee/models.html#model-options-and-table-metadata)
-* #581, #611, support connection pools with `playhouse.db_url.connect()`. [Docs](http://docs.peewee-orm.com/en/latest/peewee/playhouse.html#connect).
-* Added [Contributing section](http://docs.peewee-orm.com/en/latest/peewee/contributing.html) section to docs.
+* #587, added support for ``ON CONFLICT`` SQLite clause for `INSERT` and `UPDATE` queries. [Docs](https://docs.peewee-orm.com/en/latest/peewee/api.html#UpdateQuery.on_conflict)
+* #601, added hook for programmatically defining table names. [Model options docs](https://docs.peewee-orm.com/en/latest/peewee/models.html#model-options-and-table-metadata)
+* #581, #611, support connection pools with `playhouse.db_url.connect()`. [Docs](https://docs.peewee-orm.com/en/latest/peewee/playhouse.html#connect).
+* Added [Contributing section](https://docs.peewee-orm.com/en/latest/peewee/contributing.html) section to docs.
 
 [View commits](https://github.com/coleifer/peewee/compare/2.6.0...2.6.1)
 
 ## 2.6.0
 
-This is a tiny update, mainly consisting of a new-and-improved implementation of ``get_or_create()`` ([docs](http://docs.peewee-orm.com/en/latest/peewee/api.html#Model.get_or_create)).
+This is a tiny update, mainly consisting of a new-and-improved implementation of ``get_or_create()`` ([docs](https://docs.peewee-orm.com/en/latest/peewee/api.html#Model.get_or_create)).
 
 ### Backwards-incompatible changes
 
@@ -1765,7 +1765,7 @@ This is a tiny update, mainly consisting of a new-and-improved implementation of
 ### New features
 
 * #574, better support for setting the character encoding on Postgresql database connections. Thanks @klen!
-* Improved implementation of [get_or_create()](http://docs.peewee-orm.com/en/latest/peewee/api.html#Model.get_or_create).
+* Improved implementation of [get_or_create()](https://docs.peewee-orm.com/en/latest/peewee/api.html#Model.get_or_create).
 
 [View commits](https://github.com/coleifer/peewee/compare/2.5.1...2.6.0)
 
@@ -1782,9 +1782,9 @@ This is a relatively small release with a few important bugfixes.
 
 ### New features
 
-* #561, added an option for bulk insert queries to return the list of auto-generated primary keys. See [docs for InsertQuery.return_id_list](http://docs.peewee-orm.com/en/latest/peewee/api.html#InsertQuery.return_id_list).
+* #561, added an option for bulk insert queries to return the list of auto-generated primary keys. See [docs for InsertQuery.return_id_list](https://docs.peewee-orm.com/en/latest/peewee/api.html#InsertQuery.return_id_list).
 * #569, added `parse` function to the `playhouse.db_url` module. Thanks @stt!
-* Added [hacks](http://docs.peewee-orm.com/en/latest/peewee/hacks.html) section to the docs. Please contribute your hacks!
+* Added [hacks](https://docs.peewee-orm.com/en/latest/peewee/hacks.html) section to the docs. Please contribute your hacks!
 
 ### Backwards-incompatible changes
 
@@ -1796,7 +1796,7 @@ This is a relatively small release with a few important bugfixes.
 
 There are a couple new features so I thought I'd bump to 2.5.x. One change Postgres users may be happy to see is the use of `INSERT ... RETURNING` to perform inserts. This should definitely speed up inserts for Postgres, since an extra query is no longer needed to get the new auto-generated primary key.
 
-I also added a [new context manager/decorator](http://docs.peewee-orm.com/en/latest/peewee/database.html#using-multiple-databases) that allows you to use a different database for the duration of the wrapped block.
+I also added a [new context manager/decorator](https://docs.peewee-orm.com/en/latest/peewee/database.html#using-multiple-databases) that allows you to use a different database for the duration of the wrapped block.
 
 ### Bugs fixed
 
@@ -1809,14 +1809,14 @@ I also added a [new context manager/decorator](http://docs.peewee-orm.com/en/lat
 
 ### New features
 
-* Added support for [CAST expressions](http://docs.peewee-orm.com/en/latest/peewee/playhouse.html#cast).
-* Added a hook for [extending Node](http://docs.peewee-orm.com/en/latest/peewee/api.html#Node.extend) with custom methods.
+* Added support for [CAST expressions](https://docs.peewee-orm.com/en/latest/peewee/playhouse.html#cast).
+* Added a hook for [extending Node](https://docs.peewee-orm.com/en/latest/peewee/api.html#Node.extend) with custom methods.
 * `JOIN_<type>` became `JOIN.<type>`, e.g. `.join(JOIN.LEFT_OUTER)`.
 * `OP_<code>` became `OP.<code>`.
 * #556, allowed using `+` and `-` prefixes to indicate ascending/descending ordering.
-* #550, added [Database.initialize_connection()](http://docs.peewee-orm.com/en/latest/peewee/database.html#additional-connection-initialization) hook.
+* #550, added [Database.initialize_connection()](https://docs.peewee-orm.com/en/latest/peewee/database.html#additional-connection-initialization) hook.
 * #549, bind selected columns to a particular model. Thanks @jhorman, nice PR!
-* #531, support for swapping databases at run-time via [Using](http://docs.peewee-orm.com/en/latest/peewee/database.html#using-multiple-databases).
+* #531, support for swapping databases at run-time via [Using](https://docs.peewee-orm.com/en/latest/peewee/database.html#using-multiple-databases).
 * #530, support for SQLCipher and Python3.
 * New `RowIDField` for `sqlite_ext` playhouse module. This field can be used to interact with SQLite `rowid` fields.
 * Added `LateralJoin` helper to the `postgres_ext` playhouse module.
@@ -1839,8 +1839,8 @@ I also added a [new context manager/decorator](http://docs.peewee-orm.com/en/lat
 
 ### New features
 
-* Added support for Postgresql's ``jsonb`` type with [BinaryJSONField](http://docs.peewee-orm.com/en/latest/peewee/playhouse.html#BinaryJSONField).
-* Add some basic [Flask helpers](http://docs.peewee-orm.com/en/latest/peewee/playhouse.html#flask-utils).
+* Added support for Postgresql's ``jsonb`` type with [BinaryJSONField](https://docs.peewee-orm.com/en/latest/peewee/playhouse.html#BinaryJSONField).
+* Add some basic [Flask helpers](https://docs.peewee-orm.com/en/latest/peewee/playhouse.html#flask-utils).
 * Add support for `UNION ALL` queries in #512
 * Add `SqlCipherExtDatabase`, which combines the sqlcipher database with the sqlite extensions.
 * Add option to print metadata when generating code with ``pwiz``.
@@ -1849,7 +1849,7 @@ I also added a [new context manager/decorator](http://docs.peewee-orm.com/en/lat
 
 ## 2.4.6
 
-This is a relatively small release with mostly bug fixes and updates to the documentation. The one new feature I'd like to highlight is the ``ManyToManyField`` ([docs](http://docs.peewee-orm.com/en/latest/peewee/playhouse.html#ManyToManyField)).
+This is a relatively small release with mostly bug fixes and updates to the documentation. The one new feature I'd like to highlight is the ``ManyToManyField`` ([docs](https://docs.peewee-orm.com/en/latest/peewee/playhouse.html#ManyToManyField)).
 
 ### Bugs fixed
 
@@ -1860,7 +1860,7 @@ This is a relatively small release with mostly bug fixes and updates to the docu
 
 ### New features
 
-* Peewee has a new [ManyToManyField](http://docs.peewee-orm.com/en/latest/peewee/playhouse.html#ManyToManyField) available in the ``playhouse.shortcuts`` module.
+* Peewee has a new [ManyToManyField](https://docs.peewee-orm.com/en/latest/peewee/playhouse.html#ManyToManyField) available in the ``playhouse.shortcuts`` module.
 * Peewee now has proper support for *NOT IN* queries through the ``Node.not_in()`` method.
 * Models now support iteration. This is equivalent to ``Model.select()``.
 
@@ -1882,12 +1882,12 @@ I'm excited about this release, as in addition to a number of new features and b
 
 ### New features
 
-* Added connection abstraction called `ExecutionContext` ([see docs](http://docs.peewee-orm.com/en/latest/peewee/database.html#advanced-connection-management)).
+* Added connection abstraction called `ExecutionContext` ([see docs](https://docs.peewee-orm.com/en/latest/peewee/database.html#advanced-connection-management)).
 * Made all context managers work as decorators (`atomic`, `transaction`, `savepoint`, `execution_context`).
 * Added explicit methods for `IS NULL` and `IS NOT NULL` queries. The latter was actually necessary since the behavior is different from `NOT IS NULL (...)`.
 * Allow disabling backref validation (#465)
 * Made quite a few improvements to the documentation, particularly sections on transactions.
-* Added caching to the [DataSet](http://docs.peewee-orm.com/en/latest/peewee/playhouse.html#dataset) extension, which should improve performance.
+* Added caching to the [DataSet](https://docs.peewee-orm.com/en/latest/peewee/playhouse.html#dataset) extension, which should improve performance.
 * Made the SQLite migrator smarter with regards to preserving indexes when a table copy is necessary.
 
 [View commits](https://github.com/coleifer/peewee/compare/2.4.4...2.4.5)
@@ -1896,7 +1896,7 @@ I'm excited about this release, as in addition to a number of new features and b
 
 Biggest news: peewee has a new logo!
 
-![](http://media.charlesleifer.com/blog/photos/peewee-logo-bold.png)
+![](https://media.charlesleifer.com/blog/photos/peewee-logo-bold.png)
 
 * Small documentation updates here and there.
 
@@ -1917,7 +1917,7 @@ Biggest news: peewee has a new logo!
 * Lots of enhancements and cleanup to the `playhouse.apsw_ext` module.
 * The `playhouse.reflection` module now supports introspecting indexes.
 * Added a model option for disabling backref validation.
-* Added support for the SQLite [closure table extension](http://charlesleifer.com/blog/querying-tree-structures-in-sqlite-using-python-and-the-transitive-closure-extension/).
+* Added support for the SQLite [closure table extension](https://charlesleifer.com/blog/querying-tree-structures-in-sqlite-using-python-and-the-transitive-closure-extension/).
 * Added support for *virtual fields*, which act on dynamically-created virtual table fields.
 * Added a new example: a virtual table implementation that exposes Redis as a relational database table.
 * Added a module `playhouse.sqlite_aggregates` that contains a handful of aggregates you may find useful when developing with SQLite.
@@ -1937,12 +1937,12 @@ This release contains numerous improvements, particularly around the built-in da
 
 ### New features
 
-* New model *Meta* option to disable backref validation. [See validate_backrefs](http://docs.peewee-orm.com/en/latest/peewee/models.html#model-options-and-table-metadata).
+* New model *Meta* option to disable backref validation. [See validate_backrefs](https://docs.peewee-orm.com/en/latest/peewee/models.html#model-options-and-table-metadata).
 * Added documentation on ordering by calculated values.
 * Added basic PyPy compatibility.
 * Added logic to close cursors after they have been exhausted.
 * Structured and consolidated database metadata introspection, including improvements for introspecting indexes.
-* Added support to [prefetch](http://docs.peewee-orm.com/en/latest/peewee/api.html?highlight=prefetch#prefetch) for traversing *up* the query tree.
+* Added support to [prefetch](https://docs.peewee-orm.com/en/latest/peewee/api.html?highlight=prefetch#prefetch) for traversing *up* the query tree.
 * Added introspection option to skip invalid models while introspecting.
 * Added option to limit the tables introspected.
 * Added closed connection detection to the MySQL connection pool.
@@ -1964,10 +1964,10 @@ This release contains a number of improvements to the `reflection` and `migrate`
 
 ### New features
 
-* Added support for [importing data](http://docs.peewee-orm.com/en/latest/peewee/playhouse.html#importing-data) when using the [DataSet extension](http://docs.peewee-orm.com/en/latest/peewee/playhouse.html#dataset).
+* Added support for [importing data](https://docs.peewee-orm.com/en/latest/peewee/playhouse.html#importing-data) when using the [DataSet extension](https://docs.peewee-orm.com/en/latest/peewee/playhouse.html#dataset).
 * Added an encrypted diary app to the examples.
-* Better index reconstruction when altering columns on SQLite databases with the [migrate](http://docs.peewee-orm.com/en/latest/peewee/playhouse.html#migrate) module.
-* Support for multi-column primary keys in the [reflection](http://docs.peewee-orm.com/en/latest/peewee/playhouse.html#reflection) module.
+* Better index reconstruction when altering columns on SQLite databases with the [migrate](https://docs.peewee-orm.com/en/latest/peewee/playhouse.html#migrate) module.
+* Support for multi-column primary keys in the [reflection](https://docs.peewee-orm.com/en/latest/peewee/playhouse.html#reflection) module.
 * Close cursors more aggressively when executing SELECT queries.
 
 [View commits](https://github.com/coleifer/peewee/compare/2.4.1...2.4.2)
@@ -1994,11 +1994,11 @@ As of 2.4.0, most of the introspection logic was moved out of the ``pwiz`` modul
 
 ### New features
 
-* Created a new [reflection](http://docs.peewee-orm.com/en/latest/peewee/playhouse.html#reflection) extension for introspecting databases. The *reflection* module additionally can generate actual peewee Model classes dynamically.
-* Created a [dataset](http://docs.peewee-orm.com/en/latest/peewee/playhouse.html#dataset) library (based on the [SQLAlchemy project](https://dataset.readthedocs.io/) of the same name). For more info check out the blog post [announcing playhouse.dataset](http://charlesleifer.com/blog/saturday-morning-hacks-dataset-for-peewee/).
-* Added a [db_url](http://docs.peewee-orm.com/en/latest/peewee/playhouse.html#database-url) module which creates `Database` objects from a connection string.
-* Added [csv dump](http://docs.peewee-orm.com/en/latest/peewee/playhouse.html#dumping-csv) functionality to the [CSV utils](http://docs.peewee-orm.com/en/latest/peewee/playhouse.html#csv-utils) extension.
-* Added an [atomic](http://docs.peewee-orm.com/en/latest/peewee/transactions.html#nesting-transactions) context manager to support nested transactions.
+* Created a new [reflection](https://docs.peewee-orm.com/en/latest/peewee/playhouse.html#reflection) extension for introspecting databases. The *reflection* module additionally can generate actual peewee Model classes dynamically.
+* Created a [dataset](https://docs.peewee-orm.com/en/latest/peewee/playhouse.html#dataset) library (based on the [SQLAlchemy project](https://dataset.readthedocs.io/) of the same name). For more info check out the blog post [announcing playhouse.dataset](https://charlesleifer.com/blog/saturday-morning-hacks-dataset-for-peewee/).
+* Added a [db_url](https://docs.peewee-orm.com/en/latest/peewee/playhouse.html#database-url) module which creates `Database` objects from a connection string.
+* Added [csv dump](https://docs.peewee-orm.com/en/latest/peewee/playhouse.html#dumping-csv) functionality to the [CSV utils](https://docs.peewee-orm.com/en/latest/peewee/playhouse.html#csv-utils) extension.
+* Added an [atomic](https://docs.peewee-orm.com/en/latest/peewee/transactions.html#nesting-transactions) context manager to support nested transactions.
 * Added support for HStore, JSON and TSVector to the `reflection` module.
 * More documentation updates.
 
@@ -2014,14 +2014,14 @@ This release contains a lot of improvements to the documentation and a mixed bag
 
 ### Backwards-incompatible changes
 
-As of 2.3.3, all peewee `Database` instances have a default of `True` for the `threadlocals` parameter. This means that a connection is opened for each thread. It seemed to me that by sharing connections across threads caused a lot of confusion to users who weren't aware of (or familiar with) the `threadlocals` parameter. For single-threaded apps the behavior will not be affected, but for multi-threaded applications, if you wish to share your connection across threads you must now specify `threadlocals=False`. For more information, see the [documentation](http://docs.peewee-orm.com/en/latest/peewee/api.html#Database).
+As of 2.3.3, all peewee `Database` instances have a default of `True` for the `threadlocals` parameter. This means that a connection is opened for each thread. It seemed to me that by sharing connections across threads caused a lot of confusion to users who weren't aware of (or familiar with) the `threadlocals` parameter. For single-threaded apps the behavior will not be affected, but for multi-threaded applications, if you wish to share your connection across threads you must now specify `threadlocals=False`. For more information, see the [documentation](https://docs.peewee-orm.com/en/latest/peewee/api.html#Database).
 
 I also renamed the `Model.get_id()` and `Model.set_id()` convenience methods so as not to conflict with Flask-Login. These methods should have probably been private anyways, and the new methods are named `_get_pk_value()` and `_set_pk_value()`.
 
 ### New features
 
-* Basic support for [Postgresql full-text search](http://docs.peewee-orm.com/en/latest/peewee/playhouse.html#pg-fts).
-* Helper functions for converting models to dictionaries and unpacking dictionaries into model instances. See [docs](http://docs.peewee-orm.com/en/latest/peewee/playhouse.html#model_to_dict).
+* Basic support for [Postgresql full-text search](https://docs.peewee-orm.com/en/latest/peewee/playhouse.html#pg-fts).
+* Helper functions for converting models to dictionaries and unpacking dictionaries into model instances. See [docs](https://docs.peewee-orm.com/en/latest/peewee/playhouse.html#model_to_dict).
 
 ### Bugs fixed
 
@@ -2065,17 +2065,17 @@ This release contains a number of bugfixes, enhancements and a rewrite of much o
 
 ### Changes in 2.3.0
 
-* [New and improved documentation](http://docs.peewee-orm.com/)
-* Added [aggregate_rows()](http://docs.peewee-orm.com/en/latest/peewee/querying.html#list-users-and-all-their-tweets) method for mitigating N+1 queries.
+* [New and improved documentation](https://docs.peewee-orm.com/)
+* Added [aggregate_rows()](https://docs.peewee-orm.com/en/latest/peewee/querying.html#list-users-and-all-their-tweets) method for mitigating N+1 queries.
 * Query compiler performance improvements and rewrite of table alias internals (51d82fcd and d8d55df04).
-* Added context-managers and decorators for [counting queries](http://docs.peewee-orm.com/en/latest/peewee/playhouse.html#count_queries) and [asserting query counts](http://docs.peewee-orm.com/en/latest/peewee/playhouse.html#assert_query_count).
-* Allow `UPDATE` queries to contain subqueries for values ([example](http://docs.peewee-orm.com/en/latest/peewee/querying.html#atomic-updates)).
-* Support for `INSERT INTO / SELECT FROM` queries ([docs](http://docs.peewee-orm.com/en/latest/peewee/api.html?highlight=insert_from#Model.insert_from)).
+* Added context-managers and decorators for [counting queries](https://docs.peewee-orm.com/en/latest/peewee/playhouse.html#count_queries) and [asserting query counts](https://docs.peewee-orm.com/en/latest/peewee/playhouse.html#assert_query_count).
+* Allow `UPDATE` queries to contain subqueries for values ([example](https://docs.peewee-orm.com/en/latest/peewee/querying.html#atomic-updates)).
+* Support for `INSERT INTO / SELECT FROM` queries ([docs](https://docs.peewee-orm.com/en/latest/peewee/api.html?highlight=insert_from#Model.insert_from)).
 * Allow `SqliteDatabase` to set the database's journal mode.
 * Added method for concatenation ([docs]()).
 * Moved ``UUIDField`` out of the playhouse and into peewee
-* Added [pskel](http://docs.peewee-orm.com/en/latest/peewee/playhouse.html#pskel) script.
-* Documentation for [BerkeleyDB](http://docs.peewee-orm.com/en/latest/peewee/playhouse.html#berkeleydb).
+* Added [pskel](https://docs.peewee-orm.com/en/latest/peewee/playhouse.html#pskel) script.
+* Documentation for [BerkeleyDB](https://docs.peewee-orm.com/en/latest/peewee/playhouse.html#berkeleydb).
 
 ### Bugs fixed
 
@@ -2230,8 +2230,8 @@ Released 2013-12-25
 
 Changes included in 2.1.6:
 
-* [Lightweight Django integration](http://docs.peewee-orm.com/en/latest/peewee/playhouse.html#django-integration).
-* Added a [csv loader](http://docs.peewee-orm.com/en/latest/peewee/playhouse.html#csv-loader) to playhouse.
+* [Lightweight Django integration](https://docs.peewee-orm.com/en/latest/peewee/playhouse.html#django-integration).
+* Added a [csv loader](https://docs.peewee-orm.com/en/latest/peewee/playhouse.html#csv-loader) to playhouse.
 * Register unicode converters per-connection instead of globally when using `pscyopg2`.
 * Fix for how the related object cache is invalidated (#243).
 
@@ -2242,11 +2242,11 @@ Released 2013-11-19
 
 ### Summary of new features
 
-* Rewrote the ``playhouse.postgres_ext.ServerSideCursor`` helper to work with a single query.  [Docs](http://docs.peewee-orm.com/en/latest/peewee/playhouse.html#server-side-cursors).
-* Added error handler hook to the database class, allowing your code to choose how to handle errors executing SQL.  [Docs](http://docs.peewee-orm.com/en/latest/peewee/api.html#Database.sql_error_handler).
+* Rewrote the ``playhouse.postgres_ext.ServerSideCursor`` helper to work with a single query.  [Docs](https://docs.peewee-orm.com/en/latest/peewee/playhouse.html#server-side-cursors).
+* Added error handler hook to the database class, allowing your code to choose how to handle errors executing SQL.  [Docs](https://docs.peewee-orm.com/en/latest/peewee/api.html#Database.sql_error_handler).
 * Allow arbitrary attributes to be stored in ``Model.Meta`` a5e13bb26d6196dbd24ff228f99ff63d9c046f79.
-* Support for composite primary keys (!!).  [How-to](http://docs.peewee-orm.com/en/latest/peewee/cookbook.html#composite-primary-keys) and [API docs](http://docs.peewee-orm.com/en/latest/peewee/api.html#CompositeKey).
-* Added helper for generating ``CASE`` expressions.  [Docs](http://docs.peewee-orm.com/en/latest/peewee/playhouse.html#case).
+* Support for composite primary keys (!!).  [How-to](https://docs.peewee-orm.com/en/latest/peewee/cookbook.html#composite-primary-keys) and [API docs](https://docs.peewee-orm.com/en/latest/peewee/api.html#CompositeKey).
+* Added helper for generating ``CASE`` expressions.  [Docs](https://docs.peewee-orm.com/en/latest/peewee/playhouse.html#case).
 * Allow the table alias to be specified as a model ``Meta`` option.
 * Added ability to specify ``NOWAIT`` when issuing ``SELECT FOR UPDATE`` queries.
 
@@ -2264,9 +2264,9 @@ Released 2013-10-19
 ## 2.1.4
 
 * Small refactor of some components used to represent expressions (mostly better names).
-* Support for [Array fields](http://docs.peewee-orm.com/en/latest/peewee/playhouse.html#ArrayField) in postgresql.
-* Added notes on [Proxy](http://docs.peewee-orm.com/en/latest/peewee/playhouse.html#proxy)
-* Support for [Server side cursors](http://docs.peewee-orm.com/en/latest/peewee/playhouse.html#server-side-cursors) with postgresql.
+* Support for [Array fields](https://docs.peewee-orm.com/en/latest/peewee/playhouse.html#ArrayField) in postgresql.
+* Added notes on [Proxy](https://docs.peewee-orm.com/en/latest/peewee/playhouse.html#proxy)
+* Support for [Server side cursors](https://docs.peewee-orm.com/en/latest/peewee/playhouse.html#server-side-cursors) with postgresql.
 * Code cleanups for more consistency.
 
 Commits: https://github.com/coleifer/peewee/compare/2.1.3...2.1.4
@@ -2286,4 +2286,4 @@ Released 2013-06-28
 
 ## 2.0.0
 
-Major rewrite, see notes here: http://docs.peewee-orm.com/en/latest/peewee/upgrading.html#upgrading
+Major rewrite, see notes here: https://docs.peewee-orm.com/en/latest/peewee/upgrading.html#upgrading

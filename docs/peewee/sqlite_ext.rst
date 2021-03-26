@@ -321,7 +321,7 @@ APIs
 
     Let's look at some examples of using the SQLite json1 extension with
     Peewee. Here we'll prepare a database and a simple model for testing the
-    `json1 extension <http://sqlite.org/json1.html>`_:
+    `json1 extension <https://sqlite.org/json1.html>`_:
 
     .. code-block:: pycon
 
@@ -433,7 +433,7 @@ APIs
 
     The :py:meth:`~JSONField.tree` and :py:meth:`~JSONField.children` methods
     are powerful. For more information on how to utilize them, see the
-    `json1 extension documentation <http://sqlite.org/json1.html#jtree>`_.
+    `json1 extension documentation <https://sqlite.org/json1.html#jtree>`_.
 
     Also note, that :py:class:`JSONField` lookups can be chained:
 
@@ -446,7 +446,7 @@ APIs
 
         'b', {'x1': {'y1': 'z1', 'y2': 'z2'}, 'x2': [1, 2]}
 
-    For more information, refer to the `sqlite json1 documentation <http://sqlite.org/json1.html>`_.
+    For more information, refer to the `sqlite json1 documentation <https://sqlite.org/json1.html>`_.
 
     .. py:method:: __getitem__(item)
 
@@ -478,7 +478,7 @@ APIs
 
         Set the value stored in a :py:class:`JSONField`.
 
-        Uses the `json_set() <http://sqlite.org/json1.html#jset>`_ function
+        Uses the `json_set() <https://sqlite.org/json1.html#jset>`_ function
         from the json1 extension.
 
     .. py:method:: update(data)
@@ -495,7 +495,7 @@ APIs
         MergePatch treats JSON array objects as atomic, so ``update()`` cannot
         append to an array, nor modify individual elements of an array.
 
-        For more information as well as examples, see the SQLite `json_patch() <http://sqlite.org/json1.html#jpatch>`_
+        For more information as well as examples, see the SQLite `json_patch() <https://sqlite.org/json1.html#jpatch>`_
         function documentation.
 
     .. py:method:: remove()
@@ -674,7 +674,7 @@ APIs
 
         Set the value at the given location in the JSON data.
 
-        Uses the `json_set() <http://sqlite.org/json1.html#jset>`_ function
+        Uses the `json_set() <https://sqlite.org/json1.html#jset>`_ function
         from the json1 extension.
 
     .. py:method:: update(data)
@@ -691,7 +691,7 @@ APIs
         MergePatch treats JSON array objects as atomic, so ``update()`` cannot
         append to an array, nor modify individual elements of an array.
 
-        For more information as well as examples, see the SQLite `json_patch() <http://sqlite.org/json1.html#jpatch>`_
+        For more information as well as examples, see the SQLite `json_patch() <https://sqlite.org/json1.html#jpatch>`_
         function documentation.
 
     .. py:method:: remove()
@@ -918,7 +918,7 @@ APIs
     the content itself will not be stored in the search index.
 
     To accomplish this, you can specify a table or column using the ``content``
-    option. The `FTS4 documentation <http://sqlite.org/fts3.html#section_6_2>`_
+    option. The `FTS4 documentation <https://sqlite.org/fts3.html#section_6_2>`_
     has more information.
 
     Here is a short example illustrating how to implement this with peewee:
@@ -1257,7 +1257,7 @@ APIs
         :param table_name: Name for the vocab table. If not specified, will be
             "fts5tablename_v".
 
-        Generate a model class suitable for accessing the `vocab table <http://sqlite.org/fts5.html#the_fts5vocab_virtual_table_module>`_
+        Generate a model class suitable for accessing the `vocab table <https://sqlite.org/fts5.html#the_fts5vocab_virtual_table_module>`_
         corresponding to FTS5 search index.
 
 .. _sqlite-vtfunc:
@@ -1587,15 +1587,15 @@ APIs
 
     .. note::
         For an in-depth discussion of the SQLite transitive closure extension,
-        check out this blog post, `Querying Tree Structures in SQLite using Python and the Transitive Closure Extension <http://charlesleifer.com/blog/querying-tree-structures-in-sqlite-using-python-and-the-transitive-closure-extension/>`_.
+        check out this blog post, `Querying Tree Structures in SQLite using Python and the Transitive Closure Extension <https://charlesleifer.com/blog/querying-tree-structures-in-sqlite-using-python-and-the-transitive-closure-extension/>`_.
 
 .. _sqlite-lsm1:
 
 .. py:class:: LSMTable()
 
-    :py:class:`VirtualModel` subclass suitable for working with the `lsm1 extension <http://charlesleifer.com/blog/lsm-key-value-storage-in-sqlite3/>`_
+    :py:class:`VirtualModel` subclass suitable for working with the `lsm1 extension <https://charlesleifer.com/blog/lsm-key-value-storage-in-sqlite3/>`_
     The *lsm1* extension is a virtual table that provides a SQL interface to
-    the `lsm key/value storage engine from SQLite4 <http://sqlite.org/src4/doc/trunk/www/lsmusr.wiki>`_.
+    the `lsm key/value storage engine from SQLite4 <https://sqlite.org/src4/doc/trunk/www/lsmusr.wiki>`_.
 
     .. note::
         The LSM1 extension has not been released yet (SQLite version 3.22 at
