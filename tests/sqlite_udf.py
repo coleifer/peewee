@@ -291,7 +291,7 @@ class TestScalarFunctions(BaseTestUDF):
             ('www.nugget.com', r),
             ('nugz.com', r),
             ('http://a.b.c.peewee/foo', r),
-            ('https://charlesleifer.com/xx', r),
+            ('http://charlesleifer.com/xx', r),
             ('https://charlesleifer.com/xx', r),
         )
         with self.database.atomic():
