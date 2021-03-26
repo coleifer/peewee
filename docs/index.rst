@@ -71,7 +71,7 @@ Contents:
 Note
 ----
 
-If you find any bugs, odd behavior, or have an idea for a new feature please don't hesitate to `open an issue <https://github.com/coleifer/peewee/issues?state=open>`_ on GitHub or `contact me <http://charlesleifer.com/contact/>`_.
+If you find any bugs, odd behavior, or have an idea for a new feature please don't hesitate to `open an issue <https://github.com/coleifer/peewee/issues?state=open>`_ on GitHub or `contact me <https://charlesleifer.com/contact/>`_.
 
 Indices and tables
 ==================

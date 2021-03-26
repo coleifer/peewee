@@ -1587,13 +1587,13 @@ APIs
 
     .. note::
         For an in-depth discussion of the SQLite transitive closure extension,
-        check out this blog post, `Querying Tree Structures in SQLite using Python and the Transitive Closure Extension <http://charlesleifer.com/blog/querying-tree-structures-in-sqlite-using-python-and-the-transitive-closure-extension/>`_.
+        check out this blog post, `Querying Tree Structures in SQLite using Python and the Transitive Closure Extension <https://charlesleifer.com/blog/querying-tree-structures-in-sqlite-using-python-and-the-transitive-closure-extension/>`_.
 
 .. _sqlite-lsm1:
 
 .. py:class:: LSMTable()
 
-    :py:class:`VirtualModel` subclass suitable for working with the `lsm1 extension <http://charlesleifer.com/blog/lsm-key-value-storage-in-sqlite3/>`_
+    :py:class:`VirtualModel` subclass suitable for working with the `lsm1 extension <https://charlesleifer.com/blog/lsm-key-value-storage-in-sqlite3/>`_
     The *lsm1* extension is a virtual table that provides a SQL interface to
     the `lsm key/value storage engine from SQLite4 <http://sqlite.org/src4/doc/trunk/www/lsmusr.wiki>`_.
 

@@ -3,7 +3,7 @@
 Hacks
 =====
 
-Collected hacks using peewee. Have a cool hack you'd like to share? Open `an issue on GitHub <https://github.com/coleifer/peewee/issues/new>`_ or `contact me <http://charlesleifer.com/contact/>`_.
+Collected hacks using peewee. Have a cool hack you'd like to share? Open `an issue on GitHub <https://github.com/coleifer/peewee/issues/new>`_ or `contact me <https://charlesleifer.com/contact/>`_.
 
 .. _optimistic_locking:
 
@@ -121,7 +121,7 @@ Example:
 Top object per group
 --------------------
 
-These examples describe several ways to query the single top item per group. For a thorough discuss of various techniques, check out my blog post `Querying the top item by group with Peewee ORM <http://charlesleifer.com/blog/techniques-for-querying-lists-of-objects-and-determining-the-top-related-item/>`_. If you are interested in the more general problem of querying the top *N* items, see the section below :ref:`top_n_per_group`.
+These examples describe several ways to query the single top item per group. For a thorough discuss of various techniques, check out my blog post `Querying the top item by group with Peewee ORM <https://charlesleifer.com/blog/techniques-for-querying-lists-of-objects-and-determining-the-top-related-item/>`_. If you are interested in the more general problem of querying the top *N* items, see the section below :ref:`top_n_per_group`.
 
 In these examples we will use the *User* and *Tweet* models to find each user and their most-recent tweet.
 
@@ -169,7 +169,7 @@ SQLite and MySQL are a bit more lax and permit grouping by a subset of the colum
 Top N objects per group
 -----------------------
 
-These examples describe several ways to query the top *N* items per group reasonably efficiently. For a thorough discussion of various techniques, check out my blog post `Querying the top N objects per group with Peewee ORM <http://charlesleifer.com/blog/querying-the-top-n-objects-per-group-with-peewee-orm/>`_.
+These examples describe several ways to query the top *N* items per group reasonably efficiently. For a thorough discussion of various techniques, check out my blog post `Querying the top N objects per group with Peewee ORM <https://charlesleifer.com/blog/querying-the-top-n-objects-per-group-with-peewee-orm/>`_.
 
 In these examples we will use the *User* and *Tweet* models to find each user and their three most-recent tweets.
 
@@ -288,7 +288,7 @@ To accomplish this with peewee, we will wrap the ranked Tweets in an outer query
 Other methods
 ^^^^^^^^^^^^^
 
-If you're not using Postgres, then unfortunately you're left with options that exhibit less-than-ideal performance. For a more complete overview of common methods, check out `this blog post <http://charlesleifer.com/blog/querying-the-top-n-objects-per-group-with-peewee-orm/>`_. Below I will summarize the approaches and the corresponding SQL.
+If you're not using Postgres, then unfortunately you're left with options that exhibit less-than-ideal performance. For a more complete overview of common methods, check out `this blog post <https://charlesleifer.com/blog/querying-the-top-n-objects-per-group-with-peewee-orm/>`_. Below I will summarize the approaches and the corresponding SQL.
 
 Using ``COUNT``, we can get all tweets where there exist less than *N* tweets with more recent timestamps:
 

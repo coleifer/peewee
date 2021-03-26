@@ -1896,7 +1896,7 @@ I'm excited about this release, as in addition to a number of new features and b
 
 Biggest news: peewee has a new logo!
 
-![](http://media.charlesleifer.com/blog/photos/peewee-logo-bold.png)
+![](https://media.charlesleifer.com/blog/photos/peewee-logo-bold.png)
 
 * Small documentation updates here and there.
 

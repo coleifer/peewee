@@ -91,7 +91,7 @@ Optional dependencies
   fine).
 * `BerkeleyDB <http://www.oracle.com/technetwork/database/database-technologies/berkeleydb/downloads/index.html>`_ can
   be compiled with a SQLite frontend, which works with Peewee. Compiling can be
-  tricky so `here are instructions <http://charlesleifer.com/blog/updated-instructions-for-compiling-berkeleydb-with-sqlite-for-use-with-python/>`_.
+  tricky so `here are instructions <https://charlesleifer.com/blog/updated-instructions-for-compiling-berkeleydb-with-sqlite-for-use-with-python/>`_.
 * Lastly, if you use the *Flask* framework, there are helper extension modules
   available.
 
