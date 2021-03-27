@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 
 import datetime
+import os
 import sys
 from getpass import getpass
 from optparse import OptionParser
@@ -167,7 +168,7 @@ def get_option_parser():
     ao('-u', '--user', dest='user')
     ao('-P', '--password', dest='password', action='store_true')
     engines = sorted(DATABASE_MAP)
-    ao('-e', '--engine', dest='engine', default='postgresql', choices=engines,
+    ao('-e', '--engine', dest='engine', choices=engines,
        help=('Database type, e.g. sqlite, mysql, postgresql or cockroachdb. '
              'Default is "postgresql".'))
     ao('-s', '--schema', dest='schema')
@@ -214,7 +215,11 @@ if __name__ == '__main__':
         tables = [table.strip() for table in options.tables.split(',')
                   if table.strip()]
 
-    introspector = make_introspector(options.engine, database, **connect)
+    engine = options.engine
+    if engine is None:
+        engine = 'sqlite' if os.path.exists(database) else 'postgresql'
+
+    introspector = make_introspector(engine, database, **connect)
     if options.info:
         cmd_line = ' '.join(raw_argv[1:])
         print_header(cmd_line, introspector)
