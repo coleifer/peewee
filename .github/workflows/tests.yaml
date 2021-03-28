@@ -28,6 +28,9 @@ jobs:
           - "sqlite"
           - "postgresql"
           - "mysql"
+        exclude:
+          - python-version: 2.7
+            peewee-backend: postgresql
         include:
           - python-version: 3.6
             peewee-backend: cockroachdb
