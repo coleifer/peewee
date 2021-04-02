@@ -518,6 +518,13 @@ class TestModelAPIs(ModelTestCase):
                          'huey')
         self.assertIsNone(User.get_or_none(User.username == 'foo'))
 
+    @requires_models(User, Tweet)
+    def test_model_select_get_or_none(self):
+        huey = self.add_user('huey')
+        self.assertEqual(User.select().where(User.username == 'huey').get_or_none().username,
+                         'huey')
+        self.assertIsNone(User.select().where(User.username == 'foo').get_or_none())
+
     @requires_models(User, Color)
     def test_get_by_id(self):
         huey = self.add_user('huey')

@@ -6888,6 +6888,12 @@ class BaseModelSelect(_ModelQueryHelper):
                                           'not exist:\nSQL: %s\nParams: %s' %
                                           (clone.model, sql, params))
 
+    def get_or_none(self, database=None):
+        try:
+            return self.get(database=database)
+        except self.model.DoesNotExist:
+            pass
+
     @Node.copy
     def group_by(self, *columns):
         grouping = []
