@@ -581,7 +581,7 @@ For more information, see the documentation on:
 * :py:meth:`Model.get`
 * :py:meth:`Model.get_by_id`
 * :py:meth:`Model.get_or_none` - if no matching row is found, return ``None``.
-* :py:meth:`Model.first`
+* :py:meth:`ModelSelect.first`
 * :py:meth:`Model.select`
 * :py:meth:`SelectBase.get`
 
