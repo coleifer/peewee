@@ -1411,6 +1411,9 @@ def sqlite_get_db_status(conn, flag):
         int current, highwater, rc
         pysqlite_Connection *c_conn = <pysqlite_Connection *>conn
 
+    if not c_conn.db:
+        return (None, None)
+
     rc = sqlite3_db_status(c_conn.db, flag, &current, &highwater, 0)
     if rc == SQLITE_OK:
         return (current, highwater)
@@ -1440,6 +1443,9 @@ cdef class ConnectionHelper(object):
             sqlite3_update_hook(self.conn.db, NULL, NULL)
 
     def set_commit_hook(self, fn):
+        if not self.conn.initialized or not self.conn.db:
+            return
+
         self._commit_hook = fn
         if fn is None:
             sqlite3_commit_hook(self.conn.db, NULL, NULL)
@@ -1447,6 +1453,9 @@ cdef class ConnectionHelper(object):
             sqlite3_commit_hook(self.conn.db, _commit_callback, <void *>fn)
 
     def set_rollback_hook(self, fn):
+        if not self.conn.initialized or not self.conn.db:
+            return
+
         self._rollback_hook = fn
         if fn is None:
             sqlite3_rollback_hook(self.conn.db, NULL, NULL)
@@ -1454,6 +1463,9 @@ cdef class ConnectionHelper(object):
             sqlite3_rollback_hook(self.conn.db, _rollback_callback, <void *>fn)
 
     def set_update_hook(self, fn):
+        if not self.conn.initialized or not self.conn.db:
+            return
+
         self._update_hook = fn
         if fn is None:
             sqlite3_update_hook(self.conn.db, NULL, NULL)
@@ -1465,18 +1477,24 @@ cdef class ConnectionHelper(object):
         Replace the default busy handler with one that introduces some "jitter"
         into the amount of time delayed between checks.
         """
+        if not self.conn.initialized or not self.conn.db:
+            return False
+
         cdef sqlite3_int64 n = timeout * 1000
         sqlite3_busy_handler(self.conn.db, _aggressive_busy_handler, <void *>n)
         return True
 
     def changes(self):
-        return sqlite3_changes(self.conn.db)
+        if self.conn.initialized and self.conn.db:
+            return sqlite3_changes(self.conn.db)
 
     def last_insert_rowid(self):
-        return <int>sqlite3_last_insert_rowid(self.conn.db)
+        if self.conn.initialized and self.conn.db:
+            return <int>sqlite3_last_insert_rowid(self.conn.db)
 
     def autocommit(self):
-        return sqlite3_get_autocommit(self.conn.db) != 0
+        if self.conn.initialized and self.conn.db:
+            return sqlite3_get_autocommit(self.conn.db) != 0
 
 
 cdef int _commit_callback(void *userData) with gil:
@@ -1528,6 +1546,9 @@ def backup(src_conn, dest_conn, pages=None, name=None, progress=None):
         sqlite3 *src_db = src.db
         sqlite3 *dest_db = dest.db
         sqlite3_backup *backup
+
+    if not src_db or not dest_db:
+        raise OperationalError('cannot backup to or from a closed database')
 
     # We always backup to the "main" database in the dest db.
     backup = sqlite3_backup_init(dest_db, b'main', src_db, bname)
