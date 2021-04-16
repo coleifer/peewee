@@ -5148,6 +5148,7 @@ class BareField(Field):
 
 class ForeignKeyField(Field):
     accessor_class = ForeignKeyAccessor
+    backref_accessor_class = BackrefAccessor
 
     def __init__(self, model, field=None, backref=None, on_delete=None,
                  on_update=None, deferrable=None, _deferred=None,
@@ -5243,7 +5244,8 @@ class ForeignKeyField(Field):
         if set_attribute:
             setattr(model, self.object_id_name, ObjectIdAccessor(self))
             if self.backref not in '!+':
-                setattr(self.rel_model, self.backref, BackrefAccessor(self))
+                setattr(self.rel_model, self.backref,
+                        self.backref_accessor_class(self))
 
     def foreign_key_constraint(self):
         parts = []
