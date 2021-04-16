@@ -1536,3 +1536,17 @@ class TestModelConversionRegression(ModelTestCase):
         c0, c1, c2 = cpks
         query = CharFK.select().where(CharFK.cpk << [c0, c2])
         self.assertEqual(sorted([f.id for f in query]), [1, 3])
+
+
+class TestBackrefModelSelect(ModelTestCase):
+    requires = [User, Tweet]
+
+    def test_create_model_from_backref(self):
+        user1 = User.create(username='u1')
+        user2 = User.create(username='u2')
+
+        tweet = user1.tweets.create(content='u1-1')
+        self.assertEqual(isinstance(tweet, Tweet))
+        self.assertEqual(tweet.user, user1)
+        self.assertEqual(user1.tweets.count(), 1)
+        self.assertEqual(user2.tweets.count(), 0)

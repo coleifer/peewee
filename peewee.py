@@ -4445,7 +4445,7 @@ class BackrefAccessor(object):
         if instance is not None:
             dest = self.field.rel_field.name
             return (self.rel_model
-                    .select()
+                    .backref_select(self.field, getattr(instance, dest))
                     .where(self.field == getattr(instance, dest)))
         return self
 
@@ -6278,6 +6278,15 @@ class Model(with_metaclass(ModelBase, Node)):
         return ModelSelect(cls, fields, is_default=is_default)
 
     @classmethod
+    def backref_select(cls, from_field, to_field, *fields):
+        is_default = not fields
+        if not fields:
+            fields = cls._meta.sorted_fields
+        return BackrefModelSelect(cls, fields, from_field=from_field,
+                                  to_field=to_field, is_default=is_default)
+
+
+    @classmethod
     def _normalize_data(cls, data, kwargs):
         normalized = {}
         if data:
@@ -7241,6 +7250,21 @@ class NoopModelSelect(ModelSelect):
 
     def _get_cursor_wrapper(self, cursor):
         return CursorWrapper(cursor)
+
+
+class BackrefModelSelect(ModelSelect):
+    def __init__(self, model, fields_or_models, from_field, to_field,
+                 is_default=False):
+
+        self.from_field = from_field
+        self.to_field = to_field
+
+        super(BackrefModelSelect, self).__init__(model, fields,
+                                                 is_default=is_default)
+
+    def create(self, **kwargs):
+        kwargs[self.from_field.name] = self.to_field
+        return self.model.create(**kwargs)
 
 
 class _ModelWriteQueryHelper(_ModelQueryHelper):
