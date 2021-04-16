@@ -1546,7 +1546,7 @@ class TestBackrefModelSelect(ModelTestCase):
         user2 = User.create(username='u2')
 
         tweet = user1.tweets.create(content='u1-1')
-        self.assertEqual(isinstance(tweet, Tweet))
+        self.assertTrue(isinstance(tweet, Tweet))
         self.assertEqual(tweet.user, user1)
         self.assertEqual(user1.tweets.count(), 1)
         self.assertEqual(user2.tweets.count(), 0)
