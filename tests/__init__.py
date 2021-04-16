@@ -27,7 +27,7 @@ except ImportError:
     print('Unable to import APSW extension tests, skipping.')
 try:
     from .cockroachdb import *
-except ImportError:
+except:
     print('Unable to import CockroachDB tests, skipping.')
 try:
     from .cysqlite import *
@@ -47,7 +47,7 @@ except ImportError:
 from .pool import *
 try:
     from .postgres import *
-except ImportError:
+except (ImportError, ImproperlyConfigured):
     print('Unable to import postgres extension tests, skipping.')
 except OperationalError:
     print('Postgresql test database "peewee_test" not found, skipping '
