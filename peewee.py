@@ -7259,7 +7259,7 @@ class BackrefModelSelect(ModelSelect):
         self.from_field = from_field
         self.to_field = to_field
 
-        super(BackrefModelSelect, self).__init__(model, fields,
+        super(BackrefModelSelect, self).__init__(model, fields_or_models,
                                                  is_default=is_default)
 
     def create(self, **kwargs):
