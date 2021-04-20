@@ -84,7 +84,7 @@ def select_related_dbapi_raw(i):
 @timed
 def insert_related(i):
     with db.atomic():
-        populate_collections(30, 35)
+        populate_collections(30, 60)
 
 @timed
 def select_related(i):
@@ -103,6 +103,13 @@ def select_related_dicts(i):
     query = Item.select(Item, Collection).join(Collection).dicts()
     for row in query:
         pass
+
+@timed
+def select_prefetch(i):
+    query = prefetch(Collection.select(), Item)
+    for c in query:
+        for i in c.items:
+            pass
 
 
 if __name__ == '__main__':
@@ -123,4 +130,5 @@ if __name__ == '__main__':
     select_related_left()
     select_related_dicts()
     select_related_dbapi_raw()
+    select_prefetch()
     db.drop_tables([Register, Collection, Item])
