@@ -5134,6 +5134,14 @@ class IPField(BigIntegerField):
 class BooleanField(Field):
     field_type = 'BOOL'
     adapt = bool
+    
+    def is_true(self, is_true=True):
+        op = OP.EQ if is_true else OP.NE
+        return Expression(self, op, 1)
+
+    def is_false(self, is_false=True):
+        op = OP.EQ if is_false else OP.NE
+        return Expression(self, op, 0)
 
 
 class BareField(Field):
