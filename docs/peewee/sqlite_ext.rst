@@ -1742,14 +1742,14 @@ APIs
          Row(key='k3', value='v3'),
          Row(key='k9', value='v9')]
 
-    Attempting to get a single non-existant key will result in a ``KeyError``,
+    Attempting to get a single non-existant key will result in a ``DoesNotExist``,
     but slices will not raise an exception:
 
     .. code-block:: pycon
 
         >>> KV['k1']
         ...
-        KeyError: 'k1'
+        KV.DoesNotExist: <Model:KV> instance matching query does not exist: ...
 
         >>> list(KV['k1':'k1'])
         []

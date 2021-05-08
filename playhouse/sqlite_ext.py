@@ -887,10 +887,7 @@ class LSMTable(VirtualModel):
             pk)
 
         if is_single:
-            try:
-                row = query.get()
-            except cls.DoesNotExist:
-                raise KeyError(pk)
+            row = query.get()
             return row[1] if cls._meta._value_field is not None else row
         else:
             return query

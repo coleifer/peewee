@@ -1907,7 +1907,7 @@ class TestLSM1Extension(BaseTestCase):
         self.assertEqual(v0.val_f, 0.1)
         self.assertEqual(v0.val_t, 'v0')
 
-        self.assertRaises(KeyError, lambda: KV['k1'])
+        self.assertRaises(KV.DoesNotExist, lambda: KV['k1'])
 
         # Test that updates work as expected.
         KV['k0'] = (None, 1338, 3.14, 'v2-e')
@@ -1969,7 +1969,7 @@ class TestLSM1Extension(BaseTestCase):
                          ['k0', 'k1', 'k19', 'k2', 'k3', 'k9'])
 
         del KVS['k1']
-        self.assertRaises(KeyError, lambda: KVS['k1'])
+        self.assertRaises(KVS.DoesNotExist, lambda: KVS['k1'])
 
     def test_index_uint(self):
         database.create_tables([KVI])
