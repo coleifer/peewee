@@ -2846,7 +2846,10 @@ Fields
 
     .. attention:: Only supported by Postgres 10.0 and newer.
 
-.. py:class:: FloatField
+.. py:class:: FloatField([max_digits=None[, decimal_places=None]])
+
+    :param int max_digits: Maximum digits of accuracy to return.
+    :param int decimal_places: Number of decimal places to return.
 
     Field class for storing floating-point numbers.
 

@@ -231,6 +231,8 @@ Some fields take special parameters...
 +--------------------------------+------------------------------------------------+
 | :py:class:`BareField`          | ``adapt``                                      |
 +--------------------------------+------------------------------------------------+
+| :py:class:`FloatField`         | ``max_digits``, ``decimal_places``             |
++--------------------------------+------------------------------------------------+
 
 .. note::
     Both ``default`` and ``choices`` could be implemented at the database level
