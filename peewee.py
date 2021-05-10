@@ -4639,6 +4639,17 @@ class PrimaryKeyField(AutoField):
 class FloatField(Field):
     field_type = 'FLOAT'
 
+    def __init__(self, *args, max_digits=None, decimal_places=None, **kwargs):
+        if decimal_places is not None and max_digits is None:
+            raise ValueError('The "max_digits" parameter must be provided when the '
+                             '"decimal_places" parameter is provided')
+        self.max_digits = max_digits
+        self.decimal_places = decimal_places
+        super(FloatField, self).__init__(*args, **kwargs)
+
+    def get_modifiers(self):
+        return [mod for mod in [self.max_digits, self.decimal_places] if mod is not None]
+
     def adapt(self, value):
         try:
             return float(value)
