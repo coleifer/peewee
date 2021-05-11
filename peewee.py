@@ -2681,7 +2681,11 @@ class Insert(_WriteQuery):
                     else:
                         raise ValueError('Missing value for %s.' % column.name)
 
-                if not isinstance(val, Node):
+                if isinstance(column,ForeignKeyField) or not isinstance(val, Node):
+                    # if the column is a ForeignKeyField, we have to re-wrap it even
+                    # if it is already a Node, because the ForeignKeyField could
+                    # operate on a non-pk column of the referenced (foreign) model object,
+                    # so we have to give its converter a chance to extract that column
                     val = Value(val, converter=converter, unpack=False)
                 values.append(val)
 
