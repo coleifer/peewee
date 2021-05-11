@@ -453,3 +453,29 @@ class TestFKtoNonPKField(ModelTestCase):
                 'WHERE ("t1"."fk_a_id" = ?)'), ['a1'])
             b1_db = query.get()
             self.assertEqual(b1_db.id, b1.id)
+
+    def test_fk_to_non_pk_insert_update(self):
+        a1 = FK_A.create(key='a1')
+        b1 = FK_B.create(fk_a=a1)
+        self.assertEqual(FK_B.select().where(FK_B.fk_a == a1).count(), 1)
+
+        exprs = (
+            {FK_B.fk_a: a1},
+            {'fk_a': a1},
+            {FK_B.fk_a: a1.key},
+            {'fk_a': a1.key})
+        for n, expr in enumerate(exprs, 2):
+            self.assertTrue(FK_B.insert(expr).execute())
+            self.assertEqual(FK_B.select().where(FK_B.fk_a == a1).count(), n)
+
+        a2 = FK_A.create(key='a2')
+        exprs = (
+            {FK_B.fk_a: a2},
+            {'fk_a': a2},
+            {FK_B.fk_a: a2.key},
+            {'fk_a': a2.key})
+
+        b_list = list(FK_B.select().where(FK_B.fk_a == a1))
+        for i, (b, expr) in enumerate(zip(b_list[1:], exprs), 1):
+            self.assertTrue(FK_B.update(expr).where(FK_B.id == b.id).execute())
+            self.assertEqual(FK_B.select().where(FK_B.fk_a == a2).count(), i)

@@ -1455,6 +1455,9 @@ class TestQueryWithModelInstanceParam(ModelTestCase):
         b1 = FKF_B.create(fk_a_1=a1, fk_a_2=a1)
         b2 = FKF_B.create(fk_a_1=a2, fk_a_2=a2)
 
+        # Ensure that UPDATE works as expected as well.
+        b1.save()
+
         # See also keys.TestFKtoNonPKField test, which replicates much of this.
         args = (b1.fk_a_1, b1.fk_a_1_id, a1, a1.key)
         for arg in args:

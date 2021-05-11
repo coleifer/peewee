@@ -2520,8 +2520,15 @@ class Update(_WriteQuery):
                         v = k.to_value(v)
                     else:
                         v = Value(v, unpack=False)
+                elif isinstance(v, Model) and isinstance(k, ForeignKeyField):
+                    # NB: we want to ensure that when passed a model instance
+                    # in the context of a foreign-key, we apply the fk-specific
+                    # adaptation of the model.
+                    v = k.to_value(v)
+
                 if not isinstance(v, Value):
                     v = qualify_names(v)
+
                 expressions.append(NodeList((k, SQL('='), v)))
 
             (ctx
@@ -2634,6 +2641,7 @@ class Insert(_WriteQuery):
                 if col not in seen:
                     columns.append(col)
 
+        fk_fields = set()
         nullable_columns = set()
         value_lookups = {}
         for column in columns:
@@ -2643,6 +2651,8 @@ class Insert(_WriteQuery):
                     lookups.append(column.column_name)
                 if column.null:
                     nullable_columns.add(column)
+                if isinstance(column, ForeignKeyField):
+                    fk_fields.add(column)
             value_lookups[column] = lookups
 
         ctx.sql(EnclosedNodeList(columns)).literal(' VALUES ')
@@ -2681,7 +2691,8 @@ class Insert(_WriteQuery):
                     else:
                         raise ValueError('Missing value for %s.' % column.name)
 
-                if not isinstance(val, Node):
+                if not isinstance(val, Node) or (isinstance(val, Model) and
+                                                 column in fk_fields):
                     val = Value(val, converter=converter, unpack=False)
                 values.append(val)
 
