@@ -679,7 +679,7 @@ This will return all the rows in the *User* table:
 .. code-block:: pycon
 
     >>> for user in User.select():
-    ...     print user.username
+    ...     print(user.username)
     ...
     Charlie
     Huey

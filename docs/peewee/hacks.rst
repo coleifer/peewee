@@ -393,7 +393,7 @@ If we retrieve the user from the database, the password that's stored is hashed 
 .. code-block:: pycon
 
     >>> user = User.get(User.username == 'charlie')
-    >>> print user.password
+    >>> print(user.password)
     b76fa$88be1adcde66a1ac16054bc17c8a297523170949
 
 To implement ``login``-type functionality, you could write something like this:

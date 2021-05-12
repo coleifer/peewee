@@ -1786,7 +1786,7 @@ database:
 
 .. code-block:: pycon
 
-    >>> print db.tables
+    >>> print(db.tables)
     ['sometable', 'user']
 
 And for a given table, you can print the columns:
@@ -1794,14 +1794,14 @@ And for a given table, you can print the columns:
 .. code-block:: pycon
 
     >>> table = db['user']
-    >>> print table.columns
+    >>> print(table.columns)
     ['id', 'age', 'name', 'gender', 'favorite_orm']
 
 We can also find out how many rows are in a table:
 
 .. code-block:: pycon
 
-    >>> print len(db['user'])
+    >>> print(len(db['user']))
     3
 
 Reading data
@@ -1816,7 +1816,7 @@ To retrieve all rows, you can use the :py:meth:`~Table.all` method:
 
     # We can iterate over all rows without calling `.all()`
     for user in db['user']:
-        print user['name']
+        print(user['name'])
 
 Specific objects can be retrieved using :py:meth:`~Table.find` and
 :py:meth:`~Table.find_one`.
@@ -2636,7 +2636,7 @@ Example usage:
     from playhouse.signals import *
 
     def post_save_handler(sender, instance, created):
-        print '%s was just saved' % instance
+        print('%s was just saved' % instance)
 
     # our handler will only be called when we save instances of SomeModel
     post_save.connect(post_save_handler, sender=SomeModel)
@@ -2652,7 +2652,7 @@ is functionally equivalent to the above example:
 
     @post_save(sender=SomeModel)
     def post_save_handler(sender, instance, created):
-        print '%s was just saved' % instance
+        print('%s was just saved' % instance)
 
 
 Signal API
@@ -2745,7 +2745,7 @@ This will print a bunch of models to standard output. So you can do this:
 .. code-block:: pycon
 
     >>> from mymodels import Blog, Entry, Tag, Whatever
-    >>> print [blog.name for blog in Blog.select()]
+    >>> print([blog.name for blog in Blog.select()])
 
 Command-line options
 ^^^^^^^^^^^^^^^^^^^^

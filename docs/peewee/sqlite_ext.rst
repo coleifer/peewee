@@ -1077,7 +1077,7 @@ APIs
                      .order_by(DocumentIndex.rank()))
 
             for search_result in query:
-                print search_result.title, search_result.score
+                print(search_result.title, search_result.score)
 
     .. py:classmethod:: bm25([col1_weight, col2_weight...coln_weight])
 
@@ -1509,7 +1509,7 @@ APIs
         # Get all ancestors for a particular node.
         laptops = Category.get(Category.name == 'Laptops')
         for parent in Closure.ancestors(laptops):
-            print parent.name
+            print(parent.name)
 
         # Computer Hardware
         # Computers
@@ -1519,7 +1519,7 @@ APIs
         # Get all descendants for a particular node.
         hardware = Category.get(Category.name == 'Computer Hardware')
         for node in Closure.descendants(hardware):
-            print node.name
+            print(node.name)
 
         # Laptops
         # Desktops

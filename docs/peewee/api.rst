@@ -214,7 +214,7 @@ Database
                 User.create(username='zaizee')
 
             # Print the usernames of all users.
-            print [u.username for u in User.select()]
+            print([u.username for u in User.select()])
 
             # Prints ["mickey", "zaizee"]
 
@@ -3474,7 +3474,7 @@ Fields
 
         >>> huey.courses = Course.select().where(Course.name.contains('english'))
         >>> for course in huey.courses.order_by(Course.name):
-        ...     print course.name
+        ...     print(course.name)
         English 101
         English 151
         English 201
