@@ -835,6 +835,17 @@ class TestSelectQuery(BaseTestCase):
         for expr, expected in cases:
             assertLike(expr, expected)
 
+    def test_like_expr(self):
+        query = User.select(User.c.id).where(User.c.username.like('%foo%'))
+        self.assertSQL(query, (
+            'SELECT "t1"."id" FROM "users" AS "t1" '
+            'WHERE ("t1"."username" LIKE ?)'), ['%foo%'])
+
+        query = User.select(User.c.id).where(User.c.username.ilike('%foo%'))
+        self.assertSQL(query, (
+            'SELECT "t1"."id" FROM "users" AS "t1" '
+            'WHERE ("t1"."username" ILIKE ?)'), ['%foo%'])
+
 
 class TestInsertQuery(BaseTestCase):
     def test_insert_simple(self):

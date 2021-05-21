@@ -1180,6 +1180,9 @@ class ColumnBase(Node):
     __mod__ = _e(OP.LIKE)
     __pow__ = _e(OP.ILIKE)
 
+    like = _e(OP.LIKE)
+    ilike = _e(OP.ILIKE)
+
     bin_and = _e(OP.BIN_AND)
     bin_or = _e(OP.BIN_OR)
     in_ = _e(OP.IN)
