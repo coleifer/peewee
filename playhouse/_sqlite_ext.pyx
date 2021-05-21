@@ -582,7 +582,7 @@ cdef int pwBestIndex(sqlite3_vtab *pBase, sqlite3_index_info *pIdxInfo) \
         int nParams = len(table_func_cls.params)
 
     for i in range(pIdxInfo.nConstraint):
-        pConstraint = pIdxInfo.aConstraint + i
+        pConstraint = <sqlite3_index_constraint *>pIdxInfo.aConstraint + i
         if not pConstraint.usable:
             continue
         if pConstraint.op != SQLITE_INDEX_CONSTRAINT_EQ:
@@ -703,43 +703,6 @@ class TableFunction(object):
             accum.append('%s HIDDEN' % param)
 
         return ', '.join(accum)
-
-
-cdef tuple SQLITE_DATETIME_FORMATS = (
-    '%Y-%m-%d %H:%M:%S',
-    '%Y-%m-%d %H:%M:%S.%f',
-    '%Y-%m-%d',
-    '%H:%M:%S',
-    '%H:%M:%S.%f',
-    '%H:%M')
-
-cdef dict SQLITE_DATE_TRUNC_MAPPING = {
-    'year': '%Y',
-    'month': '%Y-%m',
-    'day': '%Y-%m-%d',
-    'hour': '%Y-%m-%d %H',
-    'minute': '%Y-%m-%d %H:%M',
-    'second': '%Y-%m-%d %H:%M:%S'}
-
-
-cdef tuple validate_and_format_datetime(lookup, date_str):
-    if not date_str or not lookup:
-        return
-
-    lookup = lookup.lower()
-    if lookup not in SQLITE_DATE_TRUNC_MAPPING:
-        return
-
-    cdef datetime.datetime date_obj
-    cdef bint success = False
-
-    for date_format in SQLITE_DATETIME_FORMATS:
-        try:
-            date_obj = datetime.datetime.strptime(date_str, date_format)
-        except ValueError:
-            pass
-        else:
-            return (date_obj, lookup)
 
 
 cdef inline bytes encode(key):
