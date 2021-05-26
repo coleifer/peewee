@@ -267,6 +267,7 @@ cdef extern from "sqlite3.h" nogil:
     cdef int sqlite3_errcode(sqlite3 *db)
     cdef int sqlite3_errstr(int)
     cdef const char *sqlite3_errmsg(sqlite3 *db)
+    cdef char *sqlite3_mprintf(const char *, ...)
 
     cdef int sqlite3_blob_open(
           sqlite3*,
@@ -606,11 +607,8 @@ cdef int pwBestIndex(sqlite3_vtab *pBase, sqlite3_index_info *pIdxInfo) \
 
         # Store a reference to the columns in the index info structure.
         joinedCols = encode(','.join(columns))
-        idxStr = <char *>sqlite3_malloc((len(joinedCols) + 1) * sizeof(char))
-        memcpy(idxStr, <char *>joinedCols, len(joinedCols))
-        idxStr[len(joinedCols)] = '\x00'
-        pIdxInfo.idxStr = idxStr
-        pIdxInfo.needToFreeIdxStr = 0
+        pIdxInfo.idxStr = sqlite3_mprintf("%s", <char *>joinedCols)
+        pIdxInfo.needToFreeIdxStr = 1
     elif USE_SQLITE_CONSTRAINT:
         return SQLITE_CONSTRAINT
     else:
