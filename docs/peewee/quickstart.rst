@@ -62,7 +62,7 @@ data model, by defining one or more :py:class:`Model` classes:
     multiple people, we always name the class using the singular form.
 
 There are lots of :ref:`field types <fields>` suitable for storing various
-types of data. Peewee handles converting between *pythonic* values those used
+types of data. Peewee handles converting between *pythonic* values and those used
 by the database, so you can use Python types in your code without having to
 worry.
 
