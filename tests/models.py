@@ -3501,6 +3501,24 @@ class PGOnConflictTests(OnConflictTests):
 
     @requires_upsert
     @requires_models(OCTest)
+    def test_update_ignore_with_conflict_target(self):
+        query = OCTest.insert(a='foo', b=1).on_conflict(
+            action='IGNORE',
+            conflict_target=(OCTest.a,))
+        rowid1 = query.execute()
+        self.assertTrue(rowid1 is not None)
+
+        query.clone().execute()  # Nothing happens, insert is ignored.
+        self.assertEqual(OCTest.select().count(), 1)
+
+        OCTest.insert(a='foo', b=2).on_conflict_ignore().execute()
+        self.assertEqual(OCTest.select().count(), 1)
+
+        OCTest.insert(a='bar', b=1).on_conflict_ignore().execute()
+        self.assertEqual(OCTest.select().count(), 2)
+
+    @requires_upsert
+    @requires_models(OCTest)
     def test_update_atomic(self):
         # Add a new row with the given "a" value. If a conflict occurs,
         # re-insert with b=b+2.
