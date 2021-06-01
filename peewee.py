@@ -3916,7 +3916,13 @@ class PostgresqlDatabase(Database):
     def conflict_update(self, oc, query):
         action = oc._action.lower() if oc._action else ''
         if action in ('ignore', 'nothing'):
-            return SQL('ON CONFLICT DO NOTHING')
+            parts = [SQL('ON CONFLICT')]
+            if oc._conflict_target:
+                parts.append(EnclosedNodeList([
+                    Entity(col) if isinstance(col, basestring) else col
+                    for col in oc._conflict_target]))
+            parts.append(SQL('DO NOTHING'))
+            return NodeList(parts)
         elif action and action != 'update':
             raise ValueError('The only supported actions for conflict '
                              'resolution with Postgresql are "ignore" or '

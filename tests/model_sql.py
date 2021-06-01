@@ -870,6 +870,21 @@ class TestOnConflictSQL(ModelDatabaseTestCase):
             'DO UPDATE SET "b" = ("oc_test"."b" + ?) '
             'RETURNING "oc_test"."id"'), ['foo', 1, 0, 2])
 
+    def test_on_conflict_do_nothing(self):
+        query = OCTest.insert(a='foo', b=1).on_conflict(action='IGNORE')
+        self.assertSQL(query, (
+            'INSERT INTO "oc_test" ("a", "b", "c") VALUES (?, ?, ?) '
+            'ON CONFLICT DO NOTHING '
+            'RETURNING "oc_test"."id"'), ['foo', 1, 0])
+
+        query = OCTest.insert(a='foo', b=1).on_conflict(
+            conflict_target=(OCTest.a,),
+            action='IGNORE')
+        self.assertSQL(query, (
+            'INSERT INTO "oc_test" ("a", "b", "c") VALUES (?, ?, ?) '
+            'ON CONFLICT ("a") DO NOTHING '
+            'RETURNING "oc_test"."id"'), ['foo', 1, 0])
+
     def test_update_where_clause(self):
         # Add a new row with the given "a" value. If a conflict occurs,
         # re-insert with b=b+2 so long as the original b < 3.
