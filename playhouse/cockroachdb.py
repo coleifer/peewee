@@ -1,12 +1,16 @@
 import functools
 import re
+import sys
 
 from peewee import *
 from peewee import _atomic
 from peewee import _manual
 from peewee import ColumnMetadata  # (name, data_type, null, primary_key, table, default)
+from peewee import EnclosedNodeList
+from peewee import Entity
 from peewee import ForeignKeyMetadata  # (column, dest_table, dest_column, table).
 from peewee import IndexMetadata
+from peewee import NodeList
 from playhouse.pool import _PooledPostgresqlDatabase
 try:
     from playhouse.postgres_ext import ArrayField
@@ -15,6 +19,9 @@ try:
     JSONField = BinaryJSONField
 except ImportError:  # psycopg2 not installed, ignore.
     ArrayField = BinaryJSONField = IntervalField = JSONField = None
+
+if sys.version_info[0] > 2:
+    basestring = str
 
 
 NESTED_TX_MIN_VERSION = 200100
@@ -107,7 +114,13 @@ class CockroachDatabase(PostgresqlDatabase):
     def conflict_update(self, oc, query):
         action = oc._action.lower() if oc._action else ''
         if action in ('ignore', 'nothing'):
-            return SQL('ON CONFLICT DO NOTHING')
+            parts = [SQL('ON CONFLICT')]
+            if oc._conflict_target:
+                parts.append(EnclosedNodeList([
+                    Entity(col) if isinstance(col, basestring) else col
+                    for col in oc._conflict_target]))
+            parts.append(SQL('DO NOTHING'))
+            return NodeList(parts)
         elif action in ('replace', 'upsert'):
             # No special stuff is necessary, this is just indicated by starting
             # the statement with UPSERT instead of INSERT.
