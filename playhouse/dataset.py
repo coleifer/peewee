@@ -18,10 +18,11 @@ from playhouse.reflection import Introspector
 if sys.version_info[0] == 3:
     basestring = str
     from functools import reduce
-
-
-def open_file(f, mode, encoding='utf8'):
-    return open(f, mode, encoding=encoding)
+    def open_file(f, mode, encoding='utf8'):
+        return open(f, mode, encoding=encoding)
+else:
+    def open_file(f, mode, encoding='utf8'):
+        return open(f, mode)
 
 
 class DataSet(object):
