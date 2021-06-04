@@ -1876,21 +1876,23 @@ API
 
         Create a context manager representing a new transaction (or savepoint).
 
-    .. py:method:: freeze(query[, format='csv'[, filename=None[, file_obj=None[, **kwargs]]]])
+    .. py:method:: freeze(query[, format='csv'[, filename=None[, file_obj=None[, encoding='utf8'[, **kwargs]]]]])
 
         :param query: A :py:class:`SelectQuery`, generated using :py:meth:`~Table.all` or `~Table.find`.
         :param format: Output format. By default, *csv* and *json* are supported.
         :param filename: Filename to write output to.
         :param file_obj: File-like object to write output to.
+        :param str encoding: File encoding.
         :param kwargs: Arbitrary parameters for export-specific functionality.
 
-    .. py:method:: thaw(table[, format='csv'[, filename=None[, file_obj=None[, strict=False[, **kwargs]]]]])
+    .. py:method:: thaw(table[, format='csv'[, filename=None[, file_obj=None[, strict=False[, encoding='utf8'[, **kwargs]]]]]])
 
         :param str table: The name of the table to load data into.
         :param format: Input format. By default, *csv* and *json* are supported.
         :param filename: Filename to read data from.
         :param file_obj: File-like object to read data from.
         :param bool strict: Whether to store values for columns that do not already exist on the table.
+        :param str encoding: File encoding.
         :param kwargs: Arbitrary parameters for import-specific functionality.
 
     .. py:method:: connect()
