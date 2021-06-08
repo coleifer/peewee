@@ -5304,7 +5304,8 @@ class DeferredForeignKey(Field):
         DeferredForeignKey._unresolved.add(self)
         super(DeferredForeignKey, self).__init__(
             column_name=kwargs.get('column_name'),
-            null=kwargs.get('null'))
+            null=kwargs.get('null'),
+            primary_key=kwargs.get('primary_key'))
 
     __hash__ = object.__hash__
 
@@ -5313,7 +5314,11 @@ class DeferredForeignKey(Field):
 
     def set_model(self, rel_model):
         field = ForeignKeyField(rel_model, _deferred=True, **self.field_kwargs)
-        self.model._meta.add_field(self.name, field)
+        if field.primary_key:
+            # NOTE: this calls add_field() under-the-hood.
+            self.model._meta.set_primary_key(self.name, field)
+        else:
+            self.model._meta.add_field(self.name, field)
 
     @staticmethod
     def resolve(model_cls):
