@@ -4450,7 +4450,8 @@ class ForeignKeyAccessor(FieldAccessor):
         else:
             fk_value = instance.__data__.get(self.name)
             instance.__data__[self.name] = obj
-            if obj != fk_value and self.name in instance.__rel__:
+            if (obj != fk_value or obj is None) and \
+               self.name in instance.__rel__:
                 del instance.__rel__[self.name]
         instance._dirty.add(self.name)
 

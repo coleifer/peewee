@@ -1539,3 +1539,23 @@ class TestModelConversionRegression(ModelTestCase):
         c0, c1, c2 = cpks
         query = CharFK.select().where(CharFK.cpk << [c0, c2])
         self.assertEqual(sorted([f.id for f in query]), [1, 3])
+
+
+class FKN_A(TestModel): pass
+class FKN_B(TestModel):
+    a = ForeignKeyField(FKN_A, null=True)
+
+class TestSetFKNull(ModelTestCase):
+    requires = [FKN_A, FKN_B]
+
+    def test_set_fk_null(self):
+        a1 = FKN_A.create()
+        a2 = FKN_A()
+        b1 = FKN_B(a=a1)
+        b2 = FKN_B(a=a2)
+
+        self.assertTrue(b1.a is a1)
+        self.assertTrue(b2.a is a2)
+        b1.a = b2.a = None
+        self.assertTrue(b1.a is None)
+        self.assertTrue(b2.a is None)
