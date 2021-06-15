@@ -4605,3 +4605,79 @@ class TestColumnNameStripping(ModelTestCase):
         row = query.dicts().get()
         self.assertEqual(row['dob'], d1)
         self.assertEqual(row['mdob'], d2)
+
+
+class VL(TestModel):
+    n = IntegerField()
+    s = CharField()
+
+
+@skip_if(IS_SQLITE_OLD or IS_MYSQL or IS_CRDB)
+class TestValuesListIntegration(ModelTestCase):
+    requires = [VL]
+    _data = [(1, 'one'), (2, 'two'), (3, 'three')]
+
+    def test_insert_into_select_from_vl(self):
+        vl = ValuesList(self._data)
+        cte = vl.cte('newvals', columns=['n', 's'])
+        res = (VL
+               .insert_from(cte.select(cte.c.n, cte.c.s), fields=[VL.n, VL.s])
+               .with_cte(cte)
+               .execute())
+
+        vq = VL.select().order_by(VL.n)
+        self.assertEqual([(v.n, v.s) for v in vq], self._data)
+
+    def test_update_vl_cte(self):
+        VL.insert_many(self._data).execute()
+
+        new_values = [(1, 'One'), (3, 'Three'), (4, 'Four')]
+        cte = ValuesList(new_values).cte('new_values', columns=('n', 's'))
+
+        # We have to use a subquery to update the individual column, as SQLite
+        # does not support UPDATE/FROM syntax.
+        subq = (cte
+                .select(cte.c.s)
+                .where(VL.n == cte.c.n))
+
+        # Perform the update, assigning extra the new value from the values
+        # list, and restricting the overall update using the composite pk.
+        res = (VL
+               .update(s=subq)
+               .where(VL.n.in_(cte.select(cte.c.n)))
+               .with_cte(cte)
+               .execute())
+
+        vq = VL.select().order_by(VL.n)
+        self.assertEqual([(v.n, v.s) for v in vq], [
+            (1, 'One'), (2, 'two'), (3, 'Three')])
+
+    def test_values_list(self):
+        vl = ValuesList(self._data)
+
+        query = vl.select(SQL('*'))
+        self.assertEqual(list(query.tuples().bind(self.database)), self._data)
+
+    @requires_postgresql
+    def test_values_list_named_columns(self):
+        vl = ValuesList(self._data).columns('idx', 'name')
+        query = (vl
+                 .select(vl.c.idx, vl.c.name)
+                 .order_by(vl.c.idx.desc()))
+        self.assertEqual(list(query.tuples().bind(self.database)),
+                         self._data[::-1])
+
+    def test_values_list_named_columns_in_cte(self):
+        vl = ValuesList(self._data)
+        cte = vl.cte('val', columns=('idx', 'name'))
+        query = (cte
+                 .select(cte.c.idx, cte.c.name)
+                 .order_by(cte.c.idx.desc())
+                 .with_cte(cte))
+        self.assertEqual(list(query.tuples().bind(self.database)),
+                         self._data[::-1])
+
+    def test_named_values_list(self):
+        vl = ValuesList(self._data).alias('vl')
+        query = vl.select()
+        self.assertEqual(list(query.tuples().bind(self.database)), self._data)
