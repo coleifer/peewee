@@ -573,6 +573,26 @@ class TestModelAPIs(ModelTestCase):
         self.assertEqual(child_db.name, 'child')
 
     @requires_models(Person)
+    def test_get_or_create_defaults(self):
+        p, created = Person.get_or_create(first='huey', defaults={
+            'last': 'cat',
+            'dob': datetime.date(2010, 7, 1)})
+        self.assertTrue(created)
+
+        p_db = Person.get(Person.first == 'huey')
+        self.assertEqual(p_db.first, 'huey')
+        self.assertEqual(p_db.last, 'cat')
+        self.assertEqual(p_db.dob, datetime.date(2010, 7, 1))
+
+        p2, created = Person.get_or_create(first='huey', defaults={
+            'last': 'kitten',
+            'dob': datetime.date(2020, 1, 1)})
+        self.assertFalse(created)
+        self.assertEqual(p2.first, 'huey')
+        self.assertEqual(p2.last, 'cat')
+        self.assertEqual(p2.dob, datetime.date(2010, 7, 1))
+
+    @requires_models(Person)
     def test_save(self):
         huey = Person(first='huey', last='cat', dob=datetime.date(2010, 7, 1))
         self.assertTrue(huey.save() > 0)
