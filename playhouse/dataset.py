@@ -8,6 +8,7 @@ try:
 except ImportError:
     from urllib.parse import urlparse
 import sys
+import uuid
 
 from peewee import *
 from playhouse.db_url import connect
@@ -339,12 +340,12 @@ class JSONExporter(Exporter):
             def default(o):
                 if isinstance(o, datetime_types):
                     return o.isoformat()
-                elif isinstance(o, Decimal):
+                elif isinstance(o, (Decimal, uuid.UUID)):
                     return str(o)
                 raise TypeError('Unable to serialize %r as JSON' % o)
         else:
             def default(o):
-                if isinstance(o, datetime_types + (Decimal,)):
+                if isinstance(o, datetime_types + (Decimal, uuid.UUID)):
                     return str(o)
                 raise TypeError('Unable to serialize %r as JSON' % o)
         return default
