@@ -12,19 +12,21 @@ from peewee import __version__ as peewee_version
 from playhouse.cockroachdb import CockroachDatabase
 from playhouse.reflection import *
 
-
 HEADER = """from peewee import *%s
+
 
 database = %s('%s'%s)
 """
 
 BASE_MODEL = """\
+
 class BaseModel(Model):
     class Meta:
         database = database
 """
 
 UNKNOWN_FIELD = """\
+
 class UnknownField(object):
     def __init__(self, *_, **__): pass
 """
@@ -40,16 +42,18 @@ DATABASE_MAP = dict((value, key)
                     for key in DATABASE_ALIASES
                     for value in DATABASE_ALIASES[key])
 
+
 def make_introspector(database_type, database_name, **kwargs):
     if database_type not in DATABASE_MAP:
         err('Unrecognized database, must be one of: %s' %
             ', '.join(DATABASE_MAP.keys()))
         sys.exit(1)
-
+    
     schema = kwargs.pop('schema', None)
     DatabaseClass = DATABASE_MAP[database_type]
     db = DatabaseClass(database_name, **kwargs)
     return Introspector.from_database(db, schema=schema)
+
 
 def print_models(introspector, tables=None, preserve_order=False,
                  include_views=False, ignore_unknown=False, snake_case=True):
@@ -88,7 +92,7 @@ def print_models(introspector, tables=None, preserve_order=False,
                 if dest != table:
                     _print_table(dest, seen, accum + [table])
 
-        print_('class %s(BaseModel):' % database.model_names[table])
+        print_('\nclass %s(BaseModel):' % database.model_names[table])
         columns = database.columns[table].items()
         if not preserve_order:
             columns = sorted(columns)
@@ -121,30 +125,31 @@ def print_models(introspector, tables=None, preserve_order=False,
             print_('        indexes = (')
             for fields, unique in sorted(multi_column_indexes):
                 print_('            ((%s), %s),' % (
-                    ', '.join("'%s'" % field for field in fields),
-                    unique,
-                ))
+                        ', '.join("'%s'" % field for field in fields),
+                        unique,
+                        ))
             print_('        )')
-
+        
         if introspector.schema:
             print_('        schema = \'%s\'' % introspector.schema)
         if len(primary_keys) > 1:
             pk_field_names = sorted([
-                field.name for col, field in columns
-                if col in primary_keys])
+                    field.name for col, field in columns
+                    if col in primary_keys])
             pk_list = ', '.join("'%s'" % pk for pk in pk_field_names)
             print_('        primary_key = CompositeKey(%s)' % pk_list)
         elif not primary_keys:
             print_('        primary_key = False')
         print_('')
-
+        
         seen.add(table)
-
+    
     seen = set()
     for table in sorted(database.model_names.keys()):
         if table not in seen:
             if not tables or table in tables:
                 _print_table(table, seen)
+
 
 def print_header(cmd_line, introspector):
     timestamp = datetime.datetime.now()
@@ -159,6 +164,7 @@ def print_header(cmd_line, introspector):
 def err(msg):
     sys.stderr.write('\033[91m%s\033[0m\n' % msg)
     sys.stderr.flush()
+
 
 def get_option_parser():
     parser = OptionParser(usage='usage: %prog [options] database_name')
@@ -188,6 +194,7 @@ def get_option_parser():
        help='Use legacy table- and column-name generation.')
     return parser
 
+
 def get_connect_kwargs(options):
     ops = ('host', 'port', 'user', 'schema')
     kwargs = dict((o, getattr(options, o)) for o in ops if getattr(options, o))
@@ -198,31 +205,31 @@ def get_connect_kwargs(options):
 
 if __name__ == '__main__':
     raw_argv = sys.argv
-
+    
     parser = get_option_parser()
     options, args = parser.parse_args()
-
+    
     if len(args) < 1:
         err('Missing required parameter "database"')
         parser.print_help()
         sys.exit(1)
-
+    
     connect = get_connect_kwargs(options)
     database = args[-1]
-
+    
     tables = None
     if options.tables:
         tables = [table.strip() for table in options.tables.split(',')
                   if table.strip()]
-
+    
     engine = options.engine
     if engine is None:
         engine = 'sqlite' if os.path.exists(database) else 'postgresql'
-
+    
     introspector = make_introspector(engine, database, **connect)
     if options.info:
         cmd_line = ' '.join(raw_argv[1:])
         print_header(cmd_line, introspector)
-
+    
     print_models(introspector, tables, options.preserve_order, options.views,
                  options.ignore_unknown, not options.legacy_naming)
