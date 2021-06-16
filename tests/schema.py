@@ -5,6 +5,7 @@ from peewee import NodeList
 
 from .base import BaseTestCase
 from .base import get_in_memory_db
+from .base import IS_CRDB
 from .base import IS_SQLITE
 from .base import ModelDatabaseTestCase
 from .base import ModelTestCase
@@ -803,3 +804,67 @@ class TestNamedConstraintsIntegration(ModelTestCase):
                     TMNamedConstraints.create(**f)
 
         self.assertEqual(len(TMNamedConstraints), 1)
+
+
+class TMKV(TestModel):
+    key = CharField()
+    value = IntegerField()
+    extra = IntegerField()
+
+class TMKVNew(TestModel):
+    key = CharField()
+    val = IntegerField()
+    class Meta:
+        primary_key = False
+        table_name = 'tmkv_new'
+
+
+class TestCreateTableAsSQL(ModelDatabaseTestCase):
+    database = get_in_memory_db()
+    requires = [TMKV]
+
+    def test_create_table_as_sql(self):
+        query = (TMKV
+                 .select(TMKV.key, TMKV.value.alias('val'))
+                 .where(TMKV.extra < 4))
+        ctx = TMKV._schema._create_table_as('tmkv_new', query)
+        self.assertSQL(ctx, (
+            'CREATE TABLE IF NOT EXISTS "tmkv_new" AS '
+            'SELECT "t1"."key", "t1"."value" AS "val" FROM "tmkv" AS "t1" '
+            'WHERE ("t1"."extra" < ?)'), [4])
+
+        ctx = TMKV._schema._create_table_as(('alt', 'tmkv_new'), query)
+        self.assertSQL(ctx, (
+            'CREATE TABLE IF NOT EXISTS "alt"."tmkv_new" AS '
+            'SELECT "t1"."key", "t1"."value" AS "val" FROM "tmkv" AS "t1" '
+            'WHERE ("t1"."extra" < ?)'), [4])
+
+
+class TestCreateTableAs(ModelTestCase):
+    requires = [TMKV]
+
+    def tearDown(self):
+        try:
+            TMKVNew.drop_table(safe=True)
+        except:
+            pass
+        super(TestCreateTableAs, self).tearDown()
+
+    def test_create_table_as(self):
+        TMKV.insert_many([('k%02d' % i, i, i) for i in range(10)]).execute()
+
+        query = (TMKV
+                 .select(TMKV.key, TMKV.value.alias('val'))
+                 .where(TMKV.extra < 4))
+        query.create_table('tmkv_new', safe=True)
+
+        expected = ['key', 'val']
+        if IS_CRDB: expected.append('rowid')  # CRDB adds this.
+
+        self.assertEqual(
+            [col.name for col in self.database.get_columns('tmkv_new')],
+            expected)
+
+        query = TMKVNew.select().order_by(TMKVNew.key)
+        self.assertEqual([(r.key, r.val) for r in query],
+                         [('k00', 0), ('k01', 1), ('k02', 2), ('k03', 3)])

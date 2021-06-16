@@ -5672,7 +5672,7 @@ class SchemaManager(object):
         if safe:
             ctx.literal('IF NOT EXISTS ')
         return (ctx
-                .sql(Entity(table_name))
+                .sql(Entity(*ensure_tuple(table_name)))
                 .literal(' AS ')
                 .sql(query))
 
