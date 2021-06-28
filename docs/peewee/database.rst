@@ -1781,8 +1781,8 @@ has special "SHOW" statements:
 .. code-block:: python
 
     class FooDatabase(Database):
-        def _connect(self, database, **kwargs):
-            return foodb.connect(database, **kwargs)
+        def _connect(self):
+            return foodb.connect(self.database, **self.connect_params)
 
         def get_tables(self):
             res = self.execute('SHOW TABLES;')
