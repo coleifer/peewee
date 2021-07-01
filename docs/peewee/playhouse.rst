@@ -1843,10 +1843,12 @@ you wish to export:
 API
 ^^^
 
-.. py:class:: DataSet(url, **kwargs)
+.. py:class:: DataSet(url, reuse_if_open=False, **kwargs)
 
     :param url: A database URL or a :py:class:`Database` instance. For
         details on using a URL, see :ref:`db_url` for examples.
+    :param bool reuse_if_open: prevent `Connection already opened` error from
+        being raised.
     :param kwargs: additional keyword arguments passed to
         :py:meth:`Introspector.generate_models` when introspecting the db.
 
