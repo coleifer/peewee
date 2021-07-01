@@ -27,7 +27,7 @@ else:
 
 
 class DataSet(object):
-    def __init__(self, url, **kwargs):
+    def __init__(self, url, reuse_if_open=False, **kwargs):
         if isinstance(url, Database):
             self._url = None
             self._database = url
@@ -40,7 +40,7 @@ class DataSet(object):
             # Connect to the database.
             self._database = connect(url)
 
-        self._database.connect()
+        self.connect(reuse_if_open)
 
         # Introspect the database and generate models.
         self._introspector = Introspector.from_database(self._database)
@@ -84,8 +84,11 @@ class DataSet(object):
     def __contains__(self, table):
         return table in self.tables
 
-    def connect(self):
-        self._database.connect()
+    def connect(self, reuse_if_open=False):
+        if reuse_if_open:
+            self._database.connect(reuse_if_open)
+        else:
+            self._database.connect()
 
     def close(self):
         self._database.close()
