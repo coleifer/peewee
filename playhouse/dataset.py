@@ -40,7 +40,8 @@ class DataSet(object):
             # Connect to the database.
             self._database = connect(url)
 
-        self._database.connect()
+        # Open a connection if one does not already exist.
+        self._database.connect(reuse_if_open=True)
 
         # Introspect the database and generate models.
         self._introspector = Introspector.from_database(self._database)
@@ -84,8 +85,8 @@ class DataSet(object):
     def __contains__(self, table):
         return table in self.tables
 
-    def connect(self):
-        self._database.connect()
+    def connect(self, reuse_if_open=False):
+        self._database.connect(reuse_if_open=reuse_if_open)
 
     def close(self):
         self._database.close()
