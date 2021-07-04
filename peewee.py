@@ -7480,7 +7480,7 @@ class ModelDictCursorWrapper(BaseModelCursorWrapper):
         for i in range(self.ncols):
             attr = columns[i]
             if attr in result: continue  # Don't overwrite if we have dupes.
-            if converters[i] is not None:
+            if converters[i] is not None and row[i] != '':
                 result[attr] = converters[i](row[i])
             else:
                 result[attr] = row[i]
