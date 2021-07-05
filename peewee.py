@@ -1475,6 +1475,15 @@ class Expression(ColumnBase):
             op_in = self.op == OP.IN or self.op == OP.NOT_IN
             if op_in and ctx.as_new().parse(self.rhs)[0] == '()':
                 return ctx.literal('0 = 1' if self.op == OP.IN else '1 = 1')
+            elif op_in and isinstance(self.rhs, multi_types):
+                # Make sure not to greedily unpack the RHS
+                rhs_new = []
+                for n in self.rhs:
+                    if isinstance(n, multi_types):
+                        rhs_new.append(Value(n, unpack=False))
+                    else:
+                        rhs_new.append(n)
+                self.rhs = rhs_new
 
             return (ctx
                     .sql(self.lhs)

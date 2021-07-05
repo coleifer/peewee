@@ -435,6 +435,21 @@ class TestJSONField(ModelTestCase):
             kd_db = KeyData.get(KeyData.key == 'kx')
             self.assertEqual(kd_db.data, value)
 
+
+    def test_json_in(self):
+        itr_select_query = (KeyData
+            .select()
+            .where(KeyData.data.in_(
+                [[1], [2], [1,2]]
+            )))
+
+        query_vals = itr_select_query.sql()[1]
+        self.assertListEqual(
+            query_vals,
+            ['[1]', '[2]', '[1, 2]']
+        )
+    
+
     def test_json_unicode(self):
         with self.database.atomic():
             KeyData.delete().execute()
