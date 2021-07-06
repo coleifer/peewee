@@ -470,6 +470,35 @@ class TestJSONField(ModelTestCase):
         self.assertEqual(kd1_db.data, ['g', 'h', 'i'])
         self.assertEqual(kd2_db.data, ['j', 'k', 'l'])
 
+    def test_json_multi_ops(self):
+        data = (
+            ('k1', [0, 1]),
+            ('k2', [1, 2]),
+            ('k3', {'x3': 'y3'}),
+            ('k4', {'x4': 'y4'}))
+        self.assertEqual(KeyData.insert_many(data).execute(), 4)
+
+        vals = [[1, 2], [2, 3], {'x3': 'y3'}, {'x5': 'y5'}]
+        pw_vals = [Value(v, unpack=False) for v in vals]
+
+        query = KeyData.select().where(KeyData.data.in_(pw_vals))
+        self.assertSQL(query, (
+            'SELECT "t1"."id", "t1"."key", "t1"."data" '
+            'FROM "key_data" AS "t1" '
+            'WHERE ("t1"."data" IN (json(?), json(?), json(?), json(?)))'),
+            ['[1, 2]', '[2, 3]', '{"x3": "y3"}', '{"x5": "y5"}'])
+
+        self.assertEqual(query.count(), 2)
+        self.assertEqual(sorted([k.key for k in query]), ['k2', 'k3'])
+
+        query = KeyData.select().where(KeyData.data == [1, 2])
+        self.assertEqual(query.count(), 1)
+        self.assertEqual(query.get().key, 'k2')
+
+        query = KeyData.select().where(KeyData.data == {'x3': 'y3'})
+        self.assertEqual(query.count(), 1)
+        self.assertEqual(query.get().key, 'k3')
+
 
 @skip_unless(json_installed(), 'requires sqlite json1')
 class TestJSONFieldFunctions(ModelTestCase):
