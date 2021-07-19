@@ -114,7 +114,7 @@ Learning more
 
 Check the `documentation <http://docs.peewee-orm.com/>`_ for more examples.
 
-Specific question? Come hang out in the #peewee channel on irc.freenode.net, or post to the mailing list, http://groups.google.com/group/peewee-orm . If you would like to report a bug, `create a new issue <https://github.com/coleifer/peewee/issues/new>`_ on GitHub.
+Specific question? Come hang out in the #peewee channel on irc.libera.chat, or post to the mailing list, http://groups.google.com/group/peewee-orm . If you would like to report a bug, `create a new issue <https://github.com/coleifer/peewee/issues/new>`_ on GitHub.
 
 Still want more info?
 ---------------------
