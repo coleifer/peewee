@@ -205,6 +205,18 @@ class SearchField(Field):
     def match(self, term):
         return match(self, term)
 
+    @property
+    def fts_column_index(self):
+        if not hasattr(self, '_fts_column_index'):
+            search_fields = [f.name for f in self.model._meta.sorted_fields
+                             if isinstance(f, SearchField)]
+            self._fts_column_index = search_fields.index(self.name)
+        return self._fts_column_index
+
+    def highlight(self, left, right):
+        column_idx = self.fts_column_index
+        return fn.highlight(self.model._meta.entity, column_idx, left, right)
+
 
 class VirtualTableSchemaManager(SchemaManager):
     def _create_virtual_table(self, safe=True, **options):

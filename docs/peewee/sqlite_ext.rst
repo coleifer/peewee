@@ -795,6 +795,28 @@ APIs
                      .where(SearchIndex.match('python'))
                      .order_by(SearchIndex.bm25()))
 
+    .. py:method:: highlight(left, right)
+
+        :param str left: opening tag for highlight, e.g. ``'<b>'``
+        :param str right: closing tag for highlight, e.g. ``'</b>'``
+
+        When performing a search using the ``MATCH`` operator, FTS5 can return
+        text highlighting matches in a given column.
+
+        .. code-block:: python
+
+            # Search for items matching string 'python' and return the title
+            # highlighted with square brackets.
+            query = (SearchIndex
+                     .search('python')
+                     .select(SearchIndex.title.highlight('[', ']').alias('hi')))
+
+            for result in query:
+                print(result.hi)
+
+            # For example, might print:
+            # Learn [python] the hard way
+
 
 .. py:class:: VirtualModel()
 

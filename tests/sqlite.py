@@ -1252,6 +1252,19 @@ class TestFTS5(BaseFTSTestCase, ModelTestCase):
         for title, data, misc in self.test_corpus:
             FTS5Test.create(title=title, data=data, misc=misc)
 
+    def test_highlight_function(self):
+        query = (FTS5Test
+                 .search('dd')
+                 .select(FTS5Test.title.highlight('[', ']').alias('hi')))
+        accum = [row.hi for row in query]
+        self.assertEqual(accum, ['baze cc [dd]', 'bar bb cc', 'nug aa [dd]'])
+
+        query = (FTS5Test
+                 .search('bb')
+                 .select(FTS5Test.data.highlight('[', ']').alias('hi')))
+        accum = [row.hi[:7] for row in query]
+        self.assertEqual(accum, ['[bb] cc', 'aa [bb]', '[bb] cc'])
+
     def test_create_table(self):
         query = FTS5Test._schema._create_table()
         self.assertSQL(query, (
