@@ -217,6 +217,13 @@ class SearchField(Field):
         column_idx = self.fts_column_index
         return fn.highlight(self.model._meta.entity, column_idx, left, right)
 
+    def snippet(self, left, right, over_length='...', max_tokens=16):
+        if not (0 < max_tokens < 65):
+            raise ValueError('max_tokens must be between 1 and 64 (inclusive)')
+        column_idx = self.fts_column_index
+        return fn.snippet(self.model._meta.entity, column_idx, left, right,
+                          over_length, max_tokens)
+
 
 class VirtualTableSchemaManager(SchemaManager):
     def _create_virtual_table(self, safe=True, **options):

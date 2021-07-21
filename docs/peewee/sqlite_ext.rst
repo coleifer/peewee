@@ -817,6 +817,28 @@ APIs
             # For example, might print:
             # Learn [python] the hard way
 
+    .. py:method:: snippet(left, right, over_length='...', max_tokens=16)
+
+        :param str left: opening tag for highlight, e.g. ``'<b>'``
+        :param str right: closing tag for highlight, e.g. ``'</b>'``
+        :param str over_length: text to prepend or append when snippet exceeds
+            the maximum number of tokens.
+        :param int max_tokens: max tokens returned, **must be 1 - 64**.
+
+        When performing a search using the ``MATCH`` operator, FTS5 can return
+        text with a snippet containing the highlighted match in a given column.
+
+        .. code-block:: python
+
+            # Search for items matching string 'python' and return the title
+            # highlighted with square brackets.
+            query = (SearchIndex
+                     .search('python')
+                     .select(SearchIndex.title.snippet('[', ']').alias('snip')))
+
+            for result in query:
+                print(result.snip)
+
 
 .. py:class:: VirtualModel()
 
