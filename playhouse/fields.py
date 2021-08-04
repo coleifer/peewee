@@ -10,13 +10,9 @@ try:
     import cPickle as pickle
 except ImportError:
     import pickle
-import sys
 
 from peewee import BlobField
 from peewee import buffer_type
-
-
-PY2 = sys.version_info[0] == 2
 
 
 class CompressedField(BlobField):
