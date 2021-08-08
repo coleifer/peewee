@@ -1572,7 +1572,9 @@ Query-builder
             # the result string and convert the values to python ints.
             tweet_ids = (fn
                          .GROUP_CONCAT(Tweet.id)
-                         .python_value(lambda idlist: [int(i) for i in idlist]))
+                         .python_value(
+                           lambda idlist: [int(i) for i in (idlist.split(",") if idlist else [])])
+                         )
 
             query = (User
                      .select(User.username, tweet_ids.alias('tweet_ids'))
