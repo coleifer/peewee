@@ -11,6 +11,7 @@ from playhouse.migrate import SchemaMigrator
 from .base import BaseTestCase
 from .base import IS_MYSQL
 from .base import IS_MYSQL_ADVANCED_FEATURES
+from .base import IS_SQLITE
 from .base import IS_SQLITE_OLD
 from .base import ModelTestCase
 from .base import TestModel
@@ -1559,3 +1560,32 @@ class TestSetFKNull(ModelTestCase):
         b1.a = b2.a = None
         self.assertTrue(b1.a is None)
         self.assertTrue(b2.a is None)
+
+
+class TestWeirdAliases(ModelTestCase):
+    requires = [User]
+
+    @skip_if(IS_MYSQL)  # mysql can't do anything normally.
+    def test_weird_aliases(self):
+        User.create(username='huey')
+        def assertAlias(s, expected):
+            query = User.select(s).dicts()
+            row = query[0]
+            self.assertEqual(list(row)[0], expected)
+
+        # When we explicitly provide an alias, use that.
+        assertAlias(User.username.alias('"username"'), '"username"')
+        assertAlias(User.username.alias('(username)'), '(username)')
+        assertAlias(User.username.alias('user(name)'), 'user(name)')
+        assertAlias(User.username.alias('(username"'), '(username"')
+        assertAlias(User.username.alias('"username)'), '"username)')
+        assertAlias(fn.LOWER(User.username).alias('user (name)'), 'user (name)')
+
+        # Here peewee cannot tell that an alias was given, so it will attempt
+        # to clean-up the column name returned by the cursor description.
+        assertAlias(SQL('"t1"."username" AS "user name"'), 'user name')
+        assertAlias(SQL('"t1"."username" AS "user (name)"'), 'user (name')
+        assertAlias(SQL('"t1"."username" AS "(username)"'), 'username')
+        assertAlias(SQL('"t1"."username" AS "x.y.(username)"'), 'username')
+        if IS_SQLITE:
+            assertAlias(SQL('LOWER("t1"."username")'), 'username')

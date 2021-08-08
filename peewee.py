@@ -4347,7 +4347,7 @@ class CursorWrapper(object):
 class DictCursorWrapper(CursorWrapper):
     def _initialize_columns(self):
         description = self.cursor.description
-        self.columns = [t[0][t[0].find('.') + 1:].strip('")')
+        self.columns = [t[0][t[0].rfind('.') + 1:].strip('()"`')
                         for t in description]
         self.ncols = len(description)
 
@@ -4365,9 +4365,8 @@ class DictCursorWrapper(CursorWrapper):
 class NamedTupleCursorWrapper(CursorWrapper):
     def initialize(self):
         description = self.cursor.description
-        self.tuple_class = collections.namedtuple(
-            'Row',
-            [col[0][col[0].find('.') + 1:].strip('"') for col in description])
+        self.tuple_class = collections.namedtuple('Row', [
+            t[0][t[0].rfind('.') + 1:].strip('()"`') for t in description])
 
     def process_row(self, row):
         return self.tuple_class(*row)
@@ -7416,13 +7415,20 @@ class BaseModelCursorWrapper(DictCursorWrapper):
         self.fields = fields = [None] * self.ncols
 
         for idx, description_item in enumerate(description):
-            column = description_item[0]
-            dot_index = column.find('.')
+            column = orig_column = description_item[0]
+
+            # Try to clean-up messy column descriptions when people do not
+            # provide an alias. The idea is that we take something like:
+            # SUM("t1"."price") -> "price") -> price
+            dot_index = column.rfind('.')
             if dot_index != -1:
                 column = column[dot_index + 1:]
-
-            column = column.strip('")')
+            column = column.strip('()"`')
             self.columns.append(column)
+
+            # Now we'll see what they selected and see if we can improve the
+            # column-name being returned - e.g. by mapping it to the selected
+            # field's name.
             try:
                 raw_node = self.select[idx]
             except IndexError:
@@ -7433,6 +7439,12 @@ class BaseModelCursorWrapper(DictCursorWrapper):
             else:
                 node = raw_node.unwrap()
 
+            # If this column was given an alias, then we will use whatever
+            # alias was returned by the cursor.
+            is_alias = raw_node.is_alias()
+            if is_alias:
+                self.columns[idx] = orig_column
+
             # Heuristics used to attempt to get the field associated with a
             # given SELECT column, so that we can accurately convert the value
             # returned by the database-cursor into a Python object.
@@ -7440,7 +7452,7 @@ class BaseModelCursorWrapper(DictCursorWrapper):
                 if raw_node._coerce:
                     converters[idx] = node.python_value
                 fields[idx] = node
-                if not raw_node.is_alias():
+                if not is_alias:
                     self.columns[idx] = node.name
             elif isinstance(node, ColumnBase) and raw_node._converter:
                 converters[idx] = raw_node._converter
