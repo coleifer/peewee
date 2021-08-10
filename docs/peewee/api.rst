@@ -1570,7 +1570,7 @@ Query-builder
             # Get user and a list of their tweet IDs. The tweet IDs are
             # returned as a comma-separated string by the db, so we'll split
             # the result string and convert the values to python ints.
-            convert_ids = lambda s: [int(i) for i in (s or '').split(',')]
+            convert_ids = lambda s: [int(i) for i in (s or '').split(',') if i]
             tweet_ids = (fn
                          .GROUP_CONCAT(Tweet.id)
                          .python_value(convert_ids))
