@@ -41,6 +41,7 @@ Instantiating a :py:class:`SqliteExtDatabase`:
         ('journal_mode', 'wal'),  # Use WAL-mode (you should always use this!).
         ('foreign_keys', 1)))  # Enforce foreign-key constraints.
 
+
 APIs
 ----
 

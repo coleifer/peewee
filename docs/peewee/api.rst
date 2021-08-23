@@ -3766,7 +3766,7 @@ Schema Manager
 Model
 -----
 
-.. py:class:: Metadata(model[, database=None[, table_name=None[, indexes=None[, primary_key=None[, constraints=None[, schema=None[, only_save_dirty=False[, depends_on=None[, options=None[, without_rowid=False[, **kwargs]]]]]]]]]]]])
+.. py:class:: Metadata(model[, database=None[, table_name=None[, indexes=None[, primary_key=None[, constraints=None[, schema=None[, only_save_dirty=False[, depends_on=None[, options=None[, without_rowid=False[, strict_tables=False[, **kwargs]]]]]]]]]]]]])
 
     :param Model model: Model class.
     :param Database database: database model is bound to.
@@ -3780,6 +3780,7 @@ Model
         save the fields which have been modified.
     :param dict options: Arbitrary options for the model.
     :param bool without_rowid: Specify WITHOUT ROWID (sqlite only).
+    :param bool strict_tables: Specify STRICT (sqlite only, requires 3.37+).
     :param kwargs: Arbitrary setting attributes and values.
 
     Store metadata for a :py:class:`Model`.

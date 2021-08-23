@@ -795,6 +795,7 @@ Option                  Meaning                                                I
 ``legacy_table_names``  use legacy table name generation (enabled by default)  yes
 ``depends_on``          indicate this table depends on another for creation    no
 ``without_rowid``       indicate table should not have rowid (SQLite only)     no
+``strict_tables``       indicate strict data-types (SQLite only, 3.37+)        yes
 ======================  ====================================================== ====================
 
 Here is an example showing inheritable versus non-inheritable attributes:
