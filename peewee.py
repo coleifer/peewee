@@ -72,6 +72,7 @@ except ImportError:
 
 __version__ = '3.14.4'
 __all__ = [
+    'AnyField',
     'AsIs',
     'AutoField',
     'BareField',
@@ -4606,6 +4607,10 @@ class Field(ColumnBase):
         return NodeList(accum)
 
 
+class AnyField(Field):
+    field_type = 'ANY'
+
+
 class IntegerField(Field):
     field_type = 'INT'
 
@@ -5642,8 +5647,11 @@ class SchemaManager(object):
                     raise ValueError('table_settings must be strings')
                 ctx.literal(' ').literal(setting)
 
-        if meta.without_rowid:
-            ctx.literal(' WITHOUT ROWID')
+        extra_opts = []
+        if meta.strict_tables: extra_opts.append('STRICT')
+        if meta.without_rowid: extra_opts.append('WITHOUT ROWID')
+        if extra_opts:
+            ctx.literal(' %s' % ', '.join(extra_opts))
         return ctx
 
     def _create_table_option_sql(self, options):
@@ -5827,8 +5835,8 @@ class Metadata(object):
                  primary_key=None, constraints=None, schema=None,
                  only_save_dirty=False, depends_on=None, options=None,
                  db_table=None, table_function=None, table_settings=None,
-                 without_rowid=False, temporary=False, legacy_table_names=True,
-                 **kwargs):
+                 without_rowid=False, temporary=False, strict_tables=None,
+                 legacy_table_names=True, **kwargs):
         if db_table is not None:
             __deprecated__('"db_table" has been deprecated in favor of '
                            '"table_name" for Models.')
@@ -5869,6 +5877,7 @@ class Metadata(object):
         self.depends_on = depends_on
         self.table_settings = table_settings
         self.without_rowid = without_rowid
+        self.strict_tables = strict_tables
         self.temporary = temporary
 
         self.refs = {}
@@ -6130,7 +6139,7 @@ class ModelBase(type):
     inheritable = set(['constraints', 'database', 'indexes', 'primary_key',
                        'options', 'schema', 'table_function', 'temporary',
                        'only_save_dirty', 'legacy_table_names',
-                       'table_settings'])
+                       'table_settings', 'strict_tables'])
 
     def __new__(cls, name, bases, attrs):
         if name == MODEL_BASE or bases[0].__name__ == MODEL_BASE:

@@ -8,6 +8,7 @@ from playhouse.sqlite_ext import *
 from playhouse._sqlite_ext import TableFunction
 
 from .base import BaseTestCase
+from .base import IS_SQLITE_37
 from .base import IS_SQLITE_9
 from .base import ModelTestCase
 from .base import TestModel

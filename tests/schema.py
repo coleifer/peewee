@@ -318,6 +318,46 @@ class TestModelDDL(ModelDatabaseTestCase):
              '"key" TEXT NOT NULL PRIMARY KEY, '
              '"value" TEXT NOT NULL)')])
 
+    def test_strict_tables(self):
+        class Strict(TestModel):
+            key = TextField(primary_key=True)
+            value = TextField()
+
+            class Meta:
+                database = self.database
+                strict_tables = True
+
+        self.assertCreateTable(Strict, [
+            ('CREATE TABLE "strict" ('
+             '"key" TEXT NOT NULL PRIMARY KEY, '
+             '"value" TEXT NOT NULL) STRICT')])
+
+        # Subclasses *do* inherit "strict_tables" setting.
+        class SubStrict(Strict): pass
+
+        self.assertCreateTable(SubStrict, [
+            ('CREATE TABLE "sub_strict" ('
+             '"key" TEXT NOT NULL PRIMARY KEY, '
+             '"value" TEXT NOT NULL) STRICT')])
+
+    def test_without_rowid_strict(self):
+        class KV(TestModel):
+            key = TextField(primary_key=True)
+            class Meta:
+                database = self.database
+                strict_tables = True
+                without_rowid = True
+
+        self.assertCreateTable(KV, [
+            ('CREATE TABLE "kv" ("key" TEXT NOT NULL PRIMARY KEY) '
+             'STRICT, WITHOUT ROWID')])
+
+        class SKV(KV):
+            pass
+
+        self.assertCreateTable(SKV, [
+            ('CREATE TABLE "skv" ("key" TEXT NOT NULL PRIMARY KEY) STRICT')])
+
     def test_db_table(self):
         class A(TestModel):
             class Meta:
