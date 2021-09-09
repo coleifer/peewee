@@ -1,6 +1,9 @@
+import threading
+
 from peewee import *
 from peewee import Alias
 from peewee import CompoundSelectQuery
+from peewee import Metadata
 from peewee import SENTINEL
 from peewee import callable_
 
@@ -251,3 +254,25 @@ def resolve_multimodel_query(query, key='_model_identifier'):
             yield model(**row)
 
     return wrapped_iterator()
+
+
+class ThreadSafeDatabaseMetadata(Metadata):
+    """
+    Metadata class to allow swapping database at run-time in a multi-threaded
+    application. To use:
+
+    class Base(Model):
+        class Meta:
+            model_metadata_class = ThreadSafeDatabaseMetadata
+    """
+    def __init__(self, *args, **kwargs):
+        # The database attribute is stored in a thread-local.
+        self._database = None
+        self._local = threading.local()
+        super(ThreadSafeDatabaseMetadata, self).__init__(*args, **kwargs)
+
+    def _get_db(self):
+        return getattr(self._local, 'database', self._database)
+    def _set_db(self, db):
+        self._local.database = self._database = db
+    database = property(_get_db, _set_db)

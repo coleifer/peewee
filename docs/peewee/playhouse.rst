@@ -2564,6 +2564,29 @@ helpers for serializing models to dictionaries and vice-versa.
     when iterating over the query results.
 
 
+.. py:class:: ThreadSafeDatabaseMetadata()
+
+    Model :py:class:`Metadata` implementation that provides thread-safe access
+    to the ``database`` attribute, allowing applications to swap the database
+    at run-time safely in a multi-threaded application.
+
+    Usage:
+
+    .. code-block:: python
+
+        from playhouse.shortcuts import ThreadSafeDatabaseMetadata
+
+        # Our multi-threaded application will sometimes swap out the primary
+        # for the read-replica at run-time.
+        primary = PostgresqlDatabase(...)
+        read_replica = PostgresqlDatabase(...)
+
+        class BaseModel(Model):
+            class Meta:
+                database = primary
+                model_metadata_class = ThreadSafeDatabaseMetadata
+
+
 .. _signals:
 
 Signal support

@@ -3,6 +3,7 @@ import operator
 from peewee import *
 from playhouse.shortcuts import *
 
+from .base import BaseTestCase
 from .base import DatabaseTestCase
 from .base import ModelTestCase
 from .base import TestModel
@@ -661,3 +662,52 @@ class TestResolveMultiModelQuery(ModelTestCase):
             self.assertEqual(row.__class__, exp_row.__class__)
             self.assertEqual(row.key, exp_row.key)
             self.assertEqual(row.value, exp_row.value)
+
+
+ts_database = get_in_memory_db()
+
+class TSBase(Model):
+    class Meta:
+        database = ts_database
+        model_metadata_class = ThreadSafeDatabaseMetadata
+
+class TSReg(TSBase):
+    key = TextField()
+
+class TestThreadSafeDatabaseMetadata(BaseTestCase):
+    def setUp(self):
+        super(TestThreadSafeDatabaseMetadata, self).setUp()
+        ts_database.create_tables([TSReg])
+
+    def test_threadsafe_database_metadata(self):
+        self.assertTrue(isinstance(TSReg._meta, ThreadSafeDatabaseMetadata))
+        self.assertEqual(TSReg._meta.database, ts_database)
+
+        t1 = TSReg.create(key='k1')
+        t1_db = TSReg.get(TSReg.key == 'k1')
+        self.assertEqual(t1.id, t1_db.id)
+
+    def test_swap_database(self):
+        d1 = get_in_memory_db()
+        d2 = get_in_memory_db()
+
+        class TSKV(TSBase):
+            key = TextField()
+
+        def swap_db():
+            self.assertEqual(TSKV._meta.database, ts_database)
+            d1.bind([TSKV])
+            self.assertEqual(TSKV._meta.database, d1)
+            with d2.bind_ctx([TSKV]):
+                self.assertEqual(TSKV._meta.database, d2)
+            self.assertEqual(TSKV._meta.database, d1)
+
+        self.assertEqual(TSKV._meta.database, ts_database)
+
+        # From a separate thread, swap the database and verify it works
+        # correctly.
+        t = threading.Thread(target=swap_db)
+        t.start() ; t.join()
+
+        # In the main thread the original database has not been altered.
+        self.assertEqual(TSKV._meta.database, ts_database)

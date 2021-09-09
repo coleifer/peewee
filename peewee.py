@@ -6169,6 +6169,7 @@ class ModelBase(type):
             for k in base_meta.__dict__:
                 if k in all_inheritable and k not in meta_options:
                     meta_options[k] = base_meta.__dict__[k]
+            meta_options.setdefault('database', base_meta.database)
             meta_options.setdefault('schema', base_meta.schema)
 
             for (k, v) in b.__dict__.items():
