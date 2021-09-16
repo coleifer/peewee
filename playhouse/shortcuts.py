@@ -274,5 +274,7 @@ class ThreadSafeDatabaseMetadata(Metadata):
     def _get_db(self):
         return getattr(self._local, 'database', self._database)
     def _set_db(self, db):
-        self._local.database = self._database = db
+        if self._database is None:
+            self._database = db
+        self._local.database = db
     database = property(_get_db, _set_db)

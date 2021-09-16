@@ -691,18 +691,18 @@ class TestThreadSafeDatabaseMetadata(BaseTestCase):
         d1 = get_in_memory_db()
         d2 = get_in_memory_db()
 
-        class TSKV(TSBase):
-            key = TextField()
+        class M(TSBase):
+            pass
 
         def swap_db():
-            self.assertEqual(TSKV._meta.database, ts_database)
-            d1.bind([TSKV])
-            self.assertEqual(TSKV._meta.database, d1)
-            with d2.bind_ctx([TSKV]):
-                self.assertEqual(TSKV._meta.database, d2)
-            self.assertEqual(TSKV._meta.database, d1)
+            self.assertEqual(M._meta.database, ts_database)
+            d1.bind([M])
+            self.assertEqual(M._meta.database, d1)
+            with d2.bind_ctx([M]):
+                self.assertEqual(M._meta.database, d2)
+            self.assertEqual(M._meta.database, d1)
 
-        self.assertEqual(TSKV._meta.database, ts_database)
+        self.assertEqual(M._meta.database, ts_database)
 
         # From a separate thread, swap the database and verify it works
         # correctly.
@@ -710,4 +710,30 @@ class TestThreadSafeDatabaseMetadata(BaseTestCase):
         t.start() ; t.join()
 
         # In the main thread the original database has not been altered.
-        self.assertEqual(TSKV._meta.database, ts_database)
+        self.assertEqual(M._meta.database, ts_database)
+
+    def test_preserve_original_db(self):
+        outputs = []
+        d1 = get_in_memory_db()
+        d2 = get_in_memory_db()
+
+        class M(TSBase):
+            class Meta:
+                database = d1
+
+        def swap_db():
+            self.assertTrue(M._meta.database is d1)
+            with d2.bind_ctx([M]):
+                self.assertTrue(M._meta.database is d2)
+            self.assertTrue(M._meta.database is d1)
+            d2.bind([M])  # Now bind to d2 and leave it bound.
+            self.assertTrue(M._meta.database is d2)
+
+        # From a separate thread, swap the database and verify it works
+        # correctly.
+        threads = [threading.Thread(target=swap_db) for _ in range(20)]
+        for t in threads: t.start()
+        for t in threads: t.join()
+
+        # In the main thread the original database has not been altered.
+        self.assertTrue(M._meta.database is d1)
