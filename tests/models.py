@@ -1711,6 +1711,33 @@ class TestDefaultDirtyBehavior(ModelTestCase):
         ac_db = AutoCounter.get(AutoCounter.id == ac.id)
         self.assertEqual(ac_db.counter, 3)
 
+    @requires_models(Person)
+    def test_save_only_dirty(self):
+        today = datetime.date.today()
+        try:
+            for only_save_dirty in (False, True):
+                Person._meta.only_save_dirty = only_save_dirty
+
+                p = Person.create(first='f', last='l', dob=today)
+                p.first = 'f2'
+                p.last = 'l2'
+                p.save(only=[Person.first])
+                self.assertEqual(p.dirty_fields, [Person.last])
+
+                p_db = Person.get(Person.id == p.id)
+                self.assertEqual((p_db.first, p_db.last), ('f2', 'l'))
+
+                p.save()
+                self.assertEqual(p.dirty_fields, [])
+
+                p_db = Person.get(Person.id == p.id)
+                self.assertEqual((p_db.first, p_db.last), ('f2', 'l2'))
+
+                p.delete_instance()
+        finally:
+            # Reset only_save_dirty property for other tests.
+            Person._meta.only_save_dirty = False
+
 
 class TestDefaultValues(ModelTestCase):
     database = get_in_memory_db()

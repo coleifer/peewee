@@ -6594,10 +6594,12 @@ class Model(with_metaclass(ModelBase, Node)):
             if pk is not None and (self._meta.auto_increment or
                                    pk_value is None):
                 self._pk = pk
+                # Although we set the primary-key, do not mark it as dirty.
+                self._dirty.discard(pk_field.name)
         else:
             self.insert(**field_dict).execute()
 
-        self._dirty.clear()
+        self._dirty -= set(field_dict)  # Remove any fields we saved.
         return rows
 
     def is_dirty(self):
