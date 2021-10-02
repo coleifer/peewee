@@ -247,9 +247,11 @@ class TestDateFields(ModelTestCase):
             self.assertEqual(row,
                              (2011, 1, 2, 11, 12, 13, 2012, 2, 3, 3, 13, 37))
         else:
-            self.assertEqual(row, (
-                2011., 1., 2., 11., 12., 13.054321, 2012., 2., 3., 3., 13.,
-                37.))
+            self.assertTrue(row in [
+                (2011., 1., 2., 11., 12., 13.054321, 2012., 2., 3., 3., 13.,
+                 37.),
+                (D('2011'), D('1'), D('2'), D('11'), D('12'), D('13.054321'),
+                 D('2012'), D('2'), D('3'), D('3'), D('13'), D('37'))])
 
     def test_truncate_date(self):
         dm = DateModel.create(
