@@ -20,6 +20,7 @@ from .base import requires_models
 from .base import requires_mysql
 from .base import requires_postgresql
 from .base import skip_if
+from .base import skip_unless
 from .base_models import Sample
 from .base_models import Tweet
 from .base_models import User
@@ -1589,3 +1590,22 @@ class TestWeirdAliases(ModelTestCase):
         assertAlias(SQL('"t1"."username" AS "x.y.(username)"'), 'username')
         if IS_SQLITE:
             assertAlias(SQL('LOWER("t1"."username")'), 'username')
+
+
+
+class NDF(TestModel):
+    key = CharField(primary_key=True)
+    date = DateTimeField(null=True)
+
+class TestBulkUpdateAllNull(ModelTestCase):
+    requires = [NDF]
+
+    @skip_unless(IS_SQLITE or IS_MYSQL, 'postgres cannot do this properly')
+    def test_bulk_update_all_null(self):
+        n1 = NDF.create(key='n1', date=datetime.datetime(2021, 1, 1))
+        n2 = NDF.create(key='n2', date=datetime.datetime(2021, 1, 2))
+        rows = [NDF(key=key, date=None) for key in ('n1', 'n2')]
+        NDF.bulk_update(rows, fields=['date'])
+
+        query = NDF.select().order_by(NDF.key).tuples()
+        self.assertEqual([r for r in query], [('n1', None), ('n2', None)])
