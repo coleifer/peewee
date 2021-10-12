@@ -574,6 +574,7 @@ cdef int pwBestIndex(sqlite3_vtab *pBase, sqlite3_index_info *pIdxInfo) \
         with gil:
     cdef:
         int i
+        int col_idx
         int idxNum = 0, nArg = 0
         peewee_vtab *pVtab = <peewee_vtab *>pBase
         object table_func_cls = <object>pVtab.table_func_cls
@@ -589,11 +590,12 @@ cdef int pwBestIndex(sqlite3_vtab *pBase, sqlite3_index_info *pIdxInfo) \
         if pConstraint.op != SQLITE_INDEX_CONSTRAINT_EQ:
             continue
 
-        columns.append(table_func_cls.params[pConstraint.iColumn -
-                                             table_func_cls._ncols])
-        nArg += 1
-        pIdxInfo.aConstraintUsage[i].argvIndex = nArg
-        pIdxInfo.aConstraintUsage[i].omit = 1
+        col_idx = pConstraint.iColumn - table_func_cls._ncols
+        if col_idx >= 0:
+            columns.append(table_func_cls.params[col_idx])
+            nArg += 1
+            pIdxInfo.aConstraintUsage[i].argvIndex = nArg
+            pIdxInfo.aConstraintUsage[i].omit = 1
 
     if nArg > 0 or nParams == 0:
         if nArg == nParams:
