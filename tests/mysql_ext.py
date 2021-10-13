@@ -10,8 +10,16 @@ from .base import ModelTestCase
 from .base import TestModel
 from .base import db_loader
 from .base import requires_mysql
+from .base import skip_if
 from .base import skip_unless
 
+
+try:
+    import mariadb
+except ImportError:
+    mariadb = mariadb_db = None
+else:
+    mariadb_db = db_loader('mariadb')
 
 mysql_ext_db = db_loader('mysqlconnector')
 
@@ -35,6 +43,7 @@ class KJ(TestModel):
 
 @requires_mysql
 class TestMySQLConnector(ModelTestCase):
+    database = mysql_ext_db
     requires = [Person, Note]
 
     def test_basic_operations(self):
@@ -50,6 +59,10 @@ class TestMySQLConnector(ModelTestCase):
                 for person, notes in data:
                     for note in notes:
                         Note.create(person=person, content=note)
+
+            with self.database.atomic() as sp:
+                Person.create(first='x', last='y')
+                sp.rollback()
 
         people = Person.select().order_by(Person.first)
         self.assertEqual([person.first for person in people],
@@ -67,6 +80,12 @@ class TestMySQLConnector(ModelTestCase):
                 ('huey', 'meow'),
                 ('huey', 'purr'),
                 ('charlie', 'zai')])
+
+
+@requires_mysql
+@skip_if(mariadb is None, 'mariadb connector not installed')
+class TestMariaDBConnector(TestMySQLConnector):
+    database = mariadb_db
 
 
 @requires_mysql

@@ -1597,10 +1597,11 @@ MySQL Extensions
 ----------------
 
 Peewee provides an alternate database implementation for using the
-`mysql-connector <https://dev.mysql.com/doc/connector-python/en/>`_ driver. The
-implementation can be found in ``playhouse.mysql_ext``.
+`mysql-connector <https://dev.mysql.com/doc/connector-python/en/>`_ driver or
+the `mariadb-connector <https://mariadb-corporation.github.io/mariadb-connector-python/>`_.
+The implementations can be found in ``playhouse.mysql_ext``.
 
-Example usage:
+Example usage of mysql-connector:
 
 .. code-block:: python
 
@@ -1608,6 +1609,23 @@ Example usage:
 
     # MySQL database implementation that utilizes mysql-connector driver.
     db = MySQLConnectorDatabase('my_database', host='1.2.3.4', user='mysql')
+
+Example usage of mariadb-connector:
+
+.. code-block:: python
+
+    from playhouse.mysql_ext import MariaDBConnectorDatabase
+
+    # MySQL database implementation that utilizes mysql-connector driver.
+    db = MariaDBConnectorDatabase('my_database', host='1.2.3.4', user='mysql')
+
+.. note::
+    The :py:class:`MariaDBConnectorDatabase` does **not** accept the following
+    parameters:
+
+    * ``charset`` (it is always utf8mb4)
+    * ``sql_mode``
+    * ``use_unicode``
 
 Additional MySQL-specific helpers:
 

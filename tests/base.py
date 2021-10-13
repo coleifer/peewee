@@ -12,6 +12,7 @@ except ImportError:
 
 from peewee import *
 from peewee import sqlite3
+from playhouse.mysql_ext import MariaDBConnectorDatabase
 from playhouse.mysql_ext import MySQLConnectorDatabase
 from playhouse.cockroachdb import CockroachDatabase
 from playhouse.cockroachdb import NESTED_TX_MIN_VERSION
@@ -27,6 +28,7 @@ def db_loader(engine, name='peewee_test', db_class=None, **params):
             MySQLDatabase: ['mysql'],
             PostgresqlDatabase: ['postgres', 'postgresql'],
             MySQLConnectorDatabase: ['mysqlconnector'],
+            MariaDBConnectorDatabase: ['mariadb', 'maridbconnector'],
             CockroachDatabase: ['cockroach', 'cockroachdb', 'crdb'],
         }
         engine_map = dict((alias, db) for db, aliases in engine_aliases.items()
@@ -52,9 +54,9 @@ def get_in_memory_db(**params):
 BACKEND = os.environ.get('PEEWEE_TEST_BACKEND') or 'sqlite'
 VERBOSITY = int(os.environ.get('PEEWEE_TEST_VERBOSITY') or 1)
 
-IS_SQLITE = BACKEND in ('sqlite', 'sqlite3')
-IS_MYSQL = BACKEND in ('mysql', 'mysqlconnector')
-IS_POSTGRESQL = BACKEND in ('postgres', 'postgresql')
+IS_SQLITE = BACKEND.startswith('sqlite')
+IS_MYSQL = BACKEND.startswith(('mysql', 'maria'))
+IS_POSTGRESQL = BACKEND.startswith('postgres')
 IS_CRDB = BACKEND in ('cockroach', 'cockroachdb', 'crdb')
 
 
