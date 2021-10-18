@@ -2116,6 +2116,7 @@ class Query(BaseQuery):
 
 
 def __compound_select__(operation, inverted=False):
+    @__bind_database__
     def method(self, other):
         if inverted:
             self, other = other, self

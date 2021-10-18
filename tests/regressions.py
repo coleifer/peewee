@@ -1609,3 +1609,24 @@ class TestBulkUpdateAllNull(ModelTestCase):
 
         query = NDF.select().order_by(NDF.key).tuples()
         self.assertEqual([r for r in query], [('n1', None), ('n2', None)])
+
+
+class CQA(TestModel):
+    a = TextField()
+    b = TextField()
+
+
+class TestSelectFromUnion(ModelTestCase):
+    requires = [CQA]
+
+    def test_select_from_union(self):
+        CQA.insert_many([('a%d' % i, 'b%d' % i) for i in range(10)]).execute()
+
+        q1 = CQA.select(CQA.a).order_by(CQA.id).limit(3)
+        q2 = CQA.select(CQA.b).order_by(CQA.id).limit(3)
+
+        wq1 = q1.select_from(SQL('*'))
+        wq2 = q2.select_from(SQL('*'))
+        union = wq1 | wq2
+        data = [val for val, in union.tuples()]
+        self.assertEqual(sorted(data), ['a0', 'a1', 'a2', 'b0', 'b1', 'b2'])
