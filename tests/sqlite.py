@@ -1,4 +1,5 @@
 from decimal import Decimal as D
+import datetime
 import os
 import sys
 
@@ -17,6 +18,7 @@ from .base import get_in_memory_db
 from .base import requires_models
 from .base import skip_if
 from .base import skip_unless
+from .base_models import Person
 from .base_models import User
 from .sqlite_helpers import compile_option
 from .sqlite_helpers import json_installed
@@ -477,7 +479,11 @@ class TestJSONField(ModelTestCase):
             ('k2', [1, 2]),
             ('k3', {'x3': 'y3'}),
             ('k4', {'x4': 'y4'}))
-        self.assertEqual(KeyData.insert_many(data).execute(), 4)
+        res = KeyData.insert_many(data).execute()
+        if database.returning_clause:
+            self.assertEqual([r for r, in res], [1, 2, 3, 4])
+        else:
+            self.assertEqual(res, 4)
 
         vals = [[1, 2], [2, 3], {'x3': 'y3'}, {'x5': 'y5'}]
         pw_vals = [Value(v, unpack=False) for v in vals]
@@ -2262,3 +2268,81 @@ class TestTDecimalField(ModelTestCase):
 
         td2_db = TDecModel.get(TDecModel.id == td2.id)
         self.assertEqual(td2_db.value, D('12345678.0123456789012346'))
+
+
+class KVR(TestModel):
+    key = TextField(primary_key=True)
+    value = IntegerField()
+
+
+@skip_unless(database.returning_clause, 'returning clause required')
+class TestSqliteReturning(ModelTestCase):
+    database = database
+    requires = [Person, User, KVR]
+
+    def test_sqlite_returning(self):
+        iq = User.insert_many([{'username': 'u%s' % i} for i in range(3)])
+        self.assertEqual([r for r, in iq.execute()], [1, 2, 3])
+
+        res = (User
+               .insert_many([{'username': 'u%s' % i} for i in (4, 5)])
+               .returning(User)
+               .execute())
+        self.assertEqual([(r.id, r.username) for r in res],
+                         [(4, 'u4'), (5, 'u5')])
+
+        # Simple insert returns the ID.
+        res = User.insert(username='u6').execute()
+        self.assertEqual(res, 6)
+
+    def test_sqlite_on_conflict_returning(self):
+        p = Person.create(first='f1', last='l1', dob='1990-01-01')
+        self.assertEqual(p.id, 1)
+
+        iq = Person.insert_many([
+            {'first': 'f%s' % i, 'last': 'l%s' %i, 'dob': '1990-01-%02d' % i}
+            for i in range(1, 3)])
+        iq = iq.on_conflict(conflict_target=[Person.first, Person.last],
+                            update={'dob': '2000-01-01'})
+        p1, p2 = iq.returning(Person).execute()
+
+        self.assertEqual((p1.first, p1.last), ('f1', 'l1'))
+        self.assertEqual(p1.dob, datetime.date(2000, 1, 1))
+        self.assertEqual((p2.first, p2.last), ('f2', 'l2'))
+        self.assertEqual(p2.dob, datetime.date(1990, 1, 2))
+
+        p3 = Person.insert(first='f3', last='l3', dob='1990-01-03').execute()
+        self.assertEqual(p3, 3)
+
+    def test_text_pk(self):
+        res = KVR.create(key='k1', value=1)
+        self.assertEqual((res.key, res.value), ('k1', 1))
+
+        res = KVR.insert(key='k2', value=2).execute()
+        self.assertEqual(res, 'k2')
+
+        # insert_many() returns the primary-key as usual.
+        iq = KVR.insert_many([{'key': 'k%s' % i, 'value': i} for i in (3, 4)])
+        self.assertEqual([r for r, in iq.execute()], ['k3', 'k4'])
+
+        iq = KVR.insert_many([{'key': 'k%s' % i, 'value': i} for i in (4, 5)])
+        iq = iq.on_conflict(conflict_target=[KVR.key],
+                            update={KVR.value: KVR.value + 10})
+        res = iq.returning(KVR).execute()
+        self.assertEqual([(r.key, r.value) for r in res],
+                         [('k4', 14), ('k5', 5)])
+
+        res = (KVR
+               .update(value=KVR.value + 10)
+               .where(KVR.key.in_(['k1', 'k3', 'kx']))
+               .returning(KVR)
+               .execute())
+        self.assertEqual([(r.key, r.value) for r in res],
+                         [('k1', 11), ('k3', 13)])
+
+        res = (KVR.delete()
+               .where(KVR.key.not_in(['k2', 'k3', 'k4']))
+               .returning(KVR)
+               .execute())
+        self.assertEqual([(r.key, r.value) for r in res],
+                         [('k1', 11), ('k5', 5)])

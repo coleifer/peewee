@@ -10,6 +10,7 @@ except ImportError:
     mariadb = None
 
 from peewee import ImproperlyConfigured
+from peewee import Insert
 from peewee import MySQLDatabase
 from peewee import NodeList
 from peewee import SQL
@@ -53,7 +54,19 @@ class MariaDBConnectorDatabase(MySQLDatabase):
         version = conn.server_version
         version, point = divmod(version, 100)
         version, minor = divmod(version, 100)
-        return (version, minor, point)
+        self.server_version = (version, minor, point)
+        if self.server_version >= (10, 5, 0):
+            self.returning_clause = True
+
+    def last_insert_id(self, cursor, query_type=None):
+        if not self.returning_clause:
+            return cursor.lastrowid
+        elif query_type == Insert.SIMPLE:
+            try:
+                return cursor[0][0]
+            except (AttributeError, IndexError):
+                return cursor.lastrowid
+        return cursor
 
 
 class JSONField(TextField):
