@@ -7146,8 +7146,8 @@ class ModelSelect(BaseModelSelect, Select):
     @Node.copy
     def join(self, dest, join_type=JOIN.INNER, on=None, src=None, attr=None):
         src = self._join_ctx if src is None else src
-
-        if join_type == JOIN.LATERAL or join_type == JOIN.LEFT_LATERAL:
+        
+        if join_type in [JOIN.LATERAL, JOIN.LEFT_LATERAL]:
             on = True
         elif join_type != JOIN.CROSS:
             on, attr, constructor = self._normalize_join(src, dest, on, attr)
