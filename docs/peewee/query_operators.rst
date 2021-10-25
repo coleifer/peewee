@@ -197,9 +197,12 @@ Here is how you might add support for ``modulo`` in SQLite:
 .. code-block:: python
 
     from peewee import *
-    from peewee import Expression # the building block for expressions
+    from peewee import Expression  # The building block for expressions.
 
     def mod(lhs, rhs):
+        # Note: this works with Sqlite, but some drivers may use string-
+        # formatting before sending the query to the database, so you may
+        # need to use '%%' instead here.
         return Expression(lhs, '%', rhs)
 
 Now you can use these custom operators to build richer queries:
