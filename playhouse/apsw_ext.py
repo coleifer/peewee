@@ -23,6 +23,7 @@ from peewee import BooleanField as _BooleanField
 from peewee import DateField as _DateField
 from peewee import DateTimeField as _DateTimeField
 from peewee import DecimalField as _DecimalField
+from peewee import Insert
 from peewee import TimeField as _TimeField
 from peewee import logger
 
@@ -91,7 +92,14 @@ class APSWDatabase(SqliteExtDatabase):
             conn.loadextension(extension)
 
     def last_insert_id(self, cursor, query_type=None):
-        return cursor.getconnection().last_insert_rowid()
+        if not self.returning_clause:
+            return cursor.getconnection().last_insert_rowid()
+        elif query_type == Insert.SIMPLE:
+            try:
+                return cursor[0][0]
+            except (AttributeError, IndexError, TypeError):
+                return cursor.getconnection().last_insert_rowid()
+        return cursor
 
     def rows_affected(self, cursor):
         return cursor.getconnection().changes()
