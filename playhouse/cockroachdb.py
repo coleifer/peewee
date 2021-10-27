@@ -66,10 +66,14 @@ class CockroachDatabase(PostgresqlDatabase):
     nulls_ordering = False
     release_after_rollback = True
 
-    def __init__(self, *args, **kwargs):
-        kwargs.setdefault('user', 'root')
-        kwargs.setdefault('port', 26257)
-        super(CockroachDatabase, self).__init__(*args, **kwargs)
+    def __init__(self, database, *args, **kwargs):
+        # Unless a DSN or database connection-url were specified, provide
+        # convenient defaults for the user and port.
+        if 'dsn' not in kwargs and (database and
+                                    not database.startswith('postgresql://')):
+            kwargs.setdefault('user', 'root')
+            kwargs.setdefault('port', 26257)
+        super(CockroachDatabase, self).__init__(database, *args, **kwargs)
 
     def _set_server_version(self, conn):
         curs = conn.cursor()

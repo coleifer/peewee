@@ -12,6 +12,15 @@ peewee.
 
     db = CockroachDatabase('my_app', user='root', host='10.1.0.8')
 
+If you are using `Cockroach Cloud <https://cockroachlabs.cloud/>`_, you may
+find it easier to specify the connection parameters using a connection-string:
+
+.. code-block:: python
+
+    db = CockroachDatabase('postgresql://root:secret@host:26257/defaultdb...')
+
+.. note:: CockroachDB requires the ``psycopg2`` (postgres) Python driver.
+
 The ``playhouse.cockroachdb`` extension module provides the following classes
 and helpers:
 
@@ -165,6 +174,8 @@ CRDB APIs
     Additional keyword arguments are passed to the psycopg2 connection
     constructor, and may be used to specify the database ``user``, ``port``,
     etc.
+
+    Alternatively, the connection details can be specified in URL-form.
 
     .. py:method:: run_transaction(callback[, max_attempts=None[, system_time=None[, priority=None]]])
 

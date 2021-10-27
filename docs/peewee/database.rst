@@ -56,6 +56,10 @@ the appropriate database-specific module and use the database class provided:
     # Use CockroachDB.
     db = CockroachDatabase('my_app', user='root', port=26257, host='10.1.0.8')
 
+    # CockroachDB connections may require a number of parameters, which can
+    # alternatively be specified using a connection-string.
+    db = CockroachDatabase('postgresql://...')
+
 For more information on database extensions, see:
 
 * :ref:`postgres_ext`
@@ -192,6 +196,15 @@ class, defined in ``playhouse.cockroachdb``:
     from playhouse.cockroachdb import CockroachDatabase
 
     db = CockroachDatabase('my_app', user='root', port=26257, host='localhost')
+
+If you are using `Cockroach Cloud <https://cockroachlabs.cloud/>`_, you may
+find it easier to specify the connection parameters using a connection-string:
+
+.. code-block:: python
+
+    db = CockroachDatabase('postgresql://root:secret@host:26257/defaultdb...')
+
+.. note:: CockroachDB requires the ``psycopg2`` (postgres) Python driver.
 
 CRDB provides client-side transaction retries, which are available using a
 special :py:meth:`CockroachDatabase.run_transaction` helper-method. This method

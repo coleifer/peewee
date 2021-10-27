@@ -3789,7 +3789,16 @@ class PostgresqlDatabase(Database):
     def _connect(self):
         if psycopg2 is None:
             raise ImproperlyConfigured('Postgres driver not installed!')
-        conn = psycopg2.connect(database=self.database, **self.connect_params)
+
+        # Handle connection-strings nicely, since psycopg2 will accept them,
+        # and they may be easier when lots of parameters are specified.
+        params = self.connect_params.copy()
+        if self.database.startswith('postgresql://'):
+            params.setdefault('dsn', self.database)
+        else:
+            params.setdefault('dbname', self.database)
+
+        conn = psycopg2.connect(**params)
         if self._register_unicode:
             pg_extensions.register_type(pg_extensions.UNICODE, conn)
             pg_extensions.register_type(pg_extensions.UNICODEARRAY, conn)
