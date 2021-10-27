@@ -7,10 +7,14 @@ https://github.com/coleifer/peewee/releases
 
 ## master
 
-* Fix bug in APSW extension with Sqlite 3.35 and newer, due to handling of last
-  insert rowid with RETURNING. Refs #2479.
+[View commits](https://github.com/coleifer/peewee/compare/3.14.7...master)
 
-[View commits](https://github.com/coleifer/peewee/compare/3.14.6...master)
+## 3.14.7
+
+Fix bug in APSW extension with Sqlite 3.35 and newer, due to handling of last
+insert rowid with RETURNING. Refs #2479.
+
+[View commits](https://github.com/coleifer/peewee/compare/3.14.6...3.14.7)
 
 ## 3.14.6
 
