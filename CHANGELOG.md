@@ -7,7 +7,47 @@ https://github.com/coleifer/peewee/releases
 
 ## master
 
-[View commits](https://github.com/coleifer/peewee/compare/3.14.4...master)
+[View commits](https://github.com/coleifer/peewee/compare/3.14.5...master)
+
+## 3.14.5
+
+This release contains a number of bug-fixes and small improvements.
+
+* Only raise `DoesNotExist` when `lazy_load` is enabled on ForeignKeyField,
+  fixes issue #2377.
+* Add missing convenience method `ModelSelect.get_or_none()`
+* Allow `ForeignKeyField` to specify a custom `BackrefAccessorClass`,
+  references issue #2391.
+* Ensure foreign-key-specific conversions are applied on INSERT and UPDATE,
+  fixes #2408.
+* Add handling of MySQL error 4031 (inactivity timeout) to the `ReconnectMixin`
+  helper class. Fixes #2419.
+* Support specification of conflict target for ON CONFLICT/DO NOTHING.
+* Add `encoding` parameter to the DataSet `freeze()` and `thaw()` methods,
+  fixes #2425.
+* Fix bug which prevented `DeferredForeignKey` from being used as a model's
+  primary key, fixes #2427.
+* Ensure foreign key's related object cache is cleared when the foreign-key is
+  set to `None`. Fixes #2428.
+* Allow specification of `(schema, table)` to be used with CREATE TABLE AS...,
+  fixes #2423.
+* Allow reusing open connections with DataSet, refs #2441.
+* Add `highlight()` and `snippet()` helpers to Sqlite `SearchField`, for use
+  with full-text search extension.
+* Preserve user-provided aliases in column names. Fixes #2453.
+* Add support for Sqlite 3.37 strict tables.
+* Ensure database is inherited when using `ThreadSafeDatabaseMetadata`, and
+  also adds an implementation in `playhouse.shortcuts` along with basic unit
+  tests.
+* Better handling of Model's dirty fields when saving, fixes #2466.
+* Add basic support for MariaDB connector driver in `playhouse.mysql_ext`, refs
+  issue #2471.
+* Begin a basic implementation for a psycopg3-compatible pg database, refs
+  issue #2473.
+* Add provisional support for RETURNING when using the appropriate versions of
+  Sqlite or MariaDB.
+
+[View commits](https://github.com/coleifer/peewee/compare/3.14.4...3.14.5)
 
 ## 3.14.4
 
