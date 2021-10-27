@@ -7,7 +7,13 @@ https://github.com/coleifer/peewee/releases
 
 ## master
 
-[View commits](https://github.com/coleifer/peewee/compare/3.14.5...master)
+[View commits](https://github.com/coleifer/peewee/compare/3.14.6...master)
+
+## 3.14.6
+
+Fix pesky bug in new `last_insert_id()` on the `SqliteExtDatabase`.
+
+[View commits](https://github.com/coleifer/peewee/compare/3.14.5...3.14.6)
 
 ## 3.14.5
 
