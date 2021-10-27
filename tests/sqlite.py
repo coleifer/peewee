@@ -2295,6 +2295,10 @@ class TestSqliteReturning(ModelTestCase):
         res = User.insert(username='u6').execute()
         self.assertEqual(res, 6)
 
+        iq = User.insert_many([{'username': 'u%s' % i} for i in (7, 8, 9)])
+        curs = iq.namedtuples().execute()
+        self.assertEqual([u.id for u in curs], [7, 8, 9])
+
     def test_sqlite_on_conflict_returning(self):
         p = Person.create(first='f1', last='l1', dob='1990-01-01')
         self.assertEqual(p.id, 1)
