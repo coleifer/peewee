@@ -991,8 +991,8 @@ class SqliteExtDatabase(SqliteDatabase):
             return cursor.lastrowid
         elif query_type == Insert.SIMPLE:
             try:
-                return cursor[0][0]
-            except (AttributeError, IndexError):
+                return cursor.fetchone()[0]
+            except (AttributeError, IndexError, TypeError):
                 return cursor.lastrowid
         return cursor
 
