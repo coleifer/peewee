@@ -7,7 +7,20 @@ https://github.com/coleifer/peewee/releases
 
 ## master
 
-[View commits](https://github.com/coleifer/peewee/compare/3.14.7...master)
+[View commits](https://github.com/coleifer/peewee/compare/3.14.8...master)
+
+## 3.14.8
+
+Back-out all changes to automatically use RETURNING for `SqliteExtDatabase`,
+`CSqliteExtDatabase` and `APSWDatabase`. The issue I found is that when a
+RETURNING cursor is not fully-consumed, any parent SAVEPOINT (and possibly
+transaction) would not be able to be released. Since this is a
+backwards-incompatible change, I am going to back it out for now.
+
+Returning clause can still be specified for Sqlite, however it just needs to be
+done so manually rather than having it applied automatically.
+
+[View commits](https://github.com/coleifer/peewee/compare/3.14.7...3.14.8)
 
 ## 3.14.7
 
