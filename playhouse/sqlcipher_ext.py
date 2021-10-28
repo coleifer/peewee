@@ -65,7 +65,6 @@ __sqlcipher_version__ = sqlcipher.sqlite_version_info
 
 
 class _SqlCipherDatabase(object):
-    returning_clause = __sqlcipher_version__ >= (3, 35, 0)
     server_version = __sqlcipher_version__
 
     def _connect(self):

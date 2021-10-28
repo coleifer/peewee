@@ -2275,14 +2275,16 @@ class KVR(TestModel):
     value = IntegerField()
 
 
-@skip_unless(database.returning_clause, 'returning clause required')
+@skip_unless(database.server_version >= (3, 35, 0), 'sqlite returning clause required')
 class TestSqliteReturning(ModelTestCase):
     database = database
     requires = [Person, User, KVR]
 
     def test_sqlite_returning(self):
-        iq = User.insert_many([{'username': 'u%s' % i} for i in range(3)])
-        self.assertEqual([r for r, in iq.execute()], [1, 2, 3])
+        iq = (User
+              .insert_many([{'username': 'u%s' % i} for i in range(3)])
+              .returning(User.id))
+        self.assertEqual([r.id for r in iq.execute()], [1, 2, 3])
 
         res = (User
                .insert_many([{'username': 'u%s' % i} for i in (4, 5)])
@@ -2295,8 +2297,11 @@ class TestSqliteReturning(ModelTestCase):
         res = User.insert(username='u6').execute()
         self.assertEqual(res, 6)
 
-        iq = User.insert_many([{'username': 'u%s' % i} for i in (7, 8, 9)])
-        curs = iq.namedtuples().execute()
+        iq = (User
+              .insert_many([{'username': 'u%s' % i} for i in (7, 8, 9)])
+              .returning(User)
+              .namedtuples())
+        curs = iq.execute()
         self.assertEqual([u.id for u in curs], [7, 8, 9])
 
     def test_sqlite_on_conflict_returning(self):
@@ -2323,11 +2328,14 @@ class TestSqliteReturning(ModelTestCase):
         self.assertEqual((res.key, res.value), ('k1', 1))
 
         res = KVR.insert(key='k2', value=2).execute()
-        self.assertEqual(res, 'k2')
+        self.assertEqual(res, 2)
+        #self.assertEqual(res, 'k2')
 
         # insert_many() returns the primary-key as usual.
-        iq = KVR.insert_many([{'key': 'k%s' % i, 'value': i} for i in (3, 4)])
-        self.assertEqual([r for r, in iq.execute()], ['k3', 'k4'])
+        iq = (KVR
+              .insert_many([{'key': 'k%s' % i, 'value': i} for i in (3, 4)])
+              .returning(KVR.key))
+        self.assertEqual([r.key for r in iq.execute()], ['k3', 'k4'])
 
         iq = KVR.insert_many([{'key': 'k%s' % i, 'value': i} for i in (4, 5)])
         iq = iq.on_conflict(conflict_target=[KVR.key],

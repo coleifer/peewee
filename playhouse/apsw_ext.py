@@ -92,14 +92,7 @@ class APSWDatabase(SqliteExtDatabase):
             conn.loadextension(extension)
 
     def last_insert_id(self, cursor, query_type=None):
-        if not self.returning_clause:
-            return cursor.getconnection().last_insert_rowid()
-        elif query_type == Insert.SIMPLE:
-            try:
-                return cursor[0][0]
-            except (AttributeError, IndexError, TypeError):
-                return cursor.getconnection().last_insert_rowid()
-        return cursor
+        return cursor.getconnection().last_insert_rowid()
 
     def rows_affected(self, cursor):
         return cursor.getconnection().changes()

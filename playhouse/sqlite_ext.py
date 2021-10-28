@@ -16,7 +16,6 @@ from peewee import OP
 from peewee import VirtualField
 from peewee import merge_dict
 from peewee import sqlite3
-from peewee import __sqlite_version__
 try:
     from playhouse._sqlite_ext import (
         backup,
@@ -944,8 +943,6 @@ def _sqlite_regexp(regex, value):
 
 
 class SqliteExtDatabase(SqliteDatabase):
-    returning_clause = __sqlite_version__ >= (3, 35, 0)
-
     def __init__(self, database, c_extensions=None, rank_functions=True,
                  hash_functions=False, regexp_function=False,
                  bloomfilter=False, json_contains=False, *args, **kwargs):
@@ -985,16 +982,6 @@ class SqliteExtDatabase(SqliteDatabase):
         super(SqliteExtDatabase, self)._add_conn_hooks(conn)
         if self._row_factory:
             conn.row_factory = self._row_factory
-
-    def last_insert_id(self, cursor, query_type=None):
-        if not self.returning_clause:
-            return cursor.lastrowid
-        elif query_type == Insert.SIMPLE:
-            try:
-                return cursor[0][0]
-            except (AttributeError, IndexError, TypeError):
-                return cursor.lastrowid
-        return cursor
 
     def row_factory(self, fn):
         self._row_factory = fn
