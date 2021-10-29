@@ -1979,4 +1979,4 @@ recursive CTE:
 Foreign Keys and Joins
 ----------------------
 
-This section have been moved into its own document: :ref:`relationships`.
+This section has been moved into its own document: :ref:`relationships`.
