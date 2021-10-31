@@ -21,6 +21,37 @@ find it easier to specify the connection parameters using a connection-string:
 
 .. note:: CockroachDB requires the ``psycopg2`` (postgres) Python driver.
 
+.. note::
+    CockroachDB installation and getting-started guide can be
+    found here: https://www.cockroachlabs.com/docs/v21.1/install-cockroachdb.html
+
+SSL Configuration
+^^^^^^^^^^^^^^^^^
+
+SSL certificates are strongly recommended when running a Cockroach cluster.
+Psycopg2 supports SSL out-of-the-box, but you may need to specify some
+additional options when initializing your database:
+
+.. code-block:: python
+
+    db = CockroachDatabase(
+        'my_app',
+        user='root',
+        host='10.1.0.8',
+        sslmode='verify-full',  # Verify the cert common-name.
+        sslrootcert='/path/to/root.crt')
+
+
+    # Or, alternatively, specified as part of a connection-string:
+    db = CockroachDatabase('postgresql://root:secret@host:26257/dbname'
+                           '?sslmode=verify-full&sslrootcert=/path/to/root.crt'
+                           '&options=--cluster=my-cluster-xyz')
+
+More details about client verification can be found on the `libpq docs <https://www.postgresql.org/docs/9.1/libpq-ssl.html>`_.
+
+Cockroach Extension APIs
+^^^^^^^^^^^^^^^^^^^^^^^^
+
 The ``playhouse.cockroachdb`` extension module provides the following classes
 and helpers:
 
