@@ -206,6 +206,10 @@ find it easier to specify the connection parameters using a connection-string:
 
 .. note:: CockroachDB requires the ``psycopg2`` (postgres) Python driver.
 
+.. note::
+    CockroachDB installation and getting-started guide can be
+    found here: https://www.cockroachlabs.com/docs/stable/install-cockroachdb.html
+
 CRDB provides client-side transaction retries, which are available using a
 special :py:meth:`CockroachDatabase.run_transaction` helper-method. This method
 accepts a callable, which is responsible for executing any transactional
@@ -234,6 +238,7 @@ Simplest possible example of :py:meth:`~CockroachDatabase.run_transaction`:
 For more information, see:
 
 * :ref:`CRDB extension documentation <crdb>`
+* :ref:`SSL configuration with CockroachDB <crdb_ssl>`
 * :ref:`Arrays <pgarrays>` (postgres-specific, but applies to CRDB)
 * :ref:`JSON <pgjson>` (postgres-specific, but applies to CRDB)
 

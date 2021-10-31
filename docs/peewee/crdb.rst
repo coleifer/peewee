@@ -23,7 +23,10 @@ find it easier to specify the connection parameters using a connection-string:
 
 .. note::
     CockroachDB installation and getting-started guide can be
-    found here: https://www.cockroachlabs.com/docs/v21.1/install-cockroachdb.html
+    found here: https://www.cockroachlabs.com/docs/stable/install-cockroachdb.html
+
+
+.. _crdb_ssl:
 
 SSL Configuration
 ^^^^^^^^^^^^^^^^^
