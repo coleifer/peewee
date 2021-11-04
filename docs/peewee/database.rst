@@ -1099,7 +1099,7 @@ with Postgresql or MySQL. Reasons I prefer gevent:
 * Gevent works with both Python 2 *and* Python 3.
 * Gevent is *Pythonic*. Asyncio is an un-pythonic abomination.
 
-Besides monkey-patching socket, no special steps are required if you are using
+Besides [monkey-patching socket](http://www.gevent.org/intro.html#monkey-patching), no special steps are required if you are using
 **MySQL** with a pure Python driver like `pymysql <https://github.com/PyMySQL/PyMySQL>`_
 or are using `mysql-connector <https://dev.mysql.com/doc/connector-python/en/>`_
 in pure-python mode. MySQL drivers written in C will require special
