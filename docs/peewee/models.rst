@@ -356,6 +356,11 @@ foreign key field's name:
         # in the column.
         print(tweet.user_id, tweet.message)
 
+.. note::
+    If the ``user`` field was defined with a ``column_name``, additionally 
+    specify ``object_id_name="user_id"`` for the above to take effect (instead
+    of raising an ``AttributeError``.
+    
 To prevent accidentally resolving a foreign-key and triggering an additional
 query, :py:class:`ForeignKeyField` supports an initialization paramater
 ``lazy_load`` which, when disabled, behaves like the ``"_id"`` attribute. For
