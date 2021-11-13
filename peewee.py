@@ -4032,6 +4032,18 @@ class MySQLDatabase(Database):
         warnings.warn('Unable to determine MySQL version: "%s"' % version)
         return (0, 0, 0)  # Unable to determine version!
 
+    def is_connection_usable(self):
+        if self._state.closed:
+            return False
+
+        conn = self._state.conn
+        if hasattr(conn, 'ping'):
+            try:
+                conn.ping(False)
+            except Exception:
+                return False
+        return True
+
     def default_values_insert(self, ctx):
         return ctx.literal('() VALUES ()')
 
