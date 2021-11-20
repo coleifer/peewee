@@ -568,14 +568,16 @@ its advanced features.
 Sqlcipher backend
 -----------------
 
-* Although this extention's code is short, it has not been properly
-  peer-reviewed yet and may have introduced vulnerabilities.
+.. note::
+    Although this extention's code is short, it has not been properly
+    peer-reviewed yet and may have introduced vulnerabilities.
 
-Also note that this code relies on pysqlcipher_ and sqlcipher_, and
-the code there might have vulnerabilities as well, but since these
+Also note that this code relies on sqlcipher3_ (python bindings) and sqlcipher_,
+and the code there might have vulnerabilities as well, but since these
 are widely used crypto modules, we can expect "short zero days" there.
 
-..  _pysqlcipher: https://pypi.python.org/pypi/pysqlcipher3
+..  _sqlcipher3: https://pypi.python.org/pypi/sqlcipher3
+..  _pysqlcipher3: https://pypi.python.org/pypi/pysqlcipher3
 ..  _sqlcipher: http://sqlcipher.net
 
 sqlcipher_ext API notes
@@ -584,7 +586,7 @@ sqlcipher_ext API notes
 .. py:class:: SqlCipherDatabase(database, passphrase, **kwargs)
 
     Subclass of :py:class:`SqliteDatabase` that stores the database
-    encrypted. Instead of the standard ``sqlite3`` backend, it uses pysqlcipher_:
+    encrypted. Instead of the standard ``sqlite3`` backend, it uses sqlcipher3_:
     a python wrapper for sqlcipher_, which -- in turn -- is an encrypted wrapper
     around ``sqlite3``, so the API is *identical* to :py:class:`SqliteDatabase`'s,
     except for object construction parameters:
