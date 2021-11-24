@@ -3646,6 +3646,10 @@ Basic usage:
 
     DATABASE = 'postgresql://postgres:password@localhost:5432/my_database'
 
+    # If we want to exclude particular views from the automatic connection
+    # management, we list them this way:
+    FLASKDB_EXCLUDED_ROUTES = ('logout',)
+
     app = Flask(__name__)
     app.config.from_object(__name__)
 

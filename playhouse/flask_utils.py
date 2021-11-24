@@ -85,11 +85,51 @@ def get_next_url(default='/'):
     return default
 
 class FlaskDB(object):
-    def __init__(self, app=None, database=None, model_class=Model):
+    """
+    Convenience wrapper for configuring a Peewee database for use with a Flask
+    application. Provides a base `Model` class and registers handlers to manage
+    the database connection during the request/response cycle.
+
+    Usage::
+
+        from flask import Flask
+        from peewee import *
+        from playhouse.flask_utils import FlaskDB
+
+
+        # The database can be specified using a database URL, or you can pass a
+        # Peewee database instance directly:
+        DATABASE = 'postgresql:///my_app'
+        DATABASE = PostgresqlDatabase('my_app')
+
+        # If we do not want connection-management on any views, we can specify
+        # the view names using FLASKDB_EXCLUDED_ROUTES. The db connection will
+        # not be opened/closed automatically when these views are requested:
+        FLASKDB_EXCLUDED_ROUTES = ('logout',)
+
+        app = Flask(__name__)
+        app.config.from_object(__name__)
+
+        # Now we can configure our FlaskDB:
+        flask_db = FlaskDB(app)
+
+        # Or use the "deferred initialization" pattern:
+        flask_db = FlaskDB()
+        flask_db.init_app(app)
+
+        # The `flask_db` provides a base Model-class for easily binding models
+        # to the configured database:
+        class User(flask_db.Model):
+            email = CharField()
+
+    """
+    def __init__(self, app=None, database=None, model_class=Model,
+                 excluded_routes=None):
         self.database = None  # Reference to actual Peewee database instance.
         self.base_model_class = model_class
         self._app = app
         self._db = database  # dict, url, Database, or None (default).
+        self._excluded_routes = excluded_routes or ()
         if app is not None:
             self.init_app(app)
 
@@ -106,6 +146,9 @@ class FlaskDB(object):
                                  'database: DATABASE or DATABASE_URL.')
         else:
             initial_db = self._db
+
+        if 'FLASKDB_EXCLUDED_ROUTES' in app.config:
+            self._excluded_routes = app.config['FLASKDB_EXCLUDED_ROUTES']
 
         self._load_database(app, initial_db)
         self._register_handlers(app)
@@ -178,8 +221,12 @@ class FlaskDB(object):
         return self._model_class
 
     def connect_db(self):
+        if self._excluded_routes and request.endpoint in self._excluded_routes:
+            return
         self.database.connect()
 
     def close_db(self, exc):
+        if self._excluded_routes and request.endpoint in self._excluded_routes:
+            return
         if not self.database.is_closed():
             self.database.close()
