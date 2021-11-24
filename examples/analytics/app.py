@@ -1,10 +1,9 @@
 """
 Example "Analytics" app. To start using this on your site, do the following:
 
-* Create a postgresql database with HStore support:
+* Create a postgresql database:
 
     createdb analytics
-    psql analytics -c "create extension hstore;"
 
 * Create an account for each domain you intend to collect analytics for, e.g.
 
@@ -29,7 +28,7 @@ import binascii
 
 from flask import Flask, Response, abort, g, request
 from peewee import *
-from playhouse.postgres_ext import HStoreField, PostgresqlExtDatabase
+from playhouse.postgres_ext import BinaryJSONField, PostgresqlExtDatabase
 
 # Analytics settings.
 # 1px gif.
@@ -49,10 +48,7 @@ SECRET_KEY = 'secret - change me'  # TODO: change me.
 app = Flask(__name__)
 app.config.from_object(__name__)
 
-database = PostgresqlExtDatabase(
-    DATABASE_NAME,
-    register_hstore=True,
-    user='postgres')
+database = PostgresqlExtDatabase(DATABASE_NAME, user='postgres')
 
 
 class BaseModel(Model):
@@ -76,8 +72,8 @@ class PageView(BaseModel):
     title = TextField(default='')
     ip = CharField(default='')
     referrer = TextField(default='')
-    headers = HStoreField()
-    params = HStoreField()
+    headers = BinaryJSONField()
+    params = BinaryJSONField()
 
     @classmethod
     def create_from_request(cls, account, request):
