@@ -2046,7 +2046,7 @@ Hybrid Attributes
 
 Hybrid attributes encapsulate functionality that operates at both the Python
 *and* SQL levels. The idea for hybrid attributes comes from a feature of the
-`same name in SQLAlchemy <http://docs.sqlalchemy.org/en/improve_toc/orm/extensions/hybrid.html>`_.
+`same name in SQLAlchemy <https://docs.sqlalchemy.org/en/14/orm/extensions/hybrid.html>`_.
 Consider the following example:
 
 .. code-block:: python
