@@ -372,6 +372,9 @@ class TestArrayField(ModelTestCase):
         assertAM(T.contains('omega', 'delta'))
         assertAM(T.contains('汉语'), am5)
         assertAM(T.contains('alpha', 'delta'), am)
+        assertAM(T.contained_by('alpha', 'beta', 'delta'), am2, am3)
+        assertAM(T.contained_by('alpha', 'beta', 'gamma', 'delta'),
+                 am, am2, am3)
 
         # Check for any.
         assertAM(T.contains_any('beta'), am, am2)

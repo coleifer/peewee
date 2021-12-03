@@ -42,6 +42,7 @@ HCONTAINS_ANY_KEY = '?|'
 HKEY = '->'
 HUPDATE = '||'
 ACONTAINS = '@>'
+ACONTAINED_BY = '<@'
 ACONTAINS_ANY = '&&'
 TS_MATCH = '@@'
 JSONB_CONTAINS = '@>'
@@ -228,6 +229,9 @@ class ArrayField(IndexedFieldMixin, Field):
 
     def contains_any(self, *items):
         return Expression(self, ACONTAINS_ANY, ArrayValue(self, items))
+
+    def contained_by(self, *items):
+        return Expression(self, ACONTAINED_BY, ArrayValue(self, items))
 
 
 class ArrayValue(Node):
