@@ -1461,6 +1461,27 @@ then close it when the response is returned.
         if not db.is_closed():
             db.close()
 
+BlackSheep
+^^^^^^^^^^
+See `Application events https://www.neoteroi.dev/blacksheep/application/#application-events`_.
+
+.. code-block:: python
+
+    from blacksheep import Application
+    from peewee import *
+
+    db = SqliteDatabase('my_app.db')
+    app = Application()
+
+    @app.on_start
+    async def startup(application: Application):
+        db.connect()
+
+    @app.on_stop
+    async def shutdown(application: Application):
+        if not db.is_closed():
+            db.close()
+
 
 Other frameworks
 ^^^^^^^^^^^^^^^^
