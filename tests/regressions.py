@@ -1256,11 +1256,15 @@ class UUIDReg(TestModel):
     id = UUIDField(primary_key=True, default=uuid.uuid4)
     key = TextField()
 
+class CharPKKV(TestModel):
+    id = CharField(primary_key=True)
+    key = TextField()
+    value = IntegerField(default=0)
 
-class TestBulkUpdateUUIDPK(ModelTestCase):
-    requires = [UUIDReg]
 
+class TestBulkUpdateNonIntegerPK(ModelTestCase):
     @skip_if(sys.version_info[0] == 2)
+    @requires_models(UUIDReg)
     def test_bulk_update_uuid_pk(self):
         r1 = UUIDReg.create(key='k1')
         r2 = UUIDReg.create(key='k2')
@@ -1271,6 +1275,22 @@ class TestBulkUpdateUUIDPK(ModelTestCase):
         r1_db, r2_db = UUIDReg.select().order_by(UUIDReg.key)
         self.assertEqual(r1_db.key, 'k1-x')
         self.assertEqual(r2_db.key, 'k2-x')
+
+    @requires_models(CharPKKV)
+    def test_bulk_update_non_integer_pk(self):
+        a, b, c = [CharPKKV.create(id=c, key='k%s' % c) for c in 'abc']
+        a.key = 'ka-x'
+        a.value = 1
+        b.value = 2
+        c.key = 'kc-x'
+        c.value = 3
+        CharPKKV.bulk_update((a, b, c), (CharPKKV.key, CharPKKV.value))
+
+        data = list(CharPKKV.select().order_by(CharPKKV.id).tuples())
+        self.assertEqual(data, [
+            ('a', 'ka-x', 1),
+            ('b', 'kb', 2),
+            ('c', 'kc-x', 3)])
 
 
 class TestSaveClearingPK(ModelTestCase):
