@@ -7596,6 +7596,9 @@ class ModelCursorWrapper(BaseModelCursorWrapper):
                 accum.append(curr.rhs)
                 continue
 
+            if isinstance(curr, SQL):
+                continue
+
             if curr not in self.joins:
                 continue
 
