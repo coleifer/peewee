@@ -2,10 +2,16 @@ import os
 import platform
 import sys
 import warnings
-from distutils.command.build_ext import build_ext
-from distutils.errors import CCompilerError
-from distutils.errors import DistutilsExecError
-from distutils.errors import DistutilsPlatformError
+try:
+    from distutils.command.build_ext import build_ext
+    from distutils.errors import CCompilerError
+    from distutils.errors import DistutilsExecError
+    from distutils.errors import DistutilsPlatformError
+except ImportError:
+    from setuptools._distutils.command.build_ext import build_ext
+    from setuptools._distutils.errors import CCompilerError
+    from setuptools._distutils.errors import DistutilsExecError
+    from setuptools._distutils.errors import DistutilsPlatformError
 
 from setuptools import setup
 from setuptools.extension import Extension
@@ -56,8 +62,12 @@ sqlite_ext_module = Extension(
 def _have_sqlite_extension_support():
     import shutil
     import tempfile
-    from distutils.ccompiler import new_compiler
-    from distutils.sysconfig import customize_compiler
+    try:
+        from distutils.ccompiler import new_compiler
+        from distutils.sysconfig import customize_compiler
+    except ImportError:
+        from setuptools.command.build_ext import customize_compiler
+        from setuptools.command.build_ext import new_compiler
 
     libraries = ['sqlite3']
     c_code = ('#include <sqlite3.h>\n\n'
