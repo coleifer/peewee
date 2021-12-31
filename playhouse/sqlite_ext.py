@@ -697,6 +697,14 @@ class FTS5Model(BaseFTSModel):
         return cls._fts_cmd('merge', rank=npages)
 
     @classmethod
+    def optimize(cls):
+        return cls._fts_cmd('optimize')
+
+    @classmethod
+    def rebuild(cls):
+        return cls._fts_cmd('rebuild')
+
+    @classmethod
     def set_pgsz(cls, pgsz):
         return cls._fts_cmd('pgsz', rank=pgsz)
 
@@ -707,6 +715,10 @@ class FTS5Model(BaseFTSModel):
     @classmethod
     def delete_all(cls):
         return cls._fts_cmd('delete-all')
+
+    @classmethod
+    def integrity_check(cls, rank=0):
+        return cls._fts_cmd('integrity-check', rank=rank)
 
     @classmethod
     def VocabModel(cls, table_type='row', table=None):

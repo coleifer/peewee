@@ -1272,6 +1272,12 @@ class TestFTS5(BaseFTSTestCase, ModelTestCase):
             ['merge', 4])
         FTS5Test.merge(4)  # Runs without error.
 
+        FTS5Test.insert_many([{'title': 'k%08d' % i, 'data': 'v%08d' % i}
+                              for i in range(100)]).execute()
+
+        FTS5Test.integrity_check(rank=0)
+        FTS5Test.optimize()
+
     def test_create_table_options(self):
         class Test1(FTS5Model):
             f1 = SearchField()
