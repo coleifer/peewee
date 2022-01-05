@@ -3323,6 +3323,10 @@ class Database(_callable_context_manager):
                     yield obj
 
     def table_exists(self, table_name, schema=None):
+        if is_model(table_name):
+            model = table_name
+            table_name = model._meta.table_name
+            schema = model._meta.schema
         return table_name in self.get_tables(schema=schema)
 
     def get_tables(self, schema=None):

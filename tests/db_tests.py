@@ -502,6 +502,10 @@ class TestIntrospection(ModelTestCase):
         self.assertTrue(self.database.table_exists(User._meta.table_name))
         self.assertFalse(self.database.table_exists('nuggies'))
 
+        self.assertTrue(self.database.table_exists(User))
+        class X(TestModel): pass
+        self.assertFalse(self.database.table_exists(X))
+
     def test_get_tables(self):
         tables = self.database.get_tables()
         required = set(m._meta.table_name for m in self.requires)
