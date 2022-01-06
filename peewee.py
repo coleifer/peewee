@@ -6137,7 +6137,11 @@ class Metadata(object):
         self.model._schema._database = database
         del self.table
 
-        # Apply any hooks that have been registered.
+        # Apply any hooks that have been registered. If we have an
+        # uninitialized proxy object, we will treat that as `None`.
+        if isinstance(database, Proxy) and database.obj is None:
+            database = None
+
         for hook in self._db_hooks:
             hook(database)
 

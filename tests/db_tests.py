@@ -734,6 +734,29 @@ class TestDBProxy(BaseTestCase):
         with_manual_commit()
         self.assertFalse(db.in_transaction())
 
+    def test_proxy_bind_ctx_callbacks(self):
+        db = Proxy()
+        class BaseModel(Model):
+            class Meta:
+                database = db
+
+        class Hook(BaseModel):
+            data = BlobField()  # Attaches hook to configure blob-type.
+
+        self.assertTrue(Hook.data._constructor is bytearray)
+
+        class CustomSqliteDB(SqliteDatabase):
+            sentinel = object()
+            def get_binary_type(self):
+                return self.sentinel
+
+        custom_db = CustomSqliteDB(':memory:')
+
+        with custom_db.bind_ctx([Hook]):
+            self.assertTrue(Hook.data._constructor is custom_db.sentinel)
+
+        self.assertTrue(Hook.data._constructor is bytearray)
+
 
 class Data(TestModel):
     key = TextField()
