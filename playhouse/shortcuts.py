@@ -13,7 +13,8 @@ _clone_set = lambda s: set(s) if s else set()
 
 def model_to_dict(model, recurse=True, backrefs=False, only=None,
                   exclude=None, seen=None, extra_attrs=None,
-                  fields_from_query=None, max_depth=None, manytomany=False):
+                  fields_from_query=None, max_depth=None, manytomany=False,
+                  use_column_names=False):
     """
     Convert a model instance (and any related objects) to a dictionary.
 
@@ -69,6 +70,8 @@ def model_to_dict(model, recurse=True, backrefs=False, only=None,
                     only=only,
                     exclude=exclude,
                     max_depth=max_depth - 1))
+            if use_column_names:
+                name = model.fields[name].column_name
             data[name] = accum
 
     for field in model._meta.sorted_fields:
@@ -90,8 +93,11 @@ def model_to_dict(model, recurse=True, backrefs=False, only=None,
                     max_depth=max_depth - 1)
             else:
                 field_data = None
-
-        data[field.name] = field_data
+        if use_column_names:
+            field_name = field.column_name
+        else:
+            field_name = field.name
+        data[field_name] = field_data
 
     if extra_attrs:
         for attr_name in extra_attrs:
