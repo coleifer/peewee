@@ -27,7 +27,7 @@ else:
 
 
 class DataSet(object):
-    def __init__(self, url, **kwargs):
+    def __init__(self, url, include_views=False, **kwargs):
         if isinstance(url, Database):
             self._url = None
             self._database = url
@@ -45,9 +45,11 @@ class DataSet(object):
 
         # Introspect the database and generate models.
         self._introspector = Introspector.from_database(self._database)
+        self._include_views = include_views
         self._models = self._introspector.generate_models(
             skip_invalid=True,
             literal_column_names=True,
+            include_views=self._include_views,
             **kwargs)
         self._migrator = SchemaMigrator.from_database(self._database)
 
@@ -80,7 +82,14 @@ class DataSet(object):
 
     @property
     def tables(self):
-        return self._database.get_tables()
+        tables = self._database.get_tables()
+        if self._include_views:
+            tables += self.views
+        return tables
+
+    @property
+    def views(self):
+        return [v.name for v in self._database.get_views()]
 
     def __contains__(self, table):
         return table in self.tables
@@ -107,7 +116,8 @@ class DataSet(object):
         updated = self._introspector.generate_models(
             skip_invalid=True,
             table_names=dependencies,
-            literal_column_names=True)
+            literal_column_names=True,
+            include_views=self._include_views)
         self._models.update(updated)
 
     def get_table_dependencies(self, table):
@@ -135,10 +145,7 @@ class DataSet(object):
         return self._database.execute_sql(sql, params, commit)
 
     def transaction(self):
-        if self._database.transaction_depth() == 0:
-            return self._database.transaction()
-        else:
-            return self._database.savepoint()
+        return self._database.atomic()
 
     def _check_arguments(self, filename, file_obj, format, format_dict):
         if filename and file_obj:

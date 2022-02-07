@@ -14,10 +14,11 @@ from peewee import *
 from playhouse.dataset import DataSet
 from playhouse.dataset import Table
 
-from .base import db_loader
-from .base import skip_if
+from .base import IS_SQLITE_OLD
 from .base import ModelTestCase
 from .base import TestModel
+from .base import db_loader
+from .base import skip_if
 
 
 db = db_loader('sqlite')
@@ -30,6 +31,7 @@ class Note(TestModel):
     user = ForeignKeyField(User)
     content = TextField()
     timestamp = DateTimeField()
+    status = IntegerField(default=1)
 
 class Category(TestModel):
     name = TextField()
@@ -68,6 +70,35 @@ class TestDataSet(ModelTestCase):
         users = dataset['users']
         users.insert(username='charlie')
         self.assertEqual(list(users), [{'id': 1, 'username': 'charlie'}])
+
+    @skip_if(IS_SQLITE_OLD)
+    def test_with_views(self):
+        self.dataset.query('CREATE VIEW notes_public AS '
+                           'SELECT content, timestamp FROM note '
+                           'WHERE status = 1 ORDER BY timestamp DESC')
+        self.assertTrue('notes_public' in self.dataset.views)
+        self.assertFalse('notes_public' in self.dataset.tables)
+
+        users = self.dataset['user']
+        with self.dataset.transaction():
+            users.insert(username='charlie')
+            users.insert(username='huey')
+
+        notes = self.dataset['note']
+        for i, (ct, st) in enumerate([('n1', 1), ('n2', 2), ('n3', 1)]):
+            notes.insert(content=ct, status=st, user_id='charlie',
+                         timestamp=datetime.datetime(2022, 1, 1 + i))
+
+        self.assertFalse('notes_public' in self.dataset)
+
+        # Create a new dataset instance with views enabled.
+        dataset = DataSet(self.dataset._database, include_views=True)
+        self.assertTrue('notes_public' in dataset)
+        public = dataset['notes_public']
+        self.assertEqual(public.columns, ['content', 'timestamp'])
+        self.assertEqual(list(public), [
+            {'content': 'n3', 'timestamp': datetime.datetime(2022, 1, 3)},
+            {'content': 'n1', 'timestamp': datetime.datetime(2022, 1, 1)}])
 
     def test_item_apis(self):
         dataset = DataSet('sqlite:///:memory:')
@@ -145,7 +176,8 @@ class TestDataSet(ModelTestCase):
 
         note = self.dataset['note']
         columns = sorted(note.columns)
-        self.assertEqual(columns, ['content', 'id', 'timestamp', 'user_id'])
+        self.assertEqual(columns, ['content', 'id', 'status', 'timestamp',
+                                   'user_id'])
 
         category = self.dataset['category']
         columns = sorted(category.columns)
@@ -285,17 +317,20 @@ class TestDataSet(ModelTestCase):
             note.insert(
                 content='note %s' % i,
                 timestamp=datetime.date(2014, 1, i),
+                status=i,
                 user_id='charlie')
 
         notes = sorted(note.all(), key=operator.itemgetter('id'))
         self.assertEqual(notes[0], {
             'content': 'note 1',
             'id': 1,
+            'status': 1,
             'timestamp': datetime.datetime(2014, 1, 1),
             'user_id': 'charlie'})
         self.assertEqual(notes[-1], {
             'content': 'note 3',
             'id': 3,
+            'status': 3,
             'timestamp': datetime.datetime(2014, 1, 3),
             'user_id': 'charlie'})
 
@@ -396,7 +431,8 @@ class TestDataSet(ModelTestCase):
 
         note = self.dataset['note']
         note_ts = datetime.datetime(2017, 1, 2, 3, 4, 5)
-        note.insert(content='foo', timestamp=note_ts, user_id='charlie')
+        note.insert(content='foo', timestamp=note_ts, user_id='charlie',
+                    status=2)
 
         buf = StringIO()
         self.dataset.freeze(note.all(), 'json', file_obj=buf)
@@ -404,6 +440,7 @@ class TestDataSet(ModelTestCase):
             'id': 1,
             'user_id': 'charlie',
             'content': 'foo',
+            'status': 2,
             'timestamp': '2017-01-02 03:04:05'}])
 
         note.delete(id=1)
@@ -415,6 +452,7 @@ class TestDataSet(ModelTestCase):
             'id': 1,
             'user_id': 'charlie',
             'content': 'foo',
+            'status': 2,
             'timestamp': note_ts}])
 
     def test_table_column_creation(self):
