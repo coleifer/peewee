@@ -468,6 +468,8 @@ _alphanum = (set('\t ,"(){}*:_+0123456789') |
              set(_alphabet.upper()) |
              set((chr(26),)))
 _invalid_ascii = set(chr(p) for p in range(128) if chr(p) not in _alphanum)
+del _alphabet
+del _alphanum
 _quote_re = re.compile(r'(?:[^\s"]|"(?:\\.|[^"])*")+')
 
 
