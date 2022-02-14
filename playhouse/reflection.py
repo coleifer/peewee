@@ -5,6 +5,7 @@ except ImportError:
 from collections import namedtuple
 from inspect import isclass
 import re
+import warnings
 
 from peewee import *
 from peewee import _StringField
@@ -684,12 +685,19 @@ class Introspector(object):
                 database = self.metadata.database
                 schema = self.schema
 
+        pending = set()
+
         def _create_model(table, models):
+            pending.add(table)
             for foreign_key in database.foreign_keys[table]:
                 dest = foreign_key.dest_table
 
                 if dest not in models and dest != table:
-                    _create_model(dest, models)
+                    if dest in pending:
+                        warnings.warn('Possible reference cycle found between '
+                                      '%s and %s' % (table, dest))
+                    else:
+                        _create_model(dest, models)
 
             primary_keys = []
             columns = database.columns[table]
@@ -736,7 +744,11 @@ class Introspector(object):
                         params['model'] = 'self'
                     else:
                         dest_table = column.foreign_key.dest_table
-                        params['model'] = models[dest_table]
+                        if dest_table in models:
+                            params['model'] = models[dest_table]
+                        else:
+                            FieldClass = DeferredForeignKey
+                            params['rel_model_name'] = dest_table
                     if column.to_field:
                         params['field'] = column.to_field
 
@@ -761,6 +773,9 @@ class Introspector(object):
             except ValueError:
                 if not skip_invalid:
                     raise
+            finally:
+                if table in pending:
+                    pending.remove(table)
 
         # Actually generate Model classes.
         for table, model in sorted(database.model_names.items()):
