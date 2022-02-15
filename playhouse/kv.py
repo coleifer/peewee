@@ -38,10 +38,10 @@ class KeyValue(object):
         self._ordered = ordered
         self._database = database or SqliteExtDatabase(':memory:')
         self._table_name = table_name
-        support_on_conflig = (isinstance(self._database, PostgresqlDatabase) or
+        support_on_conflict = (isinstance(self._database, PostgresqlDatabase) or
                               (isinstance(self._database, SqliteDatabase) and
                                self._database.server_version >= (3, 24)))
-        if support_on_conflig:
+        if support_on_conflict:
             self.upsert = self._postgres_upsert
             self.update = self._postgres_update
         else:

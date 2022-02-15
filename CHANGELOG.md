@@ -7,7 +7,23 @@ https://github.com/coleifer/peewee/releases
 
 ## master
 
-[View commits](https://github.com/coleifer/peewee/compare/3.14.8...master)
+[View commits](https://github.com/coleifer/peewee/compare/3.14.9...master)
+
+## 3.14.9
+
+* Allow calling `table_exists()` with a model-class, refs
+* Improve `is_connection_usable()` method of `MySQLDatabase` class.
+* Better support for VIEWs with `playhouse.dataset.DataSet` and sqlite-web.
+* Support INSERT / ON CONFLICT in `playhosue.kv` for newer Sqlite.
+* Add `ArrayField.contained_by()` method, a corollary to `contains()` and
+  the `contains_any()` methods.
+* Support cyclical foreign-key relationships in reflection/introspection, and
+  also for sqlite-web.
+* Add magic methods for FTS5 field to optimize, rebuild and integrity check the
+  full-text index.
+* Add fallbacks in `setup.py` in the event distutils is not available.
+
+[View commits](https://github.com/coleifer/peewee/compare/3.14.8...3.14.9)
 
 ## 3.14.8
 
