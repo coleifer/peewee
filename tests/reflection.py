@@ -574,6 +574,37 @@ class TestReflectViews(BaseReflectionTestCase):
             ('n1', datetime.datetime(2018, 1, 1))])
 
 
+class TestCyclicalFK(BaseReflectionTestCase):
+    @requires_sqlite
+    def test_cyclical_fk(self):
+        # NOTE: this schema was provided by a user.
+        cursor = self.database.cursor()
+        cursor.executescript(
+            'CREATE TABLE flow_run_state (id CHAR(36) NOT NULL, '
+            'flow_run_id CHAR(36) NOT NULL, '
+	    'CONSTRAINT pk_flow_run_state PRIMARY KEY (id), '
+	    'CONSTRAINT fk_flow_run_state__flow_run_id__flow_run '
+            'FOREIGN KEY(flow_run_id) REFERENCES flow_run (id) '
+            'ON DELETE cascade); '
+            'CREATE TABLE flow_run (id CHAR(36) NOT NULL, '
+	    'state_id CHAR(36) NOT NULL, '
+	    'CONSTRAINT pk_flow_run PRIMARY KEY (id), '
+	    'CONSTRAINT fk_flow_run__state_id__flow_run_state '
+            'FOREIGN KEY(state_id) REFERENCES flow_run_state (id) '
+            'ON DELETE SET NULL);')
+        M = self.introspector.generate_models()
+        FRS = M['flow_run_state']
+        FR = M['flow_run']
+        self.assertEqual(sorted(FR._meta.fields), ['id', 'state'])
+        self.assertEqual(sorted(FRS._meta.fields), ['flow_run', 'id'])
+        self.assertTrue(isinstance(FR.id, CharField))
+        self.assertTrue(isinstance(FR.state, ForeignKeyField))
+        self.assertTrue(FR.state.rel_model is FRS)
+        self.assertTrue(isinstance(FRS.id, CharField))
+        self.assertTrue(isinstance(FRS.flow_run, ForeignKeyField))
+        self.assertTrue(FRS.flow_run.rel_model is FR)
+
+
 class Event(TestModel):
     key = TextField()
     timestamp = DateTimeField(index=True)
