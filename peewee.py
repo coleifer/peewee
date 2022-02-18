@@ -2565,9 +2565,7 @@ class Insert(_WriteQuery):
         self._columns = columns
         self._on_conflict = on_conflict
         self._query_type = None
-
-    def where(self, *expressions):
-        raise NotImplementedError('INSERT queries cannot have a WHERE clause.')
+        self._where = None
 
     @Node.copy
     def on_conflict_ignore(self, ignore=True):
@@ -2660,7 +2658,7 @@ class Insert(_WriteQuery):
                     fk_fields.add(column)
             value_lookups[column] = lookups
 
-        ctx.sql(EnclosedNodeList(columns)).literal(' VALUES ')
+        ctx.sql(EnclosedNodeList(columns)).literal(' VALUES ' if self._where is None else ' SELECT ')
         columns_converters = [
             (column, column.db_value if isinstance(column, Field) else None)
             for column in columns]
@@ -2707,7 +2705,7 @@ class Insert(_WriteQuery):
             raise self.DefaultValuesException('Error: no data to insert.')
 
         with ctx.scope_values(subquery=True):
-            return ctx.sql(CommaNodeList(all_values))
+            return ctx.sql(CommaNodeList(all_values if self._where is None else values))
 
     def _query_insert(self, ctx):
         return (ctx
@@ -2750,6 +2748,9 @@ class Insert(_WriteQuery):
                 update = self._on_conflict.get_conflict_update(ctx, self)
                 if update is not None:
                     ctx.literal(' ').sql(update)
+
+            if self._where is not None:
+                ctx.literal(' WHERE ').sql(self._where)
 
             return self.apply_returning(ctx)
 
