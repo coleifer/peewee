@@ -174,6 +174,33 @@ def dict_to_model(model_class, data, ignore_unknown=False):
     return update_model_from_dict(model_class(), data, ignore_unknown)
 
 
+def insert_where(cls, data, *where):
+    """
+    Helper for generating conditional INSERT queries.
+
+    For example, prevent INSERTing a new tweet if the user has tweeted within
+    the last hour::
+
+        INSERT INTO "tweet" ("user_id", "content", "timestamp")
+        SELECT 234, 'some content', now()
+        WHERE NOT EXISTS (
+            SELECT 1 FROM "tweet"
+            WHERE user_id = 234 AND timestamp > now() - interval '1 hour')
+
+    Using this helper:
+
+        iq = insert_where(Tweet, {
+            Tweet.user: user_obj,
+            Tweet.content: 'some content',
+            Tweet.timestamp: datetime.now()},
+            (Tweet.user == user_obj) & (Tweet.timestamp > one_hour_ago))
+        res = iq.execute()
+    """
+    fields, values = zip(*data.items())
+    sq = Select(columns=values).where(~fn.EXISTS(cls.select().where(*where)))
+    return cls.insert_from(sq, fields)
+
+
 class ReconnectMixin(object):
     """
     Mixin class that attempts to automatically reconnect to the database under

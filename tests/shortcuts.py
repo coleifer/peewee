@@ -737,3 +737,24 @@ class TestThreadSafeDatabaseMetadata(BaseTestCase):
 
         # In the main thread the original database has not been altered.
         self.assertTrue(M._meta.database is d1)
+
+
+class TestInsertWhere(ModelTestCase):
+    requires = [User, Tweet]
+
+    def test_insert_where(self):
+        ua, ub = [User.create(username=n) for n in 'ab']
+
+        def _insert_where(user, content):
+            iq = insert_where(Tweet, {
+                Tweet.user: user,
+                Tweet.content: content},
+                (Tweet.user == user) & (Tweet.content == content))
+            return 1 if iq.execute() else 0
+
+        self.assertEqual(_insert_where(ua, 't1'), 1)
+        self.assertEqual(_insert_where(ua, 't2'), 1)
+        self.assertEqual(_insert_where(ua, 't1'), 0)
+        self.assertEqual(_insert_where(ua, 't2'), 0)
+        self.assertEqual(_insert_where(ub, 't1'), 1)
+        self.assertEqual(_insert_where(ub, 't2'), 1)
