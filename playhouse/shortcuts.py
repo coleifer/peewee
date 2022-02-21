@@ -174,7 +174,7 @@ def dict_to_model(model_class, data, ignore_unknown=False):
     return update_model_from_dict(model_class(), data, ignore_unknown)
 
 
-def insert_where(cls, data, *where):
+def insert_where(cls, data, where=None):
     """
     Helper for generating conditional INSERT queries.
 
@@ -189,15 +189,22 @@ def insert_where(cls, data, *where):
 
     Using this helper:
 
+        cond = ~fn.EXISTS(Tweet.select().where(
+            Tweet.user == user_obj,
+            Tweet.timestamp > one_hour_ago))
+
         iq = insert_where(Tweet, {
             Tweet.user: user_obj,
-            Tweet.content: 'some content',
-            Tweet.timestamp: datetime.now()},
-            (Tweet.user == user_obj) & (Tweet.timestamp > one_hour_ago))
+            Tweet.content: 'some content'}, where=cond)
+
         res = iq.execute()
     """
+    for field, default in cls._meta.defaults.items():
+        if field.name in data or field in data: continue
+        value = default() if callable_(default) else default
+        data[field] = value
     fields, values = zip(*data.items())
-    sq = Select(columns=values).where(~fn.EXISTS(cls.select().where(*where)))
+    sq = Select(columns=values).where(where)
     return cls.insert_from(sq, fields)
 
 

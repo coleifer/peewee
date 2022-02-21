@@ -739,17 +739,26 @@ class TestThreadSafeDatabaseMetadata(BaseTestCase):
         self.assertTrue(M._meta.database is d1)
 
 
+class TIW(TestModel):
+    key = CharField()
+    value = IntegerField(default=0)
+    extra = IntegerField(default=lambda: 1)
+
+
 class TestInsertWhere(ModelTestCase):
-    requires = [User, Tweet]
+    requires = [User, Tweet, TIW]
 
     def test_insert_where(self):
         ua, ub = [User.create(username=n) for n in 'ab']
 
         def _insert_where(user, content):
+            cond = (Tweet.select()
+                    .where(Tweet.user == user, Tweet.content == content))
+            where = ~fn.EXISTS(cond)
             iq = insert_where(Tweet, {
                 Tweet.user: user,
                 Tweet.content: content},
-                (Tweet.user == user) & (Tweet.content == content))
+                where=where)
             return 1 if iq.execute() else 0
 
         self.assertEqual(_insert_where(ua, 't1'), 1)
@@ -758,3 +767,17 @@ class TestInsertWhere(ModelTestCase):
         self.assertEqual(_insert_where(ua, 't2'), 0)
         self.assertEqual(_insert_where(ub, 't1'), 1)
         self.assertEqual(_insert_where(ub, 't2'), 1)
+
+    def test_insert_where_defaults(self):
+        TIW.create(key='k1', value=1, extra=2)
+        def _insert_where(key):
+            where = ~fn.EXISTS(TIW.select().where(TIW.key == key))
+            iq = insert_where(TIW, {TIW.key: key}, where)
+            return 1 if iq.execute() else 0
+
+        self.assertEqual(_insert_where('k2'), 1)
+        self.assertEqual(_insert_where('k1'), 0)
+        self.assertEqual(_insert_where('k2'), 0)
+        tiw = TIW.get(TIW.key == 'k2')
+        self.assertEqual(tiw.value, 0)
+        self.assertEqual(tiw.extra, 1)
