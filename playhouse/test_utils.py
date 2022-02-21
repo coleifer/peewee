@@ -11,7 +11,9 @@ class _QueryLogHandler(logging.Handler):
         logging.Handler.__init__(self, *args, **kwargs)
 
     def emit(self, record):
-        self.queries.append(record)
+        # Counts all entries logged to the "peewee" logger by execute_sql().
+        if record.name == 'peewee':
+            self.queries.append(record)
 
 
 class count_queries(object):
