@@ -7,6 +7,11 @@ https://github.com/coleifer/peewee/releases
 
 ## master
 
+* Add `shortcuts.insert_where()` helper for generating conditional INSERT with
+  a bit less boilerplate.
+* Fix bug in `test_utils.count_queres()` which could erroneously include pool
+  events such as connect/disconnect, etc.
+
 [View commits](https://github.com/coleifer/peewee/compare/3.14.9...master)
 
 ## 3.14.9
