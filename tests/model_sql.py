@@ -171,6 +171,19 @@ class TestModelSQL(ModelDatabaseTestCase):
             'INNER JOIN "favorite" AS "t3" ON ("t3"."tweet_id" = "t1"."id")'),
             [])
 
+        query = Tweet.select(Tweet.id).left_outer_join(Favorite).switch(Tweet).left_outer_join(User)
+        self.assertSQL(query, (
+            'SELECT "t1"."id" FROM "tweet" AS "t1" '
+            'LEFT OUTER JOIN "favorite" AS "t2" ON ("t2"."tweet_id" = "t1"."id") '
+            'LEFT OUTER JOIN "users" AS "t3" ON ("t1"."user_id" = "t3"."id")'), [])
+
+        query = Tweet.select(Tweet.id).left_outer_join(User).switch(Tweet).left_outer_join(Favorite)
+        self.assertSQL(query, (
+            'SELECT "t1"."id" FROM "tweet" AS "t1" '
+            'LEFT OUTER JOIN "users" AS "t2" ON ("t1"."user_id" = "t2"."id") '
+            'LEFT OUTER JOIN "favorite" AS "t3" ON ("t3"."tweet_id" = "t1"."id")'),
+            [])
+
     def test_model_alias(self):
         TA = Tweet.alias()
         query = (User
