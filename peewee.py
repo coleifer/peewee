@@ -2325,6 +2325,9 @@ class Select(SelectBase):
         item = self._from_list.pop()
         self._from_list.append(Join(item, dest, join_type, on))
 
+    def left_outer_join(self, dest, on=None):
+        return self.join(dest, JOIN.LEFT_OUTER, on)
+
     @Node.copy
     def group_by(self, *columns):
         grouping = []
@@ -7191,6 +7194,9 @@ class ModelSelect(BaseModelSelect, Select):
 
         item = self._from_list.pop()
         self._from_list.append(Join(item, dest, join_type, on))
+
+    def left_outer_join(self, dest, on=None, src=None, attr=None):
+        return self.join(dest, JOIN.LEFT_OUTER, on, src, attr)
 
     def join_from(self, src, dest, join_type=JOIN.INNER, on=None, attr=None):
         return self.join(dest, join_type, on, src, attr)
