@@ -142,6 +142,9 @@ def _do_setup(c_extensions, sqlite_extensions):
         author='Charles Leifer',
         author_email='coleifer@gmail.com',
         url='https://github.com/coleifer/peewee/',
+        project_urls={
+            'Source': 'https://github.com/coleifer/peewee',
+        },
         packages=['playhouse'],
         py_modules=['peewee', 'pwiz'],
         classifiers=[
