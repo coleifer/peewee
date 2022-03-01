@@ -161,6 +161,9 @@ def _do_setup(c_extensions, sqlite_extensions):
         ],
         license='MIT License',
         platforms=['any'],
+        project_urls={
+            'Documentation': 'http://docs.peewee-orm.com',
+            'Source': 'https://github.com/coleifer/peewee'},
         scripts=['pwiz.py'],
         zip_safe=False,
         cmdclass={'build_ext': _PeeweeBuildExt},
