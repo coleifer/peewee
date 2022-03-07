@@ -76,29 +76,32 @@ class TestDataSet(ModelTestCase):
         self.dataset.query('CREATE VIEW notes_public AS '
                            'SELECT content, timestamp FROM note '
                            'WHERE status = 1 ORDER BY timestamp DESC')
-        self.assertTrue('notes_public' in self.dataset.views)
-        self.assertFalse('notes_public' in self.dataset.tables)
+        try:
+            self.assertTrue('notes_public' in self.dataset.views)
+            self.assertFalse('notes_public' in self.dataset.tables)
 
-        users = self.dataset['user']
-        with self.dataset.transaction():
-            users.insert(username='charlie')
-            users.insert(username='huey')
+            users = self.dataset['user']
+            with self.dataset.transaction():
+                users.insert(username='charlie')
+                users.insert(username='huey')
 
-        notes = self.dataset['note']
-        for i, (ct, st) in enumerate([('n1', 1), ('n2', 2), ('n3', 1)]):
-            notes.insert(content=ct, status=st, user_id='charlie',
-                         timestamp=datetime.datetime(2022, 1, 1 + i))
+            notes = self.dataset['note']
+            for i, (ct, st) in enumerate([('n1', 1), ('n2', 2), ('n3', 1)]):
+                notes.insert(content=ct, status=st, user_id='charlie',
+                             timestamp=datetime.datetime(2022, 1, 1 + i))
 
-        self.assertFalse('notes_public' in self.dataset)
+            self.assertFalse('notes_public' in self.dataset)
 
-        # Create a new dataset instance with views enabled.
-        dataset = DataSet(self.dataset._database, include_views=True)
-        self.assertTrue('notes_public' in dataset)
-        public = dataset['notes_public']
-        self.assertEqual(public.columns, ['content', 'timestamp'])
-        self.assertEqual(list(public), [
-            {'content': 'n3', 'timestamp': datetime.datetime(2022, 1, 3)},
-            {'content': 'n1', 'timestamp': datetime.datetime(2022, 1, 1)}])
+            # Create a new dataset instance with views enabled.
+            dataset = DataSet(self.dataset._database, include_views=True)
+            self.assertTrue('notes_public' in dataset)
+            public = dataset['notes_public']
+            self.assertEqual(public.columns, ['content', 'timestamp'])
+            self.assertEqual(list(public), [
+                {'content': 'n3', 'timestamp': datetime.datetime(2022, 1, 3)},
+                {'content': 'n1', 'timestamp': datetime.datetime(2022, 1, 1)}])
+        finally:
+            self.dataset.query('DROP VIEW notes_public')
 
     def test_item_apis(self):
         dataset = DataSet('sqlite:///:memory:')
