@@ -1306,6 +1306,13 @@ class Alias(WrappedNode):
     def __hash__(self):
         return hash(self._alias)
 
+    @property
+    def name(self):
+        return self._alias
+    @name.setter
+    def name(self, value):
+        self._alias = value
+
     def alias(self, alias=None):
         if alias is None:
             return self.node
