@@ -12,7 +12,17 @@ https://github.com/coleifer/peewee/releases
 * Fix bug in `test_utils.count_queres()` which could erroneously include pool
   events such as connect/disconnect, etc.
 
-[View commits](https://github.com/coleifer/peewee/compare/3.14.9...master)
+[View commits](https://github.com/coleifer/peewee/compare/3.14.10...master)
+
+## 3.14.10
+
+* Add shortcut for conditional insert using sub-select, see #2528
+* Add convenience `left_outer_join()` method to query.
+* Add `selected_columns` property to Select queries.
+* Add `name` property to Alias instances.
+* Fix regression in tests introduced by change to DataSet in 3.14.9.
+
+[View commits](https://github.com/coleifer/peewee/compare/3.14.9...3.14.10)
 
 ## 3.14.9
 
