@@ -2314,6 +2314,13 @@ class Select(SelectBase):
     def select_extend(self, *columns):
         self._returning = tuple(self._returning) + columns
 
+    @property
+    def selected_columns(self):
+        return self._returning
+    @selected_columns.setter
+    def selected_columns(self, value):
+        self._returning = value
+
     @Node.copy
     def from_(self, *sources):
         self._from_list = list(sources)

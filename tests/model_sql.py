@@ -1,6 +1,7 @@
 import datetime
 
 from peewee import *
+from peewee import Alias
 from peewee import Database
 from peewee import ModelIndex
 
@@ -58,6 +59,30 @@ class TestModelSQL(ModelDatabaseTestCase):
 
         query = query2.select(Category.name)
         self.assertSQL(query, 'SELECT "t1"."name" FROM "category" AS "t1"', [])
+
+    def test_selected_columns(self):
+        query = (Person
+                 .select(
+                     Person.first,
+                     Person.last,
+                     fn.COUNT(Note.id).alias('ct'))
+                 .join(Note))
+        f_first, f_last, f_ct = query.selected_columns
+        self.assertEqual(f_first.name, 'first')
+        self.assertTrue(f_first.model is Person)
+        self.assertEqual(f_last.name, 'last')
+        self.assertTrue(f_last.model is Person)
+        self.assertTrue(isinstance(f_ct, Alias))
+        f_ct = f_ct.unwrap()
+        self.assertEqual(f_ct.name, 'COUNT')
+        f_nid, = f_ct.arguments
+        self.assertEqual(f_nid.name, 'id')
+        self.assertTrue(f_nid.model is Note)
+
+        query.selected_columns = (Person.first,)
+        f_first, = query.selected_columns
+        self.assertEqual(f_first.name, 'first')
+        self.assertTrue(f_first.model is Person)
 
     def test_where_coerce(self):
         query = Person.select(Person.last).where(Person.id == '1337')

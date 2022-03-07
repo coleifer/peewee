@@ -3,6 +3,7 @@ import re
 
 from peewee import *
 from peewee import Expression
+from peewee import Function
 from peewee import query_to_string
 
 from .base import BaseTestCase
@@ -43,6 +44,29 @@ class TestSelectQuery(BaseTestCase):
         self.assertSQL(query, (
             'SELECT "t1"."username", "t1"."is_admin", "t1"."is_active", '
             '"t1"."id" FROM "users" AS "t1"'), [])
+
+    def test_selected_columns(self):
+        query = (User
+                 .select(User.c.id, User.c.username, fn.COUNT(Tweet.c.id))
+                 .join(Tweet, JOIN.LEFT_OUTER,
+                       on=(User.c.id == Tweet.c.user_id)))
+        # NOTE: because of operator overloads for equality we have to test by
+        # asserting the attributes of the selected cols.
+        c_id, c_username, c_ct = query.selected_columns
+        self.assertEqual(c_id.name, 'id')
+        self.assertTrue(c_id.source is User)
+        self.assertEqual(c_username.name, 'username')
+        self.assertTrue(c_username.source is User)
+        self.assertTrue(isinstance(c_ct, Function))
+        self.assertEqual(c_ct.name, 'COUNT')
+        c_tid, = c_ct.arguments
+        self.assertEqual(c_tid.name, 'id')
+        self.assertTrue(c_tid.source is Tweet)
+
+        query.selected_columns = (User.c.username,)
+        c_username, = query.selected_columns
+        self.assertEqual(c_username.name, 'username')
+        self.assertTrue(c_username.source is User)
 
     def test_select_explicit_columns(self):
         query = (Person
