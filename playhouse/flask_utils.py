@@ -47,6 +47,15 @@ class PaginatedQuery(object):
             abort(404)
         return self.query.paginate(self.get_page(), self.paginate_by)
 
+    def get_page_range(self, page, total, show=5):
+        # Generate page buttons for a subset of pages, e.g. if the current page
+        # is 4, we have 10 pages, and want to show 5 buttons, this function
+        # returns us: [2, 3, 4, 5, 6]
+        start = max((page - (show // 2)), 1)
+        stop = min(start + show, total) + 1
+        start = max(min(start, stop - show), 1)
+        return list(range(start, stop)[:show])
+
 
 def get_object_or_404(query_or_model, *query):
     if not isinstance(query_or_model, SelectQuery):
