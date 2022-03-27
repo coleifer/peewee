@@ -1,6 +1,7 @@
 import datetime
 import os
 import re
+import warnings
 
 from peewee import *
 from playhouse.reflection import *
@@ -575,6 +576,10 @@ class TestReflectViews(BaseReflectionTestCase):
 
 
 class TestCyclicalFK(BaseReflectionTestCase):
+    def setUp(self):
+        super(TestCyclicalFK, self).setUp()
+        warnings.filterwarnings('ignore')
+
     @requires_sqlite
     def test_cyclical_fk(self):
         # NOTE: this schema was provided by a user.

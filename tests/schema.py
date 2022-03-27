@@ -358,16 +358,16 @@ class TestModelDDL(ModelDatabaseTestCase):
         self.assertCreateTable(SKV, [
             ('CREATE TABLE "skv" ("key" TEXT NOT NULL PRIMARY KEY) STRICT')])
 
-    def test_db_table(self):
+    def test_table_name(self):
         class A(TestModel):
             class Meta:
                 database = self.database
-                db_table = 'A_tbl'
+                table_name = 'A_tbl'
         class B(TestModel):
             a = ForeignKeyField(A, backref='bs')
             class Meta:
                 database = self.database
-                db_table = 'B_tbl'
+                table_name = 'B_tbl'
         self.assertCreateTable(A, [
             'CREATE TABLE "A_tbl" ("id" INTEGER NOT NULL PRIMARY KEY)'])
         self.assertCreateTable(B, [
