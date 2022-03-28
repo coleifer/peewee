@@ -2564,6 +2564,31 @@ Query-builder
 
     Class representing an INSERT query.
 
+    .. py:method:: as_rowcount([as_rowcount=True])
+
+        :param bool as_rowcount: Whether to return the modified row count (as
+            opposed to the last-inserted row id).
+
+        By default, on databases that do *not* use RETURNING automatically
+        (currently Sqlite and MySQL), Peewee versions 3.12 through 3.14.10
+        would return the modified row-count when executing a bulk insert. This
+        change has been reverted so that bulk-inserts will, by default, return
+        the value of ``cursor.lastrowid``.
+
+        If you prefer to receive the inserted row-count, then specify
+        ``as_rowcount()``:
+
+        .. code-block:: python
+
+            db = MySQLDatabase(...)
+
+            query = User.insert_many([...])
+            # By default, the last rowid is returned:
+            #last_id = query.execute()
+
+            # To get the modified row-count:
+            rowcount = query.as_rowcount().execute()
+
     .. py:method:: on_conflict_ignore([ignore=True])
 
         :param bool ignore: Whether to add ON CONFLICT IGNORE clause.

@@ -2582,9 +2582,14 @@ class Insert(_WriteQuery):
         self._columns = columns
         self._on_conflict = on_conflict
         self._query_type = None
+        self._as_rowcount = False
 
     def where(self, *expressions):
         raise NotImplementedError('INSERT queries cannot have a WHERE clause.')
+
+    @Node.copy
+    def as_rowcount(self, _as_rowcount=True):
+        self._as_rowcount = _as_rowcount
 
     @Node.copy
     def on_conflict_ignore(self, ignore=True):
@@ -2782,7 +2787,7 @@ class Insert(_WriteQuery):
     def handle_result(self, database, cursor):
         if self._return_cursor:
             return cursor
-        if self._query_type != Insert.SIMPLE and not self._returning:
+        if self._as_rowcount:
             return database.rows_affected(cursor)
         return database.last_insert_id(cursor, self._query_type)
 
@@ -3849,6 +3854,12 @@ class PostgresqlDatabase(Database):
             return cursor if query_type != Insert.SIMPLE else cursor[0][0]
         except (IndexError, KeyError, TypeError):
             pass
+
+    def rows_affected(self, cursor):
+        try:
+            return cursor.rowcount
+        except AttributeError:
+            return cursor.cursor.rowcount
 
     def get_tables(self, schema=None):
         query = ('SELECT tablename FROM pg_catalog.pg_tables '

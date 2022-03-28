@@ -205,7 +205,7 @@ def insert_where(cls, data, where=None):
         data[field] = value
     fields, values = zip(*data.items())
     sq = Select(columns=values).where(where)
-    return cls.insert_from(sq, fields)
+    return cls.insert_from(sq, fields).as_rowcount()
 
 
 class ReconnectMixin(object):

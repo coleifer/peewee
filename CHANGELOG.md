@@ -7,6 +7,30 @@ https://github.com/coleifer/peewee/releases
 
 ## master
 
+Rollback behavior change in commit ab43376697 (GH #2026). Peewee will no longer
+automatically return the cursor `rowcount` for certain bulk-inserts.  This
+should only affect users of MySQL and Sqlite who relied on a bulk INSERT
+returning the `rowcount` (as opposed to the cursor's `lastrowid`). The
+`rowcount` behavior is still available chaining the ``as_rowcount()`` method:
+
+```python
+# NOTE: this change only affects MySQL or Sqlite.
+db = MySQLDatabase(...)
+
+# Previously, bulk inserts of the following forms would return the rowcount.
+query = User.insert_many(...)  # Bulk insert.
+query = User.insert_from(...)  # Bulk insert (INSERT INTO .. SELECT FROM).
+
+# Previous behavior (peewee 3.12 - 3.14.10):
+# rows_inserted = query.execute()
+
+# New behavior:
+last_id = query.execute()
+
+# To get the old behavior back:
+rows_inserted = query.as_rowcount().execute()
+```
+
 * Add `shortcuts.insert_where()` helper for generating conditional INSERT with
   a bit less boilerplate.
 * Fix bug in `test_utils.count_queres()` which could erroneously include pool

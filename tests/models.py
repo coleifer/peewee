@@ -422,11 +422,11 @@ class TestModelAPIs(ModelTestCase):
         iq = User.insert_many([(u,) for u in ('u1', 'u2', 'u3')])
         if IS_POSTGRESQL or IS_CRDB:
             iq = iq.returning()
-        self.assertEqual(iq.execute(), 3)
+        self.assertEqual(iq.as_rowcount().execute(), 3)
 
         # Now explicitly specify empty returning() for all DBs.
         iq = User.insert_many([(u,) for u in ('u4', 'u5')]).returning()
-        self.assertEqual(iq.execute(), 2)
+        self.assertEqual(iq.as_rowcount().execute(), 2)
 
         query = (User
                  .select(User.username.concat('-x'))
@@ -434,13 +434,16 @@ class TestModelAPIs(ModelTestCase):
         iq = User.insert_from(query, ['username'])
         if IS_POSTGRESQL or IS_CRDB:
             iq = iq.returning()
-        self.assertEqual(iq.execute(), 2)
+        self.assertEqual(iq.as_rowcount().execute(), 2)
 
         query = (User
                  .select(User.username.concat('-y'))
                  .where(User.username.in_(['u3', 'u4'])))
         iq = User.insert_from(query, ['username']).returning()
-        self.assertEqual(iq.execute(), 2)
+        self.assertEqual(iq.as_rowcount().execute(), 2)
+
+        query = User.insert({'username': 'u5'})
+        self.assertEqual(query.as_rowcount().execute(), 1)
 
     @skip_if(IS_POSTGRESQL or IS_CRDB, 'requires sqlite or mysql')
     @requires_models(Emp)
