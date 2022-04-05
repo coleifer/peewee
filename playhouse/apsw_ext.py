@@ -92,10 +92,20 @@ class APSWDatabase(SqliteExtDatabase):
             conn.loadextension(extension)
 
     def last_insert_id(self, cursor, query_type=None):
-        return cursor.getconnection().last_insert_rowid()
+        if not self.returning_clause:
+            return cursor.getconnection().last_insert_rowid()
+        elif query_type == Insert.SIMPLE:
+            try:
+                return cursor[0][0]
+            except (AttributeError, IndexError, TypeError):
+                pass
+        return cursor
 
     def rows_affected(self, cursor):
-        return cursor.getconnection().changes()
+        try:
+            return cursor.getconnection().changes()
+        except AttributeError:
+            return cursor.cursor.getconnection().changes()  # RETURNING query.
 
     def begin(self, lock_type='deferred'):
         self.cursor().execute('begin %s;' % lock_type)

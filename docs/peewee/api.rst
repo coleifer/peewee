@@ -565,11 +565,13 @@ Database
         this is equivalent to ``fn.random()``, for MySQL ``fn.rand()``.
 
 
-.. py:class:: SqliteDatabase(database[, pragmas=None[, timeout=5[, **kwargs]]])
+.. py:class:: SqliteDatabase(database[, pragmas=None[, timeout=5[, returning_clause=None[,  **kwargs]]]])
 
     :param pragmas: Either a dictionary or a list of 2-tuples containing
         pragma key and value to set every time a connection is opened.
     :param timeout: Set the busy-timeout on the SQLite driver (in seconds).
+    :param bool returning_clause: Use `RETURNING` clause automatically for bulk
+        INSERT queries (requires Sqlite 3.35 or newer).
 
     Sqlite database implementation. :py:class:`SqliteDatabase` that provides
     some advanced features only offered by Sqlite.

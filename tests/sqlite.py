@@ -19,6 +19,7 @@ from .base import requires_models
 from .base import skip_if
 from .base import skip_unless
 from .base_models import Person
+from .base_models import Tweet
 from .base_models import User
 from .sqlite_helpers import compile_option
 from .sqlite_helpers import json_installed
@@ -2364,3 +2365,132 @@ class TestSqliteReturning(ModelTestCase):
                .execute())
         self.assertEqual([(r.key, r.value) for r in res],
                          [('k1', 11), ('k5', 5)])
+
+
+@skip_unless(database.server_version >= (3, 35, 0), 'sqlite returning clause required')
+class TestSqliteReturningConfig(ModelTestCase):
+    database = SqliteExtDatabase(':memory:', returning_clause=True)
+    requires = [KVR, User]
+
+    def test_pk_set_properly(self):
+        user = User.create(username='u1')
+        self.assertEqual(user.id, 1)
+
+        kvr = KVR.create(key='k1', value=1)
+        self.assertEqual(kvr.key, 'k1')
+
+    def test_insert_behavior(self):
+        iq = User.insert({'username': 'u1'})
+        self.assertEqual(iq.execute(), 1)
+
+        iq = User.insert_many([{'username': 'u2'}, {'username': 'u3'}])
+        self.assertEqual(list(iq.execute()), [(2,), (3,)])
+
+        iq = User.insert_many([('u4',), ('u5',)]).as_rowcount()
+        self.assertEqual(iq.execute(), 2)
+
+        iq = KVR.insert({'key': 'k1', 'value': 1})
+        self.assertEqual(iq.execute(), 'k1')
+
+        iq = KVR.insert_many([('k2', 2), ('k3', 3)])
+        self.assertEqual(list(iq.execute()), [('k2',), ('k3',)])
+
+        iq = KVR.insert_many([('k4', 4), ('k5', 5)]).as_rowcount()
+        self.assertEqual(iq.execute(), 2)
+
+    def test_insert_on_conflict(self):
+        KVR.create(key='k1', value=1)
+        iq = (KVR.insert({'key': 'k1', 'value': 100})
+              .on_conflict(conflict_target=[KVR.key],
+                           update={KVR.value: KVR.value + 10}))
+        self.assertEqual(iq.execute(), 'k1')
+        self.assertEqual(KVR.get(KVR.key == 'k1').value, 11)
+
+        KVR.create(key='k2', value=2)
+        iq = (KVR.insert_many([
+            {'key': 'k1', 'value': 100},
+            {'key': 'k2', 'value': 200},
+            {'key': 'k3', 'value': 300}])
+            .on_conflict(conflict_target=[KVR.key],
+                         update={KVR.value: KVR.value + 10}))
+        self.assertEqual(list(iq.execute()), [('k1',), ('k2',), ('k3',)])
+        self.assertEqual(sorted(KVR.select().tuples()),
+                         [('k1', 21), ('k2', 12), ('k3', 300)])
+
+    def test_update_delete_rowcounts(self):
+        users = [User.create(username=u) for u in 'abc']
+        kvrs = [KVR.create(key='k%s' % i, value=i) for i in (1, 2, 3)]
+
+        uq = User.update(username='c2').where(User.username == 'c')
+        self.assertEqual(uq.execute(), 1)
+        uq = User.update(username=User.username.concat('x'))
+        self.assertEqual(uq.execute(), 3)
+
+        dq = User.delete().where(User.username.in_(['bx', 'c2x']))
+        self.assertEqual(dq.execute(), 2)
+
+        uq = KVR.update(value=KVR.value + 10).where(KVR.key == 'k3')
+        self.assertEqual(uq.execute(), 1)
+        uq = KVR.update(value=KVR.value + 100)
+        self.assertEqual(uq.execute(), 3)
+
+        dq = KVR.delete().where(KVR.value.in_([102, 113]))
+        self.assertEqual(dq.execute(), 2)
+
+    def test_update_delete_explicit_returning(self):
+        users = [User.create(username=u) for u in 'abc']
+
+        uq = (User.update(username='c2')
+              .where(User.username == 'c')
+              .returning(User.id, User.username))
+        for _ in range(2):
+            self.assertEqual([u.username for u in uq.execute()], ['c2'])
+        self.assertEqual(list(uq.clone().execute()), [])
+
+        uq = (User.update(username=User.username.concat('x'))
+              .where(~User.username.endswith('x'))  # For idempotency.
+              .returning(User.id, User.username)
+              .tuples())
+        for _ in range(2):
+            self.assertEqual(sorted(uq.execute()),
+                             [(1, 'ax'), (2, 'bx'), (3, 'c2x')])
+        self.assertEqual(list(uq.clone().execute()), [])
+
+        dq = User.delete().where(User.username == 'c2x').returning(User)
+        for _ in range(2):
+            # The result is cached to support multiple iterations.
+            self.assertEqual([u.username for u in dq.execute()], ['c2x'])
+        self.assertEqual(list(dq.clone().execute()), [])
+
+        dq = User.delete().returning(User).tuples()
+        for _ in range(2):
+            # The result is cached to support multiple iterations.
+            self.assertEqual(sorted(dq.execute()), [(1, 'ax'), (2, 'bx')])
+        self.assertEqual(list(dq.clone().execute()), [])
+
+    def test_bulk_create_update(self):
+        users = [User(username='u%s' % i) for i in range(5)]
+        with self.assertQueryCount(1):
+            User.bulk_create(users)
+
+        self.assertEqual(User.select().count(), 5)
+        self.assertEqual(sorted(User.select().tuples()), [
+            (1, 'u0'), (2, 'u1'), (3, 'u2'), (4, 'u3'), (5, 'u4')])
+
+        users[0].username = 'u0x'
+        users[2].username = 'u2x'
+        users[4].username = 'u4x'
+        with self.assertQueryCount(1):
+            n = User.bulk_update(users, ['username'])
+            self.assertEqual(n, 5)
+
+        self.assertEqual(sorted(User.select().tuples()), [
+            (1, 'u0x'), (2, 'u1'), (3, 'u2x'), (4, 'u3'), (5, 'u4x')])
+
+    @requires_models(User, Tweet)
+    def test_fk_set_correctly(self):
+        # Ensure FK can be set lazily.
+        user = User(username='u1')
+        tweet = Tweet(user=user, content='t1')
+        user.save()
+        tweet.save()

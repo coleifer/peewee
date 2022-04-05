@@ -3441,11 +3441,16 @@ class SqliteDatabase(Database):
         self.register_function(_sqlite_date_trunc, 'date_trunc', 2)
         self.nulls_ordering = self.server_version >= (3, 30, 0)
 
-    def init(self, database, pragmas=None, timeout=5, **kwargs):
+    def init(self, database, pragmas=None, timeout=5, returning_clause=None,
+             **kwargs):
         if pragmas is not None:
             self._pragmas = pragmas
         if isinstance(self._pragmas, dict):
             self._pragmas = list(self._pragmas.items())
+        if returning_clause is not None:
+            if __sqlite_version__ < (3, 35, 0):
+                warnings.warn('RETURNING clause requires Sqlite 3.35 or newer')
+            self.returning_clause = returning_clause
         self._timeout = timeout
         super(SqliteDatabase, self).init(database, **kwargs)
 
@@ -3667,6 +3672,22 @@ class SqliteDatabase(Database):
         if not self.is_closed():
             self.execute_sql('DETACH DATABASE "%s"' % name)
         return True
+
+    def last_insert_id(self, cursor, query_type=None):
+        if not self.returning_clause:
+            return cursor.lastrowid
+        elif query_type == Insert.SIMPLE:
+            try:
+                return cursor[0][0]
+            except (IndexError, KeyError, TypeError):
+                pass
+        return cursor
+
+    def rows_affected(self, cursor):
+        try:
+            return cursor.rowcount
+        except AttributeError:
+            return cursor.cursor.rowcount  # This was a RETURNING query.
 
     def begin(self, lock_type=None):
         statement = 'BEGIN %s' % lock_type if lock_type else 'BEGIN'

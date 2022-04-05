@@ -31,6 +31,12 @@ last_id = query.execute()
 rows_inserted = query.as_rowcount().execute()
 ```
 
+Additionally, this release adds better support for using the new `RETURNING`
+syntax with Sqlite automatically. Specify `returing_clause=True` when
+initializing your `SqliteDatabase` and all bulk inserts will automatically
+specify a `RETURNING` clause, returning the newly-inserted primary keys. This
+functionality requires Sqlite 3.35 or newer.
+
 * Add `shortcuts.insert_where()` helper for generating conditional INSERT with
   a bit less boilerplate.
 * Fix bug in `test_utils.count_queres()` which could erroneously include pool
