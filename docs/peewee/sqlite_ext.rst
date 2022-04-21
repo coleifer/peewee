@@ -469,6 +469,27 @@ APIs
 
         For more examples see the :py:class:`JSONPath` API documentation.
 
+    .. py:method:: extract(*paths)
+
+        :param paths: One or more JSON paths to extract.
+
+        Extract the value(s) at the specified JSON paths. If multiple paths are
+        provided, then Sqlite will return the values as a ``list``.
+
+    .. py:method:: extract_json(path)
+
+        :param str path: JSON path
+
+        Extract the value at the specified path as a JSON data-type. This
+        corresponds to the ``->`` operator added in Sqlite 3.38.
+
+    .. py:method:: extract_text(path)
+
+        :param str path: JSON path
+
+        Extract the value at the specified path as a SQL data-type. This
+        corresponds to the ``->>`` operator added in Sqlite 3.38.
+
     .. py:method:: set(value[, as_json=None])
 
         :param value: a scalar value, list, or dictionary.
@@ -480,6 +501,32 @@ APIs
         Set the value stored in a :py:class:`JSONField`.
 
         Uses the `json_set() <http://sqlite.org/json1.html#jset>`_ function
+        from the json1 extension.
+
+    .. py:method:: replace(value[, as_json=None])
+
+        :param value: a scalar value, list, or dictionary.
+        :param bool as_json: force the value to be treated as JSON, in which
+            case it will be serialized as JSON in Python beforehand. By
+            default, lists and dictionaries are treated as JSON to be
+            serialized, while strings and integers are passed as-is.
+
+        Replace the existing value stored in a :py:class:`JSONField`.
+
+        Uses the `json_replace() <http://sqlite.org/json1.html#jset>`_ function
+        from the json1 extension.
+
+    .. py:method:: insert(value[, as_json=None])
+
+        :param value: a scalar value, list, or dictionary.
+        :param bool as_json: force the value to be treated as JSON, in which
+            case it will be serialized as JSON in Python beforehand. By
+            default, lists and dictionaries are treated as JSON to be
+            serialized, while strings and integers are passed as-is.
+
+        Insert value into :py:class:`JSONField`.
+
+        Uses the `json_insert() <http://sqlite.org/json1.html#jset>`_ function
         from the json1 extension.
 
     .. py:method:: append(value[, as_json=None])
@@ -689,6 +736,32 @@ APIs
         Set the value at the given location in the JSON data.
 
         Uses the `json_set() <http://sqlite.org/json1.html#jset>`_ function
+        from the json1 extension.
+
+    .. py:method:: replace(value[, as_json=None])
+
+        :param value: a scalar value, list, or dictionary.
+        :param bool as_json: force the value to be treated as JSON, in which
+            case it will be serialized as JSON in Python beforehand. By
+            default, lists and dictionaries are treated as JSON to be
+            serialized, while strings and integers are passed as-is.
+
+        Replace the existing value at the given location in the JSON data.
+
+        Uses the `json_replace() <http://sqlite.org/json1.html#jset>`_ function
+        from the json1 extension.
+
+    .. py:method:: insert(value[, as_json=None])
+
+        :param value: a scalar value, list, or dictionary.
+        :param bool as_json: force the value to be treated as JSON, in which
+            case it will be serialized as JSON in Python beforehand. By
+            default, lists and dictionaries are treated as JSON to be
+            serialized, while strings and integers are passed as-is.
+
+        Insert a new value at the given location in the JSON data.
+
+        Uses the `json_insert() <http://sqlite.org/json1.html#jset>`_ function
         from the json1 extension.
 
     .. py:method:: append(value[, as_json=None])

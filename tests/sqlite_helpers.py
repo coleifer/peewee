@@ -19,6 +19,10 @@ def json_patch_installed():
     return sqlite3.sqlite_version_info >= (3, 18, 0)
 
 
+def json_text_installed():
+    return sqlite3.sqlite_version_info >= (3, 38, 0)
+
+
 def compile_option(p):
     if not hasattr(compile_option, '_pragma_cache'):
         conn = sqlite3.connect(':memory:')

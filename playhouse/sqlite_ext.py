@@ -98,10 +98,19 @@ class JSONPath(ColumnBase):
         path = Value('$%s' % ''.join(self._path + ('[#]',)))
         return fn.json_set(self._field, path, value)
 
-    def set(self, value, as_json=None):
+    def _json_operation(self, func, value, as_json=None):
         if as_json or isinstance(value, (list, dict)):
             value = fn.json(self._field._json_dumps(value))
-        return fn.json_set(self._field, self.path, value)
+        return func(self._field, self.path, value)
+
+    def insert(self, value, as_json=None):
+        return self._json_operation(fn.json_insert, value, as_json)
+
+    def set(self, value, as_json=None):
+        return self._json_operation(fn.json_set, value, as_json)
+
+    def replace(self, value, as_json=None):
+        return self._json_operation(fn.json_replace, value, as_json)
 
     def update(self, value):
         return self.set(fn.json_patch(self, self._field._json_dumps(value)))
@@ -165,23 +174,40 @@ class JSONField(TextField):
     def __getitem__(self, item):
         return JSONPath(self)[item]
 
-    def set(self, value, as_json=None):
-        return JSONPath(self).set(value, as_json)
+    def extract(self, *paths):
+        paths = [Value(p, converter=False) for p in paths]
+        return fn.json_extract(self, *paths)
+    def extract_json(self, path):
+        return Expression(self, '->', Value(path, converter=False))
+    def extract_text(self, path):
+        return Expression(self, '->>', Value(path, converter=False))
 
     def append(self, value, as_json=None):
         return JSONPath(self).append(value, as_json)
 
+    def insert(self, value, as_json=None):
+        return JSONPath(self).insert(value, as_json)
+
+    def set(self, value, as_json=None):
+        return JSONPath(self).set(value, as_json)
+
+    def replace(self, value, as_json=None):
+        return JSONPath(self).replace(value, as_json)
+
     def update(self, data):
         return JSONPath(self).update(data)
 
-    def remove(self):
-        return JSONPath(self).remove()
+    def remove(self, *paths):
+        if not paths:
+            return JSONPath(self).remove()
+        return fn.json_remove(self, *paths)
 
     def json_type(self):
         return fn.json_type(self)
 
-    def length(self):
-        return fn.json_array_length(self)
+    def length(self, path=None):
+        args = (self, path) if path else (self,)
+        return fn.json_array_length(*args)
 
     def children(self):
         """
