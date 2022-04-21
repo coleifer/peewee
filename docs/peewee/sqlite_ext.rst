@@ -482,6 +482,19 @@ APIs
         Uses the `json_set() <http://sqlite.org/json1.html#jset>`_ function
         from the json1 extension.
 
+    .. py:method:: append(value[, as_json=None])
+
+        :param value: a scalar value, list, or dictionary.
+        :param bool as_json: force the value to be treated as JSON, in which
+            case it will be serialized as JSON in Python beforehand. By
+            default, lists and dictionaries are treated as JSON to be
+            serialized, while strings and integers are passed as-is.
+
+        Append to the array stored in a :py:class:`JSONField`.
+
+        Uses the `json_set() <http://sqlite.org/json1.html#jset>`_ function
+        from the json1 extension.
+
     .. py:method:: update(data)
 
         :param data: a scalar value, list or dictionary to merge with the data
@@ -674,6 +687,19 @@ APIs
             serialized, while strings and integers are passed as-is.
 
         Set the value at the given location in the JSON data.
+
+        Uses the `json_set() <http://sqlite.org/json1.html#jset>`_ function
+        from the json1 extension.
+
+    .. py:method:: append(value[, as_json=None])
+
+        :param value: a scalar value, list, or dictionary.
+        :param bool as_json: force the value to be treated as JSON, in which
+            case it will be serialized as JSON in Python beforehand. By
+            default, lists and dictionaries are treated as JSON to be
+            serialized, while strings and integers are passed as-is.
+
+        Append to the array stored at the given location in the JSON data.
 
         Uses the `json_set() <http://sqlite.org/json1.html#jset>`_ function
         from the json1 extension.

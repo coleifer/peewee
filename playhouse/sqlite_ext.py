@@ -86,11 +86,17 @@ class JSONPath(ColumnBase):
         return Value('$%s' % ''.join(self._path))
 
     def __getitem__(self, idx):
-        if isinstance(idx, int):
+        if isinstance(idx, int) or idx == '#':
             item = '[%s]' % idx
         else:
             item = '.%s' % idx
         return JSONPath(self._field, self._path + (item,))
+
+    def append(self, value, as_json=None):
+        if as_json or isinstance(value, (list, dict)):
+            value = fn.json(self._field._json_dumps(value))
+        path = Value('$%s' % ''.join(self._path + ('[#]',)))
+        return fn.json_set(self._field, path, value)
 
     def set(self, value, as_json=None):
         if as_json or isinstance(value, (list, dict)):
@@ -161,6 +167,9 @@ class JSONField(TextField):
 
     def set(self, value, as_json=None):
         return JSONPath(self).set(value, as_json)
+
+    def append(self, value, as_json=None):
+        return JSONPath(self).append(value, as_json)
 
     def update(self, data):
         return JSONPath(self).update(data)

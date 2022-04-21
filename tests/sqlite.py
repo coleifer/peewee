@@ -474,6 +474,18 @@ class TestJSONField(ModelTestCase):
         self.assertEqual(kd1_db.data, ['g', 'h', 'i'])
         self.assertEqual(kd2_db.data, ['j', 'k', 'l'])
 
+    def test_json_bulk_update_top_level_dict(self):
+        kd1 = KeyData.create(key='k1', data={'x': 'y1'})
+        kd2 = KeyData.create(key='k2', data={'x': 'y2'})
+
+        kd1.data = {'x': 'z1'}
+        kd2.data = {'X': 'Z2'}
+        KeyData.bulk_update([kd1, kd2], fields=[KeyData.data])
+        kd1_db = KeyData.get(KeyData.key == 'k1')
+        kd2_db = KeyData.get(KeyData.key == 'k2')
+        self.assertEqual(kd1_db.data, {'x': 'z1'})
+        self.assertEqual(kd2_db.data, {'X': 'Z2'})
+
     def test_json_multi_ops(self):
         data = (
             ('k1', [0, 1]),
@@ -598,6 +610,38 @@ class TestJSONFieldFunctions(ModelTestCase):
         self.assertRows((KeyData.data['k1'] == 'v1-x'), ['a', 'c'])
 
         self.assertData('a', {'k1': 'v1-x', 'x1': {'y1': 'z1'}})
+
+    def test_set_append(self):
+        for value in ('ix', [], ['c1'], ['c1', 'c2'], {}, {'k1': 'v1'},
+                      {'k1': 'v1', 'k2': 'v2'}, None, 1):
+            KeyData.delete().execute()
+            KeyData.create(key='a0', data=[])
+            KeyData.create(key='a1', data=['i1'])
+            KeyData.create(key='a2', data=['i1', 'i2'])
+            KeyData.create(key='n0', data={'arr': []})
+            KeyData.create(key='n1', data={'arr': ['i1']})
+            KeyData.create(key='n2', data={'arr': ['i1', 'i2']})
+
+            query = (KeyData
+                     .update(data=KeyData.data.append(value))
+                     .where(KeyData.key.startswith('a')))
+            self.assertEqual(query.execute(), 3)
+
+            query = KeyData.select().where(KeyData.key.startswith('a'))
+            self.assertEqual(sorted((row.key, row.data) for row in query),
+                             [('a0', [value]), ('a1', ['i1', value]),
+                              ('a2', ['i1', 'i2', value])])
+
+            query = (KeyData
+                     .update(data=KeyData.data['arr'].append(value))
+                     .where(KeyData.key.startswith('n')))
+            self.assertEqual(query.execute(), 3)
+
+            query = KeyData.select().where(KeyData.key.startswith('n'))
+            self.assertEqual(sorted((row.key, row.data) for row in query),
+                             [('n0', {'arr': [value]}),
+                              ('n1', {'arr': ['i1', value]}),
+                              ('n2', {'arr': ['i1', 'i2', value]})])
 
     def test_set_json(self):
         set_json = KeyData.data['x1'].set({'y1': 'z1-x', 'y3': 'z3'})
