@@ -44,6 +44,18 @@ class TestDatabase(DatabaseTestCase):
         self.database.foreign_keys = 'off'
         self.assertEqual(self.database.foreign_keys, 0)
 
+    def test_appid_user_version(self):
+        self.assertEqual(self.database.application_id, 0)
+        self.assertEqual(self.database.user_version, 0)
+        self.database.application_id = 1
+        self.database.user_version = 2
+        self.assertEqual(self.database.application_id, 1)
+        self.assertEqual(self.database.user_version, 2)
+        self.assertTrue(self.database.close())
+        self.assertTrue(self.database.connect())
+        self.assertEqual(self.database.application_id, 1)
+        self.assertEqual(self.database.user_version, 2)
+
     def test_timeout_semantics(self):
         self.assertEqual(self.database.timeout, 5)
         self.assertEqual(self.database.pragma('busy_timeout'), 5000)

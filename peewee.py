@@ -3522,6 +3522,8 @@ class SqliteDatabase(Database):
     read_uncommitted = __pragma__('read_uncommitted')
     synchronous = __pragma__('synchronous')
     wal_autocheckpoint = __pragma__('wal_autocheckpoint')
+    application_id = __pragma__('application_id')
+    user_version = __pragma__('user_version')
 
     @property
     def timeout(self):
