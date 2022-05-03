@@ -3524,6 +3524,7 @@ class SqliteDatabase(Database):
     wal_autocheckpoint = __pragma__('wal_autocheckpoint')
     application_id = __pragma__('application_id')
     user_version = __pragma__('user_version')
+    data_version = __pragma__('data_version')
 
     @property
     def timeout(self):
