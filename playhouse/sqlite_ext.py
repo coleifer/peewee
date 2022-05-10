@@ -95,8 +95,7 @@ class JSONPath(ColumnBase):
     def append(self, value, as_json=None):
         if as_json or isinstance(value, (list, dict)):
             value = fn.json(self._field._json_dumps(value))
-        path = Value('$%s' % ''.join(self._path + ('[#]',)))
-        return fn.json_set(self._field, path, value)
+        return fn.json_set(self._field, self['#'].path, value)
 
     def _json_operation(self, func, value, as_json=None):
         if as_json or isinstance(value, (list, dict)):
