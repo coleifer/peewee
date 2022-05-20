@@ -640,6 +640,9 @@ class Context(object):
             with self.scope_column():
                 return self.sql(value)
 
+        if self.state.value_literals:
+            return self.literal(_query_val_transform(value))
+
         self._values.append(value)
         return self.literal(self.state.param or '?') if add_param else self
 
@@ -1388,6 +1391,12 @@ class Value(ColumnBase):
             return ctx.sql(EnclosedNodeList(self.values))
 
         return ctx.value(self.value, self.converter)
+
+
+class ValueLiterals(WrappedNode):
+    def __sql__(self, ctx):
+        with ctx(value_literals=True):
+            return ctx.sql(self.node)
 
 
 def AsIs(value):
@@ -5804,6 +5813,10 @@ class SchemaManager(object):
                 index = index.safe(False)
             elif index._safe != safe:
                 index = index.safe(safe)
+            if isinstance(self._database, SqliteDatabase):
+                # Ensure we do not use value placeholders with Sqlite, as they
+                # are not supported.
+                index = ValueLiterals(index)
         return self._create_context().sql(index)
 
     def create_indexes(self, safe=True):

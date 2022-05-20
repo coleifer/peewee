@@ -2046,6 +2046,12 @@ class TestIndex(BaseTestCase):
             '("status", "timestamp" DESC, SUBSTR("title", ?, ?)) '
             'WHERE (("flags" & ?) = ?)'), [1, 1, 4, 4])
 
+        # Check behavior when value-literals are enabled.
+        self.assertSQL(aidx, (
+            'CREATE INDEX IF NOT EXISTS "foo_idx" ON "article" '
+            '("status", "timestamp" DESC, SUBSTR("title", 1, 1)) '
+            'WHERE (("flags" & 4) = 4)'), [], value_literals=True)
+
     def test_str_cols(self):
         uidx = Index('users_info', User, ('username DESC', 'id'))
         self.assertSQL(uidx, (

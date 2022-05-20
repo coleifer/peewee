@@ -168,8 +168,8 @@ class TestModelDDL(ModelDatabaseTestCase):
             ('CREATE INDEX "article_timestamp_status" ON "article" ('
              '"timestamp" DESC, "status")', []),
             ('CREATE INDEX "article_name_timestamp" ON "article" ('
-             '"name", "timestamp", ("flags" & ?)) '
-             'WHERE ("status" = ?)', [4, 1]),
+             '"name", "timestamp", ("flags" & 4)) '
+             'WHERE ("status" = 1)', []),
             ('CREATE INDEX "article_foo" ON "article" ("flags" & 3)', []),
         ])
 
