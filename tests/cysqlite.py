@@ -8,6 +8,7 @@ from playhouse._sqlite_ext import BloomFilter
 
 from .base import BaseTestCase
 from .base import DatabaseTestCase
+from .base import TestModel
 from .base import db_loader
 from .base import skip_unless
 
@@ -373,6 +374,33 @@ class TestBloomFilterIntegration(CyDatabaseTestCase):
             curs = self.execute('select bloomfilter_contains(?, ?)',
                                 key, buf)
             self.assertEqual(curs.fetchone()[0], 0)
+
+    def test_bf_stored(self):
+        class Base(TestModel):
+            class Meta:
+                database = self.database
+        class BF(Base):
+            data = BlobField()
+        class Reg(Base):
+            key = TextField()
+            value = TextField()
+
+        self.database.create_tables([Reg, BF])
+        with self.database.atomic():
+            for i in range(100):
+                Reg.insert(key='k%03d' % i, value='v%064d' % i).execute()
+
+            agg = (Reg
+                   .select(fn.bloomfilter(Reg.value))
+                   .where(Reg.key.endswith('0')))
+            n = BF.insert(data=agg).execute()
+
+        query = (Reg
+                 .select()
+                 .join(BF, on=(fn.bloomfilter_contains(Reg.value, BF.data)))
+                 .order_by(Reg.key))
+        self.assertTrue(all(r.value.endswith('0') for r in query))
+        self.assertEqual(len(query), 10)
 
 
 class TestBloomFilter(BaseTestCase):
