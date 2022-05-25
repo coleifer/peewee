@@ -60,6 +60,15 @@ class TestModelSQL(ModelDatabaseTestCase):
         query = query2.select(Category.name)
         self.assertSQL(query, 'SELECT "t1"."name" FROM "category" AS "t1"', [])
 
+    def test_select_extend(self):
+        query = Note.select()
+        ext = query.join(Person).select_extend(Person)
+        self.assertSQL(ext, (
+            'SELECT "t1"."id", "t1"."author_id", "t1"."content", "t2"."id", '
+            '"t2"."first", "t2"."last", "t2"."dob" '
+            'FROM "note" AS "t1" INNER JOIN "person" AS "t2" '
+            'ON ("t1"."author_id" = "t2"."id")'), [])
+
     def test_selected_columns(self):
         query = (Person
                  .select(

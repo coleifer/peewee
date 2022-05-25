@@ -7090,6 +7090,11 @@ class ModelSelect(BaseModelSelect, Select):
             return super(ModelSelect, self).select(*fields)
         return self
 
+    def select_extend(self, *columns):
+        self._is_default = False
+        fields = _normalize_model_select(columns)
+        return super(ModelSelect, self).select_extend(*fields)
+
     def switch(self, ctx=None):
         self._join_ctx = self.model if ctx is None else ctx
         return self
