@@ -1,10 +1,13 @@
 import os
+import sys
 
 from peewee import *
 from peewee import sqlite3
 from playhouse.sqlite_ext import CYTHON_SQLITE_EXTENSIONS
 from playhouse.sqlite_ext import *
 from playhouse._sqlite_ext import BloomFilter
+from playhouse._sqlite_ext import peewee_bloomfilter_add
+from playhouse._sqlite_ext import peewee_bloomfilter_contains
 
 from .base import BaseTestCase
 from .base import DatabaseTestCase
@@ -375,6 +378,7 @@ class TestBloomFilterIntegration(CyDatabaseTestCase):
                                 key, buf)
             self.assertEqual(curs.fetchone()[0], 0)
 
+    @skip_unless(sys.version_info[0] >= 3, 'requires python 3')
     def test_bf_stored(self):
         class Base(TestModel):
             class Meta:
@@ -401,6 +405,17 @@ class TestBloomFilterIntegration(CyDatabaseTestCase):
                  .order_by(Reg.key))
         self.assertTrue(all(r.value.endswith('0') for r in query))
         self.assertEqual(len(query), 10)
+
+        # Perform update, adding the values that end with "1" now.
+        for i in range(1, 100, 10):
+            BF.update(data=fn.bloomfilter_add('v%064d' % i, BF.data)).execute()
+
+        query = (Reg
+                 .select()
+                 .join(BF, on=(fn.bloomfilter_contains(Reg.value, BF.data)))
+                 .order_by(Reg.key))
+        self.assertTrue(all(r.value.endswith(('0', '1')) for r in query))
+        self.assertEqual(len(query), 20)
 
 
 class TestBloomFilter(BaseTestCase):
@@ -448,6 +463,28 @@ class TestBloomFilter(BaseTestCase):
         self.assertEqual(len(new_bf), self.n)
         new_buf = new_bf.to_buffer()
         self.assertEqual(buf, new_buf)
+
+    def test_bloomfilter_functions(self):
+        bf = BloomFilter()
+        for i in range(1000):
+            bf.add('k%04d' % i)
+
+        buf = bf.to_buffer()
+        for i in range(1000):
+            self.assertTrue(peewee_bloomfilter_contains('k%04d' % i, buf))
+
+        for i in range(1000, 3000):
+            self.assertFalse(peewee_bloomfilter_contains('k%04d' % i, buf))
+
+        # Add 1000-2000 now and verify the bloom filter is updated.
+        for i in range(1000, 2000):
+            buf = peewee_bloomfilter_add('k%04d' % i, buf)
+        for i in range(2000):
+            self.assertTrue(peewee_bloomfilter_contains('k%04d' % i, buf))
+
+        # These still are not present.
+        for i in range(2000, 4000):
+            self.assertFalse(peewee_bloomfilter_contains('k%04d' % i, buf))
 
 
 class DataTypes(TableFunction):

@@ -1190,6 +1190,20 @@ def peewee_bloomfilter_contains(key, data):
 
     return bf_contains(&bf, <unsigned char *>bkey)
 
+def peewee_bloomfilter_add(key, data):
+    cdef:
+        bf_t bf
+        bytes bkey
+        char *buf
+        Py_ssize_t buflen
+
+    PyBytes_AsStringAndSize(data, &buf, &buflen)
+    bf.size = buflen
+    bf.bits = <void *>buf
+
+    bkey = encode(key)
+    bf_add(&bf, bkey)
+    return data
 
 def peewee_bloomfilter_calculate_size(n_items, error_p):
     return BloomFilter.calculate_size(n_items, error_p)
@@ -1197,6 +1211,8 @@ def peewee_bloomfilter_calculate_size(n_items, error_p):
 
 def register_bloomfilter(database):
     database.register_aggregate(BloomFilterAggregate, 'bloomfilter')
+    database.register_function(peewee_bloomfilter_add,
+                               'bloomfilter_add')
     database.register_function(peewee_bloomfilter_contains,
                                'bloomfilter_contains')
     database.register_function(peewee_bloomfilter_calculate_size,
