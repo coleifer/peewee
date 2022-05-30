@@ -1823,6 +1823,19 @@ class TestFunctionCoerce(ModelTestCase):
         query = Sample.select(counter_group)
         self.assertEqual(query.scalar(), '0,1,2')
 
+    def test_scalar(self):
+        for i in range(4):
+            Sample.create(counter=i, value=i)
+        query = Sample.select(fn.SUM(Sample.counter).alias('total'))
+        self.assertEqual(query.scalar(), 6)
+        self.assertEqual(query.scalar(as_tuple=True), (6,))
+        self.assertEqual(query.scalar(as_dict=True), {'total': 6})
+
+        Sample.delete().execute()
+        self.assertTrue(query.scalar() is None)
+        self.assertEqual(query.scalar(as_tuple=True), (None,))
+        self.assertEqual(query.scalar(as_dict=True), {'total': None})
+
     def test_safe_python_value(self):
         for i in range(3):
             Sample.create(counter=i, value=i)

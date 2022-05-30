@@ -2227,11 +2227,13 @@ Query-builder
         Multiple calls for the same value of ``n`` will not result in multiple
         executions.
 
-    .. py:method:: scalar(database[, as_tuple=False])
+    .. py:method:: scalar(database[, as_tuple=False[, as_dict=False]])
 
         :param Database database: database to execute query against.
         :param bool as_tuple: Return the result as a tuple?
-        :returns: Single scalar value if ``as_tuple = False``, else row tuple.
+        :param bool as_dict: Return the result as a dict?
+        :returns: Single scalar value. If ``as_tuple = True``, a row tuple is
+            returned. If ``as_dict = True``, a row dict is returned.
 
         Return a scalar value from the first row of results. If multiple
         scalar values are anticipated (e.g. multiple aggregations in a single
@@ -2244,6 +2246,9 @@ Query-builder
 
             query = Note.select(fn.MAX(Note.timestamp), fn.COUNT(Note.id))
             max_ts, n_notes = query.scalar(db, as_tuple=True)
+
+            query = Note.select(fn.COUNT(Note.id).alias('count'))
+            assert query.scalar(db, as_dict=True) == {'count': 123}
 
     .. py:method:: count(database[, clear_limit=False])
 
