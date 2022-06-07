@@ -181,7 +181,7 @@ Getting single records
 ^^^^^^^^^^^^^^^^^^^^^^
 
 Let's retrieve Grandma's record from the database. To get a single record from
-the database, use :py:meth:`Select.get`:
+the database, use :py:meth:`Model.select`:
 
 .. code-block:: python
 
