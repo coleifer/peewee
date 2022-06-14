@@ -1650,3 +1650,61 @@ class TestSelectFromUnion(ModelTestCase):
         union = wq1 | wq2
         data = [val for val, in union.tuples()]
         self.assertEqual(sorted(data), ['a0', 'a1', 'a2', 'b0', 'b1', 'b2'])
+
+
+class DF(TestModel):
+    name = TextField()
+    value = IntegerField()
+class DFC(TestModel):
+    df = ForeignKeyField(DF)
+    name = TextField()
+    value = IntegerField()
+class DFGC(TestModel):
+    dfc = ForeignKeyField(DFC)
+    name = TextField()
+    value = IntegerField()
+
+
+class TestDjangoFilterRegression(ModelTestCase):
+    requires = [DF, DFC, DFGC]
+
+    def test_django_filter_regression(self):
+        a, b, c = [DF.create(name=n, value=i) for i, n in enumerate('abc')]
+        ca1 = DFC.create(df=a, name='a1', value=11)
+        ca2 = DFC.create(df=a, name='a2', value=12)
+        cb1 = DFC.create(df=b, name='b1', value=21)
+
+        gca1_1 = DFGC.create(dfc=ca1, name='a1-1', value=101)
+        gca1_2 = DFGC.create(dfc=ca1, name='a1-2', value=101)
+        gca2_1 = DFGC.create(dfc=ca2, name='a2-1', value=111)
+
+        def assertNames(q, expected):
+            self.assertEqual(sorted([n.name for n in q]), expected)
+
+        assertNames(DF.filter(name='a'), ['a'])
+        assertNames(DF.filter(name='a', id=a.id), ['a'])
+        assertNames(DF.filter(name__in=['a', 'c']), ['a', 'c'])
+        assertNames(DF.filter(name__in=['a', 'c'], id=a.id), ['a'])
+        assertNames(DF.filter(dfc_set__name='a1'), ['a'])
+        assertNames(DF.filter(dfc_set__name__in=['a1', 'b1']), ['a', 'b'])
+        assertNames(DF.filter(DQ(dfc_set__name='a1') | DQ(dfc_set__name='b1')),
+                    ['a', 'b'])
+        assertNames(DF.filter(dfc_set__dfgc_set__name='a1-1'), ['a'])
+        assertNames(DF.filter(
+            DQ(dfc_set__dfgc_set__name='a1-1') |
+            DQ(dfc_set__dfgc_set__name__in=['x', 'y'])), ['a'])
+
+        assertNames(DFC.filter(df__name='a'), ['a1', 'a2'])
+        assertNames(DFC.filter(df__name='a', value=11), ['a1'])
+        assertNames(DFC.filter(DQ(df__name='a') | DQ(df__name='b')),
+                    ['a1', 'a2', 'b1'])
+        assertNames(DFC.filter(
+            DQ(df__name='a') | DQ(dfgc_set__name='a1-1')).distinct(),
+            ['a1', 'a2'])
+
+        assertNames(DFGC.filter(dfc__df__name='a'), ['a1-1', 'a1-2', 'a2-1'])
+        assertNames(DFGC.filter(dfc__df__name='a', dfc__name='a2'), ['a2-1'])
+        assertNames(DFGC.filter(
+            DQ(dfc__df__value__lte=0) |
+            DQ(dfc__df__name='a', dfc__name='a1') |
+            DQ(dfc__name='a2')), ['a1-1', 'a1-2', 'a2-1'])
