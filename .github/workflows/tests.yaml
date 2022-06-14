@@ -45,7 +45,7 @@ jobs:
           PGHOST: 127.0.0.1
           PGPASSWORD: peewee
         run: |
-          pip install psycopg2-binary cython pymysql apsw mysql-connector
+          pip install psycopg2-binary cython pymysql 'apsw<3.38' mysql-connector
           python setup.py build_ext -i
           psql peewee_test -c 'CREATE EXTENSION hstore;'
       - name: sqlcipher
