@@ -1708,3 +1708,11 @@ class TestDjangoFilterRegression(ModelTestCase):
             DQ(dfc__df__value__lte=0) |
             DQ(dfc__df__name='a', dfc__name='a1') |
             DQ(dfc__name='a2')), ['a1-1', 'a1-2', 'a2-1'])
+
+        assertNames(
+            (DFGC.filter(DQ(dfc__df__value__lte=10) | DQ(dfc__value__lte=101))
+             .filter(DQ(name__ilike='a1%') | DQ(dfc__value=101))),
+            ['a1-1', 'a1-2'])
+
+        assertNames(DFGC.filter(dfc__df=a), ['a1-1', 'a1-2', 'a2-1'])
+        assertNames(DFGC.filter(dfc__df=a.id), ['a1-1', 'a1-2', 'a2-1'])
