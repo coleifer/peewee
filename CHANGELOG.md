@@ -31,6 +31,10 @@ last_id = query.execute()
 rows_inserted = query.as_rowcount().execute()
 ```
 
+This release contains a fix for a long-standing request to allow data-modifying
+queries to support CTEs. CTEs are now supported for use with INSERT, DELETE and
+UPDATE queries - see #2152.
+
 Additionally, this release adds better support for using the new `RETURNING`
 syntax with Sqlite automatically. Specify `returing_clause=True` when
 initializing your `SqliteDatabase` and all bulk inserts will automatically

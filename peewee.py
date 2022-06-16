@@ -2489,6 +2489,10 @@ class _WriteQuery(Query):
         self._return_cursor = True if returning else False
         super(_WriteQuery, self).__init__(**kwargs)
 
+    def cte(self, name, recursive=False, columns=None, materialized=None):
+        return CTE(name, self, recursive=recursive, columns=columns,
+                   materialized=materialized)
+
     @Node.copy
     def returning(self, *returning):
         self._returning = returning

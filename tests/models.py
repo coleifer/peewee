@@ -4744,3 +4744,127 @@ class TestValuesListIntegration(ModelTestCase):
         vl = ValuesList(self._data).alias('vl')
         query = vl.select()
         self.assertEqual(list(query.tuples().bind(self.database)), self._data)
+
+
+class C_Product(TestModel):
+    name = CharField()
+    price = IntegerField(default=0)
+
+class C_Archive(TestModel):
+    name = CharField()
+    price = IntegerField(default=0)
+
+class C_Part(TestModel):
+    part = CharField(primary_key=True)
+    sub_part = ForeignKeyField('self', null=True)
+
+@skip_unless(IS_POSTGRESQL)
+class TestDataModifyingCTEIntegration(ModelTestCase):
+    requires = [C_Product, C_Archive, C_Part]
+
+    def setUp(self):
+        super(TestDataModifyingCTEIntegration, self).setUp()
+        for i in range(5):
+            C_Product.create(name='p%s' % i, price=i)
+        mp1_c_g = C_Part.create(part='mp1-c-g')
+        mp1_c = C_Part.create(part='mp1-c', sub_part=mp1_c_g)
+        mp1 = C_Part.create(part='mp1', sub_part=mp1_c)
+        mp2_c_g = C_Part.create(part='mp2-c-g')
+        mp2_c = C_Part.create(part='mp2-c', sub_part=mp2_c_g)
+        mp2 = C_Part.create(part='mp2', sub_part=mp2_c)
+
+    def test_data_modifying_cte_delete(self):
+        query = (C_Product.delete()
+                 .where(C_Product.price < 3)
+                 .returning(C_Product.id, C_Product.name, C_Product.price))
+        cte = query.cte('moved_rows')
+
+        src = Select((cte,), (cte.c.id, cte.c.name, cte.c.price))
+        res = (C_Archive
+               .insert_from(src, (C_Archive.id, C_Archive.name, C_Archive.price))
+               .with_cte(cte)
+               .execute())
+        self.assertEqual(len(list(res)), 3)
+
+        self.assertEqual(
+            sorted([(p.name, p.price) for p in C_Product.select()]),
+            [('p3', 3), ('p4', 4)])
+        self.assertEqual(
+            sorted([(p.name, p.price) for p in C_Archive.select()]),
+            [('p0', 0), ('p1', 1), ('p2', 2)])
+
+        base = (C_Part
+                .select(C_Part.sub_part, C_Part.part)
+                .where(C_Part.part == 'mp1')
+                .cte('included_parts', recursive=True,
+                     columns=('sub_part', 'part')))
+        PA = C_Part.alias('p')
+        recursive = (PA
+                     .select(PA.sub_part, PA.part)
+                     .join(base, on=(PA.part == base.c.sub_part)))
+        cte = base.union_all(recursive)
+
+        sq = Select((cte,), (cte.c.part,))
+        res = (C_Part.delete()
+               .where(C_Part.part.in_(sq))
+               .with_cte(cte)
+               .execute())
+
+        self.assertEqual(sorted([p.part for p in C_Part.select()]),
+                         ['mp2', 'mp2-c', 'mp2-c-g'])
+
+    def test_data_modifying_cte_update(self):
+        # Populate archive table w/copy of data in product.
+        C_Archive.insert_from(
+            C_Product.select(),
+            (C_Product.id, C_Product.name, C_Product.price)).execute()
+
+        query = (C_Product
+                 .update(price=C_Product.price * 2)
+                 .returning(C_Product.id, C_Product.name, C_Product.price))
+        cte = query.cte('t')
+
+        sq = cte.select_from(cte.c.id, cte.c.name, cte.c.price)
+        self.assertEqual(sorted([(x.name, x.price) for x in sq]), [
+            ('p0', 0), ('p1', 2), ('p2', 4), ('p3', 6), ('p4', 8)])
+
+        # Ensure changes were persisted.
+        self.assertEqual(sorted([(x.name, x.price) for x in C_Product]), [
+            ('p0', 0), ('p1', 2), ('p2', 4), ('p3', 6), ('p4', 8)])
+
+        sq = Select((cte,), (cte.c.id, cte.c.price))
+        res = (C_Archive
+               .update(price=sq.c.price)
+               .from_(sq)
+               .where(C_Archive.id == sq.c.id)
+               .with_cte(cte)
+               .execute())
+
+        self.assertEqual(sorted([(x.name, x.price) for x in C_Product]), [
+            ('p0', 0), ('p1', 4), ('p2', 8), ('p3', 12), ('p4', 16)])
+        self.assertEqual(sorted([(x.name, x.price) for x in C_Archive]), [
+            ('p0', 0), ('p1', 4), ('p2', 8), ('p3', 12), ('p4', 16)])
+
+    def test_data_modifying_cte_insert(self):
+        query = (C_Product
+                 .insert({'name': 'p5', 'price': 5})
+                 .returning(C_Product.id, C_Product.name, C_Product.price))
+        cte = query.cte('t')
+
+        sq = cte.select_from(cte.c.id, cte.c.name, cte.c.price)
+        self.assertEqual([(p.name, p.price) for p in sq], [('p5', 5)])
+
+        query = (C_Product
+                 .insert({'name': 'p6', 'price': 6})
+                 .returning(C_Product.id, C_Product.name, C_Product.price))
+        cte = query.cte('t')
+        sq = Select((cte,), (cte.c.id, cte.c.name, cte.c.price))
+        res = (C_Archive
+               .insert_from(sq, (sq.c.id, sq.c.name, sq.c.price))
+               .with_cte(cte)
+               .execute())
+        self.assertEqual([(p.name, p.price) for p in C_Archive], [('p6', 6)])
+
+        self.assertEqual(sorted([(p.name, p.price) for p in C_Product]), [
+            ('p0', 0), ('p1', 1), ('p2', 2), ('p3', 3), ('p4', 4), ('p5', 5),
+            ('p6', 6)])

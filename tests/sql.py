@@ -488,6 +488,116 @@ class TestSelectQuery(BaseTestCase):
             'WHERE ("users"."id" IN (SELECT "uv"."id" FROM "uv"))'),
             [1, 'u1x', 2, 'u2x'])
 
+    def test_data_modifying_cte_delete(self):
+        Product = Table('products', ('id', 'name', 'timestamp'))
+        Archive = Table('archive', ('id', 'name', 'timestamp'))
+
+        query = (Product.delete()
+                 .where(Product.timestamp < datetime.date(2022, 1, 1))
+                 .returning(Product.id, Product.name, Product.timestamp))
+        cte = query.cte('moved_rows')
+
+        src = Select((cte,), (cte.c.id, cte.c.name, cte.c.timestamp))
+        iq = (Archive
+              .insert(src, (Archive.id, Archive.name, Archive.timestamp))
+              .with_cte(cte))
+        self.assertSQL(iq, (
+            'WITH "moved_rows" AS ('
+            'DELETE FROM "products" WHERE ("products"."timestamp" < ?) '
+            'RETURNING "products"."id", "products"."name", '
+            '"products"."timestamp") '
+            'INSERT INTO "archive" ("id", "name", "timestamp") '
+            'SELECT "moved_rows"."id", "moved_rows"."name", '
+            '"moved_rows"."timestamp" FROM "moved_rows"'),
+            [datetime.date(2022, 1, 1)])
+
+        Part = Table('parts', ('id', 'part', 'sub_part'))
+        base = (Part
+                .select(Part.sub_part, Part.part)
+                .where(Part.part == 'p')
+                .cte('included_parts', recursive=True,
+                     columns=('sub_part', 'part')))
+        PA = Part.alias('p')
+        recursive = (PA
+                     .select(PA.sub_part, PA.part)
+                     .join(base, on=(PA.part == base.c.sub_part)))
+        cte = base.union_all(recursive)
+
+        sq = Select((cte,), (cte.c.part,))
+        query = (Part.delete()
+                 .where(Part.part.in_(sq))
+                 .with_cte(cte))
+        self.assertSQL(query, (
+            'WITH RECURSIVE "included_parts" ("sub_part", "part") AS ('
+            'SELECT "t1"."sub_part", "t1"."part" FROM "parts" AS "t1" '
+            'WHERE ("t1"."part" = ?) '
+            'UNION ALL '
+            'SELECT "p"."sub_part", "p"."part" '
+            'FROM "parts" AS "p" '
+            'INNER JOIN "included_parts" '
+            'ON ("p"."part" = "included_parts"."sub_part")) '
+            'DELETE FROM "parts" '
+            'WHERE ("parts"."part" IN ('
+            'SELECT "included_parts"."part" FROM "included_parts"))'), ['p'])
+
+    def test_data_modifying_cte_update(self):
+        Product = Table('products', ('id', 'name', 'price'))
+        Archive = Table('archive', ('id', 'name', 'price'))
+
+        query = (Product
+                 .update(price=Product.price * 1.05)
+                 .returning(Product.id, Product.name, Product.price))
+        cte = query.cte('t')
+
+        sq = cte.select_from(cte.c.id, cte.c.name, cte.c.price)
+        self.assertSQL(sq, (
+            'WITH "t" AS ('
+            'UPDATE "products" SET "price" = ("products"."price" * ?) '
+            'RETURNING "products"."id", "products"."name", "products"."price")'
+            ' SELECT "t"."id", "t"."name", "t"."price" FROM "t"'), [1.05])
+
+        sq = Select((cte,), (cte.c.id, cte.c.price))
+        uq = (Archive
+              .update(price=sq.c.price)
+              .from_(sq)
+              .where(Archive.id == sq.c.id)
+              .with_cte(cte))
+        self.assertSQL(uq, (
+            'WITH "t" AS ('
+            'UPDATE "products" SET "price" = ("products"."price" * ?) '
+            'RETURNING "products"."id", "products"."name", "products"."price")'
+            ' UPDATE "archive" SET "price" = "t1"."price"'
+            ' FROM (SELECT "t"."id", "t"."price" FROM "t") AS "t1"'
+            ' WHERE ("archive"."id" = "t1"."id")'), [1.05])
+
+    def test_data_modifying_cte_insert(self):
+        Product = Table('products', ('id', 'name', 'price'))
+        Archive = Table('archive', ('id', 'name', 'price'))
+
+        query = (Product
+                 .insert({'name': 'p1', 'price': 10})
+                 .returning(Product.id, Product.name, Product.price))
+        cte = query.cte('t')
+
+        sq = cte.select_from(cte.c.id, cte.c.name, cte.c.price)
+        self.assertSQL(sq, (
+            'WITH "t" AS ('
+            'INSERT INTO "products" ("name", "price") VALUES (?, ?) '
+            'RETURNING "products"."id", "products"."name", "products"."price")'
+            ' SELECT "t"."id", "t"."name", "t"."price" FROM "t"'),
+            ['p1', 10])
+
+        sq = Select((cte,), (cte.c.id, cte.c.name, cte.c.price))
+        iq = (Archive
+              .insert(sq, (sq.c.id, sq.c.name, sq.c.price))
+              .with_cte(cte))
+        self.assertSQL(iq, (
+            'WITH "t" AS ('
+            'INSERT INTO "products" ("name", "price") VALUES (?, ?) '
+            'RETURNING "products"."id", "products"."name", "products"."price")'
+            ' INSERT INTO "archive" ("id", "name", "price")'
+            ' SELECT "t"."id", "t"."name", "t"."price" FROM "t"'), ['p1', 10])
+
     def test_complex_select(self):
         Order = Table('orders', columns=(
             'region',
