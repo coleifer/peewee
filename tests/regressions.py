@@ -1716,3 +1716,23 @@ class TestDjangoFilterRegression(ModelTestCase):
 
         assertNames(DFGC.filter(dfc__df=a), ['a1-1', 'a1-2', 'a2-1'])
         assertNames(DFGC.filter(dfc__df=a.id), ['a1-1', 'a1-2', 'a2-1'])
+
+        q = DFC.select().join(DF)
+        assertNames(q.filter(df=a), ['a1', 'a2'])
+        assertNames(q.filter(df__name='a'), ['a1', 'a2'])
+
+        DFA = DF.alias()
+        DFCA = DFC.alias()
+        DFGCA = DFGC.alias()
+        q = DFCA.select().join(DFA)
+        assertNames(q.filter(df=a), ['a1', 'a2'])
+        assertNames(q.filter(df__name='a'), ['a1', 'a2'])
+
+        q = DFGC.select().join(DFC).join(DF)
+        assertNames(q.filter(dfc__df=a), ['a1-1', 'a1-2', 'a2-1'])
+
+        q = DFGCA.select().join(DFCA).join(DFA)
+        assertNames(q.filter(dfc__df=a), ['a1-1', 'a1-2', 'a2-1'])
+
+        q = DF.select().join(DFC).join(DFGC)
+        assertNames(q.filter(dfc_set__dfgc_set__name='a1-1'), ['a'])

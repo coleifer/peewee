@@ -7305,6 +7305,8 @@ class ModelSelect(BaseModelSelect, Select):
             else:
                 for piece in key.split('__'):
                     for dest, attr, _, _ in self._joins.get(curr, ()):
+                        try: model_attr = getattr(curr, piece, None)
+                        except: pass
                         if attr == piece or (isinstance(dest, ModelAlias) and
                                              dest.alias == piece):
                             curr = dest
