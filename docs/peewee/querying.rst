@@ -1976,6 +1976,56 @@ recursive CTE:
     # p2, 2, root->p2
     # c2-1, 3, root->p2->c2-1
 
+Data-Modifying CTE
+^^^^^^^^^^^^^^^^^^
+
+Peewee supports data-modifying CTE's.
+
+Example of using a data-modifying CTE to move data from one table to an archive
+table, using a single query:
+
+.. code-block:: python
+
+   class Event(Model):
+       name = CharField()
+       timestamp = DateTimeField()
+
+   class Archive(Model):
+       name = CharField()
+       timestamp = DateTimeField()
+
+   # Move rows older than 24 hours from the Event table to the Archive.
+   cte = (Event
+          .delete()
+          .where(Event.timestamp < (datetime.now() - timedelta(days=1)))
+          .returning(Event)
+          .cte('moved_rows'))
+
+   # Create a simple SELECT to get the resulting rows from the CTE.
+   src = Select((cte,), (cte.c.id, cte.c.name, cte.c.timestamp))
+
+   # Insert into the archive table whatever data was returned by the DELETE.
+   res = (Archive
+          .insert_from(src, (Archive.id, Archive.name, Archive.timestamp))
+          .with_cte(cte)
+          .execute())
+
+The above corresponds to, roughly, the following SQL:
+
+.. code-block:: sql
+
+    WITH "moved_rows" AS (
+        DELETE FROM "event" WHERE ("timestamp" < XXXX-XX-XXTXX:XX:XX)
+        RETURNING "id", "name", "timestamp")
+    INSERT INTO "archive" ("id", "name", "timestamp")
+    SELECT "moved_rows"."id", "moved_rows"."name", "moved_rows"."timestamp"
+    FROM "moved_rows";
+
+For additional examples, refer to the tests in ``models.py`` and ``sql.py``:
+
+* https://github.com/coleifer/peewee/blob/master/tests/models.py
+* https://github.com/coleifer/peewee/blob/master/tests/sql.py
+
 Foreign Keys and Joins
 ----------------------
 

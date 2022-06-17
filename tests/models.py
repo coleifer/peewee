@@ -4776,7 +4776,7 @@ class TestDataModifyingCTEIntegration(ModelTestCase):
     def test_data_modifying_cte_delete(self):
         query = (C_Product.delete()
                  .where(C_Product.price < 3)
-                 .returning(C_Product.id, C_Product.name, C_Product.price))
+                 .returning(C_Product))
         cte = query.cte('moved_rows')
 
         src = Select((cte,), (cte.c.id, cte.c.name, cte.c.price))
