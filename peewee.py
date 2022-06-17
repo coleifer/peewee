@@ -70,7 +70,7 @@ except ImportError:
         mysql = None
 
 
-__version__ = '3.14.10'
+__version__ = '3.15.0'
 __all__ = [
     'AnyField',
     'AsIs',

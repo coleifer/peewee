@@ -7,6 +7,10 @@ https://github.com/coleifer/peewee/releases
 
 ## master
 
+[View commits](https://github.com/coleifer/peewee/compare/3.15.0...master)
+
+## 3.15.0
+
 Rollback behavior change in commit ab43376697 (GH #2026). Peewee will no longer
 automatically return the cursor `rowcount` for certain bulk-inserts.  This
 should only affect users of MySQL and Sqlite who relied on a bulk INSERT
@@ -41,12 +45,14 @@ initializing your `SqliteDatabase` and all bulk inserts will automatically
 specify a `RETURNING` clause, returning the newly-inserted primary keys. This
 functionality requires Sqlite 3.35 or newer.
 
+Smaller changes:
+
 * Add `shortcuts.insert_where()` helper for generating conditional INSERT with
   a bit less boilerplate.
 * Fix bug in `test_utils.count_queres()` which could erroneously include pool
   events such as connect/disconnect, etc.
 
-[View commits](https://github.com/coleifer/peewee/compare/3.14.10...master)
+[View commits](https://github.com/coleifer/peewee/compare/3.14.10...3.15.0)
 
 ## 3.14.10
 
