@@ -1986,6 +1986,51 @@ Query-builder
         specified CTEs will be overwritten. For examples of common-table
         expressions, see :ref:`cte`.
 
+    .. py:method:: cte(name[, recursive=False[, columns=None]])
+
+        :param str name: Alias for common table expression.
+        :param bool recursive: Will this be a recursive CTE?
+        :param list columns: List of column names (as strings).
+
+        Indicate that a query will be used as a common table expression. For
+        example, if we are modelling a category tree and are using a
+        parent-link foreign key, we can retrieve all categories and their
+        absolute depths using a recursive CTE:
+
+        .. code-block:: python
+
+            class Category(Model):
+                name = TextField()
+                parent = ForeignKeyField('self', backref='children', null=True)
+
+            # The base case of our recursive CTE will be categories that are at
+            # the root level -- in other words, categories without parents.
+            roots = (Category
+                     .select(Category.name, Value(0).alias('level'))
+                     .where(Category.parent.is_null())
+                     .cte(name='roots', recursive=True))
+
+            # The recursive term will select the category name and increment
+            # the depth, joining on the base term so that the recursive term
+            # consists of all children of the base category.
+            RTerm = Category.alias()
+            recursive = (RTerm
+                         .select(RTerm.name, (roots.c.level + 1).alias('level'))
+                         .join(roots, on=(RTerm.parent == roots.c.id)))
+
+            # Express <base term> UNION ALL <recursive term>.
+            cte = roots.union_all(recursive)
+
+            # Select name and level from the recursive CTE.
+            query = (cte
+                     .select_from(cte.c.name, cte.c.level)
+                     .order_by(cte.c.name))
+
+            for category in query:
+                print(category.name, category.level)
+
+        For more examples of CTEs, see :ref:`cte`.
+
     .. py:method:: where(*expressions)
 
         :param expressions: zero or more expressions to include in the WHERE
@@ -2072,51 +2117,6 @@ Query-builder
 
     Select query helper-class that implements operator-overloads for creating
     compound queries.
-
-    .. py:method:: cte(name[, recursive=False[, columns=None]])
-
-        :param str name: Alias for common table expression.
-        :param bool recursive: Will this be a recursive CTE?
-        :param list columns: List of column names (as strings).
-
-        Indicate that a query will be used as a common table expression. For
-        example, if we are modelling a category tree and are using a
-        parent-link foreign key, we can retrieve all categories and their
-        absolute depths using a recursive CTE:
-
-        .. code-block:: python
-
-            class Category(Model):
-                name = TextField()
-                parent = ForeignKeyField('self', backref='children', null=True)
-
-            # The base case of our recursive CTE will be categories that are at
-            # the root level -- in other words, categories without parents.
-            roots = (Category
-                     .select(Category.name, Value(0).alias('level'))
-                     .where(Category.parent.is_null())
-                     .cte(name='roots', recursive=True))
-
-            # The recursive term will select the category name and increment
-            # the depth, joining on the base term so that the recursive term
-            # consists of all children of the base category.
-            RTerm = Category.alias()
-            recursive = (RTerm
-                         .select(RTerm.name, (roots.c.level + 1).alias('level'))
-                         .join(roots, on=(RTerm.parent == roots.c.id)))
-
-            # Express <base term> UNION ALL <recursive term>.
-            cte = roots.union_all(recursive)
-
-            # Select name and level from the recursive CTE.
-            query = (cte
-                     .select_from(cte.c.name, cte.c.level)
-                     .order_by(cte.c.name))
-
-            for category in query:
-                print(category.name, category.level)
-
-        For more examples of CTEs, see :ref:`cte`.
 
     .. py:method:: select_from(*columns)
 
