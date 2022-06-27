@@ -156,11 +156,13 @@ class CockroachDatabase(PostgresqlDatabase):
                              commit=False)
 
     def atomic(self, system_time=None, priority=None):
+        if self.is_closed(): self.connect()  # Side-effect, set server version.
         if self.server_version < NESTED_TX_MIN_VERSION:
             return _crdb_atomic(self, system_time, priority)
         return super(CockroachDatabase, self).atomic(system_time, priority)
 
     def savepoint(self):
+        if self.is_closed(): self.connect()  # Side-effect, set server version.
         if self.server_version < NESTED_TX_MIN_VERSION:
             raise NotImplementedError(TXN_ERR_MSG)
         return super(CockroachDatabase, self).savepoint()

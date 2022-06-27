@@ -386,3 +386,19 @@ class TestCockroachIntegration(ModelTestCase):
                      .join(Post))
             self.assertEqual([(n.post.content, n.note) for n in query],
                              [('p', 'n')])
+
+
+@skip_unless(IS_CRDB)
+class TestEnsureServerVersionSet(ModelTestCase):
+    # References GH ssue #2584.
+    requires = [KV]
+
+    def test_server_version_set(self):
+        # Mimic state of newly-initialized database.
+        self.database.close()
+        self.database.server_version = None
+
+        with self.database.atomic() as txn:
+            KV.create(k='k1', v=1)
+
+        self.assertTrue(self.database.server_version is not None)
