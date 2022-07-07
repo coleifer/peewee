@@ -32,7 +32,12 @@ class ChangeLog(object):
         FROM (
             SELECT json_group_object(
                 col,
-                json_array("oldval", "newval")) AS "changes"
+                json_array(
+                    case when json_valid("oldval") then json("oldval")
+                        else "oldval" end,
+                    case when json_valid("newval") then json("newval")
+                        else "newval" end)
+                ) AS "changes"
             FROM (
                 SELECT json_extract(value, '$[0]') as "col",
                        json_extract(value, '$[1]') as "oldval",
