@@ -1910,7 +1910,7 @@ With Peewee, we would write:
                      fn.SUM(Order.amount).alias('product_sales'))
              .where(Order.region.in_(top_regions.select(top_regions.c.region)))
              .group_by(Order.region, Order.product)
-             .with_cte(regional_sales, top_regions))
+             .with_cte(reg_sales, top_regions))
 
 Recursive CTEs
 ^^^^^^^^^^^^^^
