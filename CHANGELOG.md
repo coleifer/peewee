@@ -7,7 +7,16 @@ https://github.com/coleifer/peewee/releases
 
 ## master
 
-[View commits](https://github.com/coleifer/peewee/compare/3.15.0...master)
+[View commits](https://github.com/coleifer/peewee/compare/3.15.1...master)
+
+## 3.15.1
+
+* Fix issue introduced in Sqlite 3.39.0 regarding the propagation of column
+  subtypes in subqueries.
+* Fix bug where cockroachdb server version was not set when beginning a
+  transaction on an unopened database.
+
+[View commits](https://github.com/coleifer/peewee/compare/3.15.0...3.15.1)
 
 ## 3.15.0
 
