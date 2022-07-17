@@ -205,7 +205,7 @@ class BaseBinaryJsonFieldTestCase(BaseJsonFieldTestCase):
         self._create_test_data()
         D = self.M.data
 
-        # 'k3' is mapped to another dictioary {'k4': [...]}. Therefore,
+        # 'k3' is mapped to another dictionary {'k4': [...]}. Therefore,
         # 'k3' is said to contain 'k4', but *not* ['k4'] or ['k4', 'k5'].
         self.assertObjects(D['k3'].contains('k4'), 0)
         self.assertObjects(D['k3'].contains(['k4']))

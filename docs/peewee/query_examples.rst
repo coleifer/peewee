@@ -328,7 +328,7 @@ Joins and Subqueries
 This category deals primarily with a foundational concept in relational
 database systems: joining. Joining allows you to combine related information
 from multiple tables to answer a question. This isn't just beneficial for ease
-of querying: a lack of join capability encourages denormalisation of data,
+of querying: a lack of join capability encourages denormalization of data,
 which increases the complexity of keeping your data internally consistent.
 
 This topic covers inner, outer, and self joins, as well as spending a little

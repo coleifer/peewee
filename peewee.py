@@ -1849,7 +1849,7 @@ class QualifiedNames(WrappedNode):
 
 
 def qualify_names(node):
-    # Search a node heirarchy to ensure that any column-like objects are
+    # Search a node hierarchy to ensure that any column-like objects are
     # referenced using fully-qualified names.
     if isinstance(node, Expression):
         return node.__class__(qualify_names(node.lhs), node.op,

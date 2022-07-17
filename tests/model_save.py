@@ -109,7 +109,7 @@ class TestPrimaryKeySaveHandling(ModelTestCase):
     def test_composite_pk(self):
         t4 = T4(pk1=1, pk2=2, value=10)
 
-        # Will attempt to do an update on non-existant rows.
+        # Will attempt to do an update on non-existent rows.
         self.assertEqual(t4.save(), 0)
         self.assertEqual(t4.save(force_insert=True), 1)
 
