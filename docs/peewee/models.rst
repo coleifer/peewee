@@ -189,7 +189,7 @@ Field initialization arguments
 
 Parameters accepted by all field types and their default values:
 
-* ``null = False`` -- allow null values
+* ``null = False`` -- null is not allowed
 * ``index = False`` -- create an index on this column
 * ``unique = False`` -- create a unique index on this column. See also :ref:`adding composite indexes <model_indexes>`.
 * ``column_name = None`` -- explicitly specify the column name in the database.
