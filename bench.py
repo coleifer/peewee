@@ -28,9 +28,9 @@ def timed(fn):
         times = []
         N = 10
         for i in range(N):
-            start = time.time()
+            start = time.perf_counter()
             fn(i, *args, **kwargs)
-            times.append(time.time() - start)
+            times.append(time.perf_counter() - start)
         print('%0.3f ... %s' % (round(sum(times) / N, 3), fn.__name__))
     return inner
 
