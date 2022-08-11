@@ -1128,6 +1128,9 @@ class ColumnBase(Node):
     def unalias(self):
         return self
 
+    def bind_to(self, dest):
+        return BindTo(self, dest)
+
     def cast(self, as_type):
         return Cast(self, as_type)
 
@@ -1336,6 +1339,15 @@ class Alias(WrappedNode):
                     .sql(Entity(self._alias)))
         else:
             return ctx.sql(Entity(self._alias))
+
+
+class BindTo(WrappedNode):
+    def __init__(self, node, dest):
+        super(BindTo, self).__init__(node)
+        self.dest = dest
+
+    def __sql__(self, ctx):
+        return ctx.sql(self.node)
 
 
 class Negated(WrappedNode):
@@ -7721,6 +7733,12 @@ class ModelCursorWrapper(BaseModelCursorWrapper):
                     key = field.source
                 else:
                     key = field.model
+            elif isinstance(node, BindTo):
+                if node.dest not in self.key_to_constructor:
+                    raise ValueError('%s specifies bind-to %s, but %s is not '
+                                     'among the selected sources.' %
+                                     (node.unwrap(), node.dest, node.dest))
+                key = node.dest
             else:
                 if isinstance(node, Node):
                     node = node.unwrap()

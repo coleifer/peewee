@@ -4868,3 +4868,52 @@ class TestDataModifyingCTEIntegration(ModelTestCase):
         self.assertEqual(sorted([(p.name, p.price) for p in C_Product]), [
             ('p0', 0), ('p1', 1), ('p2', 2), ('p3', 3), ('p4', 4), ('p5', 5),
             ('p6', 6)])
+
+
+class TestBindTo(ModelTestCase):
+    requires = [User, Tweet]
+
+    def test_bind_to(self):
+        for i in (1, 2, 3):
+            user = User.create(username='u%s' % i)
+            Tweet.create(user=user, content='t%s' % i)
+
+        # Alias to a particular field-name.
+        name = Case(User.username, [
+            ('u1', 'user 1'),
+            ('u2', 'user 2')], 'someone else')
+        q = (Tweet
+             .select(Tweet.content, name.alias('username').bind_to(User))
+             .join(User)
+             .order_by(Tweet.content))
+        with self.assertQueryCount(1):
+            self.assertEqual([(t.content, t.user.username) for t in q], [
+                ('t1', 'user 1'),
+                ('t2', 'user 2'),
+                ('t3', 'someone else')])
+
+        # Use a different alias.
+        q = (Tweet
+             .select(Tweet.content, name.alias('display').bind_to(User))
+             .join(User)
+             .order_by(Tweet.content))
+        with self.assertQueryCount(1):
+            self.assertEqual([(t.content, t.user.display) for t in q], [
+                ('t1', 'user 1'),
+                ('t2', 'user 2'),
+                ('t3', 'someone else')])
+
+        # Ensure works with model and field aliases.
+        TA, UA = Tweet.alias(), User.alias()
+        name = Case(UA.username, [
+            ('u1', 'user 1'),
+            ('u2', 'user 2')], 'someone else')
+        q = (TA
+             .select(TA.content, name.alias('display').bind_to(UA))
+             .join(UA, on=(UA.id == TA.user))
+             .order_by(TA.content))
+        with self.assertQueryCount(1):
+            self.assertEqual([(t.content, t.user.display) for t in q], [
+                ('t1', 'user 1'),
+                ('t2', 'user 2'),
+                ('t3', 'someone else')])
