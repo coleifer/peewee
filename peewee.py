@@ -1240,6 +1240,7 @@ class ColumnBase(Node):
                                  'end-point.')
             return self.between(item.start, item.stop)
         return self == item
+    def __iter__(self): raise NotImplementedError  # Prevent accidents.
 
     def distinct(self):
         return NodeList((SQL('DISTINCT'), self))

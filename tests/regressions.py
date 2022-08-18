@@ -1736,3 +1736,8 @@ class TestDjangoFilterRegression(ModelTestCase):
 
         q = DF.select().join(DFC).join(DFGC)
         assertNames(q.filter(dfc_set__dfgc_set__name='a1-1'), ['a'])
+
+
+class TestFunctionInfiniteLoop(BaseTestCase):
+    def test_function_infinite_loop(self):
+        self.assertRaises(NotImplementedError, lambda: list(fn.COUNT()))
