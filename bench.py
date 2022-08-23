@@ -105,6 +105,12 @@ def select_related_dicts(i):
         pass
 
 @timed
+def select_related_objects(i):
+    query = Item.select(Item, Collection).join(Collection).objects()
+    for item in query:
+        pass
+
+@timed
 def select_prefetch(i):
     query = prefetch(Collection.select(), Item)
     for c in query:
@@ -128,6 +134,7 @@ if __name__ == '__main__':
     select()
     select_related()
     select_related_left()
+    select_related_objects()
     select_related_dicts()
     select_related_dbapi_raw()
     select_prefetch()
