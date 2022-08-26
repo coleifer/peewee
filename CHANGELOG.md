@@ -7,7 +7,18 @@ https://github.com/coleifer/peewee/releases
 
 ## master
 
-[View commits](https://github.com/coleifer/peewee/compare/3.15.1...master)
+[View commits](https://github.com/coleifer/peewee/compare/3.15.2...master)
+
+## 3.15.2
+
+* Fix bug where field-specific conversions were being applied to the pattern
+  used for LIKE / ILIKE operations. Refs #2609
+* Fix possible infinite loop when accidentally invoking the `__iter__` method
+  on certain `Column` subclasses. Refs #2606
+* Add new helper for specifying which Model a particular selected column-like
+  should be bound to, in queries with joins that select from multiple sources.
+
+[View commits](https://github.com/coleifer/peewee/compare/3.15.1...3.15.2)
 
 ## 3.15.1
 
