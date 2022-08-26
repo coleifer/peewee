@@ -1740,4 +1740,4 @@ class TestDjangoFilterRegression(ModelTestCase):
 
 class TestFunctionInfiniteLoop(BaseTestCase):
     def test_function_infinite_loop(self):
-        self.assertRaises(NotImplementedError, lambda: list(fn.COUNT()))
+        self.assertRaises(TypeError, lambda: list(fn.COUNT()))
