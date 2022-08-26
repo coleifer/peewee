@@ -1204,7 +1204,13 @@ class ColumnBase(Node):
     def _escape_like_expr(self, s, template):
         if s.find('_') >= 0 or s.find('%') >= 0 or s.find('\\') >= 0:
             s = s.replace('\\', '\\\\').replace('_', '\\_').replace('%', '\\%')
-            return NodeList((template % s, SQL('ESCAPE'), '\\'))
+            # Pass the expression and escape string as unconverted values, to
+            # avoid (e.g.) a Json field converter turning the escaped LIKE
+            # pattern into a Json-quoted string.
+            return NodeList((
+                Value(template % s, converter=False),
+                SQL('ESCAPE'),
+                Value('\\', converter=False)))
         return template % s
     def contains(self, rhs):
         if isinstance(rhs, Node):
