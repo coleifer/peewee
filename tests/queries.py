@@ -116,6 +116,18 @@ class TestQueryExecution(DatabaseTestCase):
         query = query.where(Register.value >= 2)
         self.assertEqual(query.scalar(as_tuple=True), (15, 3, 5))
 
+    def test_scalars(self):
+        values = [1.0, 1.5, 2.0, 5.0, 8.0]
+        (Register
+         .insert([{Register.value: value} for value in values])
+         .execute())
+
+        query = Register.select(Register.value)
+        self.assertEqual(query.scalars(), [1.0, 1.5, 2.0, 5.0, 8.0])
+
+        query = query.where(Register.value < 5)
+        self.assertEqual(query.scalars(), [1.0, 1.5, 2.0])
+
     def test_slicing_select(self):
         values = [1., 1., 2., 3., 5., 8.]
         (Register

@@ -2212,6 +2212,10 @@ class SelectBase(_HashableSource, Source, SelectQuery):
         return row[0] if row and not as_tuple else row
 
     @database_required
+    def scalars(self, database):
+        return [t[0] for t in self.tuples()]
+
+    @database_required
     def count(self, database, clear_limit=False):
         clone = self.order_by().alias('_wrapped')
         if clear_limit:
