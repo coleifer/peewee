@@ -101,8 +101,8 @@ value, simply pass in ``charset`` alongside your other values:
 Consult your database driver's documentation for the available parameters:
 
 * Postgres: `psycopg2 <http://initd.org/psycopg/docs/module.html#psycopg2.connect>`_
-* MySQL: `MySQLdb <http://mysql-python.sourceforge.net/MySQLdb.html#some-mysql-examples>`_
 * MySQL: `pymysql <https://github.com/PyMySQL/PyMySQL/blob/f08f01fe8a59e8acfb5f5add4a8fe874bec2a196/pymysql/connections.py#L494-L513>`_
+* MySQL: `mysqlclient <https://github.com/PyMySQL/mysqlclient>`_
 * SQLite: `sqlite3 <https://docs.python.org/2/library/sqlite3.html#sqlite3.connect>`_
 * CockroachDB: see `psycopg2 <http://initd.org/psycopg/docs/module.html#psycopg2.connect>`_
 
@@ -564,7 +564,7 @@ Using MySQL
 
 To connect to a MySQL database, we will use :py:class:`MySQLDatabase`. After
 the database name, you can specify arbitrary connection parameters that will be
-passed back to the driver (either MySQLdb or pymysql).
+passed back to the driver (e.g. ``pymysql`` or ``mysqlclient``).
 
 .. code-block:: python
 
@@ -578,6 +578,20 @@ passed back to the driver (either MySQLdb or pymysql).
     class User(BaseModel):
         username = CharField()
         # etc, etc
+
+Driver information:
+
+* `pymysql <https://github.com/PyMySQL/PyMySQL>`_ is a pure-python mysql client,
+  works with python 2 and 3. Peewee will use attempt to use pymysql first.
+* `mysqlclient <https://github.com/PyMySQL/mysqlclient-python>`_ uses a c
+  extension and supports python 3. It exposes a ``MySQLdb`` module. Peewee will
+  attempt to use this module if pymysql is not installed.
+* ``mysql-python`` is also called `MySQLdb1 <https://github.com/farcepest/MySQLdb1>`_
+  and is legacy and should not be used. Since this shares the same module name
+  as mysqlclient, same applies.
+* `mysql-connector python <https://github.com/mysql/mysql-connector-python>`_ pure-python
+  (I think??) supports python 3. To use this driver you can use :ref:`MySQLConnectorDatabase`
+  from the ``playhouse.mysql_ext`` extension.
 
 Error 2006: MySQL server has gone away
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
