@@ -1603,31 +1603,41 @@ Peewee provides an alternate database implementation for using the
 the `mariadb-connector <https://mariadb-corporation.github.io/mariadb-connector-python/>`_.
 The implementations can be found in ``playhouse.mysql_ext``.
 
-Example usage of mysql-connector:
+.. py:class:: MySQLConnectorDatabase(database, **kwargs)
 
-.. code-block:: python
+    Database implementation using `mysql-connector <https://dev.mysql.com/doc/connector-python/en/>`_.
+    Full list of supported `connection parameters <https://dev.mysql.com/doc/connector-python/en/connector-python-connectargs.html>`_.
 
-    from playhouse.mysql_ext import MySQLConnectorDatabase
+    Example usage of mysql-connector:
 
-    # MySQL database implementation that utilizes mysql-connector driver.
-    db = MySQLConnectorDatabase('my_database', host='1.2.3.4', user='mysql')
+    .. code-block:: python
 
-Example usage of mariadb-connector:
+        from playhouse.mysql_ext import MySQLConnectorDatabase
 
-.. code-block:: python
+        # MySQL database implementation that utilizes mysql-connector driver.
+        db = MySQLConnectorDatabase('my_database', host='1.2.3.4', user='mysql')
 
-    from playhouse.mysql_ext import MariaDBConnectorDatabase
+.. py:class:: MariaDBConnectorDatabase(database, **kwargs)
 
-    # MySQL database implementation that utilizes mysql-connector driver.
-    db = MariaDBConnectorDatabase('my_database', host='1.2.3.4', user='mysql')
+    Database implementation using `mariadb-connector <https://mariadb-corporation.github.io/mariadb-connector-python/>`_.
+    Full list of supported `connection parameters <https://mariadb-corporation.github.io/mariadb-connector-python/module.html#constructors>`_.
 
-.. note::
-    The :py:class:`MariaDBConnectorDatabase` does **not** accept the following
-    parameters:
+    Example usage of mariadb-connector:
 
-    * ``charset`` (it is always utf8mb4)
-    * ``sql_mode``
-    * ``use_unicode``
+    .. code-block:: python
+
+        from playhouse.mysql_ext import MariaDBConnectorDatabase
+
+        # MySQL database implementation that utilizes mysql-connector driver.
+        db = MariaDBConnectorDatabase('my_database', host='1.2.3.4', user='mysql')
+
+    .. note::
+        The :py:class:`MariaDBConnectorDatabase` does **not** accept the following
+        parameters:
+
+        * ``charset`` (it is always utf8mb4)
+        * ``sql_mode``
+        * ``use_unicode``
 
 Additional MySQL-specific helpers:
 
