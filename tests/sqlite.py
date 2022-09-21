@@ -2495,7 +2495,6 @@ class TestSqliteReturningConfig(ModelTestCase):
         kvr = KVR.create(key='k1', value=1)
         self.assertEqual(kvr.key, 'k1')
 
-    @skip_if(sys.version_info >= (3, 11), 'test fails on 3.11')
     def test_insert_behavior(self):
         iq = User.insert({'username': 'u1'})
         self.assertEqual(iq.execute(), 1)
@@ -2503,8 +2502,12 @@ class TestSqliteReturningConfig(ModelTestCase):
         iq = User.insert_many([{'username': 'u2'}, {'username': 'u3'}])
         self.assertEqual(list(iq.execute()), [(2,), (3,)])
 
-        iq = User.insert_many([('u4',), ('u5',)]).as_rowcount()
-        self.assertEqual(iq.execute(), 2)
+        # NOTE: sqlite3_changes() does not return the inserted rowcount until
+        # the statement has been consumed. The fact that it returned 2 is a
+        # side-effect of the statement cache and our having consumed the query
+        # in the previous test assertion. So this test is invalid.
+        #iq = User.insert_many([('u4',), ('u5',)]).as_rowcount()
+        #self.assertEqual(iq.execute(), 2)
 
         iq = KVR.insert({'key': 'k1', 'value': 1})
         self.assertEqual(iq.execute(), 'k1')
@@ -2512,8 +2515,9 @@ class TestSqliteReturningConfig(ModelTestCase):
         iq = KVR.insert_many([('k2', 2), ('k3', 3)])
         self.assertEqual(list(iq.execute()), [('k2',), ('k3',)])
 
-        iq = KVR.insert_many([('k4', 4), ('k5', 5)]).as_rowcount()
-        self.assertEqual(iq.execute(), 2)
+        # See note above.
+        #iq = KVR.insert_many([('k4', 4), ('k5', 5)]).as_rowcount()
+        #self.assertEqual(iq.execute(), 2)
 
     def test_insert_on_conflict(self):
         KVR.create(key='k1', value=1)
