@@ -582,7 +582,7 @@ passed back to the driver (e.g. ``pymysql`` or ``mysqlclient``).
 Driver information:
 
 * `pymysql <https://github.com/PyMySQL/PyMySQL>`_ is a pure-python mysql client,
-  works with python 2 and 3. Peewee will use attempt to use pymysql first.
+  works with python 2 and 3. Peewee will attempt to use pymysql first.
 * `mysqlclient <https://github.com/PyMySQL/mysqlclient-python>`_ uses a c
   extension and supports python 3. It exposes a ``MySQLdb`` module. Peewee will
   attempt to use this module if pymysql is not installed.
