@@ -34,6 +34,8 @@ jobs:
         include:
           - python-version: 3.6
             peewee-backend: cockroachdb
+          - python-version: "3.10"
+            peewee-backend: cockroachdb
     steps:
       - uses: actions/checkout@v2
       - uses: actions/setup-python@v2
@@ -54,9 +56,9 @@ jobs:
       - name: crdb
         if: ${{ matrix.peewee-backend == 'cockroachdb' }}
         run: |
-          wget -qO- https://binaries.cockroachdb.com/cockroach-v20.1.1.linux-amd64.tgz | tar xz
-          ./cockroach-v20.1.1.linux-amd64/cockroach start-single-node --insecure --background
-          ./cockroach-v20.1.1.linux-amd64/cockroach sql --insecure -e 'create database peewee_test;'
+          wget -qO- https://binaries.cockroachdb.com/cockroach-v22.1.7.linux-amd64.tgz | tar xz
+          ./cockroach-v22.1.7.linux-amd64/cockroach start-single-node --insecure --background
+          ./cockroach-v22.1.7.linux-amd64/cockroach sql --insecure -e 'create database peewee_test;'
       - name: runtests ${{ matrix.peewee-backend }} - ${{ matrix.python-version }}
         env:
           PEEWEE_TEST_BACKEND: ${{ matrix.peewee-backend }}
