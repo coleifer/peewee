@@ -10,6 +10,56 @@ from peewee import callable_
 
 _clone_set = lambda s: set(s) if s else set()
 
+def many_to_many_relation(should_skip, exclude,model,
+                          data, manytomany=False, recurse=True,
+                          backrefs=False, only=None, max_depth=None):
+    if manytomany:
+        for name, m2m in model._meta.manytomany.items():
+            if should_skip(name):
+                continue
+
+            exclude.update((m2m, m2m.rel_model._meta.manytomany[m2m.backref]))
+            for fkf in m2m.through_model._meta.refs:
+                exclude.add(fkf)
+
+            accum = []
+            for rel_obj in getattr(model, name):
+                accum.append(model_to_dict(
+                    rel_obj,
+                    recurse=recurse,
+                    backrefs=backrefs,
+                    only=only,
+                    exclude=exclude,
+                    max_depth=max_depth - 1))
+            data[name] = accum
+
+
+def backref_recurse_relationship(model, model_class, data,
+                                 recurse=True, backrefs=False, exclude=None,
+                                 only=None, max_depth=None):
+    if backrefs and recurse:
+        for foreign_key, rel_model in model._meta.backrefs.items():
+            if foreign_key.backref == '+': continue
+            descriptor = getattr(model_class, foreign_key.backref)
+            if descriptor in exclude or foreign_key in exclude:
+                continue
+            if only and (descriptor not in only) and (foreign_key not in only):
+                continue
+
+            accum = []
+            exclude.add(foreign_key)
+            related_query = getattr(model, foreign_key.backref)
+
+            for rel_obj in related_query:
+                accum.append(model_to_dict(
+                    rel_obj,
+                    recurse=recurse,
+                    backrefs=backrefs,
+                    only=only,
+                    exclude=exclude,
+                    max_depth=max_depth - 1))
+
+            data[foreign_key.backref] = accum
 
 def model_to_dict(model, recurse=True, backrefs=False, only=None,
                   exclude=None, seen=None, extra_attrs=None,
@@ -51,25 +101,7 @@ def model_to_dict(model, recurse=True, backrefs=False, only=None,
     exclude |= seen
     model_class = type(model)
 
-    if manytomany:
-        for name, m2m in model._meta.manytomany.items():
-            if should_skip(name):
-                continue
-
-            exclude.update((m2m, m2m.rel_model._meta.manytomany[m2m.backref]))
-            for fkf in m2m.through_model._meta.refs:
-                exclude.add(fkf)
-
-            accum = []
-            for rel_obj in getattr(model, name):
-                accum.append(model_to_dict(
-                    rel_obj,
-                    recurse=recurse,
-                    backrefs=backrefs,
-                    only=only,
-                    exclude=exclude,
-                    max_depth=max_depth - 1))
-            data[name] = accum
+    many_to_many_relation(should_skip, exclude, model, data, manytomany, recurse, backrefs, only, max_depth)
 
     for field in model._meta.sorted_fields:
         if should_skip(field):
@@ -101,29 +133,7 @@ def model_to_dict(model, recurse=True, backrefs=False, only=None,
             else:
                 data[attr_name] = attr
 
-    if backrefs and recurse:
-        for foreign_key, rel_model in model._meta.backrefs.items():
-            if foreign_key.backref == '+': continue
-            descriptor = getattr(model_class, foreign_key.backref)
-            if descriptor in exclude or foreign_key in exclude:
-                continue
-            if only and (descriptor not in only) and (foreign_key not in only):
-                continue
-
-            accum = []
-            exclude.add(foreign_key)
-            related_query = getattr(model, foreign_key.backref)
-
-            for rel_obj in related_query:
-                accum.append(model_to_dict(
-                    rel_obj,
-                    recurse=recurse,
-                    backrefs=backrefs,
-                    only=only,
-                    exclude=exclude,
-                    max_depth=max_depth - 1))
-
-            data[foreign_key.backref] = accum
+    backref_recurse_relationship(model, model_class, data, recurse, backrefs, exclude, only, max_depth)
 
     return data
 
