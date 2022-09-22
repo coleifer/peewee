@@ -7,7 +7,17 @@ https://github.com/coleifer/peewee/releases
 
 ## master
 
-[View commits](https://github.com/coleifer/peewee/compare/3.15.2...master)
+[View commits](https://github.com/coleifer/peewee/compare/3.15.3...master)
+
+## 3.15.3
+
+* Add `scalars()` query method (complements `scalar()`), roughly equivalent to
+  writing `[t[0] for t in query.tuples()]`.
+* Small doc improvements
+* Fix and remove some flaky test assertions with Sqlite INSERT + RETURNING.
+* Fix innocuous failing Sqlite test on big-endian machines.
+
+[View commits](https://github.com/coleifer/peewee/compare/3.15.2...3.15.3)
 
 ## 3.15.2
 
