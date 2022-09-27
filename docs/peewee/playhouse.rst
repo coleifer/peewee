@@ -2997,6 +2997,26 @@ Add new field(s) to an existing model:
         migrator.add_column('comment_tbl', 'comment', comment_field),
     )
 
+.. note::
+    Peewee follows the Django convention of, by default, appending ``_id`` to
+    the column name for a given :py:class:`ForeignKeyField`. When adding a
+    foreign-key, you will want to ensure you give it the proper column name. For
+    example, if I want to add a ``user`` foreign-key to a ``Tweet`` model:
+
+    .. code-block:: python
+
+        # Our desired model will look like this:
+        class Tweet(BaseModel):
+            user = ForeignKeyField(User)  # I want to add this field.
+            # ... other fields ...
+
+        # Migration code:
+        user = ForeignKeyField(User, field=User.id, null=True)
+        migrate(
+            # Note that the column name given is "user_id".
+            migrator.add_column(Tweet._meta.table_name, 'user_id', user),
+        )
+
 Renaming a field:
 
 .. code-block:: python
