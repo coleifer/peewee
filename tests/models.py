@@ -1865,8 +1865,8 @@ class TestFunctionCoerce(ModelTestCase):
         query = Sample.select(counter)
         self.assertEqual(query.scalar(), [0, 1, 2])
 
-    @requires_models(Category)
-    def test_no_coerce_count(self):
+    @requires_models(Category, Sample)
+    def test_no_coerce_count_avg(self):
         for i in range(10):
             Category.create(name=str(i))
 
@@ -1877,6 +1877,11 @@ class TestFunctionCoerce(ModelTestCase):
         # Force the value to be coerced using the field's db_value().
         query = Category.select(fn.COUNT(Category.name).coerce(True))
         self.assertEqual(query.scalar(), '10')
+
+        # Ensure avg over an integer field is returned as a float.
+        Sample.insert_many([(1, 0), (2, 0)]).execute()
+        query = Sample.select(fn.AVG(Sample.counter).alias('a'))
+        self.assertEqual(query.get().a, 1.5)
 
 
 class TestJoinModelAlias(ModelTestCase):

@@ -1563,13 +1563,15 @@ def Check(constraint, name=None):
 
 
 class Function(ColumnBase):
+    no_coerce_functions = set(('sum', 'count', 'avg', 'cast', 'array_agg'))
+
     def __init__(self, name, arguments, coerce=True, python_value=None):
         self.name = name
         self.arguments = arguments
         self._filter = None
         self._order_by = None
         self._python_value = python_value
-        if name and name.lower() in ('sum', 'count', 'cast', 'array_agg'):
+        if name and name.lower() in self.no_coerce_functions:
             self._coerce = False
         else:
             self._coerce = coerce
