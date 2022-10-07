@@ -129,6 +129,7 @@ __all__ = [
     'PostgresqlDatabase',
     'PrimaryKeyField',  # XXX: Deprecated, change to AutoField.
     'prefetch',
+    'PREFETCH_TYPE',
     'ProgrammingError',
     'Proxy',
     'QualifiedNames',
@@ -345,6 +346,11 @@ ROW = attrdict(
     NAMED_TUPLE=3,
     CONSTRUCTOR=4,
     MODEL=5)
+
+# Query type to use with prefetch
+PREFETCH_TYPE = attrdict(
+    WHERE=1,
+    JOIN=2)
 
 SCOPE_NORMAL = 1
 SCOPE_SOURCE = 2
@@ -7041,8 +7047,8 @@ class BaseModelSelect(_ModelQueryHelper):
             self.execute()
         return iter(self._cursor_wrapper)
 
-    def prefetch(self, *subqueries):
-        return prefetch(self, *subqueries)
+    def prefetch(self, *subqueries, prefetch_type=PREFETCH_TYPE.WHERE):
+        return prefetch(self, *subqueries, prefetch_type=prefetch_type)
 
     def get(self, database=None):
         clone = self.paginate(1, 1)
@@ -7867,7 +7873,7 @@ class PrefetchQuery(collections.namedtuple('_PrefetchQuery', (
                 id_map[key].append(instance)
 
 
-def prefetch_add_subquery(sq, subqueries):
+def prefetch_add_subquery(sq, subqueries, prefetch_type):
     fixed_queries = [PrefetchQuery(sq)]
     for i, subquery in enumerate(subqueries):
         if isinstance(subquery, tuple):
@@ -7903,32 +7909,50 @@ def prefetch_add_subquery(sq, subqueries):
         dest = (target_model,) if target_model else None
 
         if fks:
-            expr = []
-            select_pks = []
-            for fk, pk in zip(fks, pks):
-                expr.append(getattr(last_query.c, pk.column_name) == fk)
-                select_pks.append(pk)
-            subquery = subquery.distinct().join(last_query.select(*select_pks), on=reduce(operator.or_, expr))
+            if prefetch_type == PREFETCH_TYPE.WHERE:
+                expr = reduce(operator.or_, [
+                    (fk << last_query.select(pk))
+                    for (fk, pk) in zip(fks, pks)])
+                subquery = subquery.where(expr)
+            elif prefetch_type == PREFETCH_TYPE.JOIN:
+                expr = []
+                select_pks = []
+                for fk, pk in zip(fks, pks):
+                    expr.append(getattr(last_query.c, pk.column_name) == fk)
+                    select_pks.append(pk)
+                subquery = subquery.distinct().join(last_query.select(*select_pks),
+                                                    on=reduce(operator.or_, expr))
             fixed_queries.append(PrefetchQuery(subquery, fks, False, dest))
         elif backrefs:
             expressions = []
-            select_fks = []
-            for backref in backrefs:
-                rel_field = getattr(subquery_model, backref.rel_field.name)
-                fk_field = getattr(last_obj, backref.name)
-                select_fks.append(fk_field)
-                expressions.append(rel_field == getattr(last_query.c, fk_field.column_name))
-            subquery = subquery.distinct().join(last_query.select(*select_fks), on=reduce(operator.or_, expressions))
+            def fields():
+                for backref in backrefs:
+                    rel_field = getattr(subquery_model, backref.rel_field.name)
+                    fk_field = getattr(last_obj, backref.name)
+                    yield (rel_field, fk_field)
+
+            if prefetch_type == PREFETCH_TYPE.WHERE:
+                for rel_field, fk_field in fields():
+                    expressions.append(rel_field << last_query.select(fk_field))
+                subquery = subquery.where(reduce(operator.or_, expressions))
+            elif prefetch_type == PREFETCH_TYPE.JOIN:
+                select_fks = []
+                for rel_field, fk_field in fields():
+                    select_fks.append(fk_field)
+                    expressions.append(
+                        rel_field == getattr(last_query.c, fk_field.column_name))
+                subquery = subquery.distinct().join(last_query.select(*select_fks),
+                                         on=reduce(operator.or_, expressions))
             fixed_queries.append(PrefetchQuery(subquery, backrefs, True, dest))
 
     return fixed_queries
 
 
-def prefetch(sq, *subqueries):
+def prefetch(sq, *subqueries, prefetch_type=PREFETCH_TYPE.WHERE):
     if not subqueries:
         return sq
 
-    fixed_queries = prefetch_add_subquery(sq, subqueries)
+    fixed_queries = prefetch_add_subquery(sq, subqueries, prefetch_type)
     deps = {}
     rel_map = {}
     for pq in reversed(fixed_queries):
