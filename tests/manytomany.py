@@ -277,33 +277,37 @@ class TestManyToMany(ModelTestCase):
 
     def test_prefetch_notes(self):
         self._set_data()
-        with self.assertQueryCount(3):
-            gargie, huey, mickey, zaizee = prefetch(
-                User.select().order_by(User.username),
-                NoteUserThrough,
-                Note)
+        for pt in PREFETCH_TYPE.values():
+            with self.assertQueryCount(3):
+                gargie, huey, mickey, zaizee = prefetch(
+                    User.select().order_by(User.username),
+                    NoteUserThrough,
+                    Note,
+                    prefetch_type=pt)
 
-        with self.assertQueryCount(0):
-            self.assertNotes(gargie.notes, [1, 2])
-        with self.assertQueryCount(0):
-            self.assertNotes(zaizee.notes, [4, 5])
+            with self.assertQueryCount(0):
+                self.assertNotes(gargie.notes, [1, 2])
+            with self.assertQueryCount(0):
+                self.assertNotes(zaizee.notes, [4, 5])
         with self.assertQueryCount(2):
             self.assertNotes(User.create(username='x').notes, [])
 
     def test_prefetch_users(self):
         self._set_data()
-        with self.assertQueryCount(3):
-            n1, n2, n3, n4, n5 = prefetch(
-                Note.select().order_by(Note.text),
-                NoteUserThrough,
-                User)
+        for pt in PREFETCH_TYPE.values():
+            with self.assertQueryCount(3):
+                n1, n2, n3, n4, n5 = prefetch(
+                    Note.select().order_by(Note.text),
+                    NoteUserThrough,
+                    User,
+                    prefetch_type=pt)
 
-        with self.assertQueryCount(0):
-            self.assertUsers(n1.users, ['gargie'])
-        with self.assertQueryCount(0):
-            self.assertUsers(n2.users, ['gargie', 'huey'])
-        with self.assertQueryCount(0):
-            self.assertUsers(n5.users, ['zaizee'])
+            with self.assertQueryCount(0):
+                self.assertUsers(n1.users, ['gargie'])
+            with self.assertQueryCount(0):
+                self.assertUsers(n2.users, ['gargie', 'huey'])
+            with self.assertQueryCount(0):
+                self.assertUsers(n5.users, ['zaizee'])
         with self.assertQueryCount(2):
             self.assertUsers(Note.create(text='x').users, [])
 
