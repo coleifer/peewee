@@ -4784,13 +4784,19 @@ Model
 
         Use Django-style filters to express a WHERE clause.
 
-    .. py:method:: prefetch(*subqueries)
+    .. py:method:: prefetch(*subqueries[, prefetch_type=PREFETCH_TYPE.WHERE])
 
         :param subqueries: A list of :py:class:`Model` classes or select
             queries to prefetch.
+        :param prefetch_type: Query type to use for the subqueries.
         :returns: a list of models with selected relations prefetched.
 
         Execute the query, prefetching the given additional resources.
+
+        Prefetch type may be one of:
+
+        * ``PREFETCH_TYPE.WHERE``
+        * ``PREFETCH_TYPE.JOIN``
 
         See also :py:func:`prefetch` standalone function.
 
@@ -4812,15 +4818,23 @@ Model
             mapped correctly.
 
 
-.. py:function:: prefetch(sq, *subqueries)
+.. py:function:: prefetch(sq, *subqueries[, prefetch_type=PREFETCH_TYPE.WHERE])
 
     :param sq: Query to use as starting-point.
     :param subqueries: One or more models or :py:class:`ModelSelect` queries
         to eagerly fetch.
+    :param prefetch_type: Query type to use for the subqueries.
     :returns: a list of models with selected relations prefetched.
 
     Eagerly fetch related objects, allowing efficient querying of multiple
-    tables when a 1-to-many relationship exists.
+    tables when a 1-to-many relationship exists. The prefetch type changes how
+    the subqueries are constructed which may be desirable dependending on the
+    database engine in use.
+
+        Prefetch type may be one of:
+
+        * ``PREFETCH_TYPE.WHERE``
+        * ``PREFETCH_TYPE.JOIN``
 
     For example, it is simple to query a many-to-1 relationship efficiently::
 

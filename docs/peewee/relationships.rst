@@ -1005,3 +1005,5 @@ Some things to consider when using :py:func:`prefetch`:
 * Foreign keys must exist between the models being prefetched.
 * `LIMIT` works as you'd expect on the outer-most query, but may be difficult
   to implement correctly if trying to limit the size of the sub-selects.
+  * The parameter `prefetch_type` may be used when `LIMIT` is not supported
+    with the default query construction (e.g. with MySQL).
