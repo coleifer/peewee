@@ -373,6 +373,7 @@ class TestPrefetch(ModelTestCase):
         r4 = RC(z, c)
 
         def assertRelationships(attr, values):
+            self.assertEqual(len(attr),len(values))
             for relationship, value in zip(attr, values):
                 self.assertEqual(relationship.__data__, value)
 

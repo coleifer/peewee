@@ -7903,18 +7903,22 @@ def prefetch_add_subquery(sq, subqueries):
         dest = (target_model,) if target_model else None
 
         if fks:
-            expr = reduce(operator.or_, [
-                (fk << last_query.select(pk))
-                for (fk, pk) in zip(fks, pks)])
-            subquery = subquery.where(expr)
+            expr = []
+            select_pks = []
+            for fk, pk in zip(fks, pks):
+                expr.append(getattr(last_query.c, pk.column_name) == fk)
+                select_pks.append(pk)
+            subquery = subquery.distinct().join(last_query.select(*select_pks), on=reduce(operator.or_, expr))
             fixed_queries.append(PrefetchQuery(subquery, fks, False, dest))
         elif backrefs:
             expressions = []
+            select_fks = []
             for backref in backrefs:
                 rel_field = getattr(subquery_model, backref.rel_field.name)
                 fk_field = getattr(last_obj, backref.name)
-                expressions.append(rel_field << last_query.select(fk_field))
-            subquery = subquery.where(reduce(operator.or_, expressions))
+                select_fks.append(fk_field)
+                expressions.append(rel_field == getattr(last_query.c, fk_field.column_name))
+            subquery = subquery.distinct().join(last_query.select(*select_fks), on=reduce(operator.or_, expressions))
             fixed_queries.append(PrefetchQuery(subquery, backrefs, True, dest))
 
     return fixed_queries
