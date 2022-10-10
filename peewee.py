@@ -6268,9 +6268,10 @@ class ModelBase(type):
                        'only_save_dirty', 'legacy_table_names',
                        'table_settings', 'strict_tables'])
 
-    def __new__(cls, name, bases, attrs):
+    def __new__(cls, name, bases, attrs, **kwargs):
         if name == MODEL_BASE or bases[0].__name__ == MODEL_BASE:
-            return super(ModelBase, cls).__new__(cls, name, bases, attrs)
+            return super(ModelBase, cls).__new__(cls, name, bases, attrs,
+                                                 **kwargs)
 
         meta_options = {}
         meta = attrs.pop('Meta', None)
@@ -6310,7 +6311,7 @@ class ModelBase(type):
         Schema = meta_options.get('schema_manager_class', SchemaManager)
 
         # Construct the new class.
-        cls = super(ModelBase, cls).__new__(cls, name, bases, attrs)
+        cls = super(ModelBase, cls).__new__(cls, name, bases, attrs, **kwargs)
         cls.__data__ = cls.__rel__ = None
 
         cls._meta = Meta(cls, **meta_options)
