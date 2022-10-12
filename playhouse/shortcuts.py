@@ -249,6 +249,11 @@ class ReconnectMixin(object):
         try:
             return super(ReconnectMixin, self).execute_sql(sql, params, commit)
         except Exception as exc:
+            # If we are in a transaction, do not reconnect silently as
+            # any changes could be lost.
+            if self.in_transaction():
+                raise exc
+
             exc_class = type(exc)
             if exc_class not in self._reconnect_errors:
                 raise exc
