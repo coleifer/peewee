@@ -7047,8 +7047,8 @@ class BaseModelSelect(_ModelQueryHelper):
             self.execute()
         return iter(self._cursor_wrapper)
 
-    def prefetch(self, *subqueries, prefetch_type=PREFETCH_TYPE.WHERE):
-        return prefetch(self, *subqueries, prefetch_type=prefetch_type)
+    def prefetch(self, *subqueries, **kwargs):
+        return prefetch(self, *subqueries, **kwargs)
 
     def get(self, database=None):
         clone = self.paginate(1, 1)
@@ -7950,9 +7950,12 @@ def prefetch_add_subquery(sq, subqueries, prefetch_type):
     return fixed_queries
 
 
-def prefetch(sq, *subqueries, prefetch_type=PREFETCH_TYPE.WHERE):
+def prefetch(sq, *subqueries, **kwargs):
     if not subqueries:
         return sq
+    prefetch_type = kwargs.pop('prefetch_type', PREFETCH_TYPE.WHERE)
+    if kwargs:
+        raise ValueError('Unrecognized arguments: %s' % kwargs)
 
     fixed_queries = prefetch_add_subquery(sq, subqueries, prefetch_type)
     deps = {}
