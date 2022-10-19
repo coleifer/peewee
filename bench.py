@@ -117,6 +117,14 @@ def select_prefetch(i):
         for i in c.items:
             pass
 
+@timed
+def select_prefetch_join(i):
+    query = prefetch(Collection.select(), Item,
+                     prefetch_type=PREFETCH_TYPE.JOIN)
+    for c in query:
+        for i in c.items:
+            pass
+
 
 if __name__ == '__main__':
     db.create_tables([Register, Collection, Item])
@@ -138,4 +146,5 @@ if __name__ == '__main__':
     select_related_dicts()
     select_related_dbapi_raw()
     select_prefetch()
+    select_prefetch_join()
     db.drop_tables([Register, Collection, Item])
