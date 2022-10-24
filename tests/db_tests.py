@@ -921,3 +921,24 @@ class TestExceptionWrapper(ModelTestCase):
 
         if exc is None: raise Exception('expected integrity error not raised')
         self.assertTrue(exc.orig.__module__ != 'peewee')
+
+
+class TestModelPropertyHelper(BaseTestCase):
+    def test_model_property(self):
+        database = get_in_memory_db()
+        class M1(database.Model): pass
+        class M2(database.Model): pass
+        class CM1(M1): pass
+        for M in (M1, M2, CM1):
+            self.assertTrue(M._meta.database is database)
+
+    def test_model_property_on_proxy(self):
+        db = DatabaseProxy()
+        class M1(db.Model): pass
+        class M2(db.Model): pass
+        class CM1(M1): pass
+
+        test_db = get_in_memory_db()
+        db.initialize(test_db)
+        for M in (M1, M2, CM1):
+            self.assertEqual(M._meta.database.database, ':memory:')

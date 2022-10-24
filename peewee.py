@@ -474,6 +474,10 @@ class DatabaseProxy(Proxy):
         return _transaction(self, *args, **kwargs)
     def savepoint(self):
         return _savepoint(self)
+    @property
+    def Model(self):
+        class Meta: database = self
+        return type('BaseModel', (Model,), {'Meta': Meta})
 
 
 class ModelDescriptor(object): pass
@@ -3448,6 +3452,11 @@ class Database(_callable_context_manager):
 
     def get_noop_select(self, ctx):
         return ctx.sql(Select().columns(SQL('0')).where(SQL('0')))
+
+    @property
+    def Model(self):
+        class Meta: database = self
+        return type('BaseModel', (Model,), {'Meta': Meta})
 
 
 def __pragma__(name):
