@@ -464,6 +464,8 @@ class DatabaseProxy(Proxy):
     """
     Proxy implementation specifically for proxying `Database` objects.
     """
+    __slots__ = ('obj', '_callbacks', '_Model')
+
     def connection_context(self):
         return ConnectionContext(self)
     def atomic(self, *args, **kwargs):
@@ -476,8 +478,10 @@ class DatabaseProxy(Proxy):
         return _savepoint(self)
     @property
     def Model(self):
-        class Meta: database = self
-        return type('BaseModel', (Model,), {'Meta': Meta})
+        if not hasattr(self, '_Model'):
+            class Meta: database = self
+            self._Model = type('BaseModel', (Model,), {'Meta': Meta})
+        return self._Model
 
 
 class ModelDescriptor(object): pass
@@ -3455,8 +3459,10 @@ class Database(_callable_context_manager):
 
     @property
     def Model(self):
-        class Meta: database = self
-        return type('BaseModel', (Model,), {'Meta': Meta})
+        if not hasattr(self, '_Model'):
+            class Meta: database = self
+            self._Model = type('BaseModel', (Model,), {'Meta': Meta})
+        return self._Model
 
 
 def __pragma__(name):
