@@ -2487,6 +2487,20 @@ class TestReturningIntegration(ModelTestCase):
                  .returning(User.username.alias('new_username')))
         self.assertEqual([x.new_username for x in query.execute()], ['sipp'])
 
+        # Minimal test with insert_many.
+        query = User.insert_many([('u7',), ('u8',)])
+        self.assertEqual([r for r, in query.execute()], [7, 8])
+
+        # Test with insert / on conflict.
+        query = (User
+                 .insert_many([(7, 'u7',), (9, 'u9',)],
+                              [User.id, User.username])
+                 .on_conflict(conflict_target=[User.id],
+                              update={User.username: User.username + 'x'})
+                 .returning(User))
+        self.assertEqual([(x.id, x.username) for x in query],
+                         [(7, 'u7x'), (9, 'u9')])
+
     def test_simple_returning_insert_update_delete(self):
         res = User.insert(username='charlie').returning(User).execute()
         self.assertEqual([u.username for u in res], ['charlie'])
