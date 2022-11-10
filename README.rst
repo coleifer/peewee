@@ -104,7 +104,10 @@ Queries are expressive and composable:
              .group_by(User)
              .order_by(tweet_ct.desc()))
 
-    # Do an atomic update
+    # Do an atomic update (for illustrative purposes only, imagine a simple
+    # table for tracking a "count" associated with each URL). We don't want to
+    # naively get the save in two separate steps since this is prone to race
+    # conditions.
     Counter.update(count=Counter.count + 1).where(Counter.url == request.url)
 
 Check out the `example twitter app <http://docs.peewee-orm.com/en/latest/peewee/example.html>`_.
