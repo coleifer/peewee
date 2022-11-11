@@ -7,7 +7,43 @@ https://github.com/coleifer/peewee/releases
 
 ## master
 
-[View commits](https://github.com/coleifer/peewee/compare/3.15.3...master)
+[View commits](https://github.com/coleifer/peewee/compare/3.15.4...master)
+
+## 3.15.4
+
+* Raise an exception in `ReconnectMixin` if connection is lost while inside a
+  transaction (if the transaction was interrupted presumably some changes were
+  lost and explicit intervention is needed).
+* Add `db.Model` property to reduce boilerplate.
+* Add support for running `prefetch()` queries with joins instead of subqueries
+  (this helps overcome a MySQL limitation about applying LIMITs to a subquery).
+* Add SQL `AVG` to whitelist to avoid coercing by default.
+* Allow arbitrary keywords in metaclass constructor, #2627
+* Add a `pyproject.toml` to silence warnings from newer pips when `wheel`
+  package is not available.
+
+This release has a small helper for reducing boilerplate in some cases by
+exposing a base model class as an attribute of the database instance.
+
+```python
+# old:
+db = SqliteDatabase('...')
+
+class BaseModel(Model):
+    class Meta:
+        database = db
+
+class MyModel(BaseModel):
+    pass
+
+# new:
+db = SqliteDatabase('...')
+
+class MyModel(db.Model):
+    pass
+```
+
+[View commits](https://github.com/coleifer/peewee/compare/3.15.3...3.15.4)
 
 ## 3.15.3
 
