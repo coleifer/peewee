@@ -134,4 +134,4 @@ cdef class median(object):
         elif self.ct < 3:
             return self.items[0]
         else:
-            return self.selectKth(self.ct / 2)
+            return self.selectKth(self.ct // 2)
