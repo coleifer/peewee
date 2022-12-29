@@ -234,6 +234,10 @@ class ReconnectMixin(object):
         # mysql-connector raises a slightly different error when an idle
         # connection is terminated by the server. This is equivalent to 2013.
         (OperationalError, 'MySQL Connection not available.'),
+
+        # Postgres error examples:
+        #(OperationalError, 'terminat'),
+        #(InterfaceError, 'connection already closed'),
     )
 
     def __init__(self, *args, **kwargs):
