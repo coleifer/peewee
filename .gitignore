@@ -2,7 +2,6 @@
 build
 prof/
 docs/_build/
-playhouse/*.c
 playhouse/*.h
 playhouse/*.so
 playhouse/tests/peewee_test.db
