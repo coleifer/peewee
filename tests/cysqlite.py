@@ -290,6 +290,17 @@ class TestBlob(CyDatabaseTestCase):
         blob.seek(0)
         data = blob.read(17)  # Attempting to read more data is OK.
         self.assertEqual(data, b'x' * 16)
+
+        data = blob.read(1)
+        self.assertEqual(data, b'')
+
+        blob.seek(0)
+        blob.write(b'0123456789abcdef')
+
+        self.assertEqual(blob[0], b'0')
+        self.assertEqual(blob[-1], b'f')
+        self.assertRaises(IndexError, lambda: data[17])
+
         blob.close()
 
     def test_blob_errors_opening(self):
@@ -318,6 +329,7 @@ class TestBlob(CyDatabaseTestCase):
         self.assertRaises(InterfaceError, blob.seek, 0, 0)
         self.assertRaises(InterfaceError, blob.tell)
         self.assertRaises(InterfaceError, blob.reopen, rowid)
+        blob.close()  # Safe to call again.
 
     def test_blob_readonly(self):
         rowid = self.create_blob_row(4)

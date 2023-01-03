@@ -1243,6 +1243,7 @@ cdef class Blob(object)  # Forward declaration.
 
 
 cdef inline int _check_blob_closed(Blob blob) except -1:
+    _check_connection(blob.conn)
     if not blob.pBlob:
         raise InterfaceError('Cannot operate on closed blob.')
     return 1
@@ -1283,8 +1284,9 @@ cdef class Blob(object):
         self.offset = 0
 
     cdef _close(self):
-        if self.pBlob:
-            sqlite3_blob_close(self.pBlob)
+        if self.pBlob and self.conn.db:
+            with nogil:
+                sqlite3_blob_close(self.pBlob)
         self.pBlob = <sqlite3_blob *>0
 
     def __dealloc__(self):
@@ -1294,10 +1296,34 @@ cdef class Blob(object):
         _check_blob_closed(self)
         return sqlite3_blob_bytes(self.pBlob)
 
+    def __getitem__(self, idx):
+        cdef:
+            unsigned char c
+            int i = idx
+            int rc
+            int size
+
+        _check_blob_closed(self)
+        size = sqlite3_blob_bytes(self.pBlob)
+        if i < 0: i += size
+        if i < 0 or i >= size:
+            raise IndexError('Blob index out of range (%s, %s)' % (i, size))
+
+        with nogil:
+            rc = sqlite3_blob_read(self.pBlob, &c, 1, i)
+
+        if rc != SQLITE_OK:
+            self._close()
+            raise OperationalError('Error reading from blob.')
+
+        return PyBytes_FromStringAndSize(<char *>&c, 1)
+
     def read(self, n=None):
         cdef:
             bytes pybuf
             int length = -1
+            int max_length
+            int rc
             int size
             char *buf
 
@@ -1306,18 +1332,19 @@ cdef class Blob(object):
 
         _check_blob_closed(self)
         size = sqlite3_blob_bytes(self.pBlob)
-        if self.offset == size or length == 0:
+        max_length = size - self.offset
+        if length < 0 or length > max_length:
+            length = max_length
+
+        if length == 0:
             return b''
-
-        if length < 0:
-            length = size - self.offset
-
-        if self.offset + length > size:
-            length = size - self.offset
 
         pybuf = PyBytes_FromStringAndSize(NULL, length)
         buf = PyBytes_AS_STRING(pybuf)
-        if sqlite3_blob_read(self.pBlob, buf, length, self.offset):
+        with nogil:
+            rc = sqlite3_blob_read(self.pBlob, buf, length, self.offset)
+
+        if rc != SQLITE_OK:
             self._close()
             raise OperationalError('Error reading from blob.')
 
@@ -1329,19 +1356,17 @@ cdef class Blob(object):
         _check_blob_closed(self)
         size = sqlite3_blob_bytes(self.pBlob)
         if frame_of_reference == 0:
-            if offset < 0 or offset > size:
-                raise ValueError('seek() offset outside of valid range.')
-            self.offset = offset
+            pass
         elif frame_of_reference == 1:
-            if self.offset + offset < 0 or self.offset + offset > size:
-                raise ValueError('seek() offset outside of valid range.')
-            self.offset += offset
+            offset += self.offset
         elif frame_of_reference == 2:
-            if size + offset < 0 or size + offset > size:
-                raise ValueError('seek() offset outside of valid range.')
-            self.offset = size + offset
+            offset += size
         else:
             raise ValueError('seek() frame of reference must be 0, 1 or 2.')
+
+        if offset < 0 or offset > size:
+            raise ValueError('seek() offset outside of valid range.')
+        self.offset = offset
 
     def tell(self):
         _check_blob_closed(self)
@@ -1350,21 +1375,27 @@ cdef class Blob(object):
     def write(self, bytes data):
         cdef:
             char *buf
+            int rc
+            int remaining
             int size
             Py_ssize_t buflen
 
         _check_blob_closed(self)
         size = sqlite3_blob_bytes(self.pBlob)
+        remaining = size - self.offset
         PyBytes_AsStringAndSize(data, &buf, &buflen)
-        if (<int>(buflen + self.offset)) < self.offset:
-            raise ValueError('Data is too large (integer wrap)')
-        if (<int>(buflen + self.offset)) > size:
+        if buflen > remaining:
             raise ValueError('Data would go beyond end of blob')
-        if sqlite3_blob_write(self.pBlob, buf, buflen, self.offset):
+
+        with nogil:
+            rc = sqlite3_blob_write(self.pBlob, buf, buflen, self.offset)
+
+        if rc != SQLITE_OK:
             raise OperationalError('Error writing to blob.')
         self.offset += <int>buflen
 
     def close(self):
+        _check_connection(self.conn)
         self._close()
 
     def reopen(self, rowid):
