@@ -110,8 +110,8 @@ the columns as :py:class:`Field` instances on the class.
             )
 
     # a dead simple one-to-many relationship: one user has 0..n messages, exposed by
-    # the foreign key.  because we didn't specify, a users messages will be accessible
-    # as a special attribute, User.messages
+    # the foreign key. a users messages will be accessible as a special attribute,
+    # User.messages.
     class Message(BaseModel):
         user = ForeignKeyField(User, backref='messages')
         content = TextField()
