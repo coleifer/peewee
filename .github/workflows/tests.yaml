@@ -4,6 +4,7 @@ jobs:
   tests:
     name: ${{ matrix.peewee-backend }} - ${{ matrix.python-version }}
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     services:
       mysql:
         image: mariadb:latest
