@@ -4194,7 +4194,8 @@ class MySQLDatabase(Database):
         sql = """
             SELECT column_name, is_nullable, data_type, column_default
             FROM information_schema.columns
-            WHERE table_name = %s AND table_schema = DATABASE()"""
+            WHERE table_name = %s AND table_schema = DATABASE()
+            ORDER BY ordinal_position"""
         cursor = self.execute_sql(sql, (table,))
         pks = set(self.get_primary_keys(table))
         return [ColumnMetadata(name, dt, null == 'YES', name in pks, table, df)
