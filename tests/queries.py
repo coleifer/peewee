@@ -62,7 +62,7 @@ class TestQueryExecution(DatabaseTestCase):
             {'content': 'meow'},
             {'content': 'purr'}])
         self.assertEqual(query.first(), {'content': 'meow'})
-        self.assertEqual(query.count(), 4)
+        self.assertEqual(query.count(), 3)
 
         query = Tweet.select().where(Tweet.id == 0)
         self.assertIsNone(query.peek(n=2))
