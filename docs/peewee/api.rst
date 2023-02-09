@@ -2227,6 +2227,12 @@ Query-builder
         Multiple calls for the same value of ``n`` will not result in multiple
         executions.
 
+        The query is altered in-place so it is not possible to call
+        :py:meth:`~SelectBase.first` and then later iterate over the full
+        result-set using the same query object. Again, this is done to ensure
+        that multiple calls to ``first()`` will not result in multiple query
+        executions.
+
     .. py:method:: scalar(database[, as_tuple=False[, as_dict=False]])
 
         :param Database database: database to execute query against.
