@@ -2215,10 +2215,10 @@ class SelectBase(_HashableSource, Source, SelectQuery):
 
     @database_required
     def first(self, database, n=1):
+        query = self
         if self._limit != n:
-            self._limit = n
-            self._cursor_wrapper = None
-        return self.peek(database, n=n)
+            query = self.limit(n)
+        return query.peek(database, n=n)
 
     @database_required
     def scalar(self, database, as_tuple=False, as_dict=False):
