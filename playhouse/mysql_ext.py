@@ -22,7 +22,8 @@ class MySQLConnectorDatabase(MySQLDatabase):
     def _connect(self):
         if mysql_connector is None:
             raise ImproperlyConfigured('MySQL connector not installed!')
-        return mysql_connector.connect(db=self.database, **self.connect_params)
+        return mysql_connector.connect(db=self.database, autocommit=True,
+                                       **self.connect_params)
 
     def cursor(self, commit=None):
         if self.is_closed():
@@ -40,7 +41,8 @@ class MariaDBConnectorDatabase(MySQLDatabase):
         self.connect_params.pop('charset', None)
         self.connect_params.pop('sql_mode', None)
         self.connect_params.pop('use_unicode', None)
-        return mariadb.connect(db=self.database, **self.connect_params)
+        return mariadb.connect(db=self.database, autocommit=True,
+                               **self.connect_params)
 
     def cursor(self, commit=None):
         if self.is_closed():

@@ -8,15 +8,13 @@ This document specifies Peewee's APIs.
 Database
 --------
 
-.. py:class:: Database(database[, thread_safe=True[, autorollback=False[, field_types=None[, operations=None[, autoconnect=True[, **kwargs]]]]]])
+.. py:class:: Database(database[, thread_safe=True[, field_types=None[, operations=None[, autoconnect=True[, **kwargs]]]]])
 
     :param str database: Database name or filename for SQLite (or ``None`` to
         :ref:`defer initialization <deferring_initialization>`, in which case
         you must call :py:meth:`Database.init`, specifying the database name).
     :param bool thread_safe: Whether to store connection state in a
         thread-local.
-    :param bool autorollback: Automatically rollback queries that fail when
-        **not** in an explicit transaction.
     :param dict field_types: A mapping of additional field types to support.
     :param dict operations: A mapping of additional operations to support.
     :param bool autoconnect: Automatically connect to database if attempting to

@@ -3083,7 +3083,6 @@ class Database(_callable_context_manager):
     server_version = None
 
     # Feature toggles.
-    commit_select = False
     compound_select_parentheses = CSQ_PARENTHESES_NEVER
     for_update = False
     index_schema_prefix = False
@@ -3107,7 +3106,6 @@ class Database(_callable_context_manager):
             self._operations.update(operations)
 
         self.autoconnect = autoconnect
-        self.autorollback = autorollback
         self.thread_safe = thread_safe
         if thread_safe:
             self._state = _ConnectionLocal()
@@ -3115,6 +3113,12 @@ class Database(_callable_context_manager):
         else:
             self._state = _ConnectionState()
             self._lock = _NoopLock()
+
+        if autorollback:
+            __deprecated__('Peewee no longer uses the "autorollback" option, '
+                           'as we always run in autocommit-mode now. This '
+                           'changes psycopg2\'s semantics so that the conn '
+                           'is not left in a transaction-aborted state.')
 
         if autocommit is not None:
             __deprecated__('Peewee no longer uses the "autocommit" option, as '
@@ -3368,14 +3372,16 @@ class Database(_callable_context_manager):
     def begin(self):
         if self.is_closed():
             self.connect()
-
-    def commit(self):
         with __exception_wrapper__:
-            return self._state.conn.commit()
+            self.cursor().execute('BEGIN')
 
     def rollback(self):
         with __exception_wrapper__:
-            return self._state.conn.rollback()
+            self.cursor().execute('ROLLBACK')
+
+    def commit(self):
+        with __exception_wrapper__:
+            self.cursor().execute('COMMIT')
 
     def batch_commit(self, it, n):
         for group in chunked(it, n):
@@ -3742,6 +3748,14 @@ class SqliteDatabase(Database):
         statement = 'BEGIN %s' % lock_type if lock_type else 'BEGIN'
         self.execute_sql(statement, commit=False)
 
+    def commit(self):
+        with __exception_wrapper__:
+            return self._state.conn.commit()
+
+    def rollback(self):
+        with __exception_wrapper__:
+            return self._state.conn.rollback()
+
     def get_tables(self, schema=None):
         schema = schema or 'main'
         cursor = self.execute_sql('SELECT name FROM "%s".sqlite_master WHERE '
@@ -3867,7 +3881,6 @@ class PostgresqlDatabase(Database):
     operations = {'REGEXP': '~', 'IREGEXP': '~*'}
     param = '%s'
 
-    commit_select = True
     compound_select_parentheses = CSQ_PARENTHESES_ALWAYS
     for_update = True
     nulls_ordering = True
@@ -3909,16 +3922,6 @@ class PostgresqlDatabase(Database):
         self.server_version = conn.server_version
         if self.server_version >= 90600:
             self.safe_create_index = True
-
-    def begin(self):
-        with __exception_wrapper__:
-            self.cursor().execute('BEGIN')
-    def rollback(self):
-        with __exception_wrapper__:
-            self.cursor().execute('ROLLBACK')
-    def commit(self):
-        with __exception_wrapper__:
-            self.cursor().execute('COMMIT')
 
     def is_connection_usable(self):
         if self._state.closed:
@@ -4101,7 +4104,6 @@ class MySQLDatabase(Database):
     param = '%s'
     quote = '``'
 
-    commit_select = True
     compound_select_parentheses = CSQ_PARENTHESES_UNNESTED
     for_update = True
     index_using_precedes_table = True
@@ -4123,7 +4125,8 @@ class MySQLDatabase(Database):
     def _connect(self):
         if mysql is None:
             raise ImproperlyConfigured('MySQL driver not installed!')
-        conn = mysql.connect(db=self.database, **self.connect_params)
+        conn = mysql.connect(db=self.database, autocommit=True,
+                             **self.connect_params)
         return conn
 
     def _set_server_version(self, conn):
@@ -4144,29 +4147,6 @@ class MySQLDatabase(Database):
 
         warnings.warn('Unable to determine MySQL version: "%s"' % version)
         return (0, 0, 0)  # Unable to determine version!
-
-    def execute_sql(self, sql, params=None, commit=SENTINEL):
-        logger.debug((sql, params))
-        if commit is SENTINEL:
-            if self.in_transaction():
-                commit = False
-            elif self.commit_select:
-                commit = True
-            else:
-                commit = not sql[:6].lower().startswith('select')
-
-        with __exception_wrapper__:
-            cursor = self.cursor(commit)
-            try:
-                cursor.execute(sql, params or ())
-            except Exception:
-                if self.autorollback and not self.in_transaction():
-                    self.rollback()
-                raise
-            else:
-                if commit and not self.in_transaction():
-                    self.commit()
-        return cursor
 
     def is_connection_usable(self):
         if self._state.closed:
