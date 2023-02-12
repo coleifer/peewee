@@ -895,17 +895,18 @@ class TestDatabaseConnection(DatabaseTestCase):
         self.database.execute_sql('create table foo (data text not null)')
         self.assertTrue(self.database.is_connection_usable())
 
-        with self.assertRaises(IntegrityError):
-            self.database.execute_sql('insert into foo (data) values (NULL)')
+        with self.database.atomic() as txn:
+            with self.assertRaises(IntegrityError):
+                self.database.execute_sql('insert into foo (data) values (NULL)')
 
-        self.assertFalse(self.database.is_closed())
-        self.assertFalse(self.database.is_connection_usable())
-        self.database.rollback()
-        self.assertTrue(self.database.is_connection_usable())
+            self.assertFalse(self.database.is_closed())
+            self.assertFalse(self.database.is_connection_usable())
+            txn.rollback()
+            self.assertTrue(self.database.is_connection_usable())
 
-        curs = self.database.execute_sql('select * from foo')
-        self.assertEqual(list(curs), [])
-        self.database.execute_sql('drop table foo')
+            curs = self.database.execute_sql('select * from foo')
+            self.assertEqual(list(curs), [])
+            self.database.execute_sql('drop table foo')
 
 
 class TestExceptionWrapper(ModelTestCase):

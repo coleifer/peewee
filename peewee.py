@@ -3223,25 +3223,9 @@ class Database(_callable_context_manager):
 
     def execute_sql(self, sql, params=None, commit=SENTINEL):
         logger.debug((sql, params))
-        if commit is SENTINEL:
-            if self.in_transaction():
-                commit = False
-            elif self.commit_select:
-                commit = True
-            else:
-                commit = not sql[:6].lower().startswith('select')
-
         with __exception_wrapper__:
             cursor = self.cursor(commit)
-            try:
-                cursor.execute(sql, params or ())
-            except Exception:
-                if self.autorollback and not self.in_transaction():
-                    self.rollback()
-                raise
-            else:
-                if commit and not self.in_transaction():
-                    self.commit()
+            cursor.execute(sql, params or ())
         return cursor
 
     def execute(self, query, commit=SENTINEL, **context_options):
@@ -3918,12 +3902,23 @@ class PostgresqlDatabase(Database):
             conn.set_client_encoding(self._encoding)
         if self._isolation_level:
             conn.set_isolation_level(self._isolation_level)
+        conn.autocommit = True
         return conn
 
     def _set_server_version(self, conn):
         self.server_version = conn.server_version
         if self.server_version >= 90600:
             self.safe_create_index = True
+
+    def begin(self):
+        with __exception_wrapper__:
+            self.cursor().execute('BEGIN')
+    def rollback(self):
+        with __exception_wrapper__:
+            self.cursor().execute('ROLLBACK')
+    def commit(self):
+        with __exception_wrapper__:
+            self.cursor().execute('COMMIT')
 
     def is_connection_usable(self):
         if self._state.closed:
@@ -4149,6 +4144,29 @@ class MySQLDatabase(Database):
 
         warnings.warn('Unable to determine MySQL version: "%s"' % version)
         return (0, 0, 0)  # Unable to determine version!
+
+    def execute_sql(self, sql, params=None, commit=SENTINEL):
+        logger.debug((sql, params))
+        if commit is SENTINEL:
+            if self.in_transaction():
+                commit = False
+            elif self.commit_select:
+                commit = True
+            else:
+                commit = not sql[:6].lower().startswith('select')
+
+        with __exception_wrapper__:
+            cursor = self.cursor(commit)
+            try:
+                cursor.execute(sql, params or ())
+            except Exception:
+                if self.autorollback and not self.in_transaction():
+                    self.rollback()
+                raise
+            else:
+                if commit and not self.in_transaction():
+                    self.commit()
+        return cursor
 
     def is_connection_usable(self):
         if self._state.closed:

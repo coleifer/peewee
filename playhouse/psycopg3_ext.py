@@ -14,6 +14,7 @@ class Psycopg3Database(PostgresqlDatabase):
         conn = psycopg.connect(dbname=self.database, **self.connect_params)
         if self._isolation_level is not None:
             conn.isolation_level = self._isolation_level
+        conn.autocommit = True
         return conn
 
     def get_binary_type(self):

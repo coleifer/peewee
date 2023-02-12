@@ -2329,6 +2329,7 @@ class TestForUpdateIntegration(ModelTestCase):
         AltUser = self.AltUser
 
         with self.database.manual_commit():
+            self.database.begin()
             users = User.select().where(User.username == 'zaizee').for_update()
             updated = (User
                        .update(username='ziggy')
@@ -2368,6 +2369,7 @@ class TestForUpdateIntegration(ModelTestCase):
         AltUser = self.AltUser
 
         with self.database.manual_commit():
+            self.database.begin()
             users = (User
                      .select(User.username)
                      .where(User.username == 'zaizee')
@@ -2394,6 +2396,7 @@ class TestForUpdateIntegration(ModelTestCase):
         AltUser, AltTweet = self.AltUser, self.AltTweet
 
         with self.database.manual_commit():
+            self.database.begin()
             # Lock tweets by huey.
             query = (Tweet
                      .select()

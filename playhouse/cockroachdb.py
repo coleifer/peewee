@@ -146,14 +146,13 @@ class CockroachDatabase(PostgresqlDatabase):
     def begin(self, system_time=None, priority=None):
         super(CockroachDatabase, self).begin()
         if system_time is not None:
-            self.execute_sql('SET TRANSACTION AS OF SYSTEM TIME %s',
-                             (system_time,), commit=False)
+            self.cursor().execute('SET TRANSACTION AS OF SYSTEM TIME %s',
+                                  (system_time,))
         if priority is not None:
             priority = priority.lower()
             if priority not in ('low', 'normal', 'high'):
                 raise ValueError('priority must be low, normal or high')
-            self.execute_sql('SET TRANSACTION PRIORITY %s' % priority,
-                             commit=False)
+            self.cursor().execute('SET TRANSACTION PRIORITY %s' % priority)
 
     def atomic(self, system_time=None, priority=None):
         if self.is_closed(): self.connect()  # Side-effect, set server version.

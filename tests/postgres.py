@@ -821,13 +821,11 @@ class TestAutocommitIntegration(ModelTestCase):
         # Force an integrity error, then verify that the current
         # transaction has been aborted.
         self.assertRaises(IntegrityError, KX.create, key='k1', value=10)
-        self.assertRaises(InternalError, KX.get, key='k1')
 
     def test_autocommit_default(self):
         kx2 = KX.create(key='k2', value=2)  # Will be committed.
         self.assertTrue(kx2.id > 0)
         self.force_integrity_error()
-        self.database.rollback()
 
         self.assertEqual(KX.select().count(), 2)
         self.assertEqual([(kx.key, kx.value)
@@ -836,6 +834,7 @@ class TestAutocommitIntegration(ModelTestCase):
 
     def test_autocommit_disabled(self):
         with self.database.manual_commit():
+            self.database.begin()
             kx2 = KX.create(key='k2', value=2)  # Not committed.
             self.assertTrue(kx2.id > 0)  # Yes, we have a primary key.
             self.force_integrity_error()
