@@ -1547,6 +1547,11 @@ the wrapped block.
     :py:meth:`~Database.atomic` can be used as either a **context manager** or
     a **decorator**.
 
+.. note::
+    Peewee's behavior differs from the DB-API 2.0 behavior you may be used to
+    (see PEP-249 for details). By default, Peewee puts all connections into
+    **autocommit-mode** and transaction management is handled by Peewee.
+
 Context manager
 ^^^^^^^^^^^^^^^
 
@@ -1766,6 +1771,9 @@ there are a ton of cool databases out there and adding support for your
 database-of-choice should be really easy, provided the driver supports the
 `DB-API 2.0 spec <http://www.python.org/dev/peps/pep-0249/>`_.
 
+.. warning::
+    Peewee requires the database connection be put into autocommit-mode.
+
 The DB-API 2.0 spec should be familiar to you if you've used the standard
 library sqlite3 driver, psycopg2 or the like. Peewee currently relies on a
 handful of parts:
@@ -1782,7 +1790,8 @@ you can still get a lot of mileage out of peewee.  An example is the `apsw
 sqlite driver <http://code.google.com/p/apsw/>`_ in the "playhouse" module.
 
 The first thing is to provide a subclass of :py:class:`Database` that will open
-a connection.
+a connection, and ensure the connection is in autocommit-mode (thus disabling
+all the DB-API transaction semantics):
 
 .. code-block:: python
 
@@ -1791,8 +1800,8 @@ a connection.
 
 
     class FooDatabase(Database):
-        def _connect(self, database, **kwargs):
-            return foodb.connect(database, **kwargs)
+        def _connect(self, database):
+            return foodb.connect(self.database, autocommit=True, **self.connect_params)
 
 The :py:class:`Database` provides a higher-level API and is responsible for
 executing queries, creating tables and indexes, and introspecting the database
@@ -1806,7 +1815,7 @@ has special "SHOW" statements:
 
     class FooDatabase(Database):
         def _connect(self):
-            return foodb.connect(self.database, **self.connect_params)
+            return foodb.connect(self.database, autocommit=True, **self.connect_params)
 
         def get_tables(self):
             res = self.execute('SHOW TABLES;')
