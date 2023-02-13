@@ -137,27 +137,25 @@ Database
         opened. The connection will be whatever the underlying database-driver
         uses to encapsulate a database connection.
 
-    .. py:method:: cursor([commit=None])
+    .. py:method:: cursor([named_cursor=None])
 
-        :param commit: For internal use.
+        :param named_cursor: For internal use.
 
         Return a ``cursor`` object on the current connection. If a connection
         is not open, one will be opened. The cursor will be whatever the
         underlying database-driver uses to encapsulate a database cursor.
 
-    .. py:method:: execute_sql(sql[, params=None[, commit=SENTINEL]])
+    .. py:method:: execute_sql(sql[, params=None])
 
         :param str sql: SQL string to execute.
         :param tuple params: Parameters for query.
-        :param commit: Boolean flag to override the default commit logic.
         :returns: cursor object.
 
         Execute a SQL query and return a cursor over the results.
 
-    .. py:method:: execute(query[, commit=SENTINEL[, **context_options]])
+    .. py:method:: execute(query[, **context_options])
 
         :param query: A :py:class:`Query` instance.
-        :param commit: Boolean flag to override the default commit logic.
         :param context_options: Arbitrary options to pass to the SQL generator.
         :returns: cursor object.
 
