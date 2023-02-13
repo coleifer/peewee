@@ -7,7 +7,47 @@ https://github.com/coleifer/peewee/releases
 
 ## master
 
-[View commits](https://github.com/coleifer/peewee/compare/3.15.4...master)
+[View commits](https://github.com/coleifer/peewee/compare/3.16.0...master)
+
+## 3.16.0
+
+This release contains backwards-incompatible changes in the way Peewee
+initializes connections to the underlying database driver. Previously, peewee
+implemented autocommit semantics *on-top* of the existing DB-API transactional
+workflow. Going forward, Peewee instead places the DB-API driver into
+autocommit mode directly.
+
+Why this change?
+
+Previously, Peewee emulated autocommit behavior for top-level queries issued
+outside of a transaction. This necessitated a number of checks which had to be
+performed each time a query was executed, so as to ensure that we didn't end up
+with uncommitted writes or, conversely, idle read transactions. By running the
+underlying driver in autocommit mode, we can eliminate all these checks, since
+we are already managing transactions ourselves.
+
+Behaviorally, there should be no change -- Peewee will still treat top-level
+queries outside of transactions as being autocommitted, while queries inside of
+`atomic()` / `with db:` blocks are implicitly committed at the end of the
+block, or rolled-back if an exception occurs.
+
+How might this affect me?
+
+* If you are using the underlying database connection or cursors, e.g. via
+  `Database.connection()` or `Database.cursor()`, your queries will now be
+  executed in autocommit mode.
+* If you have a custom `Database` implementation (whether for a database that
+  is not officially supported, or for the purpose of overriding default
+  behaviors), you will want to ensure that your connections are opened in
+  autocommit mode.
+
+Other changes:
+
+* Some fixes to help with packaging in Python 3.11.
+* MySQL `get_columns()` implementation now returns columns in their declared
+  order.
+
+[View commits](https://github.com/coleifer/peewee/compare/3.15.4...3.16.0)
 
 ## 3.15.4
 
