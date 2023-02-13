@@ -35,14 +35,13 @@ class ShutdownException(Exception):
 
 
 class AsyncCursor(object):
-    __slots__ = ('sql', 'params', 'commit', 'timeout',
+    __slots__ = ('sql', 'params', 'timeout',
                  '_event', '_cursor', '_exc', '_idx', '_rows', '_ready')
 
-    def __init__(self, event, sql, params, commit, timeout):
+    def __init__(self, event, sql, params, timeout):
         self._event = event
         self.sql = sql
         self.params = params
-        self.commit = commit
         self.timeout = timeout
         self._cursor = self._exc = self._idx = self._rows = None
         self._ready = False
@@ -175,7 +174,7 @@ class Writer(object):
     def execute(self, obj):
         logger.debug('received query %s', obj.sql)
         try:
-            cursor = self.database._execute(obj.sql, obj.params, obj.commit)
+            cursor = self.database._execute(obj.sql, obj.params)
         except Exception as execute_err:
             cursor = None
             exc = execute_err  # python3 is so fucking lame.
@@ -241,18 +240,14 @@ class SqliteQueueDatabase(SqliteExtDatabase):
     def queue_size(self):
         return self._write_queue.qsize()
 
-    def execute_sql(self, sql, params=None, commit=SENTINEL, timeout=None):
-        if commit is SENTINEL:
-            commit = not sql.lower().startswith('select')
-
-        if not commit:
-            return self._execute(sql, params, commit=commit)
+    def execute_sql(self, sql, params=None, timeout=None):
+        if sql.lower().startswith('select'):
+            return self._execute(sql, params)
 
         cursor = AsyncCursor(
             event=self._thread_helper.event(),
             sql=sql,
             params=params,
-            commit=commit,
             timeout=self._results_timeout if timeout is None else timeout)
         self._write_queue.put(cursor)
         return cursor

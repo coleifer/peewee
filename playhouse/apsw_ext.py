@@ -126,7 +126,7 @@ class APSWDatabase(SqliteExtDatabase):
             curs.execute('rollback;')
         return True
 
-    def execute_sql(self, sql, params=None, commit=True):
+    def execute_sql(self, sql, params=None):
         logger.debug((sql, params))
         with __exception_wrapper__:
             cursor = self.cursor()

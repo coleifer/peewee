@@ -234,8 +234,9 @@ class TestThreadedDatabaseThreads(BaseTestQueueDatabase, BaseTestCase):
         # will cause the query results to time-out.
         self.database._results_timeout = 0.001
         def do_query():
-            cursor = self.database.execute_sql('select slow(?)', (0.01,),
-                                               commit=True)
+            # Prepend a space so that we can force it through the threaded
+            # pipeline, otherwise it would execute normally.
+            cursor = self.database.execute_sql(' select slow(?)', (0.01,))
             self.assertEqual(cursor.fetchone()[0], 'slept 0.01')
 
         self.assertRaises(ResultTimeout, do_query)

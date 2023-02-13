@@ -141,8 +141,8 @@ class DataSet(object):
         if not self._database.is_closed():
             self.close()
 
-    def query(self, sql, params=None, commit=True):
-        return self._database.execute_sql(sql, params, commit)
+    def query(self, sql, params=None):
+        return self._database.execute_sql(sql, params)
 
     def transaction(self):
         return self._database.atomic()

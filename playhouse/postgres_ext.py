@@ -473,27 +473,25 @@ class PostgresqlExtDatabase(PostgresqlDatabase):
             register_hstore(conn, globally=True)
         return conn
 
-    def cursor(self, commit=None):
+    def cursor(self, named_cursor=None):
         if self.is_closed():
             if self.autoconnect:
                 self.connect()
             else:
                 raise InterfaceError('Error, database connection not opened.')
-        if commit is __named_cursor__:
+        if named_cursor:
             curs = self._state.conn.cursor(name=str(uuid.uuid1()))
             curs.withhold = True
             return curs
         return self._state.conn.cursor()
 
-    def execute(self, query, commit=SENTINEL, named_cursor=False,
-                array_size=None, **context_options):
+    def execute(self, query, named_cursor=False, array_size=None,
+                **context_options):
         ctx = self.get_sql_context(**context_options)
         sql, params = ctx.sql(query).query()
         named_cursor = named_cursor or (self._server_side_cursors and
                                         sql[:6].lower() == 'select')
-        if named_cursor:
-            commit = __named_cursor__
-        cursor = self.execute_sql(sql, params, commit=commit)
+        cursor = self.execute_sql(sql, params)
         if named_cursor:
             cursor = FetchManyCursor(cursor, array_size)
         return cursor

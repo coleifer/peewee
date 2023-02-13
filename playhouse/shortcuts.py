@@ -249,9 +249,9 @@ class ReconnectMixin(object):
             self._reconnect_errors.setdefault(exc_class, [])
             self._reconnect_errors[exc_class].append(err_fragment.lower())
 
-    def execute_sql(self, sql, params=None, commit=SENTINEL):
+    def execute_sql(self, sql, params=None):
         try:
-            return super(ReconnectMixin, self).execute_sql(sql, params, commit)
+            return super(ReconnectMixin, self).execute_sql(sql, params)
         except Exception as exc:
             # If we are in a transaction, do not reconnect silently as
             # any changes could be lost.
@@ -273,7 +273,7 @@ class ReconnectMixin(object):
                 self.close()
                 self.connect()
 
-            return super(ReconnectMixin, self).execute_sql(sql, params, commit)
+            return super(ReconnectMixin, self).execute_sql(sql, params)
 
 
 def resolve_multimodel_query(query, key='_model_identifier'):

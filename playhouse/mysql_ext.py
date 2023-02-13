@@ -25,7 +25,7 @@ class MySQLConnectorDatabase(MySQLDatabase):
         return mysql_connector.connect(db=self.database, autocommit=True,
                                        **self.connect_params)
 
-    def cursor(self, commit=None):
+    def cursor(self, named_cursor=None):
         if self.is_closed():
             if self.autoconnect:
                 self.connect()
@@ -44,7 +44,7 @@ class MariaDBConnectorDatabase(MySQLDatabase):
         return mariadb.connect(db=self.database, autocommit=True,
                                **self.connect_params)
 
-    def cursor(self, commit=None):
+    def cursor(self, named_cursor=None):
         if self.is_closed():
             if self.autoconnect:
                 self.connect()

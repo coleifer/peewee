@@ -3217,7 +3217,7 @@ class Database(_callable_context_manager):
             self.connect()
         return self._state.conn
 
-    def cursor(self, commit=None):
+    def cursor(self, named_cursor=None):
         if self.is_closed():
             if self.autoconnect:
                 self.connect()
@@ -3225,17 +3225,17 @@ class Database(_callable_context_manager):
                 raise InterfaceError('Error, database connection not opened.')
         return self._state.conn.cursor()
 
-    def execute_sql(self, sql, params=None, commit=SENTINEL):
+    def execute_sql(self, sql, params=None):
         logger.debug((sql, params))
         with __exception_wrapper__:
-            cursor = self.cursor(commit)
+            cursor = self.cursor()
             cursor.execute(sql, params or ())
         return cursor
 
-    def execute(self, query, commit=SENTINEL, **context_options):
+    def execute(self, query, **context_options):
         ctx = self.get_sql_context(**context_options)
         sql, params = ctx.sql(query).query()
-        return self.execute_sql(sql, params, commit=commit)
+        return self.execute_sql(sql, params)
 
     def get_context_options(self):
         return {
@@ -3746,7 +3746,7 @@ class SqliteDatabase(Database):
 
     def begin(self, lock_type=None):
         statement = 'BEGIN %s' % lock_type if lock_type else 'BEGIN'
-        self.execute_sql(statement, commit=False)
+        self.execute_sql(statement)
 
     def commit(self):
         with __exception_wrapper__:

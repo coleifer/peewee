@@ -29,7 +29,7 @@ class CyDatabaseTestCase(DatabaseTestCase):
             os.unlink(self.database.database)
 
     def execute(self, sql, *params):
-        return self.database.execute_sql(sql, params, commit=False)
+        return self.database.execute_sql(sql, params)
 
 
 class TestCySqliteHelpers(CyDatabaseTestCase):

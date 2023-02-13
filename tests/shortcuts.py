@@ -577,8 +577,8 @@ class TestDictToModel(ModelTestCase):
 
 
 class ReconnectMySQLDatabase(ReconnectMixin, MySQLDatabase):
-    def cursor(self, commit):
-        cursor = super(ReconnectMySQLDatabase, self).cursor(commit)
+    def cursor(self, named_cursor=None):
+        cursor = super(ReconnectMySQLDatabase, self).cursor(named_cursor)
 
         # The first (0th) query fails, as do all queries after the 2nd (1st).
         if self._query_counter != 1:
