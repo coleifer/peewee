@@ -481,7 +481,6 @@ class PostgresqlExtDatabase(PostgresqlDatabase):
                 raise InterfaceError('Error, database connection not opened.')
         if named_cursor:
             curs = self._state.conn.cursor(name=str(uuid.uuid1()))
-            curs.withhold = True
             return curs
         return self._state.conn.cursor()
 
