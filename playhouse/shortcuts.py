@@ -4,8 +4,8 @@ from peewee import *
 from peewee import Alias
 from peewee import CompoundSelectQuery
 from peewee import Metadata
-from peewee import SENTINEL
 from peewee import callable_
+from peewee import __deprecated__
 
 
 _clone_set = lambda s: set(s) if s else set()
@@ -249,7 +249,9 @@ class ReconnectMixin(object):
             self._reconnect_errors.setdefault(exc_class, [])
             self._reconnect_errors[exc_class].append(err_fragment.lower())
 
-    def execute_sql(self, sql, params=None):
+    def execute_sql(self, sql, params=None, commit=None):
+        if commit is not None:
+            __deprecated__('"commit" has been deprecated and is a no-op.')
         try:
             return super(ReconnectMixin, self).execute_sql(sql, params)
         except Exception as exc:

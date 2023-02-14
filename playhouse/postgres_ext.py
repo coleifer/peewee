@@ -12,7 +12,7 @@ from peewee import ColumnBase
 from peewee import Expression
 from peewee import Node
 from peewee import NodeList
-from peewee import SENTINEL
+from peewee import __deprecated__
 from peewee import __exception_wrapper__
 
 try:
@@ -458,8 +458,6 @@ class _empty_object(object):
         return False
     __bool__ = __nonzero__
 
-__named_cursor__ = _empty_object()
-
 
 class PostgresqlExtDatabase(PostgresqlDatabase):
     def __init__(self, *args, **kwargs):
@@ -473,7 +471,9 @@ class PostgresqlExtDatabase(PostgresqlDatabase):
             register_hstore(conn, globally=True)
         return conn
 
-    def cursor(self, named_cursor=None):
+    def cursor(self, commit=None, named_cursor=None):
+        if commit is not None:
+            __deprecated__('"commit" has been deprecated and is a no-op.')
         if self.is_closed():
             if self.autoconnect:
                 self.connect()
@@ -484,8 +484,10 @@ class PostgresqlExtDatabase(PostgresqlDatabase):
             return curs
         return self._state.conn.cursor()
 
-    def execute(self, query, named_cursor=False, array_size=None,
+    def execute(self, query, commit=None, named_cursor=False, array_size=None,
                 **context_options):
+        if commit is not None:
+            __deprecated__('"commit" has been deprecated and is a no-op.')
         ctx = self.get_sql_context(**context_options)
         sql, params = ctx.sql(query).query()
         named_cursor = named_cursor or (self._server_side_cursors and

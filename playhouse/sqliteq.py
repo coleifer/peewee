@@ -17,7 +17,7 @@ try:
 except ImportError:
     GThread = GQueue = GEvent = None
 
-from peewee import SENTINEL
+from peewee import __deprecated__
 from playhouse.sqlite_ext import SqliteExtDatabase
 
 
@@ -240,7 +240,9 @@ class SqliteQueueDatabase(SqliteExtDatabase):
     def queue_size(self):
         return self._write_queue.qsize()
 
-    def execute_sql(self, sql, params=None, timeout=None):
+    def execute_sql(self, sql, params=None, commit=None, timeout=None):
+        if commit is not None:
+            __deprecated__('"commit" has been deprecated and is a no-op.')
         if sql.lower().startswith('select'):
             return self._execute(sql, params)
 
