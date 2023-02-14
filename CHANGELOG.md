@@ -36,6 +36,8 @@ How might this affect me?
 * If you are using the underlying database connection or cursors, e.g. via
   `Database.connection()` or `Database.cursor()`, your queries will now be
   executed in autocommit mode.
+* The `commit=` argument is deprecated for the `cursor()`, `execute()` and
+  `execute_sql()` methods.
 * If you have a custom `Database` implementation (whether for a database that
   is not officially supported, or for the purpose of overriding default
   behaviors), you will want to ensure that your connections are opened in
