@@ -934,7 +934,7 @@ Thread Safety
 
 Peewee keeps track of the connection state using thread-local storage, making
 the Peewee :py:class:`Database` object safe to use with multiple threads. Each
-thread will have it's own connection, and as a result any given thread will
+thread will have its own connection, and as a result any given thread will
 only have a single connection open at a given time.
 
 Context managers
