@@ -4282,6 +4282,16 @@ Model
             # Update all three rows using a single UPDATE query.
             User.bulk_update([u1, u2, u3], fields=[User.username])
 
+        This will result in executing the following SQL:
+
+        .. code-block:: sql
+
+            UPDATE "users" SET "username" = CASE "users"."id"
+                WHEN 1 THEN "u1-x"
+                WHEN 2 THEN "u2-y"
+                WHEN 3 THEN "u3-z" END
+            WHERE "users"."id" IN (1, 2, 3);
+
         If you have a large number of objects to update, it is strongly
         recommended that you specify a ``batch_size`` and wrap the operation in
         a transaction:

@@ -232,6 +232,16 @@ efficiently update one or more columns on a list of models. For example:
     # Update all three users with a single UPDATE query.
     User.bulk_update([u1, u2, u3], fields=[User.username])
 
+This will result in executing the following SQL:
+
+.. code-block:: sql
+
+    UPDATE "users" SET "username" = CASE "users"."id"
+        WHEN 1 THEN "u1-x"
+        WHEN 2 THEN "u2-y"
+        WHEN 3 THEN "u3-z" END
+    WHERE "users"."id" IN (1, 2, 3);
+
 .. note::
     For large lists of objects, you should specify a reasonable batch_size and
     wrap the call to :py:meth:`~Model.bulk_update` with
@@ -241,6 +251,12 @@ efficiently update one or more columns on a list of models. For example:
 
         with database.atomic():
             User.bulk_update(list_of_users, fields=['username'], batch_size=50)
+
+.. warning::
+    :py:meth:`Model.bulk_update` may not be the most efficient method for
+    updating large numbers of records. This functionality is implemented such
+    that we create a "mapping" of primary key to corresponding field values for
+    all rows being updated using a SQL ``CASE`` statement.
 
 Alternatively, you can use the :py:meth:`Database.batch_commit` helper to
 process chunks of rows inside *batch*-sized transactions. This method also
