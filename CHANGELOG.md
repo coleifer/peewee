@@ -31,7 +31,7 @@ queries outside of transactions as being autocommitted, while queries inside of
 `atomic()` / `with db:` blocks are implicitly committed at the end of the
 block, or rolled-back if an exception occurs.
 
-How might this affect me?
+**How might this affect me?**
 
 * If you are using the underlying database connection or cursors, e.g. via
   `Database.connection()` or `Database.cursor()`, your queries will now be
