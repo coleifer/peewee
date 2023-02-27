@@ -605,7 +605,7 @@ cdef int pwBestIndex(sqlite3_vtab *pBase, sqlite3_index_info *pIdxInfo) \
         else:
             # Penalize score based on number of missing params.
             pIdxInfo.estimatedCost = <double>10000000000000 * <double>(nParams - nArg)
-            pIdxInfo.estimatedRows = 10 ** (nParams - nArg)
+            pIdxInfo.estimatedRows = 10 * (nParams - nArg)
 
         # Store a reference to the columns in the index info structure.
         joinedCols = encode(','.join(columns))
@@ -1507,7 +1507,7 @@ cdef class ConnectionHelper(object):
             return sqlite3_get_autocommit(self.conn.db) != 0
 
 
-cdef int _commit_callback(void *userData) with gil:
+cdef int _commit_callback(void *userData) noexcept with gil:
     # C-callback that delegates to the Python commit handler. If the Python
     # function raises a ValueError, then the commit is aborted and the
     # transaction rolled back. Otherwise, regardless of the function return
@@ -1521,14 +1521,14 @@ cdef int _commit_callback(void *userData) with gil:
         return SQLITE_OK
 
 
-cdef void _rollback_callback(void *userData) with gil:
+cdef void _rollback_callback(void *userData) noexcept with gil:
     # C-callback that delegates to the Python rollback handler.
     cdef object fn = <object>userData
     fn()
 
 
 cdef void _update_callback(void *userData, int queryType, const char *database,
-                           const char *table, sqlite3_int64 rowid) with gil:
+                           const char *table, sqlite3_int64 rowid) noexcept with gil:
     # C-callback that delegates to a Python function that is executed whenever
     # the database is updated (insert/update/delete queries). The Python
     # callback receives a string indicating the query type, the name of the
@@ -1598,7 +1598,7 @@ def backup_to_file(src_conn, filename, pages=None, name=None, progress=None):
     return True
 
 
-cdef int _aggressive_busy_handler(void *ptr, int n) nogil:
+cdef int _aggressive_busy_handler(void *ptr, int n) noexcept nogil:
     # In concurrent environments, it often seems that if multiple queries are
     # kicked off at around the same time, they proceed in lock-step to check
     # for the availability of the lock. By introducing some "jitter" we can
