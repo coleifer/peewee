@@ -1,3 +1,4 @@
+# cython: language_level=3
 import hashlib
 import zlib
 

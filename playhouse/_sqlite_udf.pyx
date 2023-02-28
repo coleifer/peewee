@@ -1,3 +1,4 @@
+# cython: language_level=3
 import sys
 from difflib import SequenceMatcher
 from random import randint
