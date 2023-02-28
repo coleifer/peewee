@@ -1209,6 +1209,7 @@ class ColumnBase(Node):
     in_ = _e(OP.IN)
     not_in = _e(OP.NOT_IN)
     regexp = _e(OP.REGEXP)
+    iregexp = _e(OP.IREGEXP)
 
     # Special expressions.
     def is_null(self, is_null=True):
@@ -1249,10 +1250,6 @@ class ColumnBase(Node):
         return Expression(self, OP.BETWEEN, NodeList((lo, SQL('AND'), hi)))
     def concat(self, rhs):
         return StringExpression(self, OP.CONCAT, rhs)
-    def regexp(self, rhs):
-        return Expression(self, OP.REGEXP, rhs)
-    def iregexp(self, rhs):
-        return Expression(self, OP.IREGEXP, rhs)
     def __getitem__(self, item):
         if isinstance(item, slice):
             if item.start is None or item.stop is None:

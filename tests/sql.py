@@ -980,6 +980,17 @@ class TestSelectQuery(BaseTestCase):
             'SELECT "t1"."id" FROM "users" AS "t1" '
             'WHERE ("t1"."username" ILIKE ?)'), ['%foo%'])
 
+    def test_field_ops(self):
+        query = User.select(User.c.id).where(User.c.username.regexp('[a-z]+'))
+        self.assertSQL(query, (
+            'SELECT "t1"."id" FROM "users" AS "t1" '
+            'WHERE ("t1"."username" REGEXP ?)'), ['[a-z]+'])
+
+        query = User.select(User.c.id).where(User.c.username.contains('abc'))
+        self.assertSQL(query, (
+            'SELECT "t1"."id" FROM "users" AS "t1" '
+            'WHERE ("t1"."username" ILIKE ?)'), ['%abc%'])
+
 
 class TestInsertQuery(BaseTestCase):
     def test_insert_simple(self):
