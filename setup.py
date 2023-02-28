@@ -130,7 +130,18 @@ class _PeeweeBuildExt(build_ext):
 
 def _do_setup(c_extensions, sqlite_extensions):
     if c_extensions and sqlite_extensions:
-        ext_modules = [sqlite_udf_module, sqlite_ext_module]
+        # Only add modules if the required source files are present. This is to
+        # work-around python 3.11 and pip being janky.
+        if sys.version_info < (3, 11, 0):
+            ext_modules = [sqlite_ext_module, sqlite_udf_module]
+        else:
+            ext_modules = []
+            for m in (sqlite_ext_module, sqlite_udf_module):
+                if all(os.path.exists(src) for src in m.sources):
+                    ext_modules.append(m)
+                else:
+                    print('could not find sources for module: %s!' % m.sources)
+                    print('try adding "cython" to your local pyproject.toml')
     else:
         ext_modules = None
 
