@@ -157,6 +157,44 @@ class TestSignals(ModelTestCase):
         b = SubB.create()
         assert b in state
 
+    def test_disconnect_issue_2687(self):
+        state = []
+
+        # Same sender.
+        @signals.post_save(sender=A)
+        def sig1(sender, instance, created):
+            state.append((1, instance.a))
+
+        @signals.post_save(sender=A)
+        def sig2(sender, instance, created):
+            state.append((2, instance.a))
+
+        A.create(a='a1')
+        self.assertEqual(state, [(1, 'a1'), (2, 'a1')])
+        signals.post_save.disconnect(name='sig1', sender=A)
+
+        A.create(a='a2')
+        self.assertEqual(state, [(1, 'a1'), (2, 'a1'), (2, 'a2')])
+        signals.post_save.disconnect(name='sig2', sender=A)
+
+        A.create(a='a3')
+        self.assertEqual(state, [(1, 'a1'), (2, 'a1'), (2, 'a2')])
+
+        signals.post_save(name='s1')(sig1)
+        signals.post_save(name='s2', sender=A)(sig2)
+        state = state[:0]  # Clear state, 2.7 compat.
+
+        A.create(a='a4')
+        self.assertEqual(state, [(1, 'a4'), (2, 'a4')])
+        signals.post_save.disconnect(name='s1')
+
+        A.create(a='a5')
+        self.assertEqual(state, [(1, 'a4'), (2, 'a4'), (2, 'a5')])
+        signals.post_save.disconnect(name='s2', sender=A)
+
+        A.create(a='a6')
+        self.assertEqual(state, [(1, 'a4'), (2, 'a4'), (2, 'a5')])
+
 
 class NoPK(BaseSignalModel):
     val = IntegerField(index=True)

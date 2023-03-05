@@ -35,7 +35,7 @@ class Signal(object):
 
         self._receivers.remove(key)
         self._receiver_list = [(n, r, s) for n, r, s in self._receiver_list
-                               if n != name and s != sender]
+                               if (n, s) != key]
 
     def __call__(self, name=None, sender=None):
         def decorator(fn):
