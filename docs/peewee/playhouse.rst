@@ -2718,14 +2718,14 @@ Signal API
     Stores a list of receivers (callbacks) and calls them when the "send"
     method is invoked.
 
-    .. py:method:: connect(receiver[, sender=None[, name=None]])
+    .. py:method:: connect(receiver[, name=None[, sender=None]])
 
         :param callable receiver: a callable that takes at least two parameters,
             a "sender", which is the Model subclass that triggered the signal, and
             an "instance", which is the actual model instance.
+        :param string name: a short alias
         :param Model sender: if specified, only instances of this model class will
             trigger the receiver callback.
-        :param string name: a short alias
 
         Add the receiver to the internal list of receivers, which will be called
         whenever the signal is sent.
@@ -2737,10 +2737,11 @@ Signal API
 
             post_save.connect(cache_buster, name='project.cache_buster')
 
-    .. py:method:: disconnect([receiver=None[, name=None]])
+    .. py:method:: disconnect([receiver=None[, name=None[, sender=None]]])
 
         :param callable receiver: the callback to disconnect
         :param string name: a short alias
+        :param Model sender: disconnect model-specific handler.
 
         Disconnect the given receiver (or the receiver with the given name alias)
         so that it no longer is called. Either the receiver or the name must be
@@ -2759,7 +2760,10 @@ Signal API
         be called if the instance is an instance of the sender.
 
 
-    .. py:method __call__([sender=None[, name=None]])
+    .. py:method __call__([name=None[, sender=None]])
+
+        :param string name: a short alias
+        :param Model sender: disconnect model-specific handler.
 
         Function decorator that is an alias for a signal's connect method:
 
