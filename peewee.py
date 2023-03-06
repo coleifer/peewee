@@ -4746,8 +4746,14 @@ class Field(ColumnBase):
             accum.extend(self.constraints)
         if self.collation:
             accum.append(SQL('COLLATE %s' % self.collation))
+        try:
+            if "MySQLDatabase" in self.model._meta.database.__str__():
+                comment = self.verbose_name or self.help_text
+                if comment:
+                    accum.append(SQL(f"COMMENT '{comment}'"))
+        except:
+            pass
         return NodeList(accum)
-
 
 class AnyField(Field):
     field_type = 'ANY'
