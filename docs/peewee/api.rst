@@ -4794,7 +4794,29 @@ Model
         :param args: Zero or more :py:class:`DQ` objects.
         :param kwargs: Django-style keyword-argument filters.
 
-        Use Django-style filters to express a WHERE clause.
+        Use Django-style filters to express a WHERE clause. Joins can be
+        followed by chaining foreign-key fields. The supported operations are:
+
+        * ``eq`` - equals
+        * ``ne`` - not equals
+        * ``lt``, ``lte`` - less-than, less-than or equal-to
+        * ``gt``, ``gte`` - greater-than, greater-than or equal-to
+        * ``in`` - IN set of values
+        * ``is`` - IS (e.g. IS NULL).
+        * ``like``, ``ilike`` - LIKE and ILIKE (case-insensitive)
+        * ``regexp`` - regular expression match
+
+        Examples:
+
+        .. code-block:: python
+
+            # Get all tweets by user with username="peewee".
+            q = Tweet.filter(user__username='peewee')
+
+            # Get all posts that are draft or published, and written after 2023.
+            q = Post.filter(
+                (DQ(status='draft') | DQ(status='published')),
+                timestamp__gte=datetime.date(2023, 1, 1))
 
     .. py:method:: prefetch(*subqueries[, prefetch_type=PREFETCH_TYPE.WHERE])
 
