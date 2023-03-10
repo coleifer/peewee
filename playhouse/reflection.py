@@ -759,12 +759,14 @@ class Introspector(object):
                     constraint = SQL('DEFAULT %s' % column.default)
                     params['constraints'] = [constraint]
 
-                if column_name in column_indexes and not \
-                   column.is_primary_key():
-                    if column_indexes[column_name]:
-                        params['unique'] = True
-                    elif not column.is_foreign_key():
-                        params['index'] = True
+                if not column.is_primary_key():
+                    if column_name in column_indexes:
+                        if column_indexes[column_name]:
+                            params['unique'] = True
+                        elif not column.is_foreign_key():
+                            params['index'] = True
+                    else:
+                        params['index'] = False
 
                 attrs[column.name] = FieldClass(**params)
 
