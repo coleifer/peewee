@@ -7,6 +7,7 @@ from types import MethodType
 
 from peewee import *
 from playhouse.postgres_ext import *
+from playhouse.reflection import Introspector
 
 from .base import BaseTestCase
 from .base import DatabaseTestCase
@@ -69,7 +70,7 @@ try:
 
     class JData(TestModel):
         d1 = BinaryJSONField()
-        d2 = BinaryJSONField()
+        d2 = BinaryJSONField(index=False)
 except:
     BJson = JData = None
     JsonModel = JsonModelNull = None
@@ -669,6 +670,17 @@ class TestJsonFieldRegressions(ModelTestCase):
         obj = query.get()
         self.assertEqual(obj.data, {
             'k1': {'x2': 'y2'}, 'k2': 'v2-x', 'k3': 'v3', 'k4': 'v4'})
+
+    def test_introspect_bjson_field(self):
+        introspector = Introspector.from_database(self.database)
+        models = introspector.generate_models(table_names=['j_data'])
+        JD = models['j_data']
+        self.assertEqual(JD._meta.sorted_field_names, ['id', 'd1', 'd2'])
+        self.assertTrue(isinstance(JD.d1, BinaryJSONField))
+        self.assertTrue(isinstance(JD.d2, BinaryJSONField))
+        self.assertTrue(JD.d1.index)
+        self.assertEqual(JD.d1.index_type, 'GIN')
+        self.assertFalse(JD.d2.index)
 
 
 class TestIntervalField(ModelTestCase):
