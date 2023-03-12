@@ -1741,3 +1741,39 @@ class TestDjangoFilterRegression(ModelTestCase):
 class TestFunctionInfiniteLoop(BaseTestCase):
     def test_function_infinite_loop(self):
         self.assertRaises(TypeError, lambda: list(fn.COUNT()))
+
+
+class State(TestModel):
+    name = TextField()
+class Transition(TestModel):
+    src = ForeignKeyField(State, backref='sources')
+    dest = ForeignKeyField(State, backref='dests')
+
+class TestJoinTypePrefetchMultipleFKs(ModelTestCase):
+    requires = [State, Transition]
+
+    def test_join_prefetch_multiple_fks(self):
+        s1, s2a, s2b, s3 = [State.create(name=s)
+                            for s in ('s1', 's2a', 's2b', 's3')]
+        t1 = Transition.create(src=s1, dest=s2a)
+        t2 = Transition.create(src=s1, dest=s2b)
+        t3 = Transition.create(src=s2a, dest=s3)
+        t4 = Transition.create(src=s2b, dest=s3)
+
+        query = State.select().where(State.name != 's3').order_by(State.name)
+        transitions = (Transition
+                       .select(Transition, State)
+                       .join(State, on=Transition.dest)
+                       .order_by(Transition.id))
+        with self.assertQueryCount(2):
+            p = prefetch(query, transitions, prefetch_type=PREFETCH_TYPE.JOIN)
+            accum = []
+            for row in p:
+                accum.append((row.name, row.sources, row.dests,
+                              [d.dest.name for d in row.sources],
+                              [d.src.name for d in row.dests]))
+
+        self.assertEqual(accum, [
+            ('s1', [t1, t2], [], ['s2a', 's2b'], []),
+            ('s2a', [t3], [t1], ['s3'], ['s1']),
+            ('s2b', [t4], [t2], ['s3'], ['s1'])])
