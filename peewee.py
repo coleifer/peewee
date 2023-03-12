@@ -7933,10 +7933,10 @@ def prefetch_add_subquery(sq, subqueries, prefetch_type):
                 subquery = subquery.where(expr)
             elif prefetch_type == PREFETCH_TYPE.JOIN:
                 expr = []
-                select_pks = []
+                select_pks = set()
                 for fk, pk in zip(fks, pks):
                     expr.append(getattr(last_query.c, pk.column_name) == fk)
-                    select_pks.append(pk)
+                    select_pks.add(pk)
                 subquery = subquery.distinct().join(
                     last_query.select(*select_pks),
                     on=reduce(operator.or_, expr))
