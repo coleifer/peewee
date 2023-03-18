@@ -2299,7 +2299,7 @@ class TestWindowFunctionIntegration(ModelTestCase):
             (3, 100.)])
 
 
-@skip_if(IS_SQLITE or (IS_MYSQL and not IS_MYSQL_ADVANCED_FEATURES))
+@skip_if(IS_SQLITE or (IS_MYSQL and not IS_MYSQL_ADVANCED_FEATURES) or IS_CRDB)
 @skip_unless(db.for_update, 'requires for update')
 class TestForUpdateIntegration(ModelTestCase):
     requires = [User, Tweet]
