@@ -62,8 +62,6 @@ class CockroachDatabase(PostgresqlDatabase):
         'BLOB': 'BYTES',
     })
 
-    for_update = False
-    nulls_ordering = False
     release_after_rollback = True
 
     def __init__(self, database, *args, **kwargs):
