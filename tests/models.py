@@ -1,5 +1,6 @@
 import datetime
 import sys
+import threading
 import time
 import unittest
 
@@ -2356,6 +2357,39 @@ class TestForUpdateIntegration(ModelTestCase):
             self.database.commit()
             self.assertEqual(query.get().username, 'ziggy')
 
+    def test_for_update_blocking(self):
+        User.create(username='u1')
+
+        AltUser = self.AltUser
+        evt = threading.Event()
+        def run_in_thread():
+            with self.alt_db.atomic():
+                evt.wait()
+                n = (AltUser.update(username='u1-y')
+                     .where(AltUser.username == 'u1')
+                     .execute())
+                self.assertEqual(n, 0)
+
+        t = threading.Thread(target=run_in_thread)
+        t.daemon = True
+        t.start()
+
+        with self.database.atomic() as txn:
+            q = (User.select()
+                 .where(User.username == 'u1')
+                 .for_update()
+                 .execute())
+            evt.set()
+
+            n = (User.update(username='u1-x')
+                 .where(User.username == 'u1')
+                 .execute())
+            self.assertEqual(n, 1)
+
+        t.join(timeout=5)
+        u = User.get()
+        self.assertEqual(u.username, 'u1-x')
+
     def test_for_update_nested(self):
         User.insert_many([(u,) for u in 'abc']).execute()
         subq = User.select().where(User.username != 'b').for_update()
@@ -2387,6 +2421,7 @@ class TestForUpdateIntegration(ModelTestCase):
                         .get())
 
             self.assertRaises((OperationalError, InternalError), will_fail)
+            self.database.commit()
 
     @requires_postgresql
     @requires_models(User, Tweet)
