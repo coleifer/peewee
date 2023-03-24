@@ -37,7 +37,7 @@ class User(TestModel):
     username = CharField()
 
     class Meta:
-        table_name = 'users'
+        table_name = 'users_keys'
 
 
 class Relationship(TestModel):
