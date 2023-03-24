@@ -2299,7 +2299,7 @@ class TestWindowFunctionIntegration(ModelTestCase):
             (3, 100.)])
 
 
-@skip_if(IS_SQLITE or (IS_MYSQL and not IS_MYSQL_ADVANCED_FEATURES) or IS_CRDB)
+@skip_if(IS_SQLITE or (IS_MYSQL and not IS_MYSQL_ADVANCED_FEATURES))
 @skip_unless(db.for_update, 'requires for update')
 class TestForUpdateIntegration(ModelTestCase):
     requires = [User, Tweet]
@@ -2322,15 +2322,19 @@ class TestForUpdateIntegration(ModelTestCase):
         self.alt_db.close()
         super(TestForUpdateIntegration, self).tearDown()
 
+    @skip_if(IS_CRDB, 'crdb locks-up on this test, blocking reads')
     def test_for_update(self):
-        User.create(username='huey')
-        zaizee = User.create(username='zaizee')
+        with self.database.atomic():
+            User.create(username='huey')
+            zaizee = User.create(username='zaizee')
 
         AltUser = self.AltUser
 
         with self.database.manual_commit():
             self.database.begin()
-            users = User.select().where(User.username == 'zaizee').for_update()
+            users = (User.select().where(User.username == 'zaizee')
+                     .for_update()
+                     .execute())
             updated = (User
                        .update(username='ziggy')
                        .where(User.username == 'zaizee')
@@ -2361,7 +2365,6 @@ class TestForUpdateIntegration(ModelTestCase):
                  .execute())
         self.assertEqual(nrows, 2)
 
-    @skip_if(IS_CRDB, 'crdb does not support "nowait" option')
     def test_for_update_nowait(self):
         User.create(username='huey')
         zaizee = User.create(username='zaizee')
