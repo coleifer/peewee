@@ -6261,6 +6261,8 @@ class DoesNotExist(Exception): pass
 
 
 class ModelBase(type):
+    default_id_field = AutoField
+
     inheritable = set(['constraints', 'database', 'indexes', 'primary_key',
                        'options', 'schema', 'table_function', 'temporary',
                        'only_save_dirty', 'legacy_table_names',
@@ -6328,7 +6330,7 @@ class ModelBase(type):
             if parent_pk is not False:
                 pk, pk_name = ((parent_pk, parent_pk.name)
                                if parent_pk is not None else
-                               (AutoField(), 'id'))
+                               (cls.default_id_field(), 'id'))
             else:
                 pk = False
         elif isinstance(pk, CompositeKey):
