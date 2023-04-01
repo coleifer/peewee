@@ -13,7 +13,6 @@ from peewee import Expression
 from peewee import Node
 from peewee import NodeList
 from peewee import __deprecated__
-from peewee import __exception_wrapper__
 
 try:
     from psycopg2cffi import compat
