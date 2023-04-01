@@ -54,6 +54,9 @@ jobs:
       - name: sqlcipher
         if: ${{ matrix.python-version != 2.7 }}
         run: pip install sqlcipher3-binary
+      - name: psycopg3
+        if: ${{ matrix.python-version != 2.7 }}
+        run: pip install 'psycopg[binary]'
       - name: crdb
         if: ${{ matrix.peewee-backend == 'cockroachdb' }}
         run: |

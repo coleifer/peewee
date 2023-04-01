@@ -3,6 +3,8 @@ import datetime
 import uuid
 from decimal import Decimal as Dc
 
+import psycopg  # Failure to do so will skip these tests.
+
 from peewee import *
 from playhouse.psycopg3_ext import *
 
