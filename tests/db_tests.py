@@ -3,6 +3,7 @@ try:
     from Queue import Queue
 except ImportError:
     from queue import Queue
+import platform
 import re
 import threading
 
@@ -23,6 +24,7 @@ from .base import TestModel
 from .base import db
 from .base import db_loader
 from .base import get_in_memory_db
+from .base import new_connection
 from .base import requires_models
 from .base import requires_postgresql
 from .base_models import Category
@@ -348,6 +350,10 @@ class TestDatabase(DatabaseTestCase):
 
 
 class TestThreadSafety(ModelTestCase):
+    # HACK: This workaround increases the Sqlite busy timeout when tests are
+    # being run on certain architectures.
+    if IS_SQLITE and platform.machine() not in ('i386', 'i686', 'x86_64'):
+        database = new_connection(timeout=60)
     nthreads = 4
     nrows = 10
     requires = [User]
