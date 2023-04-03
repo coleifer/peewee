@@ -885,8 +885,8 @@ class TestSelectQuery(BaseTestCase):
             'ORDER BY "t1"."ts" DESC NULLS LAST'), [], nulls_ordering=True)
         self.assertSQL(query, (
             'SELECT "t1"."username" FROM "users" AS "t1" '
-            'ORDER BY CASE WHEN ("t1"."ts" IS ?) THEN ? ELSE ? END, '
-            '"t1"."ts" DESC'), [None, 1, 0], nulls_ordering=False)
+            'ORDER BY CASE WHEN ("t1"."ts" IS NULL) THEN ? ELSE ? END, '
+            '"t1"."ts" DESC'), [1, 0], nulls_ordering=False)
 
         query = (User
                  .select(User.c.username)
@@ -896,8 +896,8 @@ class TestSelectQuery(BaseTestCase):
             'ORDER BY "t1"."ts" DESC NULLS first'), [], nulls_ordering=True)
         self.assertSQL(query, (
             'SELECT "t1"."username" FROM "users" AS "t1" '
-            'ORDER BY CASE WHEN ("t1"."ts" IS ?) THEN ? ELSE ? END, '
-            '"t1"."ts" DESC'), [None, 0, 1], nulls_ordering=False)
+            'ORDER BY CASE WHEN ("t1"."ts" IS NULL) THEN ? ELSE ? END, '
+            '"t1"."ts" DESC'), [0, 1], nulls_ordering=False)
 
     def test_in_value_representation(self):
         query = (User
@@ -965,7 +965,7 @@ class TestSelectQuery(BaseTestCase):
         query = Note.select().where(Note.user_id == None)
         self.assertSQL(query, (
             'SELECT "t1"."id", "t1"."content", "t1"."user_id" '
-            'FROM "notes" AS "t1" WHERE ("t1"."user_id" IS ?)'), [None])
+            'FROM "notes" AS "t1" WHERE ("t1"."user_id" IS NULL)'), [])
 
     def test_like_escape(self):
         T = Table('tbl', ('key',))
@@ -1199,7 +1199,7 @@ class TestUpdateQuery(BaseTestCase):
             'UPDATE "users" SET '
             '"last_tweet_id" = (SELECT MAX("t1"."id") FROM "tweets" AS "t1" '
             'WHERE ("t1"."user_id" = "users"."id")) '
-            'WHERE ("users"."last_tweet_id" IS ?)'), [None])
+            'WHERE ("users"."last_tweet_id" IS NULL)'), [])
 
     def test_update_from(self):
         data = [(1, 'u1-x'), (2, 'u2-x')]
