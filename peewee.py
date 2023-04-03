@@ -58,6 +58,11 @@ try:
     pg_register_uuid()
 except Exception:
     pass
+if pg_errors is None:
+    try:
+        from psycopg import errors as pg_errors
+    except ImportError:
+        pass
 
 mysql_passwd = False
 try:
@@ -1574,11 +1579,14 @@ class Expression(ColumnBase):
             op_in = self.op == OP.IN or self.op == OP.NOT_IN
             if op_in and ctx.as_new().parse(self.rhs)[0] == '()':
                 return ctx.literal('0 = 1' if self.op == OP.IN else '1 = 1')
+            rhs = self.rhs
+            if rhs is None and (self.op == OP.IS or self.op == OP.IS_NOT):
+                rhs = SQL('NULL')
 
             return (ctx
                     .sql(self.lhs)
                     .literal(' %s ' % op_sql)
-                    .sql(self.rhs))
+                    .sql(rhs))
 
 
 class StringExpression(Expression):

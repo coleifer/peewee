@@ -161,3 +161,6 @@ class Psycopg3Database(PostgresqlDatabase):
         # is otherwise unusable, return False.
         conn = self._state.conn
         return conn.pgconn.transaction_status < conn.TransactionStatus.INERROR
+
+    def extract_date(self, date_part, date_field):
+        return fn.EXTRACT(NodeList((SQL(date_part), SQL('FROM'), date_field)))
