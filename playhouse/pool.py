@@ -308,6 +308,37 @@ except ImportError:
     PooledPostgresqlExtDatabase = None
 
 
+try:
+    from playhouse.psycopg3_ext import Psycopg3Database
+
+    class PooledPsycopg3Database(PooledDatabase, Psycopg3Database):
+        def _is_closed(self, conn):
+            if conn.closed:
+                return True
+
+            txn_status = conn.pgconn.transaction_status
+            if txn_status == conn.TransactionStatus.UNKNOWN:
+                return True
+            elif txn_status != conn.TransactionStatus.IDLE:
+                conn.rollback()
+            return False
+
+        def _can_reuse(self, conn):
+            txn_status = conn.pgconn.transaction_status
+            # Do not return connection in an error state, as subsequent queries
+            # will all fail. If the status is unknown then we lost the connection
+            # to the server and the connection should not be re-used.
+            if txn_status == conn.TransactionStatus.UNKNOWN:
+                return False
+            elif txn_status == conn.TransactionStatus.INERROR:
+                conn.reset()
+            elif txn_status != conn.TransactionStatus.IDLE:
+                conn.rollback()
+            return True
+except ImportError:
+    PooledPsycopg3Database = None
+
+
 class _PooledSqliteDatabase(PooledDatabase):
     def _is_closed(self, conn):
         try:
