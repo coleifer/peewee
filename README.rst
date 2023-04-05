@@ -10,9 +10,6 @@ Peewee is a simple and small ORM. It has few (but expressive) concepts, making i
 * supports sqlite, mysql, postgresql and cockroachdb
 * tons of `extensions <http://docs.peewee-orm.com/en/latest/peewee/playhouse.html>`_
 
-.. image:: https://travis-ci.org/coleifer/peewee.svg?branch=master
-  :target: https://travis-ci.org/coleifer/peewee
-
 New to peewee? These may help:
 
 * `Quickstart <http://docs.peewee-orm.com/en/latest/peewee/quickstart.html#quickstart>`_
