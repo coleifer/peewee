@@ -2,6 +2,7 @@ include CHANGELOG.md
 include LICENSE
 include README.rst
 include TODO.rst
+include pyproject.toml
 include runtests.py
 include tests.py
 include playhouse/*.pyx
