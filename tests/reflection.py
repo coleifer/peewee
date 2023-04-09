@@ -456,8 +456,12 @@ class TestReflectNoPK(BaseReflectionTestCase):
     def test_no_pk(self):
         models = self.introspector.generate_models()
         NoPK = models['no_pk']
-        self.assertEqual(NoPK._meta.sorted_field_names, ['data'])
-        self.assertTrue(NoPK._meta.primary_key is False)
+        if IS_CRDB:
+            # CockroachDB always includes a "rowid".
+            self.assertEqual(NoPK._meta.sorted_field_names, ['rowid', 'data'])
+        else:
+            self.assertEqual(NoPK._meta.sorted_field_names, ['data'])
+            self.assertTrue(NoPK._meta.primary_key is False)
 
 
 class EventLog(TestModel):
