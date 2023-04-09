@@ -69,6 +69,12 @@ class Nugget(TestModel):
     category = CharField()
 
 
+class NoPK(TestModel):
+    data = CharField()
+    class Meta:
+        primary_key = False
+
+
 class BaseReflectionTestCase(ModelTestCase):
     def setUp(self):
         super(BaseReflectionTestCase, self).setUp()
@@ -442,6 +448,16 @@ class TestReflection(BaseReflectionTestCase):
                 actual = columns[table][field_name].get_field()
                 self.assertTrue(actual in fields,
                                 '%s not in %s' % (actual, fields))
+
+
+class TestReflectNoPK(BaseReflectionTestCase):
+    requires = [NoPK]
+
+    def test_no_pk(self):
+        models = self.introspector.generate_models()
+        NoPK = models['no_pk']
+        self.assertEqual(NoPK._meta.sorted_field_names, ['data'])
+        self.assertTrue(NoPK._meta.primary_key is False)
 
 
 class EventLog(TestModel):

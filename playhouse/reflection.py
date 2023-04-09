@@ -715,7 +715,11 @@ class Introspector(object):
             # Fix models with multi-column primary keys.
             composite_key = False
             if len(primary_keys) == 0:
-                primary_keys = columns.keys()
+                if 'id' not in columns:
+                    Meta.primary_key = False
+                else:
+                    primary_keys = columns.keys()
+
             if len(primary_keys) > 1:
                 Meta.primary_key = CompositeKey(*[
                     field.name for col, field in columns.items()
