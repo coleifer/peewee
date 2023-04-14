@@ -50,7 +50,7 @@ class Column(object):
 
     def __init__(self, name, field_class, raw_column_type, nullable,
                  primary_key=False, column_name=None, index=False,
-                 unique=False, default=None, extra_parameters=None):
+                 unique=False, default=None, extra_parameters=None, verbose_name="", max_length=None):
         self.name = name
         self.field_class = field_class
         self.raw_column_type = raw_column_type
@@ -66,6 +66,8 @@ class Column(object):
         self.rel_model = None
         self.related_name = None
         self.to_field = None
+        self.verbose_name = verbose_name or column_name
+        self.max_length = max_length
 
     def __repr__(self):
         attrs = [
@@ -80,7 +82,11 @@ class Column(object):
         return 'Column(%s, %s)' % (self.name, keyword_args)
 
     def get_field_parameters(self):
-        params = {}
+        params = {"verbose_name": self.verbose_name}
+
+        if self.field_class is CharField and self.max_length:
+            params["max_length"] = self.max_length
+
         if self.extra_parameters is not None:
             params.update(self.extra_parameters)
 
@@ -140,8 +146,15 @@ class Column(object):
                 value = value.__name__
             field_params[key] = value
 
+        verbose_name = field_params.pop("verbose_name", "").encode().decode()
+
+        verbose_name_str = f"verbose_name='{verbose_name}'"
+
         param_str = ', '.join('%s=%s' % (k, v)
                               for k, v in sorted(field_params.items()))
+        param_str += ", "
+        param_str += verbose_name_str
+
         field = '%s = %s(%s)' % (
             self.name,
             self.field_class.__name__,
@@ -194,6 +207,8 @@ class Metadata(object):
                 primary_key=column_data.primary_key,
                 column_name=name,
                 default=default,
+                verbose_name=column_data.verbose_name,
+                max_length=column_data.max_length,
                 extra_parameters=extra_params.get(name))
 
         return columns
