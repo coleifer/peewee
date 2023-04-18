@@ -130,6 +130,7 @@ from peewee import NodeList
 from peewee import OP
 from peewee import callable_
 from peewee import sort_models
+from peewee import sqlite3
 from peewee import _truncate_constraint_name
 try:
     from playhouse.cockroachdb import CockroachDatabase
@@ -834,11 +835,24 @@ class SqliteMigrator(SchemaMigrator):
         return '%s(%s)' % (lhs, ', '.join('"%s"' % c for c in clean))
 
     @operation
-    def drop_column(self, table, column_name, cascade=True):
+    def drop_column(self, table, column_name, cascade=True, legacy=False):
+        if sqlite3.version_info >= (3, 25, 0) and not legacy:
+            ctx = self.make_context()
+            (self._alter_table(ctx, table)
+             .literal(' DROP COLUMN ')
+             .sql(Entity(column_name)))
+            return ctx
         return self._update_column(table, column_name, lambda a, b: None)
 
     @operation
-    def rename_column(self, table, old_name, new_name):
+    def rename_column(self, table, old_name, new_name, legacy=False):
+        if sqlite3.version_info >= (3, 25, 0) and not legacy:
+            return (self
+                    ._alter_table(self.make_context(), table)
+                    .literal(' RENAME COLUMN ')
+                    .sql(Entity(old_name))
+                    .literal(' TO ')
+                    .sql(Entity(new_name)))
         def _rename(column_name, column_def):
             return column_def.replace(column_name, new_name)
         return self._update_column(table, old_name, _rename)
