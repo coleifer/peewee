@@ -7,7 +7,19 @@ https://github.com/coleifer/peewee/releases
 
 ## master
 
-[View commits](https://github.com/coleifer/peewee/compare/3.16.0...master)
+[View commits](https://github.com/coleifer/peewee/compare/3.16.1...master)
+
+## 3.16.1
+
+* Add changes required for building against Cython 3.0 and set Cython
+  language-level to 3.
+* Ensure indexes aren't added to unindexed fields during introspection, #2691.
+* Ensure we don't redundantly select same PK in prefetch when using
+  PREFETCH_TYPE.JOIN.
+* In Sqlite migrator, use Sqlite's builtin DROP and RENAME column facilities
+  when possible. This can be overridden by passing `legacy=True` flag.
+
+[View commits](https://github.com/coleifer/peewee/compare/3.16.0...3.16.1)
 
 ## 3.16.0
 
