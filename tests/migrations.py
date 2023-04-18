@@ -9,6 +9,7 @@ from .base import IS_CRDB
 from .base import IS_MYSQL
 from .base import IS_POSTGRESQL
 from .base import IS_SQLITE
+from .base import IS_SQLITE_25
 from .base import ModelTestCase
 from .base import TestModel
 from .base import db
@@ -18,6 +19,7 @@ from .base import requires_pglike
 from .base import requires_postgresql
 from .base import requires_sqlite
 from .base import skip_if
+from .base import skip_unless
 
 try:
     from psycopg2cffi import compat
@@ -238,18 +240,19 @@ class TestSchemaMigration(ModelTestCase):
         cursor = self.database.execute_sql('select * from %s limit 1' % tbl)
         return set([col[0] for col in cursor.description])
 
-    def test_drop_column(self):
+    def test_drop_column(self, legacy=False):
+        kw = {'legacy': legacy} if IS_SQLITE else {}
         self._create_people()
         migrate(
-            self.migrator.drop_column('person', 'last_name'),
-            self.migrator.drop_column('person', 'dob'))
+            self.migrator.drop_column('person', 'last_name', **kw),
+            self.migrator.drop_column('person', 'dob', **kw))
 
         column_names = self.get_column_names('person')
         self.assertEqual(column_names, set(['id', 'first_name']))
 
         User.create(id='charlie', password='12345')
         User.create(id='huey', password='meow')
-        migrate(self.migrator.drop_column('users', 'password'))
+        migrate(self.migrator.drop_column('users', 'password', **kw))
 
         column_names = self.get_column_names('users')
         self.assertEqual(column_names, set(['id']))
@@ -258,11 +261,16 @@ class TestSchemaMigration(ModelTestCase):
             ('charlie',),
             ('huey',),])
 
-    def test_rename_column(self):
+    @skip_unless(IS_SQLITE_25, 'Requires sqlite 3.25 or newer')
+    def test_drop_column_sqlite_legacy(self):
+        self.test_drop_column(legacy=True)
+
+    def test_rename_column(self, legacy=False):
+        kw = {'legacy': legacy} if IS_SQLITE else {}
         self._create_people()
         migrate(
-            self.migrator.rename_column('person', 'first_name', 'first'),
-            self.migrator.rename_column('person', 'last_name', 'last'))
+            self.migrator.rename_column('person', 'first_name', 'first', **kw),
+            self.migrator.rename_column('person', 'last_name', 'last', **kw))
 
         column_names = self.get_column_names('person')
         self.assertEqual(column_names, set(['id', 'first', 'last', 'dob']))
@@ -284,14 +292,19 @@ class TestSchemaMigration(ModelTestCase):
                  .order_by(NewPerson.first))
         self.assertEqual(list(query.tuples()), self._person_data)
 
-    def test_rename_gh380(self):
+    @skip_unless(IS_SQLITE_25, 'Requires sqlite 3.25 or newer')
+    def test_rename_column_sqlite_legacy(self):
+        self.test_rename_column(legacy=True)
+
+    def test_rename_gh380(self, legacy=False):
+        kw = {'legacy': legacy} if IS_SQLITE else {}
         u1 = User.create(id='charlie')
         u2 = User.create(id='huey')
         p1 = Page.create(name='p1-1', user=u1)
         p2 = Page.create(name='p2-1', user=u1)
         p3 = Page.create(name='p3-2', user=u2)
 
-        migrate(self.migrator.rename_column('page', 'name', 'title'))
+        migrate(self.migrator.rename_column('page', 'name', 'title', **kw))
 
         column_names = self.get_column_names('page')
         self.assertEqual(column_names, set(['id', 'title', 'user_id']))
@@ -312,6 +325,10 @@ class TestSchemaMigration(ModelTestCase):
         self.assertEqual(
             [(np.title, np.user.id) for np in query],
             [('p1-1', 'charlie'), ('p2-1', 'charlie'), ('p3-2', 'huey')])
+
+    @skip_unless(IS_SQLITE_25, 'Requires sqlite 3.25 or newer')
+    def test_rename_gh380_sqlite_legacy(self):
+        self.test_rename_gh380(legacy=True)
 
     def test_add_not_null(self):
         self._create_people()
