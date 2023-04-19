@@ -66,4 +66,4 @@ jobs:
           PGUSER: postgres
           PGHOST: 127.0.0.1
           PGPASSWORD: peewee
-        run: python runtests.py --mysql-user=root --mysql-password=peewee
+        run: python runtests.py --mysql-user=root --mysql-password=peewee -s

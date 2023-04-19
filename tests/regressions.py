@@ -1,6 +1,9 @@
 import datetime
 import json
+import random
 import sys
+import threading
+import time
 import uuid
 
 from peewee import *
@@ -21,6 +24,7 @@ from .base import requires_mysql
 from .base import requires_postgresql
 from .base import skip_if
 from .base import skip_unless
+from .base import slow_test
 from .base_models import Sample
 from .base_models import Tweet
 from .base_models import User
@@ -1777,3 +1781,22 @@ class TestJoinTypePrefetchMultipleFKs(ModelTestCase):
             ('s1', [t1, t2], [], ['s2a', 's2b'], []),
             ('s2a', [t3], [t1], ['s3'], ['s1']),
             ('s2b', [t4], [t2], ['s3'], ['s1'])])
+
+
+@slow_test()
+class TestThreadSafetyDecorators(ModelTestCase):
+    requires = [User]
+
+    def test_thread_safety_atomic(self):
+        @self.database.atomic()
+        def get_one(n):
+            time.sleep(n)
+            return User.select().first()
+        def run(n):
+            with self.database.atomic():
+                get_one(n)
+        User.create(username='u')
+        threads = [threading.Thread(target=run, args=(i,))
+                   for i in (0.05, 0.1, 0.15, 0.2, 0.25, 0.3, 0.35, 0.5)]
+        for t in threads: t.start()
+        for t in threads: t.join()

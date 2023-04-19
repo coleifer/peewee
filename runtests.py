@@ -29,6 +29,8 @@ def get_option_parser():
                      type='int', help='Verbosity of output')
     basic.add_option('-f', '--failfast', action='store_true', default=False,
                      dest='failfast', help='Exit on first failure/error.')
+    basic.add_option('-s', '--slow-tests', action='store_true', default=False,
+                     dest='slow_tests', help='Run tests that may be slow.')
     parser.add_option_group(basic)
 
     db_param_map = (
@@ -90,6 +92,8 @@ if __name__ == '__main__':
                 os.environ['PEEWEE_%s' % att_name.upper()] = value
 
     os.environ['PEEWEE_TEST_VERBOSITY'] = str(options.verbosity)
+    if options.slow_tests:
+        os.environ['PEEWEE_SLOW_TESTS'] = '1'
 
     suite = collect_tests(args)
     failures, errors = runtests(suite, options.verbosity, options.failfast)

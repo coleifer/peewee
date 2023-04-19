@@ -53,6 +53,7 @@ def get_in_memory_db(**params):
 
 BACKEND = os.environ.get('PEEWEE_TEST_BACKEND') or 'sqlite'
 VERBOSITY = int(os.environ.get('PEEWEE_TEST_VERBOSITY') or 1)
+SLOW_TESTS = bool(os.environ.get('PEEWEE_SLOW_TESTS'))
 
 IS_SQLITE = BACKEND.startswith('sqlite')
 IS_MYSQL = BACKEND.startswith(('mysql', 'maria'))
@@ -270,10 +271,14 @@ def skip_if(expr, reason='n/a'):
         return unittest.skipIf(expr, reason)(method)
     return decorator
 
-
 def skip_unless(expr, reason='n/a'):
     def decorator(method):
         return unittest.skipUnless(expr, reason)(method)
+    return decorator
+
+def slow_test():
+    def decorator(method):
+        return unittest.skipUnless(SLOW_TESTS, 'skipping slow test')(method)
     return decorator
 
 def requires_sqlite(method):
