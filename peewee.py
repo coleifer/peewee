@@ -894,10 +894,17 @@ class BaseTable(Source):
     __rmul__ = __join__(JOIN.CROSS, inverted=True)
 
 
-class _BoundTableContext(_callable_context_manager):
+class _BoundTableContext(object):
     def __init__(self, table, database):
         self.table = table
         self.database = database
+
+    def __call__(self, fn):
+        @wraps(fn)
+        def inner(*args, **kwargs):
+            with _BoundTableContext(self.table, self.database):
+                return fn(*args, **kwargs)
+        return inner
 
     def __enter__(self):
         self._orig_database = self.table._database
@@ -3062,13 +3069,19 @@ class _NoopLock(object):
     def __exit__(self, exc_type, exc_val, exc_tb): pass
 
 
-class ConnectionContext(_callable_context_manager):
+class ConnectionContext(object):
     __slots__ = ('db',)
     def __init__(self, db): self.db = db
     def __enter__(self):
         if self.db.is_closed():
             self.db.connect()
     def __exit__(self, exc_type, exc_val, exc_tb): self.db.close()
+    def __call__(self, fn):
+        @wraps(fn)
+        def inner(*args, **kwargs):
+            with ConnectionContext(self.db):
+                return fn(*args, **kwargs)
+        return inner
 
 
 class Database(_callable_context_manager):
@@ -4301,9 +4314,16 @@ class MySQLDatabase(Database):
 # TRANSACTION CONTROL.
 
 
-class _manual(_callable_context_manager):
+class _manual(object):
     def __init__(self, db):
         self.db = db
+
+    def __call__(self, fn):
+        @wraps(fn)
+        def inner(*args, **kwargs):
+            with _manual(self.db):
+                return fn(*args, **kwargs)
+        return inner
 
     def __enter__(self):
         top = self.db.top_transaction()
@@ -4318,10 +4338,18 @@ class _manual(_callable_context_manager):
                              'manual commit block.')
 
 
-class _atomic(_callable_context_manager):
+class _atomic(object):
     def __init__(self, db, *args, **kwargs):
         self.db = db
         self._transaction_args = (args, kwargs)
+
+    def __call__(self, fn):
+        @wraps(fn)
+        def inner(*args, **kwargs):
+            a, k = self._transaction_args
+            with _atomic(self.db, *a, **k):
+                return fn(*args, **kwargs)
+        return inner
 
     def __enter__(self):
         if self.db.transaction_depth() == 0:
@@ -4338,10 +4366,18 @@ class _atomic(_callable_context_manager):
         return self._helper.__exit__(exc_type, exc_val, exc_tb)
 
 
-class _transaction(_callable_context_manager):
+class _transaction(object):
     def __init__(self, db, *args, **kwargs):
         self.db = db
         self._begin_args = (args, kwargs)
+
+    def __call__(self, fn):
+        @wraps(fn)
+        def inner(*args, **kwargs):
+            a, k = self._begin_args
+            with _transaction(self.db, *a, **k):
+                return fn(*args, **kwargs)
+        return inner
 
     def _begin(self):
         args, kwargs = self._begin_args
@@ -4377,11 +4413,18 @@ class _transaction(_callable_context_manager):
             self.db.pop_transaction()
 
 
-class _savepoint(_callable_context_manager):
+class _savepoint(object):
     def __init__(self, db, sid=None):
         self.db = db
         self.sid = sid or 's' + uuid.uuid4().hex
         self.quoted_sid = self.sid.join(self.db.quote)
+
+    def __call__(self, fn):
+        @wraps(fn)
+        def inner(*args, **kwargs):
+            with _savepoint(self.db):
+                return fn(*args, **kwargs)
+        return inner
 
     def _begin(self):
         self.db.execute_sql('SAVEPOINT %s;' % self.quoted_sid)
@@ -6414,7 +6457,7 @@ class ModelBase(type):
         return ctx.sql(self._meta.table)
 
 
-class _BoundModelsContext(_callable_context_manager):
+class _BoundModelsContext(object):
     def __init__(self, models, database, bind_refs, bind_backrefs):
         self.models = models
         self.database = database
