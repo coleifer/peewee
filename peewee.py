@@ -1935,6 +1935,8 @@ class OnConflict(Node):
 
     @Node.copy
     def where(self, *expressions):
+        expressions = [
+            expression for expression in expressions if expression is not None]
         if self._where is not None:
             expressions = (self._where,) + expressions
         self._where = reduce(operator.and_, expressions)
@@ -2108,12 +2110,16 @@ class Query(BaseQuery):
 
     @Node.copy
     def where(self, *expressions):
+        expressions = [
+            expression for expression in expressions if expression is not None]
         if self._where is not None:
             expressions = (self._where,) + expressions
         self._where = reduce(operator.and_, expressions)
 
     @Node.copy
     def orwhere(self, *expressions):
+        expressions = [
+            expression for expression in expressions if expression is not None]
         if self._where is not None:
             expressions = (self._where,) + expressions
         self._where = reduce(operator.or_, expressions)
@@ -2882,6 +2888,8 @@ class Index(Node):
 
     @Node.copy
     def where(self, *expressions):
+        expressions = [
+            expression for expression in expressions if expression is not None]
         if self._where is not None:
             expressions = (self._where,) + expressions
         self._where = reduce(operator.and_, expressions)
