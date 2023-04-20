@@ -1526,8 +1526,8 @@ class Expression(ColumnBase):
         with ctx(**overrides):
             # Postgresql reports an error for IN/NOT IN (), so convert to
             # the equivalent boolean expression.
-            op_in = self.op == OP.IN or self.op == OP.NOT_IN
-            if op_in and ctx.as_new().parse(self.rhs)[0] == '()':
+            op_in = self.op == OP.IN or self.op == OP.NOT_IN  
+            if op_in and (self.rhs == None or ctx.as_new().parse(self.rhs)[0] == '()'):
                 return ctx.literal('0 = 1' if self.op == OP.IN else '1 = 1')
 
             return (ctx
