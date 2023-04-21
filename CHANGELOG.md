@@ -7,7 +7,15 @@ https://github.com/coleifer/peewee/releases
 
 ## master
 
-[View commits](https://github.com/coleifer/peewee/compare/3.16.1...master)
+[View commits](https://github.com/coleifer/peewee/compare/3.16.2...master)
+
+## 3.16.2
+
+Fixes a longstanding issue with thread-safety of various decorators, including
+`atomic()`, `transaction()`, `savepoint()`. The context-managers are
+unaffected. See #2709 for details.
+
+[View commits](https://github.com/coleifer/peewee/compare/3.16.1...3.16.2)
 
 ## 3.16.1
 
