@@ -168,7 +168,7 @@ queries to support CTEs. CTEs are now supported for use with INSERT, DELETE and
 UPDATE queries - see #2152.
 
 Additionally, this release adds better support for using the new `RETURNING`
-syntax with Sqlite automatically. Specify `returing_clause=True` when
+syntax with Sqlite automatically. Specify `returning_clause=True` when
 initializing your `SqliteDatabase` and all bulk inserts will automatically
 specify a `RETURNING` clause, returning the newly-inserted primary keys. This
 functionality requires Sqlite 3.35 or newer.
