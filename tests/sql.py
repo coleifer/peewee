@@ -173,6 +173,14 @@ class TestSelectQuery(BaseTestCase):
             'FROM "tweets" AS "t1" '
             'INNER JOIN "users" AS "t2" ON ("t1"."user_id" = "t2"."id")'), [])
 
+        query = (Tweet
+                 .select(Tweet.star, User.c.id)
+                 .join(User, on=(Tweet.c.user_id == User.c.id)))
+        self.assertSQL(query, (
+            'SELECT "t1".*, "t2"."id" '
+            'FROM "tweets" AS "t1" '
+            'INNER JOIN "users" AS "t2" ON ("t1"."user_id" = "t2"."id")'), [])
+
     def test_from_clause(self):
         query = (Note
                  .select(Note.content, Person.name)
