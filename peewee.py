@@ -794,6 +794,10 @@ class Source(Node):
             columns = (SQL('*'),)
         return Select((self,), columns)
 
+    @property
+    def star(self):
+        return NodeList((QualifiedNames(self), SQL('.*')), glue='')
+
     def join(self, dest, join_type=JOIN.INNER, on=None):
         return Join(self, dest, join_type, on)
 
