@@ -36,6 +36,9 @@ class MySQLConnectorDatabase(MySQLDatabase):
                 raise InterfaceError('Error, database connection not opened.')
         return self._state.conn.cursor(buffered=True)
 
+    def get_binary_type(self):
+        return mysql_connector.Binary
+
 
 class MariaDBConnectorDatabase(MySQLDatabase):
     def _connect(self):
@@ -74,6 +77,9 @@ class MariaDBConnectorDatabase(MySQLDatabase):
             except (AttributeError, IndexError):
                 return cursor.lastrowid
         return cursor
+
+    def get_binary_type(self):
+        return mariadb.Binary
 
 
 class JSONField(TextField):
