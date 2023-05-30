@@ -716,8 +716,8 @@ def _query_val_transform(v):
 
 
 class Node(object):
-    __isabstractmethod__ = False
     _coerce = True
+    __isabstractmethod__ = False  # Avoid issue w/abc and __getattr__, eg fn.X
 
     def clone(self):
         obj = self.__class__.__new__(self.__class__)
