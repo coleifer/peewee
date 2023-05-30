@@ -491,6 +491,7 @@ class ModelDescriptor(object): pass
 
 
 class AliasManager(object):
+    __isabstractmethod__ = False  # Avoid issue w/abc and __getattr__, eg fn.X
     __slots__ = ('_counter', '_current_index', '_mapping')
 
     def __init__(self):
@@ -717,7 +718,6 @@ def _query_val_transform(v):
 
 class Node(object):
     _coerce = True
-    __isabstractmethod__ = False  # Avoid issue w/abc and __getattr__, eg fn.X
 
     def clone(self):
         obj = self.__class__.__new__(self.__class__)
@@ -1140,6 +1140,7 @@ class CTE(_HashableSource, Source):
 
 
 class ColumnBase(Node):
+    __isabstractmethod__ = False  # Avoid issue w/abc and __getattr__, eg fn.X
     _converter = None
 
     @Node.copy
@@ -1974,6 +1975,7 @@ def database_required(method):
 # BASE QUERY INTERFACE.
 
 class BaseQuery(Node):
+    __isabstractmethod__ = False  # Avoid issue w/abc and __getattr__, eg fn.X
     default_row_type = ROW.DICT
 
     def __init__(self, _database=None, **kwargs):
@@ -5744,6 +5746,7 @@ class CompositeKey(MetaField):
 
 
 class _SortedFieldList(object):
+    __isabstractmethod__ = False  # Avoid issue w/abc and __getattr__, eg fn.X
     __slots__ = ('_keys', '_items')
 
     def __init__(self):

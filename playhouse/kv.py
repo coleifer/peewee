@@ -23,6 +23,8 @@ class KeyValue(object):
     :param Database database: database where key/value data is stored.
     :param str table_name: table name for data.
     """
+    __isabstractmethod__ = False  # Avoid issue w/abc and __getattr__, eg fn.X
+
     def __init__(self, key_field=None, value_field=None, ordered=False,
                  database=None, table_name='keyvalue'):
         if key_field is None:

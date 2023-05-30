@@ -27,6 +27,8 @@ else:
 
 
 class DataSet(object):
+    __isabstractmethod__ = False  # Avoid issue w/abc and __getattr__, eg fn.X
+
     def __init__(self, url, include_views=False, **kwargs):
         if isinstance(url, Database):
             self._url = None
@@ -187,6 +189,8 @@ class DataSet(object):
 
 
 class Table(object):
+    __isabstractmethod__ = False  # Avoid issue w/abc and __getattr__, eg fn.X
+
     def __init__(self, dataset, name, model_class):
         self.dataset = dataset
         self.name = name
