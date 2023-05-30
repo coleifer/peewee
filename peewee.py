@@ -716,6 +716,7 @@ def _query_val_transform(v):
 
 
 class Node(object):
+    __isabstractmethod__ = False
     _coerce = True
 
     def clone(self):
