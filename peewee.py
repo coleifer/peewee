@@ -5457,7 +5457,7 @@ class ForeignKeyField(Field):
             self.backref = '%s_set' % model._meta.name
 
         if set_attribute:
-            setattr(model, self.object_id_name, ObjectIdAccessor(self))
+            setattr(model, self.object_id_name, ObjectIdAccessor(ForeignKeyColumnField(self)))
             if self.backref not in '!+':
                 setattr(self.rel_model, self.backref,
                         self.backref_accessor_class(self))
@@ -5488,6 +5488,12 @@ class ForeignKeyField(Field):
             return self.rel_model._meta.fields[attr]
         raise AttributeError('Foreign-key has no attribute %s, nor is it a '
                              'valid field on the related model.' % attr)
+
+
+class ForeignKeyColumnField(ForeignKeyField):
+    def __init__(self, field):
+        for attr, value in field.__dict__.items():
+            setattr(self, attr, value)
 
 
 class DeferredForeignKey(Field):
@@ -7674,7 +7680,7 @@ class BaseModelCursorWrapper(DictCursorWrapper):
                     converters[idx] = node.python_value
                 fields[idx] = node
                 if not is_alias:
-                    self.columns[idx] = node.name
+                    self.columns[idx] = node.safe_name if isinstance(raw_node, ForeignKeyColumnField) else node.name
             elif isinstance(node, ColumnBase) and raw_node._converter:
                 converters[idx] = raw_node._converter
             elif isinstance(node, Function) and node._coerce:
