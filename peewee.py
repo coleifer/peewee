@@ -7949,7 +7949,6 @@ def prefetch_add_subquery(sq, subqueries, prefetch_type):
            isinstance(subquery, ModelAlias):
             subquery = subquery.select()
         subquery_model = subquery.model
-        fks = backrefs = None
         for j in reversed(range(i + 1)):
             fks = backrefs = None
             fixed = fixed_queries[j]
@@ -7966,8 +7965,7 @@ def prefetch_add_subquery(sq, subqueries, prefetch_type):
             if (fks or backrefs) and ((target_model is last_obj) or
                                       (target_model is None)):
                 break
-
-        if not fks and not backrefs:
+        else:
             tgt_err = ' using %s' % target_model if target_model else ''
             raise AttributeError('Error: unable to find foreign key for '
                                  'query: %s%s' % (subquery, tgt_err))
