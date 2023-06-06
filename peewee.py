@@ -7951,6 +7951,7 @@ def prefetch_add_subquery(sq, subqueries, prefetch_type):
         subquery_model = subquery.model
         fks = backrefs = None
         for j in reversed(range(i + 1)):
+            fks = backrefs = None
             fixed = fixed_queries[j]
             last_query = fixed.query
             last_model = last_obj = fixed.model
