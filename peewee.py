@@ -5042,6 +5042,12 @@ class BigBitFieldData(object):
 
     def __repr__(self):
         return repr(self._buffer)
+    if sys.version_info[0] < 3:
+        def __str__(self):
+            return bytes_type(self._buffer)
+    else:
+        def __bytes__(self):
+            return bytes_type(self._buffer)
 
 
 class BigBitFieldAccessor(FieldAccessor):

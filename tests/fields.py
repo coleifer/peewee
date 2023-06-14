@@ -692,6 +692,30 @@ class TestBitFields(ModelTestCase):
             else:
                 self.assertFalse(b_db.data.is_set(x))
 
+    def test_bigbit_field_bulk_create(self):
+        b1, b2, b3 = Bits(), Bits(), Bits()
+        b1.data.set_bit(1)
+        b2.data.set_bit(2)
+        b3.data.set_bit(3)
+        Bits.bulk_create([b1, b2, b3])
+        self.assertEqual(len(Bits), 3)
+        for b in Bits.select():
+            self.assertEqual(sum(1 if b.data.is_set(i) else 0
+                                 for i in (1, 2, 3)), 1)
+
+    def test_bigbit_field_bulk_update(self):
+        b1, b2, b3 = Bits.create(), Bits.create(), Bits.create()
+
+        b1.data.set_bit(11)
+        b2.data.set_bit(12)
+        b3.data.set_bit(13)
+        Bits.bulk_update([b1, b2, b3], fields=[Bits.data])
+
+        mapping = {b1.id: 11, b2.id: 12, b3.id: 13}
+        for b in Bits.select():
+            bit = mapping[b.id]
+            self.assertTrue(b.data.is_set(bit))
+
 
 class BlobModel(TestModel):
     data = BlobField()
