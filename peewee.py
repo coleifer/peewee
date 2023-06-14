@@ -5074,6 +5074,8 @@ class BigBitField(BlobField):
         super(BigBitField, self).__init__(*args, **kwargs)
 
     def db_value(self, value):
+        if isinstance(value, BigBitFieldData):
+            return bytes_type(value._buffer)
         return bytes_type(value) if value is not None else value
 
 
