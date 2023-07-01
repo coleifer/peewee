@@ -602,3 +602,50 @@ class TestForeignKeyPrimaryKeyManyToMany(ModelTestCase):
     def test_empty(self):
         al = AccountList.create(name='empty')
         self.assertEqual(list(al.accounts), [])
+
+
+class Permission(TestModel):
+    name = TextField()
+
+DeniedThroughDeferred = DeferredThroughModel()
+
+class Visitor(TestModel):
+    name = TextField()
+    allowed = ManyToManyField(Permission)
+    denied = ManyToManyField(Permission, through_model=DeniedThroughDeferred)
+
+class DeniedThrough(TestModel):
+    permission = ForeignKeyField(Permission)
+    visitor = ForeignKeyField(Visitor)
+
+DeniedThroughDeferred.set_model(DeniedThrough)
+
+
+class TestMultipleManyToManySameTables(ModelTestCase):
+    database = get_in_memory_db()
+    requires = [Permission, Visitor, Visitor.allowed.through_model,
+                Visitor.denied.through_model]
+
+    def test_multiple_manytomany_same_tables(self):
+        p1, p2, p3 = [Permission.create(name=n) for n in ('p1', 'p2', 'p3')]
+        v1, v2, v3 = [Visitor.create(name=n) for n in ('v1', 'v2', 'v3')]
+
+        v1.allowed.add([p1, p2, p3])
+        v2.allowed.add(p2)
+        v2.denied.add([p1, p3])
+        v3.allowed.add(p3)
+        v3.denied.add(p1)
+
+        accum = []
+        for v in Visitor.select().order_by(Visitor.name):
+            allowed, denied = [], []
+            for p in v.allowed.order_by(Permission.name):
+                allowed.append(p.name)
+            for p in v.denied.order_by(Permission.name):
+                denied.append(p.name)
+            accum.append((v.name, allowed, denied))
+
+        self.assertEqual(accum, [
+            ('v1', ['p1', 'p2', 'p3'], []),
+            ('v2', ['p2'], ['p1', 'p3']),
+            ('v3', ['p3'], ['p1'])])
