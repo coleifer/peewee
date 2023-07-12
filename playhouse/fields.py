@@ -1,3 +1,5 @@
+import json
+
 try:
     import bz2
 except ImportError:
@@ -11,7 +13,7 @@ try:
 except ImportError:
     import pickle
 
-from peewee import BlobField
+from peewee import BlobField, TextField, Function
 from peewee import buffer_type
 
 
@@ -58,3 +60,23 @@ class PickleField(BlobField):
         if value is not None:
             pickled = pickle.dumps(value, pickle.HIGHEST_PROTOCOL)
             return self._constructor(pickled)
+
+
+class JSONField(TextField):
+    field_type = 'JSON'
+
+    # noinspection PyProtectedMember
+    def db_value(self, value):
+        ensure_ascii = getattr(self.model._meta.database, 'json_ensure_ascii', True)
+        indent = 2 if getattr(self.model._meta.database, 'json_use_detailed', False) else None
+
+        if value is not None:
+            return json.dumps(value, ensure_ascii=ensure_ascii, indent=indent)
+
+    def python_value(self, value):
+        if value is not None:
+            return json.loads(value)
+
+    def jextract(self, jpath: str) -> Function:
+        # jpath example: '$.key1.key2'
+        return fn.JSON_EXTRACT(self, jpath)
