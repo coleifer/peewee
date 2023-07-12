@@ -1781,17 +1781,22 @@ class WindowAlias(Node):
 
 
 class ForUpdate(Node):
-    def __init__(self, expr, of=None, nowait=None):
+    def __init__(self, expr, of=None, nowait=None, skip_locked=False):
         expr = 'FOR UPDATE' if expr is True else expr
         if expr.lower().endswith('nowait'):
             expr = expr[:-7]  # Strip off the "nowait" bit.
             nowait = True
+
+        if expr.lower().endswith('skip locked'):
+            expr = expr[:-12]  # Strip off the "skip locked" bit.
+            skip_locked = True
 
         self._expr = expr
         if of is not None and not isinstance(of, (list, set, tuple)):
             of = (of,)
         self._of = of
         self._nowait = nowait
+        self._skip_locked = skip_locked
 
     def __sql__(self, ctx):
         ctx.literal(self._expr)
@@ -1799,6 +1804,8 @@ class ForUpdate(Node):
             ctx.literal(' OF ').sql(CommaNodeList(self._of))
         if self._nowait:
             ctx.literal(' NOWAIT')
+        if self._skip_locked:
+            ctx.literal(' SKIP LOCKED')
         return ctx
 
 
@@ -2344,7 +2351,7 @@ class CompoundSelectQuery(SelectBase):
 class Select(SelectBase):
     def __init__(self, from_list=None, columns=None, group_by=None,
                  having=None, distinct=None, windows=None, for_update=None,
-                 for_update_of=None, nowait=None, lateral=None, **kwargs):
+                 for_update_of=None, nowait=None, skip_locked=False, lateral=None, **kwargs):
         super(Select, self).__init__(**kwargs)
         self._from_list = (list(from_list) if isinstance(from_list, tuple)
                            else from_list) or []
@@ -2355,6 +2362,7 @@ class Select(SelectBase):
         self._for_update = for_update  # XXX: consider reorganizing.
         self._for_update_of = for_update_of
         self._for_update_nowait = nowait
+        self._for_update_skip_locked = skip_locked
         self._lateral = lateral
 
         self._distinct = self._simple_distinct = None
@@ -2441,12 +2449,13 @@ class Select(SelectBase):
         self._windows = windows if windows else None
 
     @Node.copy
-    def for_update(self, for_update=True, of=None, nowait=None):
+    def for_update(self, for_update=True, of=None, nowait=None, skip_locked=False):
         if not for_update and (of is not None or nowait):
             for_update = True
         self._for_update = for_update
         self._for_update_of = of
         self._for_update_nowait = nowait
+        self._for_update_skip_locked = skip_locked
 
     @Node.copy
     def lateral(self, lateral=True):
@@ -2519,7 +2528,7 @@ class Select(SelectBase):
                                      'by database.')
                 ctx.literal(' ')
                 ctx.sql(ForUpdate(self._for_update, self._for_update_of,
-                                  self._for_update_nowait))
+                                  self._for_update_nowait, self._for_update_skip_locked))
 
         # If the subquery is inside a function -or- we are evaluating a
         # subquery on either side of an expression w/o an explicit alias, do
