@@ -107,7 +107,7 @@ if IS_MYSQL:
         IS_MYSQL_ADVANCED_FEATURES = True
     elif server_info[0] == 0:
         logger.warning('Could not determine mysql server version.')
-    if server_info[0] == 8 or ((5, 7) <= server_info[:2] <= (6, 0)):
+    if server_info[0] >= 8 or ((5, 7) <= server_info[:2] <= (6, 0)):
         # Needs actual MySQL - not MariaDB.
         IS_MYSQL_JSON = True
     db.close()

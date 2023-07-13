@@ -20,6 +20,10 @@ except ImportError:
     mariadb = mariadb_db = None
 else:
     mariadb_db = db_loader('mariadb')
+try:
+    import mysql.connector as mysql_connector
+except ImportError:
+    mysql_connector = None
 
 mysql_ext_db = db_loader('mysqlconnector')
 
@@ -42,6 +46,7 @@ class KJ(TestModel):
 
 
 @requires_mysql
+@skip_if(mysql_connector is None, 'mysql-connector not installed')
 class TestMySQLConnector(ModelTestCase):
     database = mysql_ext_db
     requires = [Person, Note]
@@ -108,6 +113,9 @@ class TestMySQLJSONField(ModelTestCase):
             # Verify value is deserialized correctly.
             kj_db = KJ['k%s' % i]
             self.assertEqual(kj_db.data, value)
+
+        kj = KJ.select().where(KJ.data.extract('$.k1') == 'v1').get()
+        self.assertEqual(kj.key, 'k7')
 
         with self.assertRaises(IntegrityError):
             KJ.create(key='kx', data=None)

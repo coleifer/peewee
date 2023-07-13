@@ -104,6 +104,9 @@ class JSONField(TextField):
                 value = self._json_dumps(value)
             return value
 
+    def extract(self, path):
+        return fn.json_extract(self, path)
+
 
 def Match(columns, expr, modifier=None):
     if isinstance(columns, (list, tuple)):
