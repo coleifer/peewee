@@ -1646,6 +1646,12 @@ Additional MySQL-specific helpers:
     Extends :py:class:`TextField` and implements transparent JSON encoding and
     decoding in Python.
 
+    .. py:method:: extract(path)
+
+        :param str path: a JSON path, e.g. ``$.key1``
+
+        Extract a value from a JSON document at the given path.
+
 .. py:function:: Match(columns, expr[, modifier=None])
 
     :param columns: a single :py:class:`Field` or a tuple of multiple fields.
