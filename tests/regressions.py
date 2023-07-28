@@ -1365,9 +1365,10 @@ class TestFKMigrationRegression(ModelTestCase):
 
     def test_fk_migration(self):
         migrator = SchemaMigrator.from_database(self.database)
+        kw = {'legacy': True} if IS_SQLITE else {}
         migrate(migrator.drop_column(
             FKMB._meta.table_name,
-            FKMB.fkma.column_name))
+            FKMB.fkma.column_name, **kw))
 
         migrate(migrator.add_column(
             FKMB._meta.table_name,

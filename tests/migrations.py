@@ -580,7 +580,8 @@ class TestSchemaMigration(ModelTestCase):
         self.assertEqual(foreign_key.dest_table, 'person')
 
     def test_drop_foreign_key(self):
-        migrate(self.migrator.drop_column('page', 'user_id'))
+        kw = {'legacy': True} if IS_SQLITE else {}
+        migrate(self.migrator.drop_column('page', 'user_id', **kw))
         columns = self.database.get_columns('page')
         self.assertEqual(
             sorted(column.name for column in columns),
@@ -664,19 +665,19 @@ class TestSchemaMigration(ModelTestCase):
     @requires_sqlite
     def test_valid_column_required(self):
         self.assertRaises(
-            ValueError,
+            (OperationalError, ValueError),
             migrate,
             self.migrator.drop_column('page', 'column_does_not_exist'))
 
         self.assertRaises(
-            ValueError,
+            (OperationalError, ValueError),
             migrate,
             self.migrator.rename_column('page', 'xx', 'yy'))
 
     @requires_sqlite
     @requires_models(IndexModel)
     def test_table_case_insensitive(self):
-        migrate(self.migrator.drop_column('PaGe', 'name'))
+        migrate(self.migrator.drop_column('PaGe', 'name', legacy=True))
         column_names = self.get_column_names('page')
         self.assertEqual(column_names, set(['id', 'user_id']))
 
@@ -685,7 +686,8 @@ class TestSchemaMigration(ModelTestCase):
         column_names = self.get_column_names('page')
         self.assertEqual(column_names, set(['id', 'user_id', 'testing']))
 
-        migrate(self.migrator.drop_column('indeX_mOdel', 'first_name'))
+        migrate(self.migrator.drop_column('indeX_mOdel', 'first_name',
+                                          legacy=True))
         indexes = self.migrator.database.get_indexes('index_model')
         self.assertEqual(len(indexes), 1)
         self.assertEqual(indexes[0].name, 'index_model_data')
@@ -759,7 +761,8 @@ class TestSchemaMigration(ModelTestCase):
         migrate(self.migrator.rename_column(
             'index_model',
             'first_name',
-            'first'))
+            'first',
+            legacy=True))
 
         queries = [x.msg for x in self.history]
         self.assertEqual(queries, [
@@ -818,7 +821,7 @@ class TestSchemaMigration(ModelTestCase):
         self.reset_sql_history()
         new_fk = ForeignKeyField(User, User.id, null=True, on_delete='CASCADE')
         migrate(
-            self.migrator.drop_column('page', 'user_id'),
+            self.migrator.drop_column('page', 'user_id', legacy=True),
             self.migrator.add_column('page', 'user_id', new_fk))
 
         queries = [x.msg for x in self.history]
