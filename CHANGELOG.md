@@ -7,7 +7,19 @@ https://github.com/coleifer/peewee/releases
 
 ## master
 
-[View commits](https://github.com/coleifer/peewee/compare/3.16.2...master)
+[View commits](https://github.com/coleifer/peewee/compare/3.16.3...master)
+
+## 3.16.3
+
+* Support for Cython 3.0.
+* Add flag to `ManyToManyField` to prevent setting/getting values on unsaved
+  instances. This is worthwhile, since reading or writing a many-to-many has no
+  meaning when the instance is unsaved.
+* Adds a `star()` helper to `Source` base-class for selecting all columns.
+* Fix missing `binary` types for mysql-connector and mariadb-connector.
+* Add `extract()` method to MySQL `JSONField` for extracting a jsonpath.
+
+[View commits](https://github.com/coleifer/peewee/compare/3.16.2...3.16.3)
 
 ## 3.16.2
 
