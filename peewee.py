@@ -58,11 +58,10 @@ try:
     pg_register_uuid()
 except Exception:
     pass
-if pg_errors is None:
-    try:
-        from psycopg import errors as pg_errors
-    except ImportError:
-        pass
+try:
+    from psycopg import errors as pg3_errors
+except ImportError:
+    pass
 
 mysql_passwd = False
 try:
@@ -3057,9 +3056,13 @@ class ExceptionWrapper(object):
     def __exit__(self, exc_type, exc_value, traceback):
         if exc_type is None:
             return
-        # psycopg2.8 shits out a million cute error types. Try to catch em all.
+        # psycopg shits out a million cute error types. Try to catch em all.
         if pg_errors is not None and exc_type.__name__ not in self.exceptions \
            and issubclass(exc_type, pg_errors.Error):
+            exc_type = exc_type.__bases__[0]
+        elif pg3_errors is not None and \
+           exc_type.__name__ not in self.exceptions \
+           and issubclass(exc_type, pg3_errors.Error):
             exc_type = exc_type.__bases__[0]
         if exc_type.__name__ in self.exceptions:
             new_type = self.exceptions[exc_type.__name__]
