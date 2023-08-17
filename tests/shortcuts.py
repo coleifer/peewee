@@ -582,7 +582,7 @@ class ReconnectMySQLDatabase(ReconnectMixin, MySQLDatabase):
 
         # The first (0th) query fails, as do all queries after the 2nd (1st).
         if self._query_counter != 1:
-            def _fake_execute(self, _):
+            def _fake_execute(self, *args):
                 raise OperationalError('2006')
             cursor.execute = _fake_execute
         self._query_counter += 1
@@ -601,7 +601,7 @@ class ReconnectMySQLDatabase(ReconnectMixin, MySQLDatabase):
 class TestReconnectMixin(DatabaseTestCase):
     database = db_loader('mysql', db_class=ReconnectMySQLDatabase)
 
-    def test_reconnect_mixin(self):
+    def test_reconnect_mixin_execute_sql(self):
         # Verify initial state.
         self.database._reset_mock()
         self.assertEqual(self.database._close_counter, 0)
@@ -623,6 +623,40 @@ class TestReconnectMixin(DatabaseTestCase):
         curs = self.database.execute_sql(sql)
         self.assertEqual(curs.fetchone(), (2,))
         self.assertEqual(self.database._close_counter, 1)
+
+
+    def test_reconnect_mixin_begin(self):
+        # Verify initial state.
+        self.database._reset_mock()
+        self.assertEqual(self.database._close_counter, 0)
+
+        with self.database.atomic():
+            self.assertTrue(self.database.in_transaction())
+            self.assertEqual(self.database._close_counter, 1)
+            # Prepare mock for commit call
+            self.database._query_counter = 1
+
+        # Due to how we configured our mock, our queries are now failing and we
+        # can verify a reconnect is occuring *AND* the exception is propagated.
+        self.assertRaises(OperationalError, self.database.atomic().__enter__)
+        self.assertEqual(self.database._close_counter, 2)
+        self.assertFalse(self.database.in_transaction())
+
+        # We reset the mock counters. The first query we execute will fail. The
+        # second query will succeed (which happens automatically, thanks to the
+        # retry logic).
+        self.database._reset_mock()
+        with self.database.atomic():
+            self.assertTrue(self.database.in_transaction())
+            self.assertEqual(self.database._close_counter, 1)
+
+            # Do not reconnect when nesting transactions
+            self.assertRaises(OperationalError, self.database.atomic().__enter__)
+            self.assertEqual(self.database._close_counter, 1)
+
+            # Prepare mock for commit call
+            self.database._query_counter = 1
+        self.assertFalse(self.database.in_transaction())
 
 
 class MMA(TestModel):
