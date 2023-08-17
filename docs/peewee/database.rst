@@ -1660,7 +1660,7 @@ block. When this happens, a new transaction will be started.
     transaction will NOT be rolled-back -- only exceptions that bubble-up to
     the outer-most transaction will trigger a rollback.
 
-    As this can may lead to unpredictable behavior, it is recommended that
+    As this may lead to unpredictable behavior, it is recommended that
     you use :py:meth:`~Database.atomic`.
 
 Explicit Savepoints
