@@ -4405,10 +4405,11 @@ class _transaction(object):
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
+        depth = self.db.transaction_depth()
         try:
-            if exc_type:
+            if exc_type and depth == 1:
                 self.rollback(False)
-            elif self.db.transaction_depth() == 1:
+            elif depth == 1:
                 try:
                     self.commit(False)
                 except:

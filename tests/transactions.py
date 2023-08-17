@@ -139,6 +139,17 @@ class TestTransaction(BaseTransactionTestCase):
 
         self.assertRegister([3, 4, 5])
 
+        with db.transaction() as txn:
+            self._save(6)
+            try:
+                with db.transaction() as txn2:
+                    self._save(7)
+                    raise ValueError()
+            except ValueError:
+                pass
+
+        self.assertRegister([3, 4, 5, 6, 7])
+
     @requires_nested
     def test_savepoint_commit(self):
         with db.atomic() as txn:
