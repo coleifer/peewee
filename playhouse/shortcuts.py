@@ -252,8 +252,14 @@ class ReconnectMixin(object):
     def execute_sql(self, sql, params=None, commit=None):
         if commit is not None:
             __deprecated__('"commit" has been deprecated and is a no-op.')
+        return self._reconnect(super(ReconnectMixin, self).execute_sql, sql, params)
+
+    def begin(self):
+        return self._reconnect(super(ReconnectMixin, self).begin)
+
+    def _reconnect(self, func, *args, **kwargs):
         try:
-            return super(ReconnectMixin, self).execute_sql(sql, params)
+            return func(*args, **kwargs)
         except Exception as exc:
             # If we are in a transaction, do not reconnect silently as
             # any changes could be lost.
@@ -275,7 +281,7 @@ class ReconnectMixin(object):
                 self.close()
                 self.connect()
 
-            return super(ReconnectMixin, self).execute_sql(sql, params)
+            return func(*args, **kwargs)
 
 
 def resolve_multimodel_query(query, key='_model_identifier'):
