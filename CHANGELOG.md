@@ -7,6 +7,17 @@ https://github.com/coleifer/peewee/releases
 
 ## master
 
+* Only roll-back in the outermost `@db.transaction` decorator/ctx manager if
+  an unhandled exception occurs. Previously, an unhandled exception that
+  occurred in a nested `transaction` context would trigger a rollback. The use
+  of nested `transaction` has long been discouraged in the documentation: the
+  recommendation is to always use `db.atomic`, which will use savepoints to
+  properly handle nested blocks. However, the new behavior should make it
+  easier to reason about transaction boundaries - see #2767 for discussion.
+* Cover transaction `BEGIN` in the reconnect-mixin. Given that no transaction
+  has been started, reconnecting when beginning a new transaction ensures that
+  a reconnect will occur if it is safe to do so.
+
 [View commits](https://github.com/coleifer/peewee/compare/3.16.3...master)
 
 ## 3.16.3
