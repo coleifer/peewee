@@ -166,7 +166,7 @@ if sys.version_info[0] == 2:
     buffer_type = buffer
     izip_longest = itertools.izip_longest
     callable_ = callable
-    multi_types = (list, tuple, frozenset, set)
+    multi_types = (list, tuple, frozenset, set, dict)
     exec('def reraise(tp, value, tb=None): raise tp, value, tb')
     def print_(s):
         sys.stdout.write(s)
@@ -184,7 +184,7 @@ else:
     buffer_type = memoryview
     basestring = str
     long = int
-    multi_types = (list, tuple, frozenset, set, range)
+    multi_types = (list, tuple, frozenset, set, range, dict)
     print_ = getattr(builtins, 'print')
     izip_longest = itertools.zip_longest
     def reraise(tp, value, tb=None):
