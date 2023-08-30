@@ -1,9 +1,6 @@
 """
 Lightweight schema migrations.
 
-NOTE: Currently tested with SQLite and Postgresql. MySQL may be missing some
-features.
-
 Example Usage
 -------------
 
