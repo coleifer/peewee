@@ -34,7 +34,7 @@ Method                  Meaning
 ``.contains(substr)``   Wild-card search for substring.
 ``.startswith(prefix)`` Search for values beginning with ``prefix``.
 ``.endswith(suffix)``   Search for values ending with ``suffix``.
-``.between(low, high)`` Search for values between ``low`` and ``high``.
+``.between(low, high)`` Search where ``low <= value <= high``.
 ``.regexp(exp)``        Regular expression match (case-sensitive).
 ``.iregexp(exp)``       Regular expression match (case-insensitive).
 ``.bin_and(value)``     Binary AND.
@@ -65,6 +65,7 @@ Here is how you might use some of these query operators:
     # Find the users whose username is in [charlie, huey, mickey]
     User.select().where(User.username.in_(['charlie', 'huey', 'mickey']))
 
+    # Find users whose salary is between 50k and 60k (inclusive).
     Employee.select().where(Employee.salary.between(50000, 60000))
 
     Employee.select().where(Employee.name.startswith('C'))

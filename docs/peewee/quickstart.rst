@@ -317,7 +317,8 @@ birthday was either:
     # Bob 1960-01-15
     # Grandma L. 1935-03-01
 
-Now let's do the opposite. People whose birthday is between 1940 and 1960:
+Now let's do the opposite. People whose birthday is between 1940 and 1960
+(inclusive of both years):
 
 .. code-block:: python
 
