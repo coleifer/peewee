@@ -757,6 +757,7 @@ class ColumnFactory(object):
 
     def __getattr__(self, attr):
         return Column(self.node, attr)
+    __getitem__ = __getattr__
 
 
 class _DynamicColumn(object):

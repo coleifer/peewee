@@ -30,6 +30,14 @@ class TestSelectQuery(BaseTestCase):
             'FROM "users" AS "t1" '
             'WHERE ("t1"."username" = ?)'), ['foo'])
 
+        query = (User
+                 .select(User.c['id'], User.c['username'])
+                 .where(User.c['username'] == 'test'))
+        self.assertSQL(query, (
+            'SELECT "t1"."id", "t1"."username" '
+            'FROM "users" AS "t1" '
+            'WHERE ("t1"."username" = ?)'), ['test'])
+
     def test_select_extend(self):
         query = User.select(User.c.id, User.c.username)
         self.assertSQL(query, (
