@@ -591,6 +591,7 @@ class TestIntrospection(ModelTestCase):
             return view_meta.name, (sql_ws_norm
                                     .replace('`peewee_test`.', '')
                                     .replace('`notes`.', '')
+                                    .replace('notes.', '')
                                     .replace('`', ''))
 
         def assertViews(expected):
@@ -637,11 +638,11 @@ class TestIntrospection(ModelTestCase):
         elif IS_POSTGRESQL:
             assertViews([
                 ('notes_deleted',
-                 ('SELECT notes.content FROM notes '
-                  'WHERE (notes.status = 9) ORDER BY notes.id DESC')),
+                 ('SELECT content FROM notes '
+                  'WHERE (status = 9) ORDER BY id DESC')),
                 ('notes_public',
-                 ('SELECT notes.content, notes.ts FROM notes '
-                  'WHERE (notes.status = 1) ORDER BY notes.ts DESC'))])
+                 ('SELECT content, ts FROM notes '
+                  'WHERE (status = 1) ORDER BY ts DESC'))])
         elif IS_CRDB:
             assertViews([
                 ('notes_deleted',
