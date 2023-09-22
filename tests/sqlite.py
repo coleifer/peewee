@@ -2616,3 +2616,29 @@ class TestSqliteReturningConfig(ModelTestCase):
         tweet = Tweet(user=user, content='t1')
         user.save()
         tweet.save()
+
+
+@skip_unless(database.server_version >= (3, 20, 0), 'sqlite deterministic requires >= 3.20')
+@skip_unless(sys.version_info >= (3, 8, 0), 'sqlite deterministic requires Python >= 3.8')
+class TestDeterministicFunction(ModelTestCase):
+    database = get_in_memory_db()
+
+    def test_deterministic(self):
+        db = self.database
+        @db.func(deterministic=True)
+        def pylower(s):
+            if s is not None:
+                return s.lower()
+
+        class Reg(db.Model):
+            key = TextField()
+            class Meta:
+                indexes = [
+                    SQL('create unique index "reg_pylower_key" '
+                        'on "reg" (pylower("key"))')]
+
+        db.create_tables([Reg])
+        Reg.create(key='k1')
+        with self.assertRaises(IntegrityError):
+            with db.atomic():
+                Reg.create(key='K1')

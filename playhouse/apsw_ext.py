@@ -76,8 +76,9 @@ class APSWDatabase(SqliteExtDatabase):
             conn.createcollation(name, fn)
 
     def _load_functions(self, conn):
-        for name, (fn, num_params) in self._functions.items():
-            conn.createscalarfunction(name, fn, num_params)
+        for name, (fn, num_params, deterministic) in self._functions.items():
+            args = (deterministic,) if deterministic else ()
+            conn.createscalarfunction(name, fn, num_params, *args)
 
     def _load_extensions(self, conn):
         conn.enableloadextension(True)

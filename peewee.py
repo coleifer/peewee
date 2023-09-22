@@ -3624,8 +3624,9 @@ class SqliteDatabase(Database):
             conn.create_collation(name, fn)
 
     def _load_functions(self, conn):
-        for name, (fn, num_params) in self._functions.items():
-            conn.create_function(name, num_params, fn)
+        for name, (fn, n_params, deterministic) in self._functions.items():
+            kwargs = {'deterministic': deterministic} if deterministic else {}
+            conn.create_function(name, n_params, fn, **kwargs)
 
     def _load_window_functions(self, conn):
         for name, (klass, num_params) in self._window_functions.items():
@@ -3658,14 +3659,15 @@ class SqliteDatabase(Database):
             return fn
         return decorator
 
-    def register_function(self, fn, name=None, num_params=-1):
-        self._functions[name or fn.__name__] = (fn, num_params)
+    def register_function(self, fn, name=None, num_params=-1,
+                          deterministic=None):
+        self._functions[name or fn.__name__] = (fn, num_params, deterministic)
         if not self.is_closed():
             self._load_functions(self.connection())
 
-    def func(self, name=None, num_params=-1):
+    def func(self, name=None, num_params=-1, deterministic=None):
         def decorator(fn):
-            self.register_function(fn, name, num_params)
+            self.register_function(fn, name, num_params, deterministic)
             return fn
         return decorator
 

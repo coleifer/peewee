@@ -732,23 +732,31 @@ Database
         extra attribute provides a shorthand way to generate the SQL necessary
         to use our custom collation.
 
-    .. py:method:: register_function(fn[, name=None[, num_params=-1]])
+    .. py:method:: register_function(fn[, name=None[, num_params=-1[, deterministic=None]]])
 
         :param fn: The user-defined scalar function.
         :param str name: Name of function (defaults to function name)
         :param int num_params: Number of arguments the function accepts, or
             -1 for any number.
+        :param bool deterministic: Whether the function is deterministic for a
+            given input (this is required to use the function in an index).
+            Requires Sqlite 3.20 or newer, and ``sqlite3`` driver support
+            (added to stdlib in Python 3.8).
 
         Register a user-defined scalar function. The function will be
         registered each time a new connection is opened.  Additionally, if a
         connection is already open, the function will be registered with the
         open connection.
 
-    .. py:method:: func([name=None[, num_params=-1]])
+    .. py:method:: func([name=None[, num_params=-1[, deterministic=None]]])
 
         :param str name: Name of the function (defaults to function name).
         :param int num_params: Number of parameters the function accepts,
             or -1 for any number.
+        :param bool deterministic: Whether the function is deterministic for a
+            given input (this is required to use the function in an index).
+            Requires Sqlite 3.20 or newer, and ``sqlite3`` driver support
+            (added to stdlib in Python 3.8).
 
         Decorator to register a user-defined scalar function.
 
