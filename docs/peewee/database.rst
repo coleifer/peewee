@@ -1503,9 +1503,27 @@ general is the :py:meth:`Database.atomic` method, which also supports nested
 transactions. :py:meth:`~Database.atomic` blocks will be run in a transaction
 or savepoint, depending on the level of nesting.
 
-If an exception occurs in a wrapped block, the current transaction/savepoint
-will be rolled back. Otherwise the statements will be committed at the end of
-the wrapped block.
+If an unhandled exception occurs in a wrapped block, the current
+transaction/savepoint will be rolled back. Otherwise the statements will be
+committed at the end of the wrapped block.
+
+Examples:
+
+.. code-block:: python
+
+    # Transaction will commit automatically at the end of the "with" block:
+    with db.atomic() as txn:
+        User.create(username='u1')
+
+    # Unhandled exceptions will cause transaction to be rolled-back:
+    with db.atomic() as txn:
+        User.create(username='huey')
+        # User has been INSERTed into the database but the transaction is not
+        # yet committed because we haven't left the scope of the "with" block.
+
+        raise ValueError('uh-oh')
+        # This exception is unhandled - the transaction will be rolled-back and
+        # the ValueError will be raised.
 
 .. note::
     While inside a block wrapped by the :py:meth:`~Database.atomic` context
