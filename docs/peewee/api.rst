@@ -936,6 +936,15 @@ Database
         currently connected, the attached database will be detached from the
         open connection.
 
+    .. py:method:: atomic([lock_type=None])
+
+        :param str lock_type: Locking strategy: DEFERRED, IMMEDIATE, EXCLUSIVE.
+
+        Create an atomic context-manager, optionally using the specified
+        locking strategy (if unspecified, DEFERRED is used).
+
+        .. note:: Lock type only applies to the outermost ``atomic()`` block.
+
     .. py:method:: transaction([lock_type=None])
 
         :param str lock_type: Locking strategy: DEFERRED, IMMEDIATE, EXCLUSIVE.
@@ -962,6 +971,22 @@ Database
 
         Set the timezone on the current connection. If no connection is open,
         then one will be opened.
+
+    .. py:method:: atomic([isolation_level=None])
+
+        :param str isolation_level: Isolation strategy: SERIALIZABLE, READ COMMITTED, REPEATABLE READ, READ UNCOMMITTED
+
+        Create an atomic context-manager, optionally using the specified
+        isolation level (if unspecified, the server default will be used).
+
+        .. note:: Isolation level only applies to the outermost ``atomic()`` block.
+
+    .. py:method:: transaction([isolation_level=None])
+
+        :param str isolation_level: Isolation strategy: SERIALIZABLE, READ COMMITTED, REPEATABLE READ, READ UNCOMMITTED
+
+        Create a transaction context-manager, optionally using the specified
+        isolation level (if unspecified, the server default will be used).
 
 
 .. py:class:: MySQLDatabase(database[, **kwargs])

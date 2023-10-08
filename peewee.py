@@ -3969,6 +3969,16 @@ class PostgresqlDatabase(Database):
         except AttributeError:
             return cursor.cursor.rowcount
 
+    def begin(self, isolation_level=None):
+        if self.is_closed():
+            self.connect()
+        if isolation_level:
+            stmt = 'BEGIN TRANSACTION ISOLATION LEVEL %s' % isolation_level
+        else:
+            stmt = 'BEGIN'
+        with __exception_wrapper__:
+            self.cursor().execute(stmt)
+
     def get_tables(self, schema=None):
         query = ('SELECT tablename FROM pg_catalog.pg_tables '
                  'WHERE schemaname = %s ORDER BY tablename')

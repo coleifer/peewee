@@ -3,6 +3,7 @@ from peewee import *
 from .base import DatabaseTestCase
 from .base import IS_CRDB
 from .base import IS_CRDB_NESTED_TX
+from .base import IS_POSTGRESQL
 from .base import IS_SQLITE
 from .base import ModelTestCase
 from .base import db
@@ -398,3 +399,39 @@ class TestTransactionLockType(BaseTransactionTestCase):
                 with db2.transaction(lock_type='IMMEDIATE') as t2:
                     self._save(6)
         self.assertRegister([2, 4, 5])
+
+
+@skip_unless(IS_POSTGRESQL, 'requires postgresql for txn isolation level')
+class TestTransactionIsolationLevel(BaseTransactionTestCase):
+    def test_isolation_level(self):
+        db2 = new_connection()
+        db2.connect()
+
+        with db2.atomic(isolation_level='SERIALIZABLE'):
+            with db.atomic(isolation_level='SERIALIZABLE'):
+                self._save(1)
+                self.assertDB2(db2, [])
+            self.assertDB2(db2, [])
+        self.assertDB2(db2, [1])
+
+        with db2.atomic(isolation_level='READ COMMITTED'):
+            with db.atomic():
+                self._save(2)
+                self.assertDB2(db2, [1])
+            self.assertDB2(db2, [1, 2])
+        self.assertDB2(db2, [1, 2])
+
+        # NB: Read Uncommitted is treated as Read Committed by PG, so we don't
+        # test it here.
+
+        with db2.atomic(isolation_level='REPEATABLE READ'):
+            with db.atomic(isolation_level='REPEATABLE READ'):
+                self._save(3)
+                self.assertDB2(db2, [1, 2])
+            self.assertDB2(db2, [1, 2])
+        self.assertDB2(db2, [1, 2, 3])
+
+    def assertDB2(self, db2, vals):
+        q = 'select "value" from "register" order by "value"'
+        actual = [v for v, in db2.execute_sql(q).fetchall()]
+        self.assertEqual(actual, vals)
