@@ -177,7 +177,7 @@ Database
         :returns: whether or not a transaction is currently open.
         :rtype: bool
 
-    .. py:method:: atomic()
+    .. py:method:: atomic([...])
 
         Create a context-manager which runs any queries in the wrapped block in
         a transaction (or save-point if blocks are nested).
@@ -185,6 +185,15 @@ Database
         Calls to :py:meth:`~Database.atomic` can be nested.
 
         :py:meth:`~Database.atomic` can also be used as a decorator.
+
+        Database-specific parameters:
+
+        :py:class:`PostgresqlDatabase` and :py:class:`MySQLDatabase` accept an
+        ``isolation_level`` parameter. :py:class:`SqliteDatabase` accepts a
+        ``lock_type`` parameter.
+
+        :param str isolation_level: Isolation strategy: SERIALIZABLE, READ COMMITTED, REPEATABLE READ, READ UNCOMMITTED
+        :param str lock_type: Locking strategy: DEFERRED, IMMEDIATE, EXCLUSIVE.
 
         Example code::
 
@@ -273,10 +282,19 @@ Database
         Roll back any changes made during a transaction begun with
         :py:meth:`~Database.session_start`.
 
-    .. py:method:: transaction()
+    .. py:method:: transaction([...])
 
         Create a context-manager that runs all queries in the wrapped block in
         a transaction.
+
+        Database-specific parameters:
+
+        :py:class:`PostgresqlDatabase` and :py:class:`MySQLDatabase` accept an
+        ``isolation_level`` parameter. :py:class:`SqliteDatabase` accepts a
+        ``lock_type`` parameter.
+
+        :param str isolation_level: Isolation strategy: SERIALIZABLE, READ COMMITTED, REPEATABLE READ, READ UNCOMMITTED
+        :param str lock_type: Locking strategy: DEFERRED, IMMEDIATE, EXCLUSIVE.
 
         .. warning::
             Calls to ``transaction`` cannot be nested. Only the top-most call
