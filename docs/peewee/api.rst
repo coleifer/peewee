@@ -993,6 +993,23 @@ Database
 
     MySQL database implementation.
 
+    .. py:method:: atomic([isolation_level=None])
+
+        :param str isolation_level: Isolation strategy: SERIALIZABLE, READ COMMITTED, REPEATABLE READ, READ UNCOMMITTED
+
+        Create an atomic context-manager, optionally using the specified
+        isolation level (if unspecified, the server default will be used).
+
+        .. note:: Isolation level only applies to the outermost ``atomic()`` block.
+
+    .. py:method:: transaction([isolation_level=None])
+
+        :param str isolation_level: Isolation strategy: SERIALIZABLE, READ COMMITTED, REPEATABLE READ, READ UNCOMMITTED
+
+        Create a transaction context-manager, optionally using the specified
+        isolation level (if unspecified, the server default will be used).
+
+
 .. _query-builder-api:
 
 Query-builder

@@ -3,6 +3,7 @@ from peewee import *
 from .base import DatabaseTestCase
 from .base import IS_CRDB
 from .base import IS_CRDB_NESTED_TX
+from .base import IS_MYSQL
 from .base import IS_POSTGRESQL
 from .base import IS_SQLITE
 from .base import ModelTestCase
@@ -401,9 +402,9 @@ class TestTransactionLockType(BaseTransactionTestCase):
         self.assertRegister([2, 4, 5])
 
 
-@skip_unless(IS_POSTGRESQL, 'requires postgresql for txn isolation level')
 class TestTransactionIsolationLevel(BaseTransactionTestCase):
-    def test_isolation_level(self):
+    @skip_unless(IS_POSTGRESQL, 'requires postgresql')
+    def test_isolation_level_pg(self):
         db2 = new_connection()
         db2.connect()
 
@@ -431,7 +432,40 @@ class TestTransactionIsolationLevel(BaseTransactionTestCase):
             self.assertDB2(db2, [1, 2])
         self.assertDB2(db2, [1, 2, 3])
 
+    @skip_unless(IS_MYSQL, 'requires mysql')
+    def test_isolation_level_mysql(self):
+        db2 = new_connection()
+        db2.connect()
+
+        with db2.atomic():
+            with db.atomic(isolation_level='SERIALIZABLE'):
+                self._save(1)
+                self.assertDB2(db2, [])
+            self.assertDB2(db2, [])
+        self.assertDB2(db2, [1])
+
+        with db2.atomic(isolation_level='READ COMMITTED'):
+            with db.atomic():
+                self._save(2)
+                self.assertDB2(db2, [1])
+            self.assertDB2(db2, [1, 2])
+        self.assertDB2(db2, [1, 2])
+
+        with db2.atomic(isolation_level='READ UNCOMMITTED'):
+            with db.atomic():
+                self._save(3)
+                self.assertDB2(db2, [1, 2, 3])
+            self.assertDB2(db2, [1, 2, 3])
+        self.assertDB2(db2, [1, 2, 3])
+
+        with db2.atomic(isolation_level='REPEATABLE READ'):
+            with db.atomic(isolation_level='REPEATABLE READ'):
+                self._save(4)
+                self.assertDB2(db2, [1, 2, 3])
+            self.assertDB2(db2, [1, 2, 3])
+        self.assertDB2(db2, [1, 2, 3, 4])
+
     def assertDB2(self, db2, vals):
-        q = 'select "value" from "register" order by "value"'
-        actual = [v for v, in db2.execute_sql(q).fetchall()]
-        self.assertEqual(actual, vals)
+        with Register.bind_ctx(db2):
+            q = Register.select().order_by(Register.value)
+            self.assertEqual([r.value for r in q], vals)

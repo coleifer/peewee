@@ -4197,6 +4197,16 @@ class MySQLDatabase(Database):
     def default_values_insert(self, ctx):
         return ctx.literal('() VALUES ()')
 
+    def begin(self, isolation_level=None):
+        if self.is_closed():
+            self.connect()
+        with __exception_wrapper__:
+            curs = self.cursor()
+            if isolation_level:
+                curs.execute('SET TRANSACTION ISOLATION LEVEL %s' %
+                             isolation_level)
+            curs.execute('BEGIN')
+
     def get_tables(self, schema=None):
         query = ('SELECT table_name FROM information_schema.tables '
                  'WHERE table_schema = DATABASE() AND table_type != %s '
