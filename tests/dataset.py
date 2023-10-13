@@ -464,6 +464,18 @@ class TestDataSet(ModelTestCase):
         self.assertEqual(table.columns, ['id', 'name'])
         self.assertEqual(list(table.all()), [{'id': 1, 'name': 'charlie'}])
 
+    def test_table_column_creation_field_col(self):
+        table = self.dataset['people']
+        table.insert(**{'First Name': 'charlie'})
+        self.assertEqual(table.columns, ['id', 'First_Name'])
+        self.assertEqual(list(table.all()), [{'id': 1, 'First_Name': 'charlie'}])
+
+        table.insert(**{'First Name': 'huey'})
+        self.assertEqual(table.columns, ['id', 'First_Name'])
+        self.assertEqual(list(table.all().order_by(table.model_class.id)), [
+            {'id': 1, 'First_Name': 'charlie'},
+            {'id': 2, 'First_Name': 'huey'}])
+
     def test_import_json(self):
         table = self.dataset['people']
         table.insert(name='charlie')

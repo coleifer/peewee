@@ -242,6 +242,7 @@ class Table(object):
 
     def _migrate_new_columns(self, data):
         new_keys = set(data) - set(self.model_class._meta.fields)
+        new_keys -= set(self.model_class._meta.columns)
         if new_keys:
             operations = []
             for key in new_keys:
