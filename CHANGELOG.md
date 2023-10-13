@@ -7,6 +7,10 @@ https://github.com/coleifer/peewee/releases
 
 ## master
 
+[View commits](https://github.com/coleifer/peewee/compare/3.17.0...master)
+
+## 3.17.0
+
 * Only roll-back in the outermost `@db.transaction` decorator/ctx manager if
   an unhandled exception occurs. Previously, an unhandled exception that
   occurred in a nested `transaction` context would trigger a rollback. The use
@@ -17,8 +21,17 @@ https://github.com/coleifer/peewee/releases
 * Cover transaction `BEGIN` in the reconnect-mixin. Given that no transaction
   has been started, reconnecting when beginning a new transaction ensures that
   a reconnect will occur if it is safe to do so.
+* Add support for setting `isolation_level` in `db.atomic()` and
+  `db.transaction()` when using Postgres and MySQL/MariaDB, which will apply to
+  the wrapped transaction. Note: Sqlite has supported a similar `lock_type`
+  parameter for some time.
+* Add support for the Sqlite `SQLITE_DETERMINISTIC` function flag. This allows
+  user-defined Sqlite functions to be used in indexes and may be used by the
+  query planner.
+* Fix unreported bug in dataset import when inferred field name differs from
+  column name.
 
-[View commits](https://github.com/coleifer/peewee/compare/3.16.3...master)
+[View commits](https://github.com/coleifer/peewee/compare/3.16.3...3.17.0)
 
 ## 3.16.3
 
