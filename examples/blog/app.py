@@ -4,11 +4,12 @@ import os
 import re
 import urllib
 
-from flask import (Flask, flash, Markup, redirect, render_template, request,
+from flask import (Flask, flash, redirect, render_template, request,
                    Response, session, url_for)
 from markdown import markdown
 from markdown.extensions.codehilite import CodeHiliteExtension
 from markdown.extensions.extra import ExtraExtension
+from markupsafe import Markup
 from micawber import bootstrap_basic, parse_html
 from micawber.cache import Cache as OEmbedCache
 from peewee import *
