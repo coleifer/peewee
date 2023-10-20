@@ -170,11 +170,11 @@ class TestSelectQuery(BaseTestCase):
             'ORDER BY "t1"."x", "t1"."y"'), [])
 
     def test_star(self):
-        query = User.select(User.star)
+        query = User.select(User.__star__)
         self.assertSQL(query, ('SELECT "t1".* FROM "users" AS "t1"'), [])
 
         query = (Tweet
-                 .select(Tweet.star, User.star)
+                 .select(Tweet.__star__, User.__star__)
                  .join(User, on=(Tweet.c.user_id == User.c.id)))
         self.assertSQL(query, (
             'SELECT "t1".*, "t2".* '
@@ -182,7 +182,7 @@ class TestSelectQuery(BaseTestCase):
             'INNER JOIN "users" AS "t2" ON ("t1"."user_id" = "t2"."id")'), [])
 
         query = (Tweet
-                 .select(Tweet.star, User.c.id)
+                 .select(Tweet.__star__, User.c.id)
                  .join(User, on=(Tweet.c.user_id == User.c.id)))
         self.assertSQL(query, (
             'SELECT "t1".*, "t2"."id" '
