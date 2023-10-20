@@ -780,6 +780,13 @@ class _ExplicitColumn(object):
         return self
 
 
+class Star(Node):
+    def __init__(self, source):
+        self.source = source
+    def __sql__(self, ctx):
+        return ctx.sql(QualifiedNames(self.source)).literal('.*')
+
+
 class Source(Node):
     c = _DynamicColumn()
 
@@ -798,7 +805,7 @@ class Source(Node):
 
     @property
     def __star__(self):
-        return NodeList((QualifiedNames(self), SQL('.*')), glue='')
+        return Star(self)
 
     def join(self, dest, join_type=JOIN.INNER, on=None):
         return Join(self, dest, join_type, on)
