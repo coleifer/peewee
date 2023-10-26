@@ -668,7 +668,7 @@ class SqliteMigrator(SchemaMigrator):
     SQLite supports a subset of ALTER TABLE queries, view the docs for the
     full details http://sqlite.org/lang_altertable.html
     """
-    column_re = re.compile('(.+?)\((.+)\)')
+    column_re = re.compile(r'(.+?)\((.+)\)')
     column_split_re = re.compile(r'(?:[^,(]|\([^)]*\))+')
     column_name_re = re.compile(r'''["`']?([\w]+)''')
     fk_re = re.compile(r'FOREIGN KEY\s+\("?([\w]+)"?\)\s+', re.I)
@@ -825,7 +825,7 @@ class SqliteMigrator(SchemaMigrator):
         # Strip out any junk after the column name.
         clean = []
         for column in columns:
-            if re.match('%s(?:[\'"`\]]?\s|$)' % column_to_update, column):
+            if re.match(r'%s(?:[\'"`\]]?\s|$)' % column_to_update, column):
                 column = new_column + column[len(column_to_update):]
             clean.append(column)
 

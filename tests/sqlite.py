@@ -287,7 +287,7 @@ class TestTableFunction(BaseTestCase):
             'foo 123 45 bar 678 nuggie 9.0',
             ['123', '45', '678', '9', '0'])
         assertResults(
-            '[\w]+@[\w]+\.[\w]{2,3}',
+            r'[\w]+@[\w]+\.[\w]{2,3}',
             ('Dear charlie@example.com, this is nug@baz.com. I am writing on '
              'behalf of zaizee@foo.io. He dislikes your blog.'),
             ['charlie@example.com', 'nug@baz.com', 'zaizee@foo.io'])
@@ -314,7 +314,7 @@ class TestTableFunction(BaseTestCase):
                      messages)
         cur = self.execute('select posts.id, regex_search.rowid, regex_search.match '
                            'FROM posts, regex_search(?, posts.msg)',
-                           ('[\w]+@[\w]+\.\w{2,3}',))
+                           (r'[\w]+@[\w]+\.\w{2,3}',))
         results = cur.fetchall()
         self.assertEqual(results, [
             (1, 1, 'foo@example.fap'),

@@ -1386,7 +1386,7 @@ class TestWindowFunctions(BaseTestCase):
                 Register.value,
                 fn.SUM(Register.value).over(**over_kwargs))
             sql, params = __sql__(query)
-            match_obj = re.search('OVER \((.*?)\) FROM', sql)
+            match_obj = re.search(r'OVER \((.*?)\) FROM', sql)
             self.assertTrue(match_obj is not None)
             self.assertEqual(match_obj.groups()[0], expected)
             self.assertEqual(params, [])
