@@ -419,13 +419,13 @@ class SqliteMetadata(Metadata):
         'varchar': CharField,
     }
 
-    begin = '(?:["\[\(]+)?'
-    end = '(?:["\]\)]+)?'
+    begin = r'(?:["\[\(]+)?'
+    end = r'(?:["\]\)]+)?'
     re_foreign_key = (
-        '(?:FOREIGN KEY\s*)?'
-        '{begin}(.+?){end}\s+(?:.+\s+)?'
-        'references\s+{begin}(.+?){end}'
-        '\s*\(["|\[]?(.+?)["|\]]?\)').format(begin=begin, end=end)
+        r'(?:FOREIGN KEY\s*)?'
+        r'{begin}(.+?){end}\s+(?:.+\s+)?'
+        r'references\s+{begin}(.+?){end}'
+        r'\s*\(["|\[]?(.+?)["|\]]?\)').format(begin=begin, end=end)
     re_varchar = r'^\s*(?:var)?char\s*\(\s*(\d+)\s*\)\s*$'
 
     def _map_col(self, column_type):
@@ -435,7 +435,7 @@ class SqliteMetadata(Metadata):
         elif re.search(self.re_varchar, raw_column_type):
             field_class = CharField
         else:
-            column_type = re.sub('\(.+\)', '', raw_column_type)
+            column_type = re.sub(r'\(.+\)', '', raw_column_type)
             if column_type == '':
                 field_class = BareField
             else:
@@ -847,7 +847,7 @@ def get_table_sql(model):
         sql = sql.replace(model._meta.database.param, '%s')
 
     # Format and indent the table declaration, simplest possible approach.
-    match_obj = re.match('^(.+?\()(.+)(\).*)', sql)
+    match_obj = re.match(r'^(.+?\()(.+)(\).*)', sql)
     create, columns, extra = match_obj.groups()
     indented = ',\n'.join('  %s' % column for column in columns.split(', '))
 
