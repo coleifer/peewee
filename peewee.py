@@ -5080,6 +5080,22 @@ class BigBitFieldData(object):
         def __bytes__(self):
             return bytes_type(self._buffer)
 
+    def __getitem__(self, item):
+        return self.is_set(item)
+
+    def __setitem__(self, item, value):
+        if value:
+            self.set_bit(item)
+        else:
+            self.clear_bit(item)
+
+    def __len__(self):
+        return len(self._buffer) * 8
+
+    def __iter__(self):
+        for i in range(len(self)):
+            yield self[i]
+
     def __ensure_other_bit_field_data(self, other):
         if isinstance(other, BigBitFieldData):
             data = other._buffer
