@@ -678,6 +678,35 @@ class TestBitFields(ModelTestCase):
         b.data.clear_bit(0)
         self.assertFalse(b.data.is_set(0))
 
+        # Out-of-bounds returns False and does not extend data.
+        self.assertFalse(b.data.is_set(1000))
+        self.assertTrue(len(b.data), 1)
+
+    def test_bigbit_item_methods(self):
+        b = Bits()
+        idxs = [0, 1, 4, 7, 8, 15, 16, 31, 32, 63]
+        for i in idxs:
+            b.data[i] = True
+        for i in range(64):
+            self.assertEqual(b.data[i], i in idxs)
+
+        data = list(b.data)
+        self.assertEqual(data, [1 if i in idxs else 0 for i in range(64)])
+
+        for i in range(64):
+            del b.data[i]
+        self.assertEqual(len(b.data), 8)
+        self.assertEqual(b.data._buffer, b'\x00' * 8)
+
+    def test_bigbit_set_clear(self):
+        b = Bits()
+        b.data = b'\x01'
+        for i in range(8):
+            self.assertEqual(b.data[i], i == 0)
+
+        b.data.clear()
+        self.assertEqual(len(b.data), 0)
+
     def test_bigbit_field(self):
         b = Bits.create()
         b.data.set_bit(1)
@@ -691,6 +720,26 @@ class TestBitFields(ModelTestCase):
                 self.assertTrue(b_db.data.is_set(x))
             else:
                 self.assertFalse(b_db.data.is_set(x))
+
+    def test_bigbit_field_bitwise(self):
+        b1 = Bits(data=b'\x11')
+        b2 = Bits(data=b'\x12')
+        b3 = Bits(data=b'\x99')
+        self.assertEqual(b1.data & b2.data, b'\x10')
+        self.assertEqual(b1.data | b2.data, b'\x13')
+        self.assertEqual(b1.data ^ b2.data, b'\x03')
+        self.assertEqual(b1.data & b3.data, b'\x11')
+        self.assertEqual(b1.data | b3.data, b'\x99')
+        self.assertEqual(b1.data ^ b3.data, b'\x88')
+
+        b1.data &= b2.data
+        self.assertEqual(b1.data._buffer, b'\x10')
+
+        b1.data |= b2.data
+        self.assertEqual(b1.data._buffer, b'\x12')
+
+        b1.data ^= b3.data
+        self.assertEqual(b1.data._buffer, b'\x8b')
 
     def test_bigbit_field_bulk_create(self):
         b1, b2, b3 = Bits(), Bits(), Bits()
