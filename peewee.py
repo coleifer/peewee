@@ -5123,6 +5123,9 @@ class BigBitFieldData(object):
         for i, (a, b) in enumerate(zip(self._buffer, self.__ensure_other_bit_field_data(other))):
             self._buffer[i] = a & b
 
+    def clear(self):
+        self._buffer.clear()
+
 
 class BigBitFieldAccessor(FieldAccessor):
     def __get__(self, instance, instance_type=None):
