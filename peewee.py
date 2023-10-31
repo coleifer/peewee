@@ -5068,7 +5068,10 @@ class BigBitFieldData(object):
         return bool(self._buffer[byte_num] & (1 << byte_offset))
 
     def is_set(self, idx):
-        byte_num, byte_offset = self._ensure_length(idx)
+        # do not extend the buffer, just return False if the index is out of range so less memory is used
+        byte_num, byte_offset = divmod(idx, 8)
+        cur_size = len(self._buffer)
+        if cur_size <= byte_num: return False
         return bool(self._buffer[byte_num] & (1 << byte_offset))
 
     def __repr__(self):
