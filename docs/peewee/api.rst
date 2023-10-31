@@ -3093,6 +3093,21 @@ Fields
         assert bitmap.data.toggle_bit(63) is True
         assert bitmap.data.is_set(63)
 
+        # BigBitField supports item accessor by bit-number, e.g.:
+        assert bitmap.data[63]
+        bitmap.data[0] = 1
+        del bitmap.data[0]
+
+        # We can also combine bitmaps using bitwise operators, e.g.
+        b = Bitmap(data=b'\x01')
+        b.data |= b'\x02'
+        assert list(b.data) == [1, 1, 0, 0, 0, 0, 0, 0]
+        assert len(b.data) == 1
+
+    .. py:method:: clear()
+
+        Clears the bitmap and sets length to 0.
+
     .. py:method:: set_bit(idx)
 
         :param int idx: Bit to set, indexed starting from zero.
@@ -3129,6 +3144,44 @@ Fields
         :returns: Whether the bit is set or not.
 
         Returns boolean indicating whether the *idx*-th bit is set or not.
+
+    .. py:method:: __getitem__(idx)
+
+        Same as :py:meth:`~BigBitField.is_set`
+
+    .. py:method:: __setitem__(idx, value)
+
+        Set the bit at ``idx`` to value (True or False).
+
+    .. py:method:: __delitem__(idx)
+
+        Same as :py:meth:`~BigBitField.clear_bit`
+
+    .. py:method:: __len__()
+
+        Return the length of the bitmap **in bytes**.
+
+    .. py:method:: __iter__()
+
+        Returns an iterator yielding 1 or 0 for each bit in the bitmap.
+
+    .. py:method:: __and__(other)
+
+        :param other: Either :py:class:`BigBitField`, ``bytes``, ``bytearray``
+            or ``memoryview`` object.
+        :returns: bitwise ``and`` of two bitmaps.
+
+    .. py:method:: __or__(other)
+
+        :param other: Either :py:class:`BigBitField`, ``bytes``, ``bytearray``
+            or ``memoryview`` object.
+        :returns: bitwise ``or`` of two bitmaps.
+
+    .. py:method:: __xor__(other)
+
+        :param other: Either :py:class:`BigBitField`, ``bytes``, ``bytearray``
+            or ``memoryview`` object.
+        :returns: bitwise ``xor`` of two bitmaps.
 
 
 .. py:class:: UUIDField

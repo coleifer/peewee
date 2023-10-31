@@ -7,6 +7,7 @@ https://github.com/coleifer/peewee/releases
 
 ## master
 
+* Add bitwise and other helper methods to `BigBitField`, #2802.
 * The new `star` attribute was causing issues for users who had a field named
   star on their models. This attribute is now renamed to `__star__`. #2796.
 

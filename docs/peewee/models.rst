@@ -556,6 +556,17 @@ Example usage:
     assert bitmap.data.toggle_bit(63) is True
     assert bitmap.data.is_set(63)
 
+    # BigBitField supports item accessor by bit-number, e.g.:
+    assert bitmap.data[63]
+    bitmap.data[0] = 1
+    del bitmap.data[0]
+
+    # We can also combine bitmaps using bitwise operators, e.g.
+    b = Bitmap(data=b'\x01')
+    b.data |= b'\x02'
+    assert list(b.data) == [1, 1, 0, 0, 0, 0, 0, 0]
+    assert len(b.data) == 1
+
 BareField
 ^^^^^^^^^
 
