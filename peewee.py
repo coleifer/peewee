@@ -5080,6 +5080,30 @@ class BigBitFieldData(object):
         def __bytes__(self):
             return bytes_type(self._buffer)
 
+    def __ensure_other_bit_field_data(self, other):
+        if isinstance(other, BigBitFieldData):
+            data = other._buffer
+        elif isinstance(other, (bytes, bytearray, memoryview)):
+            data = other
+        else:
+            raise ValueError('Can only XOR with another BigBitFieldData or bytes like object.')
+        p_len = len(data)-len(self._buffer)
+        if p_len > 0:
+            self._buffer.extend(b'\x00' * p_len)
+        return data
+
+    def __ior__(self, other):
+        for i, (a, b) in enumerate(zip(self._buffer, self.__ensure_other_bit_field_data(other))):
+            self._buffer[i] = a | b
+
+    def __ixor__(self, other):
+        for i, (a, b) in enumerate(zip(self._buffer, self.__ensure_other_bit_field_data(other))):
+            self._buffer[i] = a ^ b
+
+    def __iand__(self, other):
+        for i, (a, b) in enumerate(zip(self._buffer, self.__ensure_other_bit_field_data(other))):
+            self._buffer[i] = a & b
+
 
 class BigBitFieldAccessor(FieldAccessor):
     def __get__(self, instance, instance_type=None):
