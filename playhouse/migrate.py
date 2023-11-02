@@ -390,6 +390,32 @@ class SchemaMigrator(object):
                 .literal(' DROP NOT NULL'))
 
     @operation
+    def add_column_default(self, table, column, default):
+        if default is None:
+            raise ValueError('`default` must be not None/NULL.')
+        if callable_(default):
+            default = default()
+        # Try to handle SQL functions and string literals, otherwise pass as a
+        # bound value.
+        if isinstance(default, str) and default.endswith((')', "'")):
+            default = SQL(default)
+
+        return (self
+                ._alter_table(self.make_context(), table)
+                .literal(' ALTER COLUMN ')
+                .sql(Entity(column))
+                .literal(' SET DEFAULT ')
+                .sql(default))
+
+    @operation
+    def drop_column_default(self, table, column):
+        return (self
+                ._alter_table(self.make_context(), table)
+                .literal(' ALTER COLUMN ')
+                .sql(Entity(column))
+                .literal(' DROP DEFAULT'))
+
+    @operation
     def alter_column_type(self, table, column, field, cast=None):
         # ALTER TABLE <table> ALTER COLUMN <column>
         ctx = self.make_context()
@@ -865,6 +891,27 @@ class SqliteMigrator(SchemaMigrator):
         def _drop_not_null(column_name, column_def):
             return column_def.replace('NOT NULL', '')
         return self._update_column(table, column, _drop_not_null)
+
+    @operation
+    def add_column_default(self, table, column, default):
+        if default is None:
+            raise ValueError('`default` must be not None/NULL.')
+        if callable_(default):
+            default = default()
+        if (isinstance(default, str) and not default.endswith((')', "'"))
+            and not default.isdigit()):
+            default = "'%s'" % default
+        def _add_default(column_name, column_def):
+            # Try to handle SQL functions and string literals, otherwise quote.
+            return column_def + ' DEFAULT %s' % default
+        return self._update_column(table, column, _add_default)
+
+    @operation
+    def drop_column_default(self, table, column):
+        def _drop_default(column_name, column_def):
+            col = re.sub(r'DEFAULT\s+[\w"\'\(\)]+(\s|$)', '', column_def, re.I)
+            return col.strip()
+        return self._update_column(table, column, _drop_default)
 
     @operation
     def alter_column_type(self, table, column, field, cast=None):

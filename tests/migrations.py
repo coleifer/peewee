@@ -330,6 +330,29 @@ class TestSchemaMigration(ModelTestCase):
     def test_rename_gh380_sqlite_legacy(self):
         self.test_rename_gh380(legacy=True)
 
+    def test_add_default_drop_default(self):
+        with self.database.transaction():
+            migrate(self.migrator.add_column_default('person', 'first_name',
+                                                     default='x'))
+
+        p = Person.create(last_name='Last')
+        p_db = Person.get(Person.last_name == 'Last')
+        self.assertEqual(p_db.first_name, 'x')
+
+        with self.database.transaction():
+            migrate(self.migrator.drop_column_default('person', 'first_name'))
+
+        if IS_MYSQL:
+            # MySQL, even though the column is NOT NULL, does not seem to be
+            # enforcing the constraint(?).
+            Person.create(last_name='Last2')
+            p_db = Person.get(Person.last_name == 'Last2')
+            self.assertEqual(p_db.first_name, '')
+        else:
+            with self.assertRaises(IntegrityError):
+                with self.database.transaction():
+                    Person.create(last_name='Last2')
+
     def test_add_not_null(self):
         self._create_people()
 

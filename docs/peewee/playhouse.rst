@@ -3116,6 +3116,31 @@ Adding or dropping table constraints:
     # Add a UNIQUE constraint on the first and last names.
     migrate(migrator.add_unique('person', 'first_name', 'last_name'))
 
+Adding or dropping a database-level default value for a column:
+
+.. code-block:: python
+
+    # Add a default value for a status column.
+    migrate(migrator.add_column_default(
+        'entries',
+        'status',
+        'draft'))
+
+    # Remove the default.
+    migrate(migrator.drop_column_default('entries', 'status'))
+
+    # Use a function for the default value (does not work with Sqlite):
+    migrate(migrator.add_column_default(
+        'entries',
+        'timestamp',
+        fn.now()))
+
+    # Or alternatively (works with Sqlite):
+    migrate(migrator.add_column_default(
+        'entries',
+        'timestamp',
+        'now()'))
+
 .. note::
     Postgres users may need to set the search-path when using a non-standard
     schema. This can be done as follows:
