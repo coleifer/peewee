@@ -342,7 +342,6 @@ class SchemaMigrator(object):
         if not field.null:
             operations.extend([
                 self.apply_default(table, column_name, field),
-                self.add_column_default(table, column_name, field),
                 self.add_not_null(table, column_name)])
 
         if is_foreign_key and self.explicit_create_foreign_key:
@@ -359,6 +358,9 @@ class SchemaMigrator(object):
             using = getattr(field, 'index_type', None)
             operations.append(self.add_index(table, (column_name,),
                                              field.unique, using))
+            
+        if not field.default is None:
+            operations.append(self.add_column_default(table, column_name, field))
 
         return operations
 
