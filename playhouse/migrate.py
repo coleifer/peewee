@@ -306,7 +306,22 @@ class SchemaMigrator(object):
         if on_update is not None:
             ctx = ctx.literal(' ON UPDATE %s' % on_update)
         return ctx
-
+    
+    @operation
+    def add_column_default(self, table, column_name, field):
+        # add column default value
+        default = field.default
+        if callable_(default):
+            default = default()
+        return (self._alter_column(self.make_context(), table, column_name)
+                .literal(' SET DEFAULT {default}'.format(default=default)))
+    
+    @operation
+    def drop_column_default(self, table, column_name):
+        # drop column default value
+        return (self._alter_column(self.make_context(), table, column_name)
+                .literal(' DROP DEFAULT'))
+    
     @operation
     def add_column(self, table, column_name, field):
         # Adding a column is complicated by the fact that if there are rows
@@ -327,6 +342,7 @@ class SchemaMigrator(object):
         if not field.null:
             operations.extend([
                 self.apply_default(table, column_name, field),
+                self.add_column_default(table, column_name, field),
                 self.add_not_null(table, column_name)])
 
         if is_foreign_key and self.explicit_create_foreign_key:
