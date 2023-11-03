@@ -3214,6 +3214,23 @@ Migrations API
         :param str table: Name of table containing column.
         :param str column: Name of the column to make nullable.
 
+    .. py:method:: add_column_default(table, column, default)
+
+        :param str table: Name of table containing column.
+        :param str column: Name of the column to add default to.
+        :param default: New default value for column. See notes below.
+
+        Peewee attempts to properly quote the default if it appears to be a
+        string literal. Otherwise the default will be treated literally.
+        Postgres and MySQL support specifying the default as a peewee
+        expression, e.g. ``fn.NOW()``, but Sqlite users will need to use
+        ``default='now()'`` instead.
+
+    .. py:method:: drop_column_default(table, column)
+
+        :param str table: Name of table containing column.
+        :param str column: Name of the column to remove default from.
+
     .. py:method:: alter_column_type(table, column, field[, cast=None])
 
         :param str table: Name of the table.
