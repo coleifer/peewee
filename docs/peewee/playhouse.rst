@@ -3204,6 +3204,14 @@ Migrations API
         :param str old_name: Current name of the column.
         :param str new_name: New name for the column.
 
+    .. py:method:: add_column_default(table, column, default)
+        :param str table: Name of table containing column.
+        :param str column: Name of the column to make default value.
+
+    .. py:method:: drop_column_default(table, column)
+        :param str table: Name of table containing column.
+        :param str column: Name of the column to drop default.
+
     .. py:method:: add_not_null(table, column)
 
         :param str table: Name of table containing column.
