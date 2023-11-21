@@ -192,6 +192,20 @@ else:
             raise value.with_traceback(tb)
         raise value
 
+# Other compat issues.
+if sys.version_info < (3, 12):
+    utcfromtimestamp = datetime.datetime.utcfromtimestamp
+    utcnow = datetime.datetime.utcnow
+else:
+    def utcfromtimestamp(ts):
+        return (datetime.datetime
+                .fromtimestamp(ts, tz=datetime.timezone.utc)
+                .replace(tzinfo=None))
+    def utcnow():
+        return (datetime.datetime
+                .now(datetime.timezone.utc)
+                .replace(tzinfo=None))
+
 
 if sqlite3:
     sqlite3.register_adapter(decimal.Decimal, str)
@@ -5348,7 +5362,7 @@ class TimestampField(BigIntegerField):
         self.ticks_to_microsecond = 1000000 // self.resolution
 
         self.utc = kwargs.pop('utc', False) or False
-        dflt = datetime.datetime.utcnow if self.utc else datetime.datetime.now
+        dflt = utcnow if self.utc else datetime.datetime.now
         kwargs.setdefault('default', dflt)
         super(TimestampField, self).__init__(*args, **kwargs)
 
@@ -5400,7 +5414,7 @@ class TimestampField(BigIntegerField):
                 microseconds = 0
 
             if self.utc:
-                value = datetime.datetime.utcfromtimestamp(value)
+                value = utcfromtimestamp(value)
             else:
                 value = datetime.datetime.fromtimestamp(value)
 
