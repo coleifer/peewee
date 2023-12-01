@@ -741,6 +741,16 @@ class TestBitFields(ModelTestCase):
         b1.data ^= b3.data
         self.assertEqual(b1.data._buffer, b'\x8b')
 
+        b1.data = b'\x11'
+        self.assertEqual(b1.data & b'\xff\xff', b'\x11\x00')
+        self.assertEqual(b1.data | b'\xff\xff', b'\xff\xff')
+        self.assertEqual(b1.data ^ b'\xff\xff', b'\xee\xff')
+
+        b1.data = b'\x11\x11'
+        self.assertEqual(b1.data & b'\xff', b'\x11\x00')
+        self.assertEqual(b1.data | b'\xff', b'\xff\x11')
+        self.assertEqual(b1.data ^ b'\xff', b'\xee\x11')
+
     def test_bigbit_field_bulk_create(self):
         b1, b2, b3 = Bits(), Bits(), Bits()
         b1.data.set_bit(1)
