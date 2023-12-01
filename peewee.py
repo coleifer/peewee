@@ -5117,8 +5117,13 @@ class BigBitFieldData(object):
             data = other
         else:
             raise ValueError('Incompatible data-type')
-        buf = bytearray(b'\x00' * max(len(self), len(other)))
-        for i, (a, b) in enumerate(zip(self._buffer, data)):
+        self_len = len(self)
+        other_len = len(data)
+        max_len = max(self_len, other_len)
+        buf = bytearray(max_len)
+        for i in range(max_len):
+            a = self._buffer[i] if i < self_len else 0
+            b = data[i] if i < other_len else 0
             buf[i] = op(a, b)
         return buf
 
