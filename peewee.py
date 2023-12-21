@@ -211,6 +211,24 @@ if sqlite3:
     sqlite3.register_adapter(decimal.Decimal, str)
     sqlite3.register_adapter(datetime.date, str)
     sqlite3.register_adapter(datetime.time, str)
+    if sys.version_info >= (3, 12):
+        # We need to register datetime adapters as these are deprecated.
+        def datetime_adapter(d): return d.isoformat(' ')
+        def convert_date(d): return datetime.date(*map(int, d.split(b'-')))
+        def convert_timestamp(t):
+            date, time = t.split(b' ')
+            y, m, d = map(int, date.split(b'-'))
+            t_full = time.split(b'.')
+            h, m, s = map(int, t_full[0].split(b':'))
+            if len(t_full) == 2:
+                usec = int('{:0<6.6}'.format(t_full[1].decode()))
+            else:
+                usec = 0
+            return datetime.datetime(y, m, d, h, m, s, usec)
+        sqlite3.register_adapter(datetime.datetime, datetime_adapter)
+        sqlite3.register_converter('date', convert_date)
+        sqlite3.register_converter('timestamp', convert_timestamp)
+
     __sqlite_version__ = sqlite3.sqlite_version_info
 else:
     __sqlite_version__ = (0, 0, 0)
