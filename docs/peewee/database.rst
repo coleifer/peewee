@@ -538,7 +538,7 @@ APSW, an Advanced SQLite Driver
 
 Peewee also comes with an alternate SQLite database that uses :ref:`apsw`.
 More information on APSW can be obtained on the
-`APSW project website <https://code.google.com/p/apsw/>`_. APSW provides
+`APSW project website <https://rogerbinns.github.io/apsw/>`_. APSW provides
 special features like:
 
 * Virtual tables, virtual file-systems, Blob I/O, backups and file control.
