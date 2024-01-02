@@ -611,10 +611,10 @@ class TestJSONFieldFunctions(ModelTestCase):
         self.assertRows((D.extract_json('$.k1') == '"v1"'), ['a', 'c'])
         self.assertRows((D.extract_text('k2') == 'v2'), ['b', 'c'])
         self.assertRows((D.extract_json('k2') == '"v2"'), ['b', 'c'])
-        self.assertRows((D.extract_text('x1.y1') == 'z1'), ['a', 'd'])
-        self.assertRows((D.extract_json('x1.y1') == '"z1"'), ['a', 'd'])
-        self.assertRows((D.extract_text('l1[1]') == 1), ['e'])
-        self.assertRows((D.extract_text('l2[1][1]') == 3), ['e'])
+        self.assertRows((D.extract_text('$.x1.y1') == 'z1'), ['a', 'd'])
+        self.assertRows((D.extract_json('$.x1.y1') == '"z1"'), ['a', 'd'])
+        self.assertRows((D.extract_text('$.l1[1]') == 1), ['e'])
+        self.assertRows((D.extract_text('$.l2[1][1]') == 3), ['e'])
         self.assertRows((D.extract_json('x1') == '{"y1":"z1"}'), ['a'])
 
     def test_extract_multiple(self):
