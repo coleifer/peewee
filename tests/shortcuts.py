@@ -425,6 +425,18 @@ class TestModelToDict(ModelTestCase):
                              {'magic': 1337, 'content': 'u0-0',
                               'user': {'username': 'u0'}})
 
+    def test_fields_from_query_alias(self):
+        q = User.select(User.username.alias('name'))
+        res = q[0]
+        self.assertEqual(model_to_dict(res, fields_from_query=q),
+                         {'name': 'peewee'})
+
+        UA = User.alias()
+        q = UA.select(UA.username.alias('name'))
+        res = q[0]
+        self.assertEqual(model_to_dict(res, fields_from_query=q),
+                         {'name': 'peewee'})
+
     def test_only_backref(self):
         for i in range(3):
             Tweet.create(user=self.user, content=str(i))

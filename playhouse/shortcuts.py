@@ -39,6 +39,7 @@ def model_to_dict(model, recurse=True, backrefs=False, only=None,
     should_skip = lambda n: (n in exclude) or (only and (n not in only))
 
     if fields_from_query is not None:
+        only.add('__sentinel__')  # Add a placeholder to make non-empty.
         for item in fields_from_query._returning:
             if isinstance(item, Field):
                 only.add(item)
