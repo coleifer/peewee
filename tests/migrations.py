@@ -10,6 +10,7 @@ from .base import IS_MYSQL
 from .base import IS_POSTGRESQL
 from .base import IS_SQLITE
 from .base import IS_SQLITE_25
+from .base import IS_SQLITE_35
 from .base import ModelTestCase
 from .base import TestModel
 from .base import db
@@ -261,7 +262,7 @@ class TestSchemaMigration(ModelTestCase):
             ('charlie',),
             ('huey',),])
 
-    @skip_unless(IS_SQLITE_25, 'Requires sqlite 3.25 or newer')
+    @skip_unless(IS_SQLITE_35, 'Requires sqlite 3.35 or newer')
     def test_drop_column_sqlite_legacy(self):
         self.test_drop_column(legacy=True)
 
