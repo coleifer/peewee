@@ -859,7 +859,7 @@ class SqliteMigrator(SchemaMigrator):
 
     @operation
     def drop_column(self, table, column_name, cascade=True, legacy=False):
-        if sqlite3.sqlite_version_info >= (3, 25, 0) and not legacy:
+        if sqlite3.sqlite_version_info >= (3, 35, 0) and not legacy:
             ctx = self.make_context()
             (self._alter_table(ctx, table)
              .literal(' DROP COLUMN ')
