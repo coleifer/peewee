@@ -386,7 +386,8 @@ Upsert
 Peewee provides support for varying types of upsert functionality. With SQLite
 prior to 3.24.0 and MySQL, Peewee offers the :py:meth:`~Model.replace`, which
 allows you to insert a record or, in the event of a constraint violation,
-replace the existing record.
+replace the existing record. For Sqlite 3.24+ and Postgres, peewee provides full
+support for ``ON CONFLICT`` queries.
 
 Example of using :py:meth:`~Model.replace` and :py:meth:`~Insert.on_conflict_replace`:
 
@@ -508,6 +509,64 @@ key (string) to a value (integer):
     # If we attempted to execute the query *again*, then nothing would be
     # updated, as the new value (10) is now less than the value in the
     # original row (11).
+
+There are several important concepts to understand when using ``ON CONFLICT``:
+
+* ``conflict_target=``: which column(s) have the UNIQUE constraint. For a user
+  table, this might be the user's email.
+* ``preserve=``: if a conflict occurs, this parameter is used to indicate which
+  values from the **new** data we wish to update.
+* ``update=``: if a conflict occurs, this is a mapping of data to apply to the
+  pre-existing row.
+* ``EXCLUDED``: this "magic" namespace allows you to reference the new data
+  that would have been inserted if the constraint hadn't failed.
+
+Full example:
+
+.. code-block:: python
+
+    class User(Model):
+        email = CharField(unique=True)  # Unique identifier for user.
+        last_login = DateTimeField()
+        login_count = IntegerField(default=0)
+        ip_log = TextField(default='')
+
+
+    # Demonstrates the above 4 concepts.
+    def login(email, ip):
+        rowid = (User
+                 .insert({User.email: email,
+                          User.last_login: datetime.now(),
+                          User.login_count: 1,
+                          User.ip_log: ip})
+                 .on_conflict(
+                     # If the INSERT fails due to a constraint violation on the
+                     # user email, then perform an UPDATE instead.
+                     conflict_target=[User.email],
+
+                     # Set the "last_login" to the value we would have inserted
+                     # (our call to datetime.now()).
+                     preserve=[User.last_login],
+
+                     # Increment the user's login count and prepend the new IP
+                     # to the user's ip history.
+                     update={User.login_count: User.login_count + 1,
+                             User.ip_log: fn.CONCAT(EXCLUDED.ip_log, ',', User.ip_log)})
+                 .execute())
+
+        return rowid
+
+    # This will insert the initial row, returning the new row id (1).
+    print(login('test@example.com', '127.1'))
+
+    # Because test@example.com exists, this will trigger the UPSERT. The row id
+    # from above is returned again (1).
+    print(login('test@example.com', '127.2'))
+
+    u = User.get()
+    print(u.login_count, u.ip_log)
+
+    # Prints "2 127.2,127.1"
 
 For more information, see :py:meth:`Insert.on_conflict` and
 :py:class:`OnConflict`.
