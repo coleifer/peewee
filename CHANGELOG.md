@@ -7,13 +7,23 @@ https://github.com/coleifer/peewee/releases
 
 ## master
 
+[View commits](https://github.com/coleifer/peewee/compare/3.17.1...master)
+
+## 3.17.1
+
 * Add bitwise and other helper methods to `BigBitField`, #2802.
 * Add `add_column_default` and `drop_column_default` migrator methods for
   specifying a server-side default value, #2803.
 * The new `star` attribute was causing issues for users who had a field named
   star on their models. This attribute is now renamed to `__star__`. #2796.
+* Fix compatibility issues with 3.12 related to utcnow() deprecation.
+* Add stricter locking on connection pool to prevent race conditions.
+* Add adapters and converters to Sqlite to replace ones deprecated in 3.12.
+* Fix bug in `model_to_dict()` when only aliases are present.
+* Fix version check for Sqlite native drop column support.
+* Do not specify a `reconnect=` argument to `ping()` if using MySQL 8.x.
 
-[View commits](https://github.com/coleifer/peewee/compare/3.17.0...master)
+[View commits](https://github.com/coleifer/peewee/compare/3.17.0...3.17.1)
 
 ## 3.17.0
 
