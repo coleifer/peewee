@@ -260,7 +260,7 @@ class PooledDatabase(object):
 class PooledMySQLDatabase(PooledDatabase, MySQLDatabase):
     def _is_closed(self, conn):
         try:
-            conn.ping(False)
+            conn.ping()
         except:
             return True
         else:

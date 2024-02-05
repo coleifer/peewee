@@ -4228,7 +4228,7 @@ class MySQLDatabase(Database):
         conn = self._state.conn
         if hasattr(conn, 'ping'):
             try:
-                conn.ping(False)
+                conn.ping()
             except Exception:
                 return False
         return True
