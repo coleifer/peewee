@@ -259,8 +259,12 @@ class PooledDatabase(object):
 
 class PooledMySQLDatabase(PooledDatabase, MySQLDatabase):
     def _is_closed(self, conn):
+        if self.server_version[0] == 8:
+            args = ()
+        else:
+            args = (False,)
         try:
-            conn.ping(False)
+            conn.ping(*args)
         except:
             return True
         else:

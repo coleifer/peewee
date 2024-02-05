@@ -4227,8 +4227,12 @@ class MySQLDatabase(Database):
 
         conn = self._state.conn
         if hasattr(conn, 'ping'):
+            if self.server_version[0] == 8:
+                args = ()
+            else:
+                args = (False,)
             try:
-                conn.ping(False)
+                conn.ping(*args)
             except Exception:
                 return False
         return True
