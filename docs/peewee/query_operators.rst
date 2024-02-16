@@ -86,6 +86,17 @@ complex.
       (User.is_admin == True) &
       (User.is_active == True))
 
+    # You can also specify each comparison as individual arguments to `.where()`.
+    User.select().where(
+      User.is_admin == True,
+      User.is_active == True)
+
+    # For boolean fields, you can also use the field directly.
+    # This query would be equivalent to the ones above.
+    User.select().where(
+      (User.is_admin) &
+      (User.is_active))
+
     # Find any users who are either administrators or super-users.
     User.select().where(
       (User.is_admin == True) |
@@ -100,14 +111,15 @@ complex.
     strangers = User.select().where(User.id.not_in(friends))
 
 .. warning::
-    Although you may be tempted to use python's ``in``, ``and``, ``or`` and
+    Although you may be tempted to use python's ``is``, ``in``, ``and``, ``or`` and
     ``not`` operators in your query expressions, these **will not work.** The
-    return value of an ``in`` expression is always coerced to a boolean value.
+    return value of an ``is`` or ``in`` expression is always coerced to a boolean value.
     Similarly, ``and``, ``or`` and ``not`` all treat their arguments as boolean
     values and cannot be overloaded.
 
     So just remember:
 
+    * Use ``==`` to compare boolean field values or just use the boolean field value directly
     * Use ``.in_()`` and ``.not_in()`` instead of ``in`` and ``not in``
     * Use ``&`` instead of ``and``
     * Use ``|`` instead of ``or``
