@@ -91,6 +91,10 @@ complex.
       (User.is_admin == True) |
       (User.is_superuser == True))
 
+    # Alternatively, use the boolean values directly. Here we query users who
+    # are admins and NOT superusers.
+    User.select().where(User.is_admin & ~User.is_superuser)
+
     # Find any Tweets by users who are not admins (NOT IN).
     admins = User.select().where(User.is_admin == True)
     non_admin_tweets = Tweet.select().where(Tweet.user.not_in(admins))
@@ -100,9 +104,9 @@ complex.
     strangers = User.select().where(User.id.not_in(friends))
 
 .. warning::
-    Although you may be tempted to use python's ``in``, ``and``, ``or`` and
-    ``not`` operators in your query expressions, these **will not work.** The
-    return value of an ``in`` expression is always coerced to a boolean value.
+    Although you may be tempted to use python's ``in``, ``and``, ``or``,
+    ``is``, and ``not`` operators in your query expressions, these **will not work.**
+    The return value of an ``in`` expression is always coerced to a boolean value.
     Similarly, ``and``, ``or`` and ``not`` all treat their arguments as boolean
     values and cannot be overloaded.
 
@@ -113,6 +117,8 @@ complex.
     * Use ``|`` instead of ``or``
     * Use ``~`` instead of ``not``
     * Use ``.is_null()`` instead of ``is None`` or ``== None``.
+    * Use ``== `` and ``!=`` for comparing against ``True`` and ``False``, or
+      you may use the implicit value of the expression.
     * **Don't forget to wrap your comparisons in parentheses when using logical operators.**
 
 For more examples, see the :ref:`expressions` section.
@@ -265,6 +271,9 @@ arbitrary depth:
 
     # User's username is either charlie or charles
     (User.username == 'charlie') | (User.username == 'charles')
+
+    # User is active and not a superuser.
+    (User.is_active & ~User.is_superuser)
 
 Comparisons can be used with functions as well:
 
