@@ -12,8 +12,8 @@ to open a connection to a database, and then can be used to:
 * Manage transactions (and savepoints).
 * Introspect tables, columns, indexes, and constraints.
 
-Peewee comes with support for SQLite, MySQL and Postgres. Each database class
-provides some basic, database-specific configuration options.
+Peewee comes with support for SQLite, MySQL, MariaDB and Postgres. Each
+database class provides some basic, database-specific configuration options.
 
 .. code-block:: python
 
@@ -556,6 +556,14 @@ If you would like to use APSW, use the :py:class:`APSWDatabase` from the
     from playhouse.apsw_ext import APSWDatabase
 
     apsw_db = APSWDatabase('my_app.db')
+
+.. _using_mariadb:
+
+Using MariaDB
+-----------
+
+Peewee supports MariaDB. To use MariaDB, use the MySQL backend, which is shared
+between the two. See :ref:`"Using MySQL" <using_mysql>` for more details.
 
 .. _using_mysql:
 
@@ -1773,11 +1781,11 @@ handler.
 Adding a new Database Driver
 ----------------------------
 
-Peewee comes with built-in support for Postgres, MySQL and SQLite. These
-databases are very popular and run the gamut from fast, embeddable databases to
-heavyweight servers suitable for large-scale deployments.  That being said,
-there are a ton of cool databases out there and adding support for your
-database-of-choice should be really easy, provided the driver supports the
+Peewee comes with built-in support for Postgres, MySQL, MariaDB and SQLite.
+These databases are very popular and run the gamut from fast, embeddable
+databases to heavyweight servers suitable for large-scale deployments.  That
+being said, there are a ton of cool databases out there and adding support for
+your database-of-choice should be really easy, provided the driver supports the
 `DB-API 2.0 spec <http://www.python.org/dev/peps/pep-0249/>`_.
 
 .. warning::

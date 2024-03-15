@@ -13,7 +13,7 @@ it easy to learn and intuitive to use.
 
 * a small, expressive ORM
 * python 2.7+ and 3.4+
-* supports sqlite, mysql, postgresql and cockroachdb
+* supports sqlite, mysql, mariadb, postgresql and cockroachdb
 * :ref:`tons of extensions <playhouse>`
 
 .. image:: postgresql.png
@@ -23,6 +23,10 @@ it easy to learn and intuitive to use.
 .. image:: mysql.png
     :target: peewee/database.html#using-mysql
     :alt: mysql
+
+.. image:: mariadb.png
+    :target: peewee/database.html#using-mariadb
+    :alt: mariadb
 
 .. image:: sqlite.png
     :target: peewee/database.html#using-sqlite
