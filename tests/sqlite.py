@@ -25,6 +25,7 @@ from .sqlite_helpers import compile_option
 from .sqlite_helpers import json_installed
 from .sqlite_helpers import json_patch_installed
 from .sqlite_helpers import json_text_installed
+from .sqlite_helpers import jsonb_installed
 
 
 database = SqliteExtDatabase(':memory:', c_extensions=False, timeout=100)
@@ -124,6 +125,10 @@ class RowIDModel(TestModel):
 class KeyData(TestModel):
     key = TextField()
     data = JSONField()
+
+class JBData(TestModel):
+    key = TextField()
+    data = JSONBField()
 
 
 class Values(TestModel):
@@ -532,9 +537,11 @@ class TestJSONFieldFunctions(ModelTestCase):
         ('d', {'x1': {'y1': 'z1', 'y2': 'z2'}}),
         ('e', {'l1': [0, 1, 2], 'l2': [1, [3, 3], 7]}),
     ]
+    M = KeyData
 
     def setUp(self):
         super(TestJSONFieldFunctions, self).setUp()
+        KeyData = self.M
         with self.database.atomic():
             for key, data in self.test_data:
                 KeyData.create(key=key, data=data)
@@ -545,9 +552,11 @@ class TestJSONFieldFunctions(ModelTestCase):
         self.assertEqual([kd.key for kd in self.Q.where(where)], expected)
 
     def assertData(self, key, expected):
+        KeyData = self.M
         self.assertEqual(KeyData.get(KeyData.key == key).data, expected)
 
     def test_json_group_functions(self):
+        KeyData = self.M
         with self.database.atomic():
             KeyData.delete().execute()
             for i in range(10):
@@ -597,6 +606,7 @@ class TestJSONFieldFunctions(ModelTestCase):
         self.assertEqual(query.scalar(), {'k0': 0, 'k1': 1, 'k2': 2, 'k3': 3})
 
     def test_extract(self):
+        KeyData = self.M
         self.assertRows((KeyData.data['k1'] == 'v1'), ['a', 'c'])
         self.assertRows((KeyData.data['k2'] == 'v2'), ['b', 'c'])
         self.assertRows((KeyData.data['x1']['y1'] == 'z1'), ['a', 'd'])
@@ -605,6 +615,7 @@ class TestJSONFieldFunctions(ModelTestCase):
 
     @skip_unless(json_text_installed())
     def test_extract_text_json(self):
+        KeyData = self.M
         D = KeyData.data
         self.assertRows((D.extract('$.k1') == 'v1'), ['a', 'c'])
         self.assertRows((D.extract_text('$.k1') == 'v1'), ['a', 'c'])
@@ -618,6 +629,7 @@ class TestJSONFieldFunctions(ModelTestCase):
         self.assertRows((D.extract_json('x1') == '{"y1":"z1"}'), ['a'])
 
     def test_extract_multiple(self):
+        KeyData = self.M
         query = KeyData.select(
             KeyData.key,
             KeyData.data.extract('$.k1', '$.k2').alias('keys'))
@@ -629,6 +641,7 @@ class TestJSONFieldFunctions(ModelTestCase):
             ('e', [None, None])])
 
     def test_insert(self):
+        KeyData = self.M
         # Existing values are not overwritten.
         query = KeyData.update(data=KeyData.data['k1'].insert('v1-x'))
         self.assertEqual(query.execute(), 5)
@@ -641,6 +654,7 @@ class TestJSONFieldFunctions(ModelTestCase):
                               'l2': [1, [3, 3], 7]})
 
     def test_insert_json(self):
+        KeyData = self.M
         set_json = KeyData.data['k1'].insert([0])
         query = KeyData.update(data=set_json)
         self.assertEqual(query.execute(), 5)
@@ -653,6 +667,7 @@ class TestJSONFieldFunctions(ModelTestCase):
                               'l2': [1, [3, 3], 7]})
 
     def test_replace(self):
+        KeyData = self.M
         # Only existing values are overwritten.
         query = KeyData.update(data=KeyData.data['k1'].replace('v1-x'))
         self.assertEqual(query.execute(), 5)
@@ -664,6 +679,7 @@ class TestJSONFieldFunctions(ModelTestCase):
         self.assertData('e', {'l1': [0, 1, 2], 'l2': [1, [3, 3], 7]})
 
     def test_replace_json(self):
+        KeyData = self.M
         set_json = KeyData.data['k1'].replace([0])
         query = KeyData.update(data=set_json)
         self.assertEqual(query.execute(), 5)
@@ -675,6 +691,7 @@ class TestJSONFieldFunctions(ModelTestCase):
         self.assertData('e', {'l1': [0, 1, 2], 'l2': [1, [3, 3], 7]})
 
     def test_set(self):
+        KeyData = self.M
         query = (KeyData
                  .update({KeyData.data: KeyData.data['k1'].set('v1-x')})
                  .where(KeyData.data['k1'] == 'v1'))
@@ -684,6 +701,7 @@ class TestJSONFieldFunctions(ModelTestCase):
         self.assertData('a', {'k1': 'v1-x', 'x1': {'y1': 'z1'}})
 
     def test_set_json(self):
+        KeyData = self.M
         set_json = KeyData.data['x1'].set({'y1': 'z1-x', 'y3': 'z3'})
         query = (KeyData
                  .update({KeyData.data: set_json})
@@ -695,6 +713,7 @@ class TestJSONFieldFunctions(ModelTestCase):
         self.assertData('d', {'x1': {'y1': 'z1-x', 'y3': 'z3'}})
 
     def test_append(self):
+        KeyData = self.M
         for value in ('ix', [], ['c1'], ['c1', 'c2'], {}, {'k1': 'v1'},
                       {'k1': 'v1', 'k2': 'v2'}, None, 1):
             KeyData.delete().execute()
@@ -710,7 +729,9 @@ class TestJSONFieldFunctions(ModelTestCase):
                      .where(KeyData.key.startswith('a')))
             self.assertEqual(query.execute(), 3)
 
-            query = KeyData.select().where(KeyData.key.startswith('a'))
+            query = (KeyData
+                     .select(KeyData.key, fn.json(KeyData.data))
+                     .where(KeyData.key.startswith('a')))
             self.assertEqual(sorted((row.key, row.data) for row in query),
                              [('a0', [value]), ('a1', ['i1', value]),
                               ('a2', ['i1', 'i2', value])])
@@ -720,7 +741,9 @@ class TestJSONFieldFunctions(ModelTestCase):
                      .where(KeyData.key.startswith('n')))
             self.assertEqual(query.execute(), 3)
 
-            query = KeyData.select().where(KeyData.key.startswith('n'))
+            query = (KeyData
+                     .select(KeyData.key, fn.json(KeyData.data))
+                     .where(KeyData.key.startswith('n')))
             self.assertEqual(sorted((row.key, row.data) for row in query),
                              [('n0', {'arr': [value]}),
                               ('n1', {'arr': ['i1', value]}),
@@ -728,6 +751,7 @@ class TestJSONFieldFunctions(ModelTestCase):
 
     @skip_unless(json_patch_installed())
     def test_update(self):
+        KeyData = self.M
         merged = KeyData.data.update({'x1': {'y1': 'z1-x', 'y3': 'z3'}})
         query = (KeyData
                  .update({KeyData.data: merged})
@@ -740,6 +764,7 @@ class TestJSONFieldFunctions(ModelTestCase):
 
     @skip_unless(json_patch_installed())
     def test_update_with_removal(self):
+        KeyData = self.M
         m = KeyData.data.update({'k1': None, 'x1': {'y1': None, 'y3': 'z3'}})
         query = KeyData.update(data=m).where(KeyData.data['x1']['y1'] == 'z1')
         self.assertEqual(query.execute(), 2)
@@ -750,6 +775,7 @@ class TestJSONFieldFunctions(ModelTestCase):
 
     @skip_unless(json_patch_installed())
     def test_update_nested(self):
+        KeyData = self.M
         merged = KeyData.data['x1'].update({'y1': 'z1-x', 'y3': 'z3'})
         query = (KeyData
                  .update(data=merged)
@@ -762,6 +788,7 @@ class TestJSONFieldFunctions(ModelTestCase):
 
     @skip_unless(json_patch_installed())
     def test_updated_nested_with_removal(self):
+        KeyData = self.M
         merged = KeyData.data['x1'].update({'o1': 'p1', 'y1': None})
         nrows = (KeyData
                  .update(data=merged)
@@ -772,6 +799,7 @@ class TestJSONFieldFunctions(ModelTestCase):
         self.assertData('d', {'x1': {'o1': 'p1', 'y2': 'z2'}})
 
     def test_remove(self):
+        KeyData = self.M
         query = (KeyData
                  .update(data=KeyData.data['k1'].remove())
                  .where(KeyData.data['k1'] == 'v1'))
@@ -787,14 +815,16 @@ class TestJSONFieldFunctions(ModelTestCase):
         self.assertData('e', {'l1': [0, 1, 2], 'l2': [1, [3], 7]})
 
     def test_simple_update(self):
+        KeyData = self.M
         nrows = (KeyData
                  .update(data={'foo': 'bar'})
                  .where(KeyData.key.in_(['a', 'b']))
                  .execute())
-        for k in self.Q.where(KeyData.key.in_(['a', 'b'])):
-            self.assertEqual(k.data, {'foo': 'bar'})
+        self.assertData('a', {'foo': 'bar'})
+        self.assertData('b', {'foo': 'bar'})
 
     def test_children(self):
+        KeyData = self.M
         children = KeyData.data.children().alias('children')
         query = (KeyData
                  .select(KeyData.key, children.c.fullkey.alias('fullkey'))
@@ -809,6 +839,7 @@ class TestJSONFieldFunctions(ModelTestCase):
             ('e', '$.l1'), ('e', '$.l2')])
 
     def test_tree(self):
+        KeyData = self.M
         tree = KeyData.data.tree().alias('tree')
         query = (KeyData
                  .select(tree.c.fullkey.alias('fullkey'))
@@ -821,6 +852,29 @@ class TestJSONFieldFunctions(ModelTestCase):
             '$.x1',
             '$.x1.y1',
             '$.x1.y2'])
+
+
+@skip_unless(jsonb_installed(), 'requires sqlite jsonb support')
+class TestJSONBFieldFunctions(TestJSONFieldFunctions):
+    requires = [JBData]
+    M = JBData
+
+    def assertData(self, key, expected):
+        q = JBData.select(fn.json(JBData.data)).where(JBData.key == key)
+        self.assertEqual(q.get().data, expected)
+
+    def test_extract_multiple(self):
+        # We need to override this, otherwise we end up with jsonb returned.
+        expr = fn.json(JBData.data.extract('$.k1', '$.k2'))
+        query = JBData.select(
+            JBData.key,
+            expr.python_value(json.loads).alias('keys'))
+        self.assertEqual(sorted((k.key, k.keys) for k in query), [
+            ('a', ['v1', None]),
+            ('b', [None, 'v2']),
+            ('c', ['v1', 'v2']),
+            ('d', [None, None]),
+            ('e', [None, None])])
 
 
 class TestSqliteExtensions(BaseTestCase):

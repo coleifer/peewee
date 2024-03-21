@@ -4,7 +4,6 @@ from peewee import sqlite3
 def json_installed():
     if sqlite3.sqlite_version_info < (3, 9, 0):
         return False
-    # Test in-memory DB to determine if the FTS5 extension is installed.
     tmp_db = sqlite3.connect(':memory:')
     try:
         tmp_db.execute('select json(?)', (1337,))
@@ -21,6 +20,9 @@ def json_patch_installed():
 
 def json_text_installed():
     return sqlite3.sqlite_version_info >= (3, 38, 0)
+
+def jsonb_installed():
+    return sqlite3.sqlite_version_info >= (3, 45, 0)
 
 
 def compile_option(p):

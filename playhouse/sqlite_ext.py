@@ -90,7 +90,7 @@ class JSONPath(ColumnBase):
             item = '[%s]' % idx
         else:
             item = '.%s' % idx
-        return JSONPath(self._field, self._path + (item,))
+        return type(self)(self._field, self._path + (item,))
 
     def append(self, value, as_json=None):
         if as_json or isinstance(value, (list, dict)):
@@ -133,10 +133,41 @@ class JSONPath(ColumnBase):
         return ctx.sql(fn.json_extract(self._field, self.path)
                        if self._path else self._field)
 
+class JSONBPath(JSONPath):
+    def append(self, value, as_json=None):
+        if as_json or isinstance(value, (list, dict)):
+            value = fn.jsonb(self._field._json_dumps(value))
+        return fn.jsonb_set(self._field, self['#'].path, value)
+
+    def _json_operation(self, func, value, as_json=None):
+        if as_json or isinstance(value, (list, dict)):
+            value = fn.jsonb(self._field._json_dumps(value))
+        return func(self._field, self.path, value)
+
+    def insert(self, value, as_json=None):
+        return self._json_operation(fn.jsonb_insert, value, as_json)
+
+    def set(self, value, as_json=None):
+        return self._json_operation(fn.jsonb_set, value, as_json)
+
+    def replace(self, value, as_json=None):
+        return self._json_operation(fn.jsonb_replace, value, as_json)
+
+    def update(self, value):
+        return self.set(fn.jsonb_patch(self, self._field._json_dumps(value)))
+
+    def remove(self):
+        return fn.jsonb_remove(self._field, self.path)
+
+    def __sql__(self, ctx):
+        return ctx.sql(fn.jsonb_extract(self._field, self.path)
+                       if self._path else self._field)
+
 
 class JSONField(TextField):
     field_type = 'JSON'
     unpack = False
+    Path = JSONPath
 
     def __init__(self, json_dumps=None, json_loads=None, **kwargs):
         self._json_dumps = json_dumps or json.dumps
@@ -171,7 +202,7 @@ class JSONField(TextField):
     __hash__ = Field.__hash__
 
     def __getitem__(self, item):
-        return JSONPath(self)[item]
+        return self.Path(self)[item]
 
     def extract(self, *paths):
         paths = [Value(p, converter=False) for p in paths]
@@ -182,23 +213,23 @@ class JSONField(TextField):
         return Expression(self, '->>', Value(path, converter=False))
 
     def append(self, value, as_json=None):
-        return JSONPath(self).append(value, as_json)
+        return self.Path(self).append(value, as_json)
 
     def insert(self, value, as_json=None):
-        return JSONPath(self).insert(value, as_json)
+        return self.Path(self).insert(value, as_json)
 
     def set(self, value, as_json=None):
-        return JSONPath(self).set(value, as_json)
+        return self.Path(self).set(value, as_json)
 
     def replace(self, value, as_json=None):
-        return JSONPath(self).replace(value, as_json)
+        return self.Path(self).replace(value, as_json)
 
     def update(self, data):
-        return JSONPath(self).update(data)
+        return self.Path(self).update(data)
 
     def remove(self, *paths):
         if not paths:
-            return JSONPath(self).remove()
+            return self.Path(self).remove()
         return fn.json_remove(self, *paths)
 
     def json_type(self):
@@ -227,6 +258,26 @@ class JSONField(TextField):
 
     def tree(self):
         return fn.json_tree(self)
+
+
+class JSONBField(JSONField):
+    field_type = 'JSONB'
+    Path = JSONBPath
+
+    def db_value(self, value):
+        if value is not None:
+            if not isinstance(value, Node):
+                value = fn.jsonb(self._json_dumps(value))
+            return value
+
+    def extract(self, *paths):
+        paths = [Value(p, converter=False) for p in paths]
+        return fn.jsonb_extract(self, *paths)
+
+    def remove(self, *paths):
+        if not paths:
+            return self.Path(self).remove()
+        return fn.jsonb_remove(self, *paths)
 
 
 class SearchField(Field):
