@@ -270,6 +270,9 @@ class JSONBField(JSONField):
                 value = fn.jsonb(self._json_dumps(value))
             return value
 
+    def json(self):
+        return fn.json(self)
+
     def extract(self, *paths):
         paths = [Value(p, converter=False) for p in paths]
         return fn.jsonb_extract(self, *paths)

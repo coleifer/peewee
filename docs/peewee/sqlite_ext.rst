@@ -840,6 +840,35 @@ APIs
         JSON object at the given location. See also :py:meth:`JSONField.tree`.
 
 
+.. py:class:: JSONBField(json_dumps=None, json_loads=None, ...)
+
+    Field-class suitable for use with data stored on-disk in ``jsonb`` format
+    (available starting Sqlite 3.45.0). This field-class should be used with
+    care, as the data may be returned in it's encoded format depending on how
+    you query it. For example:
+
+    .. code-block:: pycon
+
+        >>> KV.create(key='a', value={'k1': 'v1'})
+        <KV: 1>
+        >>> KV.get(KV.key == 'a').value
+        b"l'k1'v1"
+
+    To get the JSON value, it is necessary to use ``fn.json()`` or the helper
+    :py:meth:`JSONBField.json` method:
+
+    .. code-block:: pycon
+
+        >>> kv = KV.select(KV.value.json()).get()
+        >>> kv.value
+        {'k1': 'v1'}
+
+
+.. py:class:: JSONBPath(field[, path=None])
+
+    Subclass of :py:class:`JSONPath` for working with ``jsonb`` data.
+
+
 .. py:class:: SearchField([unindexed=False[, column_name=None]])
 
     Field-class to be used for columns on models representing full-text search
