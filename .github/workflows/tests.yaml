@@ -24,7 +24,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python-version: [3.7, 3.9, "3.10"]
+        python-version: [3.7, 3.9, "3.11"]
         peewee-backend:
           - "sqlite"
           - "postgresql"
@@ -35,8 +35,10 @@ jobs:
         include:
           - python-version: 3.7
             peewee-backend: cockroachdb
-          - python-version: "3.10"
+          - python-version: "3.11"
             peewee-backend: cockroachdb
+          - python-version: "3.11"
+            peewee-backend: psycopg3
     steps:
       - uses: actions/checkout@v2
       - uses: actions/setup-python@v2
@@ -48,7 +50,7 @@ jobs:
           PGHOST: 127.0.0.1
           PGPASSWORD: peewee
         run: |
-          pip install psycopg2-binary cython pymysql 'apsw<3.38' mysql-connector
+          pip install psycopg2-binary cython pymysql 'apsw' mysql-connector
           python setup.py build_ext -i
           psql peewee_test -c 'CREATE EXTENSION hstore;'
       - name: sqlcipher

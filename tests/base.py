@@ -61,6 +61,7 @@ IS_SQLITE = BACKEND.startswith('sqlite')
 IS_MYSQL = BACKEND.startswith(('mysql', 'maria'))
 IS_POSTGRESQL = BACKEND.startswith(('postgres', 'psycopg'))
 IS_CRDB = BACKEND in ('cockroach', 'cockroachdb', 'crdb')
+IS_PSYCOPG3 = BACKEND == 'psycopg3'
 
 
 def make_db_params(key):
