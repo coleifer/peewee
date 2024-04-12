@@ -61,7 +61,7 @@ except Exception:
 try:
     from psycopg import errors as pg3_errors
 except ImportError:
-    pass
+    pg3_errors = None
 
 mysql_passwd = False
 try:
