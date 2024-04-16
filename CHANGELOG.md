@@ -7,7 +7,15 @@ https://github.com/coleifer/peewee/releases
 
 ## master
 
-[View commits](https://github.com/coleifer/peewee/compare/3.17.1...master)
+[View commits](https://github.com/coleifer/peewee/compare/3.17.2...master)
+
+## 3.17.2
+
+* Full support for `psycopg3`.
+* Basic support for Sqlite `jsonb`.
+* Fix bug where calling `list(query)` resulted in extra queries, #2871
+
+[View commits](https://github.com/coleifer/peewee/compare/3.17.1...3.17.2)
 
 ## 3.17.1
 
