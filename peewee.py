@@ -4572,6 +4572,9 @@ class CursorWrapper(object):
         self.fill_cache()
         return self.count
 
+    def __bool__(self):
+        return self.populated
+
     def initialize(self):
         pass
 
