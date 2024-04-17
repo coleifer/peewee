@@ -2095,7 +2095,7 @@ class BaseQuery(Node):
         return iter(self.execute(database).iterator())
 
     def _ensure_execution(self):
-        if not self._cursor_wrapper:
+        if self._cursor_wrapper is None:
             if not self._database:
                 raise ValueError('Query has not been executed.')
             self.execute()
@@ -4571,9 +4571,6 @@ class CursorWrapper(object):
     def __len__(self):
         self.fill_cache()
         return self.count
-
-    def __bool__(self):
-        return self.populated
 
     def initialize(self):
         pass
