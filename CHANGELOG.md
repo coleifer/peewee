@@ -7,7 +7,14 @@ https://github.com/coleifer/peewee/releases
 
 ## master
 
-[View commits](https://github.com/coleifer/peewee/compare/3.17.2...master)
+[View commits](https://github.com/coleifer/peewee/compare/3.17.3...master)
+
+## 3.17.3
+
+* Better fix for #2871 (extraneous queries when coercing query to list), and
+  new fix in #2872 for regression in truthiness of cursor.
+
+[View commits](https://github.com/coleifer/peewee/compare/3.17.2...3.17.3)
 
 ## 3.17.2
 
