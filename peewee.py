@@ -3184,7 +3184,7 @@ class Database(_callable_context_manager):
         self.thread_safe = thread_safe
         if thread_safe:
             self._state = _ConnectionLocal()
-            self._lock = threading.RLock()
+            self._lock = threading.Lock()
         else:
             self._state = _ConnectionState()
             self._lock = _NoopLock()
@@ -3401,26 +3401,23 @@ class Database(_callable_context_manager):
         return ctx.literal('DEFAULT VALUES')
 
     def session_start(self):
-        with self._lock:
-            return self.transaction().__enter__()
+        return self.transaction().__enter__()
 
     def session_commit(self):
-        with self._lock:
-            try:
-                txn = self.pop_transaction()
-            except IndexError:
-                return False
-            txn.commit(begin=self.in_transaction())
-            return True
+        try:
+            txn = self.pop_transaction()
+        except IndexError:
+            return False
+        txn.commit(begin=self.in_transaction())
+        return True
 
     def session_rollback(self):
-        with self._lock:
-            try:
-                txn = self.pop_transaction()
-            except IndexError:
-                return False
-            txn.rollback(begin=self.in_transaction())
-            return True
+        try:
+            txn = self.pop_transaction()
+        except IndexError:
+            return False
+        txn.rollback(begin=self.in_transaction())
+        return True
 
     def in_transaction(self):
         return bool(self._state.transactions)

@@ -2,6 +2,7 @@ import logging
 import weakref
 from threading import local as thread_local
 from threading import Event
+from threading import Lock
 from threading import Thread
 try:
     from Queue import Queue
@@ -194,6 +195,9 @@ class SqliteQueueDatabase(SqliteExtDatabase):
                  queue_max_size=None, results_timeout=None, *args, **kwargs):
         kwargs['check_same_thread'] = False
 
+        # Lock around starting and stopping write thread operations.
+        self._qlock = Lock()
+
         # Ensure that journal_mode is WAL. This value is passed to the parent
         # class constructor below.
         pragmas = self._validate_journal_mode(kwargs.pop('pragmas', None))
@@ -255,7 +259,7 @@ class SqliteQueueDatabase(SqliteExtDatabase):
         return cursor
 
     def start(self):
-        with self._lock:
+        with self._qlock:
             if not self._is_stopped:
                 return False
             def run():
@@ -269,7 +273,7 @@ class SqliteQueueDatabase(SqliteExtDatabase):
 
     def stop(self):
         logger.debug('environment stop requested.')
-        with self._lock:
+        with self._qlock:
             if self._is_stopped:
                 return False
             self._write_queue.put(SHUTDOWN)
@@ -278,15 +282,15 @@ class SqliteQueueDatabase(SqliteExtDatabase):
             return True
 
     def is_stopped(self):
-        with self._lock:
+        with self._qlock:
             return self._is_stopped
 
     def pause(self):
-        with self._lock:
+        with self._qlock:
             self._write_queue.put(PAUSE)
 
     def unpause(self):
-        with self._lock:
+        with self._qlock:
             self._write_queue.put(UNPAUSE)
 
     def __unsupported__(self, *args, **kwargs):
