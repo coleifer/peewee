@@ -1827,6 +1827,25 @@ class WindowAlias(Node):
         return ctx.literal(self.window._alias or 'w')
 
 
+class Case(ColumnBase):
+    def __init__(self, predicate, expression_tuples, default=None):
+        self.predicate = predicate
+        self.expression_tuples = expression_tuples
+        self.default = default
+
+    def __sql__(self, ctx):
+        clauses = [SQL('CASE')]
+        if self.predicate is not None:
+            clauses.append(self.predicate)
+        for expr, value in self.expression_tuples:
+            clauses.extend((SQL('WHEN'), expr, SQL('THEN'), value))
+        if self.default is not None:
+            clauses.extend((SQL('ELSE'), self.default))
+        clauses.append(SQL('END'))
+        with ctx(in_function=False):
+            return ctx.sql(NodeList(clauses))
+
+
 class ForUpdate(Node):
     def __init__(self, expr, of=None, nowait=None):
         expr = 'FOR UPDATE' if expr is True else expr
@@ -1847,18 +1866,6 @@ class ForUpdate(Node):
         if self._nowait:
             ctx.literal(' NOWAIT')
         return ctx
-
-
-def Case(predicate, expression_tuples, default=None):
-    clauses = [SQL('CASE')]
-    if predicate is not None:
-        clauses.append(predicate)
-    for expr, value in expression_tuples:
-        clauses.extend((SQL('WHEN'), expr, SQL('THEN'), value))
-    if default is not None:
-        clauses.extend((SQL('ELSE'), default))
-    clauses.append(SQL('END'))
-    return NodeList(clauses)
 
 
 class NodeList(ColumnBase):

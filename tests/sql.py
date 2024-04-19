@@ -1793,6 +1793,16 @@ class TestCaseFunction(BaseTestCase):
             'ELSE ? END '
             'FROM "nn" AS "t1"'), [1, 'one', 2, 'two', '?'])
 
+    def test_case_subquery(self):
+        Name = Table('n', ('id', 'name',))
+        case = Case(None, [(Name.id.in_(Name.select(Name.id)), 1)], 0)
+        q = Name.select(fn.SUM(case))
+        self.assertSQL(q, (
+            'SELECT SUM('
+            'CASE WHEN ("t1"."id" IN (SELECT "t1"."id" FROM "n" AS "t1")) '
+            'THEN ? ELSE ? END) FROM "n" AS "t1"'), [1, 0])
+
+
 
 class TestSelectFeatures(BaseTestCase):
     def test_reselect(self):

@@ -7,6 +7,9 @@ https://github.com/coleifer/peewee/releases
 
 ## master
 
+* Fix bug that could occur when using CASE inside a function, and one or more
+  of the CASE clauses consisted of a subquery. Refs #2873.
+
 [View commits](https://github.com/coleifer/peewee/compare/3.17.3...master)
 
 ## 3.17.3

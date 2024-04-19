@@ -1811,3 +1811,15 @@ class TestQueryCountList(ModelTestCase):
             list(User.select())
         with self.assertQueryCount(1):
             self.assertEqual(User.select().count(), 0)
+
+
+class TestSumCaseSubquery(ModelTestCase):
+    requires = [Sample]
+
+    def test_sum_case_subquery(self):
+        Sample.insert_many([(i, i) for i in range(5)]).execute()
+
+        subq = Sample.select().where(Sample.counter.in_([1, 3, 5]))
+        case = Case(None, [(Sample.id.in_(subq), Sample.value)], 0)
+        q = Sample.select(fn.SUM(case))
+        self.assertEqual(q.scalar(), 4.0)
