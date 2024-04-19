@@ -286,12 +286,10 @@ class SqliteQueueDatabase(SqliteExtDatabase):
             return self._is_stopped
 
     def pause(self):
-        with self._qlock:
-            self._write_queue.put(PAUSE)
+        self._write_queue.put(PAUSE)
 
     def unpause(self):
-        with self._qlock:
-            self._write_queue.put(UNPAUSE)
+        self._write_queue.put(UNPAUSE)
 
     def __unsupported__(self, *args, **kwargs):
         raise ValueError('This method is not supported by %r.' % type(self))
