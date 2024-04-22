@@ -211,7 +211,7 @@ class MyModel(db.Model):
 
 Rollback behavior change in commit ab43376697 (GH #2026). Peewee will no longer
 automatically return the cursor `rowcount` for certain bulk-inserts.  This
-should only affect users of MySQL and Sqlite who relied on a bulk INSERT
+should mainly affect users of MySQL and Sqlite who relied on a bulk INSERT
 returning the `rowcount` (as opposed to the cursor's `lastrowid`). The
 `rowcount` behavior is still available chaining the ``as_rowcount()`` method:
 
@@ -230,6 +230,25 @@ query = User.insert_from(...)  # Bulk insert (INSERT INTO .. SELECT FROM).
 last_id = query.execute()
 
 # To get the old behavior back:
+rows_inserted = query.as_rowcount().execute()
+```
+
+Additionally, in previous versions specifying an empty `.returning()` with
+Postgres would cause the rowcount to be returned. For Postgres users who wish
+to receive the rowcount:
+
+```python
+# NOTE: this change only affects Postgresql.
+db = PostgresqlDatabase(...)
+
+# Previously, an empty returning() would return the rowcount.
+query = User.insert_many(...)  # Bulk insert.
+query = User.insert_from(...)  # Bulk insert (INSERT INTO .. SELECT FROM).
+
+# Old behavior:
+# rows_inserted = query.returning().execute()
+
+# To get the rows inserted in 3.15 and newer:
 rows_inserted = query.as_rowcount().execute()
 ```
 

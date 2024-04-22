@@ -421,8 +421,6 @@ class TestModelAPIs(ModelTestCase):
         User.create(username='u0')  # Ensure that last insert ID != rowcount.
 
         iq = User.insert_many([(u,) for u in ('u1', 'u2', 'u3')])
-        if IS_POSTGRESQL or IS_CRDB:
-            iq = iq.returning()
         self.assertEqual(iq.as_rowcount().execute(), 3)
 
         # Now explicitly specify empty returning() for all DBs.
@@ -433,8 +431,6 @@ class TestModelAPIs(ModelTestCase):
                  .select(User.username.concat('-x'))
                  .where(User.username.in_(['u1', 'u2'])))
         iq = User.insert_from(query, ['username'])
-        if IS_POSTGRESQL or IS_CRDB:
-            iq = iq.returning()
         self.assertEqual(iq.as_rowcount().execute(), 2)
 
         query = (User
