@@ -387,6 +387,21 @@ class TestThreadSafety(ModelTestCase):
         for t in threads: t.join()
         self.assertEqual(data.qsize(), self.nrows * self.nthreads)
 
+    def test_mt_general(self):
+        def connect_close():
+            for _ in range(self.nrows):
+                self.database.connect()
+                with self.database.atomic() as txn:
+                    self.database.execute_sql('select 1').fetchone()
+                self.database.close()
+
+        threads = []
+        for i in range(self.nthreads):
+            threads.append(threading.Thread(target=connect_close))
+
+        for t in threads: t.start()
+        for t in threads: t.join()
+
 
 class TestDeferredDatabase(BaseTestCase):
     def test_deferred_database(self):
