@@ -4231,7 +4231,7 @@ Model
             The default return value is the number of rows modified. However,
             when using Postgres, Peewee will return a cursor by default that
             yields the primary-keys of the inserted rows. To disable this
-            functionality with Postgres, use an empty call to ``returning()``.
+            functionality with Postgres, use ``as_rowcount()``.
 
     .. py:classmethod:: insert_from(query, fields)
 
@@ -4259,7 +4259,7 @@ Model
             The default return value is the number of rows modified. However,
             when using Postgres, Peewee will return a cursor by default that
             yields the primary-keys of the inserted rows. To disable this
-            functionality with Postgres, use an empty call to ``returning()``.
+            functionality with Postgres, use ``as_rowcount()``.
 
     .. py:classmethod:: replace([__data=None[, **insert]])
 
