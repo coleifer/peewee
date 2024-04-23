@@ -281,8 +281,18 @@ class SqliteQueueDatabase(SqliteExtDatabase):
         with self._qlock:
             if self._is_stopped:
                 return False
+
             self._write_queue.put((SHUTDOWN, None))
             self._writer.join()
+
+            # Empty queue of any remaining tasks.
+            while not self._write_queue.empty():
+                op, obj = self._write_queue.get()
+                if op == PAUSE or op == UNPAUSE:
+                    obj.set()
+                elif op == QUERY:
+                    obj.set_result(None, ShutdownException())
+
             self._is_stopped = True
             return True
 
