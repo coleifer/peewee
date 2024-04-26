@@ -301,13 +301,23 @@ class SqliteQueueDatabase(SqliteExtDatabase):
             return self._is_stopped
 
     def pause(self):
-        evt = self._thread_helper.event()
-        self._write_queue.put((PAUSE, evt))
+        with self._qlock:
+            if self._is_stopped:
+                return False
+
+            evt = self._thread_helper.event()
+            self._write_queue.put((PAUSE, evt))
+
         evt.wait()
 
     def unpause(self):
-        evt = self._thread_helper.event()
-        self._write_queue.put((UNPAUSE, evt))
+        with self._qlock:
+            if self._is_stopped:
+                return False
+
+            evt = self._thread_helper.event()
+            self._write_queue.put((UNPAUSE, evt))
+
         evt.wait()
 
     def __unsupported__(self, *args, **kwargs):
