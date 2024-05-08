@@ -4,6 +4,7 @@ from playhouse.hybrid import *
 from .base import ModelTestCase
 from .base import TestModel
 from .base import get_in_memory_db
+from .base import requires_models
 
 
 class Interval(TestModel):
@@ -34,6 +35,9 @@ class Person(TestModel):
     @hybrid_property
     def full_name(self):
         return self.first + ' ' + self.last
+
+class SubPerson(Person):
+    pass
 
 
 class TestHybridProperties(ModelTestCase):
@@ -107,6 +111,16 @@ class TestHybridProperties(ModelTestCase):
         self.assertSQL(query, (
             'SELECT (("t1"."first" || ?) || "t1"."last") '
             'FROM "person" AS "t1" WHERE ("t1"."last" = ?)'), [' ', 'cat'])
+        self.assertEqual(query.tuples()[0], ('huey cat',))
+
+    @requires_models(SubPerson)
+    def test_hybrid_subclass_model_alias(self):
+        SubPerson.create(first='huey', last='cat')
+        SA = SubPerson.alias()
+        query = SA.select(SA.full_name).where(SA.last == 'cat')
+        self.assertSQL(query, (
+            'SELECT (("t1"."first" || ?) || "t1"."last") '
+            'FROM "sub_person" AS "t1" WHERE ("t1"."last" = ?)'), [' ', 'cat'])
         self.assertEqual(query.tuples()[0], ('huey cat',))
 
 

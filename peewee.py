@@ -7093,13 +7093,13 @@ class ModelAlias(Node):
         # implementing the descriptor protocol (on the model being aliased),
         # will not work correctly when we use getattr(). So we explicitly pass
         # the model alias to the descriptor's getter.
-        try:
-            obj = self.model.__dict__[attr]
-        except KeyError:
-            pass
-        else:
-            if isinstance(obj, ModelDescriptor):
-                return obj.__get__(None, self)
+        for b in (self.model,) + self.model.__bases__:
+            try:
+                obj = b.__dict__[attr]
+                if isinstance(obj, ModelDescriptor):
+                    return obj.__get__(None, self)
+            except KeyError:
+                continue
 
         model_attr = getattr(self.model, attr)
         if isinstance(model_attr, Field):
