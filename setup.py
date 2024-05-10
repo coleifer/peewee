@@ -1,5 +1,6 @@
 import os
 import platform
+import re
 import sys
 import warnings
 try:
@@ -145,9 +146,13 @@ def _do_setup(c_extensions, sqlite_extensions):
     else:
         ext_modules = None
 
+    with open('peewee.py', 'rt') as fh:
+        version, = [l for l in fh.readlines() if l.startswith('__version__')]
+        version, = re.search(r'\'([\d\.]+)\'', version).groups()
+
     setup(
         name='peewee',
-        version=__import__('peewee').__version__,
+        version=version,
         description='a little orm',
         long_description=readme,
         author='Charles Leifer',
