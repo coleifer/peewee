@@ -7,15 +7,22 @@ https://github.com/coleifer/peewee/releases
 
 ## master
 
+[View commits](https://github.com/coleifer/peewee/compare/3.17.4...master)
+
+## 3.17.4
+
 * Fix bug that could occur when using CASE inside a function, and one or more
   of the CASE clauses consisted of a subquery. Refs #2873.
+  new fix in #2872 for regression in truthiness of cursor.
+* Fix bug in the conversion of TIMESTAMP type in Sqlite on Python 3.12+.
+* Fix for hybrid properties on subclasses when aliased (#2888).
+* Many fixes for SqliteQueueDatabase (#2874, #2876, #2877).
 
-[View commits](https://github.com/coleifer/peewee/compare/3.17.3...master)
+[View commits](https://github.com/coleifer/peewee/compare/3.17.3...3.17.4)
 
 ## 3.17.3
 
 * Better fix for #2871 (extraneous queries when coercing query to list), and
-  new fix in #2872 for regression in truthiness of cursor.
 
 [View commits](https://github.com/coleifer/peewee/compare/3.17.2...3.17.3)
 
