@@ -7,7 +7,13 @@ https://github.com/coleifer/peewee/releases
 
 ## master
 
-[View commits](https://github.com/coleifer/peewee/compare/3.17.4...master)
+[View commits](https://github.com/coleifer/peewee/compare/3.17.5...master)
+
+## 3.17.5
+
+This release fixes a build system problem in Python 3.12, #2891.
+
+[View commits](https://github.com/coleifer/peewee/compare/3.17.4...3.17.5)
 
 ## 3.17.4
 
