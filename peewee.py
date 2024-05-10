@@ -221,14 +221,14 @@ if sqlite3:
         def convert_date(d): return datetime.date(*map(int, d.split(b'-')))
         def convert_timestamp(t):
             date, time = t.split(b' ')
-            year, month, day = map(int, date.split(b'-'))
+            y, m, d = map(int, date.split(b'-'))
             t_full = time.split(b'.')
             hour, minute, second = map(int, t_full[0].split(b':'))
             if len(t_full) == 2:
                 usec = int('{:0<6.6}'.format(t_full[1].decode()))
             else:
                 usec = 0
-            return datetime.datetime(year, month, day, hour, minute, second, usec)
+            return datetime.datetime(y, m, d, hour, minute, second, usec)
         sqlite3.register_adapter(datetime.datetime, datetime_adapter)
         sqlite3.register_converter('date', convert_date)
         sqlite3.register_converter('timestamp', convert_timestamp)
