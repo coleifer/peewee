@@ -700,6 +700,35 @@ class TestSortModels(BaseTestCase):
             sorted_models = sort_models(list_of_models)
             self.assertEqual(sorted_models, models)
 
+    def test_sort_models_multi_fk(self):
+        class Inventory(Model):
+            pass
+        class Sheet(Model):
+            inventory = ForeignKeyField(Inventory)
+        class Program(Model):
+            inventory = ForeignKeyField(Inventory)
+        class ProgramSheet(Model):
+            program = ForeignKeyField(Program)
+            sheet = ForeignKeyField(Sheet)
+        class ProgramPart(Model):
+            program_sheet = ForeignKeyField(ProgramSheet)
+        class Offal(Model):
+            program_sheet = ForeignKeyField(ProgramSheet)
+            sheet = ForeignKeyField(Sheet)
+
+        M = [Inventory, Sheet, Program, ProgramSheet, ProgramPart, Offal]
+        sorted_models = sort_models(M)
+        self.assertEqual(sorted_models, [
+            Inventory,
+            Program,
+            Sheet,
+            ProgramSheet,
+            Offal,
+            ProgramPart,
+        ])
+        for list_of_models in permutations(M):
+            self.assertEqual(sort_models(list_of_models), sorted_models)
+
 
 class TestDBProxy(BaseTestCase):
     def test_proxy_context_manager(self):
