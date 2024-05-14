@@ -7,6 +7,9 @@ https://github.com/coleifer/peewee/releases
 
 ## master
 
+* Fix bug in recursive `model.delete_instance()` when a table contains
+  foreign-keys at multiple depths of the graph, #2893.
+
 [View commits](https://github.com/coleifer/peewee/compare/3.17.5...master)
 
 ## 3.17.5

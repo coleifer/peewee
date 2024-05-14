@@ -138,8 +138,7 @@ class TestDeleteInstanceRegression(ModelTestCase):
         with self.assertQueryCount(5):
             a2.delete_instance(recursive=True)
 
-        queries = [logrecord.msg for logrecord in self._qh.queries[-5:]]
-        self.assertEqual(sorted(queries, reverse=True), [
+        self.assertHistory(5, [
             ('DELETE FROM "di_d" WHERE ("di_d"."c_id" IN ('
              'SELECT "t1"."id" FROM "di_c" AS "t1" WHERE ("t1"."b_id" IN ('
              'SELECT "t2"."id" FROM "di_b" AS "t2" WHERE ("t2"."a_id" = ?)'
@@ -1823,3 +1822,69 @@ class TestSumCaseSubquery(ModelTestCase):
         case = Case(None, [(Sample.id.in_(subq), Sample.value)], 0)
         q = Sample.select(fn.SUM(case))
         self.assertEqual(q.scalar(), 4.0)
+
+
+class I(TestModel):
+    name = TextField()
+class S(TestModel):
+    i = ForeignKeyField(I)
+class P(TestModel):
+    i = ForeignKeyField(I)
+class PS(TestModel):
+    p = ForeignKeyField(P)
+    s = ForeignKeyField(S)
+class PP(TestModel):
+    ps = ForeignKeyField(PS)
+class O(TestModel):
+    ps = ForeignKeyField(PS)
+    s = ForeignKeyField(S)
+class OX(TestModel):
+    o = ForeignKeyField(O, null=True)
+
+class TestDeleteInstanceDFS(ModelTestCase):
+    requires = [I, S, P, PS, PP, O, OX]
+
+    def test_delete_instance_dfs(self):
+        i1, i2 = [I.create(name=n) for n in ('i1', 'i2')]
+        for i in (i1, i2):
+            s = S.create(i=i)
+            p = P.create(i=i)
+            ps = PS.create(p=p, s=s)
+            pp = PP.create(ps=ps)
+            o = O.create(ps=ps, s=s)
+            ox = OX.create(o=o)
+
+        with self.assertQueryCount(9):
+            i1.delete_instance(recursive=True)
+
+        self.assertHistory(9, [
+            ('DELETE FROM "pp" WHERE ('
+             '"pp"."ps_id" IN (SELECT "t1"."id" FROM "ps" AS "t1" WHERE ('
+             '"t1"."p_id" IN (SELECT "t2"."id" FROM "p" AS "t2" WHERE ('
+             '"t2"."i_id" = ?)))))', [i1.id]),
+            ('UPDATE "ox" SET "o_id" = ? WHERE ('
+             '"ox"."o_id" IN (SELECT "t1"."id" FROM "o" AS "t1" WHERE ('
+             '"t1"."ps_id" IN (SELECT "t2"."id" FROM "ps" AS "t2" WHERE ('
+             '"t2"."p_id" IN (SELECT "t3"."id" FROM "p" AS "t3" WHERE ('
+             '"t3"."i_id" = ?)))))))', [None, i1.id]),
+            ('DELETE FROM "o" WHERE ('
+             '"o"."ps_id" IN (SELECT "t1"."id" FROM "ps" AS "t1" WHERE ('
+             '"t1"."p_id" IN (SELECT "t2"."id" FROM "p" AS "t2" WHERE ('
+             '"t2"."i_id" = ?)))))', [i1.id]),
+            ('DELETE FROM "o" WHERE ('
+             '"o"."s_id" IN (SELECT "t1"."id" FROM "s" AS "t1" WHERE ('
+             '"t1"."i_id" = ?)))', [i1.id]),
+            ('DELETE FROM "ps" WHERE ('
+             '"ps"."p_id" IN (SELECT "t1"."id" FROM "p" AS "t1" WHERE ('
+             '"t1"."i_id" = ?)))', [i1.id]),
+            ('DELETE FROM "ps" WHERE ('
+             '"ps"."s_id" IN (SELECT "t1"."id" FROM "s" AS "t1" WHERE ('
+             '"t1"."i_id" = ?)))', [i1.id]),
+            ('DELETE FROM "s" WHERE ("s"."i_id" = ?)', [i1.id]),
+            ('DELETE FROM "p" WHERE ("p"."i_id" = ?)', [i1.id]),
+            ('DELETE FROM "i" WHERE ("i"."id" = ?)', [i1.id]),
+        ])
+
+        counts = {OX: 2}
+        for m in self.requires:
+            self.assertEqual(m.select().count(), counts.get(m, 1))

@@ -6956,9 +6956,10 @@ class Model(with_metaclass(ModelBase, Node)):
     def dirty_fields(self):
         return [f for f in self._meta.sorted_fields if f.name in self._dirty]
 
-    def dependencies(self, search_nullable=False):
+    def dependencies(self, search_nullable=True):
         model_class = type(self)
         stack = [(type(self), None)]
+        queries = {}
         seen = set()
 
         while stack:
@@ -6974,13 +6975,16 @@ class Model(with_metaclass(ModelBase, Node)):
                 subquery = (rel_model.select(rel_model._meta.primary_key)
                             .where(node))
                 if not fk.null or search_nullable:
+                    queries.setdefault(rel_model, []).append((node, fk))
                     stack.append((rel_model, subquery))
-                yield (node, fk)
+
+        for m in reversed(sort_models(seen)):
+            for sq, q in queries.get(m, ()):
+                yield sq, q
 
     def delete_instance(self, recursive=False, delete_nullable=False):
         if recursive:
-            dependencies = self.dependencies(delete_nullable)
-            for query, fk in reversed(list(dependencies)):
+            for query, fk in self.dependencies():
                 model = fk.model
                 if fk.null and not delete_nullable:
                     model.update(**{fk.name: None}).where(query).execute()

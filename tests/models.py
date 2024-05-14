@@ -1595,22 +1595,24 @@ class TestDeleteInstance(ModelTestCase):
 
     def test_delete_instance_recursive(self):
         huey = User.get(User.username == 'huey')
+        a = []
+        for d in huey.dependencies():
+            a.append(d)
         with self.assertQueryCount(5):
             huey.delete_instance(recursive=True)
 
-        queries = [logrecord.msg for logrecord in self._qh.queries[-5:]]
-        self.assertEqual(sorted(queries), [
+        self.assertHistory(5, [
+            ('DELETE FROM "favorite" WHERE ("favorite"."user_id" = ?)',
+             [huey.id]),
             ('DELETE FROM "favorite" WHERE ('
              '"favorite"."tweet_id" IN ('
              'SELECT "t1"."id" FROM "tweet" AS "t1" WHERE ('
              '"t1"."user_id" = ?)))', [huey.id]),
-            ('DELETE FROM "favorite" WHERE ("favorite"."user_id" = ?)',
-             [huey.id]),
             ('DELETE FROM "tweet" WHERE ("tweet"."user_id" = ?)', [huey.id]),
-            ('DELETE FROM "users" WHERE ("users"."id" = ?)', [huey.id]),
             ('UPDATE "account" SET "user_id" = ? '
              'WHERE ("account"."user_id" = ?)',
              [None, huey.id]),
+            ('DELETE FROM "users" WHERE ("users"."id" = ?)', [huey.id]),
         ])
 
         # Only one user left.
@@ -1638,17 +1640,16 @@ class TestDeleteInstance(ModelTestCase):
             huey.delete_instance(recursive=True, delete_nullable=True)
 
         # Get the last 5 delete queries.
-        queries = [logrecord.msg for logrecord in self._qh.queries[-5:]]
-        self.assertEqual(sorted(queries), [
-            ('DELETE FROM "account" WHERE ("account"."user_id" = ?)',
+        self.assertHistory(5, [
+            ('DELETE FROM "favorite" WHERE ("favorite"."user_id" = ?)',
              [huey.id]),
             ('DELETE FROM "favorite" WHERE ('
              '"favorite"."tweet_id" IN ('
              'SELECT "t1"."id" FROM "tweet" AS "t1" WHERE ('
              '"t1"."user_id" = ?)))', [huey.id]),
-            ('DELETE FROM "favorite" WHERE ("favorite"."user_id" = ?)',
-             [huey.id]),
             ('DELETE FROM "tweet" WHERE ("tweet"."user_id" = ?)', [huey.id]),
+            ('DELETE FROM "account" WHERE ("account"."user_id" = ?)',
+             [huey.id]),
             ('DELETE FROM "users" WHERE ("users"."id" = ?)', [huey.id]),
         ])
 

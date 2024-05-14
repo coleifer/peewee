@@ -179,6 +179,12 @@ class BaseTestCase(unittest.TestCase):
         if params is not None:
             self.assertEqual(qparams, params)
 
+    def assertHistory(self, n, expected):
+        queries = [logrecord.msg for logrecord in self._qh.queries[-n:]]
+        queries = [(sql.replace('%s', '?').replace('`', '"'), params)
+                   for sql, params in queries]
+        self.assertEqual(queries, expected)
+
     @property
     def history(self):
         return self._qh.queries
