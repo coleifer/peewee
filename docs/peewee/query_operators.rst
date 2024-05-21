@@ -117,7 +117,7 @@ complex.
     * Use ``|`` instead of ``or``
     * Use ``~`` instead of ``not``
     * Use ``.is_null()`` instead of ``is None`` or ``== None``.
-    * Use ``== `` and ``!=`` for comparing against ``True`` and ``False``, or
+    * Use ``==`` and ``!=`` for comparing against ``True`` and ``False``, or
       you may use the implicit value of the expression.
     * **Don't forget to wrap your comparisons in parentheses when using logical operators.**
 
