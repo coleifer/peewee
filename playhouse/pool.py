@@ -34,7 +34,6 @@ That's it!
 import functools
 import heapq
 import logging
-import random
 import threading
 import time
 from collections import namedtuple
@@ -67,6 +66,10 @@ class MaxConnectionsExceeded(ValueError): pass
 
 PoolConnection = namedtuple('PoolConnection', ('timestamp', 'connection',
                                                'checked_out'))
+
+class _sentinel(object):
+    def __lt__(self, other):
+        return True
 
 
 def locked(fn):
@@ -136,7 +139,8 @@ class PooledDatabase(object):
         while True:
             try:
                 # Remove the oldest connection from the heap.
-                ts, conn = heapq.heappop(self._connections)
+                ts, _, c_conn = heapq.heappop(self._connections)
+                conn = c_conn
                 key = self.conn_key(conn)
             except IndexError:
                 ts = conn = None
@@ -167,7 +171,7 @@ class PooledDatabase(object):
                     len(self._in_use) >= self._max_connections):
                 raise MaxConnectionsExceeded('Exceeded maximum connections.')
             conn = super(PooledDatabase, self)._connect()
-            ts = time.time() - random.random() / 1000
+            ts = time.time()
             key = self.conn_key(conn)
             logger.debug('Created new connection %s.', key)
 
@@ -198,7 +202,8 @@ class PooledDatabase(object):
                 super(PooledDatabase, self)._close(conn)
             elif self._can_reuse(conn):
                 logger.debug('Returning %s to pool.', key)
-                heapq.heappush(self._connections, (pool_conn.timestamp, conn))
+                heapq.heappush(self._connections,
+                               (pool_conn.timestamp, _sentinel(), conn))
             else:
                 logger.debug('Closed %s.', key)
 
@@ -224,7 +229,7 @@ class PooledDatabase(object):
     @locked
     def close_idle(self):
         # Close any open connections that are not currently in-use.
-        for _, conn in self._connections:
+        for _, _, conn in self._connections:
             self._close(conn, close_conn=True)
         self._connections = []
 
@@ -249,7 +254,7 @@ class PooledDatabase(object):
         # Close all connections -- available and in-use. Warning: may break any
         # active connections used by other threads.
         self.close()
-        for _, conn in self._connections:
+        for _, _, conn in self._connections:
             self._close(conn, close_conn=True)
         for pool_conn in self._in_use.values():
             self._close(pool_conn.connection, close_conn=True)

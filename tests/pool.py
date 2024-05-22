@@ -112,7 +112,7 @@ class TestPooledDatabase(BaseTestCase):
 
         self.assertEqual(db.counter, 5)
         self.assertEqual(
-            sorted([conn for _, conn in db._connections]),
+            sorted([conn for _, _, conn in db._connections]),
             [1, 2, 3, 4, 5])  # All 5 are ready to be re-used.
         self.assertEqual(db._in_use, {})
 
@@ -184,9 +184,9 @@ class TestPooledDatabase(BaseTestCase):
         db = FakePooledDatabase('testing', counter=3)
 
         now = time.time()
-        heapq.heappush(db._connections, (now - 10, 3))
-        heapq.heappush(db._connections, (now - 5, 2))
-        heapq.heappush(db._connections, (now - 1, 1))
+        heapq.heappush(db._connections, (now - 10, None, 3))
+        heapq.heappush(db._connections, (now - 5, None, 2))
+        heapq.heappush(db._connections, (now - 1, None, 1))
 
         self.assertEqual(db.connection(), 3)
         self.assertTrue(3 in db._in_use)
@@ -218,9 +218,9 @@ class TestPooledDatabase(BaseTestCase):
         db = FakePooledDatabase('testing', counter=3)
 
         now = time.time()
-        heapq.heappush(db._connections, (now - 10, 3))
-        heapq.heappush(db._connections, (now - 5, 2))
-        heapq.heappush(db._connections, (now - 1, 1))
+        heapq.heappush(db._connections, (now - 10, None, 3))
+        heapq.heappush(db._connections, (now - 5, None, 2))
+        heapq.heappush(db._connections, (now - 1, None, 1))
         self.assertEqual(db.connection(), 3)
         self.assertTrue(3 in db._in_use)
 
@@ -234,10 +234,10 @@ class TestPooledDatabase(BaseTestCase):
         now = time.time()
         db = FakePooledDatabase('testing', stale_timeout=10)
         conns = [
-            (now - 20, 1),
-            (now - 15, 2),
-            (now - 5, 3),
-            (now, 4),
+            (now - 20, None, 1),
+            (now - 15, None, 2),
+            (now - 5, None, 3),
+            (now, None, 4),
         ]
         for ts_conn in conns:
             heapq.heappush(db._connections, ts_conn)
@@ -245,7 +245,7 @@ class TestPooledDatabase(BaseTestCase):
         self.assertEqual(db.connection(), 3)
         self.assertEqual(len(db._in_use), 1)
         self.assertTrue(3 in db._in_use)
-        self.assertEqual(db._connections, [(now, 4)])
+        self.assertEqual(db._connections, [(now, None, 4)])
 
     def test_connect_cascade(self):
         now = time.time()
@@ -256,10 +256,10 @@ class TestPooledDatabase(BaseTestCase):
         db = ClosedPooledDatabase('testing', stale_timeout=10)
 
         conns = [
-            (now - 15, 1),  # Skipped due to being stale.
-            (now - 5, 2),  # Will appear closed.
-            (now - 3, 3),
-            (now, 4),  # Will appear closed.
+            (now - 15, None, 1),  # Skipped due to being stale.
+            (now - 5, None, 2),  # Will appear closed.
+            (now - 3, None, 3),
+            (now, None, 4),  # Will appear closed.
         ]
         db.counter = 4  # The next connection we create will have id=5.
         for ts_conn in conns:
@@ -272,7 +272,7 @@ class TestPooledDatabase(BaseTestCase):
         pool_conn = db._in_use[3]
         self.assertEqual(pool_conn.timestamp, now - 3)
         self.assertEqual(pool_conn.connection, 3)
-        self.assertEqual(db._connections, [(now, 4)])
+        self.assertEqual(db._connections, [(now, None, 4)])
 
         # Since conn 4 is closed, we will open a new conn.
         db._state.closed = True  # Pretend we're in a different thread.
