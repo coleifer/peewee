@@ -167,7 +167,7 @@ class PooledDatabase(object):
                     len(self._in_use) >= self._max_connections):
                 raise MaxConnectionsExceeded('Exceeded maximum connections.')
             conn = super(PooledDatabase, self)._connect()
-            ts = time.time()
+            ts = time.time() - random.random() / 1000
             key = self.conn_key(conn)
             logger.debug('Created new connection %s.', key)
 
