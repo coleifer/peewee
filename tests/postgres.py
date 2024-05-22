@@ -815,6 +815,16 @@ class TestServerSide(ModelTestCase):
         ss_query = ServerSide(query.where(SQL('1 = 0')))
         self.assertEqual(list(ss_query), [])
 
+    def test_lower_level_apis(self):
+        query = Register.select(Register.value).order_by(Register.value)
+        ssq = ServerSideQuery(query, array_size=10)
+        curs_wrapper = ssq._execute(self.database)
+        curs = curs_wrapper.cursor
+        self.assertTrue(isinstance(curs, FetchManyCursor))
+        self.assertEqual(curs.fetchone(), (0,))
+        self.assertEqual(curs.fetchone(), (1,))
+        curs.close()
+
 
 class KX(TestModel):
     key = CharField(unique=True)

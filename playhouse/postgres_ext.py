@@ -13,6 +13,7 @@ from peewee import Expression
 from peewee import Node
 from peewee import NodeList
 from peewee import __deprecated__
+from peewee import __exception_wrapper__
 
 try:
     from psycopg2cffi import compat
@@ -394,6 +395,13 @@ class FetchManyCursor(object):
         self.exhausted = False
         self.iterable = self.row_gen()
 
+    def __del__(self):
+        if self.cursor and not self.cursor.closed:
+            try:
+                self.cursor.close()
+            except Exception:
+                pass
+
     @property
     def description(self):
         return self.cursor.description
@@ -402,12 +410,15 @@ class FetchManyCursor(object):
         self.cursor.close()
 
     def row_gen(self):
-        while True:
-            rows = self.cursor.fetchmany(self.array_size)
-            if not rows:
-                return
-            for row in rows:
-                yield row
+        try:
+            while True:
+                rows = self.cursor.fetchmany(self.array_size)
+                if not rows:
+                    return
+                for row in rows:
+                    yield row
+        finally:
+            self.close()
 
     def fetchone(self):
         if self.exhausted:
@@ -443,10 +454,9 @@ class ServerSideQuery(Node):
 def ServerSide(query, database=None, array_size=None):
     if database is None:
         database = query._database
-    with database.transaction():
-        server_side_query = ServerSideQuery(query, array_size=array_size)
-        for row in server_side_query:
-            yield row
+    server_side_query = ServerSideQuery(query, array_size=array_size)
+    for row in server_side_query:
+        yield row
 
 
 class _empty_object(object):
@@ -477,7 +487,8 @@ class PostgresqlExtDatabase(PostgresqlDatabase):
             else:
                 raise InterfaceError('Error, database connection not opened.')
         if named_cursor:
-            curs = self._state.conn.cursor(name=str(uuid.uuid1()))
+            curs = self._state.conn.cursor(name=str(uuid.uuid1()),
+                                           withhold=True)
             return curs
         return self._state.conn.cursor()
 
@@ -489,7 +500,16 @@ class PostgresqlExtDatabase(PostgresqlDatabase):
         sql, params = ctx.sql(query).query()
         named_cursor = named_cursor or (self._server_side_cursors and
                                         sql[:6].lower() == 'select')
-        cursor = self.execute_sql(sql, params)
+        cursor = self.execute_sql(sql, params, named_cursor=named_cursor)
         if named_cursor:
             cursor = FetchManyCursor(cursor, array_size)
+        return cursor
+
+    def execute_sql(self, sql, params=None, commit=None, named_cursor=None):
+        if commit is not None:
+            __deprecated__('"commit" has been deprecated and is a no-op.')
+        logger.debug((sql, params))
+        with __exception_wrapper__:
+            cursor = self.cursor(named_cursor=named_cursor)
+            cursor.execute(sql, params or ())
         return cursor
