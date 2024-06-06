@@ -3982,7 +3982,37 @@ Model
 
 .. py:class:: SubclassAwareMetadata
 
-    Metadata subclass that tracks :py:class:`Model` subclasses.
+    Metadata subclass that tracks :py:class:`Model` subclasses. Useful for
+    when you need to track all models in a project.
+
+    Example:
+
+    .. code-block:: python
+
+        from peewee import SubclassAwareMetadata
+
+        class Base(Model):
+            class Meta:
+                database = db
+                model_metadata_class = SubclassAwareMetadata
+
+        # Create 3 model classes that inherit from Base.
+        class A(Base): pass
+        class B(Base): pass
+        class C(Base): pass
+
+        # Now let's make a helper for changing the `schema` for each Model.
+        def change_schema(schema):
+            def _update(model):
+                model._meta.schema = schema
+            return _update
+
+        # Set all models to use "schema1", e.g. "schema1.a", "schema1.b", etc.
+        # Will apply the function to every subclass of Base.
+        Base._meta.map_models(change_schema('schema1'))
+
+        # Set all models to use "schema2", e.g. "schema2.a", "schema2.b", etc.
+        Base._meta.map_models(change_schema('schema2'))
 
     .. py:method:: map_models(fn)
 
