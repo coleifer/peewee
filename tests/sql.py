@@ -1802,6 +1802,20 @@ class TestCaseFunction(BaseTestCase):
             'CASE WHEN ("t1"."id" IN (SELECT "t1"."id" FROM "n" AS "t1")) '
             'THEN ? ELSE ? END) FROM "n" AS "t1"'), [1, 0])
 
+        case = Case(None, [
+            (Name.id < 5, Name.select(fn.SUM(Name.id))),
+            (Name.id > 5, Name.select(fn.COUNT(Name.name)).distinct())],
+            Name.select(fn.MAX(Name.id)))
+        q = Name.select(Name.name, case.alias('magic'))
+        self.assertSQL(q, (
+            'SELECT "t1"."name", CASE '
+            'WHEN ("t1"."id" < ?) '
+            'THEN (SELECT SUM("t1"."id") FROM "n" AS "t1") '
+            'WHEN ("t1"."id" > ?) '
+            'THEN (SELECT DISTINCT COUNT("t1"."name") FROM "n" AS "t1") '
+            'ELSE (SELECT MAX("t1"."id") FROM "n" AS "t1") END AS "magic" '
+            'FROM "n" AS "t1"'), [5, 5])
+
 
 
 class TestSelectFeatures(BaseTestCase):

@@ -1827,6 +1827,16 @@ class WindowAlias(Node):
         return ctx.literal(self.window._alias or 'w')
 
 
+class _InFunction(Node):
+    def __init__(self, node, in_function=True):
+        self.node = node
+        self.in_function = in_function
+
+    def __sql__(self, ctx):
+        with ctx(in_function=self.in_function):
+            return ctx.sql(self.node)
+
+
 class Case(ColumnBase):
     def __init__(self, predicate, expression_tuples, default=None):
         self.predicate = predicate
@@ -1838,9 +1848,10 @@ class Case(ColumnBase):
         if self.predicate is not None:
             clauses.append(self.predicate)
         for expr, value in self.expression_tuples:
-            clauses.extend((SQL('WHEN'), expr, SQL('THEN'), value))
+            clauses.extend((SQL('WHEN'), expr,
+                            SQL('THEN'), _InFunction(value)))
         if self.default is not None:
-            clauses.extend((SQL('ELSE'), self.default))
+            clauses.extend((SQL('ELSE'), _InFunction(self.default)))
         clauses.append(SQL('END'))
         with ctx(in_function=False):
             return ctx.sql(NodeList(clauses))
