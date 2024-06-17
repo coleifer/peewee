@@ -11,7 +11,10 @@ from .base import TestModel
 
 
 PASSPHRASE = 'testing sqlcipher'
-PRAGMAS = {'kdf_iter': 10}  # Much faster for testing. Totally unsafe.
+PRAGMAS = {
+    'kdf_iter': 10,   # Much faster for testing. Totally unsafe.
+    'cipher_log_level': 'none',
+}
 db = SqlCipherDatabase('peewee_test.dbc', passphrase=PASSPHRASE,
                        pragmas=PRAGMAS)
 ext_db = SqlCipherExtDatabase('peewee_test.dbx', passphrase=PASSPHRASE,
