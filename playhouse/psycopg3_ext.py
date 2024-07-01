@@ -16,6 +16,7 @@ from playhouse.postgres_ext import _JsonLookupBase
 try:
     import psycopg
     from psycopg.types.json import Jsonb
+    from psycopg.pq import TransactionStatus
 except ImportError:
     psycopg = Jsonb = None
 
@@ -160,7 +161,7 @@ class Psycopg3Database(PostgresqlDatabase):
         # connection. If the connection is in an error state or the connection
         # is otherwise unusable, return False.
         conn = self._state.conn
-        return conn.pgconn.transaction_status < conn.TransactionStatus.INERROR
+        return conn.pgconn.transaction_status < TransactionStatus.INERROR
 
     def extract_date(self, date_part, date_field):
         return fn.EXTRACT(NodeList((SQL(date_part), SQL('FROM'), date_field)))
