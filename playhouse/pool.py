@@ -47,6 +47,10 @@ except ImportError:
     TRANSACTION_STATUS_IDLE = \
             TRANSACTION_STATUS_INERROR = \
             TRANSACTION_STATUS_UNKNOWN = None
+try:
+    from psycopg.pq import TransactionStatus
+except ImportError:
+    pass
 
 from peewee import MySQLDatabase
 from peewee import PostgresqlDatabase
@@ -322,9 +326,9 @@ try:
                 return True
 
             txn_status = conn.pgconn.transaction_status
-            if txn_status == conn.TransactionStatus.UNKNOWN:
+            if txn_status == TransactionStatus.UNKNOWN:
                 return True
-            elif txn_status != conn.TransactionStatus.IDLE:
+            elif txn_status != TransactionStatus.IDLE:
                 conn.rollback()
             return False
 
@@ -333,11 +337,11 @@ try:
             # Do not return connection in an error state, as subsequent queries
             # will all fail. If the status is unknown then we lost the connection
             # to the server and the connection should not be re-used.
-            if txn_status == conn.TransactionStatus.UNKNOWN:
+            if txn_status == TransactionStatus.UNKNOWN:
                 return False
-            elif txn_status == conn.TransactionStatus.INERROR:
+            elif txn_status == TransactionStatus.INERROR:
                 conn.reset()
-            elif txn_status != conn.TransactionStatus.IDLE:
+            elif txn_status != TransactionStatus.IDLE:
                 conn.rollback()
             return True
 except ImportError:
