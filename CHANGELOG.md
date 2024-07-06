@@ -7,10 +7,24 @@ https://github.com/coleifer/peewee/releases
 
 ## master
 
+[View commits](https://github.com/coleifer/peewee/compare/3.17.6...master)
+
+## 3.17.6
+
 * Fix bug in recursive `model.delete_instance()` when a table contains
   foreign-keys at multiple depths of the graph, #2893.
+* Fix regression in pool behavior on systems where `time.time()` returns
+  identical values for two connections. This adds a no-op comparable sentinel
+  to the heap to prevent any recurrence of this problem, #2901.
+* Ensure that subqueries inside `CASE` statements generate correct SQL.
+* Fix regression that broke server-side cursors with Postgres (introduced in
+  3.16.0).
+* Fix to ensure compatibility with psycopg3 - the libpq TransactionStatus
+  constants are no longer available on the `Connection` instance.
+* Fix quoting issue in pwiz that could generate invalid python code for
+  double-quoted string literals used as column defaults.
 
-[View commits](https://github.com/coleifer/peewee/compare/3.17.5...master)
+[View commits](https://github.com/coleifer/peewee/compare/3.17.5...3.17.6)
 
 ## 3.17.5
 
