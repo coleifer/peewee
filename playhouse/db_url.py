@@ -39,7 +39,8 @@ def parseresult_to_dict(parsed, unquote_password=False):
 
     # urlparse in python 2.6 is broken so query will be empty and instead
     # appended to path complete with '?'
-    path_parts = parsed.path[1:].split('?')
+    # Splitting on the first '?' only to avoid splitting passwords that contain '?'
+    path_parts = parsed.path[1:].split('?', 1)
     try:
         query = path_parts[1]
     except IndexError:
