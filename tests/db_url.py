@@ -65,6 +65,12 @@ class TestDBUrl(BaseTestCase):
         self.assertTrue(isinstance(db, SqliteDatabase))
         self.assertEqual(db.database, ':memory:')
 
+        db = connect('sqlite:///test.db?p1=1?a&p2=22&p3=xyz')
+        self.assertTrue(isinstance(db, SqliteDatabase))
+        self.assertEqual(db.database, 'test.db')
+        self.assertEqual(db.connect_params, {
+            'p1': '1?a', 'p2': 22, 'p3': 'xyz'})
+
     def test_bad_scheme(self):
         def _test_scheme():
             connect('missing:///')
