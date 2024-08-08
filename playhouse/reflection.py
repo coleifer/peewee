@@ -92,7 +92,8 @@ class Column(object):
         if self.primary_key and not issubclass(self.field_class, AutoField):
             params['primary_key'] = True
         if self.default is not None:
-            params['constraints'] = '[SQL(\'DEFAULT %s\')]' % self.default
+            params['constraints'] = '[SQL("DEFAULT %s")]' % \
+                    self.default.replace('"', '\\"')
 
         # Handle ForeignKeyField-specific attributes.
         if self.is_foreign_key():
