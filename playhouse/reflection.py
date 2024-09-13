@@ -584,7 +584,6 @@ class Introspector(object):
                 foreign_keys[table] = self.metadata.get_foreign_keys(
                     table, self.schema)
             except ValueError as exc:
-                err(*exc.args)
                 foreign_keys[table] = []
             else:
                 # If there is a possibility we could exclude a dependent table,
