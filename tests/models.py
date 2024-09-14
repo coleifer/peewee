@@ -3205,6 +3205,7 @@ class TestFieldInheritance(BaseTestCase):
         self.assertTrue(Category.itemb_set.model is Category)
 
     @skip_if(IS_SQLITE, 'sqlite is not supported')
+    @skip_if(IS_MYSQL, 'mysql is not raising this error(?)')
     @skip_if(IS_CRDB, 'crdb is not raising the error in this test(?)')
     def test_deferred_fk_creation(self):
         class B(TestModel):
