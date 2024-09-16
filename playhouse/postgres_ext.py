@@ -299,9 +299,17 @@ class JSONField(Field):
     field_type = 'JSON'
     _json_datatype = 'json'
 
-    def __init__(self, dumps=None, *args, **kwargs):
+    def __init__(self, dumps=None, loads=None, *args, **kwargs):
         self.dumps = dumps or json.dumps
+        self.loads = loads or json.loads
         super(JSONField, self).__init__(*args, **kwargs)
+
+    def python_value(self, value):
+        if value is not None:
+            try:
+                return self.loads(value)
+            except (TypeError, ValueError):
+                return value
 
     def db_value(self, value):
         if value is None:
