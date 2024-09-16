@@ -733,43 +733,63 @@ Here is an example of how you might declare a model with a JSON field:
 .. code-block:: python
 
     import json
-    import urllib2
-    from playhouse.postgres_ext import *
+    from playhouse.postgres_ext import JSONField, Model, PostgresqlExtDatabase
 
     db = PostgresqlExtDatabase('my_database')
 
-    class APIResponse(Model):
-        url = CharField()
-        response = JSONField()
+
+    class User(Model):
+        meta = JSONField()
 
         class Meta:
             database = db
 
-        @classmethod
-        def request(cls, url):
-            fh = urllib2.urlopen(url)
-            return cls.create(url=url, response=json.loads(fh.read()))
 
-    APIResponse.create_table()
+    User.create_table()
 
-    # Store a JSON response.
-    offense = APIResponse.request('http://crime-api.com/api/offense/')
-    booking = APIResponse.request('http://crime-api.com/api/booking/')
+    json_str = '''{
+        "name": "sue",
+        "age": 26,
+        "status": "A",
+        "groups": [ "news", "sports"]
+    }'''
+    json_dict = json.loads(json_str)
+
+    User.create(
+        meta=json_dict,
+        # Note it should be Python objects (dicts, lists, etc) but not serialized JSON.
+    )
 
     # Query a JSON data structure using a nested key lookup:
-    offense_responses = APIResponse.select().where(
-        APIResponse.response['meta']['model'] == 'offense')
+    user = (User
+            .select()
+            .where(
+                User.meta['name'] == 'sue',
+                User.meta['groups'][1] == 'sports'
+            )
+            .get())
+
+    print(user.meta['status'], type(user.meta['groups']))
+    # A <class 'list'>
 
     # Retrieve a sub-key for each APIResponse. By calling .as_json(), the
     # data at the sub-key will be returned as Python objects (dicts, lists,
     # etc) instead of serialized JSON.
-    q = (APIResponse
-         .select(
-           APIResponse.data['booking']['person'].as_json().alias('person'))
-         .where(APIResponse.data['meta']['model'] == 'booking'))
+    result = (User
+              .select(
+                  User.meta['groups'].alias('groups'))
+              .get())
 
-    for result in q:
-        print(result.person['name'], result.person['dob'])
+    print(type(result.groups))
+    # <class 'str'>
+
+    result = (User
+              .select(
+                  User.meta['groups'].as_json().alias('groups'))
+              .get())
+
+    print(type(result.groups))
+    # <class 'list'>
 
 The :py:class:`BinaryJSONField` works the same and supports the same operations
 as the regular :py:class:`JSONField`, but provides several additional
