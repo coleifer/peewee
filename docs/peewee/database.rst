@@ -100,11 +100,11 @@ value, simply pass in ``charset`` alongside your other values:
 
 Consult your database driver's documentation for the available parameters:
 
-* Postgres: `psycopg2 <http://initd.org/psycopg/docs/module.html#psycopg2.connect>`_
+* Postgres: `psycopg2 <https://www.psycopg.org/docs/module.html#psycopg2.connect>`_
 * MySQL: `pymysql <https://github.com/PyMySQL/PyMySQL/blob/f08f01fe8a59e8acfb5f5add4a8fe874bec2a196/pymysql/connections.py#L494-L513>`_
 * MySQL: `mysqlclient <https://github.com/PyMySQL/mysqlclient>`_
 * SQLite: `sqlite3 <https://docs.python.org/2/library/sqlite3.html#sqlite3.connect>`_
-* CockroachDB: see `psycopg2 <http://initd.org/psycopg/docs/module.html#psycopg2.connect>`_
+* CockroachDB: see `psycopg2 <https://www.psycopg.org/docs/module.html#psycopg2.connect>`_
 
 .. _using_postgresql:
 
@@ -114,7 +114,7 @@ Using Postgresql
 To connect to a Postgresql database, we will use
 :py:class:`PostgresqlDatabase`. The first parameter is always the name of the
 database, and after that you can specify arbitrary `psycopg2 parameters
-<http://initd.org/psycopg/docs/module.html#psycopg2.connect>`_.
+<https://www.psycopg.org/docs/module.html#psycopg2.connect>`_.
 
 .. code-block:: python
 
@@ -1127,7 +1127,7 @@ or are using `mysql-connector <https://dev.mysql.com/doc/connector-python/en/>`_
 in pure-python mode. MySQL drivers written in C will require special
 configuration which is beyond the scope of this document.
 
-For **Postgres** and `psycopg2 <http://initd.org/psycopg>`_, which is a C
+For **Postgres** and `psycopg2 <https://www.psycopg.org/docs/>`_, which is a C
 extension, you can use the following code snippet to register event hooks that
 will make your connection async:
 
