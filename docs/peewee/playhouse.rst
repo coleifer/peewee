@@ -3482,12 +3482,16 @@ URL connection string.
     Supported schemes:
 
     * ``apsw``: :py:class:`APSWDatabase`
+    * ``cockroachdb``: :py:class:`CockroachDatabase`
+    * ``cockroachdb+pool``: :py:class:`PooledCockroachDatabase`
     * ``mysql``: :py:class:`MySQLDatabase`
     * ``mysql+pool``: :py:class:`PooledMySQLDatabase`
     * ``postgres``: :py:class:`PostgresqlDatabase`
     * ``postgres+pool``: :py:class:`PooledPostgresqlDatabase`
     * ``postgresext``: :py:class:`PostgresqlExtDatabase`
     * ``postgresext+pool``: :py:class:`PooledPostgresqlExtDatabase`
+    * ``psycopg3``: :py:class:`Psycopg3Database`
+    * ``psycopg3+pool``: :py:class:`PooledPsycopg3Database`
     * ``sqlite``: :py:class:`SqliteDatabase`
     * ``sqliteext``: :py:class:`SqliteExtDatabase`
     * ``sqlite+pool``: :py:class:`PooledSqliteDatabase`

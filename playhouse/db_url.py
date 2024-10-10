@@ -8,8 +8,10 @@ from playhouse.cockroachdb import CockroachDatabase
 from playhouse.cockroachdb import PooledCockroachDatabase
 from playhouse.pool import PooledMySQLDatabase
 from playhouse.pool import PooledPostgresqlDatabase
+from playhouse.pool import PooledPsycopg3Database
 from playhouse.pool import PooledSqliteDatabase
 from playhouse.pool import PooledSqliteExtDatabase
+from playhouse.psycopg3_ext import Psycopg3Database
 from playhouse.sqlite_ext import SqliteExtDatabase
 
 
@@ -24,6 +26,8 @@ schemes = {
     'postgresql': PostgresqlDatabase,
     'postgres+pool': PooledPostgresqlDatabase,
     'postgresql+pool': PooledPostgresqlDatabase,
+    'psycopg3': Psycopg3Database,
+    'psycopg3+pool': PooledPsycopg3Database,
     'sqlite': SqliteDatabase,
     'sqliteext': SqliteExtDatabase,
     'sqlite+pool': PooledSqliteDatabase,
