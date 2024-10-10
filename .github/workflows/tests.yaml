@@ -24,7 +24,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python-version: [3.7, 3.9, "3.11"]
+        python-version: [3.8, 3.9, "3.11"]
         peewee-backend:
           - "sqlite"
           - "postgresql"
@@ -33,7 +33,7 @@ jobs:
           - python-version: 2.7
             peewee-backend: postgresql
         include:
-          - python-version: 3.7
+          - python-version: 3.8
             peewee-backend: cockroachdb
           - python-version: "3.11"
             peewee-backend: cockroachdb
