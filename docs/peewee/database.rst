@@ -1460,17 +1460,8 @@ FastAPI
 FastAPI is an asyncio-compatible framework. Peewee relies on thread locals
 (which are also compatible with gevent) to manage the connection state across
 requests. For use with asyncio, some overrides are necessary to replace the
-thread-local behavior with an asyncio-compatible context-local.
-
-For a full treatment of using Peewee with FastAPI, consult the FastAPI
-documentation here:
-
-https://fastapi.tiangolo.com/advanced/sql-databases-peewee/
-
-The above document covers:
-
-* Adding asyncio context-aware connection state tracking
-* Per-request connection handling
+thread-local behavior with an asyncio-compatible context-local. Peewee
+recommends using Flask + gevent for lightweight async web-framework.
 
 Other frameworks
 ^^^^^^^^^^^^^^^^
