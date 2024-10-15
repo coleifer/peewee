@@ -7,7 +7,15 @@ https://github.com/coleifer/peewee/releases
 
 ## master
 
-[View commits](https://github.com/coleifer/peewee/compare/3.17.6...master)
+[View commits](https://github.com/coleifer/peewee/compare/3.17.7...master)
+
+## 3.17.7
+
+* Add db_url support for psycopg3 via `psycopg3://`.
+* Ensure double-quotes are escaped properly when introspecting constraints.
+* A few documentation-related fixes.
+
+[View commits](https://github.com/coleifer/peewee/compare/3.17.6...3.17.7)
 
 ## 3.17.6
 
