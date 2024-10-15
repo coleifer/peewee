@@ -32,7 +32,7 @@ database class provides some basic, database-specific configuration options.
     pg_db = PostgresqlDatabase('my_app', user='postgres', password='secret',
                                host='10.1.0.9', port=5432)
 
-Peewee provides advanced support for SQLite, Postgres and CockroachDB via
+Peewee provides advanced support for SQLite, Postgres and others via
 database-specific extension modules. To use the extended-functionality, import
 the appropriate database-specific module and use the database class provided:
 
@@ -51,20 +51,10 @@ the appropriate database-specific module and use the database class provided:
     db = PostgresqlExtDatabase('my_app', user='postgres', register_hstore=True)
 
 
-    from playhouse.cockroachdb import CockroachDatabase
-
-    # Use CockroachDB.
-    db = CockroachDatabase('my_app', user='root', port=26257, host='10.1.0.8')
-
-    # CockroachDB connections may require a number of parameters, which can
-    # alternatively be specified using a connection-string.
-    db = CockroachDatabase('postgresql://...')
-
 For more information on database extensions, see:
 
 * :ref:`postgres_ext`
 * :ref:`sqlite_ext`
-* :ref:`crdb`
 * :ref:`sqlcipher_ext` (encrypted SQLite database).
 * :ref:`apsw`
 * :ref:`sqliteq`
@@ -104,7 +94,6 @@ Consult your database driver's documentation for the available parameters:
 * MySQL: `pymysql <https://github.com/PyMySQL/PyMySQL/blob/f08f01fe8a59e8acfb5f5add4a8fe874bec2a196/pymysql/connections.py#L494-L513>`_
 * MySQL: `mysqlclient <https://github.com/PyMySQL/mysqlclient>`_
 * SQLite: `sqlite3 <https://docs.python.org/2/library/sqlite3.html#sqlite3.connect>`_
-* CockroachDB: see `psycopg2 <https://www.psycopg.org/docs/module.html#psycopg2.connect>`_
 
 .. _using_postgresql:
 
@@ -182,65 +171,6 @@ parameter, using the symbolic constants in ``psycopg2.extensions``:
             def _initialize_connection(self, conn):
                 conn.set_isolation_level(ISOLATION_LEVEL_SERIALIZABLE)
 
-
-.. _using_crdb:
-
-Using CockroachDB
------------------
-
-Connect to CockroachDB (CRDB) using the :py:class:`CockroachDatabase` database
-class, defined in ``playhouse.cockroachdb``:
-
-.. code-block:: python
-
-    from playhouse.cockroachdb import CockroachDatabase
-
-    db = CockroachDatabase('my_app', user='root', port=26257, host='localhost')
-
-If you are using `Cockroach Cloud <https://cockroachlabs.cloud/>`_, you may
-find it easier to specify the connection parameters using a connection-string:
-
-.. code-block:: python
-
-    db = CockroachDatabase('postgresql://root:secret@host:26257/defaultdb...')
-
-.. note:: CockroachDB requires the ``psycopg2`` (postgres) Python driver.
-
-.. note::
-    CockroachDB installation and getting-started guide can be
-    found here: https://www.cockroachlabs.com/docs/stable/install-cockroachdb.html
-
-CRDB provides client-side transaction retries, which are available using a
-special :py:meth:`CockroachDatabase.run_transaction` helper-method. This method
-accepts a callable, which is responsible for executing any transactional
-statements that may need to be retried.
-
-Simplest possible example of :py:meth:`~CockroachDatabase.run_transaction`:
-
-.. code-block:: python
-
-    def create_user(email):
-        # Callable that accepts a single argument (the database instance) and
-        # which is responsible for executing the transactional SQL.
-        def callback(db_ref):
-            return User.create(email=email)
-
-        return db.run_transaction(callback, max_attempts=10)
-
-    huey = create_user('huey@example.com')
-
-.. note::
-    The ``cockroachdb.ExceededMaxAttempts`` exception will be raised if the
-    transaction cannot be committed after the given number of attempts. If the
-    SQL is mal-formed, violates a constraint, etc., then the function will
-    raise the exception to the caller.
-
-For more information, see:
-
-* :ref:`CRDB extension documentation <crdb>`
-* :ref:`SSL configuration with CockroachDB <crdb_ssl>`
-* :ref:`Arrays <pgarrays>` (postgres-specific, but applies to CRDB)
-* :ref:`JSON <pgjson>` (postgres-specific, but applies to CRDB)
 
 .. _using_sqlite:
 

@@ -7,7 +7,7 @@ Peewee is a simple and small ORM. It has few (but expressive) concepts, making i
 
 * a small, expressive ORM
 * python 2.7+ and 3.4+
-* supports sqlite, mysql, mariadb, postgresql and cockroachdb
+* supports sqlite, mysql, mariadb, postgresql
 * tons of `extensions <http://docs.peewee-orm.com/en/latest/peewee/playhouse.html>`_
 
 New to peewee? These may help:
