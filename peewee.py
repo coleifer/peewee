@@ -7346,8 +7346,7 @@ class ModelSelect(BaseModelSelect, Select):
 
     def clone(self):
         clone = super(ModelSelect, self).clone()
-        if clone._joins:
-            clone._joins = dict(clone._joins)
+        clone._joins = dict(clone._joins)
         return clone
 
     def select(self, *fields_or_models):
