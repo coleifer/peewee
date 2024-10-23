@@ -4691,7 +4691,7 @@ Model
 
     .. py:classmethod:: drop_table([safe=True[, **options]])
 
-        :param bool safe: If set to ``True``, the create table query will
+        :param bool safe: If set to ``True``, the drop table query will
             include an ``IF EXISTS`` clause.
 
         Drop the model table.
