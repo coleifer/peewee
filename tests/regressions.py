@@ -1807,7 +1807,15 @@ class TestQueryCountList(ModelTestCase):
 
     def test_iteration_single_query(self):
         with self.assertQueryCount(1):
-            list(User.select())
+            sq = User.select()
+            for i in range(3):
+                self.assertEqual(list(sq), [])
+                self.assertFalse(bool(sq))
+        with self.assertQueryCount(1):
+            sq = User.select().tuples()
+            for i in range(3):
+                self.assertEqual(list(sq), [])
+                self.assertFalse(bool(sq))
         with self.assertQueryCount(1):
             self.assertEqual(User.select().count(), 0)
 
