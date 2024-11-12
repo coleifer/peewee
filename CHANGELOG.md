@@ -7,7 +7,14 @@ https://github.com/coleifer/peewee/releases
 
 ## master
 
-[View commits](https://github.com/coleifer/peewee/compare/3.17.7...master)
+[View commits](https://github.com/coleifer/peewee/compare/3.17.8...master)
+
+## 3.17.8
+
+* Fix regression in behavior of `delete_instance()` when traversing nullable
+  foreign-keys, #2952. Introduced in 3.17.6. **Recommended that you update**.
+* Fix bug where joins not cloned when going from join-less -> joined query,
+  refs #2941.
 
 ## 3.17.7
 
