@@ -1849,9 +1849,47 @@ class O(TestModel):
 class OX(TestModel):
     o = ForeignKeyField(O, null=True)
 
-class TestDeleteInstanceDFS(ModelTestCase):
-    requires = [I, S, P, PS, PP, O, OX]
+class Character(TestModel):
+    name = TextField()
+class Shape(TestModel):
+    character = ForeignKeyField(Character, null=True)
+class ShapeDetail(TestModel):
+    shape = ForeignKeyField(Shape)
 
+class TestDeleteInstanceDFS(ModelTestCase):
+    @requires_models(Character, Shape, ShapeDetail)
+    def test_delete_instance_dfs_nullable(self):
+        c1, c2 = [Character.create(name=name) for name in ('c1', 'c2')]
+        for c in (c1, c2):
+            s = Shape.create(character=c)
+            ShapeDetail.create(shape=s)
+
+        # Update nullables.
+        with self.assertQueryCount(2):
+            c1.delete_instance(True)
+
+        self.assertHistory(2, [
+            ('UPDATE "shape" SET "character_id" = ? WHERE '
+             '("shape"."character_id" = ?)', [None, c1.id]),
+            ('DELETE FROM "character" WHERE ("character"."id" = ?)', [c1.id])])
+
+        self.assertEqual(Shape.select().count(), 2)
+
+        # Delete nullables as well.
+        with self.assertQueryCount(3):
+            c2.delete_instance(True, True)
+
+        self.assertHistory(3, [
+            ('DELETE FROM "shape_detail" WHERE '
+             '("shape_detail"."shape_id" IN '
+             '(SELECT "t1"."id" FROM "shape" AS "t1" WHERE '
+             '("t1"."character_id" = ?)))', [c2.id]),
+            ('DELETE FROM "shape" WHERE ("shape"."character_id" = ?)', [c2.id]),
+            ('DELETE FROM "character" WHERE ("character"."id" = ?)', [c2.id])])
+
+        self.assertEqual(Shape.select().count(), 1)
+
+    @requires_models(I, S, P, PS, PP, O, OX)
     def test_delete_instance_dfs(self):
         i1, i2 = [I.create(name=n) for n in ('i1', 'i2')]
         for i in (i1, i2):
@@ -1893,6 +1931,7 @@ class TestDeleteInstanceDFS(ModelTestCase):
             ('DELETE FROM "i" WHERE ("i"."id" = ?)', [i1.id]),
         ])
 
+        models = [I, S, P, PS, PP, O, OX]
         counts = {OX: 2}
-        for m in self.requires:
+        for m in models:
             self.assertEqual(m.select().count(), counts.get(m, 1))

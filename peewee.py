@@ -6967,7 +6967,7 @@ class Model(with_metaclass(ModelBase, Node)):
     def dirty_fields(self):
         return [f for f in self._meta.sorted_fields if f.name in self._dirty]
 
-    def dependencies(self, search_nullable=True):
+    def dependencies(self, search_nullable=True, exclude_null_children=False):
         model_class = type(self)
         stack = [(type(self), None)]
         queries = {}
@@ -6987,7 +6987,12 @@ class Model(with_metaclass(ModelBase, Node)):
                             .where(node))
                 if not fk.null or search_nullable:
                     queries.setdefault(rel_model, []).append((node, fk))
-                    stack.append((rel_model, subquery))
+                    if fk.null and exclude_null_children:
+                        # Do not process additional children of this node, but
+                        # include it in the list of dependencies.
+                        seen.add(rel_model)
+                    else:
+                        stack.append((rel_model, subquery))
 
         for m in reversed(sort_models(seen)):
             for sq, q in queries.get(m, ()):
@@ -6995,7 +7000,7 @@ class Model(with_metaclass(ModelBase, Node)):
 
     def delete_instance(self, recursive=False, delete_nullable=False):
         if recursive:
-            for query, fk in self.dependencies():
+            for query, fk in self.dependencies(exclude_null_children=not delete_nullable):
                 model = fk.model
                 if fk.null and not delete_nullable:
                     model.update(**{fk.name: None}).where(query).execute()
