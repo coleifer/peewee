@@ -6145,15 +6145,20 @@ class SchemaManager(object):
             self.database.execute(seq_ctx)
 
     def _create_foreign_key(self, field):
-        name = 'fk_%s_%s_refs_%s' % (field.model._meta.table_name,
-                                     field.column_name,
-                                     field.rel_model._meta.table_name)
+        if not field.constraint_name:
+            name = 'fk_%s_%s_refs_%s' % (field.model._meta.table_name,
+                                         field.column_name,
+                                         field.rel_model._meta.table_name)
+            nodes = NodeList((SQL(' CONSTRAINT'),
+                              Entity(_truncate_constraint_name(name))))
+        else:
+            nodes = NodeList(())
         return (self
                 ._create_context()
                 .literal('ALTER TABLE ')
                 .sql(field.model)
-                .literal(' ADD CONSTRAINT ')
-                .sql(Entity(_truncate_constraint_name(name)))
+                .literal(' ADD')
+                .sql(nodes)
                 .literal(' ')
                 .sql(field.foreign_key_constraint()))
 

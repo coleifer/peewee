@@ -539,6 +539,14 @@ class TestModelDDL(ModelDatabaseTestCase):
             ('CREATE INDEX "tm_named_constraints_fk_id" '
              'ON "tm_named_constraints" ("fk_id")')])
 
+        sql, params = (TMNamedConstraints
+                       ._schema
+                       ._create_foreign_key(TMNamedConstraints.fk)
+                       .query())
+        self.assertEqual(sql, (
+            'ALTER TABLE "tm_named_constraints" ADD CONSTRAINT "tmc_fk" '
+            'FOREIGN KEY ("fk_id") REFERENCES "tm_named_constraints" ("id")'))
+
     def test_index_name_truncation(self):
         class LongIndex(TestModel):
             a123456789012345678901234567890 = CharField()
