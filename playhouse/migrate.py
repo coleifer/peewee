@@ -286,8 +286,11 @@ class SchemaMigrator(object):
 
     @operation
     def add_foreign_key_constraint(self, table, column_name, rel, rel_column,
-                                   on_delete=None, on_update=None):
-        constraint = 'fk_%s_%s_refs_%s' % (table, column_name, rel)
+                                   on_delete=None, on_update=None,
+                                   constraint_name=None):
+        constraint = constraint_name or 'fk_%s_%s_refs_%s' % (table,
+                                                              column_name,
+                                                              rel)
         ctx = (self
                .make_context()
                .literal('ALTER TABLE ')

@@ -5564,6 +5564,12 @@ class ForeignKeyField(Field):
             return self.rel_field.get_modifiers()
         return super(ForeignKeyField, self).get_modifiers()
 
+    def get_constraint_name(self):
+        return self.constraint_name or 'fk_%s_%s_refs_%s' % (
+            self.model._meta.table_name,
+            self.column_name,
+            self.rel_model._meta.table_name)
+
     def adapt(self, value):
         return self.rel_field.adapt(value)
 
@@ -5613,10 +5619,14 @@ class ForeignKeyField(Field):
                 setattr(self.rel_model, self.backref,
                         self.backref_accessor_class(self))
 
-    def foreign_key_constraint(self):
+    def foreign_key_constraint(self, explicit_name=False):
         parts = []
-        if self.constraint_name:
-            parts.extend((SQL('CONSTRAINT'), Entity(self.constraint_name)))
+        if self.constraint_name or explicit_name:
+            name = self.get_constraint_name()
+            parts.extend([
+                SQL('CONSTRAINT'),
+                Entity(_truncate_constraint_name(name))])
+
         parts.extend([
             SQL('FOREIGN KEY'),
             EnclosedNodeList((self,)),
@@ -6145,22 +6155,12 @@ class SchemaManager(object):
             self.database.execute(seq_ctx)
 
     def _create_foreign_key(self, field):
-        if not field.constraint_name:
-            name = 'fk_%s_%s_refs_%s' % (field.model._meta.table_name,
-                                         field.column_name,
-                                         field.rel_model._meta.table_name)
-            nodes = NodeList((SQL(' CONSTRAINT'),
-                              Entity(_truncate_constraint_name(name))))
-        else:
-            nodes = NodeList(())
         return (self
                 ._create_context()
                 .literal('ALTER TABLE ')
                 .sql(field.model)
-                .literal(' ADD')
-                .sql(nodes)
-                .literal(' ')
-                .sql(field.foreign_key_constraint()))
+                .literal(' ADD ')
+                .sql(field.foreign_key_constraint(True)))
 
     def create_foreign_key(self, field):
         self.database.execute(self._create_foreign_key(field))
