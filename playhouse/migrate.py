@@ -231,8 +231,11 @@ class SchemaMigrator(object):
     def alter_add_column(self, table, column_name, field):
         # Make field null at first.
         ctx = self.make_context()
-        field_null, field.null = field.null, True
 
+        default = field.default
+        if callable_(default):
+            default = default()
+        
         # Set the field's column-name and name, if it is not set or doesn't
         # match the new value.
         if field.column_name != column_name:
@@ -241,9 +244,10 @@ class SchemaMigrator(object):
         (self
          ._alter_table(ctx, table)
          .literal(' ADD COLUMN ')
-         .sql(field.ddl(ctx)))
+         .sql(field.ddl(ctx))
+         .literal(' DEFAULT ')
+         .sql(default))
 
-        field.null = field_null
         if isinstance(field, ForeignKeyField):
             self.add_inline_fk_sql(ctx, field)
         return ctx
@@ -324,13 +328,6 @@ class SchemaMigrator(object):
             raise ValueError('Foreign keys must specify a `field`.')
 
         operations = [self.alter_add_column(table, column_name, field)]
-
-        # In the event the field is *not* nullable, update with the default
-        # value and set not null.
-        if not field.null:
-            operations.extend([
-                self.apply_default(table, column_name, field),
-                self.add_not_null(table, column_name)])
 
         if is_foreign_key and self.explicit_create_foreign_key:
             operations.append(
