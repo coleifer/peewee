@@ -929,14 +929,14 @@ class TestPostgresLateralJoin(ModelTestCase):
                ('b4', 4),
                ('b7', 7))),
         ('c', ()))
-    ts = functools.partial(datetime.datetime, 2019, 1)
 
     def create_data(self):
+        ts = lambda d: datetime.datetime(2019, 1, d)
         with self.database.atomic():
             for username, tweets in self.test_data:
                 user = User.create(username=username)
                 for c, d in tweets:
-                    Tweet.create(user=user, content=c, timestamp=self.ts(d))
+                    Tweet.create(user=user, content=c, timestamp=ts(d))
 
     @requires_models(User, Tweet)
     def test_lateral_top_n(self):
