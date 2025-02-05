@@ -7,7 +7,14 @@ https://github.com/coleifer/peewee/releases
 
 ## master
 
-[View commits](https://github.com/coleifer/peewee/compare/3.17.8...master)
+[View commits](https://github.com/coleifer/peewee/compare/3.17.9...master)
+
+## 3.17.9
+
+* Fix incorrect handling of fk constraint name in migrator.
+* Fix test-only issue that can occur in Python 3.14a4.
+
+[View commits](https://github.com/coleifer/peewee/compare/3.17.8...3.17.9)
 
 ## 3.17.8
 
