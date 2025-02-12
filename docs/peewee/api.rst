@@ -1643,6 +1643,7 @@ Query-builder
 
             query = (User
                      .select(User.username, tweet_ids.alias('tweet_ids'))
+                     .join(Tweet)
                      .group_by(User.username))
 
             for user in query:
