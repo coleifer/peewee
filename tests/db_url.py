@@ -29,18 +29,27 @@ class TestDBUrl(BaseTestCase):
         self.assertEqual(cfg['baz'], '3.4.5')
         self.assertEqual(cfg['boolz'], False)
 
-    def test_db_url_quoted_password(self):
-        # By default, the password is not unescaped.
-        cfg = parse('mysql://usr:pwd%23%20@hst:123/db')
-        self.assertEqual(cfg['user'], 'usr')
-        self.assertEqual(cfg['passwd'], 'pwd%23%20')
+    def test_db_url_no_unquoting(self):
+        # By default, neither user nor password is not unescaped.
+        cfg = parse('mysql://usr%40example.com:pwd%23@hst:123/db')
+        self.assertEqual(cfg['user'], 'usr%40example.com')
+        self.assertEqual(cfg['passwd'], 'pwd%23')
         self.assertEqual(cfg['host'], 'hst')
         self.assertEqual(cfg['database'], 'db')
         self.assertEqual(cfg['port'], 123)
 
+    def test_db_url_quoted_password(self):
         cfg = parse('mysql://usr:pwd%23%20@hst:123/db', unquote_password=True)
         self.assertEqual(cfg['user'], 'usr')
         self.assertEqual(cfg['passwd'], 'pwd# ')
+        self.assertEqual(cfg['host'], 'hst')
+        self.assertEqual(cfg['database'], 'db')
+        self.assertEqual(cfg['port'], 123)
+
+    def test_db_url_quoted_user(self):
+        cfg = parse('mysql://usr%40example.com:p%40sswd@hst:123/db', unquote_user=True)
+        self.assertEqual(cfg['user'], 'usr@example.com')
+        self.assertEqual(cfg['passwd'], 'p%40sswd')
         self.assertEqual(cfg['host'], 'hst')
         self.assertEqual(cfg['database'], 'db')
         self.assertEqual(cfg['port'], 123)
