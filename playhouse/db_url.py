@@ -39,7 +39,7 @@ def register_database(db_class, *names):
     for name in names:
         schemes[name] = db_class
 
-def parseresult_to_dict(parsed, unquote_password=False):
+def parseresult_to_dict(parsed, unquote_password=False, unquote_user=False):
 
     # urlparse in python 2.6 is broken so query will be empty and instead
     # appended to path complete with '?'
@@ -49,6 +49,8 @@ def parseresult_to_dict(parsed, unquote_password=False):
     connect_kwargs = {'database': path}
     if parsed.username:
         connect_kwargs['user'] = parsed.username
+        if unquote_user:
+            connect_kwargs['user'] = unquote(connect_kwargs['user'])
     if parsed.password:
         connect_kwargs['password'] = parsed.password
         if unquote_password:
@@ -85,13 +87,13 @@ def parseresult_to_dict(parsed, unquote_password=False):
 
     return connect_kwargs
 
-def parse(url, unquote_password=False):
+def parse(url, unquote_password=False, unquote_user=False):
     parsed = urlparse(url)
-    return parseresult_to_dict(parsed, unquote_password)
+    return parseresult_to_dict(parsed, unquote_password, unquote_user)
 
-def connect(url, unquote_password=False, **connect_params):
+def connect(url, unquote_password=False, unquote_user=False, **connect_params):
     parsed = urlparse(url)
-    connect_kwargs = parseresult_to_dict(parsed, unquote_password)
+    connect_kwargs = parseresult_to_dict(parsed, unquote_password, unquote_user)
     connect_kwargs.update(connect_params)
     database_class = schemes.get(parsed.scheme)
 
