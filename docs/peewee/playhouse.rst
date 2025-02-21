@@ -3467,7 +3467,12 @@ Database URL
 This module contains a helper function to generate a database connection from a
 URL connection string.
 
-.. py:function:: connect(url, **connect_params)
+.. py:function:: connect(url, [unquote_password=False[, unquote_user=False[, **connect_params]]])
+
+    :param url: the URL for the database, see examples below.
+    :param bool unquote_password: unquote special characters in the password.
+    :param bool unquote_user: unquote special characters in the user.
+    :param connect_params: additional parameters to pass to the Database.
 
     Create a :py:class:`Database` instance from the given connection URL.
 
@@ -3508,7 +3513,11 @@ URL connection string.
         # back to a local Sqlite database if no database URL is specified.
         db = connect(os.environ.get('DATABASE') or 'sqlite:///default.db')
 
-.. py:function:: parse(url)
+.. py:function:: parse(url, [unquote_password=False[, unquote_user=False]])
+
+    :param url: the URL for the database, see :py:func:`connect` above for examples.
+    :param bool unquote_password: unquote special characters in the password.
+    :param bool unquote_user: unquote special characters in the user.
 
     Parse the information in the given URL into a dictionary containing
     ``database``, ``host``, ``port``, ``user`` and/or ``password``. Additional
