@@ -139,7 +139,10 @@ class Psycopg3Database(PostgresqlDatabase):
     def _connect(self):
         if psycopg is None:
             raise ImproperlyConfigured('psycopg3 is not installed!')
-        conn = psycopg.connect(dbname=self.database, **self.connect_params)
+        if self.database.startswith('postgresql://'):
+            conn = psycopg.connect(self.database, **self.connect_params)
+        else:
+            conn = psycopg.connect(dbname=self.database, **self.connect_params)
         if self._isolation_level is not None:
             conn.isolation_level = self._isolation_level
         conn.autocommit = True
