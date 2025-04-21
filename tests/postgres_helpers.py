@@ -289,6 +289,27 @@ class BaseBinaryJsonFieldTestCase(BaseJsonFieldTestCase):
         self.assertObjects(D['k3'].has_key('k4'), 0)
         self.assertObjects(D['k4'].has_key('i2'), 2)
 
+    def test_contains_contained_by(self):
+        samples = (
+            {'k1': 'v1', 'k2': 'v2'},
+            {'k1': 'v10'},
+            ['i1', 'i2', 'i3', 'test'],
+            'k1',
+            123,
+            1.5,
+            True,
+            False)
+        pks = []
+        for sample in samples:
+            pks.append(self.M.create(data=sample).id)
+
+        for i, sample in enumerate(samples):
+            q = self.M.select().where(self.M.data.contains(sample))
+            self.assertEqual([x.id for x in q], [pks[i]])
+
+            q = self.M.select().where(self.M.data.contained_by(sample))
+            self.assertEqual([x.id for x in q], [pks[i]])
+
     def test_concat_data(self):
         self.M.delete().execute()
         self.M.create(data={'k1': {'x1': 'y1'}, 'k2': 'v2', 'k3': [0, 1]})
