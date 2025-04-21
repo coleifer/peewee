@@ -85,10 +85,10 @@ class _JsonLookupBase(_LookupNode):
         return Expression(self.as_json(True), OP.CONCAT, rhs)
 
     def contains(self, other):
-        clone = self.as_json(True)
-        if isinstance(other, (list, dict)):
-            return Expression(clone, JSONB_CONTAINS, Json(other))
-        return Expression(clone, JSONB_EXISTS, other)
+        return Expression(self.as_json(True), JSONB_CONTAINS, Json(other))
+
+    def contained_by(self, other):
+        return Expression(self.as_json(True), JSONB_CONTAINED_BY, Json(other))
 
     def contains_any(self, *keys):
         return Expression(
@@ -332,11 +332,9 @@ class BinaryJSONField(IndexedFieldMixin, JSONField):
     __hash__ = Field.__hash__
 
     def contains(self, other):
-        if isinstance(other, (list, dict)):
-            return Expression(self, JSONB_CONTAINS, Json(other))
-        elif isinstance(other, JSONField):
+        if isinstance(other, JSONField):
             return Expression(self, JSONB_CONTAINS, other)
-        return Expression(cast_jsonb(self), JSONB_EXISTS, other)
+        return Expression(self, JSONB_CONTAINS, Json(other))
 
     def contained_by(self, other):
         return Expression(cast_jsonb(self), JSONB_CONTAINED_BY, Json(other))
