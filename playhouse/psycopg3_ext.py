@@ -37,10 +37,7 @@ class _Psycopg3JsonLookupBase(_JsonLookupBase):
         return Expression(self.as_json(True), OP.CONCAT, rhs)
 
     def contains(self, other):
-        clone = self.as_json(True)
-        if isinstance(other, (list, dict)):
-            return Expression(clone, JSONB_CONTAINS, Jsonb(other))  # Same.
-        return Expression(clone, JSONB_EXISTS, other)
+        return Expression(self.as_json(True), JSONB_CONTAINS, Jsonb(other))
 
 
 class JsonLookup(_Psycopg3JsonLookupBase):
@@ -99,11 +96,9 @@ class BinaryJSONField(IndexedFieldMixin, Field):
         return super(BinaryJSONField, self).concat(value)
 
     def contains(self, other):
-        if isinstance(other, (list, dict)):
-            return Expression(self, JSONB_CONTAINS, Jsonb(other))
-        elif isinstance(other, BinaryJSONField):
+        if isinstance(other, BinaryJSONField):
             return Expression(self, JSONB_CONTAINS, other)
-        return Expression(cast_jsonb(self), JSONB_EXISTS, other)
+        return Expression(cast_jsonb(self), JSONB_CONTAINS, Jsonb(other))
 
     def contained_by(self, other):
         return Expression(cast_jsonb(self), JSONB_CONTAINED_BY, Jsonb(other))
