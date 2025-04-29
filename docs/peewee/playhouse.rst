@@ -1434,7 +1434,7 @@ postgres_ext API notes
 
     .. py:method:: contains(other)
 
-        Test whether the given JSON data contains the given JSON fragment or key.
+        Test whether the given JSON data contains the given JSON.
 
         Example:
 
@@ -1453,12 +1453,6 @@ postgres_ext API notes
                      .select()
                      .where(APIResponse.data.contains({
                          'foo': {'bar': ['i2', 'i1']}})))
-
-        We can pass in simple keys as well. To find APIResponses that contain the key ``foo`` at the top-level:
-
-        .. code-block:: python
-
-            APIResponse.select().where(APIResponse.data.contains('foo'))
 
         We can also search sub-keys using square-brackets:
 
@@ -1525,7 +1519,13 @@ postgres_ext API notes
 
     .. py:method:: has_key(key)
 
-        Test whether the key exists at the top-level of the JSON object.
+        Test whether the key exists in the JSON object.
+
+        To find APIResponses that contain the key ``foo`` at the top-level:
+
+        .. code-block:: python
+
+            APIResponse.select().where(APIResponse.data.has_key('foo'))
 
     .. py:method:: remove(*keys)
 
