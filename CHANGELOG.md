@@ -7,7 +7,23 @@ https://github.com/coleifer/peewee/releases
 
 ## master
 
-[View commits](https://github.com/coleifer/peewee/compare/3.17.9...master)
+[View commits](https://github.com/coleifer/peewee/compare/3.18.0...master)
+
+## 3.18.0
+
+The behavior of `postgresql_ext.BinaryJSONField.contains()` has changed.
+Previously, passing a string to this method would perform a JSON key exists
+check (`?` operator) instead of JSON contains (`@>` operator). As of 3.18.0,
+this special-case has been **removed** and the `contains()` method always uses
+the JSONB contains operator (`@>`). For the **old** behavior of checking
+whether a key exists, use the `BinaryJSONField.has_key()` method. See #2984 for
+discussion.
+
+* Add options to URL-unquote user and password when using the `db_url` helpers,
+  see #2974 for discussion.
+* Support using `postgresql://` URLs when connecting to psycopg3.
+
+[View commits](https://github.com/coleifer/peewee/compare/3.17.9...3.18.0)
 
 ## 3.17.9
 
