@@ -7,7 +7,15 @@ https://github.com/coleifer/peewee/releases
 
 ## master
 
-[View commits](https://github.com/coleifer/peewee/compare/3.18.0...master)
+[View commits](https://github.com/coleifer/peewee/compare/3.18.1...master)
+
+## 3.18.1
+
+@pypa is such a bunch of clowns. I swear.
+
+![](https://media.charlesleifer.com/blog/photos/p1746027512.1307786.gif)
+
+[View commits](https://github.com/coleifer/peewee/compare/3.18.0...3.18.1)
 
 ## 3.18.0
 
