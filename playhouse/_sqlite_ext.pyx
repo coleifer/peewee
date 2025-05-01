@@ -326,7 +326,7 @@ cdef sqlite_to_python(int argc, sqlite3_value **params):
 cdef python_to_sqlite(sqlite3_context *context, value):
     if value is None:
         sqlite3_result_null(context)
-    elif isinstance(value, (int, long)):
+    elif isinstance(value, int):
         sqlite3_result_int64(context, <sqlite3_int64>value)
     elif isinstance(value, float):
         sqlite3_result_double(context, <double>value)
