@@ -958,7 +958,7 @@ When psycopg2 executes a query, normally all results are fetched and returned
 to the client by the backend. This can cause your application to use a lot of
 memory when making large queries. Using server-side cursors, results are
 returned a little at a time (by default 2000 records). For the definitive
-reference, please see the `psycopg2 documentation <http://initd.org/psycopg/docs/usage.html#server-side-cursors>`_.
+reference, please see the `psycopg2 documentation <https://www.psycopg.org/docs/usage.html#server-side-cursors>`_.
 
 .. note:: To use server-side (or named) cursors, you must be using :py:class:`PostgresqlExtDatabase`.
 
