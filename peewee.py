@@ -4238,6 +4238,8 @@ class MySQLDatabase(Database):
         self.server_version = self._extract_server_version(version_raw)
 
     def _extract_server_version(self, version):
+        if isinstance(version, tuple):
+            return version
         version = version.lower()
         if 'maria' in version:
             match_obj = re.search(r'(1\d\.\d+\.\d+)', version)
