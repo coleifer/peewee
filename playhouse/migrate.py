@@ -912,7 +912,7 @@ class SqliteMigrator(SchemaMigrator):
     @operation
     def drop_column_default(self, table, column):
         def _drop_default(column_name, column_def):
-            col = re.sub(r'DEFAULT\s+[\w"\'\(\)]+(\s|$)', '', column_def, re.I)
+            col = re.sub(r'DEFAULT\s+[\w"\'\(\)]+(\s|$)', '', column_def, flags=re.I)
             return col.strip()
         return self._update_column(table, column, _drop_default)
 
