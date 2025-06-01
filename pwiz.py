@@ -209,6 +209,7 @@ if __name__ == '__main__':
 
     connect = get_connect_kwargs(options)
     database = args[-1]
+    database = database.replace("\\","/")
 
     tables = None
     if options.tables:
