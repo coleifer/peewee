@@ -25,7 +25,7 @@ else:
     def open_file(f, mode, encoding='utf8'):
         return open(f, mode)
 
-
+csv.field_size_limit(pow(2, 31) - 1)
 class DataSet(object):
     def __init__(self, url, include_views=False, **kwargs):
         if isinstance(url, Database):
