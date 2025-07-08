@@ -7,7 +7,14 @@ https://github.com/coleifer/peewee/releases
 
 ## master
 
-[View commits](https://github.com/coleifer/peewee/compare/3.18.1...master)
+[View commits](https://github.com/coleifer/peewee/compare/3.18.2...master)
+
+## 3.18.2
+
+Cython 3.1 removes some Python 2 stuff we referenced -- this resolves the
+issue. Couple other very minor fixes.
+
+[View commits](https://github.com/coleifer/peewee/compare/3.18.1...3.18.2)
 
 ## 3.18.1
 
