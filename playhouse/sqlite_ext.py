@@ -558,7 +558,7 @@ _alphanum = (set('\t ,"(){}*:_+0123456789') |
 _invalid_ascii = set(chr(p) for p in range(128) if chr(p) not in _alphanum)
 del _alphabet
 del _alphanum
-_quote_re = re.compile(r'(?:[^\s"]|"(?:\\.|[^"])*")+')
+_quote_re = re.compile(r'[^\s"]+|"[^"\\]*(?:\\.[^"\\]*)*"')
 
 
 class FTS5Model(BaseFTSModel):
