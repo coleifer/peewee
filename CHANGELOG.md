@@ -7,6 +7,8 @@ https://github.com/coleifer/peewee/releases
 
 ## master
 
+* Fix potential regex DoS vulnerability in FTS5 query validation code (#3005).
+
 [View commits](https://github.com/coleifer/peewee/compare/3.18.2...master)
 
 ## 3.18.2

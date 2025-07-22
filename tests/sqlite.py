@@ -1614,6 +1614,21 @@ class TestFTS5(BaseFTSTestCase, ModelTestCase):
             'bb cc [dd] bb cc...',
             'bb cc bb cc bb...'])
 
+    def test_clean_query(self):
+        cases = (
+            ('test', 'test'),
+            ('"test"', '"test"'),
+            ('"test\u2022"', '"test\u2022"'),
+            ('test\u2022', 'test\u2022'),
+            ('test-', 'test\x1a'),
+            ('"test-"', '"test-"'),
+            ('\\"test-', '\x1a test\x1a'),
+            ('--test--', '\x1a\x1atest\x1a\x1a'),
+            ('-test- "-test-"', '\x1atest\x1a "-test-"'),
+        )
+        for a, b in cases:
+            self.assertEqual(FTS5Test.clean_query(a), b)
+
 
 @skip_unless(CYTHON_EXTENSION, 'requires sqlite c extension')
 class TestMurmurHash(ModelTestCase):
