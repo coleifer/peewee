@@ -83,6 +83,15 @@ class Item(TestModel):
     basket = ForeignKeyField(Basket)
 
 
+class NodeTag(TestModel):
+    tag = TextField()
+
+class Node(TestModel):
+    name = TextField()
+    tag = ForeignKeyField(NodeTag)
+    parent = ForeignKeyField('self', null=True, backref='children')
+
+
 class TestModelToDict(ModelTestCase):
     database = get_in_memory_db()
     requires = [User, Tweet, Tag, TweetTag]
@@ -90,6 +99,44 @@ class TestModelToDict(ModelTestCase):
     def setUp(self):
         super(TestModelToDict, self).setUp()
         self.user = User.create(username='peewee')
+
+    @requires_models(Node, NodeTag)
+    def test_self_referential(self):
+        a, b = [NodeTag.create(tag=tag) for tag in 'ab']
+        root = Node.create(name='root', tag=a)
+        n1 = Node.create(name='n1', parent=root, tag=a)
+        n2 = Node.create(name='n2', parent=root, tag=b)
+        Parent = Node.alias('parent')
+        ParentTag = NodeTag.alias('parent_tag')
+
+        def assertSerialization(n, expected):
+            obj = (Node
+                   .select(Node, NodeTag, Parent, ParentTag)
+                   .join_from(Node, NodeTag, JOIN.LEFT_OUTER)
+                   .join_from(Node, Parent, JOIN.LEFT_OUTER)
+                   .join_from(Parent, ParentTag, JOIN.LEFT_OUTER)
+                   .where(Node.name == n)
+                   .first())
+
+            self.assertEqual(model_to_dict(obj, recurse=True), expected)
+
+        assertSerialization('n1', {
+            'id': n1.id,
+            'name': 'n1',
+            'parent': {'id': root.id, 'name': 'root',
+                       'tag': {'id': a.id, 'tag': 'a'}},
+            'tag': {'id': a.id, 'tag': 'a'}})
+        assertSerialization('n2', {
+            'id': n2.id,
+            'name': 'n2',
+            'parent': {'id': root.id, 'name': 'root',
+                       'tag': {'id': a.id, 'tag': 'a'}},
+            'tag': {'id': b.id, 'tag': 'b'}})
+        assertSerialization('root', {
+            'id': root.id,
+            'name': 'root',
+            'parent': None,
+            'tag': {'id': a.id, 'tag': 'a'}})
 
     def test_simple(self):
         with self.assertQueryCount(0):
