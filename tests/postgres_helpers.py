@@ -105,6 +105,10 @@ class BaseJsonFieldTestCase(object):
         assertPath(expr.alias('p1'), {'p1': 'j2'})
         assertPath(expr.as_json().alias('p2'), {'p2': 'j2'})
 
+        expr = self.M.data['foo'].path('baz', 'bar')
+        assertPath(expr.alias('p1'), {'p1': '["i1", "i2", "i3"]'})
+        assertPath(expr.as_json().alias('p2'), {'p2': ['i1', 'i2', 'i3']})
+
     def test_json_field_sql(self):
         j = (self.M
              .select()
