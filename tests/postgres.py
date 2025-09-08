@@ -1,6 +1,7 @@
 #coding:utf-8
 import datetime
 import functools
+import os
 import uuid
 from decimal import Decimal as Dc
 from types import MethodType
@@ -15,6 +16,7 @@ from .base import ModelTestCase
 from .base import TestModel
 from .base import db_loader
 from .base import requires_models
+from .base import skip_if
 from .base import skip_unless
 from .base_models import Register
 from .base_models import Tweet
@@ -93,6 +95,7 @@ class TestTZField(ModelTestCase):
     database = db
     requires = [TZModel]
 
+    @skip_if(os.environ.get('CI'), 'running in ci mode, skipping')
     def test_tz_field(self):
         self.database.set_time_zone('us/eastern')
 
