@@ -252,10 +252,12 @@ class ReconnectMixin(object):
     def execute_sql(self, sql, params=None, commit=None):
         if commit is not None:
             __deprecated__('"commit" has been deprecated and is a no-op.')
-        return self._reconnect(super(ReconnectMixin, self).execute_sql, sql, params)
+        return self._reconnect(super(ReconnectMixin, self).execute_sql,
+                               sql, params)
 
-    def begin(self):
-        return self._reconnect(super(ReconnectMixin, self).begin)
+    def begin(self, *args, **kwargs):
+        return self._reconnect(super(ReconnectMixin, self).begin,
+                               *args, **kwargs)
 
     def _reconnect(self, func, *args, **kwargs):
         try:
