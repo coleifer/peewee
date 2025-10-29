@@ -1935,3 +1935,27 @@ class TestDeleteInstanceDFS(ModelTestCase):
         counts = {OX: 2}
         for m in models:
             self.assertEqual(m.select().count(), counts.get(m, 1))
+
+
+class IMC(TestModel):
+    a = IntegerField()
+    b = IntegerField(null=True)
+
+class TestChunkedInsertMany(ModelTestCase):
+    requires = [IMC]
+
+    def test_chunked_insert_many(self):
+        data = [(i, i if i % 2 == 0 else None) for i in range(100)]
+        for chunk in chunked(data, 10):
+            IMC.insert_many(chunk).execute()
+
+        q = IMC.select(IMC.a, IMC.b).order_by(IMC.id).tuples()
+        self.assertEqual(list(q), data)
+        IMC.delete().execute()
+
+        data = [{'a': i, 'b': i if i % 2 == 0 else None} for i in range(100)]
+        for chunk in chunked(data, 5):
+            IMC.insert_many(chunk).execute()
+        q = IMC.select(IMC.a, IMC.b).order_by(IMC.id).dicts()
+        self.assertEqual(list(q), data)
+        IMC.delete().execute()
