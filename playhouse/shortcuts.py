@@ -321,6 +321,8 @@ class ThreadSafeDatabaseMetadata(Metadata):
     def __init__(self, *args, **kwargs):
         # The database attribute is stored in a thread-local.
         self._database = None
+        self._table = None
+        self._lock = threading.Lock()
         self._local = threading.local()
         super(ThreadSafeDatabaseMetadata, self).__init__(*args, **kwargs)
 
@@ -331,3 +333,20 @@ class ThreadSafeDatabaseMetadata(Metadata):
             self._database = db
         self._local.database = db
     database = property(_get_db, _set_db)
+
+    def set_database(self, database):
+        with self._lock:
+            return super(ThreadSafeDatabaseMetadata,
+                         self).set_database(database)
+
+    @property
+    def table(self):
+        if getattr(self._local, 'table', None) is None:
+            self._local.table = super(ThreadSafeDatabaseMetadata, self).table
+        return self._local.table
+    @table.setter
+    def table(self, value):
+        raise AttributeError('Cannot set the "table".')
+    @table.deleter
+    def table(self):
+        self._local.table = None
