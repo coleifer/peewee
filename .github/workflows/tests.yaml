@@ -24,7 +24,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python-version: [3.8, "3.11", "3.13"]
+        python-version: [3.8, "3.11", "3.13", "3.14"]
         peewee-backend:
           - "sqlite"
           - "postgresql"
