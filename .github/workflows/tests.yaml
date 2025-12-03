@@ -38,6 +38,8 @@ jobs:
             peewee-backend: psycopg3
           - python-version: "3.13"
             peewee-backend: psycopg3
+          - python-version: "3.14"
+            peewee-backend: sqlite
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
