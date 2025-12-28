@@ -1,3 +1,4 @@
+import base64
 import csv
 import datetime
 from decimal import Decimal
@@ -338,9 +339,10 @@ class Exporter(object):
 
 
 class JSONExporter(Exporter):
-    def __init__(self, query, iso8601_datetimes=False):
+    def __init__(self, query, iso8601_datetimes=False, base64_bytes=True):
         super(JSONExporter, self).__init__(query)
         self.iso8601_datetimes = iso8601_datetimes
+        self.base64_bytes = base64_bytes
 
     def _make_default(self):
         datetime_types = (datetime.datetime, datetime.date, datetime.time)
@@ -351,11 +353,15 @@ class JSONExporter(Exporter):
                     return o.isoformat()
                 elif isinstance(o, (Decimal, uuid.UUID)):
                     return str(o)
+                elif isinstance(o, bytes) and self.base64_bytes:
+                    return base64.urlsafe_b64encode(o).decode('utf8')
                 raise TypeError('Unable to serialize %r as JSON' % o)
         else:
             def default(o):
                 if isinstance(o, datetime_types + (Decimal, uuid.UUID)):
                     return str(o)
+                elif isinstance(o, bytes) and self.base64_bytes:
+                    return base64.urlsafe_b64encode(o).decode('utf8')
                 raise TypeError('Unable to serialize %r as JSON' % o)
         return default
 
