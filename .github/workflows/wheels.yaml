@@ -1,0 +1,48 @@
+name: Build wheels
+on: [push]
+# on:
+#  push:
+#    tags:
+#      - "[0-9]+.[0-9]+.[0-9]+"
+#      - "[0-9]+.[0-9]+.[0-9]+-**"
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install build tools
+        run: |
+          python -m pip install -U pip
+          pip install setuptools build
+
+      - name: Build sdist and wheel
+        env:
+          NO_SQLITE: 1
+        run: |
+          python -m build .
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: package
+          path: dist/peewee*
+
+#  publish:
+#    needs: [build]
+#    runs-on: ubuntu-latest
+#    steps:
+#      - uses: actions/download-artifact@v4
+#        with:
+#          name: package
+#          path: dist
+#          merge-multiple: true
+#
+#      - uses: pypa/gh-action-pypi-publish@release/v1
+#        with:
+#          user: __token__
+#          password: ${{ secrets.PYPI_API_TOKEN }}

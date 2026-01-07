@@ -195,8 +195,7 @@ def get_connect_kwargs(options):
         kwargs['password'] = getpass()
     return kwargs
 
-
-if __name__ == '__main__':
+def main():
     raw_argv = sys.argv
 
     parser = get_option_parser()
@@ -226,3 +225,7 @@ if __name__ == '__main__':
 
     print_models(introspector, tables, options.preserve_order, options.views,
                  options.ignore_unknown, not options.legacy_naming)
+
+
+if __name__ == '__main__':
+    main()

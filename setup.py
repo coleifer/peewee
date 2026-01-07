@@ -1,25 +1,17 @@
 import os
 import platform
-import re
 import sys
-import warnings
 try:
-    from distutils.command.build_ext import build_ext
     from distutils.errors import CCompilerError
     from distutils.errors import DistutilsExecError
     from distutils.errors import DistutilsPlatformError
 except ImportError:
-    from setuptools._distutils.command.build_ext import build_ext
     from setuptools._distutils.errors import CCompilerError
     from setuptools._distutils.errors import DistutilsExecError
     from setuptools._distutils.errors import DistutilsPlatformError
 
 from setuptools import setup
 from setuptools.extension import Extension
-
-f = open(os.path.join(os.path.dirname(__file__), 'README.rst'))
-readme = f.read()
-f.close()
 
 extension_support = True  # Assume we are building C extensions.
 
@@ -28,19 +20,14 @@ extension_support = True  # Assume we are building C extensions.
 # (so long as we're running on CPython).
 try:
     from Cython.Build import cythonize
-    from Cython.Distutils import build_ext
     from Cython.Distutils.extension import Extension
 except ImportError:
     cython_installed = False
 else:
     if platform.python_implementation() != 'CPython':
         cython_installed = extension_support = False
-        warnings.warn('C extensions disabled as you are not using CPython.')
     else:
         cython_installed = True
-
-if 'sdist' in sys.argv and not cython_installed:
-    raise Exception('Building sdist requires that Cython be installed.')
 
 if sys.version_info[0] < 3:
     FileNotFoundError = EnvironmentError
@@ -58,7 +45,6 @@ sqlite_ext_module = Extension(
     'playhouse._sqlite_ext',
     ['playhouse/_sqlite_ext' + src_ext],
     libraries=['sqlite3'])
-
 
 def _have_sqlite_extension_support():
     import shutil
@@ -100,109 +86,23 @@ def _have_sqlite_extension_support():
     shutil.rmtree(tmp_dir)
     return success
 
-
 # This is set to True if there is extension support and libsqlite3 is found.
 sqlite_extension_support = False
 
 if extension_support:
     if os.environ.get('NO_SQLITE'):
-        warnings.warn('SQLite extensions will not be built at users request.')
+        print('SQLite extensions will not be built at users request.')
     elif not _have_sqlite_extension_support():
-        warnings.warn('Could not find libsqlite3, SQLite extensions will not '
-                      'be built.')
+        print('Could not find libsqlite3, extensions will not be built.')
     else:
         sqlite_extension_support = True
 
-# Exception we will raise to indicate a failure to build C extensions.
-class BuildFailure(Exception): pass
-
-class _PeeweeBuildExt(build_ext):
-    def run(self):
-        try:
-            build_ext.run(self)
-        except DistutilsPlatformError:
-            raise BuildFailure()
-
-    def build_extension(self, ext):
-        try:
-            build_ext.build_extension(self, ext)
-        except (CCompilerError, DistutilsExecError, DistutilsPlatformError):
-            raise BuildFailure()
-
-def _do_setup(c_extensions, sqlite_extensions):
-    if c_extensions and sqlite_extensions:
-        # Only add modules if the required source files are present. This is to
-        # work-around python 3.11 and pip being janky.
-        if sys.version_info < (3, 11, 0):
-            ext_modules = [sqlite_ext_module, sqlite_udf_module]
-        else:
-            ext_modules = []
-            for m in (sqlite_ext_module, sqlite_udf_module):
-                if all(os.path.exists(src) for src in m.sources):
-                    ext_modules.append(m)
-                else:
-                    print('could not find sources for module: %s!' % m.sources)
-                    print('try adding "cython" to your local pyproject.toml')
-    else:
-        ext_modules = None
-
-    with open('peewee.py', 'rt') as fh:
-        version, = [l for l in fh.readlines() if l.startswith('__version__')]
-        version, = re.search(r'\'([\d\.]+)\'', version).groups()
-
-    setup(
-        name='peewee',
-        version=version,
-        description='a little orm',
-        long_description=readme,
-        author='Charles Leifer',
-        author_email='coleifer@gmail.com',
-        url='https://github.com/coleifer/peewee/',
-        packages=['playhouse'],
-        py_modules=['peewee', 'pwiz'],
-        classifiers=[
-            'Development Status :: 5 - Production/Stable',
-            'Intended Audience :: Developers',
-            'Operating System :: OS Independent',
-            'Programming Language :: Python',
-            'Programming Language :: Python :: 2',
-            'Programming Language :: Python :: 2.7',
-            'Programming Language :: Python :: 3',
-            'Programming Language :: Python :: 3.4',
-            'Programming Language :: Python :: 3.5',
-            'Programming Language :: Python :: 3.6',
-            'Programming Language :: Python :: 3.7',
-            'Programming Language :: Python :: 3.8',
-            'Programming Language :: Python :: 3.9',
-            'Programming Language :: Python :: 3.10',
-            'Programming Language :: Python :: 3.11',
-            'Programming Language :: Python :: 3.12',
-            'Programming Language :: Python :: 3.13',
-            'Programming Language :: Python :: 3.14',
-            #'Programming Language :: Python :: 3.15',
-            #'Programming Language :: Python :: 999.99',
-            'Topic :: Database',
-            'Topic :: Software Development :: Libraries :: Python Modules',
-        ],
-        license='MIT License',
-        platforms=['any'],
-        project_urls={
-            'Changelog': 'https://github.com/coleifer/peewee/blob/master/CHANGELOG.md',
-            'Documentation': 'http://docs.peewee-orm.com',
-            'Source': 'https://github.com/coleifer/peewee'},
-        scripts=['pwiz.py'],
-        zip_safe=False,
-        cmdclass={'build_ext': _PeeweeBuildExt},
-        ext_modules=cythonize(ext_modules))
-
-
-if extension_support:
-    try:
-        _do_setup(extension_support, sqlite_extension_support)
-    except BuildFailure:
-        print('#' * 75)
-        print('Error compiling C extensions, C extensions will not be built.')
-        print('#' * 75)
-        _do_setup(False, False)
+if sqlite_extension_support:
+    ext_modules = [sqlite_ext_module, sqlite_udf_module]
 else:
-    _do_setup(False, False)
+    ext_modules = []
+
+setup(name='peewee',
+      packages=['playhouse'],
+      py_modules=['peewee', 'pwiz'],
+      ext_modules=cythonize(ext_modules))

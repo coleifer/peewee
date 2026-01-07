@@ -24,22 +24,24 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python-version: [3.8, "3.11", "3.13"]
+        python-version: [3.9, "3.11", "3.13", "3.14"]
         peewee-backend:
           - "sqlite"
           - "postgresql"
           - "mysql"
         include:
-          - python-version: "3.9"
+          - python-version: "3.8"
             peewee-backend: sqlite
-          - python-version: "3.11"
-            peewee-backend: cockroachdb
-          - python-version: "3.11"
+          - python-version: "3.12"
+            peewee-backend: sqlite
+          - python-version: "3.12"
             peewee-backend: psycopg3
           - python-version: "3.13"
             peewee-backend: psycopg3
           - python-version: "3.14"
-            peewee-backend: sqlite
+            peewee-backend: psycopg3
+          - python-version: "3.13"
+            peewee-backend: cockroachdb
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -52,7 +54,8 @@ jobs:
           PGPASSWORD: peewee
         run: |
           sudo apt-get install libsqlite3-dev
-          pip install setuptools psycopg2-binary cython pymysql 'apsw' mysql-connector sqlcipher3-binary 'psycopg[binary]' pysqlite3
+          pip install setuptools psycopg2-binary cython pymysql 'apsw' mysql-connector sqlcipher3-binary 'psycopg[binary]'
+          pip install --no-binary :all: pysqlite3
           python setup.py build_ext -i
           psql peewee_test -c 'CREATE EXTENSION hstore;'
       - name: crdb
