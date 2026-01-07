@@ -19,6 +19,21 @@ New to peewee? These may help:
 * `Querying <http://docs.peewee-orm.com/en/latest/peewee/querying.html>`_
 * `Relationships and joins <http://docs.peewee-orm.com/en/latest/peewee/relationships.html>`_
 
+Installation:
+
+.. code-block:: console
+
+    pip install peewee
+
+Sqlite comes built-in provided by the standard-lib ``sqlite3`` module. Other
+backends can be installed using the following instead:
+
+.. code-block:: console
+
+    pip install peewee[mysql]  # Install peewee with pymysql.
+    pip install peewee[postgres]  # Install peewee with psycopg2.
+    pip install peewee[psycopg3]  # Install peewee with psycopg3.
+
 Examples
 --------
 
