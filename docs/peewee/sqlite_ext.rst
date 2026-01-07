@@ -41,6 +41,13 @@ Instantiating a :py:class:`SqliteExtDatabase`:
         ('journal_mode', 'wal'),  # Use WAL-mode (you should always use this!).
         ('foreign_keys', 1)))  # Enforce foreign-key constraints.
 
+.. note::
+    By default the C extension is not included with the Peewee wheel. If you wish
+    to build these, you will need to install Peewee via source-distribution:
+
+    .. code-block:: python
+
+        pip install peewee --no-binary :all:
 
 APIs
 ----

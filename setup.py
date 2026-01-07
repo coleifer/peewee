@@ -46,6 +46,8 @@ sqlite_ext_module = Extension(
     ['playhouse/_sqlite_ext' + src_ext],
     libraries=['sqlite3'])
 
+ext_modules = cythonize([sqlite_udf_module, sqlite_ext_module])
+
 def _have_sqlite_extension_support():
     import shutil
     import tempfile
@@ -86,23 +88,17 @@ def _have_sqlite_extension_support():
     shutil.rmtree(tmp_dir)
     return success
 
-# This is set to True if there is extension support and libsqlite3 is found.
-sqlite_extension_support = False
-
 if extension_support:
     if os.environ.get('NO_SQLITE'):
         print('SQLite extensions will not be built at users request.')
+        ext_modules = []
     elif not _have_sqlite_extension_support():
         print('Could not find libsqlite3, extensions will not be built.')
-    else:
-        sqlite_extension_support = True
-
-if sqlite_extension_support:
-    ext_modules = [sqlite_ext_module, sqlite_udf_module]
+        ext_modules = []
 else:
     ext_modules = []
 
 setup(name='peewee',
       packages=['playhouse'],
       py_modules=['peewee', 'pwiz'],
-      ext_modules=cythonize(ext_modules))
+      ext_modules=ext_modules)

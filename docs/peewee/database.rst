@@ -490,7 +490,7 @@ If you would like to use APSW, use the :py:class:`APSWDatabase` from the
 .. _using_mariadb:
 
 Using MariaDB
------------
+-------------
 
 Peewee supports MariaDB. To use MariaDB, use the MySQL backend, which is shared
 between the two. See :ref:`"Using MySQL" <using_mysql>` for more details.

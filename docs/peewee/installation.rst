@@ -9,13 +9,13 @@ Most users will want to simply install the latest version, hosted on PyPI:
 
     pip install peewee
 
-Peewee comes with a couple C extensions that will be built if Cython is
-available.
+Peewee has optional Sqlite C extensions which are not bundled as part of the
+wheel. If you wish to use these, you can install Peewee via source
+distribution:
 
-* Sqlite extensions, which includes Cython implementations of the SQLite date
-  manipulation functions, the REGEXP operator, and full-text search result
-  ranking algorithms.
+.. code-block:: console
 
+    pip install peewee --no-binary :all:
 
 Installing with git
 -------------------
@@ -27,19 +27,10 @@ using git:
 
     git clone https://github.com/coleifer/peewee.git
     cd peewee
-    python setup.py install
+    pip install .
 
-.. note::
-    On some systems you may need to use ``sudo python setup.py install`` to
-    install peewee system-wide.
-
-If you would like to build the SQLite extension in a git checkout, you can run:
-
-.. code-block:: console
-
-    # Build the C extension and place shared libraries alongside other modules.
-    python setup.py build_ext -i
-
+If you have the sqlite3 headers installed, then the sqlite C extensions will be
+built.
 
 Running tests
 -------------
@@ -79,19 +70,12 @@ Optional dependencies
     out there, such as ``pymysql`` or ``psycopg2`` for MySQL and Postgres
     respectively.
 
-* `Cython <http://cython.org/>`_: used to expose additional functionality when
-  using SQLite and to implement things like search result ranking in a
-  performant manner. Since the generated C files are included with the package
-  distribution, Cython is no longer required to use the C extensions.
 * `apsw <https://github.com/rogerbinns/apsw>`_: an optional 3rd-party SQLite
   binding offering greater performance and comprehensive support for SQLite's C
   APIs. Use with :py:class:`APSWDatabase`.
 * `gevent <http://www.gevent.org/>`_ is an optional dependency for
   :py:class:`SqliteQueueDatabase` (though it works with ``threading`` just
   fine).
-* `BerkeleyDB <http://www.oracle.com/technetwork/database/database-technologies/berkeleydb/downloads/index.html>`_ can
-  be compiled with a SQLite frontend, which works with Peewee. Compiling can be
-  tricky so `here are instructions <https://charlesleifer.com/blog/updated-instructions-for-compiling-berkeleydb-with-sqlite-for-use-with-python/>`_.
 * Lastly, if you use the *Flask* framework, there are helper extension modules
   available.
 
@@ -100,20 +84,7 @@ Note on the SQLite extensions
 -----------------------------
 
 Peewee includes two SQLite-specific C extensions which provide additional
-functionality and improved performance for SQLite database users. Peewee will
-attempt to determine ahead-of-time if SQLite3 is installed, and only build the
-SQLite extensions if the SQLite shared-library is available on your system.
-
-If, however, you receive errors like the following when attempting to install
-Peewee, you can explicitly disable the compilation of the SQLite C extensions
-by settings the ``NO_SQLITE`` environment variable.
-
-.. code-block:: console
-
-    fatal error: sqlite3.h: No such file or directory
-
-Here is how to install Peewee with the SQLite extensions explicitly disabled:
-
-.. code-block:: console
-
-    $ NO_SQLITE=1 python setup.py install
+functionality and improved performance for SQLite database users. These are not
+shipped with the binary wheel, but can be installed by instructing ``pip`` to
+install Peewee via source-distribution. In order for the sqlite extensions to
+be built, the sqlite shared library and header must be installed.

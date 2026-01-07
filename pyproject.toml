@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools", "wheel"]
+requires = ["setuptools", "wheel", "cython"]
 build-backend="setuptools.build_meta"
 
 [project]
@@ -36,7 +36,7 @@ psycopg3 = ["psycopg[binary]"]
 [tool.setuptools]
 packages = ["playhouse", "playhouse._pysqlite"]
 py-modules = ["peewee", "pwiz"]
-exclude-package-data = {"playhouse" = ["*.c"]}
+exclude-package-data = {"playhouse" = ["*.pyx"]}
 
 [tool.setuptools.dynamic]
 version = { attr = "peewee.__version__" }

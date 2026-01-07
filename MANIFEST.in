@@ -5,6 +5,7 @@ include TODO.rst
 include pyproject.toml
 include runtests.py
 include tests.py
+include playhouse/*.c
 include playhouse/*.pyx
 include playhouse/README.md
 recursive-include examples *

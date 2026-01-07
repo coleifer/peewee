@@ -7,7 +7,47 @@ https://github.com/coleifer/peewee/releases
 
 ## master
 
-[View commits](https://github.com/coleifer/peewee/compare/3.18.3...master)
+[View commits](https://github.com/coleifer/peewee/compare/3.19.0...master)
+
+## 3.19.0
+
+* Move to new build system using pyproject and github actions.
+* No longer build and ship the Sqlite C extensions by default. Users who prefer
+  to use those can install via the sdist `pip install peewee --no-binary :all:`.
+
+Rationale about the Sqlite C extensions -- I've started shipping pysqlite3 as a
+statically-linked, self-contained binary wheel. This means that when using
+Peewee with the statically-linked pysqlite3, you can end up in a funny
+situation where the peewee Sqlite extensions are linked against the system
+libsqlite3, and the pysqlite driver has it's own Sqlite embedded, which does
+not work.
+
+If you are using the system/standard-lib sqlite3 module then the extension
+works properly, because everything is talking to the same `libsqlite3`.
+
+Similarly if you built pysqlite3 to link against the system `libsqlite3`
+everything also works correctly, though this is not "wheel-friendly".
+
+So in order to use the C extensions, you can install Peewee from the sdist and
+do either of the following:
+
+```
+# Use system sqlite and standard-lib `sqlite3` module.
+$ pip install peewee --no-binary :all:
+
+# OR,
+# Use pysqlite3 linked against the system sqlite.
+$ pip install pysqlite3 peewee --no-binary :all:
+```
+
+I don't believe, besides myself, there were many people using these extensions
+so hopefully this change is not disruptive! Please let me hear about it if I'm
+mistaken.
+
+Other small changes:
+
+* When exporting / "freezing" binary data with the `playhouse.dataset` JSON
+  serializer, encode binary data as base64.
 
 ## 3.18.3
 
