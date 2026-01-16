@@ -33,7 +33,7 @@ def get_option_parser():
                      dest='slow_tests', help='Run tests that may be slow.')
     basic.add_option('-a', '--asyncio', action='store_true', default=False,
                      dest='asyncio_tests', help='Run only asyncio tests.')
-    basic.add_option('-S', '--asyncio-stress', action='store_true',
+    basic.add_option('-A', '--asyncio-stress', action='store_true',
                      default=False, dest='asyncio_stress_test',
                      help='Run asyncio stress test.')
     parser.add_option_group(basic)
