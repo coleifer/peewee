@@ -7,6 +7,10 @@ https://github.com/coleifer/peewee/releases
 
 ## master
 
+* Adds preliminary support for `asyncio` via a new playhouse extension. See
+  [the documentation](http://docs.peewee-orm.com/en/latest/peewee/asyncio.html)
+  for details.
+
 [View commits](https://github.com/coleifer/peewee/compare/3.19.0...master)
 
 ## 3.19.0

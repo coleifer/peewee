@@ -8,6 +8,7 @@ Peewee is a simple and small ORM. It has few (but expressive) concepts, making i
 * a small, expressive ORM
 * python 2.7+ and 3.4+
 * supports sqlite, mysql, mariadb, postgresql
+* asyncio support
 * tons of `extensions <http://docs.peewee-orm.com/en/latest/peewee/playhouse.html>`_
 
 New to peewee? These may help:
@@ -33,6 +34,11 @@ backends can be installed using the following instead:
     pip install peewee[mysql]  # Install peewee with pymysql.
     pip install peewee[postgres]  # Install peewee with psycopg2.
     pip install peewee[psycopg3]  # Install peewee with psycopg3.
+
+    # AsyncIO implementations.
+    pip install peewee[aiosqlite]  # Install peewee with aiosqlite.
+    pip install peewee[aiomysql]  # Install peewee with aiomysql.
+    pip install peewee[asyncpg]  # Install peewee with asyncpg.
 
 Examples
 --------

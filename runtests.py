@@ -31,6 +31,11 @@ def get_option_parser():
                      dest='failfast', help='Exit on first failure/error.')
     basic.add_option('-s', '--slow-tests', action='store_true', default=False,
                      dest='slow_tests', help='Run tests that may be slow.')
+    basic.add_option('-a', '--asyncio', action='store_true', default=False,
+                     dest='asyncio_tests', help='Run only asyncio tests.')
+    basic.add_option('-S', '--asyncio-stress', action='store_true',
+                     default=False, dest='asyncio_stress_test',
+                     help='Run asyncio stress test.')
     parser.add_option_group(basic)
 
     db_param_map = (
@@ -77,6 +82,19 @@ def collect_tests(args):
 
     return suite
 
+def collect_asyncio_tests():
+    try:
+        import aiosqlite
+    except ImportError:
+        raise RuntimeError('Need aiosqlite at minimum to run asyncio tests.')
+
+    suite = unittest.TestSuite()
+    from tests import pwasyncio
+    module_suite = unittest.TestLoader().loadTestsFromModule(pwasyncio)
+    suite.addTest(module_suite)
+    return suite
+
+
 if __name__ == '__main__':
     parser = get_option_parser()
     options, args = parser.parse_args()
@@ -95,7 +113,20 @@ if __name__ == '__main__':
     if options.slow_tests:
         os.environ['PEEWEE_SLOW_TESTS'] = '1'
 
-    suite = collect_tests(args)
+    if options.asyncio_tests:
+        suite = collect_asyncio_tests()
+    elif options.asyncio_stress_test:
+        try:
+            import asyncio
+            from tests.pwasyncio_stress import main
+        except ImportError as exc:
+            print('Error: could not import asyncio stress test: %s' % exc)
+            sys.exit(2)
+
+        sys.exit(asyncio.run(main()))
+    else:
+        suite = collect_tests(args)
+
     failures, errors = runtests(suite, options.verbosity, options.failfast)
 
     files_to_delete = [

@@ -11,6 +11,10 @@ like the :ref:`sqlite_ext` and :ref:`postgres_ext` extensions.
 Below you will find a loosely organized listing of the various modules that
 make up the ``playhouse``.
 
+**AsyncIO**
+
+* :ref:`asyncio`
+
 **Database drivers / vendor-specific database functionality**
 
 * :ref:`sqlite_ext` (on its own page)

@@ -32,6 +32,9 @@ Changelog = "https://github.com/coleifer/peewee/blob/master/CHANGELOG.md"
 mysql = ["pymysql"]
 postgres = ["psycopg2-binary"]
 psycopg3 = ["psycopg[binary]"]
+aiosqlite = ["aiosqlite ", "greenlet"]
+aiomysql = ["aiomysql", "greenlet"]
+asyncpg = ["asyncpg ", "greenlet"]
 
 [tool.setuptools]
 packages = ["playhouse", "playhouse._pysqlite"]

@@ -77,6 +77,11 @@ from .sqliteq import *
 from .sqlite_udf import *
 from .test_utils import *
 
+try:
+    from .pwasyncio import *
+except ImportError:
+    print('Unable to import asyncio tests, skipping.')
+
 
 if __name__ == '__main__':
     from peewee import print_
