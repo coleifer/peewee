@@ -26,6 +26,10 @@ except ImportError:
 logger = logging.getLogger(__name__)
 
 
+class MissingGreenletBridge(RuntimeError):
+    pass
+
+
 async def greenlet_spawn(fn, *args, **kwargs):
     parent = getcurrent()
     result = None
@@ -57,7 +61,7 @@ def await_(awaitable):
     current = getcurrent()
     parent = current.parent
     if parent is None:
-        raise RuntimeError('await_() called outside greenlet_spawn()')
+        raise MissingGreenletBridge('await_() called outside greenlet_spawn()')
     return parent.switch(awaitable)
 
 
@@ -170,7 +174,12 @@ class AsyncDatabaseMixin(object):
         self._pool_lock = asyncio.Lock()
 
     def execute_sql(self, sql, params=None):
-        return await_(self.aexecute_sql(sql, params or ()))
+        try:
+            return await_(self.aexecute_sql(sql, params or ()))
+        except MissingGreenletBridge as exc:
+            raise MissingGreenletBridge(
+                f'Attempted query {sql} ({params}) outside greenlet runner.') \
+                    from exc
 
     async def aexecute_sql(self, sql, params=None):
         conn = await self.aconnect()

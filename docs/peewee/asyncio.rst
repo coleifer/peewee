@@ -29,7 +29,8 @@ asyncio event-loop.
 
     await db.run(User.create, name='Alice')
 
-Example:
+Here is a larger example demonstration how :py:meth:`~AsyncDatabaseMixin.run`
+can be used to wrap synchronous ORM operations to be async:
 
 .. code-block:: python
 
@@ -40,20 +41,78 @@ Example:
     db = AsyncSqliteDatabase('example.db')
 
     class User(db.Model):
-        name = CharField()
+        name = TextField()
 
-    async def main():
-        await db.acreate_tables([User])
+    async def demo():
+        async with db:
+            await db.run(db.create_tables, [User])
+            user = await db.run(User.create, name='Charlie')
 
-        async with db.atomic():
-            await db.run(User.create, name='Alice')
+            def get_user():
+                return User.select().where(User.name == 'Charlie').get()
 
-        users = await db.list(User.select())
-        print(users)  # Prints [<User: 1>]
+            user_db = await db.run(get_user)
+            assert user.name == user_db.name == 'Charlie'
+
+            def bulk_insert():
+                with db.atomic():
+                    iq = (User
+                          .insert_many([{'name': 'Alice'}, {'name': 'Bob'}])
+                          .returning(User))
+                    users = iq.execute()
+                    print('Added users: %s' % list(users))
+            await db.run(bulk_insert)
+
+            users = await db.run(list, User.select().order_by(User.name))
+            for user in users:
+                print(user.name)
+
+        # Close the pool - the connection was released, but it still remains inside
+        # the pool, so this ensures we are ready to shutdown completely.
+        await db.close_pool()
+
+    asyncio.run(demo())
+
+
+If you prefer a more ``async``-native approach, a number of helper methods are
+available on the async ``Database`` classes. Here is the exact same code
+implemented using a more natural asyncio style:
+
+.. code-block:: python
+
+    import asyncio
+    from peewee import *
+    from playhouse.pwasyncio import AsyncSqliteDatabase
+
+    db = AsyncSqliteDatabase('example.db')
+
+    class User(db.Model):
+        name = TextField()
+
+    async def demo():
+        async with db:
+            await db.acreate_tables([User])
+            user = await db.run(User.create, name='Charlie')
+            user_db = await db.get(User.select().where(User.name == 'Charlie'))
+            assert user.name == user_db.name == 'Charlie'
+
+            async with db.atomic():
+                iq = (User
+                      .insert_many([{'name': 'Alice'}, {'name': 'Bob'}])
+                      .returning(User))
+                users = await db.aexecute(iq)
+                print('Added users: %s' % list(users))
+
+            for user in await db.list(User.select().order_by(User.name)):
+                print(user.name)
 
         await db.close_pool()
 
-    asyncio.run(main())
+    asyncio.run(demo())
+
+When running Peewee ORM code, you can choose between the two execution patterns
+depending on how explicit you want to be. See :ref:`async-helpers` for details
+on the available ``async``-friendly helper methods.
 
 Supported Backends
 ------------------
@@ -146,6 +205,8 @@ Peewee queries must be executed using the database :py:meth:`~AsyncDatabaseMixin
 The :py:meth:`~AsyncDatabaseMixin.run` method ensures synchronous Peewee code
 is executed safely inside the event loop. Any arbitrary code can be wrapped in
 a function and sent to the :py:meth:`~AsyncDatabaseMixin.run` method.
+
+.. _async-helpers:
 
 Helper Methods
 ^^^^^^^^^^^^^^
@@ -292,6 +353,80 @@ Transactions and savepoints are managed using async context managers.
             await db.run(User.create, name='Bob')
 
 Nested atomic blocks behave the same as in synchronous Peewee code.
+
+Implementation Notes
+--------------------
+
+Synchronous ORM code runs inside a greenlet, and async I/O is bridged
+explicitly by Peewee using two helpers, ``greenlet_spawn()`` and ``await_()``.
+The ``greenlet_spawn()`` helper runs synchronous code, but can be suspended and
+resumed in order to yield to the asyncio event loop. Yielding is done by the
+``await_()`` helper, which suspends the greenlet and passes control to the
+asyncio coroutine.
+
+Peewee wraps all this up in a general-purpose :py:meth:`AsyncDatabaseMixin.run`
+method, which is the entrypoint for pretty much all async operations:
+
+.. code-block:: python
+
+    from playhouse.pwasyncio import *
+
+    async def demo():
+        db = AsyncSqliteDatabase(':memory:')
+        def work():
+            print(db.execute_sql('select 1').fetchall())
+        await db.run(work)
+
+    asyncio.run(demo())  # prints [(1,)]
+
+The basic flow goes something like this:
+
+1. The above code eventually hits the ``db.run()`` method. This method calls
+   the ``greenlet_spawn()`` function, creating a resumable coroutine wrapping our synchronous code.
+2. The greenlet begins executing the synchronous Peewee code.
+3. We call ``db.execute_sql('select 1')``
+4. The async database implementation calls our special ``await_()`` helper,
+   which switches control back to the event loop.
+5. The event-loop awaits the coroutine, e.g. ``await conn.execute(...)``,
+   awaiting the results from the cursor before handing them back.
+6. The result cursor is sent back to the greenlet, and the greenlet resumes.
+7. ``db.execute_sql()`` returns and the rest of the code continues normally.
+8. We call ``fetchall()`` on the result cursor, which returns all the rows
+   loaded during (5).
+
+If we try to run :py:meth:`~AsyncDatabaseMixin.execute_sql()` outside of the
+greenlet helper, Peewee will raise a :py:class:`MissingGreenletBridge` exception:
+
+.. code-block:: python
+
+    async def demo():
+        db = AsyncSqliteDatabase(':memory:')
+        print(db.execute_sql('select 1').fetchall())
+
+    # MissingGreenletBridge: Attempted query select 1 (None) outside greenlet runner.
+    asyncio.run(demo())
+
+Peewee provides a number of async-ready helper methods for common operations,
+so the ``run()`` helper can be avoided:
+
+.. code-block:: python
+
+    from playhouse.pwasyncio import *
+
+    async def demo():
+        db = AsyncSqliteDatabase(':memory:')
+        curs = await db.aexecute_sql('select 1')
+        print(curs.fetchall())
+
+    asyncio.run(demo())  # prints [(1,)]
+
+.. note::
+    Obtaining the results from the cursor does not happen asynchronously (e.g.
+    we do not call ``print(await curs.fetchall())``). Internally Peewee **does**
+    await fetching the results from the cursor, but the rows are all loaded
+    before the cursor is returned to the caller. This ensures consistency with
+    existing behavior, though in future versions we may add support for
+    streaming cursor results (via Postgres server-side cursors).
 
 API
 ---
@@ -451,3 +586,10 @@ API
 
     Inherits from :py:class:`AsyncDatabaseMixin` and
     :py:class:`peewee.PostgresqlDatabase`.
+
+.. py:class:: MissingGreenletBridge(RuntimeError)
+
+    Exception that is raised when Peewee attempts to run a blocking operation
+    like ``execute_sql()`` outside a greenlet-spawn context. Generally
+    indicates that you have attempted to execute a query outside of
+    ``db.run()`` or without using one of the async helper methods.

@@ -79,7 +79,7 @@ class TestGreenletSpawn(unittest.IsolatedAsyncioTestCase):
             await greenlet_spawn(lambda: await_(failing_async()))
 
     def test_await_outside_greenlet(self):
-        with self.assertRaises(RuntimeError):
+        with self.assertRaises(MissingGreenletBridge):
             await_(Mock())
 
 
