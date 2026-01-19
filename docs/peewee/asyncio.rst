@@ -428,6 +428,67 @@ so the ``run()`` helper can be avoided:
     existing behavior, though in future versions we may add support for
     streaming cursor results (via Postgres server-side cursors).
 
+Sharp Corners
+-------------
+
+There are limitations to what can be achieved with the approach described above.
+The main one I foresee causing problems is lazy foreign-key resolution. Consider this example:
+
+.. code-block:: python
+
+    tweet = await db.get(Tweet.select())
+    print(tweet.user.name)  # Fails.
+    # MissingGreenletBridge: Attempted query SELECT ...outside greenlet runner.
+
+This fails because the relationship ``tweet.user`` was not explicitly fetched,
+so Peewee attempts to issue a ``SELECT`` query to get the related user. This
+fails because we are not operating inside the greenlet-bridged environment.
+
+One solution is to resolve foreign keys inside :py:meth:`~AsyncDatabaseMixin.run`:
+
+.. code-block:: python
+
+    print(await db.run(lambda: tweet.user.name))
+
+Even better is to select the related object explicitly:
+
+.. code-block:: python
+
+    query = Tweet.select(Tweet, User).join(User)
+    tweet = await db.get(query)
+    print(tweet.user.name)  # OK, no extra SELECT required.
+
+In a similar way, iterating the related objects requires a query:
+
+.. code-block:: python
+
+    for tweet in user.tweet_set:
+        print(tweet.message)
+    # MissingGreenletBridge: Attempted query SELECT ... outside greenlet runner.
+
+Like above, there are a few ways you can accomplish this:
+
+.. code-block:: python
+
+    # Use the db.run() helper:
+    tweets = await db.run(list, user.tweet_set)
+    for tweet in tweets:
+        print(tweet.message)
+
+    # Use the db.list() helper:
+    for tweet in await db.list(user.tweet_set):
+        print(tweet.message)
+
+    # Use prefetch (not a great fit, but just to demonstrate):
+    user_query = User.select().where(User.id == user.id)
+    tweet_query = Tweet.select()
+    user, = await db.run(prefetch, user_query, tweet_query)
+    for tweet in user.tweet_set:
+        print(tweet.message)
+
+Overall these are the main issues I see arising, but as things come up I may
+expand this section or work to find other solutions to the problems.
+
 API
 ---
 
