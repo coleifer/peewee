@@ -3842,11 +3842,11 @@ class SqliteDatabase(Database):
 
     def commit(self):
         with __exception_wrapper__:
-            return self._state.conn.commit()
+            return self.execute_sql('COMMIT')
 
     def rollback(self):
         with __exception_wrapper__:
-            return self._state.conn.rollback()
+            return self.execute_sql('ROLLBACK')
 
     def get_tables(self, schema=None):
         schema = schema or 'main'

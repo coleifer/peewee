@@ -399,12 +399,6 @@ class AsyncSqliteDatabase(AsyncDatabaseMixin, SqliteDatabase):
         if self._pool:
             await self._pool.close()
 
-    def commit(self):
-        return self.execute_sql('COMMIT')
-
-    def rollback(self):
-        return self.execute_sql('ROLLBACK')
-
 
 class AsyncMySQLConnection(AsyncConnectionWrapper):
     async def _execute(self, sql, params=None):
