@@ -2755,7 +2755,7 @@ Query-builder
     Class representing a DELETE query.
 
 
-.. py:class:: Index(name, table, expressions[, unique=False[, safe=False[, where=None[, using=None]]]])
+.. py:class:: Index(name, table, expressions[, unique=False[, safe=False[, where=None[, using=None[, nulls_distinct=None]]]]])
 
     :param str name: Index name.
     :param Table table: Table to create index on.
@@ -2764,6 +2764,9 @@ Query-builder
     :param bool safe: Whether to add IF NOT EXISTS clause.
     :param Expression where: Optional WHERE clause for index.
     :param str using: Index algorithm.
+    :param bool nulls_distinct: Postgres-only - specify True (NULLS DISTINCT)
+        or False (NULLS NOT DISTINCT) - controls handling of NULL in unique
+        indexes.
 
     .. py:method:: safe([_safe=True])
 
@@ -2782,8 +2785,17 @@ Query-builder
 
         :param str _using: Specify index algorithm for USING clause.
 
+    .. py:method:: nulls_distinct([nulls_distinct=None])
 
-.. py:class:: ModelIndex(model, fields[, unique=False[, safe=True[, where=None[, using=None[, name=None]]]]])
+        :param bool nulls_distinct: specify True (NULLS DISTINCT) or False
+            for (NULLS NOT DISTINCT).
+
+        Requires Postgres 15 or newer.
+
+        Control handling of NULL values in unique indexes.
+
+
+.. py:class:: ModelIndex(model, fields[, unique=False[, safe=True[, where=None[, using=None[, name=None[, nulls_distinct=None]]]]]])
 
     :param Model model: Model class to create index on.
     :param list fields: Fields to index.
@@ -2792,6 +2804,9 @@ Query-builder
     :param Expression where: Optional WHERE clause for index.
     :param str using: Index algorithm or type, e.g. 'BRIN', 'GiST' or 'GIN'.
     :param str name: Optional index name.
+    :param bool nulls_distinct: Postgres-only - specify True (NULLS DISTINCT)
+        or False (NULLS NOT DISTINCT) - controls handling of NULL in unique
+        indexes.
 
     Expressive method for declaring an index on a model.
 
