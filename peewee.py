@@ -2938,7 +2938,7 @@ class Delete(_WriteQuery):
 
 class Index(Node):
     def __init__(self, name, table, expressions, unique=False, safe=False,
-                 where=None, using=None):
+                 where=None, using=None, nulls_distinct=None):
         self._name = name
         self._table = Entity(table) if not isinstance(table, Table) else table
         self._expressions = expressions
@@ -2946,6 +2946,9 @@ class Index(Node):
         self._unique = unique
         self._safe = safe
         self._using = using
+        self._nulls_distinct = nulls_distinct
+        if self._nulls_distinct is not None and not self._unique:
+            raise ValueError('NULLS DISTINCT is only available with UNIQUE.')
 
     @Node.copy
     def safe(self, _safe=True):
@@ -2960,6 +2963,12 @@ class Index(Node):
     @Node.copy
     def using(self, _using=None):
         self._using = _using
+
+    @Node.copy
+    def nulls_distinct(self, nulls_distinct=None):
+        if nulls_distinct is not None and not self._unique:
+            raise ValueError('NULLS DISTINCT is only available with UNIQUE.')
+        self._nulls_distinct = nulls_distinct
 
     def __sql__(self, ctx):
         statement = 'CREATE UNIQUE INDEX ' if self._unique else 'CREATE INDEX '
@@ -2998,12 +3007,16 @@ class Index(Node):
             if self._where is not None:
                 ctx.literal(' WHERE ').sql(self._where)
 
+            if self._nulls_distinct is not None:
+                ctx.literal(' NULLS DISTINCT' if self._nulls_distinct else
+                            ' NULLS NOT DISTINCT')
+
         return ctx
 
 
 class ModelIndex(Index):
     def __init__(self, model, fields, unique=False, safe=True, where=None,
-                 using=None, name=None):
+                 using=None, name=None, nulls_distinct=None):
         self._model = model
         if name is None:
             name = self._generate_name_from_fields(model, fields)
@@ -3018,7 +3031,8 @@ class ModelIndex(Index):
             unique=unique,
             safe=safe,
             where=where,
-            using=using)
+            using=using,
+            nulls_distinct=nulls_distinct)
 
     def _generate_name_from_fields(self, model, fields):
         accum = []

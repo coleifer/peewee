@@ -1166,6 +1166,32 @@ class TestModelIndex(BaseTestCase):
             'CREATE UNIQUE INDEX IF NOT EXISTS "article_timestamp" '
             'ON "article" ("timestamp" DESC, ("flags" & ?))'), [4])
 
+    def test_unique_index_nulls(self):
+        class A(Model):
+            a = CharField()
+            b = CharField()
+            class Meta:
+                database = self.database
+
+        idx = ModelIndex(A, ('a', 'b'), unique=True)
+        self.assertSQL(A._schema._create_index(idx), (
+            'CREATE UNIQUE INDEX IF NOT EXISTS '
+            '"a_a_b" ON "a" (a, b)'))
+
+        idx = idx.nulls_distinct(False)
+        self.assertSQL(A._schema._create_index(idx), (
+            'CREATE UNIQUE INDEX IF NOT EXISTS '
+            '"a_a_b" ON "a" (a, b) NULLS NOT DISTINCT'))
+
+        idx = idx.nulls_distinct(True)
+        self.assertSQL(A._schema._create_index(idx), (
+            'CREATE UNIQUE INDEX IF NOT EXISTS '
+            '"a_a_b" ON "a" (a, b) NULLS DISTINCT'))
+
+        idx._unique = False
+        self.assertRaises(ValueError, lambda: idx.nulls_distinct(True))
+        self.assertRaises(ValueError, lambda: idx.nulls_distinct(False))
+
 
 class TestModelArgument(BaseTestCase):
     database = SqliteDatabase(None)
