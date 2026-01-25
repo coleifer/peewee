@@ -35,6 +35,7 @@ psycopg3 = ["psycopg[binary]"]
 aiosqlite = ["aiosqlite ", "greenlet"]
 aiomysql = ["aiomysql", "greenlet"]
 asyncpg = ["asyncpg ", "greenlet"]
+clickhouse = ["clickhouse-connect"]
 
 [tool.setuptools]
 packages = ["playhouse", "playhouse._pysqlite"]

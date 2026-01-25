@@ -24,7 +24,7 @@ def get_option_parser():
         dest='engine',
         help=('Database engine to test, one of '
               '[sqlite, postgres, mysql, mysqlconnector, apsw, sqlcipher,'
-              ' cockroachdb, psycopg3]'))
+              ' cockroachdb, psycopg3, clickhouse]'))
     basic.add_option('-v', '--verbosity', dest='verbosity', default=1,
                      type='int', help='Verbosity of output')
     basic.add_option('-f', '--failfast', action='store_true', default=False,
@@ -55,6 +55,12 @@ def get_option_parser():
             ('host', 'localhost', 'localhost'),
             ('port', '26257', ''),
             ('user', 'root', 'root'),
+            ('password', 'blank', ''))),
+        ('ClickHouse', 'CH', (
+            # param  default disp default val
+            ('host', 'localhost', 'localhost'),
+            ('port', '8123', ''),
+            ('user', 'default', 'default'),
             ('password', 'blank', ''))))
     for name, prefix, param_list in db_param_map:
         group = optparse.OptionGroup(parser, '%s connection options' % name)

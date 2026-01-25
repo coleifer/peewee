@@ -12,6 +12,7 @@ except ImportError:
 
 from peewee import *
 from peewee import sqlite3
+from playhouse.clickhouse import ClickHouseDatabase
 from playhouse.cockroachdb import CockroachDatabase
 from playhouse.cockroachdb import NESTED_TX_MIN_VERSION
 from playhouse.mysql_ext import MariaDBConnectorDatabase
@@ -32,6 +33,7 @@ def db_loader(engine, name='peewee_test', db_class=None, **params):
             MySQLConnectorDatabase: ['mysqlconnector'],
             MariaDBConnectorDatabase: ['mariadb', 'maridbconnector'],
             CockroachDatabase: ['cockroach', 'cockroachdb', 'crdb'],
+            ClickHouseDatabase: ['clickhouse'],
         }
         engine_map = dict((alias, db) for db, aliases in engine_aliases.items()
                           for alias in aliases)
@@ -62,6 +64,7 @@ IS_MYSQL = BACKEND.startswith(('mysql', 'maria'))
 IS_POSTGRESQL = BACKEND.startswith(('postgres', 'psycopg'))
 IS_CRDB = BACKEND in ('cockroach', 'cockroachdb', 'crdb')
 IS_PSYCOPG3 = BACKEND == 'psycopg3'
+IS_CH = BACKEND == 'clickhouse'
 
 
 def make_db_params(key):

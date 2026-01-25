@@ -15,6 +15,7 @@ from peewee import sort_models
 
 from .base import BaseTestCase
 from .base import DatabaseTestCase
+from .base import IS_CH
 from .base import IS_CRDB
 from .base import IS_MYSQL
 from .base import IS_POSTGRESQL
