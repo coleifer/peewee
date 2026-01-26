@@ -1,12 +1,14 @@
-from peewee import *
 from clickhouse_connect.dbapi.connection import Connection
 from clickhouse_connect.cc_sqlalchemy.datatypes.sqltypes import String
+from peewee import Database
 
 
 class ClickHouseDatabase(Database):
     param = "%s"
+    quote = '``'
 
     def _connect(self):
+        # Ignore CREATE INDEX for SQL compatibility
         self.connect_params["allow_create_index_without_type"] = 1
         self.connect_params["create_index_ignore_unique"] = 1
 
@@ -17,3 +19,8 @@ class ClickHouseDatabase(Database):
 
     def get_binary_type(self):
         return String
+
+    def get_tables(self, schema=None):
+        schema = schema or "main"
+        cursor = self.execute_sql('SHOW TABLES FROM "%s" ORDER BY name', (schema,))
+        return [row for row, in cursor.fetchall()]
