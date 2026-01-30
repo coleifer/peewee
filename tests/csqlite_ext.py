@@ -20,11 +20,11 @@ database = CSqliteExtDatabase('peewee_test.db', timeout=100,
                               hash_functions=1)
 
 
-class CyDatabaseTestCase(DatabaseTestCase):
+class CDatabaseTestCase(DatabaseTestCase):
     database = database
 
     def tearDown(self):
-        super(CyDatabaseTestCase, self).tearDown()
+        super(CDatabaseTestCase, self).tearDown()
         if os.path.exists(self.database.database):
             os.unlink(self.database.database)
 
@@ -32,7 +32,7 @@ class CyDatabaseTestCase(DatabaseTestCase):
         return self.database.execute_sql(sql, params)
 
 
-class TestCySqliteHelpers(CyDatabaseTestCase):
+class TestCSqliteHelpers(CDatabaseTestCase):
     def test_autocommit(self):
         self.assertTrue(self.database.autocommit)
         self.database.begin()
@@ -127,7 +127,7 @@ class TestCySqliteHelpers(CyDatabaseTestCase):
 HUser = Table('users', ('id', 'username'))
 
 
-class TestHashFunctions(CyDatabaseTestCase):
+class TestHashFunctions(CDatabaseTestCase):
     database = database
 
     def setUp(self):
@@ -153,7 +153,7 @@ class TestHashFunctions(CyDatabaseTestCase):
             ('zaizee', 'b4dcf9')])
 
 
-class TestBackup(CyDatabaseTestCase):
+class TestBackup(CDatabaseTestCase):
     backup_filenames = set(('test_backup.db', 'test_backup1.db',
                             'test_backup2.db'))
 
@@ -235,7 +235,7 @@ class TestBackup(CyDatabaseTestCase):
         other_db.close()
 
 
-class TestBlob(CyDatabaseTestCase):
+class TestBlob(CDatabaseTestCase):
     def setUp(self):
         super(TestBlob, self).setUp()
         self.Register = Table('register', ('id', 'data'))
@@ -349,7 +349,7 @@ class TestBlob(CyDatabaseTestCase):
         self.assertEqual(blob.read(), b'huey')
 
 
-class TestBloomFilterIntegration(CyDatabaseTestCase):
+class TestBloomFilterIntegration(CDatabaseTestCase):
     database = CSqliteExtDatabase(':memory:', bloomfilter=True)
 
     def setUp(self):
@@ -523,7 +523,7 @@ class DataTypes(TableFunction):
 
 
 @skip_unless(sqlite3.sqlite_version_info >= (3, 9), 'requires sqlite >= 3.9')
-class TestDataTypesTableFunction(CyDatabaseTestCase):
+class TestDataTypesTableFunction(CDatabaseTestCase):
     database = db_loader('sqlite')
 
     def test_data_types_table_function(self):

@@ -30,7 +30,7 @@ try:
 except:
     print('Unable to import CockroachDB tests, skipping.')
 try:
-    from .cysqlite import *
+    from .csqlite_ext import *
 except ImportError:
     print('Unable to import sqlite C extension tests, skipping.')
 from .dataset import *
