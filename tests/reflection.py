@@ -7,6 +7,7 @@ from peewee import *
 from playhouse.reflection import *
 
 from .base import IS_CRDB
+from .base import IS_CYSQLITE
 from .base import IS_SQLITE_OLD
 from .base import ModelTestCase
 from .base import TestModel
@@ -601,6 +602,7 @@ class TestCyclicalFK(BaseReflectionTestCase):
         warnings.filterwarnings('ignore')
 
     @requires_sqlite
+    @skip_if(IS_CYSQLITE, 'cysqlite does not implement cursor at the moment.')
     def test_cyclical_fk(self):
         # NOTE: this schema was provided by a user.
         cursor = self.database.cursor()

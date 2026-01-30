@@ -14,6 +14,7 @@ from peewee import *
 from peewee import sqlite3
 from playhouse.cockroachdb import CockroachDatabase
 from playhouse.cockroachdb import NESTED_TX_MIN_VERSION
+from playhouse.cysqlite_ext import CySqliteDatabase
 from playhouse.mysql_ext import MariaDBConnectorDatabase
 from playhouse.mysql_ext import MySQLConnectorDatabase
 from playhouse.psycopg3_ext import Psycopg3Database
@@ -26,6 +27,7 @@ def db_loader(engine, name='peewee_test', db_class=None, **params):
     if db_class is None:
         engine_aliases = {
             SqliteDatabase: ['sqlite', 'sqlite3'],
+            CySqliteDatabase: ['cysqlite'],
             MySQLDatabase: ['mysql'],
             PostgresqlDatabase: ['postgres', 'postgresql'],
             Psycopg3Database: ['psycopg3'],
@@ -57,11 +59,12 @@ BACKEND = os.environ.get('PEEWEE_TEST_BACKEND') or 'sqlite'
 VERBOSITY = int(os.environ.get('PEEWEE_TEST_VERBOSITY') or 1)
 SLOW_TESTS = bool(os.environ.get('PEEWEE_SLOW_TESTS'))
 
-IS_SQLITE = BACKEND.startswith('sqlite')
+IS_SQLITE = BACKEND.startswith(('sqlite', 'cysqlite'))
 IS_MYSQL = BACKEND.startswith(('mysql', 'maria'))
 IS_POSTGRESQL = BACKEND.startswith(('postgres', 'psycopg'))
 IS_CRDB = BACKEND in ('cockroach', 'cockroachdb', 'crdb')
 IS_PSYCOPG3 = BACKEND == 'psycopg3'
+IS_CYSQLITE = BACKEND == 'cysqlite'
 
 
 def make_db_params(key):

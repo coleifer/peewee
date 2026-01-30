@@ -377,7 +377,7 @@ class TestSession(BaseTransactionTestCase):
 @skip_unless(IS_SQLITE, 'requires sqlite for transaction lock type')
 class TestTransactionLockType(BaseTransactionTestCase):
     def test_lock_type(self):
-        db2 = new_connection(timeout=0.001)
+        db2 = new_connection(timeout=0.0001)
         db2.connect()
 
         with self.database.atomic(lock_type='EXCLUSIVE') as txn:
