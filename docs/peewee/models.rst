@@ -767,9 +767,9 @@ instead use ``ModelClass._meta``:
     AttributeError: type object 'Person' has no attribute 'Meta'
 
     >>> Person._meta
-    <peewee.ModelOptions object at 0x7f51a2f03790>
+    <peewee.Metadata object at 0x7f51a2f03790>
 
-The :py:class:`ModelOptions` class implements several methods which may be of
+The :py:class:`Metadata` class implements several methods which may be of
 use for retrieving model metadata (such as lists of fields, foreign key
 relationships, and more).
 
