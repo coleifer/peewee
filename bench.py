@@ -4,6 +4,10 @@ from peewee import *
 db = SqliteDatabase(':memory:')
 #db = PostgresqlDatabase('peewee_test', host='127.0.0.1', port=26257, user='root')
 #db = PostgresqlDatabase('peewee_test', host='127.0.0.1', user='postgres')
+#from playhouse.cysqlite_ext import CySqliteDatabase
+#db = CySqliteDatabase(':memory:')
+#from playhouse.apsw_ext import APSWDatabase
+#db = APSWDatabase(':memory:')
 
 class Base(Model):
     class Meta:
@@ -26,7 +30,7 @@ def timed(fn):
     @functools.wraps(fn)
     def inner(*args, **kwargs):
         times = []
-        N = 10
+        N = 20
         for i in range(N):
             start = time.perf_counter()
             fn(i, *args, **kwargs)
@@ -132,13 +136,13 @@ if __name__ == '__main__':
     insert_related()
     Register.delete().execute()
     batch_insert()
-    assert Register.select().count() == 10000
+    assert Register.select().count() == 20000
     Register.delete().execute()
     bulk_insert()
-    assert Register.select().count() == 10000
+    assert Register.select().count() == 20000
     Register.delete().execute()
     bulk_create()
-    assert Register.select().count() == 10000
+    assert Register.select().count() == 20000
     select()
     select_related()
     select_related_left()
