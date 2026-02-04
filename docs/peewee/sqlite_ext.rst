@@ -290,6 +290,13 @@ APIs
     There is a small performance cost for this feature. For more information,
     see the SQLite docs on `autoincrement <https://sqlite.org/autoinc.html>`_.
 
+.. py:class:: ISODateTimeField()
+
+    SQLite does not have a native DateTime data-type. Python ``datetime``
+    objects are stored as strings by default. This subclass of
+    :py:class:`DateTimeField` ensures that the UTC offset is stored properly
+    for tz-aware datetimes and read-back properly when decoding row data.
+
 .. _sqlite-json1:
 
 .. py:class:: JSONField(json_dumps=None, json_loads=None, ...)

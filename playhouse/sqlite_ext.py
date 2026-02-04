@@ -75,6 +75,20 @@ class TDecimalField(DecimalField):
     def get_modifiers(self): pass
 
 
+class ISODateTimeField(DateTimeField):
+    formats = [
+        '%Y-%m-%dT%H:%M:%S.%f%z',
+        '%Y-%m-%dT%H:%M:%S%z',
+        '%Y-%m-%dT%H:%M:%S.%f',
+        '%Y-%m-%dT%H:%M:%S',
+        '%Y-%m-%d',
+    ]
+
+    def db_value(self, value):
+        if value:
+            return value.isoformat()
+
+
 class JSONPath(ColumnBase):
     def __init__(self, field, path=None):
         super(JSONPath, self).__init__()

@@ -152,6 +152,12 @@ class FTS5Document(FTS5Model):
         options = {'tokenize': 'porter'}
 
 
+class DT(TestModel):
+    key = TextField(primary_key=True)
+    d = DateTimeField()
+    iso = ISODateTimeField()
+
+
 class Series(TableFunction):
     columns = ['value']
     params = ['start', 'stop', 'step']
@@ -2711,3 +2717,30 @@ class TestDeterministicFunction(ModelTestCase):
         with self.assertRaises(IntegrityError):
             with db.atomic():
                 Reg.create(key='K1')
+
+@skip_unless(sys.version_info >= (3, 7, 0), 'isoformat (":") works 3.7+')
+class TestISODateTimeField(ModelTestCase):
+    database = get_in_memory_db()
+    requires = [DT]
+
+    def test_aware_datetimes(self):
+        class _UTC(datetime.tzinfo):
+            def utcoffset(self, dt): return datetime.timedelta(0)
+            def tzname(self, dt): return "UTC"
+            def dst(self, dt): return datetime.timedelta(0)
+
+        UTC = _UTC()
+
+        d1 = datetime.datetime(2026, 1, 2, 3, 4, 5)
+        d2 = d1.astimezone(UTC)
+
+        dt = DT.create(key='k1', d=d1, iso=d2)
+        self.assertEqual(dt.d, d1)
+        self.assertEqual(dt.iso, d2)
+
+        dt = DT['k1']
+        self.assertEqual(dt.d, d1)
+        self.assertEqual(dt.iso, d2)
+
+        raw = self.database.execute_sql('select * from dt').fetchone()
+        self.assertEqual(raw, ('k1', str(d1), d2.isoformat()))
