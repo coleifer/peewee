@@ -6991,6 +6991,11 @@ class Model(with_metaclass(ModelBase, Node)):
     def dirty_fields(self):
         return [f for f in self._meta.sorted_fields if f.name in self._dirty]
 
+    @property
+    def dirty_field_names(self):
+        return [f.name for f in self._meta.sorted_fields
+                if f.name in self._dirty]
+
     def dependencies(self, search_nullable=True, exclude_null_children=False):
         model_class = type(self)
         stack = [(type(self), None)]

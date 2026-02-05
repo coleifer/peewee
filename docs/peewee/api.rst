@@ -4647,6 +4647,19 @@ Model
             value that is mutable, such as a dictionary instance, and that
             dictionary is then modified, Peewee will not notice the change.
 
+        .. warning::
+            Do not do membership tests on this list, e.g. ``f in dirty_fields``
+            because if there is one or more fields in the dirty fields list,
+            the field equality override will return a truthy Expression object.
+            If you want to test if a field is dirty, instead
+            check ``f.name in model.dirty_field_names``.
+
+    .. py:attribute:: dirty_field_names
+
+        Return list of field names that have been modified.
+
+        :rtype: list
+
     .. py:method:: is_dirty()
 
         Return boolean indicating whether any fields were manually set.

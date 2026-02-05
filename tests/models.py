@@ -1724,6 +1724,8 @@ class TestDefaultDirtyBehavior(ModelTestCase):
                 p.last = 'l2'
                 p.save(only=[Person.first])
                 self.assertEqual(p.dirty_fields, [Person.last])
+                self.assertFalse('first' in p.dirty_field_names)
+                self.assertTrue('last' in p.dirty_field_names)
 
                 p_db = Person.get(Person.id == p.id)
                 self.assertEqual((p_db.first, p_db.last), ('f2', 'l'))
