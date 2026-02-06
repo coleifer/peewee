@@ -37,7 +37,7 @@ aiomysql = ["aiomysql", "greenlet"]
 asyncpg = ["asyncpg ", "greenlet"]
 
 [tool.setuptools]
-packages = ["playhouse", "playhouse._pysqlite"]
+packages = ["playhouse"]
 py-modules = ["peewee", "pwiz"]
 exclude-package-data = {"playhouse" = ["*.pyx"]}
 

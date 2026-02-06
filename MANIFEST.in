@@ -10,4 +10,3 @@ include playhouse/*.pyx
 include playhouse/README.md
 recursive-include examples *
 recursive-include docs *
-recursive-include playhouse/_pysqlite *

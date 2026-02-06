@@ -301,7 +301,9 @@ extensions:
 * Functions - which take any number of parameters and return a single value.
 * Aggregates - which aggregate parameters from multiple rows and return a
   single value.
+* Window Functions - aggregates which support operating on windows of data.
 * Collations - which describe how to sort some value.
+* Table Functions - fully user-defined tables (requres ``cysqlite``).
 
 .. note::
     For even more extension support, see :py:class:`SqliteExtDatabase`, which
@@ -352,6 +354,34 @@ Example user-defined aggregate:
              .group_by(FileChunk.filename)
              .order_by(FileChunk.filename, FileChunk.sequence))
 
+Example user-defined window function:
+
+.. code-block:: python
+
+   # Window functions are normal aggregates with two additional methods:
+   # inverse(value) - Perform the inverse of step(value).
+   # value() - Report value at current step.
+    @db.aggregate('mysum')
+    class MySum(object):
+        def __init__(self):
+            self._value = 0
+        def step(self, value):
+            self._value += (value or 0)
+        def inverse(self, value):
+            self._value -= (value or 0)  # Do opposite of "step()".
+        def value(self):
+            return self._value
+        def finalize(self):
+            return self._value
+
+    # e.g., aggregate sum of employee salaries over their department.
+    query = (Employee
+             .select(
+                 Employee.department,
+                 Employee.salary,
+                 fn.mysum(Employee.salary).over(partition_by=[Employee.department]))
+             .order_by(Employee.id))
+
 Example collation:
 
 .. code-block:: python
@@ -368,12 +398,12 @@ Example collation:
     # Or...
     Book.select().order_by(Book.title.asc(collation='reverse'))
 
-Example user-defined table-value function (see :py:class:`TableFunction`
-and :py:class:`~SqliteDatabase.table_function`) for additional details:
+Example user-defined table-value function (see `cysqlite docs <https://cysqlite.readthedocs.io/>`_
+for details on ``TableFunction``).
 
 .. code-block:: python
 
-    from playhouse.sqlite_ext import TableFunction
+    from cysqlite import TableFunction
 
     db = SqliteDatabase('my_app.db')
 
@@ -419,9 +449,9 @@ For more information, see:
 
 * :py:meth:`SqliteDatabase.func`
 * :py:meth:`SqliteDatabase.aggregate`
+* :py:meth:`SqliteDatabase.window_function`
 * :py:meth:`SqliteDatabase.collation`
 * :py:meth:`SqliteDatabase.table_function`
-* For even more SQLite extensions, see :ref:`sqlite_ext`
 
 .. _sqlite-locking:
 

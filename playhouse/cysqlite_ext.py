@@ -18,8 +18,8 @@ from playhouse.sqlite_ext import (
     SearchField,
     VirtualModel,
     FTSModel,
-    FTS5Model,
-    rank)
+    FTS5Model)
+from playhouse.sqlite_udf import rank
 
 try:
     import cysqlite
@@ -45,7 +45,7 @@ def __dbstatus__(flag, return_highwater=False, return_current=False):
     def getter(self):
         if self._state.conn is None:
             raise ImproperlyConfigured('database connection not opened.')
-        result = sqlite_get_db_status(self._state.conn, flag)
+        result = self._state.conn.status(flag)
         if return_current:
             return result[0]
         return result[1] if return_highwater else result
@@ -126,25 +126,25 @@ class CySqliteDatabase(SqliteDatabase):
     def on_commit(self, fn):
         self._commit_hook = fn
         if not self.is_closed():
-            conn.commit_hook(fn)
+            self.connection().commit_hook(fn)
         return fn
 
     def on_rollback(self, fn):
         self._rollback_hook = fn
         if not self.is_closed():
-            conn.rollback_hook(fn)
+            self.connection().rollback_hook(fn)
         return fn
 
     def on_update(self, fn):
         self._update_hook = fn
         if not self.is_closed():
-            conn.update_hook(fn)
+            self.connection().update_hook(fn)
         return fn
 
     def authorizer(self, fn):
         self._authorizer = fn
         if not self.is_closed():
-            conn.authorizer(fn)
+            self.connection().authorizer(fn)
         return fn
 
     def trace(self, fn, mask=2):
@@ -154,7 +154,7 @@ class CySqliteDatabase(SqliteDatabase):
             self._trace = (fn, mask)
         if not self.is_closed():
             args = (None,) if fn is None else self._trace
-            conn.authorizer(*args)
+            self.connection().authorizer(*args)
         return fn
 
     def progress(self, fn, n=1):
@@ -164,7 +164,7 @@ class CySqliteDatabase(SqliteDatabase):
             self._progress = (fn, mask)
         if not self.is_closed():
             args = (None,) if fn is None else self._progress
-            conn.progress(*args)
+            self.connection().progress(*args)
         return fn
 
     def begin(self, lock_type='deferred'):
@@ -182,6 +182,10 @@ class CySqliteDatabase(SqliteDatabase):
     @property
     def autocommit(self):
         return self.connection().autocommit()
+
+    def blob_open(self, table, column, rowid, read_only=False, dbname=None):
+        return self.connection().blob_open(table, column, rowid, read_only,
+                                           db_name)
 
     def backup(self, destination, pages=None, name=None, progress=None,
                src_name=None):

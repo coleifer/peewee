@@ -6,7 +6,6 @@ import sys
 from peewee import *
 from peewee import sqlite3
 from playhouse.sqlite_ext import *
-from playhouse._sqlite_ext import TableFunction
 
 from .base import BaseTestCase
 from .base import IS_SQLITE_37
@@ -28,7 +27,7 @@ from .sqlite_helpers import json_text_installed
 from .sqlite_helpers import jsonb_installed
 
 
-database = SqliteExtDatabase(':memory:', c_extensions=False, timeout=100)
+database = SqliteExtDatabase(':memory:', timeout=100)
 
 
 CLOSURE_EXTENSION = os.environ.get('PEEWEE_CLOSURE_EXTENSION')
@@ -40,7 +39,7 @@ if not LSM_EXTENSION and os.path.exists('lsm.so'):
     LSM_EXTENSION = './lsm.so'
 
 try:
-    from playhouse._sqlite_ext import peewee_rank
+    from playhouse._sqlite_udf import peewee_rank
     CYTHON_EXTENSION = True
 except ImportError:
     CYTHON_EXTENSION = False
@@ -156,249 +155,6 @@ class DT(TestModel):
     key = TextField(primary_key=True)
     d = DateTimeField()
     iso = ISODateTimeField()
-
-
-class Series(TableFunction):
-    columns = ['value']
-    params = ['start', 'stop', 'step']
-    name = 'series'
-
-    def initialize(self, start=0, stop=None, step=1):
-        self.start = start
-        self.stop = stop or float('inf')
-        self.step = step
-        self.curr = self.start
-
-    def iterate(self, idx):
-        if self.curr > self.stop:
-            raise StopIteration
-
-        ret = self.curr
-        self.curr += self.step
-        return (ret,)
-
-
-class RegexSearch(TableFunction):
-    columns = ['match']
-    params = ['regex', 'search_string']
-    name = 'regex_search'
-
-    def initialize(self, regex=None, search_string=None):
-        if regex and search_string:
-            self._iter = re.finditer(regex, search_string)
-        else:
-            self._iter = None
-
-    def iterate(self, idx):
-        # We do not need `idx`, so just ignore it.
-        if self._iter is None:
-            raise StopIteration
-        else:
-            return (next(self._iter).group(0),)
-
-
-class Split(TableFunction):
-    params = ['data']
-    columns = ['part']
-    name = 'str_split'
-
-    def initialize(self, data=None):
-        self._parts = data.split()
-        self._idx = 0
-
-    def iterate(self, idx):
-        if self._idx < len(self._parts):
-            result = (self._parts[self._idx],)
-            self._idx += 1
-            return result
-        raise StopIteration
-
-
-@skip_unless(IS_SQLITE_9, 'requires sqlite >= 3.9')
-class TestTableFunction(BaseTestCase):
-    def setUp(self):
-        super(TestTableFunction, self).setUp()
-        self.conn = sqlite3.connect(':memory:')
-
-    def tearDown(self):
-        super(TestTableFunction, self).tearDown()
-        self.conn.close()
-
-    def execute(self, sql, params=None):
-        return self.conn.execute(sql, params or ())
-
-    def test_split(self):
-        Split.register(self.conn)
-        curs = self.execute('select part from str_split(?) order by part '
-                            'limit 3', ('well hello huey and zaizee',))
-        self.assertEqual([row for row, in curs.fetchall()],
-                         ['and', 'hello', 'huey'])
-
-    def test_split_tbl(self):
-        Split.register(self.conn)
-        self.execute('create table post (content TEXT);')
-        self.execute('insert into post (content) values (?), (?), (?)',
-                     ('huey secret post',
-                      'mickey message',
-                      'zaizee diary'))
-        curs = self.execute('SELECT * FROM post, str_split(post.content)')
-        results = curs.fetchall()
-        self.assertEqual(results, [
-            ('huey secret post', 'huey'),
-            ('huey secret post', 'secret'),
-            ('huey secret post', 'post'),
-            ('mickey message', 'mickey'),
-            ('mickey message', 'message'),
-            ('zaizee diary', 'zaizee'),
-            ('zaizee diary', 'diary'),
-        ])
-
-    def test_series(self):
-        Series.register(self.conn)
-
-        def assertSeries(params, values, extra_sql=''):
-            param_sql = ', '.join('?' * len(params))
-            sql = 'SELECT * FROM series(%s)' % param_sql
-            if extra_sql:
-                sql = ' '.join((sql, extra_sql))
-            curs = self.execute(sql, params)
-            self.assertEqual([row for row, in curs.fetchall()], values)
-
-        assertSeries((0, 10, 2), [0, 2, 4, 6, 8, 10])
-        assertSeries((5, None, 20), [5, 25, 45, 65, 85], 'LIMIT 5')
-        assertSeries((4, 0, -1), [4, 3, 2], 'LIMIT 3')
-        assertSeries((3, 5, 3), [3])
-        assertSeries((3, 3, 1), [3])
-
-    def test_series_tbl(self):
-        Series.register(self.conn)
-        self.execute('CREATE TABLE nums (id INTEGER PRIMARY KEY)')
-        self.execute('INSERT INTO nums DEFAULT VALUES;')
-        self.execute('INSERT INTO nums DEFAULT VALUES;')
-        curs = self.execute('SELECT * FROM nums, series(nums.id, nums.id + 2)')
-        results = curs.fetchall()
-        self.assertEqual(results, [
-            (1, 1), (1, 2), (1, 3),
-            (2, 2), (2, 3), (2, 4)])
-
-        curs = self.execute('SELECT * FROM nums, series(nums.id) LIMIT 3')
-        results = curs.fetchall()
-        self.assertEqual(results, [(1, 1), (1, 2), (1, 3)])
-
-    def test_regex(self):
-        RegexSearch.register(self.conn)
-
-        def assertResults(regex, search_string, values):
-            sql = 'SELECT * FROM regex_search(?, ?)'
-            curs = self.execute(sql, (regex, search_string))
-            self.assertEqual([row for row, in curs.fetchall()], values)
-
-        assertResults(
-            '[0-9]+',
-            'foo 123 45 bar 678 nuggie 9.0',
-            ['123', '45', '678', '9', '0'])
-        assertResults(
-            r'[\w]+@[\w]+\.[\w]{2,3}',
-            ('Dear charlie@example.com, this is nug@baz.com. I am writing on '
-             'behalf of zaizee@foo.io. He dislikes your blog.'),
-            ['charlie@example.com', 'nug@baz.com', 'zaizee@foo.io'])
-        assertResults(
-            '[a-z]+',
-            '123.pDDFeewXee',
-            ['p', 'eew', 'ee'])
-        assertResults(
-            '[0-9]+',
-            'hello',
-            [])
-
-    def test_regex_tbl(self):
-        messages = (
-            'hello foo@example.fap, this is nuggie@example.fap. How are you?',
-            'baz@example.com wishes to let charlie@crappyblog.com know that '
-            'huey@example.com hates his blog',
-            'testing no emails.',
-            '')
-        RegexSearch.register(self.conn)
-
-        self.execute('create table posts (id integer primary key, msg)')
-        self.execute('insert into posts (msg) values (?), (?), (?), (?)',
-                     messages)
-        cur = self.execute('select posts.id, regex_search.rowid, regex_search.match '
-                           'FROM posts, regex_search(?, posts.msg)',
-                           (r'[\w]+@[\w]+\.\w{2,3}',))
-        results = cur.fetchall()
-        self.assertEqual(results, [
-            (1, 1, 'foo@example.fap'),
-            (1, 2, 'nuggie@example.fap'),
-            (2, 3, 'baz@example.com'),
-            (2, 4, 'charlie@crappyblog.com'),
-            (2, 5, 'huey@example.com'),
-        ])
-
-    def test_error_instantiate(self):
-        class BrokenInstantiate(Series):
-            name = 'broken_instantiate'
-            print_tracebacks = False
-
-            def __init__(self, *args, **kwargs):
-                super(BrokenInstantiate, self).__init__(*args, **kwargs)
-                raise ValueError('broken instantiate')
-
-        BrokenInstantiate.register(self.conn)
-        self.assertRaises(sqlite3.OperationalError, self.execute,
-                          'SELECT * FROM broken_instantiate(1, 10)')
-
-    def test_error_init(self):
-        class BrokenInit(Series):
-            name = 'broken_init'
-            print_tracebacks = False
-
-            def initialize(self, start=0, stop=None, step=1):
-                raise ValueError('broken init')
-
-        BrokenInit.register(self.conn)
-        self.assertRaises(sqlite3.OperationalError, self.execute,
-                          'SELECT * FROM broken_init(1, 10)')
-        self.assertRaises(sqlite3.OperationalError, self.execute,
-                          'SELECT * FROM broken_init(0, 1)')
-
-    def test_error_iterate(self):
-        class BrokenIterate(Series):
-            name = 'broken_iterate'
-            print_tracebacks = False
-
-            def iterate(self, idx):
-                raise ValueError('broken iterate')
-
-        BrokenIterate.register(self.conn)
-        self.assertRaises(sqlite3.OperationalError, self.execute,
-                          'SELECT * FROM broken_iterate(1, 10)')
-        self.assertRaises(sqlite3.OperationalError, self.execute,
-                          'SELECT * FROM broken_iterate(0, 1)')
-
-    def test_error_iterate_delayed(self):
-        # Only raises an exception if the value 7 comes up.
-        class SomewhatBroken(Series):
-            name = 'somewhat_broken'
-            print_tracebacks = False
-
-            def iterate(self, idx):
-                ret = super(SomewhatBroken, self).iterate(idx)
-                if ret == (7,):
-                    raise ValueError('somewhat broken')
-                else:
-                    return ret
-
-        SomewhatBroken.register(self.conn)
-        curs = self.execute('SELECT * FROM somewhat_broken(0, 3)')
-        self.assertEqual(curs.fetchall(), [(0,), (1,), (2,), (3,)])
-
-        curs = self.execute('SELECT * FROM somewhat_broken(5, 8)')
-        self.assertEqual(curs.fetchone(), (5,))
-        self.assertRaises(sqlite3.OperationalError, curs.fetchall)
-
-        curs = self.execute('SELECT * FROM somewhat_broken(0, 2)')
-        self.assertEqual(curs.fetchall(), [(0,), (1,), (2,)])
 
 
 @skip_unless(json_installed(), 'requires sqlite json1')
@@ -1367,14 +1123,8 @@ class TestFullTextSearch(BaseFTSTestCase, ModelTestCase):
                 [(0, -0.85), (1, -0.)])
 
 
-@skip_unless(CYTHON_EXTENSION, 'requires sqlite c extension')
+@skip_unless(CYTHON_EXTENSION, 'requires _sqlite_udf c extension')
 class TestFullTextSearchCython(TestFullTextSearch):
-    database = SqliteExtDatabase(':memory:', c_extensions=CYTHON_EXTENSION)
-
-    def test_c_extensions(self):
-        self.assertTrue(self.database._c_extensions)
-        self.assertTrue(Post._meta.database._c_extensions)
-
     def test_bm25f(self):
         def assertResults(term, expected):
             query = MultiColumn.search_bm25f(term, [1.0, 0, 0, 0], True)
@@ -1634,36 +1384,6 @@ class TestFTS5(BaseFTSTestCase, ModelTestCase):
         )
         for a, b in cases:
             self.assertEqual(FTS5Test.clean_query(a), b)
-
-
-@skip_unless(CYTHON_EXTENSION, 'requires sqlite c extension')
-class TestMurmurHash(ModelTestCase):
-    database = SqliteExtDatabase(':memory:', c_extensions=CYTHON_EXTENSION,
-                                 hash_functions=True)
-
-    def assertHash(self, s, e, fn_name='murmurhash'):
-        func = getattr(fn, fn_name)
-        query = Select(columns=[func(s)])
-        cursor = self.database.execute(query)
-        self.assertEqual(cursor.fetchone()[0], e)
-
-    @skip_if(sys.byteorder == 'big', 'fails on big endian')
-    def test_murmur_hash(self):
-        self.assertHash('testkey', 2871421366)
-        self.assertHash('murmur', 3883399899)
-        self.assertHash('', 0)
-        self.assertHash('this is a test of a longer string', 2569735385)
-        self.assertHash(None, None)
-
-    @skip_if(sys.version_info[0] == 3, 'requres python 2')
-    def test_checksums(self):
-        self.assertHash('testkey', -225678656, 'crc32')
-        self.assertHash('murmur', 1507884895, 'crc32')
-        self.assertHash('', 0, 'crc32')
-
-        self.assertHash('testkey', 203686666, 'adler32')
-        self.assertHash('murmur', 155714217, 'adler32')
-        self.assertHash('', 1, 'adler32')
 
 
 class TestUserDefinedCallbacks(ModelTestCase):
@@ -2087,162 +1807,6 @@ class TestTransitiveClosureIntegration(BaseTestCase):
         self.assertEqual(sorted([(n.id, n.name) for n in query]),
                          [(c1.id, 'c1'), (c2.id, 'c2')])
         database.drop_tables([Node, NodeClosure])
-
-
-class KV(LSMTable):
-    key = TextField(primary_key=True)
-    val_b = BlobField()
-    val_i = IntegerField()
-    val_f = FloatField()
-    val_t = TextField()
-
-    class Meta:
-        database = database
-        filename = 'test_lsm.ldb'
-
-
-class KVS(LSMTable):
-    key = TextField(primary_key=True)
-    value = TextField()
-
-    class Meta:
-        database = database
-        filename = 'test_lsm.ldb'
-
-
-class KVI(LSMTable):
-    key = IntegerField(primary_key=True)
-    value = TextField()
-
-    class Meta:
-        database = database
-        filename = 'test_lsm.ldb'
-
-
-@skip_unless(LSM_EXTENSION and os.path.exists(LSM_EXTENSION),
-             'requires lsm1 sqlite extension')
-class TestLSM1Extension(BaseTestCase):
-    def setUp(self):
-        super(TestLSM1Extension, self).setUp()
-        if os.path.exists(KV._meta.filename):
-            os.unlink(KV._meta.filename)
-
-        database.connect()
-        database.load_extension(LSM_EXTENSION.rstrip('.so'))
-
-    def tearDown(self):
-        super(TestLSM1Extension, self).tearDown()
-        database.unload_extension(LSM_EXTENSION.rstrip('.so'))
-        database.close()
-        if os.path.exists(KV._meta.filename):
-            os.unlink(KV._meta.filename)
-
-    def test_lsm_extension(self):
-        self.assertSQL(KV._schema._create_table(), (
-            'CREATE VIRTUAL TABLE IF NOT EXISTS "kv" USING lsm1 '
-            '("test_lsm.ldb", "key", TEXT, "val_b", "val_i", '
-            '"val_f", "val_t")'), [])
-
-        self.assertSQL(KVS._schema._create_table(), (
-            'CREATE VIRTUAL TABLE IF NOT EXISTS "kvs" USING lsm1 '
-            '("test_lsm.ldb", "key", TEXT, "value")'), [])
-
-        self.assertSQL(KVI._schema._create_table(), (
-            'CREATE VIRTUAL TABLE IF NOT EXISTS "kvi" USING lsm1 '
-            '("test_lsm.ldb", "key", UINT, "value")'), [])
-
-    def test_lsm_crud_operations(self):
-        database.create_tables([KV])
-
-        with database.transaction():
-            KV.create(key='k0', val_b=None, val_i=0, val_f=0.1, val_t='v0')
-
-        v0 = KV['k0']
-        self.assertEqual(v0.key, 'k0')
-        self.assertEqual(v0.val_b, None)
-        self.assertEqual(v0.val_i, 0)
-        self.assertEqual(v0.val_f, 0.1)
-        self.assertEqual(v0.val_t, 'v0')
-
-        self.assertRaises(KV.DoesNotExist, lambda: KV['k1'])
-
-        # Test that updates work as expected.
-        KV['k0'] = (None, 1338, 3.14, 'v2-e')
-
-        v0_db = KV['k0']
-        self.assertEqual(v0_db.val_i, 1338)
-        self.assertEqual(v0_db.val_f, 3.14)
-        self.assertEqual(v0_db.val_t, 'v2-e')
-
-        self.assertEqual(len([item for item in KV.select()]), 1)
-
-        del KV['k0']
-        self.assertEqual(len([item for item in KV.select()]), 0)
-
-    def test_insert_replace(self):
-        database.create_tables([KVS])
-        KVS.insert({'key': 'k0', 'value': 'v0'}).execute()
-        self.assertEqual(KVS['k0'], 'v0')
-
-        KVS.replace({'key': 'k0', 'value': 'v0-e'}).execute()
-        self.assertEqual(KVS['k0'], 'v0-e')
-
-        # Implicit.
-        KVS['k0'] = 'v0-x'
-        self.assertEqual(KVS['k0'], 'v0-x')
-
-    def test_index_performance(self):
-        database.create_tables([KVS])
-
-        data = [{'key': 'k%s' % i, 'value': 'v%s' % i} for i in range(20)]
-        KVS.insert_many(data).execute()
-
-        self.assertEqual(KVS.select().count(), 20)
-        self.assertEqual(KVS['k0'], 'v0')
-        self.assertEqual(KVS['k19'], 'v19')
-
-        keys = [row.key for row in KVS['k4.1':'k8.9']]
-        self.assertEqual(keys, ['k5', 'k6', 'k7', 'k8'])
-
-        keys = sorted([row.key for row in KVS[:'k13']])
-        self.assertEqual(keys, ['k0', 'k1', 'k10', 'k11', 'k12', 'k13'])
-
-        keys = [row.key for row in KVS['k5':]]
-        self.assertEqual(keys, ['k5', 'k6', 'k7', 'k8', 'k9'])
-
-        data = [tuple(row) for row in KVS[KVS.key > 'k5']]
-        self.assertEqual(data, [
-            ('k6', 'v6'),
-            ('k7', 'v7'),
-            ('k8', 'v8'),
-            ('k9', 'v9')])
-
-        del KVS[KVS.key.between('k10', 'k18')]
-        self.assertEqual(sorted([row.key for row in KVS[:'k2']]),
-                         ['k0', 'k1', 'k19', 'k2'])
-
-        del KVS['k3.1':'k8.1']
-        self.assertEqual([row.key for row in KVS[:]],
-                         ['k0', 'k1', 'k19', 'k2', 'k3', 'k9'])
-
-        del KVS['k1']
-        self.assertRaises(KVS.DoesNotExist, lambda: KVS['k1'])
-
-    def test_index_uint(self):
-        database.create_tables([KVI])
-        data = [{'key': i, 'value': 'v%s' % i} for i in range(100)]
-
-        with database.transaction():
-            KVI.insert_many(data).execute()
-
-        keys = [row.key for row in KVI[27:33]]
-        self.assertEqual(keys, [27, 28, 29, 30, 31, 32, 33])
-
-        keys = sorted([row.key for row in KVI[KVI.key < 4]])
-        self.assertEqual(keys, [0, 1, 2, 3])
-
-        keys = [row.key for row in KVI[KVI.key > 95]]
-        self.assertEqual(keys, [96, 97, 98, 99])
 
 
 @skip_unless(json_installed(), 'requires json1 sqlite extension')

@@ -16,19 +16,13 @@ The ``playhouse.sqlite_ext`` includes even more SQLite features, including:
 * :ref:`Full-text search <sqlite-fts>`
 * :ref:`JSON extension integration <sqlite-json1>`
 * :ref:`Closure table extension support <sqlite-closure-table>`
-* :ref:`LSM1 extension support <sqlite-lsm1>`
-* :ref:`User-defined table functions <sqlite-vtfunc>`
-* Support for online backups using backup API: :py:meth:`~CSqliteExtDatabase.backup_to_file`
-* :ref:`BLOB API support, for efficient binary data storage <sqlite-blob>`.
-* :ref:`Additional helpers <sqlite-extras>`
 
 Getting started
 ---------------
 
 To get started with the features described in this document, you will want to
 use the :py:class:`SqliteExtDatabase` class from the ``playhouse.sqlite_ext``
-module. Furthermore, some features require the ``playhouse._sqlite_ext`` C
-extension -- these features will be noted in the documentation.
+module.
 
 Instantiating a :py:class:`SqliteExtDatabase`:
 
@@ -41,209 +35,21 @@ Instantiating a :py:class:`SqliteExtDatabase`:
         ('journal_mode', 'wal'),  # Use WAL-mode (you should always use this!).
         ('foreign_keys', 1)))  # Enforce foreign-key constraints.
 
-.. note::
-    By default the C extension is not included with the Peewee wheel. If you wish
-    to build these, you will need to install Peewee via source-distribution:
-
-    .. code-block:: python
-
-        pip install peewee --no-binary :all:
-
 APIs
 ----
 
-.. py:class:: SqliteExtDatabase(database[, pragmas=None[, timeout=5[, c_extensions=None[, rank_functions=True[, hash_functions=False[, regexp_function=False]]]]]])
+.. py:class:: SqliteExtDatabase(database[, pragmas=None[, timeout=5[, rank_functions=True[, regexp_function=False[, json_contains=False]]]]])
 
     :param list pragmas: A list of 2-tuples containing pragma key and value to
         set every time a connection is opened.
     :param timeout: Set the busy-timeout on the SQLite driver (in seconds).
-    :param bool c_extensions: Declare that C extension speedups must/must-not
-        be used. If set to ``True`` and the extension module is not available,
-        will raise an :py:class:`ImproperlyConfigured` exception.
     :param bool rank_functions: Make search result ranking functions available.
-    :param bool hash_functions: Make hashing functions available (md5, sha1, etc).
     :param bool regexp_function: Make the REGEXP function available.
+    :param bool json_contains: Make json_containts() function available.
 
     Extends :py:class:`SqliteDatabase` and inherits methods for declaring
     user-defined functions, pragmas, etc.
 
-.. py:class:: CSqliteExtDatabase(database[, pragmas=None[, timeout=5[, c_extensions=None[, rank_functions=True[, hash_functions=False[, regexp_function=False[, replace_busy_handler=False]]]]]]])
-
-    :param list pragmas: A list of 2-tuples containing pragma key and value to
-        set every time a connection is opened.
-    :param timeout: Set the busy-timeout on the SQLite driver (in seconds).
-    :param bool c_extensions: Declare that C extension speedups must/must-not
-        be used. If set to ``True`` and the extension module is not available,
-        will raise an :py:class:`ImproperlyConfigured` exception.
-    :param bool rank_functions: Make search result ranking functions available.
-    :param bool hash_functions: Make hashing functions available (md5, sha1, etc).
-    :param bool regexp_function: Make the REGEXP function available.
-    :param bool replace_busy_handler: Use a smarter busy-handler implementation.
-
-    Extends :py:class:`SqliteExtDatabase` and requires that the
-    ``playhouse._sqlite_ext`` extension module be available.
-
-    .. py:method:: on_commit(fn)
-
-        Register a callback to be executed whenever a transaction is committed
-        on the current connection. The callback accepts no parameters and the
-        return value is ignored.
-
-        However, if the callback raises a :py:class:`ValueError`, the
-        transaction will be aborted and rolled-back.
-
-        Example:
-
-        .. code-block:: python
-
-            db = CSqliteExtDatabase(':memory:')
-
-            @db.on_commit
-            def on_commit():
-                logger.info('COMMITing changes')
-
-    .. py:method:: on_rollback(fn)
-
-        Register a callback to be executed whenever a transaction is rolled
-        back on the current connection. The callback accepts no parameters and
-        the return value is ignored.
-
-        Example:
-
-        .. code-block:: python
-
-            @db.on_rollback
-            def on_rollback():
-                logger.info('Rolling back changes')
-
-    .. py:method:: on_update(fn)
-
-        Register a callback to be executed whenever the database is written to
-        (via an *UPDATE*, *INSERT* or *DELETE* query). The callback should
-        accept the following parameters:
-
-        * ``query`` - the type of query, either *INSERT*, *UPDATE* or *DELETE*.
-        * database name - the default database is named *main*.
-        * table name - name of table being modified.
-        * rowid - the rowid of the row being modified.
-
-        The callback's return value is ignored.
-
-        Example:
-
-        .. code-block:: python
-
-            db = CSqliteExtDatabase(':memory:')
-
-            @db.on_update
-            def on_update(query_type, db, table, rowid):
-                # e.g. INSERT row 3 into table users.
-                logger.info('%s row %s into table %s', query_type, rowid, table)
-
-    .. py:method:: changes()
-
-        Return the number of rows modified in the currently-open transaction.
-
-    .. py:attribute:: autocommit
-
-        Property which returns a boolean indicating if autocommit is enabled.
-        By default, this value will be ``True`` except when inside a
-        transaction (or :py:meth:`~Database.atomic` block).
-
-        Example:
-
-        .. code-block:: pycon
-
-            >>> db = CSqliteExtDatabase(':memory:')
-            >>> db.autocommit
-            True
-            >>> with db.atomic():
-            ...     print(db.autocommit)
-            ...
-            False
-            >>> db.autocommit
-            True
-
-    .. py:method:: backup(destination[, pages=None, name=None, progress=None])
-
-        :param SqliteDatabase destination: Database object to serve as
-            destination for the backup.
-        :param int pages: Number of pages per iteration. Default value of -1
-            indicates all pages should be backed-up in a single step.
-        :param str name: Name of source database (may differ if you used ATTACH
-            DATABASE to load multiple databases). Defaults to "main".
-        :param progress: Progress callback, called with three parameters: the
-            number of pages remaining, the total page count, and whether the
-            backup is complete.
-
-        Example:
-
-        .. code-block:: python
-
-            master = CSqliteExtDatabase('master.db')
-            replica = CSqliteExtDatabase('replica.db')
-
-            # Backup the contents of master to replica.
-            master.backup(replica)
-
-    .. py:method:: backup_to_file(filename[, pages, name, progress])
-
-        :param filename: Filename to store the database backup.
-        :param int pages: Number of pages per iteration. Default value of -1
-            indicates all pages should be backed-up in a single step.
-        :param str name: Name of source database (may differ if you used ATTACH
-            DATABASE to load multiple databases). Defaults to "main".
-        :param progress: Progress callback, called with three parameters: the
-            number of pages remaining, the total page count, and whether the
-            backup is complete.
-
-        Backup the current database to a file. The backed-up data is not a
-        database dump, but an actual SQLite database file.
-
-        Example:
-
-        .. code-block:: python
-
-            db = CSqliteExtDatabase('app.db')
-
-            def nightly_backup():
-                filename = 'backup-%s.db' % (datetime.date.today())
-                db.backup_to_file(filename)
-
-    .. py:method:: blob_open(table, column, rowid[, read_only=False])
-
-        :param str table: Name of table containing data.
-        :param str column: Name of column containing data.
-        :param int rowid: ID of row to retrieve.
-        :param bool read_only: Open the blob for reading only.
-        :returns: :py:class:`Blob` instance which provides efficient access to
-            the underlying binary data.
-        :rtype: Blob
-
-        See :py:class:`Blob` and :py:class:`ZeroBlob` for more information.
-
-        Example:
-
-        .. code-block:: python
-
-            class Image(Model):
-                filename = TextField()
-                data = BlobField()
-
-            buf_size = 1024 * 1024 * 8  # Allocate 8MB for storing file.
-            rowid = Image.insert({Image.filename: 'thefile.jpg',
-                                  Image.data: ZeroBlob(buf_size)}).execute()
-
-            # Open the blob, returning a file-like object.
-            blob = db.blob_open('image', 'data', rowid)
-
-            # Write some data to the blob.
-            blob.write(image_data)
-            img_size = blob.tell()
-
-            # Read the data back out of the blob.
-            blob.seek(0)
-            image_data = blob.read(img_size)
 
 .. py:class:: RowIDField()
 
@@ -258,6 +64,7 @@ APIs
             rowid = RowIDField()  # Will be primary key.
             content = TextField()
             timestamp = TimestampField()
+
 
 .. py:class:: DocIDField()
 
@@ -280,6 +87,7 @@ APIs
             class Meta:
                 database = db
 
+
 .. py:class:: AutoIncrementField()
 
     SQLite, by default, may reuse primary key values after rows are deleted. To
@@ -288,12 +96,14 @@ APIs
     There is a small performance cost for this feature. For more information,
     see the SQLite docs on `autoincrement <https://sqlite.org/autoinc.html>`_.
 
+
 .. py:class:: ISODateTimeField()
 
     SQLite does not have a native DateTime data-type. Python ``datetime``
     objects are stored as strings by default. This subclass of
     :py:class:`DateTimeField` ensures that the UTC offset is stored properly
     for tz-aware datetimes and read-back properly when decoding row data.
+
 
 .. _sqlite-json1:
 
@@ -1445,141 +1255,6 @@ APIs
         Generate a model class suitable for accessing the `vocab table <http://sqlite.org/fts5.html#the_fts5vocab_virtual_table_module>`_
         corresponding to FTS5 search index.
 
-.. _sqlite-vtfunc:
-
-.. py:class:: TableFunction()
-
-    Implement a user-defined table-valued function. Unlike a simple
-    :ref:`scalar or aggregate <sqlite-user-functions>` function, which returns
-    a single scalar value, a table-valued function can return any number of
-    rows of tabular data.
-
-    Simple example:
-
-    .. code-block:: python
-
-        from playhouse.sqlite_ext import TableFunction
-
-
-        class Series(TableFunction):
-            # Name of columns in each row of generated data.
-            columns = ['value']
-
-            # Name of parameters the function may be called with.
-            params = ['start', 'stop', 'step']
-
-            def initialize(self, start=0, stop=None, step=1):
-                """
-                Table-functions declare an initialize() method, which is
-                called with whatever arguments the user has called the
-                function with.
-                """
-                self.start = self.current = start
-                self.stop = stop or float('Inf')
-                self.step = step
-
-            def iterate(self, idx):
-                """
-                Iterate is called repeatedly by the SQLite database engine
-                until the required number of rows has been read **or** the
-                function raises a `StopIteration` signalling no more rows
-                are available.
-                """
-                if self.current > self.stop:
-                    raise StopIteration
-
-                ret, self.current = self.current, self.current + self.step
-                return (ret,)
-
-        # Register the table-function with our database, which ensures it
-        # is declared whenever a connection is opened.
-        db.table_function('series')(Series)
-
-        # Usage:
-        cursor = db.execute_sql('SELECT * FROM series(?, ?, ?)', (0, 5, 2))
-        for value, in cursor:
-            print(value)
-
-    .. note::
-        A :py:class:`TableFunction` must be registered with a database
-        connection before it can be used. To ensure the table function is
-        always available, you can use the
-        :py:meth:`SqliteDatabase.table_function` decorator to register the
-        function with the database.
-
-    :py:class:`TableFunction` implementations must provide two attributes and
-    implement two methods, described below.
-
-    .. py:attribute:: columns
-
-        A list containing the names of the columns for the data returned by the
-        function. For example, a function that is used to split a string on a
-        delimiter might specify 3 columns: ``[substring, start_idx, end_idx]``.
-
-    .. py:attribute:: params
-
-        The names of the parameters the function may be called with. All
-        parameters, including optional parameters, should be listed. For
-        example, a function that is used to split a string on a delimiter might
-        specify 2 params: ``[string, delimiter]``.
-
-    .. py:attribute:: name
-
-        *Optional* - specify the name for the table function. If not provided,
-        name will be taken from the class name.
-
-    .. py:attribute:: print_tracebacks = True
-
-        Print a full traceback for any errors that occur in the
-        table-function's callback methods. When set to False, only the generic
-        OperationalError will be visible.
-
-    .. py:method:: initialize(**parameter_values)
-
-        :param parameter_values: Parameters the function was called with.
-        :returns: No return value.
-
-        The ``initialize`` method is called to initialize the table function
-        with the parameters the user specified when calling the function.
-
-    .. py:method:: iterate(idx)
-
-        :param int idx: current iteration step
-        :returns: A tuple of row data corresponding to the columns named
-            in the :py:attr:`~TableFunction.columns` attribute.
-        :raises StopIteration: To signal that no more rows are available.
-
-        This function is called repeatedly and returns successive rows of data.
-        The function may terminate before all rows are consumed (especially if
-        the user specified a ``LIMIT`` on the results). Alternatively, the
-        function can signal that no more data is available by raising a
-        ``StopIteration`` exception.
-
-    .. py:classmethod:: register(conn)
-
-        :param conn: A ``sqlite3.Connection`` object.
-
-        Register the table function with a DB-API 2.0 ``sqlite3.Connection``
-        object. Table-valued functions **must** be registered before they can
-        be used in a query.
-
-        Example:
-
-        .. code-block:: python
-
-            class MyTableFunction(TableFunction):
-                name = 'my_func'
-                # ... other attributes and methods ...
-
-            db = SqliteDatabase(':memory:')
-            db.connect()
-
-            MyTableFunction.register(db.connection())
-
-        To ensure the :py:class:`TableFunction` is registered every time a
-        connection is opened, use the :py:meth:`~SqliteDatabase.table_function`
-        decorator.
-
 
 .. _sqlite-closure-table:
 
@@ -1773,287 +1448,3 @@ APIs
     .. note::
         For an in-depth discussion of the SQLite transitive closure extension,
         check out this blog post, `Querying Tree Structures in SQLite using Python and the Transitive Closure Extension <https://charlesleifer.com/blog/querying-tree-structures-in-sqlite-using-python-and-the-transitive-closure-extension/>`_.
-
-.. _sqlite-lsm1:
-
-.. py:class:: LSMTable()
-
-    :py:class:`VirtualModel` subclass suitable for working with the `lsm1 extension <https://charlesleifer.com/blog/lsm-key-value-storage-in-sqlite3/>`_
-    The *lsm1* extension is a virtual table that provides a SQL interface to
-    the `lsm key/value storage engine from SQLite4 <http://sqlite.org/src4/doc/trunk/www/lsmusr.wiki>`_.
-
-    .. note::
-        The LSM1 extension has not been released yet (SQLite version 3.22 at
-        time of writing), so consider this feature experimental with potential
-        to change in subsequent releases.
-
-    LSM tables define one primary key column and an arbitrary number of
-    additional value columns (which are serialized and stored in a single value
-    field in the storage engine). The primary key must be all of the same type
-    and use one of the following field types:
-
-    * :py:class:`IntegerField`
-    * :py:class:`TextField`
-    * :py:class:`BlobField`
-
-    Since the LSM storage engine is a key/value store, primary keys (including
-    integers) must be specified by the application.
-
-    .. attention::
-        Secondary indexes are not supported by the LSM engine, so the only
-        efficient queries will be lookups (or range queries) on the primary
-        key.  Other fields can be queried and filtered on, but may result in a
-        full table-scan.
-
-    Example model declaration:
-
-    .. code-block:: python
-
-        db = SqliteExtDatabase('my_app.db')
-        db.load_extension('lsm.so')  # Load shared library.
-
-        class EventLog(LSMTable):
-            timestamp = IntegerField(primary_key=True)
-            action = TextField()
-            sender = TextField()
-            target = TextField()
-
-            class Meta:
-                database = db
-                filename = 'eventlog.ldb'  # LSM data is stored in separate db.
-
-        # Declare virtual table.
-        EventLog.create_table()
-
-    Example queries:
-
-    .. code-block:: python
-
-        # Use dictionary operators to get, set and delete rows from the LSM
-        # table. Slices may be passed to represent a range of key values.
-        def get_timestamp():
-            # Return time as integer expressing time in microseconds.
-            return int(time.time() * 1000000)
-
-        # Create a new row, at current timestamp.
-        ts = get_timestamp()
-        EventLog[ts] = ('pageview', 'search', '/blog/some-post/')
-
-        # Retrieve row from event log.
-        log = EventLog[ts]
-        print(log.action, log.sender, log.target)
-        # Prints ("pageview", "search", "/blog/some-post/")
-
-        # Delete the row.
-        del EventLog[ts]
-
-        # We can also use the "create()" method.
-        EventLog.create(
-            timestamp=get_timestamp(),
-            action='signup',
-            sender='newsletter',
-            target='sqlite-news')
-
-    Simple key/value model declaration:
-
-    .. code-block:: python
-
-        class KV(LSMTable):
-            key = TextField(primary_key=True)
-            value = TextField()
-
-            class Meta:
-                database = db
-                filename = 'kv.ldb'
-
-        db.create_tables([KV])
-
-    For tables consisting of a single value field, Peewee will return the value
-    directly when getting a single item. You can also request slices of rows,
-    in which case Peewee returns a corresponding :py:class:`Select` query,
-    which can be iterated over. Below are some examples:
-
-    .. code-block:: pycon
-
-        >>> KV['k0'] = 'v0'
-        >>> print(KV['k0'])
-        'v0'
-
-        >>> data = [{'key': 'k%d' % i, 'value': 'v%d' % i} for i in range(20)]
-        >>> KV.insert_many(data).execute()
-
-        >>> KV.select().count()
-        20
-
-        >>> KV['k8']
-        'v8'
-
-        >>> list(KV['k4.1':'k7.x']
-        [Row(key='k5', value='v5'),
-         Row(key='k6', value='v6'),
-         Row(key='k7', value='v7')]
-
-        >>> list(KV['k6xxx':])
-        [Row(key='k7', value='v7'),
-         Row(key='k8', value='v8'),
-         Row(key='k9', value='v9')]
-
-    You can also index the :py:class:`LSMTable` using expressions:
-
-    .. code-block:: pycon
-
-        >>> list(KV[KV.key > 'k6'])
-        [Row(key='k7', value='v7'),
-         Row(key='k8', value='v8'),
-         Row(key='k9', value='v9')]
-
-        >>> list(KV[(KV.key > 'k6') & (KV.value != 'v8')])
-        [Row(key='k7', value='v7'),
-         Row(key='k9', value='v9')]
-
-    You can delete single rows using ``del`` or multiple rows using slices
-    or expressions:
-
-    .. code-block:: pycon
-
-        >>> del KV['k1']
-        >>> del KV['k3x':'k8']
-        >>> del KV[KV.key.between('k10', 'k18')]
-
-        >>> list(KV[:])
-        [Row(key='k0', value='v0'),
-         Row(key='k19', value='v19'),
-         Row(key='k2', value='v2'),
-         Row(key='k3', value='v3'),
-         Row(key='k9', value='v9')]
-
-    Attempting to get a single non-existant key will result in a ``DoesNotExist``,
-    but slices will not raise an exception:
-
-    .. code-block:: pycon
-
-        >>> KV['k1']
-        ...
-        KV.DoesNotExist: <Model:KV> instance matching query does not exist: ...
-
-        >>> list(KV['k1':'k1'])
-        []
-
-
-.. _sqlite-blob:
-
-.. py:class:: ZeroBlob(length)
-
-    :param int length: Size of blob in bytes.
-
-    :py:class:`ZeroBlob` is used solely to reserve space for storing a BLOB
-    that supports incremental I/O. To use the `SQLite BLOB-store <https://www.sqlite.org/c3ref/blob_open.html>`_
-    it is necessary to first insert a ZeroBlob of the desired size into the
-    row you wish to use with incremental I/O.
-
-    For example, see :py:class:`Blob`.
-
-.. py:class:: Blob(database, table, column, rowid[, read_only=False])
-
-    :param database: :py:class:`SqliteExtDatabase` instance.
-    :param str table: Name of table being accessed.
-    :param str column: Name of column being accessed.
-    :param int rowid: Primary-key of row being accessed.
-    :param bool read_only: Prevent any modifications to the blob data.
-
-    Open a blob, stored in the given table/column/row, for incremental I/O.
-    To allocate storage for new data, you can use the :py:class:`ZeroBlob`,
-    which is very efficient.
-
-    .. code-block:: python
-
-        class RawData(Model):
-            data = BlobField()
-
-        # Allocate 100MB of space for writing a large file incrementally:
-        query = RawData.insert({'data': ZeroBlob(1024 * 1024 * 100)})
-        rowid = query.execute()
-
-        # Now we can open the row for incremental I/O:
-        blob = Blob(db, 'rawdata', 'data', rowid)
-
-        # Read from the file and write to the blob in chunks of 4096 bytes.
-        while True:
-            data = file_handle.read(4096)
-            if not data:
-                break
-            blob.write(data)
-
-        bytes_written = blob.tell()
-        blob.close()
-
-    .. py:method:: read([n=None])
-
-        :param int n: Only read up to *n* bytes from current position in file.
-
-        Read up to *n* bytes from the current position in the blob file. If *n*
-        is not specified, the entire blob will be read.
-
-    .. py:method:: seek(offset[, whence=0])
-
-        :param int offset: Seek to the given offset in the file.
-        :param int whence: Seek relative to the specified frame of reference.
-
-        Values for ``whence``:
-
-        * ``0``: beginning of file
-        * ``1``: current position
-        * ``2``: end of file
-
-    .. py:method:: tell()
-
-        Return current offset within the file.
-
-    .. py:method:: write(data)
-
-        :param bytes data: Data to be written
-
-        Writes the given data, starting at the current position in the file.
-
-    .. py:method:: close()
-
-        Close the file and free associated resources.
-
-    .. py:method:: reopen(rowid)
-
-        :param int rowid: Primary key of row to open.
-
-        If a blob has already been opened for a given table/column, you can use
-        the :py:meth:`~Blob.reopen` method to re-use the same :py:class:`Blob`
-        object for accessing multiple rows in the table.
-
-.. _sqlite-extras:
-
-Additional Features
--------------------
-
-The :py:class:`SqliteExtDatabase` can also register other useful functions:
-
-* ``rank_functions`` (enabled by default): registers functions for ranking
-  search results, such as *bm25* and *lucene*.
-* ``hash_functions``: registers md5, sha1, sha256, adler32, crc32 and
-  murmurhash functions.
-* ``regexp_function``: registers a regexp function.
-
-Examples:
-
-.. code-block:: python
-
-    def create_new_user(username, password):
-        # DO NOT DO THIS IN REAL LIFE. PLEASE.
-        query = User.insert({'username': username, 'password': fn.sha1(password)})
-        new_user_id = query.execute()
-
-You can use the *murmurhash* function to hash bytes to an integer for compact
-storage:
-
-.. code-block:: pycon
-
-    >>> db = SqliteExtDatabase(':memory:', hash_functions=True)
-    >>> db.execute_sql('SELECT murmurhash(?)', ('abcdefg',)).fetchone()
-    (4188131059,)

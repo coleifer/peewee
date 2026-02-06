@@ -1,7 +1,5 @@
 import json
-import math
 import re
-import struct
 import sys
 
 from peewee import *
@@ -16,22 +14,9 @@ from peewee import OP
 from peewee import VirtualField
 from peewee import merge_dict
 from peewee import sqlite3
-try:
-    from playhouse._sqlite_ext import (
-        backup,
-        backup_to_file,
-        Blob,
-        ConnectionHelper,
-        register_hash_functions,
-        register_rank_functions,
-        sqlite_get_db_status,
-        sqlite_get_status,
-        TableFunction,
-        ZeroBlob,
-    )
-    CYTHON_SQLITE_EXTENSIONS = True
-except ImportError:
-    CYTHON_SQLITE_EXTENSIONS = False
+from playhouse.sqlite_udf import JSON
+from playhouse.sqlite_udf import RANK
+from playhouse.sqlite_udf import register_udf_groups
 
 
 if sys.version_info[0] == 3:
@@ -948,109 +933,6 @@ def ClosureTable(model_class, foreign_key=None, referencing_class=None,
     return type(name, (BaseClosureTable,), {'Meta': Meta})
 
 
-class LSMTable(VirtualModel):
-    class Meta:
-        extension_module = 'lsm1'
-        filename = None
-
-    @classmethod
-    def clean_options(cls, options):
-        filename = cls._meta.filename
-        if not filename:
-            raise ValueError('LSM1 extension requires that you specify a '
-                             'filename for the LSM database.')
-        else:
-            if len(filename) >= 2 and filename[0] != '"':
-                filename = '"%s"' % filename
-        if not cls._meta.primary_key:
-            raise ValueError('LSM1 models must specify a primary-key field.')
-
-        key = cls._meta.primary_key
-        if isinstance(key, AutoField):
-            raise ValueError('LSM1 models must explicitly declare a primary '
-                             'key field.')
-        if not isinstance(key, (TextField, BlobField, IntegerField)):
-            raise ValueError('LSM1 key must be a TextField, BlobField, or '
-                             'IntegerField.')
-        key._hidden = True
-        if isinstance(key, IntegerField):
-            data_type = 'UINT'
-        elif isinstance(key, BlobField):
-            data_type = 'BLOB'
-        else:
-            data_type = 'TEXT'
-        cls._meta.prefix_arguments = [filename, '"%s"' % key.name, data_type]
-
-        # Does the key map to a scalar value, or a tuple of values?
-        if len(cls._meta.sorted_fields) == 2:
-            cls._meta._value_field = cls._meta.sorted_fields[1]
-        else:
-            cls._meta._value_field = None
-
-        return options
-
-    @classmethod
-    def load_extension(cls, path='lsm.so'):
-        cls._meta.database.load_extension(path)
-
-    @staticmethod
-    def slice_to_expr(key, idx):
-        if idx.start is not None and idx.stop is not None:
-            return key.between(idx.start, idx.stop)
-        elif idx.start is not None:
-            return key >= idx.start
-        elif idx.stop is not None:
-            return key <= idx.stop
-
-    @staticmethod
-    def _apply_lookup_to_query(query, key, lookup):
-        if isinstance(lookup, slice):
-            expr = LSMTable.slice_to_expr(key, lookup)
-            if expr is not None:
-                query = query.where(expr)
-            return query, False
-        elif isinstance(lookup, Expression):
-            return query.where(lookup), False
-        else:
-            return query.where(key == lookup), True
-
-    @classmethod
-    def get_by_id(cls, pk):
-        query, is_single = cls._apply_lookup_to_query(
-            cls.select().namedtuples(),
-            cls._meta.primary_key,
-            pk)
-
-        if is_single:
-            row = query.get()
-            return row[1] if cls._meta._value_field is not None else row
-        else:
-            return query
-
-    @classmethod
-    def set_by_id(cls, key, value):
-        if cls._meta._value_field is not None:
-            data = {cls._meta._value_field: value}
-        elif isinstance(value, tuple):
-            data = {}
-            for field, fval in zip(cls._meta.sorted_fields[1:], value):
-                data[field] = fval
-        elif isinstance(value, dict):
-            data = value
-        elif isinstance(value, cls):
-            data = value.__dict__
-        data[cls._meta.primary_key] = key
-        cls.replace(data).execute()
-
-    @classmethod
-    def delete_by_id(cls, pk):
-        query, is_single = cls._apply_lookup_to_query(
-            cls.delete(),
-            cls._meta.primary_key,
-            pk)
-        return query.execute()
-
-
 OP.MATCH = 'MATCH'
 
 def _sqlite_regexp(regex, value):
@@ -1058,36 +940,17 @@ def _sqlite_regexp(regex, value):
 
 
 class SqliteExtDatabase(SqliteDatabase):
-    def __init__(self, database, c_extensions=None, rank_functions=True,
-                 hash_functions=False, regexp_function=False,
+    def __init__(self, database, rank_functions=True, regexp_function=False,
                  json_contains=False, *args, **kwargs):
         super(SqliteExtDatabase, self).__init__(database, *args, **kwargs)
         self._row_factory = None
 
-        if c_extensions and not CYTHON_SQLITE_EXTENSIONS:
-            raise ImproperlyConfigured('SqliteExtDatabase initialized with '
-                                       'C extensions, but shared library was '
-                                       'not found!')
-        prefer_c = CYTHON_SQLITE_EXTENSIONS and (c_extensions is not False)
         if rank_functions:
-            if prefer_c:
-                register_rank_functions(self)
-            else:
-                self.register_function(bm25, 'fts_bm25')
-                self.register_function(rank, 'fts_rank')
-                self.register_function(bm25, 'fts_bm25f')  # Fall back to bm25.
-                self.register_function(bm25, 'fts_lucene')
-        if hash_functions:
-            if not prefer_c:
-                raise ValueError('C extension required to register hash '
-                                 'functions.')
-            register_hash_functions(self)
+            register_udf_groups(self, RANK)
         if regexp_function:
             self.register_function(_sqlite_regexp, 'regexp', 2)
         if json_contains:
-            self.register_function(_json_contains, 'json_contains')
-
-        self._c_extensions = prefer_c
+            register_udf_groups(self, JSON)
 
     def _add_conn_hooks(self, conn):
         super(SqliteExtDatabase, self)._add_conn_hooks(conn)
@@ -1098,325 +961,14 @@ class SqliteExtDatabase(SqliteDatabase):
         self._row_factory = fn
 
 
-if CYTHON_SQLITE_EXTENSIONS:
-    SQLITE_STATUS_MEMORY_USED = 0
-    SQLITE_STATUS_PAGECACHE_USED = 1
-    SQLITE_STATUS_PAGECACHE_OVERFLOW = 2
-    SQLITE_STATUS_SCRATCH_USED = 3
-    SQLITE_STATUS_SCRATCH_OVERFLOW = 4
-    SQLITE_STATUS_MALLOC_SIZE = 5
-    SQLITE_STATUS_PARSER_STACK = 6
-    SQLITE_STATUS_PAGECACHE_SIZE = 7
-    SQLITE_STATUS_SCRATCH_SIZE = 8
-    SQLITE_STATUS_MALLOC_COUNT = 9
-    SQLITE_DBSTATUS_LOOKASIDE_USED = 0
-    SQLITE_DBSTATUS_CACHE_USED = 1
-    SQLITE_DBSTATUS_SCHEMA_USED = 2
-    SQLITE_DBSTATUS_STMT_USED = 3
-    SQLITE_DBSTATUS_LOOKASIDE_HIT = 4
-    SQLITE_DBSTATUS_LOOKASIDE_MISS_SIZE = 5
-    SQLITE_DBSTATUS_LOOKASIDE_MISS_FULL = 6
-    SQLITE_DBSTATUS_CACHE_HIT = 7
-    SQLITE_DBSTATUS_CACHE_MISS = 8
-    SQLITE_DBSTATUS_CACHE_WRITE = 9
-    SQLITE_DBSTATUS_DEFERRED_FKS = 10
-    #SQLITE_DBSTATUS_CACHE_USED_SHARED = 11
-
-    def __status__(flag, return_highwater=False):
-        """
-        Expose a sqlite3_status() call for a particular flag as a property of
-        the Database object.
-        """
-        def getter(self):
-            result = sqlite_get_status(flag)
-            return result[1] if return_highwater else result
-        return property(getter)
-
-    def __dbstatus__(flag, return_highwater=False, return_current=False):
-        """
-        Expose a sqlite3_dbstatus() call for a particular flag as a property of
-        the Database instance. Unlike sqlite3_status(), the dbstatus properties
-        pertain to the current connection.
-        """
-        def getter(self):
-            if self._state.conn is None:
-                raise ImproperlyConfigured('database connection not opened.')
-            result = sqlite_get_db_status(self._state.conn, flag)
-            if return_current:
-                return result[0]
-            return result[1] if return_highwater else result
-        return property(getter)
-
-    class CSqliteExtDatabase(SqliteExtDatabase):
-        def __init__(self, *args, **kwargs):
-            self._conn_helper = None
-            self._commit_hook = self._rollback_hook = self._update_hook = None
-            self._replace_busy_handler = False
-            super(CSqliteExtDatabase, self).__init__(*args, **kwargs)
-
-        def init(self, database, replace_busy_handler=False, **kwargs):
-            super(CSqliteExtDatabase, self).init(database, **kwargs)
-            self._replace_busy_handler = replace_busy_handler
-
-        def _close(self, conn):
-            if self._commit_hook:
-                self._conn_helper.set_commit_hook(None)
-            if self._rollback_hook:
-                self._conn_helper.set_rollback_hook(None)
-            if self._update_hook:
-                self._conn_helper.set_update_hook(None)
-            return super(CSqliteExtDatabase, self)._close(conn)
-
-        def _add_conn_hooks(self, conn):
-            super(CSqliteExtDatabase, self)._add_conn_hooks(conn)
-            self._conn_helper = ConnectionHelper(conn)
-            if self._commit_hook is not None:
-                self._conn_helper.set_commit_hook(self._commit_hook)
-            if self._rollback_hook is not None:
-                self._conn_helper.set_rollback_hook(self._rollback_hook)
-            if self._update_hook is not None:
-                self._conn_helper.set_update_hook(self._update_hook)
-            if self._replace_busy_handler:
-                timeout = self._timeout or 5
-                self._conn_helper.set_busy_handler(timeout * 1000)
-
-        def on_commit(self, fn):
-            self._commit_hook = fn
-            if not self.is_closed():
-                self._conn_helper.set_commit_hook(fn)
-            return fn
-
-        def on_rollback(self, fn):
-            self._rollback_hook = fn
-            if not self.is_closed():
-                self._conn_helper.set_rollback_hook(fn)
-            return fn
-
-        def on_update(self, fn):
-            self._update_hook = fn
-            if not self.is_closed():
-                self._conn_helper.set_update_hook(fn)
-            return fn
-
-        def changes(self):
-            return self._conn_helper.changes()
-
-        @property
-        def last_insert_rowid(self):
-            return self._conn_helper.last_insert_rowid()
-
-        @property
-        def autocommit(self):
-            return self._conn_helper.autocommit()
-
-        def backup(self, destination, pages=None, name=None, progress=None):
-            return backup(self.connection(), destination.connection(),
-                          pages=pages, name=name, progress=progress)
-
-        def backup_to_file(self, filename, pages=None, name=None,
-                           progress=None):
-            return backup_to_file(self.connection(), filename, pages=pages,
-                                  name=name, progress=progress)
-
-        def blob_open(self, table, column, rowid, read_only=False):
-            return Blob(self, table, column, rowid, read_only)
-
-        # Status properties.
-        memory_used = __status__(SQLITE_STATUS_MEMORY_USED)
-        malloc_size = __status__(SQLITE_STATUS_MALLOC_SIZE, True)
-        malloc_count = __status__(SQLITE_STATUS_MALLOC_COUNT)
-        pagecache_used = __status__(SQLITE_STATUS_PAGECACHE_USED)
-        pagecache_overflow = __status__(SQLITE_STATUS_PAGECACHE_OVERFLOW)
-        pagecache_size = __status__(SQLITE_STATUS_PAGECACHE_SIZE, True)
-        scratch_used = __status__(SQLITE_STATUS_SCRATCH_USED)
-        scratch_overflow = __status__(SQLITE_STATUS_SCRATCH_OVERFLOW)
-        scratch_size = __status__(SQLITE_STATUS_SCRATCH_SIZE, True)
-
-        # Connection status properties.
-        lookaside_used = __dbstatus__(SQLITE_DBSTATUS_LOOKASIDE_USED)
-        lookaside_hit = __dbstatus__(SQLITE_DBSTATUS_LOOKASIDE_HIT, True)
-        lookaside_miss = __dbstatus__(SQLITE_DBSTATUS_LOOKASIDE_MISS_SIZE,
-                                      True)
-        lookaside_miss_full = __dbstatus__(SQLITE_DBSTATUS_LOOKASIDE_MISS_FULL,
-                                           True)
-        cache_used = __dbstatus__(SQLITE_DBSTATUS_CACHE_USED, False, True)
-        #cache_used_shared = __dbstatus__(SQLITE_DBSTATUS_CACHE_USED_SHARED,
-        #                                 False, True)
-        schema_used = __dbstatus__(SQLITE_DBSTATUS_SCHEMA_USED, False, True)
-        statement_used = __dbstatus__(SQLITE_DBSTATUS_STMT_USED, False, True)
-        cache_hit = __dbstatus__(SQLITE_DBSTATUS_CACHE_HIT, False, True)
-        cache_miss = __dbstatus__(SQLITE_DBSTATUS_CACHE_MISS, False, True)
-        cache_write = __dbstatus__(SQLITE_DBSTATUS_CACHE_WRITE, False, True)
+class CSqliteExtDatabase(SqliteExtDatabase):
+    # XXX: here today, gone tomorrow.
+    def __init__(self, *args, **kwargs):
+        warnings.warn('CSqliteExtDatabase is deprecated. For equivalent '
+                      'functionality use cysqlite_ext.CySqliteDatabase.',
+                      DeprecationWarning)
+        super(CSqliteExtDatabase, self).__init__(*args, **kwargs)
 
 
 def match(lhs, rhs):
     return Expression(lhs, OP.MATCH, rhs)
-
-def _parse_match_info(buf):
-    # See http://sqlite.org/fts3.html#matchinfo
-    bufsize = len(buf)  # Length in bytes.
-    return [struct.unpack('@I', buf[i:i+4])[0] for i in range(0, bufsize, 4)]
-
-def get_weights(ncol, raw_weights):
-    if not raw_weights:
-        return [1] * ncol
-    else:
-        weights = [0] * ncol
-        for i, weight in enumerate(raw_weights):
-            weights[i] = weight
-    return weights
-
-# Ranking implementation, which parse matchinfo.
-def rank(raw_match_info, *raw_weights):
-    # Handle match_info called w/default args 'pcx' - based on the example rank
-    # function http://sqlite.org/fts3.html#appendix_a
-    match_info = _parse_match_info(raw_match_info)
-    score = 0.0
-
-    p, c = match_info[:2]
-    weights = get_weights(c, raw_weights)
-
-    # matchinfo X value corresponds to, for each phrase in the search query, a
-    # list of 3 values for each column in the search table.
-    # So if we have a two-phrase search query and three columns of data, the
-    # following would be the layout:
-    # p0 : c0=[0, 1, 2],   c1=[3, 4, 5],    c2=[6, 7, 8]
-    # p1 : c0=[9, 10, 11], c1=[12, 13, 14], c2=[15, 16, 17]
-    for phrase_num in range(p):
-        phrase_info_idx = 2 + (phrase_num * c * 3)
-        for col_num in range(c):
-            weight = weights[col_num]
-            if not weight:
-                continue
-
-            col_idx = phrase_info_idx + (col_num * 3)
-
-            # The idea is that we count the number of times the phrase appears
-            # in this column of the current row, compared to how many times it
-            # appears in this column across all rows. The ratio of these values
-            # provides a rough way to score based on "high value" terms.
-            row_hits = match_info[col_idx]
-            all_rows_hits = match_info[col_idx + 1]
-            if row_hits > 0:
-                score += weight * (float(row_hits) / all_rows_hits)
-
-    return -score
-
-# Okapi BM25 ranking implementation (FTS4 only).
-def bm25(raw_match_info, *args):
-    """
-    Usage:
-
-        # Format string *must* be pcnalx
-        # Second parameter to bm25 specifies the index of the column, on
-        # the table being queries.
-        bm25(matchinfo(document_tbl, 'pcnalx'), 1) AS rank
-    """
-    match_info = _parse_match_info(raw_match_info)
-    K = 1.2
-    B = 0.75
-    score = 0.0
-
-    P_O, C_O, N_O, A_O = range(4)  # Offsets into the matchinfo buffer.
-    term_count = match_info[P_O]  # n
-    col_count = match_info[C_O]
-    total_docs = match_info[N_O]  # N
-    L_O = A_O + col_count
-    X_O = L_O + col_count
-
-    # Worked example of pcnalx for two columns and two phrases, 100 docs total.
-    # {
-    #   p  = 2
-    #   c  = 2
-    #   n  = 100
-    #   a0 = 4   -- avg number of tokens for col0, e.g. title
-    #   a1 = 40  -- avg number of tokens for col1, e.g. body
-    #   l0 = 5   -- curr doc has 5 tokens in col0
-    #   l1 = 30  -- curr doc has 30 tokens in col1
-    #
-    #   x000     -- hits this row for phrase0, col0
-    #   x001     -- hits all rows for phrase0, col0
-    #   x002     -- rows with phrase0 in col0 at least once
-    #
-    #   x010     -- hits this row for phrase0, col1
-    #   x011     -- hits all rows for phrase0, col1
-    #   x012     -- rows with phrase0 in col1 at least once
-    #
-    #   x100     -- hits this row for phrase1, col0
-    #   x101     -- hits all rows for phrase1, col0
-    #   x102     -- rows with phrase1 in col0 at least once
-    #
-    #   x110     -- hits this row for phrase1, col1
-    #   x111     -- hits all rows for phrase1, col1
-    #   x112     -- rows with phrase1 in col1 at least once
-    # }
-
-    weights = get_weights(col_count, args)
-
-    for i in range(term_count):
-        for j in range(col_count):
-            weight = weights[j]
-            if weight == 0:
-                continue
-
-            x = X_O + (3 * (j + i * col_count))
-            term_frequency = float(match_info[x])  # f(qi, D)
-            docs_with_term = float(match_info[x + 2])  # n(qi)
-
-            # log( (N - n(qi) + 0.5) / (n(qi) + 0.5) )
-            idf = math.log(
-                    (total_docs - docs_with_term + 0.5) /
-                    (docs_with_term + 0.5))
-            if idf <= 0.0:
-                idf = 1e-6
-
-            doc_length = float(match_info[L_O + j])  # |D|
-            avg_length = float(match_info[A_O + j]) or 1.  # avgdl
-            ratio = doc_length / avg_length
-
-            num = term_frequency * (K + 1.0)
-            b_part = 1.0 - B + (B * ratio)
-            denom = term_frequency + (K * b_part)
-
-            pc_score = idf * (num / denom)
-            score += (pc_score * weight)
-
-    return -score
-
-
-def _json_contains(src_json, obj_json):
-    stack = []
-    try:
-        stack.append((json.loads(obj_json), json.loads(src_json)))
-    except:
-        # Invalid JSON!
-        return False
-
-    while stack:
-        obj, src = stack.pop()
-        if isinstance(src, dict):
-            if isinstance(obj, dict):
-                for key in obj:
-                    if key not in src:
-                        return False
-                    stack.append((obj[key], src[key]))
-            elif isinstance(obj, list):
-                for item in obj:
-                    if item not in src:
-                        return False
-            elif obj not in src:
-                return False
-        elif isinstance(src, list):
-            if isinstance(obj, dict):
-                return False
-            elif isinstance(obj, list):
-                try:
-                    for i in range(len(obj)):
-                        stack.append((obj[i], src[i]))
-                except IndexError:
-                    return False
-            elif obj not in src:
-                return False
-        elif obj != src:
-            return False
-    return True

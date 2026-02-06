@@ -1,10 +1,10 @@
+import glob
 import os
-import sys
+
+import cysqlite
 
 from peewee import *
-from peewee import sqlite3
-from playhouse.sqlite_ext import CYTHON_SQLITE_EXTENSIONS
-from playhouse.sqlite_ext import *
+from playhouse.cysqlite_ext import *
 
 from .base import BaseTestCase
 from .base import DatabaseTestCase
@@ -13,23 +13,22 @@ from .base import db_loader
 from .base import skip_unless
 
 
-database = CSqliteExtDatabase('peewee_test.db', timeout=100,
-                              hash_functions=1)
+database = CySqliteDatabase('peewee_test.db', timeout=100)
 
 
-class CDatabaseTestCase(DatabaseTestCase):
+class CyDatabaseTestCase(DatabaseTestCase):
     database = database
 
     def tearDown(self):
-        super(CDatabaseTestCase, self).tearDown()
-        if os.path.exists(self.database.database):
-            os.unlink(self.database.database)
+        super(CyDatabaseTestCase, self).tearDown()
+        for filename in glob.glob(self.database.database + '*'):
+            os.unlink(filename)
 
     def execute(self, sql, *params):
         return self.database.execute_sql(sql, params)
 
 
-class TestCSqliteHelpers(CDatabaseTestCase):
+class TestCSqliteHelpers(CyDatabaseTestCase):
     def test_autocommit(self):
         self.assertTrue(self.database.autocommit)
         self.database.begin()
@@ -121,36 +120,7 @@ class TestCSqliteHelpers(CDatabaseTestCase):
         self.assertTrue(self.database.cache_used is not None)
 
 
-HUser = Table('users', ('id', 'username'))
-
-
-class TestHashFunctions(CDatabaseTestCase):
-    database = database
-
-    def setUp(self):
-        super(TestHashFunctions, self).setUp()
-        self.database.execute_sql(
-            'create table users (id integer not null primary key, '
-            'username text not null)')
-
-    def test_md5(self):
-        for username in ('charlie', 'huey', 'zaizee'):
-            HUser.insert({HUser.username: username}).execute(self.database)
-
-        query = (HUser
-                 .select(HUser.username,
-                         fn.SUBSTR(fn.SHA1(HUser.username), 1, 6).alias('sha'))
-                 .order_by(HUser.username)
-                 .tuples()
-                 .execute(self.database))
-
-        self.assertEqual(query[:], [
-            ('charlie', 'd8cd10'),
-            ('huey', '89b31a'),
-            ('zaizee', 'b4dcf9')])
-
-
-class TestBackup(CDatabaseTestCase):
+class TestBackup(CyDatabaseTestCase):
     backup_filenames = set(('test_backup.db', 'test_backup1.db',
                             'test_backup2.db'))
 
@@ -172,7 +142,7 @@ class TestBackup(CDatabaseTestCase):
         self._populate_test_data()
 
         # Back-up to an in-memory database and verify contents.
-        other_db = CSqliteExtDatabase(':memory:')
+        other_db = CySqliteDatabase(':memory:')
         self.database.backup(other_db)
         cursor = other_db.execute_sql('SELECT value FROM register ORDER BY '
                                       'value;')
@@ -180,7 +150,7 @@ class TestBackup(CDatabaseTestCase):
         other_db.close()
 
     def test_backup_preserve_pagesize(self):
-        db1 = CSqliteExtDatabase('test_backup1.db')
+        db1 = CySqliteDatabase('test_backup1.db')
         with db1.connection_context():
             db1.page_size = 8192
             self._populate_test_data(db=db1)
@@ -188,7 +158,7 @@ class TestBackup(CDatabaseTestCase):
         db1.connect()
         self.assertEqual(db1.page_size, 8192)
 
-        db2 = CSqliteExtDatabase('test_backup2.db')
+        db2 = CySqliteDatabase('test_backup2.db')
         db1.backup(db2)
         self.assertEqual(db2.page_size, 8192)
         nrows, = db2.execute_sql('select count(*) from register;').fetchone()
@@ -198,7 +168,7 @@ class TestBackup(CDatabaseTestCase):
         self._populate_test_data()
 
         self.database.backup_to_file('test_backup.db')
-        backup_db = CSqliteExtDatabase('test_backup.db')
+        backup_db = CySqliteDatabase('test_backup.db')
         cursor = backup_db.execute_sql('SELECT value FROM register ORDER BY '
                                        'value;')
         self.assertEqual([val for val, in cursor.fetchall()], list(range(100)))
@@ -211,7 +181,7 @@ class TestBackup(CDatabaseTestCase):
         def progress(remaining, total, is_done):
             accum.append((remaining, total, is_done))
 
-        other_db = CSqliteExtDatabase(':memory:')
+        other_db = CySqliteDatabase(':memory:')
         self.database.backup(other_db, pages=1, progress=progress)
         self.assertTrue(len(accum) > 0)
 
@@ -226,127 +196,13 @@ class TestBackup(CDatabaseTestCase):
         def broken_progress(remaining, total, is_done):
             raise ValueError('broken')
 
-        other_db = CSqliteExtDatabase(':memory:')
+        other_db = CySqliteDatabase(':memory:')
         self.assertRaises(ValueError, self.database.backup, other_db,
                           progress=broken_progress)
         other_db.close()
 
 
-class TestBlob(CDatabaseTestCase):
-    def setUp(self):
-        super(TestBlob, self).setUp()
-        self.Register = Table('register', ('id', 'data'))
-        self.execute('CREATE TABLE register (id INTEGER NOT NULL PRIMARY KEY, '
-                     'data BLOB NOT NULL)')
-
-    def create_blob_row(self, nbytes):
-        Register = self.Register.bind(self.database)
-        Register.insert({Register.data: ZeroBlob(nbytes)}).execute()
-        return self.database.last_insert_rowid
-
-    def test_blob(self):
-        rowid1024 = self.create_blob_row(1024)
-        rowid16 = self.create_blob_row(16)
-
-        blob = Blob(self.database, 'register', 'data', rowid1024)
-        self.assertEqual(len(blob), 1024)
-
-        blob.write(b'x' * 1022)
-        blob.write(b'zz')
-        blob.seek(1020)
-        self.assertEqual(blob.tell(), 1020)
-
-        data = blob.read(3)
-        self.assertEqual(data, b'xxz')
-        self.assertEqual(blob.read(), b'z')
-        self.assertEqual(blob.read(), b'')
-
-        blob.seek(-10, 2)
-        self.assertEqual(blob.tell(), 1014)
-        self.assertEqual(blob.read(), b'xxxxxxxxzz')
-
-        blob.reopen(rowid16)
-        self.assertEqual(blob.tell(), 0)
-        self.assertEqual(len(blob), 16)
-
-        blob.write(b'x' * 15)
-        self.assertEqual(blob.tell(), 15)
-
-    def test_blob_exceed_size(self):
-        rowid = self.create_blob_row(16)
-
-        blob = self.database.blob_open('register', 'data', rowid)
-        with self.assertRaisesCtx(ValueError):
-            blob.seek(17, 0)
-
-        with self.assertRaisesCtx(ValueError):
-            blob.write(b'x' * 17)
-
-        blob.write(b'x' * 16)
-        self.assertEqual(blob.tell(), 16)
-        blob.seek(0)
-        data = blob.read(17)  # Attempting to read more data is OK.
-        self.assertEqual(data, b'x' * 16)
-
-        data = blob.read(1)
-        self.assertEqual(data, b'')
-
-        blob.seek(0)
-        blob.write(b'0123456789abcdef')
-
-        self.assertEqual(blob[0], b'0')
-        self.assertEqual(blob[-1], b'f')
-        self.assertRaises(IndexError, lambda: data[17])
-
-        blob.close()
-
-    def test_blob_errors_opening(self):
-        rowid = self.create_blob_row(4)
-
-        with self.assertRaisesCtx(OperationalError):
-            blob = self.database.blob_open('register', 'data', rowid + 1)
-
-        with self.assertRaisesCtx(OperationalError):
-            blob = self.database.blob_open('register', 'missing', rowid)
-
-        with self.assertRaisesCtx(OperationalError):
-            blob = self.database.blob_open('missing', 'data', rowid)
-
-    def test_blob_operating_on_closed(self):
-        rowid = self.create_blob_row(4)
-        blob = self.database.blob_open('register', 'data', rowid)
-        self.assertEqual(len(blob), 4)
-        blob.close()
-
-        with self.assertRaisesCtx(InterfaceError):
-            len(blob)
-
-        self.assertRaises(InterfaceError, blob.read)
-        self.assertRaises(InterfaceError, blob.write, b'foo')
-        self.assertRaises(InterfaceError, blob.seek, 0, 0)
-        self.assertRaises(InterfaceError, blob.tell)
-        self.assertRaises(InterfaceError, blob.reopen, rowid)
-        blob.close()  # Safe to call again.
-
-    def test_blob_readonly(self):
-        rowid = self.create_blob_row(4)
-        blob = self.database.blob_open('register', 'data', rowid)
-        blob.write(b'huey')
-        blob.seek(0)
-        self.assertEqual(blob.read(), b'huey')
-        blob.close()
-
-        blob = self.database.blob_open('register', 'data', rowid, True)
-        self.assertEqual(blob.read(), b'huey')
-        blob.seek(0)
-        with self.assertRaisesCtx(OperationalError):
-            blob.write(b'meow')
-
-        # BLOB is read-only.
-        self.assertEqual(blob.read(), b'huey')
-
-
-class DataTypes(TableFunction):
+class DataTypes(cysqlite.TableFunction):
     columns = ('key', 'value')
     params = ()
     name = 'data_types'
@@ -369,20 +225,25 @@ class DataTypes(TableFunction):
         raise StopIteration
 
 
-@skip_unless(sqlite3.sqlite_version_info >= (3, 9), 'requires sqlite >= 3.9')
-class TestDataTypesTableFunction(CDatabaseTestCase):
-    database = db_loader('sqlite')
+@skip_unless(cysqlite.sqlite_version_info >= (3, 9), 'requires sqlite >= 3.9')
+class TestDataTypesTableFunction(CyDatabaseTestCase):
+    database = db_loader('cysqlite')
 
     def test_data_types_table_function(self):
         self.database.register_table_function(DataTypes)
-        cursor = self.database.execute_sql('SELECT key, value '
-                                           'FROM data_types() ORDER BY key')
-        self.assertEqual(cursor.fetchall(), [
-            ('k0', None),
-            ('k1', 1),
-            ('k2', 2.),
-            ('k3', u'unicode str'),
-            ('k4', b'byte str'),
-            ('k5', 0),
-            ('k6', 1),
-        ])
+        for _ in range(2):
+            cursor = self.database.execute_sql('SELECT key, value FROM '
+                                               'data_types() ORDER BY key')
+            self.assertEqual(cursor.fetchall(), [
+                ('k0', None),
+                ('k1', 1),
+                ('k2', 2.),
+                ('k3', u'unicode str'),
+                ('k4', b'byte str'),
+                ('k5', 0),
+                ('k6', 1),
+            ])
+
+            # Ensure table re-registered after close.
+            self.database.close()
+            self.database.connect()

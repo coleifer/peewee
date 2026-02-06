@@ -843,15 +843,18 @@ Database
 
     .. py:method:: table_function([name=None])
 
-        Class-decorator for registering a :py:class:`TableFunction`. Table
+        Class-decorator for registering a ``cysqlite.TableFunction``. Table
         functions are user-defined functions that, rather than returning a
         single, scalar value, can return any number of rows of tabular data.
+
+        See `cysqlite docs <https://cysqlite.readthedocs.io/>`_ for details on
+        ``TableFunction`` API.
 
         Example:
 
         .. code-block:: python
 
-            from playhouse.sqlite_ext import TableFunction
+            from cysqlite import TableFunction
 
             @db.table_function('series')
             class Series(TableFunction):

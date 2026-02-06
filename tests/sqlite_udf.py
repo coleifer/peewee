@@ -13,10 +13,6 @@ from .base import TestModel
 from .base import db_loader
 from .base import skip_unless
 try:
-    from playhouse import _sqlite_ext as cython_ext
-except ImportError:
-    cython_ext = None
-try:
     from playhouse import _sqlite_udf as cython_udf
 except ImportError:
     cython_udf = None
@@ -415,76 +411,3 @@ class TestScalarFunctions(BaseTestUDF):
         self.assertEqual(
             self.sql1('select strip_chars(?, ?)', '  hey foo ', ' '),
             'hey foo')
-
-
-@skip_unless(cython_ext is not None, 'requires sqlite c extension')
-@skip_unless(sqlite3.sqlite_version_info >= (3, 9), 'requires sqlite >= 3.9')
-class TestVirtualTableFunctions(ModelTestCase):
-    database = database
-    requires = MODELS
-
-    def sqln(self, sql, *p):
-        cursor = self.database.execute_sql(sql, p)
-        return cursor.fetchall()
-
-    def test_regex_search(self):
-        usernames = [
-            'charlie',
-            'hu3y17',
-            'zaizee2012',
-            '1234.56789',
-            'hurr durr']
-        for username in usernames:
-            User.create(username=username)
-
-        rgx = '[0-9]+'
-        results = self.sqln(
-            ('SELECT user.username, regex_search.match '
-             'FROM user, regex_search(?, user.username) '
-             'ORDER BY regex_search.match'),
-            rgx)
-        self.assertEqual([row for row in results], [
-            ('1234.56789', '1234'),
-            ('hu3y17', '17'),
-            ('zaizee2012', '2012'),
-            ('hu3y17', '3'),
-            ('1234.56789', '56789'),
-        ])
-
-    def test_date_series(self):
-        ONE_DAY = 86400
-        def assertValues(start, stop, step_seconds, expected):
-            results = self.sqln('select * from date_series(?, ?, ?)',
-                                start, stop, step_seconds)
-            self.assertEqual(results, expected)
-
-        assertValues('2015-01-01', '2015-01-05', 86400, [
-            ('2015-01-01',),
-            ('2015-01-02',),
-            ('2015-01-03',),
-            ('2015-01-04',),
-            ('2015-01-05',),
-        ])
-
-        assertValues('2015-01-01', '2015-01-05', 86400 / 2, [
-            ('2015-01-01 00:00:00',),
-            ('2015-01-01 12:00:00',),
-            ('2015-01-02 00:00:00',),
-            ('2015-01-02 12:00:00',),
-            ('2015-01-03 00:00:00',),
-            ('2015-01-03 12:00:00',),
-            ('2015-01-04 00:00:00',),
-            ('2015-01-04 12:00:00',),
-            ('2015-01-05 00:00:00',),
-        ])
-
-        assertValues('14:20:15', '14:24', 30, [
-            ('14:20:15',),
-            ('14:20:45',),
-            ('14:21:15',),
-            ('14:21:45',),
-            ('14:22:15',),
-            ('14:22:45',),
-            ('14:23:15',),
-            ('14:23:45',),
-        ])
