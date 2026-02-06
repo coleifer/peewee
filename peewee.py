@@ -3590,7 +3590,6 @@ class SqliteDatabase(Database):
         self._collations = {}
         self._functions = {}
         self._window_functions = {}
-        self._table_functions = []
         self._extensions = set()
         self._attached = {}
         self.register_function(_sqlite_date_part, 'date_part', 2)
@@ -3635,9 +3634,6 @@ class SqliteDatabase(Database):
         self._load_functions(conn)
         if self.server_version >= (3, 25, 0):
             self._load_window_functions(conn)
-        if self._table_functions:
-            for table_function in self._table_functions:
-                table_function.register(conn)
         if self._extensions:
             self._load_extensions(conn)
 
@@ -3765,19 +3761,6 @@ class SqliteDatabase(Database):
             return klass
         return decorator
 
-    def register_table_function(self, klass, name=None):
-        if name is not None:
-            klass.name = name
-        self._table_functions.append(klass)
-        if not self.is_closed():
-            klass.register(self.connection())
-
-    def table_function(self, name=None):
-        def decorator(klass):
-            self.register_table_function(klass, name)
-            return klass
-        return decorator
-
     def unregister_aggregate(self, name):
         del(self._aggregates[name])
 
@@ -3789,15 +3772,6 @@ class SqliteDatabase(Database):
 
     def unregister_window_function(self, name):
         del(self._window_functions[name])
-
-    def unregister_table_function(self, name):
-        for idx, klass in enumerate(self._table_functions):
-            if klass.name == name:
-                break
-        else:
-            return False
-        self._table_functions.pop(idx)
-        return True
 
     def _load_extensions(self, conn):
         conn.enable_load_extension(True)

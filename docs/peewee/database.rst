@@ -404,8 +404,9 @@ for details on ``TableFunction``).
 .. code-block:: python
 
     from cysqlite import TableFunction
+    from playhouse.cysqlite_ext import CySqliteDatabase
 
-    db = SqliteDatabase('my_app.db')
+    db = CySqliteDatabase('my_app.db')
 
     @db.table_function('series')
     class Series(TableFunction):
@@ -451,7 +452,7 @@ For more information, see:
 * :py:meth:`SqliteDatabase.aggregate`
 * :py:meth:`SqliteDatabase.window_function`
 * :py:meth:`SqliteDatabase.collation`
-* :py:meth:`SqliteDatabase.table_function`
+* :py:meth:`CySqliteDatabase.table_function`
 
 .. _sqlite-locking:
 

@@ -14,10 +14,13 @@ from peewee import *
 from peewee import sqlite3
 from playhouse.cockroachdb import CockroachDatabase
 from playhouse.cockroachdb import NESTED_TX_MIN_VERSION
-from playhouse.cysqlite_ext import CySqliteDatabase
 from playhouse.mysql_ext import MariaDBConnectorDatabase
 from playhouse.mysql_ext import MySQLConnectorDatabase
 from playhouse.psycopg3_ext import Psycopg3Database
+try:
+    from playhouse.cysqlite_ext import CySqliteDatabase
+except ImportError:
+    CySqliteDatabase = None
 
 
 logger = logging.getLogger('peewee')
@@ -36,7 +39,7 @@ def db_loader(engine, name='peewee_test', db_class=None, **params):
             CockroachDatabase: ['cockroach', 'cockroachdb', 'crdb'],
         }
         engine_map = dict((alias, db) for db, aliases in engine_aliases.items()
-                          for alias in aliases)
+                          for alias in aliases if db is not None)
         if engine.lower() not in engine_map:
             raise Exception('Unsupported engine: %s.' % engine)
         db_class = engine_map[engine.lower()]

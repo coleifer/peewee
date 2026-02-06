@@ -841,59 +841,6 @@ Database
                 def finalize(self):
                     return self._value
 
-    .. py:method:: table_function([name=None])
-
-        Class-decorator for registering a ``cysqlite.TableFunction``. Table
-        functions are user-defined functions that, rather than returning a
-        single, scalar value, can return any number of rows of tabular data.
-
-        See `cysqlite docs <https://cysqlite.readthedocs.io/>`_ for details on
-        ``TableFunction`` API.
-
-        Example:
-
-        .. code-block:: python
-
-            from cysqlite import TableFunction
-
-            @db.table_function('series')
-            class Series(TableFunction):
-                columns = ['value']
-                params = ['start', 'stop', 'step']
-
-                def initialize(self, start=0, stop=None, step=1):
-                    """
-                    Table-functions declare an initialize() method, which is
-                    called with whatever arguments the user has called the
-                    function with.
-                    """
-                    self.start = self.current = start
-                    self.stop = stop or float('Inf')
-                    self.step = step
-
-                def iterate(self, idx):
-                    """
-                    Iterate is called repeatedly by the SQLite database engine
-                    until the required number of rows has been read **or** the
-                    function raises a `StopIteration` signalling no more rows
-                    are available.
-                    """
-                    if self.current > self.stop:
-                        raise StopIteration
-
-                    ret, self.current = self.current, self.current + self.step
-                    return (ret,)
-
-            # Usage:
-            cursor = db.execute_sql('SELECT * FROM series(?, ?, ?)', (0, 5, 2))
-            for value, in cursor:
-                print(value)
-
-            # Prints:
-            # 0
-            # 2
-            # 4
-
     .. py:method:: unregister_aggregate(name)
 
         :param name: Name of the user-defined aggregate function.
@@ -909,13 +856,6 @@ Database
     .. py:method:: unregister_function(name)
 
         :param name: Name of the user-defined scalar function.
-
-        Unregister the user-defined scalar function.
-
-    .. py:method:: unregister_table_function(name)
-
-        :param name: Name of the user-defined table function.
-        :returns: True or False, depending on whether the function was removed.
 
         Unregister the user-defined scalar function.
 
