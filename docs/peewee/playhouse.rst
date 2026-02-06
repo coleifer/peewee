@@ -187,8 +187,8 @@ matches in a given string, or a function that accepts two dates and generates
 all the intervening days.
 
 .. note::
-    To use table-valued functions, you will need to build the
-    ``playhouse._sqlite_ext`` C extension.
+    To use table-valued functions, you will need to use the ``cysqlite``
+    implementation found in ``playhouse.cysqlite_ext.CySqliteDatabase``.
 
 Registering user-defined functions:
 
