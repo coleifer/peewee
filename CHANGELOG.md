@@ -17,6 +17,11 @@ https://github.com/coleifer/peewee/releases
   testing, since testing `x in dirty_fields` returns True if one or more field
   exists due to operator overloads returning a truthy Expression object.
   Refs #3028.
+* Begin **significant** pruning of current Cython Sqlite extensions - most of
+  these will be moved to `playhouse.cysqlite_ext` which supports them natively
+  (no more hacks). Those that remain will likely just be Cython implementations
+  of the various rank() family of functions, and those can probably just get
+  put into `playhouse.sqlite_udf`. Take warning!
 
 [View commits](https://github.com/coleifer/peewee/compare/3.19.0...master)
 

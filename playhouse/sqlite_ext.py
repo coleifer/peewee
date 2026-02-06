@@ -22,7 +22,6 @@ try:
         backup_to_file,
         Blob,
         ConnectionHelper,
-        register_bloomfilter,
         register_hash_functions,
         register_rank_functions,
         sqlite_get_db_status,
@@ -1061,7 +1060,7 @@ def _sqlite_regexp(regex, value):
 class SqliteExtDatabase(SqliteDatabase):
     def __init__(self, database, c_extensions=None, rank_functions=True,
                  hash_functions=False, regexp_function=False,
-                 bloomfilter=False, json_contains=False, *args, **kwargs):
+                 json_contains=False, *args, **kwargs):
         super(SqliteExtDatabase, self).__init__(database, *args, **kwargs)
         self._row_factory = None
 
@@ -1085,10 +1084,6 @@ class SqliteExtDatabase(SqliteDatabase):
             register_hash_functions(self)
         if regexp_function:
             self.register_function(_sqlite_regexp, 'regexp', 2)
-        if bloomfilter:
-            if not prefer_c:
-                raise ValueError('C extension required to use bloomfilter.')
-            register_bloomfilter(self)
         if json_contains:
             self.register_function(_json_contains, 'json_contains')
 

@@ -20,7 +20,7 @@ The ``playhouse.sqlite_ext`` includes even more SQLite features, including:
 * :ref:`User-defined table functions <sqlite-vtfunc>`
 * Support for online backups using backup API: :py:meth:`~CSqliteExtDatabase.backup_to_file`
 * :ref:`BLOB API support, for efficient binary data storage <sqlite-blob>`.
-* :ref:`Additional helpers <sqlite-extras>`, including bloom filter, more.
+* :ref:`Additional helpers <sqlite-extras>`
 
 Getting started
 ---------------
@@ -52,7 +52,7 @@ Instantiating a :py:class:`SqliteExtDatabase`:
 APIs
 ----
 
-.. py:class:: SqliteExtDatabase(database[, pragmas=None[, timeout=5[, c_extensions=None[, rank_functions=True[, hash_functions=False[, regexp_function=False[, bloomfilter=False]]]]]]])
+.. py:class:: SqliteExtDatabase(database[, pragmas=None[, timeout=5[, c_extensions=None[, rank_functions=True[, hash_functions=False[, regexp_function=False]]]]]])
 
     :param list pragmas: A list of 2-tuples containing pragma key and value to
         set every time a connection is opened.
@@ -63,12 +63,11 @@ APIs
     :param bool rank_functions: Make search result ranking functions available.
     :param bool hash_functions: Make hashing functions available (md5, sha1, etc).
     :param bool regexp_function: Make the REGEXP function available.
-    :param bool bloomfilter: Make the :ref:`bloom filter <sqlite-extras>` available.
 
     Extends :py:class:`SqliteDatabase` and inherits methods for declaring
     user-defined functions, pragmas, etc.
 
-.. py:class:: CSqliteExtDatabase(database[, pragmas=None[, timeout=5[, c_extensions=None[, rank_functions=True[, hash_functions=False[, regexp_function=False[, bloomfilter=False[, replace_busy_handler=False]]]]]]]])
+.. py:class:: CSqliteExtDatabase(database[, pragmas=None[, timeout=5[, c_extensions=None[, rank_functions=True[, hash_functions=False[, regexp_function=False[, replace_busy_handler=False]]]]]]])
 
     :param list pragmas: A list of 2-tuples containing pragma key and value to
         set every time a connection is opened.
@@ -79,7 +78,6 @@ APIs
     :param bool rank_functions: Make search result ranking functions available.
     :param bool hash_functions: Make hashing functions available (md5, sha1, etc).
     :param bool regexp_function: Make the REGEXP function available.
-    :param bool bloomfilter: Make the :ref:`bloom filter <sqlite-extras>` available.
     :param bool replace_busy_handler: Use a smarter busy-handler implementation.
 
     Extends :py:class:`SqliteExtDatabase` and requires that the
@@ -2033,44 +2031,6 @@ APIs
 
 Additional Features
 -------------------
-
-The :py:class:`SqliteExtDatabase` accepts an initialization option to register
-support for a simple `bloom filter <https://en.wikipedia.org/wiki/Bloom_filter>`_.
-The bloom filter, once initialized, can then be used for efficient membership
-queries on large set of data.
-
-Here's an example:
-
-.. code-block:: python
-
-    db = CSqliteExtDatabase(':memory:', bloomfilter=True)
-
-    # Create and define a table to store some data.
-    db.execute_sql('CREATE TABLE "register" ("data" TEXT)')
-    Register = Table('register', ('data',)).bind(db)
-
-    # Populate the database with a bunch of text.
-    with db.atomic():
-        for i in 'abcdefghijklmnopqrstuvwxyz':
-            keys = [i * j for j in range(1, 10)]  # a, aa, aaa, ... aaaaaaaaa
-            Register.insert([{'data': key} for key in keys]).execute()
-
-    # Collect data into a 16KB bloomfilter.
-    query = Register.select(fn.bloomfilter(Register.data, 16 * 1024).alias('buf'))
-    row = query.get()
-    buf = row['buf']
-
-    # Use bloomfilter buf to test whether other keys are members.
-    test_keys = (
-        ('aaaa', True),
-        ('abc', False),
-        ('zzzzzzz', True),
-        ('zyxwvut', False))
-    for key, is_present in test_keys:
-        query = Register.select(fn.bloomfilter_contains(key, buf).alias('is_member'))
-        answer = query.get()['is_member']
-        assert answer == is_present
-
 
 The :py:class:`SqliteExtDatabase` can also register other useful functions:
 
