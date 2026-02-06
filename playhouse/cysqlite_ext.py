@@ -4,7 +4,7 @@ from peewee import SqliteDatabase
 from peewee import __exception_wrapper__
 
 try:
-    from cysqlite import Connection
+    import cysqlite
 except ImportError:
     Connection = None
 
@@ -12,25 +12,24 @@ logger = logging.getLogger('peewee')
 
 class CySqliteDatabase(SqliteDatabase):
     def _connect(self):
-        if Connection is None:
+        if cysqlite is None:
             raise ImproperlyConfigured('cysqlite is not installed.')
-        conn = Connection(self.database, timeout=self._timeout,
-                          extensions=True, **self.connect_params)
-        conn.connect()
+        conn = cysqlite.Connection(self.database, timeout=self._timeout,
+                                   extensions=True, **self.connect_params)
         try:
             self._add_conn_hooks(conn)
-        except:
+        except Exception:
             conn.close()
             raise
         return conn
 
     def _set_pragmas(self, conn):
         for pragma, value in self._pragmas:
-            conn.execute_one('PRAGMA %s = %s;' % (pragma, value))
+            conn.pragma(pragma, value)
 
     def _attach_databases(self, conn):
         for name, db in self._attached.items():
-            conn.execute_one('ATTACH DATABASE "%s" AS "%s"' % (db, name))
+            conn.attach(db, name)
 
     def _load_aggregates(self, conn):
         for name, (klass, num_params) in self._aggregates.items():
@@ -48,12 +47,6 @@ class CySqliteDatabase(SqliteDatabase):
         for name, (klass, num_params) in self._window_functions.items():
             conn.create_window_function(klass, name, num_params)
 
-    def last_insert_id(self, cursor, query_type=None):
-        return self.connection().last_insert_rowid()
-
-    def rows_affected(self, cursor):
-        return self.connection().changes()
-
     def begin(self, lock_type='deferred'):
         with __exception_wrapper__:
             self.connection().begin(lock_type)
@@ -65,13 +58,3 @@ class CySqliteDatabase(SqliteDatabase):
     def rollback(self):
         with __exception_wrapper__:
             self.connection().rollback()
-
-    def cursor(self):
-        raise NotImplementedError('cysqlite does not use a cursor interface.')
-
-    def execute_sql(self, sql, params=None):
-        logger.debug((sql, params))
-        with __exception_wrapper__:
-            conn = self.connection()
-            stmt = conn.execute(sql, params or ())
-        return stmt
