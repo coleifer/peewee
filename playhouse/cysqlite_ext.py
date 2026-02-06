@@ -5,6 +5,21 @@ from peewee import ImproperlyConfigured
 from peewee import OP
 from peewee import SqliteDatabase
 from peewee import __exception_wrapper__
+from playhouse.sqlite_ext import (
+    RowIDField,
+    DocIDField,
+    AutoIncrementField,
+    TDecimalField,
+    ISODateTimeField,
+    JSONPath,
+    JSONBPath,
+    JSONField,
+    JSONBField,
+    SearchField,
+    VirtualModel,
+    FTSModel,
+    FTS5Model,
+    rank)
 
 try:
     import cysqlite
@@ -52,6 +67,7 @@ class CySqliteDatabase(SqliteDatabase):
         if rank_functions:
             self.register_function(cysqlite.rank_bm25, 'fts_bm25')
             self.register_function(cysqlite.rank_lucene, 'fts_lucene')
+            self.register_function(rank, 'fts_rank')
 
         if regexp_function:
             self.register_function(_sqlite_regexp, 'regexp', 2)
