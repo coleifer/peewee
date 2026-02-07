@@ -22,7 +22,7 @@ cysqlite Extension
         functions are user-defined functions that, rather than returning a
         single, scalar value, can return any number of rows of tabular data.
 
-        See `cysqlite docs <https://cysqlite.readthedocs.io/>`_ for details on
+        See `cysqlite docs <https://cysqlite.readthedocs.io/en/latest/api.html#tablefunction>`_ for details on
         ``TableFunction`` API.
 
         Example:
@@ -163,7 +163,7 @@ cysqlite Extension
           the operation from occuring.
         * ``cysqlite.C_SQLITE_DENY``: prevent statement compilation.
 
-        More details can be found in the `cysqlite docs <https://cysqlite.readthedocs.org/>`_.
+        More details can be found in the `cysqlite docs <https://cysqlite.readthedocs.io/en/latest/api.html#Connection.authorizer>`_.
 
     .. py:method:: trace(fn, mask=2):
 
@@ -183,7 +183,7 @@ cysqlite Extension
 
         Any return value from callback is ignored.
 
-        More details can be found in the `cysqlite docs <https://cysqlite.readthedocs.org/>`_.
+        More details can be found in the `cysqlite docs <https://cysqlite.readthedocs.io/en/latest/api.html#Connection.trace>`_.
 
     .. py:method:: progress(fn, n=1)
 
@@ -195,7 +195,7 @@ cysqlite Extension
         takes no arguments and returns 0 to allow progress to continue or any
         non-zero value to interrupt progress.
 
-        More details can be found in the `cysqlite docs <https://cysqlite.readthedocs.org/>`_.
+        More details can be found in the `cysqlite docs <https://cysqlite.readthedocs.io/en/latest/api.html#Connection.progress>`_.
 
     .. py:attribute:: autocommit
 
@@ -274,7 +274,7 @@ cysqlite Extension
             the underlying binary data.
         :rtype: cysqlite.Blob
 
-        See `cysqlite documentation <https://cysqlite.readthedocs.io/>`_ for
+        See `cysqlite documentation <https://cysqlite.readthedocs.io/en/latest/api.html#blob>`_ for
         more details.
 
         Example:

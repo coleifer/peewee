@@ -398,7 +398,7 @@ Example collation:
     # Or...
     Book.select().order_by(Book.title.asc(collation='reverse'))
 
-Example user-defined table-value function (see `cysqlite docs <https://cysqlite.readthedocs.io/>`_
+Example user-defined table-value function (see `cysqlite TableFunction docs <https://cysqlite.readthedocs.io/en/latest/api.html#tablefunction>`_
 for details on ``TableFunction``).
 
 .. code-block:: python
