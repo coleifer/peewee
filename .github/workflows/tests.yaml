@@ -68,7 +68,7 @@ jobs:
           ./cockroach-v22.2.6.linux-amd64/cockroach start-single-node --insecure --background
           ./cockroach-v22.2.6.linux-amd64/cockroach sql --insecure -e 'create database peewee_test;'
       - name: cysqlite
-        if: ${{ matrix.peewee-backend == 'cysqlite' }}
+        if: ${{ matrix.peewee-backend == 'cysqlite' || matrix.peewee-backend == 'sqlite' }}
         run: |
           pip install -e 'git+https://github.com/coleifer/cysqlite#egg=cysqlite'
       - name: runtests ${{ matrix.peewee-backend }} - ${{ matrix.python-version }}
