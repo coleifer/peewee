@@ -44,6 +44,10 @@ async def greenlet_spawn(fn, *args, **kwargs):
         finally:
             pass
 
+    # Run the sync code in a greenlet - the sync code must use await_()
+    # whenever blocking would occur. await_() transfers a coroutine and control
+    # back up to this runner, which can safely `await` the coroutine before
+    # switching back to the sync code.
     g = greenlet(runner, parent=parent)
     value = g.switch()
     while not g.dead:
