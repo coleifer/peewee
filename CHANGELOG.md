@@ -7,6 +7,10 @@ https://github.com/coleifer/peewee/releases
 
 ## master
 
+[View commits](https://github.com/coleifer/peewee/compare/3.20.0...master)
+
+## 3.20.0 (pending)
+
 * Adds preliminary support for `asyncio` via a new playhouse extension. See
   [the documentation](http://docs.peewee-orm.com/en/latest/peewee/asyncio.html)
   for details.
@@ -21,6 +25,12 @@ https://github.com/coleifer/peewee/releases
   implementations of the FTS rank functions are moved to `sqlite_udf`. Most of
   the remaining functionality is moved to `playhouse.cysqlite_ext` which
   supports it natively (no more hacks).
+
+Migrating `CSqliteExtDatabase` usage:
+
+You can either use `sqlite_ext.SqliteExtDatabase` or try the new
+`cysqlite_ext.CySqliteDatabase` if you want all the old functionality and are
+willing to try a new driver.
 
 [View commits](https://github.com/coleifer/peewee/compare/3.19.0...master)
 

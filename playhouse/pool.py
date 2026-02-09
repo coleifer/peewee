@@ -369,9 +369,9 @@ except ImportError:
     PooledSqliteExtDatabase = None
 
 try:
-    from playhouse.sqlite_ext import CSqliteExtDatabase
+    from playhouse.cysqlite_ext import CySqliteDatabase
 
-    class PooledCSqliteExtDatabase(_PooledSqliteDatabase, CSqliteExtDatabase):
+    class PooledCySqliteDatabase(_PooledSqliteDatabase, CySqliteDatabase):
         pass
 except ImportError:
-    PooledCSqliteExtDatabase = None
+    PooledCySqliteDatabase = None
