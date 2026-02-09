@@ -5,9 +5,9 @@ from peewee import sqlite3
 from peewee import Expression
 from playhouse.fields import PickleField
 try:
-    from playhouse.sqlite_ext import CSqliteExtDatabase as SqliteExtDatabase
+    from playhouse.cysqlite_ext import CySqliteDatabase as _SqliteDatabase
 except ImportError:
-    from playhouse.sqlite_ext import SqliteExtDatabase
+    from playhouse.sqlite_ext import SqliteExtDatabase as _SqliteDatabase
 
 
 Sentinel = type('Sentinel', (object,), {})
@@ -36,7 +36,7 @@ class KeyValue(object):
         self._key_field = key_field
         self._value_field = value_field
         self._ordered = ordered
-        self._database = database or SqliteExtDatabase(':memory:')
+        self._database = database or _SqliteDatabase(':memory:')
         self._table_name = table_name
         support_on_conflict = (isinstance(self._database, PostgresqlDatabase) or
                               (isinstance(self._database, SqliteDatabase) and
