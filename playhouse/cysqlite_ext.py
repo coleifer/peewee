@@ -1,6 +1,7 @@
 import logging
 from pathlib import Path
 
+from peewee import DecimalField
 from peewee import ImproperlyConfigured
 from peewee import OP
 from peewee import SqliteDatabase
@@ -9,7 +10,6 @@ from playhouse.sqlite_ext import (
     RowIDField,
     DocIDField,
     AutoIncrementField,
-    TDecimalField,
     ISODateTimeField,
     JSONPath,
     JSONBPath,
@@ -50,6 +50,16 @@ def __dbstatus__(flag, return_highwater=False, return_current=False):
             return result[0]
         return result[1] if return_highwater else result
     return property(getter)
+
+
+class TDecimalField(DecimalField):
+    field_type = 'TEXT'
+
+    def get_modifiers(self): pass
+
+    def db_value(self, value):
+        if value is not None:
+            return str(super(DecimalField, self).db_value(value))
 
 
 class CySqliteDatabase(SqliteDatabase):

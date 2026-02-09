@@ -2308,3 +2308,48 @@ class TestISODateTimeField(ModelTestCase):
 
         raw = self.database.execute_sql('select * from dt').fetchone()
         self.assertEqual(raw, ('k1', str(d1), d2.isoformat()))
+
+#
+# If we have cysqlite, let's run tests on it.
+#
+
+try:
+    from playhouse.cysqlite_ext import CySqliteDatabase
+except ImportError:
+    pass
+else:
+    cysqlite_database = CySqliteDatabase('peewee_test.db', timeout=100)
+    cysqlite_database.register_aggregate(WeightedAverage, 'weighted_avg', 1)
+    cysqlite_database.register_aggregate(WeightedAverage, 'weighted_avg2', 2)
+    cysqlite_database.register_collation(collate_reverse)
+    cysqlite_database.register_function(title_case)
+    cysqlite_database.collation()(collate_case_insensitive)
+    cysqlite_database.func()(rstrip)
+
+    test_cases = [
+        TestJSONField,
+        TestJSONFieldFunctions,
+        TestJSONBFieldFunctions,
+        TestSqliteExtensions,
+        TestFullTextSearch,
+        TestFTS5,
+        TestUserDefinedCallbacks,
+        TestRowIDField,
+        TestIntWhereChain,
+        TestCollatedFieldDefinitions,
+        TestReadOnly,
+        TestSqliteReturning,
+        TestDeterministicFunction,
+        TestISODateTimeField,
+        # For various reasons these do not work.
+        #TestJsonContains,
+        #TestTDecimalField,
+        #TestSqliteReturningConfig,
+    ]
+
+    for test_case in test_cases:
+        new_name = test_case.__name__ + 'CySqlite'
+        klass = type(new_name, (test_case,), {
+            'database': cysqlite_database,
+        })
+        locals()[new_name] = klass
