@@ -12,8 +12,8 @@ from .base import IS_SQLITE_37
 from .base import IS_SQLITE_9
 from .base import ModelTestCase
 from .base import TestModel
-from .base import db_loader
 from .base import get_in_memory_db
+from .base import get_sqlite_db
 from .base import requires_models
 from .base import skip_if
 from .base import skip_unless
@@ -1991,7 +1991,7 @@ class TestCollatedFieldDefinitions(ModelTestCase):
 
 
 class TestReadOnly(ModelTestCase):
-    database = db_loader('sqlite3')
+    database = get_sqlite_db()
 
     @skip_if(sys.version_info < (3, 4, 0), 'requres python >= 3.4.0')
     @requires_models(User)

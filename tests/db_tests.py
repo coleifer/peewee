@@ -22,8 +22,8 @@ from .base import IS_SQLITE
 from .base import ModelTestCase
 from .base import TestModel
 from .base import db
-from .base import db_loader
 from .base import get_in_memory_db
+from .base import get_sqlite_db
 from .base import new_connection
 from .base import requires_models
 from .base import requires_postgresql
@@ -33,7 +33,7 @@ from .base_models import User
 
 
 class TestDatabase(DatabaseTestCase):
-    database = db_loader('sqlite3')
+    database = get_sqlite_db()
 
     def test_pragmas(self):
         self.database.cache_size = -2048
@@ -460,13 +460,13 @@ class TestSchemaNamespace(ModelTestCase):
 
 
 class TestSqliteIsolation(ModelTestCase):
-    database = db_loader('sqlite3')
+    database = get_sqlite_db()
     requires = [User]
 
     def test_sqlite_isolation(self):
         for username in ('u1', 'u2', 'u3'): User.create(username=username)
 
-        new_db = db_loader('sqlite3')
+        new_db = get_sqlite_db()
         curs = new_db.execute_sql('SELECT COUNT(*) FROM users')
         self.assertEqual(curs.fetchone()[0], 3)
 
@@ -482,7 +482,7 @@ class TestSqliteIsolation(ModelTestCase):
             self.assertEqual(curs.fetchone()[0], 0)
 
             # Third conn does not see the changes.
-            new_db2 = db_loader('sqlite3')
+            new_db2 = get_sqlite_db()
             curs = new_db2.execute_sql('SELECT COUNT(*) FROM users')
             self.assertEqual(curs.fetchone()[0], 0)
 
@@ -830,7 +830,7 @@ class Data(TestModel):
 
 
 class TestAttachDatabase(ModelTestCase):
-    database = db_loader('sqlite3')
+    database = get_sqlite_db()
     requires = [Data]
 
     def test_attach(self):

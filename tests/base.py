@@ -58,6 +58,10 @@ def get_in_memory_db(**params):
     backend = 'cysqlite' if BACKEND == 'cysqlite' else 'sqlite3'
     return db_loader(backend, ':memory:', **params)
 
+def get_sqlite_db():
+    backend = 'cysqlite' if BACKEND == 'cysqlite' else 'sqlite3'
+    return db_loader(backend)
+
 
 BACKEND = os.environ.get('PEEWEE_TEST_BACKEND') or 'sqlite'
 VERBOSITY = int(os.environ.get('PEEWEE_TEST_VERBOSITY') or 1)

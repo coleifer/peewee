@@ -10,7 +10,7 @@ from playhouse.sqlite_udf import register_all
 from .base import IS_SQLITE_9
 from .base import ModelTestCase
 from .base import TestModel
-from .base import db_loader
+from .base import get_sqlite_db
 from .base import skip_unless
 try:
     from playhouse import _sqlite_udf as cython_udf
@@ -22,7 +22,7 @@ def requires_cython(method):
     return skip_unless(cython_udf is not None,
                        'requires sqlite udf c extension')(method)
 
-database = db_loader('sqlite')
+database = get_sqlite_db()
 register_all(database)
 
 

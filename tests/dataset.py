@@ -17,11 +17,11 @@ from playhouse.dataset import Table
 from .base import IS_SQLITE_OLD
 from .base import ModelTestCase
 from .base import TestModel
-from .base import db_loader
+from .base import get_sqlite_db
 from .base import skip_if
 
 
-db = db_loader('sqlite')
+db = get_sqlite_db()
 
 
 class User(TestModel):
