@@ -6,6 +6,7 @@ except ImportError:
 from peewee import *
 from playhouse.cockroachdb import CockroachDatabase
 from playhouse.cockroachdb import PooledCockroachDatabase
+from playhouse.pool import PooledCySqliteDatabase
 from playhouse.pool import PooledMySQLDatabase
 from playhouse.pool import PooledPostgresqlDatabase
 from playhouse.pool import PooledPsycopg3Database
@@ -13,6 +14,10 @@ from playhouse.pool import PooledSqliteDatabase
 from playhouse.pool import PooledSqliteExtDatabase
 from playhouse.psycopg3_ext import Psycopg3Database
 from playhouse.sqlite_ext import SqliteExtDatabase
+try:
+    from playhouse.cysqlite_ext import CySqliteDatabase
+except ImportError:
+    CySqliteDatabase = None
 
 
 schemes = {
@@ -33,6 +38,11 @@ schemes = {
     'sqlite+pool': PooledSqliteDatabase,
     'sqliteext+pool': PooledSqliteExtDatabase,
 }
+if CySqliteDatabase is not None:
+    schemes.update({
+        'cysqlite': CySqliteDatabase,
+        'cysqlite+pool': PooledCySqliteDatabase,
+    })
 
 def register_database(db_class, *names):
     global schemes

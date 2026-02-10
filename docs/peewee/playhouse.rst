@@ -3493,6 +3493,8 @@ URL connection string.
     * ``apsw``: :py:class:`APSWDatabase`
     * ``cockroachdb``: :py:class:`CockroachDatabase`
     * ``cockroachdb+pool``: :py:class:`PooledCockroachDatabase`
+    * ``cysqlite``: :py:class:`CySqliteDatabase`
+    * ``cysqlite+pool``: :py:class:`PooledCySqliteDatabase`
     * ``mysql``: :py:class:`MySQLDatabase`
     * ``mysql+pool``: :py:class:`PooledMySQLDatabase`
     * ``postgres``: :py:class:`PostgresqlDatabase`
@@ -3654,6 +3656,10 @@ Pool APIs
 .. py:class:: PooledSqliteExtDatabase
 
     Persistent connections for SQLite apps, using the :ref:`sqlite_ext` advanced database driver :py:class:`SqliteExtDatabase`.
+
+.. py:class:: PooledCySqliteDatabase
+
+    Persistent connections for SQLite apps, using the :ref:`cysqlite_ext` database driver :py:class:`CySqliteDatabase`.
 
 .. _test_utils:
 

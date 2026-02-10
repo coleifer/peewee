@@ -3,6 +3,9 @@
 cysqlite Extension
 ==================
 
+SQLite database implementation using `cysqlite <https://cysqlite.readthedocs.io/>`_
+as the driver.
+
 .. py:class:: CySqliteDatabase(database[, pragmas=None[, timeout=5[, rank_functions=True[, regexp_function=False[, json_contains=False]]]]])
 
     :param list pragmas: A list of 2-tuples containing pragma key and value to
@@ -15,6 +18,12 @@ cysqlite Extension
     Extends :py:class:`SqliteDatabase` and inherits methods for declaring
     user-defined functions, aggregates, window functions, collations, pragmas,
     etc.
+
+    Example:
+
+    .. code-block:: python
+
+        db = CySqliteDatabase('app.db', pragmas={'journal_mode': 'wal'})
 
     .. py:method:: table_function([name=None])
 
