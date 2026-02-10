@@ -94,7 +94,7 @@ class APSWDatabase(SqliteExtDatabase):
 
     def last_insert_id(self, cursor, query_type=None):
         if not self.returning_clause:
-            return cursor.getconnection().last_insert_rowid()
+            return cursor.connection.last_insert_rowid()
         elif query_type == Insert.SIMPLE:
             try:
                 return cursor[0][0]
@@ -104,9 +104,9 @@ class APSWDatabase(SqliteExtDatabase):
 
     def rows_affected(self, cursor):
         try:
-            return cursor.getconnection().changes()
+            return cursor.connection.changes()
         except AttributeError:
-            return cursor.cursor.getconnection().changes()  # RETURNING query.
+            return cursor.cursor.connection.changes()  # RETURNING query.
 
     def begin(self, lock_type='deferred'):
         self.cursor().execute('begin %s;' % lock_type)
@@ -114,7 +114,7 @@ class APSWDatabase(SqliteExtDatabase):
     def commit(self):
         with __exception_wrapper__:
             curs = self.cursor()
-            if curs.getconnection().getautocommit():
+            if curs.connection.getautocommit():
                 return False
             curs.execute('commit;')
         return True
@@ -122,7 +122,7 @@ class APSWDatabase(SqliteExtDatabase):
     def rollback(self):
         with __exception_wrapper__:
             curs = self.cursor()
-            if curs.getconnection().getautocommit():
+            if curs.connection.getautocommit():
                 return False
             curs.execute('rollback;')
         return True
