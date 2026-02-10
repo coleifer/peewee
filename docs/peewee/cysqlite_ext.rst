@@ -228,7 +228,7 @@ as the driver.
 
     .. py:method:: backup(destination[, pages=None, name=None, progress=None])
 
-        :param SqliteDatabase destination: Database object to serve as
+        :param CySqliteDatabase destination: Database object to serve as
             destination for the backup.
         :param int pages: Number of pages per iteration. Default value of -1
             indicates all pages should be backed-up in a single step.
