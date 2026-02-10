@@ -2016,7 +2016,7 @@ class TDecModel(TestModel):
 
 
 class TestTDecimalField(ModelTestCase):
-    database = get_in_memory_db()
+    database = database
     requires = [TDecModel]
 
     def test_tdecimal_field(self):
