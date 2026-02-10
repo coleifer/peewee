@@ -63,6 +63,7 @@ Contents:
    peewee/relationships
    peewee/api
    peewee/sqlite_ext
+   peewee/cysqlite_ext
    peewee/asyncio
    peewee/playhouse
    peewee/query_examples
