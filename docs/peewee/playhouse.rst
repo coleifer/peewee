@@ -18,7 +18,7 @@ make up the ``playhouse``.
 **Database drivers / vendor-specific database functionality**
 
 * :ref:`sqlite_ext`
-* :ref:`cysqlite`
+* :ref:`cysqlite_ext`
 * :ref:`sqliteq`
 * :ref:`sqlite_udf`
 * :ref:`apsw`
@@ -3656,7 +3656,7 @@ Pool APIs
 
 .. py:class:: PooledCySqliteDatabase
 
-    Persistent connections for SQLite apps, using the :ref:`cysqlite` database driver :py:class:`CySqliteDatabase`.
+    Persistent connections for SQLite apps, using the :ref:`cysqlite_ext` database driver :py:class:`CySqliteDatabase`.
 
 .. _test_utils:
 

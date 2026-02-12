@@ -56,7 +56,7 @@ For more information on database extensions, see:
 * :ref:`postgres_ext`
 * :ref:`sqlite_ext`
 * :ref:`sqlcipher_ext` (encrypted SQLite database).
-* :ref:`cysqlite`
+* :ref:`cysqlite_ext`
 * :ref:`apsw`
 * :ref:`sqliteq`
 

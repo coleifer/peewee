@@ -1,4 +1,4 @@
-.. _cysqlite:
+.. _cysqlite_ext:
 
 cysqlite Extension
 ==================
