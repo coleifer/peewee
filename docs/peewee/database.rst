@@ -33,23 +33,15 @@ database class provides some basic, database-specific configuration options.
                                host='10.1.0.9', port=5432)
 
 Peewee provides advanced support for SQLite, Postgres and others via
-database-specific extension modules. To use the extended-functionality, import
+database-specific extension modules. To use the extended functionality, import
 the appropriate database-specific module and use the database class provided:
 
 .. code-block:: python
 
-    from playhouse.sqlite_ext import SqliteExtDatabase
-
-    # Use SQLite (will register a REGEXP function and set busy timeout to 3s).
-    db = SqliteExtDatabase('/path/to/app.db', regexp_function=True, timeout=3,
-                           pragmas={'journal_mode': 'wal'})
-
-
     from playhouse.postgres_ext import PostgresqlExtDatabase
 
-    # Use Postgres (and register hstore extension).
-    db = PostgresqlExtDatabase('my_app', user='postgres', register_hstore=True)
-
+    # Use Postgres w/postgres-specific features.
+    db = PostgresqlExtDatabase('my_app', user='postgres')
 
 For more information on database extensions, see:
 
@@ -59,6 +51,7 @@ For more information on database extensions, see:
 * :ref:`cysqlite_ext`
 * :ref:`apsw`
 * :ref:`sqliteq`
+* :ref:`mysql_ext` (mysql-connector/mariadb-connector support).
 
 Initializing a Database
 -----------------------
