@@ -1658,6 +1658,7 @@ Additional MySQL-specific helpers:
 
 .. py:function:: Match(columns, expr[, modifier=None])
 
+    :noindex:
     :param columns: a single :py:class:`Field` or a tuple of multiple fields.
     :param str expr: the full-text search expression.
     :param str modifier: optional modifiers for the search, e.g. *'in boolean mode'*.
@@ -3659,7 +3660,7 @@ Pool APIs
 
 .. py:class:: PooledCySqliteDatabase
 
-    Persistent connections for SQLite apps, using the :ref:`cysqlite_ext` database driver :py:class:`CySqliteDatabase`.
+    Persistent connections for SQLite apps, using the :ref:`cysqlite` database driver :py:class:`CySqliteDatabase`.
 
 .. _test_utils:
 

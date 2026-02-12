@@ -559,7 +559,7 @@ Driver information:
   and is legacy and should not be used. Since this shares the same module name
   as mysqlclient, same applies.
 * `mysql-connector python <https://github.com/mysql/mysql-connector-python>`_ pure-python
-  (I think??) supports python 3. To use this driver you can use :ref:`MySQLConnectorDatabase`
+  (I think??) supports python 3. To use this driver you can use :py:class:`MySQLConnectorDatabase`
   from the ``playhouse.mysql_ext`` extension.
 
 Error 2006: MySQL server has gone away

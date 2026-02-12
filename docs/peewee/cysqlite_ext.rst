@@ -15,15 +15,18 @@ as the driver.
     :param bool regexp_function: Make the REGEXP function available.
     :param bool json_contains: Make json_containts() function available.
 
-    Extends :py:class:`SqliteDatabase` and inherits methods for declaring
-    user-defined functions, aggregates, window functions, collations, pragmas,
-    etc.
+    .. seealso::
+       CySqliteDatabase extends :py:class:`SqliteDatabase` and inherits all
+       methods for declaring user-defined functions, aggregates, window
+       functions, collations, pragmas, etc.
 
     Example:
 
     .. code-block:: python
 
         db = CySqliteDatabase('app.db', pragmas={'journal_mode': 'wal'})
+
+    .. include:: sqlite-method-defs.rst
 
     .. py:method:: table_function([name=None])
 
