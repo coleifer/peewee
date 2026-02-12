@@ -39,8 +39,6 @@ extensions, which can be imported from ``playhouse.cysqlite_ext``:
 
         db = CySqliteDatabase('app.db', pragmas={'journal_mode': 'wal'})
 
-    .. include:: sqlite-method-defs.rst
-
     .. py:method:: table_function([name=None])
 
         Class-decorator for registering a ``cysqlite.TableFunction``. Table
@@ -324,3 +322,5 @@ extensions, which can be imported from ``playhouse.cysqlite_ext``:
             # Read the data back out of the blob.
             blob.seek(0)
             image_data = blob.read(img_size)
+
+    .. include:: sqlite-method-defs.rst
