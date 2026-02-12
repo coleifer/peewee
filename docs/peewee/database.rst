@@ -1023,6 +1023,7 @@ The following pooled database classes are available:
 * :py:class:`PooledMySQLDatabase`
 * :py:class:`PooledSqliteDatabase`
 * :py:class:`PooledSqliteExtDatabase`
+* :py:class:`PooledCySqliteDatabase`
 
 For an in-depth discussion of peewee's connection pool, see the :ref:`pool`
 section of the :ref:`playhouse <playhouse>` documentation.
