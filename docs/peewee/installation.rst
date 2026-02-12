@@ -70,6 +70,8 @@ Optional dependencies
     out there, such as ``pymysql`` or ``psycopg2`` for MySQL and Postgres
     respectively.
 
+* `cysqlite <https://cysqlite.readthedocs.io/>`_: optional SQlite driver that
+  provides additional SQLite functionality. Use with :py:class:`CySqliteDatabase`.
 * `apsw <https://github.com/rogerbinns/apsw>`_: an optional 3rd-party SQLite
   binding offering greater performance and comprehensive support for SQLite's C
   APIs. Use with :py:class:`APSWDatabase`.
@@ -78,13 +80,3 @@ Optional dependencies
   fine).
 * Lastly, if you use the *Flask* framework, there are helper extension modules
   available.
-
-
-Note on the SQLite extensions
------------------------------
-
-Peewee includes two SQLite-specific C extensions which provide additional
-functionality and improved performance for SQLite database users. These are not
-shipped with the binary wheel, but can be installed by instructing ``pip`` to
-install Peewee via source-distribution. In order for the sqlite extensions to
-be built, the sqlite shared library and header must be installed.
