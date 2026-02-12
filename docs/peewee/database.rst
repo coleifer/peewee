@@ -201,9 +201,10 @@ you can specify a list or pragmas or any other arbitrary `sqlite3 parameters
 Peewee includes a :ref:`SQLite extension module <sqlite_ext>` which provides
 many SQLite-specific features such as :ref:`full-text search <sqlite-fts>`,
 :ref:`json extension support <sqlite-json1>`, and much, much more. If you would
-like to use these awesome features, use the :py:class:`SqliteExtDatabase` from
-the ``playhouse.sqlite_ext`` module or the :py:class:`CySqliteDatabase` from
-the ``playhouse.cysqlite_ext`` module.
+like to use these awesome features, use:
+
+* :py:class:`SqliteExtDatabase` from the ``playhouse.sqlite_ext`` module, or
+* :py:class:`CySqliteDatabase` from the ``playhouse.cysqlite_ext`` module.
 
 Using ``SqliteExtDatabase``:
 
@@ -320,10 +321,6 @@ extensions:
 * Window Functions - aggregates which support operating on windows of data.
 * Collations - which describe how to sort some value.
 * Table Functions - fully user-defined tables (requres ``cysqlite``).
-
-.. note::
-    For even more extension support, see :py:class:`SqliteExtDatabase`, which
-    is in the ``playhouse.sqlite_ext`` module.
 
 Example user-defined function:
 
