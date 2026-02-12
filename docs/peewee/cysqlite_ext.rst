@@ -4,7 +4,20 @@ cysqlite Extension
 ==================
 
 SQLite database implementation using `cysqlite <https://cysqlite.readthedocs.io/>`_
-as the driver.
+as the driver. The ``cysqlite`` extension also works with the following SQLite
+extensions, which can be imported from ``playhouse.cysqlite_ext``:
+
+* :py:class:`RowIDField`
+* :py:class:`DocIDField`
+* :py:class:`AutoIncrementField`
+* :py:class:`ISODateTimeField`
+* :py:class:`JSONField` and :py:class:`JSONPath`
+* :py:class:`JSONBField` and :py:class:`JSONBPath`
+* :py:class:`SearchField`
+* :py:class:`VirtualModel`
+* :py:class:`FTSModel`, providing full-text search.
+* :py:class:`FTS5Model`, providing full-text search using FTS5.
+
 
 .. py:class:: CySqliteDatabase(database[, pragmas=None[, timeout=5[, rank_functions=True[, regexp_function=False[, json_contains=False]]]]])
 

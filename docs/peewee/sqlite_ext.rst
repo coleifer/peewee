@@ -17,14 +17,18 @@ The ``playhouse.sqlite_ext`` includes even more SQLite features, including:
 * :ref:`JSON extension integration <sqlite-json1>`
 * :ref:`Closure table extension support <sqlite-closure-table>`
 
+.. note::
+   These features are also included in the ``playhouse.cysqlite_ext`` module and
+   can be used interchangeably with :py:class:`CySqliteDatabase`.
+
 Getting started
 ---------------
 
 To get started with the features described in this document, you will want to
 use the :py:class:`SqliteExtDatabase` class from the ``playhouse.sqlite_ext``
-module.
+module or :py:class:`CySqliteDatabase` from ``playhouse.cysqlite_ext``.
 
-Instantiating a :py:class:`SqliteExtDatabase`:
+Using :py:class:`SqliteExtDatabase`:
 
 .. code-block:: python
 
@@ -34,6 +38,17 @@ Instantiating a :py:class:`SqliteExtDatabase`:
         ('cache_size', -1024 * 64),  # 64MB page-cache.
         ('journal_mode', 'wal'),  # Use WAL-mode (you should always use this!).
         ('foreign_keys', 1)))  # Enforce foreign-key constraints.
+
+Using :py:class:`CySqliteDatabase`:
+
+.. code-block:: python
+
+    from playhouse.cysqlite_ext import CySqliteDatabase
+
+    db = CySqliteDatabase('my_app.db', pragmas={
+        'cache_size': -1024 * 64,  # 64MB page-cache.
+        'journal_mode': 'wal',,  # Use WAL-mode (you should always use this!).
+        'foreign_keys': 1})  # Enforce foreign-key constraints.
 
 APIs
 ----
@@ -49,6 +64,19 @@ APIs
 
     Extends :py:class:`SqliteDatabase` and inherits methods for declaring
     user-defined functions, pragmas, etc.
+
+    .. attention::
+        In past versions :py:class:`SqliteExtDatabase` contained additional
+        functionality, but practically all of that functionality has been moved
+        into the standard :py:class:`SqliteDatabase`. The only functionality
+        that remains specific solely to ``SqliteExtDatabase`` is:
+
+        * accepts ``__init__`` arguments to register full-text search ranking
+          functions (enabled by default).
+        * accepts ``__init__`` argument to register a regex function, allowing
+          SQLite to perform ``REGEXP`` queries.
+        * accepts ``__init__`` argument to register ``json_contains()``
+          user-defined funciton.
 
 
 .. py:class:: RowIDField()
