@@ -86,9 +86,14 @@ Consult your database driver's documentation for the available parameters:
 
 * Postgres: `psycopg2 <https://www.psycopg.org/docs/module.html#psycopg2.connect>`_
 * MySQL: `pymysql <https://github.com/PyMySQL/PyMySQL/blob/f08f01fe8a59e8acfb5f5add4a8fe874bec2a196/pymysql/connections.py#L494-L513>`_
-* MySQL: `mysqlclient <https://github.com/PyMySQL/mysqlclient>`_
 * SQLite: `sqlite3 <https://docs.python.org/3/library/sqlite3.html#sqlite3.connect>`_
-* CySQLite: `cysqlite <https://cysqlite.readthedocs.io/en/latest/api.html#connect>`_
+
+Extension modules provide support for the following additional drivers:
+
+* Postgres (``playhouse.psycopg3_ext`` :py:class:`Psycopg3Database`): `psycopg3 <https://www.psycopg.org/psycopg3/docs/api/module.html#psycopg.connect>`_
+* MySQL (``playhouse.mysql_ext`` :py:class:`MySQLConnectorDatabase`): `mysql-connector <https://dev.mysql.com/doc/connector-python/en/connector-python-connectargs.html>`_
+* SQLite (``playhouse.cysqlite_ext`` :py:class:`CySqliteDatabase`): `cysqlite <https://cysqlite.readthedocs.io/en/latest/api.html#connect>`_
+* SQLite (``playhouse.apsw_ext`` :py:class:`APSWDatabase`): `apsw <https://rogerbinns.github.io/apsw/connection.html>`_
 
 .. _using_postgresql:
 
@@ -130,6 +135,7 @@ If you would like to use these awesome features, use the
 
     psql_db = PostgresqlExtDatabase('my_database', user='postgres')
 
+.. seealso:: :py:class:`Psycopg3Database`
 
 Isolation level
 ^^^^^^^^^^^^^^^
@@ -193,8 +199,8 @@ you can specify a list or pragmas or any other arbitrary `sqlite3 parameters
 
 Peewee includes a :ref:`SQLite extension module <sqlite_ext>` which provides
 many SQLite-specific features such as :ref:`full-text search <sqlite-fts>`,
-:ref:`json extension support <sqlite-json1>`, and much, much more. If you would
-like to use these awesome features, use:
+:ref:`json extension support <sqlite-json1>`, and more. These features are
+provided by the following modules:
 
 * :py:class:`SqliteExtDatabase` from the ``playhouse.sqlite_ext`` module, or
 * :py:class:`CySqliteDatabase` from the ``playhouse.cysqlite_ext`` module.
@@ -576,11 +582,8 @@ Driver information:
 * `mysqlclient <https://github.com/PyMySQL/mysqlclient-python>`_ uses a c
   extension and supports python 3. It exposes a ``MySQLdb`` module. Peewee will
   attempt to use this module if pymysql is not installed.
-* ``mysql-python`` is also called `MySQLdb1 <https://github.com/farcepest/MySQLdb1>`_
-  and is legacy and should not be used. Since this shares the same module name
-  as mysqlclient, same applies.
-* `mysql-connector python <https://github.com/mysql/mysql-connector-python>`_ pure-python
-  (I think??) supports python 3. To use this driver you can use :py:class:`MySQLConnectorDatabase`
+* `mysql-connector python <https://github.com/mysql/mysql-connector-python>`_
+  to use this driver you can use :py:class:`MySQLConnectorDatabase`
   from the ``playhouse.mysql_ext`` extension.
 
 Error 2006: MySQL server has gone away

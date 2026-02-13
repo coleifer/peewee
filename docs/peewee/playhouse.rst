@@ -24,6 +24,7 @@ make up the ``playhouse``.
 * :ref:`apsw`
 * :ref:`sqlcipher_ext`
 * :ref:`postgres_ext`
+* :ref:`psycopg3_ext`
 * :ref:`crdb`
 * :ref:`mysql_ext`
 
@@ -694,6 +695,8 @@ If there is a particular feature you would like to see added, please
 `open a Github issue <https://github.com/coleifer/peewee/issues>`_.
 
 .. warning:: In order to start using the features described below, you will need to use the extension :py:class:`PostgresqlExtDatabase` class instead of :py:class:`PostgresqlDatabase`.
+
+.. seealso:: :py:class:`Psycopg3Database`
 
 The code below will assume you are using the following database and base model:
 
@@ -1589,9 +1592,46 @@ postgres_ext API notes
             terms = 'python & (sqlite | postgres)'
             results = Blog.select().where(Blog.search_content.match(terms))
 
+.. _psycopg3_ext:
+
+Psycopg3 Support
+----------------
+
+Peewee provides :py:class:`Psycopg3Database` which uses `psycopg3 <https://www.psycopg.org/psycopg3/docs/>`_.
+
+.. py:class:: Psycopg3Database(database[, ...])
+
+    Identical to :py:class:`PostgresqlDatabase` but required in order to support:
+
+    :param str database: Name of database to connect to.
+
+    .. seealso::
+        :py:class:`Psycopg3Database` and ``playhouse.psycopg3_ext`` supports most
+        of the same Postgres-specific functionality as :py:class:`PostgresqlExtDatabase`:
+
+        * :ref:`json support <pgjson>`, including *jsonb* for Postgres 9.4.
+        * :ref:`hstore support <hstore>`
+        * :ref:`full-text search <pg_fts>`
+        * :py:class:`ArrayField` field type, for storing arrays.
+        * :py:class:`IntervalField` field type, for storing ``timedelta`` objects.
+        * :py:class:`JSONField` field type, for storing JSON data.
+        * :py:class:`BinaryJSONField` field type for the ``jsonb`` JSON data type.
+        * :py:class:`TSVectorField` field type, for storing full-text search data.
+        * :py:class:`DateTimeTZField` field type, a timezone-aware datetime field.
+
+    Example:
+
+    .. code-block:: python
+
+        from playhouse.psycopg3_ext import Psycopg3Database
+
+        db = Psycopg3Database(
+            'app',
+            host='127.0.0.1',
+            user='postgres',
+            port=5432)
 
 .. include:: crdb.rst
-
 
 .. _mysql_ext:
 
