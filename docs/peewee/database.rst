@@ -88,6 +88,7 @@ value, simply pass in ``charset`` alongside your other values:
 Consult your database driver's documentation for the available parameters:
 
 * Postgres: `psycopg2 <https://www.psycopg.org/docs/module.html#psycopg2.connect>`_
+  or `psycopg3 <https://www.psycopg.org/psycopg3/docs/api/module.html#psycopg.connect>`_
 * MySQL: `pymysql <https://github.com/PyMySQL/PyMySQL/blob/f08f01fe8a59e8acfb5f5add4a8fe874bec2a196/pymysql/connections.py#L494-L513>`_
 * SQLite: `sqlite3 <https://docs.python.org/3/library/sqlite3.html#sqlite3.connect>`_
 
