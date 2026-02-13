@@ -47,11 +47,14 @@ For more information on database extensions, see:
 
 * :ref:`postgres_ext`
 * :ref:`sqlite_ext`
+* :ref:`mysql_ext` (mysql-connector/mariadb-connector support).
+
+Peewee also supports a number of alternate drivers:
+
+* :ref:`psycopg3_ext`
 * :ref:`sqlcipher_ext` (encrypted SQLite database).
 * :ref:`cysqlite_ext`
 * :ref:`apsw`
-* :ref:`sqliteq`
-* :ref:`mysql_ext` (mysql-connector/mariadb-connector support).
 
 Initializing a Database
 -----------------------
@@ -88,22 +91,25 @@ Consult your database driver's documentation for the available parameters:
 * MySQL: `pymysql <https://github.com/PyMySQL/PyMySQL/blob/f08f01fe8a59e8acfb5f5add4a8fe874bec2a196/pymysql/connections.py#L494-L513>`_
 * SQLite: `sqlite3 <https://docs.python.org/3/library/sqlite3.html#sqlite3.connect>`_
 
-Extension modules provide support for the following additional drivers:
-
-* Postgres (``playhouse.psycopg3_ext`` :py:class:`Psycopg3Database`): `psycopg3 <https://www.psycopg.org/psycopg3/docs/api/module.html#psycopg.connect>`_
-* MySQL (``playhouse.mysql_ext`` :py:class:`MySQLConnectorDatabase`): `mysql-connector <https://dev.mysql.com/doc/connector-python/en/connector-python-connectargs.html>`_
-* SQLite (``playhouse.cysqlite_ext`` :py:class:`CySqliteDatabase`): `cysqlite <https://cysqlite.readthedocs.io/en/latest/api.html#connect>`_
-* SQLite (``playhouse.apsw_ext`` :py:class:`APSWDatabase`): `apsw <https://rogerbinns.github.io/apsw/connection.html>`_
-
 .. _using_postgresql:
 
 Using Postgresql
 ----------------
 
-To connect to a Postgresql database, we will use
-:py:class:`PostgresqlDatabase`. The first parameter is always the name of the
-database, and after that you can specify arbitrary `psycopg2 parameters
-<https://www.psycopg.org/docs/module.html#psycopg2.connect>`_.
+To use Peewee with Postgresql the recommended driver is either ``psycopg2`` or
+``psycopg3``:
+
+.. code-block:: sh
+
+   $ pip install "psycopg2-binary"  # Psycopg2.
+
+   $ pip install "psycopg[binary]"  # Psycopg3.
+
+To connect to a Postgresql database, we will use :py:class:`PostgresqlDatabase`.
+The first parameter is always the name of the database, and after that you can
+specify arbitrary `psycopg2 <https://www.psycopg.org/docs/module.html#psycopg2.connect>`_
+or `psycopg3 <https://www.psycopg.org/psycopg3/docs/api/module.html#psycopg.connect>`_
+parameters:
 
 .. code-block:: python
 
@@ -117,31 +123,29 @@ database, and after that you can specify arbitrary `psycopg2 parameters
     class User(BaseModel):
         username = CharField()
 
-The :ref:`playhouse` contains a :ref:`Postgresql extension module
-<postgres_ext>` which provides many postgres-specific features such as:
+.. seealso::
+    The :ref:`playhouse` contains a :ref:`Postgresql extension module
+    <postgres_ext>` which provides many postgres-specific features such as:
 
-* :ref:`Arrays <pgarrays>`
-* :ref:`HStore <hstore>`
-* :ref:`JSON <pgjson>`
-* :ref:`Server-side cursors <server_side_cursors>`
-* And more!
+    * :ref:`Arrays <pgarrays>`
+    * :ref:`JSON <pgjson>`
+    * :ref:`Full Text Search <pg_fts>`
 
-If you would like to use these awesome features, use the
-:py:class:`PostgresqlExtDatabase` from the ``playhouse.postgres_ext`` module:
+    Use the :py:class:`PostgresqlExtDatabase` from ``playhouse.postgres_ext``
+    or :py:class:`Psycopg3Database` from ``playhouse.psycopg3_ext`` to utilize
+    these features.
 
-.. code-block:: python
+    .. code-block:: python
 
-    from playhouse.postgres_ext import PostgresqlExtDatabase
+        from playhouse.postgres_ext import PostgresqlExtDatabase
 
-    psql_db = PostgresqlExtDatabase('my_database', user='postgres')
-
-.. seealso:: :py:class:`Psycopg3Database`
+        psql_db = PostgresqlExtDatabase('my_database', user='postgres')
 
 Isolation level
 ^^^^^^^^^^^^^^^
 
-As of Peewee 3.9.7, the isolation level can be specified as an initialization
-parameter, using the symbolic constants in ``psycopg2.extensions``:
+The isolation level can be specified as an initialization parameter, using the
+constants in ``psycopg2.extensions``:
 
 .. code-block:: python
 
@@ -150,35 +154,15 @@ parameter, using the symbolic constants in ``psycopg2.extensions``:
     db = PostgresqlDatabase('my_app', user='postgres', host='db-host',
                             isolation_level=ISOLATION_LEVEL_SERIALIZABLE)
 
-.. note::
-
-    In older versions, you can manually set the isolation level on the
-    underlying psycopg2 connection. This can be done in a one-off fashion:
-
-    .. code-block:: python
-
-        db = PostgresqlDatabase(...)
-        conn = db.connection()  # returns current connection.
-
-        from psycopg2.extensions import ISOLATION_LEVEL_SERIALIZABLE
-        conn.set_isolation_level(ISOLATION_LEVEL_SERIALIZABLE)
-
-    To run this every time a connection is created, subclass and implement
-    the ``_initialize_database()`` hook, which is designed for this purpose:
-
-    .. code-block:: python
-
-        class SerializedPostgresqlDatabase(PostgresqlDatabase):
-            def _initialize_connection(self, conn):
-                conn.set_isolation_level(ISOLATION_LEVEL_SERIALIZABLE)
-
-
 .. _using_sqlite:
 
 Using SQLite
 ------------
 
-To connect to a SQLite database, we will use :py:class:`SqliteDatabase`. The
+To use Peewee with SQLite, the recommended driver is the standard library
+``sqlite3`` module.
+
+To connect to a SQLite database, use :py:class:`SqliteDatabase`. The
 first parameter is the filename containing the database, or the string
 ``':memory:'`` to create an in-memory database. After the database filename,
 you can specify a list or pragmas or any other arbitrary `sqlite3 parameters
@@ -197,35 +181,36 @@ you can specify a list or pragmas or any other arbitrary `sqlite3 parameters
         username = TextField()
         # etc, etc
 
-Peewee includes a :ref:`SQLite extension module <sqlite_ext>` which provides
-many SQLite-specific features such as :ref:`full-text search <sqlite-fts>`,
-:ref:`json extension support <sqlite-json1>`, and more. These features are
-provided by the following modules:
+.. seealso::
+    Peewee includes a :ref:`SQLite extension module <sqlite_ext>` which provides
+    many SQLite-specific features such as :ref:`full-text search <sqlite-fts>`,
+    :ref:`json extension support <sqlite-json1>`, and more. These features are
+    provided by the following modules:
 
-* :py:class:`SqliteExtDatabase` from the ``playhouse.sqlite_ext`` module, or
-* :py:class:`CySqliteDatabase` from the ``playhouse.cysqlite_ext`` module.
+    * :py:class:`SqliteExtDatabase` from the ``playhouse.sqlite_ext`` module, or
+    * :py:class:`CySqliteDatabase` from the ``playhouse.cysqlite_ext`` module.
 
-Using ``SqliteExtDatabase``:
+    Using ``SqliteExtDatabase``:
 
-.. code-block:: python
+    .. code-block:: python
 
-    from playhouse.sqlite_ext import SqliteExtDatabase
+        from playhouse.sqlite_ext import SqliteExtDatabase
 
-    sqlite_db = SqliteExtDatabase('my_app.db', pragmas={
-        'journal_mode': 'wal',  # WAL-mode.
-        'cache_size': -64 * 1000,  # 64MB cache.
-        'synchronous': 0})  # Let the OS manage syncing.
+        sqlite_db = SqliteExtDatabase('my_app.db', pragmas={
+            'journal_mode': 'wal',  # WAL-mode.
+            'cache_size': -64 * 1000,  # 64MB cache.
+            'synchronous': 0})  # Let the OS manage syncing.
 
-Using ``CySqliteDatabase``:
+    Using ``CySqliteDatabase``:
 
-.. code-block:: python
+    .. code-block:: python
 
-    from playhouse.cysqlite_ext import CySqliteDatabase
+        from playhouse.cysqlite_ext import CySqliteDatabase
 
-    sqlite_db = SqliteExtDatabase('my_app.db', pragmas={
-        'journal_mode': 'wal',  # WAL-mode.
-        'cache_size': -64 * 1000,  # 64MB cache.
-        'synchronous': 0})  # Let the OS manage syncing.
+        sqlite_db = SqliteExtDatabase('my_app.db', pragmas={
+            'journal_mode': 'wal',  # WAL-mode.
+            'cache_size': -64 * 1000,  # 64MB cache.
+            'synchronous': 0})  # Let the OS manage syncing.
 
 .. _sqlite-pragma:
 
@@ -558,9 +543,15 @@ between the two. See :ref:`"Using MySQL" <using_mysql>` for more details.
 Using MySQL
 -----------
 
+To use Peewee with MySQL or MariaDB the recommended driver is ``pymysql``:
+
+.. code-block:: sh
+
+   $ pip install "pymysql"
+
 To connect to a MySQL database, we will use :py:class:`MySQLDatabase`. After
 the database name, you can specify arbitrary connection parameters that will be
-passed back to the driver (e.g. ``pymysql`` or ``mysqlclient``).
+passed back to the driver.
 
 .. code-block:: python
 
@@ -577,11 +568,10 @@ passed back to the driver (e.g. ``pymysql`` or ``mysqlclient``).
 
 Driver information:
 
-* `pymysql <https://github.com/PyMySQL/PyMySQL>`_ is a pure-python mysql client,
-  works with python 2 and 3. Peewee will use attempt to use pymysql first.
-* `mysqlclient <https://github.com/PyMySQL/mysqlclient-python>`_ uses a c
-  extension and supports python 3. It exposes a ``MySQLdb`` module. Peewee will
-  attempt to use this module if pymysql is not installed.
+* `pymysql <https://github.com/PyMySQL/PyMySQL>`_ is a pure-python mysql client.
+  Peewee will use attempt to use pymysql first.
+* `mysqlclient <https://github.com/PyMySQL/mysqlclient-python>`_ uses a C
+  extension. Peewee will attempt to use this module if pymysql is not installed.
 * `mysql-connector python <https://github.com/mysql/mysql-connector-python>`_
   to use this driver you can use :py:class:`MySQLConnectorDatabase`
   from the ``playhouse.mysql_ext`` extension.
@@ -815,10 +805,10 @@ using the ``bind()`` methods.
 Thread-Safety and Multiple Databases
 ------------------------------------
 
-If you plan to change the database at run-time in a multi-threaded application,
-storing the model's database in a thread-local will prevent race-conditions.
-This can be accomplished with a custom model ``Metadata`` class (see
-:py:class:`ThreadSafeDatabaseMetadata`, included in ``playhouse.shortcuts``):
+Peewee database connections are thread-safe. However, if you plan to **change**
+the database at run-time in a multi-threaded application, storing the model's
+database in a thread-local will prevent race-conditions. This can be
+accomplished with a custom model ``Metadata`` class (see :py:class:`ThreadSafeDatabaseMetadata`, included in ``playhouse.shortcuts``):
 
 .. code-block:: python
 
@@ -831,8 +821,7 @@ This can be accomplished with a custom model ``Metadata`` class (see
             model_metadata_class = ThreadSafeDatabaseMetadata
 
 The database can now be swapped safely while running in a multi-threaded
-environment using the familiar :py:meth:`Database.bind` or
-:py:meth:`Database.bind_ctx` methods.
+environment using the :py:meth:`Database.bind` or :py:meth:`Database.bind_ctx` methods.
 
 .. _connection_management:
 
@@ -1142,6 +1131,18 @@ will make your connection async:
 do any socket operations that would be a candidate for non-blocking. Async has
 no effect one way or the other on SQLite databases.
 
+AsyncIO
+-------
+
+Peewee provides support for the following asyncio database drivers:
+
+* aiosqlite
+* aiomysql
+* asyncpg
+
+Peewee support for asyncio is described in detail in the :ref:`asyncio`
+documentation.
+
 .. _framework-integration:
 
 Framework Integration
@@ -1443,11 +1444,8 @@ response middleware `sanic middleware <http://sanic.readthedocs.io/en/latest/san
 FastAPI
 ^^^^^^^
 
-FastAPI is an asyncio-compatible framework. Peewee relies on thread locals
-(which are also compatible with gevent) to manage the connection state across
-requests. For use with asyncio, some overrides are necessary to replace the
-thread-local behavior with an asyncio-compatible context-local. Peewee
-recommends using Flask + gevent for lightweight async web-framework.
+FastAPI is an asyncio-compatible framework. See the :ref:`asyncio`
+documentation for details on how to use Peewee in an asyncio setting.
 
 Other frameworks
 ^^^^^^^^^^^^^^^^
