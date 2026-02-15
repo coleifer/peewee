@@ -242,37 +242,37 @@ class CySqliteDatabase(SqliteDatabase):
                                                 progress, src_name)
 
     # Status properties.
-    memory_used = __status__(cysqlite.C_SQLITE_STATUS_MEMORY_USED)
-    malloc_size = __status__(cysqlite.C_SQLITE_STATUS_MALLOC_SIZE, True)
-    malloc_count = __status__(cysqlite.C_SQLITE_STATUS_MALLOC_COUNT)
-    pagecache_used = __status__(cysqlite.C_SQLITE_STATUS_PAGECACHE_USED)
+    memory_used = __status__(cysqlite.SQLITE_STATUS_MEMORY_USED)
+    malloc_size = __status__(cysqlite.SQLITE_STATUS_MALLOC_SIZE, True)
+    malloc_count = __status__(cysqlite.SQLITE_STATUS_MALLOC_COUNT)
+    pagecache_used = __status__(cysqlite.SQLITE_STATUS_PAGECACHE_USED)
     pagecache_overflow = __status__(
-        cysqlite.C_SQLITE_STATUS_PAGECACHE_OVERFLOW)
-    pagecache_size = __status__(cysqlite.C_SQLITE_STATUS_PAGECACHE_SIZE, True)
-    scratch_used = __status__(cysqlite.C_SQLITE_STATUS_SCRATCH_USED)
-    scratch_overflow = __status__(cysqlite.C_SQLITE_STATUS_SCRATCH_OVERFLOW)
-    scratch_size = __status__(cysqlite.C_SQLITE_STATUS_SCRATCH_SIZE, True)
+        cysqlite.SQLITE_STATUS_PAGECACHE_OVERFLOW)
+    pagecache_size = __status__(cysqlite.SQLITE_STATUS_PAGECACHE_SIZE, True)
+    scratch_used = __status__(cysqlite.SQLITE_STATUS_SCRATCH_USED)
+    scratch_overflow = __status__(cysqlite.SQLITE_STATUS_SCRATCH_OVERFLOW)
+    scratch_size = __status__(cysqlite.SQLITE_STATUS_SCRATCH_SIZE, True)
 
     # Connection status properties.
-    lookaside_used = __dbstatus__(cysqlite.C_SQLITE_DBSTATUS_LOOKASIDE_USED)
+    lookaside_used = __dbstatus__(cysqlite.SQLITE_DBSTATUS_LOOKASIDE_USED)
     lookaside_hit = __dbstatus__(
-        cysqlite.C_SQLITE_DBSTATUS_LOOKASIDE_HIT, True)
+        cysqlite.SQLITE_DBSTATUS_LOOKASIDE_HIT, True)
     lookaside_miss = __dbstatus__(
-        cysqlite.C_SQLITE_DBSTATUS_LOOKASIDE_MISS_SIZE, True)
+        cysqlite.SQLITE_DBSTATUS_LOOKASIDE_MISS_SIZE, True)
     lookaside_miss_full = __dbstatus__(
-        cysqlite.C_SQLITE_DBSTATUS_LOOKASIDE_MISS_FULL, True)
+        cysqlite.SQLITE_DBSTATUS_LOOKASIDE_MISS_FULL, True)
     cache_used = __dbstatus__(
-        cysqlite.C_SQLITE_DBSTATUS_CACHE_USED, False, True)
+        cysqlite.SQLITE_DBSTATUS_CACHE_USED, False, True)
     schema_used = __dbstatus__(
-        cysqlite.C_SQLITE_DBSTATUS_SCHEMA_USED, False, True)
+        cysqlite.SQLITE_DBSTATUS_SCHEMA_USED, False, True)
     statement_used = __dbstatus__(
-        cysqlite.C_SQLITE_DBSTATUS_STMT_USED, False, True)
+        cysqlite.SQLITE_DBSTATUS_STMT_USED, False, True)
     cache_hit = __dbstatus__(
-        cysqlite.C_SQLITE_DBSTATUS_CACHE_HIT, False, True)
+        cysqlite.SQLITE_DBSTATUS_CACHE_HIT, False, True)
     cache_miss = __dbstatus__(
-        cysqlite.C_SQLITE_DBSTATUS_CACHE_MISS, False, True)
+        cysqlite.SQLITE_DBSTATUS_CACHE_MISS, False, True)
     cache_write = __dbstatus__(
-        cysqlite.C_SQLITE_DBSTATUS_CACHE_WRITE, False, True)
+        cysqlite.SQLITE_DBSTATUS_CACHE_WRITE, False, True)
 
 
 OP.MATCH = 'MATCH'
