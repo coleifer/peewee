@@ -21,7 +21,7 @@ need to install it to run the example:
 Running the example
 -------------------
 
-.. image:: tweepee.jpg
+.. image:: tweepee.png
 
 After ensuring that flask is installed, ``cd`` into the twitter example
 directory and execute the ``run_example.py`` script:
