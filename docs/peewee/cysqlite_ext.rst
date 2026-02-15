@@ -169,8 +169,8 @@ extensions, which can be imported from ``playhouse.cysqlite_ext``:
         Register an authorizer callback. Authorizer callbacks must accept 5
         parameters, which vary depending on the operation being checked.
 
-        * op: operation code, e.g. ``cysqlite.C_SQLITE_INSERT``.
-        * p1: operation-specific value, e.g. table name for ``C_SQLITE_INSERT``.
+        * op: operation code, e.g. ``cysqlite.SQLITE_INSERT``.
+        * p1: operation-specific value, e.g. table name for ``SQLITE_INSERT``.
         * p2: operation-specific value.
         * p3: database name, e.g. ``"main"``.
         * p4: inner-most trigger or view responsible for the access attempt if
@@ -181,10 +181,10 @@ extensions, which can be imported from ``playhouse.cysqlite_ext``:
 
         The authorizer callback must return one of:
 
-        * ``cysqlite.C_SQLITE_OK``: allow operation.
-        * ``cysqlite.C_SQLITE_IGNORE``: allow statement compilation but prevent
+        * ``cysqlite.SQLITE_OK``: allow operation.
+        * ``cysqlite.SQLITE_IGNORE``: allow statement compilation but prevent
           the operation from occuring.
-        * ``cysqlite.C_SQLITE_DENY``: prevent statement compilation.
+        * ``cysqlite.SQLITE_DENY``: prevent statement compilation.
 
         More details can be found in the `cysqlite docs <https://cysqlite.readthedocs.io/en/latest/api.html#Connection.authorizer>`_.
 
@@ -198,11 +198,11 @@ extensions, which can be imported from ``playhouse.cysqlite_ext``:
         accept 4 parameters, which vary depending on the operation being
         traced.
 
-        * event: type of event, e.g. ``cysqlite.TRACE_PROFILE``.
-        * sid: memory address of statement (only ``cysqlite.TRACE_CLOSE``), else -1.
-        * sql: SQL string (only ``cysqlite.TRACE_STMT``), else None.
+        * event: type of event, e.g. ``SQLITE_TRACE_PROFILE``.
+        * sid: memory address of statement (only ``SQLITE_TRACE_CLOSE``), else -1.
+        * sql: SQL string (only ``SQLITE_TRACE_STMT``), else None.
         * ns: estimated number of nanoseconds the statement took to run (only
-          ``cysqlite.TRACE_PROFILE``), else -1.
+          ``SQLITE_TRACE_PROFILE``), else -1.
 
         Any return value from callback is ignored.
 
