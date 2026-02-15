@@ -264,4 +264,7 @@ def main():
     app.run(debug=True)
 
 if __name__ == '__main__':
+    print('To login, open:')
+    print('http://127.0.0.1:5000/login/')
+    print('password is: %s' % ADMIN_PASSWORD)
     main()
