@@ -12,49 +12,40 @@ to open a connection to a database, and then can be used to:
 * Manage transactions (and savepoints).
 * Introspect tables, columns, indexes, and constraints.
 
-Peewee comes with support for SQLite, MySQL, MariaDB and Postgres. Each
-database class provides some basic, database-specific configuration options.
+Peewee comes with support for:
 
-.. code-block:: python
+* SQLite - :py:class:`SqliteDatabase` using the standard library ``sqlite3``.
 
-    from peewee import *
+  .. code-block:: python
 
-    # SQLite database using WAL journal mode and 64MB cache.
-    sqlite_db = SqliteDatabase('/path/to/app.db', pragmas={
-        'journal_mode': 'wal',
-        'cache_size': -1024 * 64})
+      # SQLite database using WAL journal mode and 64MB cache.
+      sqlite_db = SqliteDatabase('/path/to/app.db', pragmas={
+          'journal_mode': 'wal',
+          'cache_size': -1024 * 64})
 
-    # Connect to a MySQL database on network.
-    mysql_db = MySQLDatabase('my_app', user='app', password='db_password',
-                             host='10.1.0.8', port=3306)
+* Postgres - :py:class:`PostgresqlDatabase` using ``psycopg2`` or ``psycopg3``.
 
-    # Connect to a Postgres database.
-    pg_db = PostgresqlDatabase('my_app', user='postgres', password='secret',
-                               host='10.1.0.9', port=5432)
+  .. code-block:: python
 
-Peewee provides advanced support for SQLite, Postgres and others via
-database-specific extension modules. To use the extended functionality, import
-the appropriate database-specific module and use the database class provided:
+      # Connect to a Postgres database.
+      pg_db = PostgresqlDatabase(
+          'my_app',
+          user='postgres',
+          password='secret',
+          host='10.1.0.9',
+          port=5432)
 
-.. code-block:: python
+* MySQL and MariaDB - :py:class:`MySQLDatabase` using ``pymysql``.
 
-    from playhouse.postgres_ext import PostgresqlExtDatabase
+  .. code-block:: python
 
-    # Use Postgres w/postgres-specific features.
-    db = PostgresqlExtDatabase('my_app', user='postgres')
-
-For more information on database extensions, see:
-
-* :ref:`postgres_ext`
-* :ref:`sqlite_ext`
-* :ref:`mysql_ext` (mysql-connector/mariadb-connector support).
-
-Peewee also supports a number of alternate drivers:
-
-* :ref:`psycopg3_ext`
-* :ref:`sqlcipher_ext` (encrypted SQLite database).
-* :ref:`cysqlite_ext`
-* :ref:`apsw`
+      # Connect to a MySQL database on network.
+      mysql_db = MySQLDatabase(
+          'my_app',
+          user='app',
+          password='db_password',
+          host='10.1.0.8',
+          port=3306)
 
 Initializing a Database
 -----------------------
@@ -67,7 +58,7 @@ pass vendor-specific parameters easily.
 For instance, with Postgresql it is common to need to specify the ``host``,
 ``user`` and ``password`` when creating your connection. These are not standard
 Peewee :py:class:`Database` parameters, so they will be passed directly back to
-``psycopg2`` when creating connections:
+``psycopg2``/``psycopg3`` when creating connections:
 
 .. code-block:: python
 
@@ -132,9 +123,10 @@ parameters:
     * :ref:`JSON <pgjson>`
     * :ref:`Full Text Search <pg_fts>`
 
-    Use the :py:class:`PostgresqlExtDatabase` from ``playhouse.postgres_ext``
-    or :py:class:`Psycopg3Database` from ``playhouse.psycopg3_ext`` to utilize
-    these features.
+    To utilize these features use:
+
+    * ``playhouse.postgres_ext`` - :py:class:`PostgresqlExtDatabase` or
+    * ``playhouse.psycopg3_ext`` - :py:class:`Psycopg3Database`
 
     .. code-block:: python
 
@@ -208,7 +200,7 @@ you can specify a list or pragmas or any other arbitrary `sqlite3 parameters
 
         from playhouse.cysqlite_ext import CySqliteDatabase
 
-        sqlite_db = SqliteExtDatabase('my_app.db', pragmas={
+        sqlite_db = CySqliteDatabase('my_app.db', pragmas={
             'journal_mode': 'wal',  # WAL-mode.
             'cache_size': -64 * 1000,  # 64MB cache.
             'synchronous': 0})  # Let the OS manage syncing.
