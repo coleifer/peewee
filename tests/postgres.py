@@ -825,6 +825,21 @@ class TestServerSide(ModelTestCase):
             self.assertEqual(curs.fetchone(), (1,))
             curs.close()
 
+    def test_close_cursor(self):
+        query = Register.select(Register.value).order_by(Register.value)
+        with self.database.atomic():
+            ssq = ServerSideQuery(query, array_size=10)
+            accum = []
+            for i, obj in enumerate(ssq.iterator()):
+                if i == 25:
+                    break
+                accum.append(obj.value)
+
+            self.assertTrue(ssq.close())
+
+        self.assertEqual(len(accum), 25)
+        self.assertEqual(accum, list(range(25)))
+
 
 class KX(TestModel):
     key = CharField(unique=True)

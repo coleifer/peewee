@@ -29,7 +29,6 @@ except ImportError:
     def register_hstore(*args): pass
 
 try:
-    from psycopg import ServerCursor
     from psycopg.types import TypeInfo
     from psycopg.types.hstore import register_hstore as register_hstore_pg3
 except ImportError:
@@ -460,6 +459,18 @@ class ServerSideQuery(Node):
         if self._cursor_wrapper is None:
             self._execute(self.query._database)
         return iter(self._cursor_wrapper.iterator())
+
+    def close(self):
+        if self._cursor_wrapper is not None:
+            self._cursor_wrapper.cursor.close()
+            self._cursor_wrapper = None
+            return True
+        return False
+
+    def iterator(self):
+        if self._cursor_wrapper is None:
+            self._execute(self.query._database)
+        return self._cursor_wrapper.iterator()
 
     def _execute(self, database):
         if self._cursor_wrapper is None:
