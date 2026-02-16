@@ -55,14 +55,13 @@ JSONB_PATH = '#>'
 
 class Json(Node):
     # Fallback JSON handler.
-    __slots__ = ('value', 'dumps')
+    __slots__ = ('value',)
 
-    def __init__(self, value, dumps=None):
+    def __init__(self, value):
         self.value = value
-        self.dumps = dumps
 
     def __sql__(self, ctx):
-        return ctx.value(self.value, self.dumps or json.dumps)
+        return ctx.value(self.value, json.dumps)
 
 
 class _LookupNode(ColumnBase):
@@ -317,10 +316,6 @@ class JsonPath(_JsonLookupBase):
 class JSONField(FieldDatabaseHook, Field):
     field_type = 'JSON'
     _json_datatype = 'json'
-
-    def __init__(self, dumps=None, *args, **kwargs):
-        self.dumps = dumps or json.dumps
-        super(JSONField, self).__init__(*args, **kwargs)
 
     def _db_hook(self, database):
         if database is None or not hasattr(database, '_adapter'):

@@ -17,6 +17,11 @@ https://github.com/coleifer/peewee/releases
 * `PostgresqlDatabase` can use `psycopg` (psycopg3) if it is installed. If both
   psycopg2 and psycopg3 are installed, Peewee will prefer psycopg2, but this
   can be controlled by specifying `prefer_psycopg3=True` in the constructor.
+  Same applies to `PostgresqlExtDatabase`.
+* `Psycopg3Database` class has been moved to `playhouse.postgres_ext` and is
+  now just a thin wrapper around `PostgresqlExtDatabase`.
+* Postgres JSON operations no longer dump and try to do minimal casts, instead
+  relying on the driver-provided `Json()` wrapper(s).
 * Adds new `ISODateTimeField` for Sqlite that encodes datetimes in ISO format
   (more friendly when db is shared with other tools), and also properly reads
   back UTC offset info.
@@ -24,10 +29,9 @@ https://github.com/coleifer/peewee/releases
   testing, since testing `x in dirty_fields` returns True if one or more field
   exists due to operator overloads returning a truthy Expression object.
   Refs #3028.
-* **Significant**: removal of Cython `_sqlite_ext` extension. The C
-  implementations of the FTS rank functions are moved to `sqlite_udf`. Most of
-  the remaining functionality is moved to `playhouse.cysqlite_ext` which
-  supports it natively (no more hacks).
+* Removal of Cython `_sqlite_ext` extension. The C implementations of the FTS
+  rank functions are moved to `sqlite_udf`. Most of the remaining functionality
+  is moved to `playhouse.cysqlite_ext` which supports it natively.
 
 Migrating `CSqliteExtDatabase` usage:
 

@@ -1342,22 +1342,18 @@ postgres_ext API notes
 
         Query rows for the existence of *any* key.
 
-.. py:class:: JSONField(dumps=None, *args, **kwargs)
-
-    :param dumps: The default is to call json.dumps() or the dumps function.
-        You can override this method to create a customized JSON wrapper.
+.. py:class:: JSONField(*args, **kwargs)
 
     Field class suitable for storing and querying arbitrary JSON. When using
     this on a model, set the field's value to a Python object (either a
     ``dict`` or a ``list``). When you retrieve your value from the database it
     will be returned as a Python data structure.
 
-    .. note:: You must be using Postgres 9.2 / psycopg2 2.5 or greater.
+    .. note:: Requires psycopg2 2.5 or greater.
 
     .. note::
-        If you are using Postgres 9.4, strongly consider using the
-        :py:class:`BinaryJSONField` instead as it offers better performance and
-        more powerful querying options.
+        Strongly consider using the :py:class:`BinaryJSONField` instead as it
+        offers better performance and more powerful querying options.
 
     Example model declaration:
 
@@ -1447,10 +1443,7 @@ postgres_ext API notes
         get_data(APIResponse.data['foo']['bar'][0].as_json())
         # 'i1'
 
-.. py:class:: BinaryJSONField(dumps=None, *args, **kwargs)
-
-    :param dumps: The default is to call json.dumps() or the dumps function.
-      You can override this method to create a customized JSON wrapper.
+.. py:class:: BinaryJSONField(*args, **kwargs)
 
     Store and query arbitrary JSON documents. Data should be stored using
     normal Python ``dict`` and ``list`` objects, and when data is returned from
@@ -1464,7 +1457,7 @@ postgres_ext API notes
         By default BinaryJSONField will use a GiST index. To disable this,
         initialize the field with ``index=False``.
 
-    .. note:: You must be using Postgres 9.4 / psycopg2 2.5 or newer. If you are using Postgres 9.2 or 9.3, you can use the regular :py:class:`JSONField` instead.
+    .. note:: You must be using Postgres 9.4 / psycopg2 2.5 or newer.
 
     .. py:method:: contains(other)
 
