@@ -60,22 +60,18 @@ class FTSModel(TestModel):
     fts_data = TSVectorField()
 
 
-try:
-    class JsonModel(TestModel):
-        data = JSONField()
+class JsonModel(TestModel):
+    data = JSONField()
 
-    class JsonModelNull(TestModel):
-        data = JSONField(null=True)
+class JsonModelNull(TestModel):
+    data = JSONField(null=True)
 
-    class BJson(TestModel):
-        data = BinaryJSONField()
+class BJson(TestModel):
+    data = BinaryJSONField()
 
-    class JData(TestModel):
-        d1 = BinaryJSONField()
-        d2 = BinaryJSONField(index=False)
-except:
-    BJson = JData = None
-    JsonModel = JsonModelNull = None
+class JData(TestModel):
+    d1 = BinaryJSONField()
+    d2 = BinaryJSONField(index=False)
 
 
 class Normal(TestModel):
@@ -548,22 +544,11 @@ class TestTSVectorField(ModelTestCase):
         self.assertMessages(M('faith things', plain=True), [2, 4])
 
 
-def pg93():
-    with db:
-        return db.server_version >= 90300
-
-def pg10():
-    with db:
-        return db.server_version >= 100000
-
 def pg12():
     with db:
         return db.server_version >= 120000
 
-JSON_SUPPORT = (JsonModel is not None) and pg93()
 
-
-@skip_unless(JSON_SUPPORT, 'json support unavailable')
 class TestJsonField(BaseJsonFieldTestCase, ModelTestCase):
     M = JsonModel
     N = Normal
@@ -584,14 +569,12 @@ class TestJsonField(BaseJsonFieldTestCase, ModelTestCase):
         self.assertEqual(query.get(), tjn)
 
 
-@skip_unless(JSON_SUPPORT, 'json support unavailable')
 class TestBinaryJsonField(BaseBinaryJsonFieldTestCase, ModelTestCase):
     M = BJson
     N = Normal
     database = db
     requires = [BJson, Normal]
 
-    @skip_unless(pg10(), 'jsonb remove support requires pg >= 10')
     def test_remove_data(self):
         BJson.delete().execute()  # Clear out db.
         BJson.create(data={
@@ -611,7 +594,6 @@ class TestBinaryJsonField(BaseBinaryJsonFieldTestCase, ModelTestCase):
         assertData(['k1', 'kx', 'ky', 'k3'], {'k2': 'v2', 'k4': [0, 1, 2]})
         assertData(['k4', 'k3'], {'k1': 'v1', 'k2': 'v2'})
 
-    @skip_unless(pg10(), 'jsonb remove support requires pg >= 10')
     def test_json_contains_in_list(self):
         m1 = self.M.create(data=[{'k1': 'v1', 'k2': 'v2'}, {'a1': 'b1'}])
         m2 = self.M.create(data=[{'k3': 'v3'}, {'k4': 'v4'}])
@@ -636,25 +618,6 @@ class TestBinaryJsonField(BaseBinaryJsonFieldTestCase, ModelTestCase):
         self.assertRaises(ProgrammingError, fails)
 
 
-@skip_unless(JSON_SUPPORT, 'json support unavailable')
-class TestBinaryJsonFieldBulkUpdate(ModelTestCase):
-    database = db
-    requires = [BJson]
-
-    def test_binary_json_field_bulk_update(self):
-        b1 = BJson.create(data={'k1': 'v1'})
-        b2 = BJson.create(data={'k2': 'v2'})
-        b1.data['k1'] = 'v1-x'
-        b2.data['k2'] = 'v2-y'
-        BJson.bulk_update([b1, b2], fields=[BJson.data])
-
-        b1_db = BJson.get(BJson.id == b1.id)
-        b2_db = BJson.get(BJson.id == b2.id)
-        self.assertEqual(b1_db.data, {'k1': 'v1-x'})
-        self.assertEqual(b2_db.data, {'k2': 'v2-y'})
-
-
-@skip_unless(JSON_SUPPORT, 'json support unavailable')
 class TestJsonFieldRegressions(ModelTestCase):
     database = db
     requires = [JData]
@@ -748,7 +711,6 @@ class IDByDefault(TestModel):
     data = CharField()
 
 
-@skip_unless(pg10(), 'identity field requires pg >= 10')
 class TestIdentityField(ModelTestCase):
     database = db
     requires = [IDAlways, IDByDefault]
@@ -933,7 +895,6 @@ class TestPostgresCTEMaterialization(ModelTestCase):
             self.assertEqual([r.value for r in query], [1, 3])
 
 
-@skip_unless(pg93(), 'lateral join requires pg >= 9.3')
 class TestPostgresLateralJoin(ModelTestCase):
     database = db
     test_data = (

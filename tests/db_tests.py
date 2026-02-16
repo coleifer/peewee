@@ -820,6 +820,9 @@ class TestDBProxy(BaseTestCase):
 
         self.assertTrue(Hook.data._constructor is bytearray)
 
+        custom_db.bind([Hook])
+        self.assertTrue(Hook.data._constructor is custom_db.sentinel)
+
 
 class Data(TestModel):
     key = TextField()

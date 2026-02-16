@@ -116,8 +116,8 @@ class BaseJsonFieldTestCase(object):
         table = self.M._meta.table_name
         self.assertSQL(j, (
             'SELECT "t1"."id", "t1"."data" '
-            'FROM "%s" AS "t1" WHERE ("t1"."data" = CAST(? AS %s))')
-            % (table, self.M.data._json_datatype))
+            'FROM "%s" AS "t1" WHERE ("t1"."data" = ?)')
+            % table)
 
         j = (self.M
              .select()
@@ -153,16 +153,32 @@ class BaseJsonFieldTestCase(object):
 
         self.assertItems((self.M.data['k2']['xxx'] == 'v1'))
 
+    def test_bulk_update(self):
+        m1 = self.M.create(data={'k1': 'v1'})
+        m2 = self.M.create(data={'k2': 'v2'})
+        m3 = self.M.create(data=['i1', 'i2'])
+        m1.data['k1'] = 'v1-x'
+        m2.data['k2'] = 'v2-y'
+        m3.data.append('i3')
+        self.M.bulk_update([m1, m2, m3], fields=[self.M.data])
+
+        m1_db = self.M.get(self.M.id == m1.id)
+        m2_db = self.M.get(self.M.id == m2.id)
+        m3_db = self.M.get(self.M.id == m3.id)
+        self.assertEqual(m1_db.data, {'k1': 'v1-x'})
+        self.assertEqual(m2_db.data, {'k2': 'v2-y'})
+        self.assertEqual(m3_db.data, ['i1', 'i2', 'i3'])
+
     def test_json_bulk_update_top_level_list(self):
         m1 = self.M.create(data=['a', 'b', 'c'])
         m2 = self.M.create(data=['d', 'e', 'f'])
 
-        m1.data = ['g', 'h', 'i']
+        m1.data = ['g', 'h', 'i', {'j': 'kk'}]
         m2.data = ['j', 'k', 'l']
         self.M.bulk_update([m1, m2], fields=[self.M.data])
         m1_db = self.M.get(self.M.id == m1.id)
         m2_db = self.M.get(self.M.id == m2.id)
-        self.assertEqual(m1_db.data, ['g', 'h', 'i'])
+        self.assertEqual(m1_db.data, ['g', 'h', 'i', {'j': 'kk'}])
         self.assertEqual(m2_db.data, ['j', 'k', 'l'])
 
 
@@ -192,12 +208,24 @@ class BaseBinaryJsonFieldTestCase(BaseJsonFieldTestCase):
 
     def test_contained_by(self):
         self._create_test_data()
+        D = self.M.data
 
         item1 = ['a1', 'a2', {'a3': 'a4'}, 'a5']
-        self.assertObjects(self.M.data.contained_by(item1), 1)
+        self.assertObjects(D.contained_by(item1), 1)
 
         item2 = {'a1': 'x1', 'a2': 'x2', 'k4': ['i0', 'i1', 'i2'], 'x': 'y'}
-        self.assertObjects(self.M.data.contained_by(item2), 2)
+        self.assertObjects(D.contained_by(item2), 2)
+
+        self.assertObjects(D.contained_by(list(range(10))), 3)
+        self.assertObjects(D.contained_by(list(range(20))), 3, 4)
+
+    def test_contained_by_nested(self):
+        self._create_test_data()
+        D = self.M.data
+        self.assertObjects(D['k4'].contained_by(['i1', 'i2']), 2)
+        self.assertObjects(D['k3']['k4'].contained_by(['i1', 'i2']), 0)
+        self.assertObjects(D[2].contained_by({'a3': 'a4'}), 1)
+        self.assertObjects(D[0].contained_by(['a1', 'ax']), 1)
 
     def test_equality(self):
         data = {'k1': ['a1', 'a2'], 'k2': {'k3': 'v3'}}

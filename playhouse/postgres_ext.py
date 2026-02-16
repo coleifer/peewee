@@ -5,6 +5,7 @@ import uuid
 from peewee import *
 from peewee import ColumnBase
 from peewee import Expression
+from peewee import FieldDatabaseHook
 from peewee import Node
 from peewee import NodeList
 from peewee import Psycopg2Adapter
@@ -53,13 +54,15 @@ JSONB_PATH = '#>'
 
 
 class Json(Node):
-    __slots__ = ('value',)
+    # Fallback JSON handler.
+    __slots__ = ('value', 'dumps')
 
-    def __init__(self, value):
+    def __init__(self, value, dumps=None):
         self.value = value
+        self.dumps = dumps
 
     def __sql__(self, ctx):
-        return ctx.value(self.value, json.dumps)
+        return ctx.value(self.value, self.dumps or json.dumps)
 
 
 class _LookupNode(ColumnBase):
@@ -73,72 +76,6 @@ class _LookupNode(ColumnBase):
 
     def __hash__(self):
         return hash((self.__class__.__name__, id(self)))
-
-
-class _JsonLookupBase(_LookupNode):
-    def __init__(self, node, parts, as_json=False):
-        super(_JsonLookupBase, self).__init__(node, parts)
-        self._as_json = as_json
-
-    def clone(self):
-        return type(self)(self.node, list(self.parts), self._as_json)
-
-    @Node.copy
-    def as_json(self, as_json=True):
-        self._as_json = as_json
-
-    def concat(self, rhs):
-        if not isinstance(rhs, Node):
-            rhs = Json(rhs)
-        return Expression(self.as_json(True), OP.CONCAT, rhs)
-
-    def contains(self, other):
-        return Expression(self.as_json(True), JSONB_CONTAINS, Json(other))
-
-    def contained_by(self, other):
-        return Expression(self.as_json(True), JSONB_CONTAINED_BY, Json(other))
-
-    def contains_any(self, *keys):
-        return Expression(
-            self.as_json(True),
-            JSONB_CONTAINS_ANY_KEY,
-            Value(list(keys), unpack=False))
-
-    def contains_all(self, *keys):
-        return Expression(
-            self.as_json(True),
-            JSONB_CONTAINS_ALL_KEYS,
-            Value(list(keys), unpack=False))
-
-    def has_key(self, key):
-        return Expression(self.as_json(True), JSONB_CONTAINS_KEY, key)
-
-    def path(self, *keys):
-        return JsonPath(self.as_json(True), keys)
-
-
-class JsonLookup(_JsonLookupBase):
-    def __getitem__(self, value):
-        return JsonLookup(self.node, self.parts + [value], self._as_json)
-
-    def __sql__(self, ctx):
-        ctx.sql(self.node)
-        for part in self.parts[:-1]:
-            ctx.literal('->').sql(part)
-        if self.parts:
-            (ctx
-             .literal('->' if self._as_json else '->>')
-             .sql(self.parts[-1]))
-
-        return ctx
-
-
-class JsonPath(_JsonLookupBase):
-    def __sql__(self, ctx):
-        return (ctx
-                .sql(self.node)
-                .literal('#>' if self._as_json else '#>>')
-                .sql(Value('{%s}' % ','.join(map(str, self.parts)))))
 
 
 class ObjectSlice(_LookupNode):
@@ -307,7 +244,77 @@ class HStoreField(IndexedFieldMixin, Field):
                                                          unpack=False))
 
 
-class JSONField(Field):
+class _JsonLookupBase(_LookupNode):
+    def __init__(self, node, parts, as_json=False):
+        super(_JsonLookupBase, self).__init__(node, parts)
+        self._as_json = as_json
+
+    def clone(self):
+        return type(self)(self.node, list(self.parts), self._as_json)
+
+    @Node.copy
+    def as_json(self, as_json=True):
+        self._as_json = as_json
+
+    def concat(self, rhs):
+        if not isinstance(rhs, Node):
+            rhs = self.node.json_type(rhs)
+        return Expression(self.as_json(True), OP.CONCAT, rhs)
+
+    def contains(self, other):
+        if not isinstance(other, Node):
+            other = self.node.json_type(other)
+        return Expression(self.as_json(True), JSONB_CONTAINS, other)
+
+    def contained_by(self, other):
+        if not isinstance(other, Node):
+            other = self.node.json_type(other)
+        return Expression(self.as_json(True), JSONB_CONTAINED_BY, other)
+
+    def contains_any(self, *keys):
+        return Expression(
+            self.as_json(True),
+            JSONB_CONTAINS_ANY_KEY,
+            Value(list(keys), False, unpack=False))
+
+    def contains_all(self, *keys):
+        return Expression(
+            self.as_json(True),
+            JSONB_CONTAINS_ALL_KEYS,
+            Value(list(keys), False, unpack=False))
+
+    def has_key(self, key):
+        return Expression(self.as_json(True), JSONB_CONTAINS_KEY, key)
+
+    def path(self, *keys):
+        return JsonPath(self.as_json(True), keys)
+
+
+class JsonLookup(_JsonLookupBase):
+    def __getitem__(self, value):
+        return JsonLookup(self.node, self.parts + [value], self._as_json)
+
+    def __sql__(self, ctx):
+        ctx.sql(self.node)
+        for part in self.parts[:-1]:
+            ctx.literal('->').sql(part)
+        if self.parts:
+            (ctx
+             .literal('->' if self._as_json else '->>')
+             .sql(self.parts[-1]))
+
+        return ctx
+
+
+class JsonPath(_JsonLookupBase):
+    def __sql__(self, ctx):
+        return (ctx
+                .sql(self.node)
+                .literal('#>' if self._as_json else '#>>')
+                .sql(Value('{%s}' % ','.join(map(str, self.parts)))))
+
+
+class JSONField(FieldDatabaseHook, Field):
     field_type = 'JSON'
     _json_datatype = 'json'
 
@@ -315,12 +322,25 @@ class JSONField(Field):
         self.dumps = dumps or json.dumps
         super(JSONField, self).__init__(*args, **kwargs)
 
+    def _db_hook(self, database):
+        if database is None or not hasattr(database, '_adapter'):
+            self.json_type = Json
+            self.cast_json_case = True
+        else:
+            self.json_type = database._adapter.json_type
+            self.cast_json_case = database._adapter.cast_json_case
+
     def db_value(self, value):
-        if value is None:
+        if value is None or isinstance(value, (Node, self.json_type)):
             return value
-        if not isinstance(value, Json):
-            return Cast(self.dumps(value), self._json_datatype)
-        return value
+        return self.json_type(value)
+
+    def to_value(self, value, case=False):
+        # CASE WHEN id = 123 THEN x.json_data fails because the expression is
+        # untyped, so we need an explicit cast with psycopg2.
+        if case and self.cast_json_case:
+            return Cast(self.json_type(value), self._json_datatype)
+        return self.json_type(value)
 
     def __getitem__(self, value):
         return JsonLookup(self, [value])
@@ -330,12 +350,8 @@ class JSONField(Field):
 
     def concat(self, value):
         if not isinstance(value, Node):
-            value = Json(value)
+            value = self.json_type(value)
         return super(JSONField, self).concat(value)
-
-
-def cast_jsonb(node):
-    return NodeList((node, SQL('::jsonb')), glue='')
 
 
 class BinaryJSONField(IndexedFieldMixin, JSONField):
@@ -343,35 +359,42 @@ class BinaryJSONField(IndexedFieldMixin, JSONField):
     _json_datatype = 'jsonb'
     __hash__ = Field.__hash__
 
+    def _db_hook(self, database):
+        if database is None or not hasattr(database, '_adapter'):
+            self.json_type = Json
+            self.cast_json_case = True
+        else:
+            self.json_type = database._adapter.jsonb_type
+            self.cast_json_case = database._adapter.cast_json_case
+
     def contains(self, other):
-        if isinstance(other, JSONField):
-            return Expression(self, JSONB_CONTAINS, other)
-        return Expression(self, JSONB_CONTAINS, Json(other))
+        if not isinstance(other, Node):
+            other = self.json_type(other)
+        return Expression(self, JSONB_CONTAINS, other)
 
     def contained_by(self, other):
-        return Expression(cast_jsonb(self), JSONB_CONTAINED_BY, Json(other))
+        if not isinstance(other, Node):
+            other = self.json_type(other)
+        return Expression(self, JSONB_CONTAINED_BY, other)
 
     def contains_any(self, *items):
         return Expression(
-            cast_jsonb(self),
+            self,
             JSONB_CONTAINS_ANY_KEY,
-            Value(list(items), unpack=False))
+            Value(list(items), False, unpack=False))
 
     def contains_all(self, *items):
         return Expression(
-            cast_jsonb(self),
+            self,
             JSONB_CONTAINS_ALL_KEYS,
-            Value(list(items), unpack=False))
+            Value(list(items), False, unpack=False))
 
     def has_key(self, key):
-        return Expression(cast_jsonb(self), JSONB_CONTAINS_KEY, key)
+        return Expression(self, JSONB_CONTAINS_KEY, Value(key, False))
 
     def remove(self, *items):
-        value = Cast(Value(list(items), unpack=False), 'text[]')
-        return Expression(
-            cast_jsonb(self),
-            JSONB_REMOVE,
-            value)
+        value = Cast(Value(list(items), False, unpack=False), 'text[]')
+        return Expression(self, JSONB_REMOVE, value)
 
 
 class TSVectorField(IndexedFieldMixin, TextField):

@@ -50,16 +50,18 @@ try:
     from psycopg2 import errors as pg_errors
     from psycopg2 import extensions as pg_extensions
     from psycopg2.extras import register_uuid as pg_register_uuid
+    from psycopg2.extras import Json as Json_pg2
     pg_register_uuid()
 except ImportError:
-    psycopg2 = pg_errors = None
+    psycopg2 = pg_errors = Json_pg2 = None
 try:
     import psycopg
     from psycopg import errors as pg3_errors
     from psycopg.pq import TransactionStatus
+    from psycopg.types.json import Json as Json_pg3
+    from psycopg.types.json import Jsonb as Jsonb_pg3
 except ImportError:
-    psycopg = None
-    pg3_errors = None
+    psycopg = pg3_errors = Json_pg3 = Jsonb_pg3 = None
 
 mysql_passwd = False
 try:
@@ -3940,6 +3942,11 @@ class SqliteDatabase(Database):
 
 
 class Psycopg2Adapter(object):
+    def __init__(self):
+        self.json_type = Json_pg2
+        self.jsonb_type = Json_pg2
+        self.cast_json_case = True
+
     def check_driver(self):
         if psycopg2 is None:
             raise ImproperlyConfigured('psycopg2 postgres driver not found.')
@@ -3994,6 +4001,11 @@ class Psycopg2Adapter(object):
 
 
 class Psycopg3Adapter(object):
+    def __init__(self):
+        self.json_type = Json_pg3
+        self.jsonb_type = Jsonb_pg3
+        self.cast_json_case = False
+
     def check_driver(self):
         if psycopg is None:
             raise ImproperlyConfigured('psycopg postgres driver not found.')
@@ -4928,7 +4940,7 @@ class Field(ColumnBase):
     def python_value(self, value):
         return value if value is None else self.adapt(value)
 
-    def to_value(self, value):
+    def to_value(self, value, case=False):
         return Value(value, self.db_value, unpack=False)
 
     def get_sort_key(self, ctx):
@@ -5110,7 +5122,28 @@ class TextField(_StringField):
     field_type = 'TEXT'
 
 
-class BlobField(Field):
+class FieldDatabaseHook(object):
+    def _db_hook(self, database):
+        raise NotImplementedError('Subclasses must implement')
+
+    def bind(self, model, name, set_attribute=True):
+        if model._meta.database is not None:
+            if isinstance(model._meta.database, Proxy):
+                model._meta.database.attach_callback(self._db_hook)
+                self._db_hook(None)
+            else:
+                self._db_hook(model._meta.database)
+        else:
+            self._db_hook(None)
+
+        # Attach a hook to the model metadata; in the event the database is
+        # changed or set at run-time, we will be sure to apply our callback and
+        # use the proper data-type for our database driver.
+        model._meta._db_hooks.append(self._db_hook)
+        return super(FieldDatabaseHook, self).bind(model, name, set_attribute)
+
+
+class BlobField(FieldDatabaseHook, Field):
     field_type = 'BLOB'
 
     def _db_hook(self, database):
@@ -5118,20 +5151,6 @@ class BlobField(Field):
             self._constructor = bytearray
         else:
             self._constructor = database.get_binary_type()
-
-    def bind(self, model, name, set_attribute=True):
-        self._constructor = bytearray
-        if model._meta.database:
-            if isinstance(model._meta.database, Proxy):
-                model._meta.database.attach_callback(self._db_hook)
-            else:
-                self._db_hook(model._meta.database)
-
-        # Attach a hook to the model metadata; in the event the database is
-        # changed or set at run-time, we will be sure to apply our callback and
-        # use the proper data-type for our database driver.
-        model._meta._db_hooks.append(self._db_hook)
-        return super(BlobField, self).bind(model, name, set_attribute)
 
     def db_value(self, value):
         if isinstance(value, text_type):
@@ -6894,7 +6913,7 @@ class Model(with_metaclass(ModelBase, Node)):
                 for model in batch:
                     value = getattr(model, attr)
                     if not isinstance(value, Node):
-                        value = field.to_value(value)
+                        value = field.to_value(value, case=True)
                     accum.append((pk.to_value(model._pk), value))
                 case = Case(pk, accum)
                 update[field] = case
