@@ -56,7 +56,7 @@ jobs:
           PGPASSWORD: peewee
         run: |
           sudo apt-get install libsqlite3-dev
-          pip install setuptools psycopg2-binary cython pymysql 'apsw' mysql-connector sqlcipher3 pysqlite3 'psycopg[binary]'
+          pip install setuptools psycopg2-binary cython pymysql 'apsw' mysql-connector sqlcipher3 pysqlite3 'psycopg[binary]' gevent
           pip install greenlet aiosqlite aiomysql asyncpg
           python setup.py build_ext -i
           psql peewee_test -c 'CREATE EXTENSION hstore;'
