@@ -12,7 +12,7 @@ from playhouse.pool import PooledPostgresqlDatabase
 from playhouse.pool import PooledPsycopg3Database
 from playhouse.pool import PooledSqliteDatabase
 from playhouse.pool import PooledSqliteExtDatabase
-from playhouse.psycopg3_ext import Psycopg3Database
+from playhouse.postgres_ext import Psycopg3Database
 from playhouse.sqlite_ext import SqliteExtDatabase
 try:
     from playhouse.cysqlite_ext import CySqliteDatabase

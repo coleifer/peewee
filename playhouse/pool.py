@@ -39,19 +39,6 @@ import time
 from collections import namedtuple
 from itertools import chain
 
-try:
-    from psycopg2.extensions import TRANSACTION_STATUS_IDLE
-    from psycopg2.extensions import TRANSACTION_STATUS_INERROR
-    from psycopg2.extensions import TRANSACTION_STATUS_UNKNOWN
-except ImportError:
-    TRANSACTION_STATUS_IDLE = \
-            TRANSACTION_STATUS_INERROR = \
-            TRANSACTION_STATUS_UNKNOWN = None
-try:
-    from psycopg.pq import TransactionStatus
-except ImportError:
-    pass
-
 from peewee import MySQLDatabase
 from peewee import PostgresqlDatabase
 from peewee import SqliteDatabase
@@ -284,66 +271,25 @@ class _PooledPostgresqlDatabase(PooledDatabase):
     def _is_closed(self, conn):
         if conn.closed:
             return True
-
-        if self._psycopg3:
-            txn_status = conn.pgconn.transaction_status
-            if txn_status == TransactionStatus.UNKNOWN:
-                return True
-            elif txn_status != TransactionStatus.IDLE:
-                conn.rollback()
-            return False
-        else:
-            txn_status = conn.get_transaction_status()
-            if txn_status == TRANSACTION_STATUS_UNKNOWN:
-                return True
-            elif txn_status != TRANSACTION_STATUS_IDLE:
-                conn.rollback()
-            return False
+        return self._adapter.is_connection_closed(conn)
 
     def _can_reuse(self, conn):
-        if self._psycopg3:
-            txn_status = conn.pgconn.transaction_status
-            # Do not return connection in an error state, as subsequent queries
-            # will all fail. If the status is unknown then we lost the connection
-            # to the server and the connection should not be re-used.
-            if txn_status == TransactionStatus.UNKNOWN:
-                return False
-            elif txn_status == TransactionStatus.INERROR:
-                conn.reset()
-            elif txn_status != TransactionStatus.IDLE:
-                conn.rollback()
-            return True
-        else:
-            txn_status = conn.get_transaction_status()
-            # Do not return connection in an error state, as subsequent queries
-            # will all fail. If the status is unknown then we lost the connection
-            # to the server and the connection should not be re-used.
-            if txn_status == TRANSACTION_STATUS_UNKNOWN:
-                return False
-            elif txn_status == TRANSACTION_STATUS_INERROR:
-                conn.reset()
-            elif txn_status != TRANSACTION_STATUS_IDLE:
-                conn.rollback()
-            return True
+        return self._adapter.is_connection_reusable(conn)
 
 class PooledPostgresqlDatabase(_PooledPostgresqlDatabase, PostgresqlDatabase):
     pass
 
 try:
     from playhouse.postgres_ext import PostgresqlExtDatabase
+    from playhouse.postgres_ext import Psycopg3Database
 
     class PooledPostgresqlExtDatabase(_PooledPostgresqlDatabase, PostgresqlExtDatabase):
         pass
-except ImportError:
-    PooledPostgresqlExtDatabase = None
-
-
-try:
-    from playhouse.psycopg3_ext import Psycopg3Database
 
     class PooledPsycopg3Database(PooledDatabase, Psycopg3Database):
         pass
 except ImportError:
+    PooledPostgresqlExtDatabase = None
     PooledPsycopg3Database = None
 
 

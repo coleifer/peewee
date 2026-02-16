@@ -555,15 +555,15 @@ class TestTSVectorField(ModelTestCase):
 
 def pg93():
     with db:
-        return db.connection().server_version >= 90300
+        return db.server_version >= 90300
 
 def pg10():
     with db:
-        return db.connection().server_version >= 100000
+        return db.server_version >= 100000
 
 def pg12():
     with db:
-        return db.connection().server_version >= 120000
+        return db.server_version >= 120000
 
 JSON_SUPPORT = (JsonModel is not None) and pg93()
 
@@ -808,25 +808,27 @@ class TestServerSide(ModelTestCase):
 
     def test_server_side_cursor(self):
         query = Register.select().order_by(Register.value)
-        with self.assertQueryCount(1):
-            data = [row.value for row in ServerSide(query)]
-            self.assertEqual(data, list(range(100)))
+        with self.database.atomic():
+            with self.assertQueryCount(1):
+                data = [row.value for row in ServerSide(query)]
+                self.assertEqual(data, list(range(100)))
 
-        ss_query = ServerSide(query.limit(10), array_size=3)
-        self.assertEqual([row.value for row in ss_query], list(range(10)))
+            ss_query = ServerSide(query.limit(10), array_size=3)
+            self.assertEqual([row.value for row in ss_query], list(range(10)))
 
-        ss_query = ServerSide(query.where(SQL('1 = 0')))
-        self.assertEqual(list(ss_query), [])
+            ss_query = ServerSide(query.where(SQL('1 = 0')))
+            self.assertEqual(list(ss_query), [])
 
     def test_lower_level_apis(self):
         query = Register.select(Register.value).order_by(Register.value)
-        ssq = ServerSideQuery(query, array_size=10)
-        curs_wrapper = ssq._execute(self.database)
-        curs = curs_wrapper.cursor
-        self.assertTrue(isinstance(curs, FetchManyCursor))
-        self.assertEqual(curs.fetchone(), (0,))
-        self.assertEqual(curs.fetchone(), (1,))
-        curs.close()
+        with self.database.atomic():
+            ssq = ServerSideQuery(query, array_size=10)
+            curs_wrapper = ssq._execute(self.database)
+            curs = curs_wrapper.cursor
+            self.assertTrue(isinstance(curs, FetchManyCursor))
+            self.assertEqual(curs.fetchone(), (0,))
+            self.assertEqual(curs.fetchone(), (1,))
+            curs.close()
 
 
 class KX(TestModel):

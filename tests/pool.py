@@ -8,7 +8,6 @@ from peewee import _savepoint
 from peewee import _transaction
 from playhouse.cockroachdb import PooledCockroachDatabase
 from playhouse.pool import *
-from playhouse.psycopg3_ext import Psycopg3Database
 
 from .base import BACKEND
 from .base import BaseTestCase
@@ -373,10 +372,7 @@ class TestPooledDatabaseIntegration(ModelTestCase):
         if IS_MYSQL:
             db_class = PooledMySQLDatabase
         elif IS_POSTGRESQL:
-            if isinstance(self.database, Psycopg3Database):
-                db_class = PooledPsycopg3Database
-            else:
-                db_class = PooledPostgresqlDatabase
+            db_class = PooledPostgresqlDatabase
         elif IS_CRDB:
             db_class = PooledCockroachDatabase
         else:

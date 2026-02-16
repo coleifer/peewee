@@ -16,7 +16,6 @@ from playhouse.cockroachdb import CockroachDatabase
 from playhouse.cockroachdb import NESTED_TX_MIN_VERSION
 from playhouse.mysql_ext import MariaDBConnectorDatabase
 from playhouse.mysql_ext import MySQLConnectorDatabase
-from playhouse.psycopg3_ext import Psycopg3Database
 try:
     from playhouse.cysqlite_ext import CySqliteDatabase
 except ImportError:
@@ -50,8 +49,6 @@ def db_loader(engine, name='peewee_test', db_class=None, **params):
         params.update(CRDB_PARAMS)
     elif issubclass(db_class, PostgresqlDatabase):
         params.update(PSQL_PARAMS)
-        if IS_PSYCOPG3:
-            params.setdefault('prefer_psycopg3', True)
 
     return db_class(name, **params)
 
@@ -90,6 +87,8 @@ def make_db_params(key):
 CRDB_PARAMS = make_db_params('CRDB')
 MYSQL_PARAMS = make_db_params('MYSQL')
 PSQL_PARAMS = make_db_params('PSQL')
+if IS_PSYCOPG3:
+    PSQL_PARAMS['prefer_psycopg3'] = True
 
 if VERBOSITY > 1:
     handler = logging.StreamHandler()

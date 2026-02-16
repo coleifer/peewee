@@ -3950,6 +3950,106 @@ class SqliteDatabase(Database):
         return fn.datetime(date_field, 'unixepoch')
 
 
+class Psycopg2Adapter(object):
+    def __init__(self):
+        if psycopg2 is None:
+            raise ImproperlyConfigured('psycopg2 postgres driver not found.')
+
+    def get_binary_type(self):
+        return psycopg2.Binary
+
+    def connect(self, db, **params):
+        if db.database.startswith('postgresql://'):
+            params.setdefault('dsn', db.database)
+        else:
+            params.setdefault('dbname', db.database)
+
+        conn = psycopg2.connect(**params)
+        if db._register_unicode:
+            pg_extensions.register_type(pg_extensions.UNICODE, conn)
+            pg_extensions.register_type(pg_extensions.UNICODEARRAY, conn)
+        if db._encoding:
+            conn.set_client_encoding(db._encoding)
+        return conn
+
+    def get_server_version(self, conn):
+        return conn.server_version
+
+    def is_connection_usable(self, conn):
+        txn_status = conn.get_transaction_status()
+        return txn_status < pg_extensions.TRANSACTION_STATUS_INERROR
+
+    def is_connection_reusable(self, conn):
+        txn_status = conn.get_transaction_status()
+        # Do not return connection in an error state, as subsequent queries
+        # will all fail. If the status is unknown then we lost the connection
+        # to the server and the connection should not be re-used.
+        if txn_status == pg_extensions.TRANSACTION_STATUS_UNKNOWN:
+            return False
+        elif txn_status == pg_extensions.TRANSACTION_STATUS_INERROR:
+            conn.reset()
+        elif txn_status != pg_extensions.TRANSACTION_STATUS_IDLE:
+            conn.rollback()
+        return True
+
+    def is_connection_closed(self, conn):
+        txn_status = conn.get_transaction_status()
+        if txn_status == pg_extensions.TRANSACTION_STATUS_UNKNOWN:
+            return True
+        elif txn_status != pg_extensions.TRANSACTION_STATUS_IDLE:
+            conn.rollback()
+        return False
+
+    def extract_date(self, date_part, date_field):
+        return fn.EXTRACT(NodeList((date_part, SQL('FROM'), date_field)))
+
+
+class Psycopg3Adapter(object):
+    def __init__(self):
+        if psycopg is None:
+            raise ImproperlyConfigured('psycopg postgres driver not found.')
+
+    def get_binary_type(self):
+        return psycopg.Binary
+
+    def connect(self, db, **params):
+        if db.database.startswith('postgresql://'):
+            params.setdefault('conninfo', db.database)
+        else:
+            params.setdefault('dbname', db.database)
+        return psycopg.connect(**params)
+
+    def get_server_version(self, conn):
+        return conn.pgconn.server_version
+
+    def is_connection_usable(self, conn):
+        return conn.pgconn.transaction_status < TransactionStatus.INERROR
+
+    def is_connection_reusable(self, conn):
+        txn_status = conn.pgconn.transaction_status
+        # Do not return connection in an error state, as subsequent queries
+        # will all fail. If the status is unknown then we lost the connection
+        # to the server and the connection should not be re-used.
+        if txn_status == TransactionStatus.UNKNOWN:
+            return False
+        elif txn_status == TransactionStatus.INERROR:
+            conn.reset()
+        elif txn_status != TransactionStatus.IDLE:
+            conn.rollback()
+        return True
+
+    def is_connection_closed(self, conn):
+        txn_status = conn.pgconn.transaction_status
+        if txn_status == TransactionStatus.UNKNOWN:
+            return True
+        elif txn_status != TransactionStatus.IDLE:
+            conn.rollback()
+        return False
+
+    def extract_date(self, date_part, date_field):
+        return fn.EXTRACT(NodeList((SQL(date_part), SQL('FROM'), date_field)))
+
+
 class PostgresqlDatabase(Database):
     field_types = {
         'AUTO': 'SERIAL',
@@ -3971,6 +4071,9 @@ class PostgresqlDatabase(Database):
     safe_create_index = False
     sequences = True
 
+    psycopg2_adapter = Psycopg2Adapter
+    psycopg3_adapter = Psycopg3Adapter
+
     def init(self, database, register_unicode=True, encoding=None,
              isolation_level=None, **kwargs):
         self._register_unicode = register_unicode
@@ -3978,10 +4081,10 @@ class PostgresqlDatabase(Database):
         self._isolation_level = isolation_level
 
         prefer_psycopg3 = kwargs.pop('prefer_psycopg3', False)
-        if psycopg2 is not None and psycopg is not None:
-            self._psycopg3 = prefer_psycopg3
+        if psycopg is not None and prefer_psycopg3:
+            self._adapter = self.psycopg3_adapter()
         else:
-            self._psycopg3 = psycopg is not None
+            self._adapter = self.psycopg2_adapter()
 
         super(PostgresqlDatabase, self).init(database, **kwargs)
 
@@ -3991,39 +4094,16 @@ class PostgresqlDatabase(Database):
 
         # Handle connection-strings nicely, since psycopg will accept them,
         # and they may be easier when lots of parameters are specified.
-        params = self.connect_params.copy()
-
-        if self._psycopg3:
-            if self.database.startswith('postgresql://'):
-                params.setdefault('conninfo', self.database)
-            else:
-                params.setdefault('dbname', self.database)
-
-            conn = psycopg.connect(**params)
-        else:
-            if self.database.startswith('postgresql://'):
-                params.setdefault('dsn', self.database)
-            else:
-                params.setdefault('dbname', self.database)
-
-            conn = psycopg2.connect(**params)
-            if self._register_unicode:
-                pg_extensions.register_type(pg_extensions.UNICODE, conn)
-                pg_extensions.register_type(pg_extensions.UNICODEARRAY, conn)
-            if self._encoding:
-                conn.set_client_encoding(self._encoding)
+        conn = self._adapter.connect(self, **self.connect_params)
 
         if self._isolation_level:
             conn.set_isolation_level(self._isolation_level)
+
         conn.autocommit = True
         return conn
 
     def _set_server_version(self, conn):
-        if self._psycopg3:
-            self.server_version = conn.pgconn.server_version
-        else:
-            self.server_version = conn.server_version
-
+        self.server_version = self._adapter.get_server_version(conn)
         if self.server_version >= 90600:
             self.safe_create_index = True
 
@@ -4034,12 +4114,7 @@ class PostgresqlDatabase(Database):
         # Returns True if we are idle, running a command, or in an active
         # connection. If the connection is in an error state or the connection
         # is otherwise unusable, return False.
-        if self._psycopg3:
-            conn = self._state.conn
-            return conn.pgconn.transaction_status < TransactionStatus.INERROR
-        else:
-            txn_status = self._state.conn.get_transaction_status()
-            return txn_status < pg_extensions.TRANSACTION_STATUS_INERROR
+        return self._adapter.is_connection_usable(self._state.conn)
 
     def last_insert_id(self, cursor, query_type=None):
         try:
@@ -4153,10 +4228,7 @@ class PostgresqlDatabase(Database):
         return bool(res.fetchone()[0])
 
     def get_binary_type(self):
-        if self._psycopg3:
-            return psycopg.Binary
-        else:
-            return psycopg2.Binary
+        return self._adapter.get_binary_type()
 
     def conflict_statement(self, on_conflict, query):
         return
@@ -4187,9 +4259,7 @@ class PostgresqlDatabase(Database):
         return self._build_on_conflict_update(oc, query)
 
     def extract_date(self, date_part, date_field):
-        if self._psycopg3:
-            date_part = SQL(date_part)
-        return fn.EXTRACT(NodeList((date_part, SQL('FROM'), date_field)))
+        return self._adapter.extract_date(date_part, date_field)
 
     def truncate_date(self, date_part, date_field):
         return fn.DATE_TRUNC(date_part, date_field)

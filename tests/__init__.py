@@ -52,10 +52,6 @@ except (ImportError, ImproperlyConfigured):
 except OperationalError:
     print('Postgresql test database "peewee_test" not found, skipping '
           'the postgres_ext tests.')
-try:
-    from .psycopg3_ext import *
-except (ImportError, ImproperlyConfigured):
-    print('Unable to import psycopg3 extension tests, skipping.')
 from .pwiz_integration import *
 from .reflection import *
 from .returning import *
