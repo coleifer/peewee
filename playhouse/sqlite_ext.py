@@ -843,113 +843,14 @@ class FTS5Model(BaseFTSModel):
         return getattr(cls, attr)
 
 
-def ClosureTable(model_class, foreign_key=None, referencing_class=None,
-                 referencing_key=None):
-    """Model factory for the transitive closure extension."""
-    if referencing_class is None:
-        referencing_class = model_class
-
-    if foreign_key is None:
-        for field_obj in model_class._meta.refs:
-            if field_obj.rel_model is model_class:
-                foreign_key = field_obj
-                break
-        else:
-            raise ValueError('Unable to find self-referential foreign key.')
-
-    source_key = model_class._meta.primary_key
-    if referencing_key is None:
-        referencing_key = source_key
-
-    class BaseClosureTable(VirtualModel):
-        depth = VirtualField(IntegerField)
-        id = VirtualField(IntegerField)
-        idcolumn = VirtualField(TextField)
-        parentcolumn = VirtualField(TextField)
-        root = VirtualField(IntegerField)
-        tablename = VirtualField(TextField)
-
-        class Meta:
-            extension_module = 'transitive_closure'
-
-        @classmethod
-        def descendants(cls, node, depth=None, include_node=False):
-            query = (model_class
-                     .select(model_class, cls.depth.alias('depth'))
-                     .join(cls, on=(source_key == cls.id))
-                     .where(cls.root == node)
-                     .objects())
-            if depth is not None:
-                query = query.where(cls.depth == depth)
-            elif not include_node:
-                query = query.where(cls.depth > 0)
-            return query
-
-        @classmethod
-        def ancestors(cls, node, depth=None, include_node=False):
-            query = (model_class
-                     .select(model_class, cls.depth.alias('depth'))
-                     .join(cls, on=(source_key == cls.root))
-                     .where(cls.id == node)
-                     .objects())
-            if depth:
-                query = query.where(cls.depth == depth)
-            elif not include_node:
-                query = query.where(cls.depth > 0)
-            return query
-
-        @classmethod
-        def siblings(cls, node, include_node=False):
-            if referencing_class is model_class:
-                # self-join
-                fk_value = node.__data__.get(foreign_key.name)
-                query = model_class.select().where(foreign_key == fk_value)
-            else:
-                # siblings as given in reference_class
-                siblings = (referencing_class
-                            .select(referencing_key)
-                            .join(cls, on=(foreign_key == cls.root))
-                            .where((cls.id == node) & (cls.depth == 1)))
-
-                # the according models
-                query = (model_class
-                         .select()
-                         .where(source_key << siblings)
-                         .objects())
-
-            if not include_node:
-                query = query.where(source_key != node)
-
-            return query
-
-    class Meta:
-        database = referencing_class._meta.database
-        options = {
-            'tablename': referencing_class._meta.table_name,
-            'idcolumn': referencing_key.column_name,
-            'parentcolumn': foreign_key.column_name}
-        primary_key = False
-
-    name = '%sClosure' % model_class.__name__
-    return type(name, (BaseClosureTable,), {'Meta': Meta})
-
-
-OP.MATCH = 'MATCH'
-
-def _sqlite_regexp(regex, value):
-    return re.search(regex, value) is not None
-
-
 class SqliteExtDatabase(SqliteDatabase):
-    def __init__(self, database, rank_functions=True, regexp_function=False,
-                 json_contains=False, *args, **kwargs):
+    def __init__(self, database, rank_functions=True, json_contains=False,
+                 *args, **kwargs):
         super(SqliteExtDatabase, self).__init__(database, *args, **kwargs)
         self._row_factory = None
 
         if rank_functions:
             register_udf_groups(self, RANK)
-        if regexp_function:
-            self.register_function(_sqlite_regexp, 'regexp', 2)
         if json_contains:
             register_udf_groups(self, JSON)
 
@@ -970,6 +871,8 @@ class CSqliteExtDatabase(SqliteExtDatabase):
                       DeprecationWarning)
         super(CSqliteExtDatabase, self).__init__(*args, **kwargs)
 
+
+OP.MATCH = 'MATCH'
 
 def match(lhs, rhs):
     return Expression(lhs, OP.MATCH, rhs)

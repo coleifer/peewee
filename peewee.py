@@ -276,6 +276,9 @@ def _sqlite_date_trunc(lookup_type, datetime_string):
     dt = format_date_time(datetime_string, __sqlite_datetime_formats__)
     return dt.strftime(__sqlite_date_trunc__[lookup_type])
 
+def _sqlite_regexp(regex, value):
+    return re.search(regex, value) is not None
+
 
 def __deprecated__(s):
     warnings.warn(s, DeprecationWarning)
@@ -3577,7 +3580,7 @@ class SqliteDatabase(Database):
     server_version = __sqlite_version__
     truncate_table = False
 
-    def __init__(self, database, *args, **kwargs):
+    def __init__(self, database, regexp_function=False, *args, **kwargs):
         self._pragmas = kwargs.pop('pragmas', ())
         super(SqliteDatabase, self).__init__(database, *args, **kwargs)
         self._aggregates = {}
@@ -3586,9 +3589,11 @@ class SqliteDatabase(Database):
         self._window_functions = {}
         self._extensions = set()
         self._attached = {}
+        self.nulls_ordering = self.server_version >= (3, 30, 0)
         self.register_function(_sqlite_date_part, 'date_part', 2)
         self.register_function(_sqlite_date_trunc, 'date_trunc', 2)
-        self.nulls_ordering = self.server_version >= (3, 30, 0)
+        if regexp_function:
+            self.register_function(_sqlite_regexp, 'regexp', 2)
 
     def init(self, database, pragmas=None, timeout=5, returning_clause=None,
              **kwargs):

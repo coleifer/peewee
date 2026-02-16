@@ -15,7 +15,7 @@ The ``playhouse.sqlite_ext`` includes even more SQLite features, including:
 
 * :ref:`Full-text search <sqlite-fts>`
 * :ref:`JSON extension integration <sqlite-json1>`
-* :ref:`Closure table extension support <sqlite-closure-table>`
+* :ref:`Sqlite-specific field types <sqlite-fields>`
 
 .. note::
    These features are also included in the ``playhouse.cysqlite_ext`` module and
@@ -78,6 +78,7 @@ APIs
         * accepts ``__init__`` argument to register ``json_contains()``
           user-defined funciton.
 
+.. _sqlite-fields:
 
 .. py:class:: RowIDField()
 
@@ -131,7 +132,6 @@ APIs
     objects are stored as strings by default. This subclass of
     :py:class:`DateTimeField` ensures that the UTC offset is stored properly
     for tz-aware datetimes and read-back properly when decoding row data.
-
 
 .. _sqlite-json1:
 
@@ -1282,197 +1282,3 @@ APIs
 
         Generate a model class suitable for accessing the `vocab table <http://sqlite.org/fts5.html#the_fts5vocab_virtual_table_module>`_
         corresponding to FTS5 search index.
-
-
-.. _sqlite-closure-table:
-
-.. py:function:: ClosureTable(model_class[, foreign_key=None[, referencing_class=None[, referencing_key=None]]])
-
-    :param model_class: The model class containing the nodes in the tree.
-    :param foreign_key: The self-referential parent-node field on the model
-        class. If not provided, peewee will introspect the model to find a
-        suitable key.
-    :param referencing_class: Intermediate table for a many-to-many relationship.
-    :param referencing_key: For a many-to-many relationship, the originating
-        side of the relation.
-    :return: Returns a :py:class:`VirtualModel` for working with a closure table.
-
-    Factory function for creating a model class suitable for working with a
-    `transitive closure <http://www.sqlite.org/cgi/src/artifact/636024302cde41b2bf0c542f81c40c624cfb7012>`_
-    table. Closure tables are :py:class:`VirtualModel` subclasses that work
-    with the transitive closure SQLite extension. These special tables are
-    designed to make it easy to efficiently query hierarchical data. The SQLite
-    extension manages an AVL tree behind-the-scenes, transparently updating the
-    tree when your table changes and making it easy to perform common queries
-    on hierarchical data.
-
-    To use the closure table extension in your project, you need:
-
-    1. A copy of the SQLite extension. The source code can be found in
-       the `SQLite code repository <http://www.sqlite.org/cgi/src/artifact/636024302cde41b2bf0c542f81c40c624cfb7012>`_
-       or by cloning `this gist <https://gist.github.com/coleifer/7f3593c5c2a645913b92>`_:
-
-       .. code-block:: console
-
-           $ git clone https://gist.github.com/coleifer/7f3593c5c2a645913b92 closure
-           $ cd closure/
-
-    2. Compile the extension as a shared library, e.g.
-
-       .. code-block:: console
-
-           $ gcc -g -fPIC -shared closure.c -o closure.so
-
-    3. Create a model for your hierarchical data. The only requirement here is
-       that the model has an integer primary key and a self-referential foreign
-       key. Any additional fields are fine.
-
-       .. code-block:: python
-
-           class Category(Model):
-               name = CharField()
-               metadata = TextField()
-               parent = ForeignKeyField('self', index=True, null=True)  # Required.
-
-           # Generate a model for the closure virtual table.
-           CategoryClosure = ClosureTable(Category)
-
-       The self-referentiality can also be achieved via an intermediate table
-       (for a many-to-many relation).
-
-       .. code-block:: python
-
-           class User(Model):
-               name = CharField()
-
-           class UserRelations(Model):
-               user = ForeignKeyField(User)
-               knows = ForeignKeyField(User, backref='_known_by')
-
-               class Meta:
-                   primary_key = CompositeKey('user', 'knows') # Alternatively, a unique index on both columns.
-
-           # Generate a model for the closure virtual table, specifying the UserRelations as the referencing table
-           UserClosure = ClosureTable(
-               User,
-               referencing_class=UserRelations,
-               foreign_key=UserRelations.knows,
-               referencing_key=UserRelations.user)
-
-    4. In your application code, make sure you load the extension when you
-       instantiate your :py:class:`Database` object. This is done by passing
-       the path to the shared library to the :py:meth:`~SqliteExtDatabase.load_extension` method.
-
-       .. code-block:: python
-
-           db = SqliteExtDatabase('my_database.db')
-           db.load_extension('/path/to/closure')
-
-    .. warning::
-        There are two caveats you should be aware of when using the
-        ``transitive_closure`` extension. First, it requires that your *source
-        model* have an integer primary key. Second, it is strongly recommended
-        that you create an index on the self-referential foreign key.
-
-    Example:
-
-    .. code-block:: python
-
-         class Category(Model):
-             name = CharField()
-             metadata = TextField()
-             parent = ForeignKeyField('self', index=True, null=True)  # Required.
-
-         # Generate a model for the closure virtual table.
-         CategoryClosure = ClosureTable(Category)
-
-          # Create the tables if they do not exist.
-          db.create_tables([Category, CategoryClosure], True)
-
-    It is now possible to perform interesting queries using the data from the
-    closure table:
-
-    .. code-block:: python
-
-        # Get all ancestors for a particular node.
-        laptops = Category.get(Category.name == 'Laptops')
-        for parent in Closure.ancestors(laptops):
-            print(parent.name)
-
-        # Computer Hardware
-        # Computers
-        # Electronics
-        # All products
-
-        # Get all descendants for a particular node.
-        hardware = Category.get(Category.name == 'Computer Hardware')
-        for node in Closure.descendants(hardware):
-            print(node.name)
-
-        # Laptops
-        # Desktops
-        # Hard-drives
-        # Monitors
-        # LCD Monitors
-        # LED Monitors
-
-    API of the :py:class:`VirtualModel` returned by :py:func:`ClosureTable`.
-
-    .. py:class:: BaseClosureTable()
-
-        .. py:attribute:: id
-
-            A field for the primary key of the given node.
-
-        .. py:attribute:: depth
-
-            A field representing the relative depth of the given node.
-
-        .. py:attribute:: root
-
-            A field representing the relative root node.
-
-        .. py:method:: descendants(node[, depth=None[, include_node=False]])
-
-            Retrieve all descendants of the given node. If a depth is
-            specified, only nodes at that depth (relative to the given node)
-            will be returned.
-
-            .. code-block:: python
-
-                node = Category.get(Category.name == 'Electronics')
-
-                # Direct child categories.
-                children = CategoryClosure.descendants(node, depth=1)
-
-                # Grand-child categories.
-                children = CategoryClosure.descendants(node, depth=2)
-
-                # Descendants at all depths.
-                all_descendants = CategoryClosure.descendants(node)
-
-
-        .. py:method:: ancestors(node[, depth=None[, include_node=False]])
-
-            Retrieve all ancestors of the given node. If a depth is specified,
-            only nodes at that depth (relative to the given node) will be
-            returned.
-
-            .. code-block:: python
-
-                node = Category.get(Category.name == 'Laptops')
-
-                # All ancestors.
-                all_ancestors = CategoryClosure.ancestors(node)
-
-                # Grand-parent category.
-                grandparent = CategoryClosure.ancestores(node, depth=2)
-
-        .. py:method:: siblings(node[, include_node=False])
-
-            Retrieve all nodes that are children of the specified node's
-            parent.
-
-    .. note::
-        For an in-depth discussion of the SQLite transitive closure extension,
-        check out this blog post, `Querying Tree Structures in SQLite using Python and the Transitive Closure Extension <https://charlesleifer.com/blog/querying-tree-structures-in-sqlite-using-python-and-the-transitive-closure-extension/>`_.
