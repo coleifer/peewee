@@ -1,8 +1,3 @@
-"""
-Collection of postgres-specific extensions, currently including:
-
-* Support for hstore, a key/value type storage
-"""
 import json
 import logging
 import uuid
@@ -326,7 +321,7 @@ class JSONField(Field):
             return value
         if not isinstance(value, Json):
             return Cast(self.dumps(value), self._json_datatype)
-        return self.dumps(value)
+        return value
 
     def __getitem__(self, value):
         return JsonLookup(self, [value])
@@ -480,9 +475,7 @@ class ServerSideQuery(Node):
         return self._cursor_wrapper
 
 
-def ServerSide(query, database=None, array_size=None):
-    if database is None:
-        database = query._database
+def ServerSide(query, array_size=None):
     server_side_query = ServerSideQuery(query, array_size=array_size)
     for row in server_side_query:
         yield row
