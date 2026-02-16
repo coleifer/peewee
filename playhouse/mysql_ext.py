@@ -17,7 +17,6 @@ from peewee import NodeList
 from peewee import SQL
 from peewee import TextField
 from peewee import fn
-from peewee import __deprecated__
 
 
 class MySQLConnectorDatabase(MySQLDatabase):
@@ -27,9 +26,7 @@ class MySQLConnectorDatabase(MySQLDatabase):
         return mysql_connector.connect(db=self.database, autocommit=True,
                                        **self.connect_params)
 
-    def cursor(self, commit=None, named_cursor=None):
-        if commit is not None:
-            __deprecated__('"commit" has been deprecated and is a no-op.')
+    def cursor(self, named_cursor=None):
         if self.is_closed():
             if self.autoconnect:
                 self.connect()
@@ -51,9 +48,7 @@ class MariaDBConnectorDatabase(MySQLDatabase):
         return mariadb.connect(db=self.database, autocommit=True,
                                **self.connect_params)
 
-    def cursor(self, commit=None, named_cursor=None):
-        if commit is not None:
-            __deprecated__('"commit" has been deprecated and is a no-op.')
+    def cursor(self, named_cursor=None):
         if self.is_closed():
             if self.autoconnect:
                 self.connect()

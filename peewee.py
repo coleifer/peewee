@@ -3316,9 +3316,7 @@ class Database(_callable_context_manager):
             self.connect()
         return self._state.conn
 
-    def cursor(self, commit=None, named_cursor=None):
-        if commit is not None:
-            __deprecated__('"commit" has been deprecated and is a no-op.')
+    def cursor(self, named_cursor=None):
         if self.is_closed():
             if self.autoconnect:
                 self.connect()
@@ -3326,18 +3324,14 @@ class Database(_callable_context_manager):
                 raise InterfaceError('Error, database connection not opened.')
         return self._state.conn.cursor()
 
-    def execute_sql(self, sql, params=None, commit=None):
-        if commit is not None:
-            __deprecated__('"commit" has been deprecated and is a no-op.')
+    def execute_sql(self, sql, params=None):
         logger.debug((sql, params))
         with __exception_wrapper__:
             cursor = self.cursor()
             cursor.execute(sql, params or ())
         return cursor
 
-    def execute(self, query, commit=None, **context_options):
-        if commit is not None:
-            __deprecated__('"commit" has been deprecated and is a no-op.')
+    def execute(self, query, **context_options):
         ctx = self.get_sql_context(**context_options)
         sql, params = ctx.sql(query).query()
         return self.execute_sql(sql, params)
