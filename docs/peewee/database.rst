@@ -116,12 +116,13 @@ parameters:
         username = CharField()
 
 .. seealso::
-    The :ref:`playhouse` contains a :ref:`Postgresql extension module
-    <postgres_ext>` which provides many postgres-specific features such as:
+    Peewee includes a :ref:`Postgresql extension module <postgres_ext>` which
+    provides many postgres-specific features such as:
 
     * :ref:`Arrays <pgarrays>`
     * :ref:`JSON <pgjson>`
     * :ref:`Full Text Search <pg_fts>`
+    * Postgres-specific field types
 
     To utilize these features use :py:class:`PostgresqlExtDatabase`.
 
@@ -172,35 +173,32 @@ you can specify a list or pragmas or any other arbitrary `sqlite3 parameters
         # etc, etc
 
 .. seealso::
-    Peewee includes a :ref:`SQLite extension module <sqlite_ext>` which provides
-    many SQLite-specific features such as :ref:`full-text search <sqlite-fts>`,
-    :ref:`json extension support <sqlite-json1>`, and more. These features are
-    provided by the following modules:
+    Peewee includes a :ref:`SQLite extension module <sqlite_ext>` which
+    provides many SQLite-specific features such as:
 
-    * :py:class:`SqliteExtDatabase` from the ``playhouse.sqlite_ext`` module, or
-    * :py:class:`CySqliteDatabase` from the ``playhouse.cysqlite_ext`` module.
+    * :ref:`JSON <sqlite-json1>`
+    * :ref:`Full Text Search <sqlite-fts>`
+    * SQLite-specific field types
 
-    Using ``SqliteExtDatabase``:
+    Using :py:class:`SqliteExtDatabase`:
 
     .. code-block:: python
 
         from playhouse.sqlite_ext import SqliteExtDatabase
 
         sqlite_db = SqliteExtDatabase('my_app.db', pragmas={
-            'journal_mode': 'wal',  # WAL-mode.
-            'cache_size': -64 * 1000,  # 64MB cache.
-            'synchronous': 0})  # Let the OS manage syncing.
+            'journal_mode': 'wal',
+            'cache_size': -64 * 1000})
 
-    Using ``CySqliteDatabase``:
+    Using :py:class:`CySqliteDatabase`:
 
     .. code-block:: python
 
         from playhouse.cysqlite_ext import CySqliteDatabase
 
         sqlite_db = CySqliteDatabase('my_app.db', pragmas={
-            'journal_mode': 'wal',  # WAL-mode.
-            'cache_size': -64 * 1000,  # 64MB cache.
-            'synchronous': 0})  # Let the OS manage syncing.
+            'journal_mode': 'wal',
+            'cache_size': -64 * 1000})
 
 .. _sqlite-pragma:
 
@@ -251,7 +249,7 @@ the :py:class:`SqliteDatabase` object:
 
 .. note::
     A full list of PRAGMA settings, their meaning and accepted values can be
-    found in the SQLite documentation: http://sqlite.org/pragma.html
+    found in the SQLite documentation: https://sqlite.org/pragma.html
 
 Recommended Settings
 ^^^^^^^^^^^^^^^^^^^^
@@ -443,8 +441,8 @@ For more information, see:
 
 .. _sqlite-locking:
 
-Set locking mode for transaction
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Locking mode for transactions
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 SQLite transactions can be opened in three different modes:
 
@@ -481,6 +479,21 @@ For more information, see the SQLite `locking documentation <https://sqlite.org/
 To learn more about transactions in Peewee, see the :ref:`transactions`
 documentation.
 
+cysqlite, an alternate DB-API driver
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Peewee comes with support for the `cysqlite <https://cysqlite.readthedocs.io>`_
+driver. Additional functionality is provided by :py:class:`CySqliteDatabase`:
+
+* :py:meth:`~CySqliteDatabase.table_function` - user-defined table functions.
+* :py:meth:`~CySqliteDatabase.on_commit`  / :py:meth:`~CySqliteDatabase.on_rollback` - commit and rollback hooks.
+* :py:meth:`~CySqliteDatabase.on_update` - update hook.
+* :py:meth:`~CySqliteDatabase.authorizer` - authorizer callback.
+* :py:meth:`~CySqliteDatabase.trace` - trace callback.
+* :py:meth:`~CySqliteDatabase.progress` - progress handler.
+* :py:meth:`~CySqliteDatabase.backup` / :py:meth:`~CySqliteDatabase.backup_to_file` - online backup APIs.
+* :py:meth:`~CySqliteDatabase.blob_open` - incremental BLOB I/O.
+
 APSW, an Advanced SQLite Driver
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
@@ -504,21 +517,6 @@ If you would like to use APSW, use the :py:class:`APSWDatabase` from the
     from playhouse.apsw_ext import APSWDatabase
 
     apsw_db = APSWDatabase('my_app.db')
-
-cysqlite, an alternate DB-API driver
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-
-Peewee comes with support for the `cysqlite <https://cysqlite.readthedocs.io>`_
-driver. Additional functionality is provided by :py:class:`CySqliteDatabase`:
-
-* :py:meth:`~CySqliteDatabase.table_function` - user-defined table functions.
-* :py:meth:`~CySqliteDatabase.on_commit`  / :py:meth:`~CySqliteDatabase.on_rollback` - commit and rollback hooks.
-* :py:meth:`~CySqliteDatabase.on_update` - update hook.
-* :py:meth:`~CySqliteDatabase.authorizer` - authorizer callback.
-* :py:meth:`~CySqliteDatabase.trace` - trace callback.
-* :py:meth:`~CySqliteDatabase.progress` - progress handler.
-* :py:meth:`~CySqliteDatabase.backup` / :py:meth:`~CySqliteDatabase.backup_to_file` - online backup APIs.
-* :py:meth:`~CySqliteDatabase.blob_open` - incremental BLOB I/O.
 
 .. _using_mariadb:
 
@@ -655,7 +653,7 @@ For even more control over initializing your database, see the next section,
 .. _dynamic_db:
 
 Dynamically defining a database
--------------------------------
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 For even more control over how your database is defined/initialized, you can
 use the :py:class:`DatabaseProxy` helper. :py:class:`DatabaseProxy` objects act
@@ -703,8 +701,8 @@ the app is configured:
 
 .. _binding_database:
 
-Setting the database at run-time
---------------------------------
+Changing the database at run-time
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 We have seen three ways that databases can be configured with Peewee:
 
@@ -793,7 +791,7 @@ The :ref:`testing` section of this document also contains some examples of
 using the ``bind()`` methods.
 
 Thread-Safety and Multiple Databases
-------------------------------------
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 Peewee database connections are thread-safe. However, if you plan to **change**
 the database at run-time in a multi-threaded application, storing the model's
@@ -923,10 +921,10 @@ is rolled back).
     >>> db.is_closed()
     True
     >>> with db:
-    ...     print(db.is_closed())  # db is open inside context manager.
+    ...     print(db.is_closed())  # db is open and in a transaction.
     ...
     False
-    >>> db.is_closed()  # db is closed.
+    >>> db.is_closed()  # db is closed, transaction is committed.
     True
 
 If you want to manage transactions separately, you can use the
@@ -935,7 +933,7 @@ If you want to manage transactions separately, you can use the
 .. code-block:: pycon
 
     >>> with db.connection_context():
-    ...     # db connection is open.
+    ...     # db is open.
     ...     pass
     ...
     >>> db.is_closed()  # db connection is closed.
@@ -1002,6 +1000,289 @@ The following pooled database classes are available:
 
 For an in-depth discussion of peewee's connection pool, see the :ref:`pool`
 section of the :ref:`playhouse <playhouse>` documentation.
+
+Executing Queries
+-----------------
+
+SQL queries will typically be executed by calling ``execute()`` on a query
+constructed using the query-builder APIs (or by simply iterating over a query
+object in the case of a :py:class:`Select` query). For cases where you wish to
+execute SQL directly, you can use the :py:meth:`Database.execute_sql` method.
+
+.. code-block:: python
+
+    db = SqliteDatabase('my_app.db')
+    db.connect()
+
+    # Example of executing a simple query and ignoring the results.
+    db.execute_sql("ATTACH DATABASE ':memory:' AS cache;")
+
+    # Example of iterating over the results of a query using the cursor.
+    cursor = db.execute_sql('SELECT * FROM users WHERE status = ?', (ACTIVE,))
+    for row in cursor.fetchall():
+        # Do something with row, which is a tuple containing column data.
+        pass
+
+.. _transactions:
+
+Managing Transactions
+---------------------
+
+Peewee provides several interfaces for working with transactions. The most
+general is the :py:meth:`Database.atomic` method, which also supports nested
+transactions. :py:meth:`~Database.atomic` blocks will be run in a transaction
+or savepoint, depending on the level of nesting.
+
+If an unhandled exception occurs in a wrapped block, the current
+transaction/savepoint will be rolled back. Otherwise the statements will be
+committed at the end of the wrapped block.
+
+Examples:
+
+.. code-block:: python
+
+    # Transaction will commit automatically at the end of the "with" block:
+    with db.atomic() as txn:
+        User.create(username='u1')
+
+    # Unhandled exceptions will cause transaction to be rolled-back:
+    with db.atomic() as txn:
+        User.create(username='huey')
+        # User has been INSERTed into the database but the transaction is not
+        # yet committed because we haven't left the scope of the "with" block.
+
+        raise ValueError('uh-oh')
+        # This exception is unhandled - the transaction will be rolled-back and
+        # the ValueError will be raised.
+
+.. note::
+    While inside a block wrapped by the :py:meth:`~Database.atomic` context
+    manager, you can explicitly rollback or commit at any point by calling
+    :py:meth:`Transaction.rollback` or :py:meth:`Transaction.commit`. When you
+    do this inside a wrapped block of code, a new transaction will be started
+    automatically.
+
+    .. code-block:: python
+
+        with db.atomic() as transaction:  # Opens new transaction.
+            try:
+                save_some_objects()
+            except ErrorSavingData:
+                # Because this block of code is wrapped with "atomic", a
+                # new transaction will begin automatically after the call
+                # to rollback().
+                transaction.rollback()
+                error_saving = True
+
+            create_report(error_saving=error_saving)
+            # Note: no need to call commit. Since this marks the end of the
+            # wrapped block of code, the `atomic` context manager will
+            # automatically call commit for us.
+
+.. note::
+    :py:meth:`~Database.atomic` can be used as either a **context manager** or
+    a **decorator**.
+
+.. note::
+    Peewee's behavior differs from the DB-API 2.0 behavior you may be used to
+    (see PEP-249 for details). By default, Peewee puts all connections into
+    **autocommit-mode** and transaction management is handled by Peewee.
+
+Context manager
+^^^^^^^^^^^^^^^
+
+Using ``atomic`` as context manager:
+
+.. code-block:: python
+
+    db = SqliteDatabase(':memory:')
+
+    with db.atomic() as txn:
+        # This is the outer-most level, so this block corresponds to
+        # a transaction.
+        User.create(username='charlie')
+
+        with db.atomic() as nested_txn:
+            # This block corresponds to a savepoint.
+            User.create(username='huey')
+
+            # This will roll back the above create() query.
+            nested_txn.rollback()
+
+        User.create(username='mickey')
+
+    # When the block ends, the transaction is committed (assuming no error
+    # occurs). At that point there will be two users, "charlie" and "mickey".
+
+You can use the ``atomic`` method to perform *get or create* operations as
+well:
+
+.. code-block:: python
+
+    try:
+        with db.atomic():
+            user = User.create(username=username)
+        return 'Success'
+    except peewee.IntegrityError:
+        return 'Failure: %s is already in use.' % username
+
+Decorator
+^^^^^^^^^
+
+Using ``atomic`` as a decorator:
+
+.. code-block:: python
+
+    @db.atomic()
+    def create_user(username):
+        # This statement will run in a transaction. If the caller is already
+        # running in an `atomic` block, then a savepoint will be used instead.
+        return User.create(username=username)
+
+    create_user('charlie')
+
+Nesting Transactions
+^^^^^^^^^^^^^^^^^^^^
+
+:py:meth:`~Database.atomic` provides transparent nesting of transactions. When
+using :py:meth:`~Database.atomic`, the outer-most call will be wrapped in a
+transaction, and any nested calls will use savepoints.
+
+.. code-block:: python
+
+    with db.atomic() as txn:
+        perform_operation()
+
+        with db.atomic() as nested_txn:
+            perform_another_operation()
+
+Peewee supports nested transactions through the use of savepoints (for more
+information, see :py:meth:`~Database.savepoint`).
+
+Explicit transaction
+^^^^^^^^^^^^^^^^^^^^
+
+If you wish to explicitly run code in a transaction, you can use
+:py:meth:`~Database.transaction`. Like :py:meth:`~Database.atomic`,
+:py:meth:`~Database.transaction` can be used as a context manager or as a
+decorator.
+
+If an exception occurs in a wrapped block, the transaction will be rolled back.
+Otherwise the statements will be committed at the end of the wrapped block.
+
+.. code-block:: python
+
+    db = SqliteDatabase(':memory:')
+
+    with db.transaction() as txn:
+        # Delete the user and their associated tweets.
+        user.delete_instance(recursive=True)
+
+Transactions can be explicitly committed or rolled-back within the wrapped
+block. When this happens, a new transaction will be started.
+
+.. code-block:: python
+
+    with db.transaction() as txn:
+        User.create(username='mickey')
+        txn.commit()  # Changes are saved and a new transaction begins.
+        User.create(username='huey')
+
+        # Roll back. "huey" will not be saved, but since "mickey" was already
+        # committed, that row will remain in the database.
+        txn.rollback()
+
+    with db.transaction() as txn:
+        User.create(username='whiskers')
+        # Roll back changes, which removes "whiskers".
+        txn.rollback()
+
+        # Create a new row for "mr. whiskers" which will be implicitly committed
+        # at the end of the `with` block.
+        User.create(username='mr. whiskers')
+
+.. note::
+    If you attempt to nest transactions with peewee using the
+    :py:meth:`~Database.transaction` context manager, only the outer-most
+    transaction will be used. If an exception occurs in a nested block, the
+    transaction will NOT be rolled-back -- only exceptions that bubble-up to
+    the outer-most transaction will trigger a rollback.
+
+    As this may lead to unpredictable behavior, it is recommended that
+    you use :py:meth:`~Database.atomic`.
+
+Explicit Savepoints
+^^^^^^^^^^^^^^^^^^^
+
+Just as you can explicitly create transactions, you can also explicitly create
+savepoints using the :py:meth:`~Database.savepoint` method. Savepoints must
+occur within a transaction, but can be nested arbitrarily deep.
+
+.. code-block:: python
+
+    with db.transaction() as txn:
+        with db.savepoint() as sp:
+            User.create(username='mickey')
+
+        with db.savepoint() as sp2:
+            User.create(username='zaizee')
+            sp2.rollback()  # "zaizee" will not be saved, but "mickey" will be.
+
+.. warning::
+    If you manually commit or roll back a savepoint, a new savepoint **will
+    not** automatically be created. This differs from the behavior of
+    :py:class:`transaction`, which will automatically open a new transaction
+    after manual commit/rollback.
+
+Autocommit Mode
+^^^^^^^^^^^^^^^
+
+By default, Peewee operates in *autocommit mode*, such that any statements
+executed outside of a transaction are run in their own transaction. To group
+multiple statements into a transaction, Peewee provides the
+:py:meth:`~Database.atomic` context-manager/decorator. This should cover all
+use-cases, but in the unlikely event you want to temporarily disable Peewee's
+transaction management completely, you can use the
+:py:meth:`Database.manual_commit` context-manager/decorator.
+
+Here is how you might emulate the behavior of the
+:py:meth:`~Database.transaction` context manager:
+
+.. code-block:: python
+
+    with db.manual_commit():
+        db.begin()  # Have to begin transaction explicitly.
+        try:
+            user.delete_instance(recursive=True)
+        except:
+            db.rollback()  # Rollback! An error occurred.
+            raise
+        else:
+            try:
+                db.commit()  # Commit changes.
+            except:
+                db.rollback()
+                raise
+
+Again -- I don't anticipate anyone needing this, but it's here just in case.
+
+.. _database-errors:
+
+Database Errors
+---------------
+
+The Python DB-API 2.0 spec describes `several types of exceptions <https://www.python.org/dev/peps/pep-0249/#exceptions>`_. Because most database drivers have their own implementations of these exceptions, Peewee simplifies things by providing its own wrappers around any implementation-specific exception classes. That way, you don't need to worry about importing any special exception classes, you can just use the ones from peewee:
+
+* ``DatabaseError``
+* ``DataError``
+* ``IntegrityError``
+* ``InterfaceError``
+* ``InternalError``
+* ``NotSupportedError``
+* ``OperationalError``
+* ``ProgrammingError``
+
+.. note:: All of these error classes extend ``PeeweeException``.
 
 .. _testing:
 
@@ -1443,289 +1724,6 @@ Other frameworks
 Don't see your framework here? Please `open a GitHub ticket
 <https://github.com/coleifer/peewee/issues/new>`_ and I'll see about adding a
 section, or better yet, submit a documentation pull-request.
-
-Executing Queries
------------------
-
-SQL queries will typically be executed by calling ``execute()`` on a query
-constructed using the query-builder APIs (or by simply iterating over a query
-object in the case of a :py:class:`Select` query). For cases where you wish to
-execute SQL directly, you can use the :py:meth:`Database.execute_sql` method.
-
-.. code-block:: python
-
-    db = SqliteDatabase('my_app.db')
-    db.connect()
-
-    # Example of executing a simple query and ignoring the results.
-    db.execute_sql("ATTACH DATABASE ':memory:' AS cache;")
-
-    # Example of iterating over the results of a query using the cursor.
-    cursor = db.execute_sql('SELECT * FROM users WHERE status = ?', (ACTIVE,))
-    for row in cursor.fetchall():
-        # Do something with row, which is a tuple containing column data.
-        pass
-
-.. _transactions:
-
-Managing Transactions
----------------------
-
-Peewee provides several interfaces for working with transactions. The most
-general is the :py:meth:`Database.atomic` method, which also supports nested
-transactions. :py:meth:`~Database.atomic` blocks will be run in a transaction
-or savepoint, depending on the level of nesting.
-
-If an unhandled exception occurs in a wrapped block, the current
-transaction/savepoint will be rolled back. Otherwise the statements will be
-committed at the end of the wrapped block.
-
-Examples:
-
-.. code-block:: python
-
-    # Transaction will commit automatically at the end of the "with" block:
-    with db.atomic() as txn:
-        User.create(username='u1')
-
-    # Unhandled exceptions will cause transaction to be rolled-back:
-    with db.atomic() as txn:
-        User.create(username='huey')
-        # User has been INSERTed into the database but the transaction is not
-        # yet committed because we haven't left the scope of the "with" block.
-
-        raise ValueError('uh-oh')
-        # This exception is unhandled - the transaction will be rolled-back and
-        # the ValueError will be raised.
-
-.. note::
-    While inside a block wrapped by the :py:meth:`~Database.atomic` context
-    manager, you can explicitly rollback or commit at any point by calling
-    :py:meth:`Transaction.rollback` or :py:meth:`Transaction.commit`. When you
-    do this inside a wrapped block of code, a new transaction will be started
-    automatically.
-
-    .. code-block:: python
-
-        with db.atomic() as transaction:  # Opens new transaction.
-            try:
-                save_some_objects()
-            except ErrorSavingData:
-                # Because this block of code is wrapped with "atomic", a
-                # new transaction will begin automatically after the call
-                # to rollback().
-                transaction.rollback()
-                error_saving = True
-
-            create_report(error_saving=error_saving)
-            # Note: no need to call commit. Since this marks the end of the
-            # wrapped block of code, the `atomic` context manager will
-            # automatically call commit for us.
-
-.. note::
-    :py:meth:`~Database.atomic` can be used as either a **context manager** or
-    a **decorator**.
-
-.. note::
-    Peewee's behavior differs from the DB-API 2.0 behavior you may be used to
-    (see PEP-249 for details). By default, Peewee puts all connections into
-    **autocommit-mode** and transaction management is handled by Peewee.
-
-Context manager
-^^^^^^^^^^^^^^^
-
-Using ``atomic`` as context manager:
-
-.. code-block:: python
-
-    db = SqliteDatabase(':memory:')
-
-    with db.atomic() as txn:
-        # This is the outer-most level, so this block corresponds to
-        # a transaction.
-        User.create(username='charlie')
-
-        with db.atomic() as nested_txn:
-            # This block corresponds to a savepoint.
-            User.create(username='huey')
-
-            # This will roll back the above create() query.
-            nested_txn.rollback()
-
-        User.create(username='mickey')
-
-    # When the block ends, the transaction is committed (assuming no error
-    # occurs). At that point there will be two users, "charlie" and "mickey".
-
-You can use the ``atomic`` method to perform *get or create* operations as
-well:
-
-.. code-block:: python
-
-    try:
-        with db.atomic():
-            user = User.create(username=username)
-        return 'Success'
-    except peewee.IntegrityError:
-        return 'Failure: %s is already in use.' % username
-
-Decorator
-^^^^^^^^^
-
-Using ``atomic`` as a decorator:
-
-.. code-block:: python
-
-    @db.atomic()
-    def create_user(username):
-        # This statement will run in a transaction. If the caller is already
-        # running in an `atomic` block, then a savepoint will be used instead.
-        return User.create(username=username)
-
-    create_user('charlie')
-
-Nesting Transactions
-^^^^^^^^^^^^^^^^^^^^
-
-:py:meth:`~Database.atomic` provides transparent nesting of transactions. When
-using :py:meth:`~Database.atomic`, the outer-most call will be wrapped in a
-transaction, and any nested calls will use savepoints.
-
-.. code-block:: python
-
-    with db.atomic() as txn:
-        perform_operation()
-
-        with db.atomic() as nested_txn:
-            perform_another_operation()
-
-Peewee supports nested transactions through the use of savepoints (for more
-information, see :py:meth:`~Database.savepoint`).
-
-Explicit transaction
-^^^^^^^^^^^^^^^^^^^^
-
-If you wish to explicitly run code in a transaction, you can use
-:py:meth:`~Database.transaction`. Like :py:meth:`~Database.atomic`,
-:py:meth:`~Database.transaction` can be used as a context manager or as a
-decorator.
-
-If an exception occurs in a wrapped block, the transaction will be rolled back.
-Otherwise the statements will be committed at the end of the wrapped block.
-
-.. code-block:: python
-
-    db = SqliteDatabase(':memory:')
-
-    with db.transaction() as txn:
-        # Delete the user and their associated tweets.
-        user.delete_instance(recursive=True)
-
-Transactions can be explicitly committed or rolled-back within the wrapped
-block. When this happens, a new transaction will be started.
-
-.. code-block:: python
-
-    with db.transaction() as txn:
-        User.create(username='mickey')
-        txn.commit()  # Changes are saved and a new transaction begins.
-        User.create(username='huey')
-
-        # Roll back. "huey" will not be saved, but since "mickey" was already
-        # committed, that row will remain in the database.
-        txn.rollback()
-
-    with db.transaction() as txn:
-        User.create(username='whiskers')
-        # Roll back changes, which removes "whiskers".
-        txn.rollback()
-
-        # Create a new row for "mr. whiskers" which will be implicitly committed
-        # at the end of the `with` block.
-        User.create(username='mr. whiskers')
-
-.. note::
-    If you attempt to nest transactions with peewee using the
-    :py:meth:`~Database.transaction` context manager, only the outer-most
-    transaction will be used. If an exception occurs in a nested block, the
-    transaction will NOT be rolled-back -- only exceptions that bubble-up to
-    the outer-most transaction will trigger a rollback.
-
-    As this may lead to unpredictable behavior, it is recommended that
-    you use :py:meth:`~Database.atomic`.
-
-Explicit Savepoints
-^^^^^^^^^^^^^^^^^^^
-
-Just as you can explicitly create transactions, you can also explicitly create
-savepoints using the :py:meth:`~Database.savepoint` method. Savepoints must
-occur within a transaction, but can be nested arbitrarily deep.
-
-.. code-block:: python
-
-    with db.transaction() as txn:
-        with db.savepoint() as sp:
-            User.create(username='mickey')
-
-        with db.savepoint() as sp2:
-            User.create(username='zaizee')
-            sp2.rollback()  # "zaizee" will not be saved, but "mickey" will be.
-
-.. warning::
-    If you manually commit or roll back a savepoint, a new savepoint **will
-    not** automatically be created. This differs from the behavior of
-    :py:class:`transaction`, which will automatically open a new transaction
-    after manual commit/rollback.
-
-Autocommit Mode
-^^^^^^^^^^^^^^^
-
-By default, Peewee operates in *autocommit mode*, such that any statements
-executed outside of a transaction are run in their own transaction. To group
-multiple statements into a transaction, Peewee provides the
-:py:meth:`~Database.atomic` context-manager/decorator. This should cover all
-use-cases, but in the unlikely event you want to temporarily disable Peewee's
-transaction management completely, you can use the
-:py:meth:`Database.manual_commit` context-manager/decorator.
-
-Here is how you might emulate the behavior of the
-:py:meth:`~Database.transaction` context manager:
-
-.. code-block:: python
-
-    with db.manual_commit():
-        db.begin()  # Have to begin transaction explicitly.
-        try:
-            user.delete_instance(recursive=True)
-        except:
-            db.rollback()  # Rollback! An error occurred.
-            raise
-        else:
-            try:
-                db.commit()  # Commit changes.
-            except:
-                db.rollback()
-                raise
-
-Again -- I don't anticipate anyone needing this, but it's here just in case.
-
-.. _database-errors:
-
-Database Errors
----------------
-
-The Python DB-API 2.0 spec describes `several types of exceptions <https://www.python.org/dev/peps/pep-0249/#exceptions>`_. Because most database drivers have their own implementations of these exceptions, Peewee simplifies things by providing its own wrappers around any implementation-specific exception classes. That way, you don't need to worry about importing any special exception classes, you can just use the ones from peewee:
-
-* ``DatabaseError``
-* ``DataError``
-* ``IntegrityError``
-* ``InterfaceError``
-* ``InternalError``
-* ``NotSupportedError``
-* ``OperationalError``
-* ``ProgrammingError``
-
-.. note:: All of these error classes extend ``PeeweeException``.
 
 Logging queries
 ---------------

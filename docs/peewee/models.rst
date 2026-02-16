@@ -609,16 +609,16 @@ Creating a custom field
 It is easy to add support for custom field types in peewee. In this example we
 will create a UUID field for postgresql (which has a native UUID column type).
 
+.. note::
+    Peewee ships with a :py:class:`UUIDField`, the following code is intended
+    only as an **example**.
+
 To add a custom field type you need to first identify what type of column the
 field data will be stored in. If you just want to add python behavior atop,
 say, a decimal field (for instance to make a currency field) you would just
 subclass :py:class:`DecimalField`. On the other hand, if the database offers a
 custom column type you will need to let peewee know. This is controlled by the
 :py:attr:`Field.field_type` attribute.
-
-.. note::
-    Peewee ships with a :py:class:`UUIDField`, the following code is intended
-    only as an example.
 
 Let's start by defining our UUID field:
 
@@ -660,11 +660,10 @@ column type in the database. Specify the overrides in the :py:class:`Database` c
       # Sqlite doesn't have a UUID type, so we use text type.
       db = SqliteDatabase('my_db', field_types={'uuid': 'text'})
 
-That is it! Some fields may support exotic operations, like the postgresql
-HStore field acts like a key/value store and has custom operators for things
-like *contains* and *update*. You can specify :ref:`custom operations
-<custom-operators>` as well. For example code, check out the source code for
-the :py:class:`HStoreField`, in ``playhouse.postgres_ext``.
+That is it! Some fields may support exotic operations, like the Postgresql
+JSON field, which has custom operators for things like *contains* and *update*.
+You can specify :ref:`custom operations <custom-operators>` as well. For
+example code, check out the JSONField in `postgres_ext <https://github.com/coleifer/peewee/blob/master/playhouse/postgres_ext.py>`_.
 
 Field-naming conflicts
 ^^^^^^^^^^^^^^^^^^^^^^

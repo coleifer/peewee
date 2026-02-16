@@ -55,25 +55,33 @@ You can test specific features or specific database drivers using the
         -- install the hstore extension on the peewee_test postgres db.
         CREATE EXTENSION hstore;
 
+Driver support
+--------------
 
-Optional dependencies
----------------------
-
-.. note::
-    To use Peewee, you typically won't need anything outside the standard
-    library, since most Python distributions are compiled with SQLite support.
-    You can test by running ``import sqlite3`` in the Python console. If you
-    wish to use another database, there are many DB-API 2.0-compatible drivers
-    out there, such as ``pymysql`` or ``psycopg2`` for MySQL and Postgres
-    respectively.
-
-* `cysqlite <https://cysqlite.readthedocs.io/>`_: optional SQlite driver that
-  provides additional SQLite functionality. Use with :py:class:`CySqliteDatabase`.
-* `apsw <https://github.com/rogerbinns/apsw>`_: an optional 3rd-party SQLite
-  binding offering greater performance and comprehensive support for SQLite's C
-  APIs. Use with :py:class:`APSWDatabase`.
-* `gevent <http://www.gevent.org/>`_ is an optional dependency for
-  :py:class:`SqliteQueueDatabase` (though it works with ``threading`` just
-  fine).
-* Lastly, if you use the *Flask* framework, there are helper extension modules
-  available.
++-----------------------+------------------------+--------------------------------------------+
+| Database              | Driver                 | Implementation                             |
++=======================+========================+============================================+
+| **Sqlite**            | ``sqlite3``            | :py:class:`SqliteDatabase`                 |
++-----------------------+------------------------+--------------------------------------------+
+| **Postgres**          | ``psycopg2``           | :py:class:`PostgresqlDatabase`             |
++-----------------------+------------------------+--------------------------------------------+
+| **Postgres**          | ``psycopg3``           | :py:class:`PostgresqlDatabase`             |
++-----------------------+------------------------+--------------------------------------------+
+| **MySQL**             | ``pymysql``            | :py:class:`MySQLDatabase`                  |
++-----------------------+------------------------+--------------------------------------------+
+| Sqlite (async)        | ``aiosqlite``          | :py:class:`AsyncSqliteDatabase`            |
++-----------------------+------------------------+--------------------------------------------+
+| Postgres (async)      | ``asyncpg``            | :py:class:`AsyncPostgresqlDatabase`        |
++-----------------------+------------------------+--------------------------------------------+
+| MySQL (async)         | ``aiomysql``           | :py:class:`AsyncMySQLDatabase`             |
++-----------------------+------------------------+--------------------------------------------+
+| Sqlite (alternate)    | ``cysqlite``           | :py:class:`CySqliteDatabase`               |
++-----------------------+------------------------+--------------------------------------------+
+| Sqlite (alternate)    | ``apsw``               | :py:class:`APSWDatabase`                   |
++-----------------------+------------------------+--------------------------------------------+
+| SqlCipher             | ``sqlcipher3``         | :py:class:`SqlCipherDatabase`              |
++-----------------------+------------------------+--------------------------------------------+
+| MySQL (alternate)     | ``mysql-connector``    | :py:class:`MySQLConnectorDatabase`         |
++-----------------------+------------------------+--------------------------------------------+
+| MariaDB (alternate)   | ``mariadb-connector``  | :py:class:`MariaDBConnectorDatabase`       |
++-----------------------+------------------------+--------------------------------------------+
