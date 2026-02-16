@@ -123,10 +123,7 @@ parameters:
     * :ref:`JSON <pgjson>`
     * :ref:`Full Text Search <pg_fts>`
 
-    To utilize these features use:
-
-    * ``playhouse.postgres_ext`` - :py:class:`PostgresqlExtDatabase` or
-    * ``playhouse.psycopg3_ext`` - :py:class:`Psycopg3Database`
+    To utilize these features use :py:class:`PostgresqlExtDatabase`.
 
     .. code-block:: python
 
