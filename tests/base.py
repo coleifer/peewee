@@ -66,12 +66,31 @@ BACKEND = os.environ.get('PEEWEE_TEST_BACKEND') or 'sqlite'
 VERBOSITY = int(os.environ.get('PEEWEE_TEST_VERBOSITY') or 1)
 SLOW_TESTS = bool(os.environ.get('PEEWEE_SLOW_TESTS'))
 
+# What family of database are we using.
 IS_SQLITE = BACKEND.startswith(('sqlite', 'cysqlite'))
 IS_MYSQL = BACKEND.startswith(('mysql', 'maria'))
 IS_POSTGRESQL = BACKEND.startswith(('postgres', 'psycopg'))
+
+# Specific database or driver.
 IS_CRDB = BACKEND in ('cockroach', 'cockroachdb', 'crdb')
 IS_PSYCOPG3 = BACKEND == 'psycopg3'
 IS_CYSQLITE = BACKEND == 'cysqlite'
+
+if IS_MYSQL:
+    try:
+        import pymysql
+    except ImportError:
+        raise ImportError('pymysql is not installed')
+if BACKEND.startswith('postgres'):
+    try:
+        import psycopg2
+    except ImportError:
+        raise ImportError('psycopg2 is not installed')
+if IS_PSYCOPG3:
+    try:
+        import psycopg
+    except ImportError:
+        raise ImportError('psycopg3 is not installed')
 
 
 def make_db_params(key):

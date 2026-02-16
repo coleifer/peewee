@@ -39,6 +39,7 @@ except ImportError:
 else:
     if pysq3 and pysq3.sqlite_version_info >= sqlite3.sqlite_version_info:
         sqlite3 = pysq3
+
 try:
     from psycopg2cffi import compat
     compat.register()
@@ -46,18 +47,12 @@ except ImportError:
     pass
 try:
     import psycopg2
+    from psycopg2 import errors as pg_errors
     from psycopg2 import extensions as pg_extensions
-    try:
-        from psycopg2 import errors as pg_errors
-    except ImportError:
-        pg_errors = None
-except ImportError:
-    psycopg2 = pg_errors = None
-try:
     from psycopg2.extras import register_uuid as pg_register_uuid
     pg_register_uuid()
-except Exception:
-    pass
+except ImportError:
+    psycopg2 = pg_errors = None
 try:
     import psycopg
     from psycopg import errors as pg3_errors
@@ -3951,7 +3946,7 @@ class SqliteDatabase(Database):
 
 
 class Psycopg2Adapter(object):
-    def __init__(self):
+    def check_driver(self):
         if psycopg2 is None:
             raise ImproperlyConfigured('psycopg2 postgres driver not found.')
 
@@ -4005,7 +4000,7 @@ class Psycopg2Adapter(object):
 
 
 class Psycopg3Adapter(object):
-    def __init__(self):
+    def check_driver(self):
         if psycopg is None:
             raise ImproperlyConfigured('psycopg postgres driver not found.')
 
@@ -4089,8 +4084,7 @@ class PostgresqlDatabase(Database):
         super(PostgresqlDatabase, self).init(database, **kwargs)
 
     def _connect(self):
-        if psycopg2 is None and psycopg is None:
-            raise ImproperlyConfigured('Postgres driver not installed!')
+        self._adapter.check_driver()
 
         # Handle connection-strings nicely, since psycopg will accept them,
         # and they may be easier when lots of parameters are specified.

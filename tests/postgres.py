@@ -104,7 +104,7 @@ class TestTZField(ModelTestCase):
         tz = TZModel.create(dt=dt)
         self.assertTrue(tz.dt.tzinfo is None)
 
-        # When we retrieve the row, psycopg2 will attach the appropriate tzinfo
+        # When we retrieve the row, psycopg will attach the appropriate tzinfo
         # data. The value is returned as an "aware" datetime in US/Eastern.
         tz_db = TZModel[tz.id]
         self.assertTrue(tz_db.dt.tzinfo is not None)
@@ -472,11 +472,6 @@ class TestArrayFieldConvertValues(ModelTestCase):
 class TestArrayUUIDField(ModelTestCase):
     database = db
     requires = [UUIDList]
-
-    def setUp(self):
-        super(TestArrayUUIDField, self).setUp()
-        import psycopg2.extras
-        psycopg2.extras.register_uuid()
 
     def test_array_of_uuids(self):
         u1, u2, u3, u4 = [uuid.uuid4() for _ in range(4)]
