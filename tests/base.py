@@ -32,8 +32,7 @@ def db_loader(engine, name='peewee_test', db_class=None, **params):
             SqliteDatabase: ['sqlite', 'sqlite3'],
             CySqliteDatabase: ['cysqlite'],
             MySQLDatabase: ['mysql'],
-            PostgresqlDatabase: ['postgres', 'postgresql'],
-            Psycopg3Database: ['psycopg3'],
+            PostgresqlDatabase: ['postgres', 'postgresql', 'psycopg3'],
             MySQLConnectorDatabase: ['mysqlconnector'],
             MariaDBConnectorDatabase: ['mariadb', 'maridbconnector'],
             CockroachDatabase: ['cockroach', 'cockroachdb', 'crdb'],
@@ -51,6 +50,9 @@ def db_loader(engine, name='peewee_test', db_class=None, **params):
         params.update(CRDB_PARAMS)
     elif issubclass(db_class, PostgresqlDatabase):
         params.update(PSQL_PARAMS)
+        if IS_PSYCOPG3:
+            params.setdefault('prefer_psycopg3', True)
+
     return db_class(name, **params)
 
 

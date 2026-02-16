@@ -610,16 +610,19 @@ Database
     .. include:: sqlite-method-defs.rst
 
 
-.. py:class:: PostgresqlDatabase(database[, register_unicode=True[, encoding=None[, isolation_level=None]]])
+.. py:class:: PostgresqlDatabase(database[, register_unicode=True[, encoding=None[, isolation_level=None[, prefer_psycopg3=False]]]])
 
-    Postgresql database implementation.
+    Postgresql database implementation. Uses psycopg2 or psycopg3.
 
     Additional optional keyword-parameters:
 
     :param bool register_unicode: Register unicode types.
     :param str encoding: Database encoding.
     :param int isolation_level: Isolation level constant, defined in the
-        ``psycopg2.extensions`` module.
+        ``psycopg2.extensions`` module or ``psycopg.connection.IsolationLevel``
+        enum (psycopg3).
+    :param bool prefer_psycopg3: If both psycopg2 and psycopg3 are installed,
+        instruct Peewee to prefer psycopg3.
 
     .. py:method:: set_time_zone(timezone)
 

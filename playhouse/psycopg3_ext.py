@@ -131,35 +131,6 @@ class BinaryJSONField(IndexedFieldMixin, Field):
 
 
 class Psycopg3Database(PostgresqlDatabase):
-    def _connect(self):
-        if psycopg is None:
-            raise ImproperlyConfigured('psycopg3 is not installed!')
-        if self.database.startswith('postgresql://'):
-            conn = psycopg.connect(self.database, **self.connect_params)
-        else:
-            conn = psycopg.connect(dbname=self.database, **self.connect_params)
-        if self._isolation_level is not None:
-            conn.isolation_level = self._isolation_level
-        conn.autocommit = True
-        return conn
-
-    def get_binary_type(self):
-        return psycopg.Binary
-
-    def _set_server_version(self, conn):
-        self.server_version = conn.pgconn.server_version
-        if self.server_version >= 90600:
-            self.safe_create_index = True
-
-    def is_connection_usable(self):
-        if self._state.closed:
-            return False
-
-        # Returns True if we are idle, running a command, or in an active
-        # connection. If the connection is in an error state or the connection
-        # is otherwise unusable, return False.
-        conn = self._state.conn
-        return conn.pgconn.transaction_status < TransactionStatus.INERROR
-
-    def extract_date(self, date_part, date_field):
-        return fn.EXTRACT(NodeList((SQL(date_part), SQL('FROM'), date_field)))
+    def __init__(self, *args, **kwargs):
+        kwargs['prefer_psycopg3'] = True
+        super(Psycopg3Database, self).__init__(*args, **kwargs)

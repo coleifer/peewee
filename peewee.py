@@ -59,8 +59,11 @@ try:
 except Exception:
     pass
 try:
+    import psycopg
     from psycopg import errors as pg3_errors
+    from psycopg.pq import TransactionStatus
 except ImportError:
+    psycopg = None
     pg3_errors = None
 
 mysql_passwd = False
@@ -3973,33 +3976,54 @@ class PostgresqlDatabase(Database):
         self._register_unicode = register_unicode
         self._encoding = encoding
         self._isolation_level = isolation_level
+
+        prefer_psycopg3 = kwargs.pop('prefer_psycopg3', False)
+        if psycopg2 is not None and psycopg is not None:
+            self._psycopg3 = prefer_psycopg3
+        else:
+            self._psycopg3 = psycopg is not None
+
         super(PostgresqlDatabase, self).init(database, **kwargs)
 
     def _connect(self):
-        if psycopg2 is None:
+        if psycopg2 is None and psycopg is None:
             raise ImproperlyConfigured('Postgres driver not installed!')
 
-        # Handle connection-strings nicely, since psycopg2 will accept them,
+        # Handle connection-strings nicely, since psycopg will accept them,
         # and they may be easier when lots of parameters are specified.
         params = self.connect_params.copy()
-        if self.database.startswith('postgresql://'):
-            params.setdefault('dsn', self.database)
-        else:
-            params.setdefault('dbname', self.database)
 
-        conn = psycopg2.connect(**params)
-        if self._register_unicode:
-            pg_extensions.register_type(pg_extensions.UNICODE, conn)
-            pg_extensions.register_type(pg_extensions.UNICODEARRAY, conn)
-        if self._encoding:
-            conn.set_client_encoding(self._encoding)
+        if self._psycopg3:
+            if self.database.startswith('postgresql://'):
+                params.setdefault('conninfo', self.database)
+            else:
+                params.setdefault('dbname', self.database)
+
+            conn = psycopg.connect(**params)
+        else:
+            if self.database.startswith('postgresql://'):
+                params.setdefault('dsn', self.database)
+            else:
+                params.setdefault('dbname', self.database)
+
+            conn = psycopg2.connect(**params)
+            if self._register_unicode:
+                pg_extensions.register_type(pg_extensions.UNICODE, conn)
+                pg_extensions.register_type(pg_extensions.UNICODEARRAY, conn)
+            if self._encoding:
+                conn.set_client_encoding(self._encoding)
+
         if self._isolation_level:
             conn.set_isolation_level(self._isolation_level)
         conn.autocommit = True
         return conn
 
     def _set_server_version(self, conn):
-        self.server_version = conn.server_version
+        if self._psycopg3:
+            self.server_version = conn.pgconn.server_version
+        else:
+            self.server_version = conn.server_version
+
         if self.server_version >= 90600:
             self.safe_create_index = True
 
@@ -4010,8 +4034,12 @@ class PostgresqlDatabase(Database):
         # Returns True if we are idle, running a command, or in an active
         # connection. If the connection is in an error state or the connection
         # is otherwise unusable, return False.
-        txn_status = self._state.conn.get_transaction_status()
-        return txn_status < pg_extensions.TRANSACTION_STATUS_INERROR
+        if self._psycopg3:
+            conn = self._state.conn
+            return conn.pgconn.transaction_status < TransactionStatus.INERROR
+        else:
+            txn_status = self._state.conn.get_transaction_status()
+            return txn_status < pg_extensions.TRANSACTION_STATUS_INERROR
 
     def last_insert_id(self, cursor, query_type=None):
         try:
@@ -4125,7 +4153,10 @@ class PostgresqlDatabase(Database):
         return bool(res.fetchone()[0])
 
     def get_binary_type(self):
-        return psycopg2.Binary
+        if self._psycopg3:
+            return psycopg.Binary
+        else:
+            return psycopg2.Binary
 
     def conflict_statement(self, on_conflict, query):
         return
@@ -4156,6 +4187,8 @@ class PostgresqlDatabase(Database):
         return self._build_on_conflict_update(oc, query)
 
     def extract_date(self, date_part, date_field):
+        if self._psycopg3:
+            date_part = SQL(date_part)
         return fn.EXTRACT(NodeList((date_part, SQL('FROM'), date_field)))
 
     def truncate_date(self, date_part, date_field):

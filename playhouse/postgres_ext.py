@@ -472,6 +472,7 @@ class PostgresqlExtDatabase(PostgresqlDatabase):
     def __init__(self, *args, **kwargs):
         self._register_hstore = kwargs.pop('register_hstore', False)
         self._server_side_cursors = kwargs.pop('server_side_cursors', False)
+        kwargs['prefer_psycopg3'] = False  # Do not use psycopg3.
         super(PostgresqlExtDatabase, self).__init__(*args, **kwargs)
 
     def _connect(self):
