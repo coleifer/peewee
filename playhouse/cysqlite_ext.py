@@ -63,8 +63,7 @@ class TDecimalField(DecimalField):
 
 
 class CySqliteDatabase(SqliteDatabase):
-    def __init__(self, database, rank_functions=True, regexp_function=False,
-                 *args, **kwargs):
+    def __init__(self, database, rank_functions=True, *args, **kwargs):
         super(CySqliteDatabase, self).__init__(database, *args, **kwargs)
 
         self._table_functions = []
@@ -79,9 +78,6 @@ class CySqliteDatabase(SqliteDatabase):
             self.register_function(cysqlite.rank_bm25, 'fts_bm25')
             self.register_function(cysqlite.rank_lucene, 'fts_lucene')
             self.register_function(rank, 'fts_rank')
-
-        if regexp_function:
-            self.register_function(_sqlite_regexp, 'regexp', 2)
 
     def _connect(self):
         if cysqlite is None:
@@ -276,6 +272,3 @@ class CySqliteDatabase(SqliteDatabase):
 
 
 OP.MATCH = 'MATCH'
-
-def _sqlite_regexp(regex, value):
-    return re.search(regex, value) is not None
