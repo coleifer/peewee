@@ -8,7 +8,7 @@ This document specifies Peewee's APIs.
 Database
 --------
 
-.. py:class:: Database(database[, thread_safe=True[, field_types=None[, operations=None[, autoconnect=True[, **kwargs]]]]])
+.. py:class:: Database(database, thread_safe=True, field_types=None, operations=None, autoconnect=True, **kwargs)
 
     :param str database: Database name or filename for SQLite (or ``None`` to
         :ref:`defer initialization <deferring_initialization>`, in which case
@@ -75,7 +75,7 @@ Database
         Type of quotation-mark to use to denote entities such as tables or
         columns.
 
-    .. py:method:: init(database[, **kwargs])
+    .. py:method:: init(database, **kwargs)
 
         :param str database: Database name or filename for SQLite.
         :param kwargs: Arbitrary keyword arguments that will be passed to the
@@ -107,7 +107,7 @@ Database
                 with database.connection_context():
                     database.create_tables(APP_MODELS)
 
-    .. py:method:: connect([reuse_if_open=False])
+    .. py:method:: connect(reuse_if_open=False)
 
         :param bool reuse_if_open: Do not raise an exception if a connection is
             already opened.
@@ -137,7 +137,7 @@ Database
         opened. The connection will be whatever the underlying database-driver
         uses to encapsulate a database connection.
 
-    .. py:method:: cursor([named_cursor=None])
+    .. py:method:: cursor(named_cursor=None)
 
         :param named_cursor: For internal use.
 
@@ -145,7 +145,7 @@ Database
         is not open, one will be opened. The cursor will be whatever the
         underlying database-driver uses to encapsulate a database cursor.
 
-    .. py:method:: execute_sql(sql[, params=None])
+    .. py:method:: execute_sql(sql, params=None)
 
         :param str sql: SQL string to execute.
         :param tuple params: Parameters for query.
@@ -153,7 +153,7 @@ Database
 
         Execute a SQL query and return a cursor over the results.
 
-    .. py:method:: execute(query[, **context_options])
+    .. py:method:: execute(query, **context_options)
 
         :param query: A :py:class:`Query` instance.
         :param context_options: Arbitrary options to pass to the SQL generator.
@@ -162,7 +162,7 @@ Database
         Execute a SQL query by compiling a ``Query`` instance and executing the
         resulting SQL.
 
-    .. py:method:: last_insert_id(cursor[, query_type=None])
+    .. py:method:: last_insert_id(cursor, query_type=None)
 
         :param cursor: cursor object.
         :returns: primary key of last-inserted row.
@@ -177,7 +177,7 @@ Database
         :returns: whether or not a transaction is currently open.
         :rtype: bool
 
-    .. py:method:: atomic([...])
+    .. py:method:: atomic(...)
 
         Create a context-manager which runs any queries in the wrapped block in
         a transaction (or save-point if blocks are nested).
@@ -282,7 +282,7 @@ Database
         Roll back any changes made during a transaction begun with
         :py:meth:`~Database.session_start`.
 
-    .. py:method:: transaction([...])
+    .. py:method:: transaction(...)
 
         Create a context-manager that runs all queries in the wrapped block in
         a transaction.
@@ -370,18 +370,18 @@ Database
                     rows = row_data[idx:idx + 100]
                     User.insert_many(rows).execute()
 
-    .. py:method:: table_exists(table[, schema=None])
+    .. py:method:: table_exists(table, schema=None)
 
         :param str table: Table name.
         :param str schema: Schema name (optional).
         :returns: ``bool`` indicating whether table exists.
 
-    .. py:method:: get_tables([schema=None])
+    .. py:method:: get_tables(schema=None)
 
         :param str schema: Schema name (optional).
         :returns: a list of table names in the database.
 
-    .. py:method:: get_indexes(table[, schema=None])
+    .. py:method:: get_indexes(table, schema=None)
 
         :param str table: Table name.
         :param str schema: Schema name (optional).
@@ -404,7 +404,7 @@ Database
                  unique=True,
                  table='entry')]
 
-    .. py:method:: get_columns(table[, schema=None])
+    .. py:method:: get_columns(table, schema=None)
 
         :param str table: Table name.
         :param str schema: Schema name (optional).
@@ -428,7 +428,7 @@ Database
                  table='entry'),
              ...]
 
-    .. py:method:: get_primary_keys(table[, schema=None])
+    .. py:method:: get_primary_keys(table, schema=None)
 
         :param str table: Table name.
         :param str schema: Schema name (optional).
@@ -440,7 +440,7 @@ Database
             print(db.get_primary_keys('entry'))
             ['id']
 
-    .. py:method:: get_foreign_keys(table[, schema=None])
+    .. py:method:: get_foreign_keys(table, schema=None)
 
         :param str table: Table name.
         :param str schema: Schema name (optional).
@@ -458,7 +458,7 @@ Database
                  table='entrytag'),
              ...]
 
-    .. py:method:: get_views([schema=None])
+    .. py:method:: get_views(schema=None)
 
         :param str schema: Schema name (optional).
 
@@ -479,7 +479,7 @@ Database
         :returns: Whether sequence exists.
         :rtype: bool
 
-    .. py:method:: create_tables(models[, **options])
+    .. py:method:: create_tables(models, **options)
 
         :param list models: A list of :py:class:`Model` classes.
         :param options: Options to specify when calling
@@ -491,7 +491,7 @@ Database
         Dependencies are resolved so that tables are created in the appropriate
         order.
 
-    .. py:method:: drop_tables(models[, **options])
+    .. py:method:: drop_tables(models, **options)
 
         :param list models: A list of :py:class:`Model` classes.
         :param kwargs: Options to specify when calling
@@ -503,7 +503,7 @@ Database
         Dependencies are resolved so that tables are dropped in the appropriate
         order.
 
-    .. py:method:: bind(models[, bind_refs=True[, bind_backrefs=True]])
+    .. py:method:: bind(models, bind_refs=True, bind_backrefs=True)
 
         :param list models: One or more :py:class:`Model` classes to bind.
         :param bool bind_refs: Bind related models.
@@ -512,7 +512,7 @@ Database
         Bind the given list of models, and specified relations, to the
         database.
 
-    .. py:method:: bind_ctx(models[, bind_refs=True[, bind_backrefs=True]])
+    .. py:method:: bind_ctx(models, bind_refs=True, bind_backrefs=True)
 
         :param list models: List of models to bind to the database.
         :param bool bind_refs: Bind models that are referenced using
@@ -579,8 +579,9 @@ Database
         this is equivalent to ``fn.random()``, for MySQL ``fn.rand()``.
 
 
-.. py:class:: SqliteDatabase(database[, pragmas=None[, timeout=5[, returning_clause=None[,  **kwargs]]]])
+.. py:class:: SqliteDatabase(database, regexp_function=False, pragmas=None, timeout=5, returning_clause=None,  **kwargs)
 
+    :param bool regexp_function: Make the REGEXP function available.
     :param pragmas: Either a dictionary or a list of 2-tuples containing
         pragma key and value to set every time a connection is opened.
     :param timeout: Set the busy-timeout on the SQLite driver (in seconds).
@@ -610,7 +611,7 @@ Database
     .. include:: sqlite-method-defs.rst
 
 
-.. py:class:: PostgresqlDatabase(database[, register_unicode=True[, encoding=None[, isolation_level=None[, prefer_psycopg3=False]]]])
+.. py:class:: PostgresqlDatabase(database, register_unicode=True, encoding=None, isolation_level=None, prefer_psycopg3=False)
 
     Postgresql database implementation. Uses psycopg2 or psycopg3.
 
@@ -632,7 +633,7 @@ Database
         Set the timezone on the current connection. If no connection is open,
         then one will be opened.
 
-    .. py:method:: atomic([isolation_level=None])
+    .. py:method:: atomic(isolation_level=None)
 
         :param str isolation_level: Isolation strategy: SERIALIZABLE, READ COMMITTED, REPEATABLE READ, READ UNCOMMITTED
 
@@ -641,7 +642,7 @@ Database
 
         .. note:: Isolation level only applies to the outermost ``atomic()`` block.
 
-    .. py:method:: transaction([isolation_level=None])
+    .. py:method:: transaction(isolation_level=None)
 
         :param str isolation_level: Isolation strategy: SERIALIZABLE, READ COMMITTED, REPEATABLE READ, READ UNCOMMITTED
 
@@ -649,11 +650,11 @@ Database
         isolation level (if unspecified, the server default will be used).
 
 
-.. py:class:: MySQLDatabase(database[, **kwargs])
+.. py:class:: MySQLDatabase(database, **kwargs)
 
     MySQL database implementation.
 
-    .. py:method:: atomic([isolation_level=None])
+    .. py:method:: atomic(isolation_level=None)
 
         :param str isolation_level: Isolation strategy: SERIALIZABLE, READ COMMITTED, REPEATABLE READ, READ UNCOMMITTED
 
@@ -662,7 +663,7 @@ Database
 
         .. note:: Isolation level only applies to the outermost ``atomic()`` block.
 
-    .. py:method:: transaction([isolation_level=None])
+    .. py:method:: transaction(isolation_level=None)
 
         :param str isolation_level: Isolation strategy: SERIALIZABLE, READ COMMITTED, REPEATABLE READ, READ UNCOMMITTED
 
@@ -700,7 +701,7 @@ Query-builder
         aliased by the user.
 
 
-.. py:class:: Source([alias=None])
+.. py:class:: Source(alias=None)
 
     A source of row tuples, for example a table, join, or select query. By
     default provides a "magic" attribute named "c" that is a factory for
@@ -727,7 +728,7 @@ Query-builder
         declares columns and no columns are provided, then by default all the
         table's defined columns will be selected.
 
-    .. py:method:: join(dest[, join_type='INNER'[, on=None]])
+    .. py:method:: join(dest, join_type='INNER', on=None)
 
         :param Source dest: Join the table with the given destination.
         :param str join_type: Join type.
@@ -743,7 +744,7 @@ Query-builder
         * ``JOIN.FULL_OUTER``
         * ``JOIN.CROSS``
 
-    .. py:method:: left_outer_join(dest[, on=None])
+    .. py:method:: left_outer_join(dest, on=None)
 
         :param Source dest: Join the table with the given destination.
         :param on: Expression to use as join predicate.
@@ -779,7 +780,7 @@ Query-builder
         Perform a CROSS join on ``dest``.
 
 
-.. py:class:: Table(name[, columns=None[, primary_key=None[, schema=None[, alias=None]]]])
+.. py:class:: Table(name, columns=None, primary_key=None, schema=None, alias=None)
 
     Represents a table in the database (or a table-like object such as a view).
 
@@ -809,7 +810,7 @@ Query-builder
                  .select(User.id, User.username)
                  .order_by(User.username))
 
-    .. py:method:: bind([database=None])
+    .. py:method:: bind(database=None)
 
         :param database: :py:class:`Database` object.
 
@@ -819,7 +820,7 @@ Query-builder
         it without the need to specify the database in the query's execute
         method.
 
-    .. py:method:: bind_ctx([database=None])
+    .. py:method:: bind_ctx(database=None)
 
         :param database: :py:class:`Database` object.
 
@@ -863,7 +864,7 @@ Query-builder
                         on=(User.id == Note.c.user_id))
                      .order_by(fn.COUNT(Note.c.id).desc()))
 
-    .. py:method:: insert([insert=None[, columns=None[, **kwargs]]])
+    .. py:method:: insert(insert=None, columns=None, **kwargs)
 
         :param insert: A dictionary mapping column to value, an iterable that
             yields dictionaries (i.e. list), or a :py:class:`Select` query.
@@ -873,7 +874,7 @@ Query-builder
 
         Create a :py:class:`Insert` query into the table.
 
-    .. py:method:: replace([insert=None[, columns=None[, **kwargs]]])
+    .. py:method:: replace(insert=None, columns=None, **kwargs)
 
         :param insert: A dictionary mapping column to value, an iterable that
             yields dictionaries (i.e. list), or a :py:class:`Select` query.
@@ -884,7 +885,7 @@ Query-builder
         Create a :py:class:`Insert` query into the table whose conflict
         resolution method is to replace.
 
-    .. py:method:: update([update=None[, **kwargs]])
+    .. py:method:: update(update=None, **kwargs)
 
         :param update: A dictionary mapping column to value.
         :param kwargs: Mapping of column-name to value.
@@ -896,7 +897,7 @@ Query-builder
         Create a :py:class:`Delete` query for the table.
 
 
-.. py:class:: Join(lhs, rhs[, join_type=JOIN.INNER[, on=None[, alias=None]]])
+.. py:class:: Join(lhs, rhs, join_type=JOIN.INNER, on=None, alias=None)
 
     Represent a JOIN between to table-like objects.
 
@@ -913,7 +914,7 @@ Query-builder
         Specify the predicate expression used for this join.
 
 
-.. py:class:: ValuesList(values[, columns=None[, alias=None]])
+.. py:class:: ValuesList(values, columns=None, alias=None)
 
     Represent a values list that can be used like a table.
 
@@ -953,7 +954,7 @@ Query-builder
             # FROM (VALUES (1, 'first'), (2, 'second')) AS v(idx, name)
 
 
-.. py:class:: CTE(name, query[, recursive=False[, columns=None]])
+.. py:class:: CTE(name, query, recursive=False, columns=None)
 
     Represent a common-table-expression. For example queries, see :ref:`cte`.
 
@@ -1029,13 +1030,13 @@ Query-builder
 
         Create a ``CAST`` expression.
 
-    .. py:method:: asc([collation=None[, nulls=None]])
+    .. py:method:: asc(collation=None, nulls=None)
 
         :param str collation: Collation name to use for sorting.
         :param str nulls: Sort nulls (FIRST or LAST).
         :returns: an ascending :py:class:`Ordering` object for the column.
 
-    .. py:method:: desc([collation=None[, nulls=None]])
+    .. py:method:: desc(collation=None, nulls=None)
 
         :param str collation: Collation name to use for sorting.
         :param str nulls: Sort nulls (FIRST or LAST).
@@ -1061,7 +1062,7 @@ Query-builder
 
     Create a named alias for the given column-like object.
 
-    .. py:method:: alias([alias=None])
+    .. py:method:: alias(alias=None)
 
         :param str alias: new name (or None) for aliased column.
 
@@ -1075,7 +1076,7 @@ Query-builder
     Represents a negated column-like object.
 
 
-.. py:class:: Value(value[, converterNone[, unpack=True]])
+.. py:class:: Value(value, converterNone, unpack=True)
 
     :param value: Python object or scalar value.
     :param converter: Function used to convert value into type the database
@@ -1104,7 +1105,7 @@ Query-builder
     Represents a ``CAST(<node> AS <cast>)`` expression.
 
 
-.. py:class:: Ordering(node, direction[, collation=None[, nulls=None]])
+.. py:class:: Ordering(node, direction, collation=None, nulls=None)
 
     :param node: A column-like object.
     :param str direction: ASC or DESC
@@ -1117,22 +1118,22 @@ Query-builder
     automatically use an equivalent ``CASE`` statement for databases that do
     not support this (Sqlite / MySQL).
 
-    .. py:method:: collate([collation=None])
+    .. py:method:: collate(collation=None)
 
         :param str collation: Collation name to use for sorting.
 
 
-.. py:function:: Asc(node[, collation=None[, nulls=None]])
+.. py:function:: Asc(node, collation=None, nulls=None)
 
     Short-hand for instantiating an ascending :py:class:`Ordering` object.
 
 
-.. py:function:: Desc(node[, collation=None[, nulls=None]])
+.. py:function:: Desc(node, collation=None, nulls=None)
 
     Short-hand for instantiating an descending :py:class:`Ordering` object.
 
 
-.. py:class:: Expression(lhs, op, rhs[, flat=True])
+.. py:class:: Expression(lhs, op, rhs, flat=True)
 
     :param lhs: Left-hand side.
     :param op: Operation.
@@ -1154,7 +1155,7 @@ Query-builder
         Factory method for creating sub-entities.
 
 
-.. py:class:: SQL(sql[, params=None])
+.. py:class:: SQL(sql, params=None)
 
     :param str sql: SQL query string.
     :param tuple params: Parameters for query (optional).
@@ -1162,7 +1163,7 @@ Query-builder
     Represent a parameterized SQL query or query-fragment.
 
 
-.. py:function:: Check(constraint[, name=None])
+.. py:function:: Check(constraint, name=None)
 
     :param str constraint: Constraint SQL.
     :param str name: constraint name.
@@ -1176,7 +1177,7 @@ Query-builder
          list instead of in the field instances ``constraints=[...]`` list.
 
 
-.. py:class:: Function(name, arguments[, coerce=True[, python_value=None]])
+.. py:class:: Function(name, arguments, coerce=True, python_value=None)
 
     :param str name: Function name.
     :param tuple arguments: Arguments to function.
@@ -1200,7 +1201,7 @@ Query-builder
                  .group_by(User.username)
                  .order_by(fn.COUNT(Tweet.id).desc()))
 
-    .. py:method:: over([partition_by=None[, order_by=None[, start=None[, end=None[, window=None[, exclude=None]]]]]])
+    .. py:method:: over(partition_by=None, order_by=None, start=None, end=None, window=None, exclude=None)
 
         :param list partition_by: List of columns to partition by.
         :param list order_by: List of columns / expressions to order window by.
@@ -1256,7 +1257,7 @@ Query-builder
         aggregate function. This SQL feature is supported for Postgres and
         SQLite.
 
-    .. py:method:: coerce([coerce=True])
+    .. py:method:: coerce(coerce=True)
 
         :param bool coerce: Whether to attempt to coerce function-call result
             to a Python data-type.
@@ -1265,7 +1266,7 @@ Query-builder
         heuristics. Read the source for ``BaseModelCursorWrapper._initialize_columns``
         method to see how this works.
 
-    .. py:method:: python_value([func=None])
+    .. py:method:: python_value(func=None)
 
         :param callable python_value: Function to use for converting the return
             value from the cursor.
@@ -1328,7 +1329,7 @@ Query-builder
         # Get users whose username begins with "A" or "a":
         a_users = User.select().where(fn.LOWER(fn.SUBSTR(User.username, 1, 1)) == 'a')
 
-.. py:class:: Window([partition_by=None[, order_by=None[, start=None[, end=None[, frame_type=None[, extends=None[, exclude=None[, alias=None]]]]]]]])
+.. py:class:: Window(partition_by=None, order_by=None, start=None, end=None, frame_type=None, extends=None, exclude=None, alias=None)
 
     :param list partition_by: List of columns to partition by.
     :param list order_by: List of columns to order by.
@@ -1367,14 +1368,14 @@ Query-builder
 
         Specify the window frame exclusion parameter.
 
-    .. py:staticmethod:: preceding([value=None])
+    .. py:staticmethod:: preceding(value=None)
 
         :param value: Number of rows preceding. If ``None`` is UNBOUNDED.
 
         Convenience method for generating SQL suitable for passing in as the
         ``start`` parameter for a window range.
 
-    .. py:staticmethod:: following([value=None])
+    .. py:staticmethod:: following(value=None)
 
         :param value: Number of rows following. If ``None`` is UNBOUNDED.
 
@@ -1387,22 +1388,22 @@ Query-builder
 
         Specify the frame type.
 
-    .. py:method:: extends([window=None])
+    .. py:method:: extends(window=None)
 
         :param Window window: A :py:class:`Window` definition to extend.
             Alternately, you may specify the window's alias instead.
 
-    .. py:method:: exclude([frame_exclusion=None])
+    .. py:method:: exclude(frame_exclusion=None)
 
         :param frame_exclusion: Frame exclusion, one of ``Window.CURRENT_ROW``,
             ``Window.GROUP``, ``Window.TIES`` or ``Window.NO_OTHERS``.
 
-    .. py:method:: alias([alias=None])
+    .. py:method:: alias(alias=None)
 
         :param str alias: Alias to use for window.
 
 
-.. py:function:: Case(predicate, expression_tuples[, default=None]])
+.. py:function:: Case(predicate, expression_tuples, default=None)
 
     :param predicate: Predicate for CASE query (optional).
     :param expression_tuples: One or more cases to evaluate.
@@ -1445,7 +1446,7 @@ Query-builder
         # FROM "numbers"
 
 
-.. py:class:: NodeList(nodes[, glue=' '[, parens=False]])
+.. py:class:: NodeList(nodes, glue=' ', parens=False)
 
     :param list nodes: Zero or more nodes.
     :param str glue: How to join the nodes when converting to SQL.
@@ -1484,7 +1485,7 @@ Query-builder
     Row-values are supported by most databases.
 
 
-.. py:class:: OnConflict([action=None[, update=None[, preserve=None[, where=None[, conflict_target=None[, conflict_where=None[, conflict_constraint=None]]]]]]])
+.. py:class:: OnConflict(action=None, update=None, preserve=None, where=None, conflict_target=None, conflict_where=None, conflict_constraint=None)
 
     :param str action: Action to take when resolving conflict.
     :param update: A dictionary mapping column to new value.
@@ -1504,7 +1505,7 @@ Query-builder
 
         :param columns: Columns whose values should be preserved.
 
-    .. py:method:: update([_data=None[, **kwargs]])
+    .. py:method:: update(_data=None, **kwargs)
 
         :param dict _data: Dictionary mapping column to new value.
         :param kwargs: Dictionary mapping column name to new value.
@@ -1578,32 +1579,32 @@ Query-builder
 
     .. py:attribute:: default_row_type = ROW.DICT
 
-    .. py:method:: bind([database=None])
+    .. py:method:: bind(database=None)
 
         :param Database database: Database to execute query against.
 
         Bind the query to the given database for execution.
 
-    .. py:method:: dicts([as_dict=True])
+    .. py:method:: dicts(as_dict=True)
 
         :param bool as_dict: Specify whether to return rows as dictionaries.
 
         Return rows as dictionaries.
 
-    .. py:method:: tuples([as_tuples=True])
+    .. py:method:: tuples(as_tuples=True)
 
         :param bool as_tuple: Specify whether to return rows as tuples.
 
         Return rows as tuples.
 
-    .. py:method:: namedtuples([as_namedtuple=True])
+    .. py:method:: namedtuples(as_namedtuple=True)
 
         :param bool as_namedtuple: Specify whether to return rows as named
             tuples.
 
         Return rows as named tuples.
 
-    .. py:method:: objects([constructor=None])
+    .. py:method:: objects(constructor=None)
 
         :param constructor: Function that accepts row dict and returns an
             arbitrary object.
@@ -1623,7 +1624,7 @@ Query-builder
         executed). For example, select queries the return result will be an
         iterator over the query results.
 
-    .. py:method:: iterator([database=None])
+    .. py:method:: iterator(database=None)
 
         :param Database database: Database to execute query against. Not
             required if query was previously bound to a database.
@@ -1668,7 +1669,7 @@ Query-builder
             is determined from the size of the result set.
 
 
-.. py:class:: RawQuery([sql=None[, params=None[, **kwargs]]])
+.. py:class:: RawQuery(sql=None, params=None, **kwargs)
 
     :param str sql: SQL query.
     :param tuple params: Parameters (optional).
@@ -1676,7 +1677,7 @@ Query-builder
     Create a query by directly specifying the SQL to execute.
 
 
-.. py:class:: Query([where=None[, order_by=None[, limit=None[, offset=None[, **kwargs]]]]])
+.. py:class:: Query(where=None, order_by=None, limit=None, offset=None, **kwargs)
 
     :param where: Representation of WHERE clause.
     :param tuple order_by: Columns or values to order by.
@@ -1693,7 +1694,7 @@ Query-builder
         specified CTEs will be overwritten. For examples of common-table
         expressions, see :ref:`cte`.
 
-    .. py:method:: cte(name[, recursive=False[, columns=None]])
+    .. py:method:: cte(name, recursive=False, columns=None)
 
         :param str name: Alias for common table expression.
         :param bool recursive: Will this be a recursive CTE?
@@ -1800,15 +1801,15 @@ Query-builder
 
         Extend any previously-specified ORDER BY clause with the given values.
 
-    .. py:method:: limit([value=None])
+    .. py:method:: limit(value=None)
 
         :param int value: specify value for LIMIT clause.
 
-    .. py:method:: offset([value=None])
+    .. py:method:: offset(value=None)
 
         :param int value: specify value for OFFSET clause.
 
-    .. py:method:: paginate(page[, paginate_by=20])
+    .. py:method:: paginate(page, paginate_by=20)
 
         :param int page: Page number of results (starting from 1).
         :param int paginate_by: Rows-per-page.
@@ -1913,7 +1914,7 @@ Query-builder
 
     Base-class for :py:class:`Select` and :py:class:`CompoundSelect` queries.
 
-    .. py:method:: peek(database[, n=1])
+    .. py:method:: peek(database, n=1)
 
         :param Database database: database to execute query against.
         :param int n: Number of rows to return.
@@ -1923,7 +1924,7 @@ Query-builder
         of the cursor. This function may be called multiple times safely, and
         will always return the first N rows of results.
 
-    .. py:method:: first(database[, n=1])
+    .. py:method:: first(database, n=1)
 
         :param Database database: database to execute query against.
         :param int n: Number of rows to return.
@@ -1940,7 +1941,7 @@ Query-builder
         that multiple calls to ``first()`` will not result in multiple query
         executions.
 
-    .. py:method:: scalar(database[, as_tuple=False[, as_dict=False]])
+    .. py:method:: scalar(database, as_tuple=False, as_dict=False)
 
         :param Database database: database to execute query against.
         :param bool as_tuple: Return the result as a tuple?
@@ -1963,7 +1964,7 @@ Query-builder
             query = Note.select(fn.COUNT(Note.id).alias('count'))
             assert query.scalar(db, as_dict=True) == {'count': 123}
 
-    .. py:method:: count(database[, clear_limit=False])
+    .. py:method:: count(database, clear_limit=False)
 
         :param Database database: database to execute query against.
         :param bool clear_limit: Clear any LIMIT clause when counting.
@@ -1998,7 +1999,7 @@ Query-builder
     Class representing a compound SELECT query.
 
 
-.. py:class:: Select([from_list=None[, columns=None[, group_by=None[, having=None[, distinct=None[, windows=None[, for_update=None[, for_update_of=None[, for_update_nowait=None[, **kwargs]]]]]]]]]])
+.. py:class:: Select(from_list=None, columns=None, group_by=None, having=None, distinct=None, windows=None, for_update=None, for_update_of=None, for_update_nowait=None, **kwargs)
 
     :param list from_list: List of sources for FROM clause.
     :param list columns: Columns or values to select.
@@ -2094,7 +2095,7 @@ Query-builder
             for row in query.execute(db):
                 print(row['username'], '->', row['content'])
 
-    .. py:method:: join(dest[, join_type='INNER'[, on=None]])
+    .. py:method:: join(dest, join_type='INNER', on=None)
 
         :param dest: A table or table-like object.
         :param str join_type: Type of JOIN, default is "INNER".
@@ -2181,7 +2182,7 @@ Query-builder
                      .window(window)  # Note call to ".window()"
                      .order_by(Sample.counter))
 
-    .. py:method:: for_update([for_update=True[, of=None[, nowait=None]]])
+    .. py:method:: for_update(for_update=True, of=None, nowait=None)
 
         :param for_update: Either a boolean or a string indicating the
             desired expression, e.g. "FOR SHARE".
@@ -2189,7 +2190,7 @@ Query-builder
         :param bool nowait: Specify NOWAIT option when locking.
 
 
-.. py:class:: _WriteQuery(table[, returning=None[, **kwargs]])
+.. py:class:: _WriteQuery(table, returning=None, **kwargs)
 
     :param Table table: Table to write to.
     :param list returning: List of columns for RETURNING clause.
@@ -2214,7 +2215,7 @@ Query-builder
             for row in data:
                 print('added:', row.username, 'with id=', row.id)
 
-.. py:class:: Update(table[, update=None[, **kwargs]])
+.. py:class:: Update(table, update=None, **kwargs)
 
     :param Table table: Table to update.
     :param dict update: Data to update.
@@ -2275,7 +2276,7 @@ Query-builder
             WHERE ("users"."username" = "vl"."username")
 
 
-.. py:class:: Insert(table[, insert=None[, columns=None[, on_conflict=None[, **kwargs]]]])
+.. py:class:: Insert(table, insert=None, columns=None, on_conflict=None, **kwargs)
 
     :param Table table: Table to INSERT data into.
     :param insert: Either a dict, a list, or a query.
@@ -2284,7 +2285,7 @@ Query-builder
 
     Class representing an INSERT query.
 
-    .. py:method:: as_rowcount([as_rowcount=True])
+    .. py:method:: as_rowcount(as_rowcount=True)
 
         :param bool as_rowcount: Whether to return the modified row count (as
             opposed to the last-inserted row id).
@@ -2309,19 +2310,19 @@ Query-builder
             # To get the modified row-count:
             rowcount = query.as_rowcount().execute()
 
-    .. py:method:: on_conflict_ignore([ignore=True])
+    .. py:method:: on_conflict_ignore(ignore=True)
 
         :param bool ignore: Whether to add ON CONFLICT IGNORE clause.
 
         Specify IGNORE conflict resolution strategy.
 
-    .. py:method:: on_conflict_replace([replace=True])
+    .. py:method:: on_conflict_replace(replace=True)
 
         :param bool replace: Whether to add ON CONFLICT REPLACE clause.
 
         Specify REPLACE conflict resolution strategy.
 
-    .. py:method:: on_conflict([action=None[, update=None[, preserve=None[, where=None[, conflict_target=None[, conflict_where=None[, conflict_constraint=None]]]]]]])
+    .. py:method:: on_conflict(action=None, update=None, preserve=None, where=None, conflict_target=None, conflict_where=None, conflict_constraint=None)
 
         :param str action: Action to take when resolving conflict. If blank,
             action is assumed to be "update".
@@ -2397,7 +2398,7 @@ Query-builder
     Class representing a DELETE query.
 
 
-.. py:class:: Index(name, table, expressions[, unique=False[, safe=False[, where=None[, using=None[, nulls_distinct=None]]]]])
+.. py:class:: Index(name, table, expressions, unique=False, safe=False, where=None, using=None, nulls_distinct=None)
 
     :param str name: Index name.
     :param Table table: Table to create index on.
@@ -2410,7 +2411,7 @@ Query-builder
         or False (NULLS NOT DISTINCT) - controls handling of NULL in unique
         indexes.
 
-    .. py:method:: safe([_safe=True])
+    .. py:method:: safe(_safe=True)
 
         :param bool _safe: Whether to add IF NOT EXISTS clause.
 
@@ -2423,11 +2424,11 @@ Query-builder
         expressions will be AND-ed together with any previously-specified
         WHERE expressions.
 
-    .. py:method:: using([_using=None])
+    .. py:method:: using(_using=None)
 
         :param str _using: Specify index algorithm for USING clause.
 
-    .. py:method:: nulls_distinct([nulls_distinct=None])
+    .. py:method:: nulls_distinct(nulls_distinct=None)
 
         :param bool nulls_distinct: specify True (NULLS DISTINCT) or False
             for (NULLS NOT DISTINCT).
@@ -2437,7 +2438,7 @@ Query-builder
         Control handling of NULL values in unique indexes.
 
 
-.. py:class:: ModelIndex(model, fields[, unique=False[, safe=True[, where=None[, using=None[, name=None[, nulls_distinct=None]]]]]])
+.. py:class:: ModelIndex(model, fields, unique=False, safe=True, where=None, using=None, name=None, nulls_distinct=None)
 
     :param Model model: Model class to create index on.
     :param list fields: Fields to index.
@@ -2499,7 +2500,7 @@ Query-builder
 Fields
 ------
 
-.. py:class:: Field([null=False[, index=False[, unique=False[, column_name=None[, default=None[, primary_key=False[, constraints=None[, sequence=None[, collation=None[, unindexed=False[, choices=None[, help_text=None[, verbose_name=None[, index_type=None]]]]]]]]]]]]]])
+.. py:class:: Field(null=False, index=False, unique=False, column_name=None, default=None, primary_key=False, constraints=None, sequence=None, collation=None, unindexed=False, choices=None, help_text=None, verbose_name=None, index_type=None)
 
     :param bool null: Field allows NULLs.
     :param bool index: Create an index on field.
@@ -2589,7 +2590,7 @@ Fields
 
     Field class for storing auto-incrementing primary keys using 64-bits.
 
-.. py:class:: IdentityField([generate_always=False])
+.. py:class:: IdentityField(generate_always=False)
 
     :param bool generate_always: if specified, then the identity will always be
         generated (and specifying the value explicitly during INSERT will raise
@@ -2615,7 +2616,7 @@ Fields
 
     Field class for storing double-precision floating-point numbers.
 
-.. py:class:: DecimalField([max_digits=10[, decimal_places=5[, auto_round=False[, rounding=None[, **kwargs]]]]])
+.. py:class:: DecimalField(max_digits=10, decimal_places=5, auto_round=False, rounding=None, **kwargs)
 
    :param int max_digits: Maximum digits to store.
    :param int decimal_places: Maximum precision.
@@ -2625,7 +2626,7 @@ Fields
     Field class for storing decimal numbers. Values are represented as
     ``decimal.Decimal`` objects.
 
-.. py:class:: CharField([max_length=255])
+.. py:class:: CharField(max_length=255)
 
     Field class for storing strings.
 
@@ -2706,7 +2707,7 @@ Fields
         # Clear the "is_deleted" bit on all posts.
         Post.update(flags=Post.is_deleted.clear()).execute()
 
-    .. py:method:: flag([value=None])
+    .. py:method:: flag(value=None)
 
         :param int value: Value associated with flag, typically a power of 2.
 
@@ -2854,7 +2855,7 @@ Fields
     the database's *BLOB* data-type (or *VARBINARY* in MySQL, or *BYTEA* in
     Postgres).
 
-.. py:class:: DateTimeField([formats=None[, **kwargs]])
+.. py:class:: DateTimeField(formats=None, **kwargs)
 
     :param list formats: A list of format strings to use when coercing a string
         to a date-time.
@@ -2931,7 +2932,7 @@ Fields
         useful for finding all rows within a given month, for instance.
 
 
-.. py:class:: DateField([formats=None[, **kwargs]])
+.. py:class:: DateField(formats=None, **kwargs)
 
     :param list formats: A list of format strings to use when coercing a string
         to a date.
@@ -2977,7 +2978,7 @@ Fields
         and *day* are meaningful for :py:class:`DateField`.
 
 
-.. py:class:: TimeField([formats=None[, **kwargs]])
+.. py:class:: TimeField(formats=None, **kwargs)
 
     :param list formats: A list of format strings to use when coercing a string
         to a time.
@@ -3015,7 +3016,7 @@ Fields
 
         Reference the second of the value stored in the column in a query.
 
-.. py:class:: TimestampField([resolution=1[, utc=False[, **kwargs]]])
+.. py:class:: TimestampField(resolution=1, utc=False, **kwargs)
 
     :param resolution: Can be provided as either a power of 10, or as an
         exponent indicating how many decimal places to store.
@@ -3050,7 +3051,7 @@ Fields
 
     Field class for storing boolean values.
 
-.. py:class:: BareField([coerce=None[, **kwargs]])
+.. py:class:: BareField(coerce=None, **kwargs)
 
     :param coerce: Optional function to use for converting raw values into a
         specific format.
@@ -3065,7 +3066,7 @@ Fields
     Accepts a special ``coerce`` parameter, a function that takes a value
     coming from the database and converts it into the appropriate Python type.
 
-.. py:class:: ForeignKeyField(model[, field=None[, backref=None[, on_delete=None[, on_update=None[, deferrable=None[, object_id_name=None[, lazy_load=True[, constraint_name=None[, **kwargs]]]]]]]]])
+.. py:class:: ForeignKeyField(model, field=None, backref=None, on_delete=None, on_update=None, deferrable=None, object_id_name=None, lazy_load=True, constraint_name=None, **kwargs)
 
     :param Model model: Model to reference or the string 'self' if declaring a
         self-referential foreign key.
@@ -3127,7 +3128,7 @@ Fields
         ``pragmas={'foreign_keys': 1}`` when you instantiate
         :py:class:`SqliteDatabase`.
 
-.. py:class:: DeferredForeignKey(rel_model_name[, **kwargs])
+.. py:class:: DeferredForeignKey(rel_model_name, **kwargs)
 
     :param str rel_model_name: Model name to reference.
 
@@ -3175,7 +3176,7 @@ Fields
             # Tweet.user will be resolved into a ForeignKeyField:
             DeferredForeignKey.resolve(User)
 
-.. py:class:: ManyToManyField(model[, backref=None[, through_model=None[, on_delete=None[, on_update=None]]]])
+.. py:class:: ManyToManyField(model, backref=None, through_model=None, on_delete=None, on_update=None)
 
     :param Model model: Model to create relationship with.
     :param str backref: Accessor name for back-reference
@@ -3331,7 +3332,7 @@ Fields
         The :py:class:`Model` representing the many-to-many junction table.
         Will be auto-generated if not explicitly declared.
 
-    .. py:method:: add(value[, clear_existing=True])
+    .. py:method:: add(value, clear_existing=True)
 
         :param value: Either a :py:class:`Model` instance, a list of model
             instances, or a :py:class:`SelectQuery`.
@@ -3467,7 +3468,7 @@ Fields
 Schema Manager
 --------------
 
-.. py:class:: SchemaManager(model[, database=None[, **context_options]])
+.. py:class:: SchemaManager(model, database=None, **context_options)
 
     :param Model model: Model class.
     :param Database database: If unspecified defaults to model._meta.database.
@@ -3475,14 +3476,14 @@ Schema Manager
     Provides methods for managing the creation and deletion of tables and
     indexes for the given model.
 
-    .. py:method:: create_table([safe=True[, **options]])
+    .. py:method:: create_table(safe=True, **options)
 
         :param bool safe: Specify IF NOT EXISTS clause.
         :param options: Arbitrary options.
 
         Execute CREATE TABLE query for the given model.
 
-    .. py:method:: drop_table([safe=True[, drop_sequences=True[, **options]]])
+    .. py:method:: drop_table(safe=True, drop_sequences=True, **options)
 
         :param bool safe: Specify IF EXISTS clause.
         :param bool drop_sequences: Drop any sequences associated with the
@@ -3491,7 +3492,7 @@ Schema Manager
 
         Execute DROP TABLE query for the given model.
 
-    .. py:method:: truncate_table([restart_identity=False[, cascade=False]])
+    .. py:method:: truncate_table(restart_identity=False, cascade=False)
 
         :param bool restart_identity: Restart the id sequence (postgres-only).
         :param bool cascade: Truncate related tables as well (postgres-only).
@@ -3500,13 +3501,13 @@ Schema Manager
         which does not support TRUNCATE, then an equivalent DELETE query will
         be executed.
 
-    .. py:method:: create_indexes([safe=True])
+    .. py:method:: create_indexes(safe=True)
 
         :param bool safe: Specify IF NOT EXISTS clause.
 
         Execute CREATE INDEX queries for the indexes defined for the model.
 
-    .. py:method:: drop_indexes([safe=True])
+    .. py:method:: drop_indexes(safe=True)
 
         :param bool safe: Specify IF EXISTS clause.
 
@@ -3560,13 +3561,13 @@ Schema Manager
             is not possible to add a foreign-key constraint to an existing
             SQLite table.
 
-    .. py:method:: create_all([safe=True[, **table_options]])
+    .. py:method:: create_all(safe=True, **table_options)
 
         :param bool safe: Whether to specify IF NOT EXISTS.
 
         Create sequence(s), index(es) and table for the model.
 
-    .. py:method:: drop_all([safe=True[, drop_sequences=True[, **options]]])
+    .. py:method:: drop_all(safe=True, drop_sequences=True, **options)
 
         :param bool safe: Whether to specify IF EXISTS.
         :param bool drop_sequences: Drop any sequences associated with the
@@ -3579,7 +3580,7 @@ Schema Manager
 Model
 -----
 
-.. py:class:: Metadata(model[, database=None[, table_name=None[, indexes=None[, primary_key=None[, constraints=None[, schema=None[, only_save_dirty=False[, depends_on=None[, options=None[, without_rowid=False[, strict_tables=False[, **kwargs]]]]]]]]]]]]])
+.. py:class:: Metadata(model, database=None, table_name=None, indexes=None, primary_key=None, constraints=None, schema=None, only_save_dirty=False, depends_on=None, options=None, without_rowid=False, strict_tables=False, **kwargs)
 
     :param Model model: Model class.
     :param Database database: database model is bound to.
@@ -3606,7 +3607,7 @@ Model
 
         Return a reference to the underlying :py:class:`Table` object.
 
-    .. py:method:: model_graph([refs=True[, backrefs=True[, depth_first=True]]])
+    .. py:method:: model_graph(refs=True, backrefs=True, depth_first=True)
 
         :param bool refs: Follow foreign-key references.
         :param bool backrefs: Follow foreign-key back-references.
@@ -3769,7 +3770,7 @@ Model
             # to only selecting the primary key.
             Tweet.delete().where(Tweet.user.in_(inactive_users)).execute()
 
-    .. py:classmethod:: update([__data=None[, **update]])
+    .. py:classmethod:: update(__data=None, **update)
 
         :param dict __data: ``dict`` of fields to values.
         :param update: Field-name to value mapping.
@@ -3799,7 +3800,7 @@ Model
             When an update query is executed, the number of rows modified will
             be returned.
 
-    .. py:classmethod:: insert([__data=None[, **insert]])
+    .. py:classmethod:: insert(__data=None, **insert)
 
         :param dict __data: ``dict`` of fields to values to insert.
         :param insert: Field-name to value mapping.
@@ -3841,7 +3842,7 @@ Model
             auto-incrementing primary key, the primary key of the new row will
             be returned.
 
-    .. py:classmethod:: insert_many(rows[, fields=None])
+    .. py:classmethod:: insert_many(rows, fields=None)
 
         :param rows: An iterable that yields rows to insert.
         :param list fields: List of fields being inserted.
@@ -3949,7 +3950,7 @@ Model
             yields the primary-keys of the inserted rows. To disable this
             functionality with Postgres, use ``as_rowcount()``.
 
-    .. py:classmethod:: replace([__data=None[, **insert]])
+    .. py:classmethod:: replace(__data=None, **insert)
 
         :param dict __data: ``dict`` of fields to values to insert.
         :param insert: Field-name to value mapping.
@@ -3958,7 +3959,7 @@ Model
 
         See :py:meth:`Model.insert` for examples.
 
-    .. py:classmethod:: replace_many(rows[, fields=None])
+    .. py:classmethod:: replace_many(rows, fields=None)
 
         :param rows: An iterable that yields rows to insert.
         :param list fields: List of fields being inserted.
@@ -4018,7 +4019,7 @@ Model
         .. note::
             The create() method is a shorthand for instantiate-then-save.
 
-    .. py:classmethod:: bulk_create(model_list[, batch_size=None])
+    .. py:classmethod:: bulk_create(model_list, batch_size=None)
 
         :param iterable model_list: a list or other iterable of unsaved
             :py:class:`Model` instances.
@@ -4065,7 +4066,7 @@ Model
               :py:meth:`Database.atomic`. Otherwise an error in a batch mid-way
               through could leave the database in an inconsistent state.
 
-    .. py:classmethod:: bulk_update(model_list, fields[, batch_size=None])
+    .. py:classmethod:: bulk_update(model_list, fields, batch_size=None)
 
         :param iterable model_list: a list or other iterable of
             :py:class:`Model` instances.
@@ -4241,7 +4242,7 @@ Model
 
         :returns: The primary-key of the model instance.
 
-    .. py:method:: save([force_insert=False[, only=None]])
+    .. py:method:: save(force_insert=False, only=None)
 
         :param bool force_insert: Force INSERT query.
         :param list only: Only save the given :py:class:`Field` instances.
@@ -4306,7 +4307,7 @@ Model
 
         Return boolean indicating whether any fields were manually set.
 
-    .. py:method:: delete_instance([recursive=False[, delete_nullable=False]])
+    .. py:method:: delete_instance(recursive=False, delete_nullable=False)
 
         :param bool recursive: Delete related models.
         :param bool delete_nullable: Delete related models that have a null
@@ -4325,7 +4326,7 @@ Model
 
             some_obj.delete_instance()  # it is gone forever
 
-    .. py:classmethod:: bind(database[, bind_refs=True[, bind_backrefs=True]])
+    .. py:classmethod:: bind(database, bind_refs=True, bind_backrefs=True)
 
         :param Database database: database to bind to.
         :param bool bind_refs: Bind related models.
@@ -4335,7 +4336,7 @@ Model
 
         See also: :py:meth:`Database.bind`.
 
-    .. py:classmethod:: bind_ctx(database[, bind_refs=True[, bind_backrefs=True]])
+    .. py:classmethod:: bind_ctx(database, bind_refs=True, bind_backrefs=True)
 
         Like :py:meth:`~Model.bind`, but returns a context manager that only
         binds the models for the duration of the wrapped block.
@@ -4346,7 +4347,7 @@ Model
 
         :returns: boolean indicating whether the table exists.
 
-    .. py:classmethod:: create_table([safe=True[, **options]])
+    .. py:classmethod:: create_table(safe=True, **options)
 
         :param bool safe: If set to ``True``, the create table query will
             include an ``IF NOT EXISTS`` clause.
@@ -4360,21 +4361,21 @@ Model
             with database:
                 SomeModel.create_table()  # Execute the create table query.
 
-    .. py:classmethod:: drop_table([safe=True[, **options]])
+    .. py:classmethod:: drop_table(safe=True, **options)
 
         :param bool safe: If set to ``True``, the drop table query will
             include an ``IF EXISTS`` clause.
 
         Drop the model table.
 
-    .. py:method:: truncate_table([restart_identity=False[, cascade=False]])
+    .. py:method:: truncate_table(restart_identity=False, cascade=False)
 
         :param bool restart_identity: Restart the id sequence (postgres-only).
         :param bool cascade: Truncate related tables as well (postgres-only).
 
         Truncate (delete all rows) for the model.
 
-    .. py:classmethod:: index(*fields[, unique=False[, safe=True[, where=None[, using=None[, name=None]]]]])
+    .. py:classmethod:: index(*fields, unique=False, safe=True, where=None, using=None, name=None)
 
         :param fields: Fields to index.
         :param bool unique: Whether index is UNIQUE.
@@ -4466,7 +4467,7 @@ Model
             # Or even specify a SQL query directly:
             Article.add_index(SQL('CREATE INDEX ...'))
 
-    .. py:method:: dependencies([search_nullable=False])
+    .. py:method:: dependencies(search_nullable=False)
 
         :param bool search_nullable: Search models related via a nullable
             foreign key
@@ -4509,7 +4510,7 @@ Model
             n_accounts = Account.select().count()
 
 
-.. py:class:: ModelAlias(model[, alias=None])
+.. py:class:: ModelAlias(model, alias=None)
 
     :param Model model: Model class to reference.
     :param str alias: (optional) name for alias.
@@ -4524,7 +4525,7 @@ Model
 
     Model-specific implementation of SELECT query.
 
-    .. py:method:: switch([ctx=None])
+    .. py:method:: switch(ctx=None)
 
         :param ctx: A :py:class:`Model`, :py:class:`ModelAlias`, subquery, or
             other object that was joined-on.
@@ -4545,7 +4546,7 @@ Model
             # Equivalent (since Tweet is the query's model)
             sq = Tweet.select().join(User).switch().join(TweetFlag)
 
-    .. py:method:: objects([constructor=None])
+    .. py:method:: objects(constructor=None)
 
         :param constructor: Constructor (defaults to returning model instances)
 
@@ -4563,7 +4564,7 @@ Model
             :py:meth:`~BaseQuery.tuples` or :py:meth:`~BaseQuery.namedtuples`
             to achieve even more performance.
 
-    .. py:method:: join(dest[, join_type='INNER'[, on=None[, src=None[, attr=None]]]])
+    .. py:method:: join(dest, join_type='INNER', on=None, src=None, attr=None)
 
         :param dest: A :py:class:`Model`, :py:class:`ModelAlias`,
             :py:class:`Select` query, or other object to join to.
@@ -4602,7 +4603,7 @@ Model
         For an in-depth discussion of foreign-keys, joins and relationships
         between models, refer to :ref:`relationships`.
 
-    .. py:method:: join_from(src, dest[, join_type='INNER'[, on=None[, attr=None]]])
+    .. py:method:: join_from(src, dest, join_type='INNER', on=None, attr=None)
 
         :param src: Source for join.
         :param dest: Table to join to.
@@ -4640,7 +4641,7 @@ Model
                 (DQ(status='draft') | DQ(status='published')),
                 timestamp__gte=datetime.date(2023, 1, 1))
 
-    .. py:method:: prefetch(*subqueries[, prefetch_type=PREFETCH_TYPE.WHERE])
+    .. py:method:: prefetch(*subqueries, prefetch_type=PREFETCH_TYPE.WHERE)
 
         :param subqueries: A list of :py:class:`Model` classes or select
             queries to prefetch.
@@ -4674,7 +4675,7 @@ Model
             mapped correctly.
 
 
-.. py:function:: prefetch(sq, *subqueries[, prefetch_type=PREFETCH_TYPE.WHERE])
+.. py:function:: prefetch(sq, *subqueries, prefetch_type=PREFETCH_TYPE.WHERE)
 
     :param sq: Query to use as starting-point.
     :param subqueries: One or more models or :py:class:`ModelSelect` queries
@@ -4736,7 +4737,7 @@ Query-builder Internals
         :param Source source: Make the manager aware of a new source. If the
             source has already been added, the call is a no-op.
 
-    .. py:method:: get(source[, any_depth=False])
+    .. py:method:: get(source, any_depth=False)
 
         Return the alias for the source in the current scope. If the source
         does not have an alias, it will be given the next available alias.
@@ -4761,7 +4762,7 @@ Query-builder Internals
         Pop scope from the stack.
 
 
-.. py:class:: State(scope[, parentheses=False[, subquery=False[, **kwargs]]])
+.. py:class:: State(scope, parentheses=False, subquery=False, **kwargs)
 
     Lightweight object for representing the state at a given scope. During SQL
     generation, each object visited by the :py:class:`Context` can inspect the
@@ -4802,31 +4803,31 @@ Query-builder Internals
 
         Return whether the current state is the child of another query.
 
-    .. py:method:: scope_normal([**kwargs])
+    .. py:method:: scope_normal(**kwargs)
 
         The default scope. Sources are referred to by alias, columns by
         dotted-path from the source.
 
-    .. py:method:: scope_source([**kwargs])
+    .. py:method:: scope_source(**kwargs)
 
         Scope used when defining sources, e.g. in the column list and FROM
         clause of a SELECT query. This scope is used for defining the
         fully-qualified name of the source and assigning an alias.
 
-    .. py:method:: scope_values([**kwargs])
+    .. py:method:: scope_values(**kwargs)
 
         Scope used for UPDATE, INSERT or DELETE queries, where instead of
         referencing a source by an alias, we refer to it directly. Similarly,
         since there is a single table, columns do not need to be referenced
         by dotted-path.
 
-    .. py:method:: scope_cte([**kwargs])
+    .. py:method:: scope_cte(**kwargs)
 
         Scope used when generating the contents of a common-table-expression.
         Used after a WITH statement, when generating the definition for a CTE
         (as opposed to merely a reference to one).
 
-    .. py:method:: scope_column([**kwargs])
+    .. py:method:: scope_column(**kwargs)
 
         Scope used when generating SQL for a column. Ensures that the column is
         rendered with it's correct alias. Was needed because when referencing

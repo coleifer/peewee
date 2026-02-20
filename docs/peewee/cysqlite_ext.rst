@@ -19,14 +19,13 @@ extensions, which can be imported from ``playhouse.cysqlite_ext``:
 * :py:class:`FTS5Model`, providing full-text search using FTS5.
 
 
-.. py:class:: CySqliteDatabase(database[, pragmas=None[, timeout=5[, rank_functions=True[, regexp_function=False[, json_contains=False]]]]])
+.. py:class:: CySqliteDatabase(database, pragmas=None, timeout=5, rank_functions=True, regexp_function=True, **kwargs)
 
     :param list pragmas: A list of 2-tuples containing pragma key and value to
         set every time a connection is opened.
     :param timeout: Set the busy-timeout on the SQLite driver (in seconds).
     :param bool rank_functions: Make search result ranking functions available.
     :param bool regexp_function: Make the REGEXP function available.
-    :param bool json_contains: Make json_containts() function available.
 
     .. seealso::
        CySqliteDatabase extends :py:class:`SqliteDatabase` and inherits all
@@ -39,7 +38,7 @@ extensions, which can be imported from ``playhouse.cysqlite_ext``:
 
         db = CySqliteDatabase('app.db', pragmas={'journal_mode': 'wal'})
 
-    .. py:method:: table_function([name=None])
+    .. py:method:: table_function(name=None)
 
         Class-decorator for registering a ``cysqlite.TableFunction``. Table
         functions are user-defined functions that, rather than returning a
@@ -240,7 +239,7 @@ extensions, which can be imported from ``playhouse.cysqlite_ext``:
             >>> db.autocommit
             True
 
-    .. py:method:: backup(destination[, pages=None, name=None, progress=None])
+    .. py:method:: backup(destination, pages=None, name=None, progress=None)
 
         :param CySqliteDatabase destination: Database object to serve as
             destination for the backup.
@@ -262,7 +261,7 @@ extensions, which can be imported from ``playhouse.cysqlite_ext``:
             # Backup the contents of master to replica.
             master.backup(replica)
 
-    .. py:method:: backup_to_file(filename[, pages, name, progress])
+    .. py:method:: backup_to_file(filename, pages, name, progress)
 
         :param filename: Filename to store the database backup.
         :param int pages: Number of pages per iteration. Default value of -1
@@ -286,7 +285,7 @@ extensions, which can be imported from ``playhouse.cysqlite_ext``:
                 filename = 'backup-%s.db' % (datetime.date.today())
                 db.backup_to_file(filename)
 
-    .. py:method:: blob_open(table, column, rowid[, read_only=False])
+    .. py:method:: blob_open(table, column, rowid, read_only=False)
 
         :param str table: Name of table containing data.
         :param str column: Name of column containing data.

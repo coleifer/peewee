@@ -509,7 +509,7 @@ expand this section or work to find other solutions to the problems.
 API
 ---
 
-.. py:class:: AsyncDatabaseMixin(database[, pool_size=10[, pool_min_size=1[, acquire_timeout=10[, validate_conn_timeout=2[, **kwargs]]]]])
+.. py:class:: AsyncDatabaseMixin(database, pool_size=10, pool_min_size=1, acquire_timeout=10, validate_conn_timeout=2, **kwargs)
 
     :param str database: Database name or filename for SQLite.
     :param int pool_size: Maximum size of the driver-managed connection pool
@@ -530,7 +530,7 @@ API
     acquired and released back to the pool when the task completes or the
     database context exits.
 
-    .. py:method:: run(fn[, *args[, **kwargs]])
+    .. py:method:: run(fn, *args, **kwargs)
         :async:
 
         :param fn: A synchronous callable.
@@ -610,17 +610,17 @@ API
         Return an asyncio-aware atomic transaction context manager.
         Supports use as a synchronous or async context manager.
 
-    .. py:method:: acreate_tables(models[, **options])
+    .. py:method:: acreate_tables(models, **options)
         :async:
 
         Asynchronously create database tables.
 
-    .. py:method:: adrop_tables(models[, **options])
+    .. py:method:: adrop_tables(models, **options)
         :async:
 
         Asynchronously drop database tables.
 
-    .. py:method:: aexecute_sql(sql[, params=None])
+    .. py:method:: aexecute_sql(sql, params=None)
         :async:
 
         :param str sql: SQL query to execute.
@@ -629,7 +629,7 @@ API
 
         Execute a SQL query asynchronously using the underlying async driver.
 
-    .. py:method:: execute_sql(sql[, params=None])
+    .. py:method:: execute_sql(sql, params=None)
 
         Synchronous wrapper around :py:meth:`aexecute_sql`.
 
@@ -637,7 +637,7 @@ API
         :py:meth:`~AsyncDatabaseMixin.run`.
 
 
-.. py:class:: AsyncSqliteDatabase(database[, **kwargs])
+.. py:class:: AsyncSqliteDatabase(database, **kwargs)
 
     Async SQLite database implementation.
 
@@ -647,7 +647,7 @@ API
     Inherits from :py:class:`AsyncDatabaseMixin` and
     :py:class:`peewee.SqliteDatabase`.
 
-.. py:class:: AsyncMySQLDatabase(database[, **kwargs])
+.. py:class:: AsyncMySQLDatabase(database, **kwargs)
 
     Async MySQL / MariaDB database implementation.
 
@@ -656,7 +656,7 @@ API
     Inherits from :py:class:`AsyncDatabaseMixin` and
     :py:class:`peewee.MySQLDatabase`.
 
-.. py:class:: AsyncPostgresqlDatabase(database[, **kwargs])
+.. py:class:: AsyncPostgresqlDatabase(database, **kwargs)
 
     Async PostgreSQL database implementation.
 

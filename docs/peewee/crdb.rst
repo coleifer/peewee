@@ -200,7 +200,7 @@ to another:
 CRDB APIs
 ^^^^^^^^^
 
-.. py:class:: CockroachDatabase(database[, **kwargs])
+.. py:class:: CockroachDatabase(database, **kwargs)
 
     CockroachDB implementation, based on the :py:class:`PostgresqlDatabase` and
     using the ``psycopg2`` driver.
@@ -211,7 +211,7 @@ CRDB APIs
 
     Alternatively, the connection details can be specified in URL-form.
 
-    .. py:method:: run_transaction(callback[, max_attempts=None[, system_time=None[, priority=None]]])
+    .. py:method:: run_transaction(callback, max_attempts=None, system_time=None, priority=None)
 
         :param callback: callable that accepts a single ``db`` parameter (which
             will be the database instance this method is called from).
@@ -249,13 +249,13 @@ CRDB APIs
 
             user = create_user('huey@example.com')
 
-.. py:class:: PooledCockroachDatabase(database[, **kwargs])
+.. py:class:: PooledCockroachDatabase(database, **kwargs)
 
     CockroachDB connection-pooling implementation, based on
     :py:class:`PooledPostgresqlDatabase`. Implements the same APIs as
     :py:class:`CockroachDatabase`, but will do client-side connection pooling.
 
-.. py:function:: run_transaction(db, callback[, max_attempts=None[, system_time=None[, priority=None]]])
+.. py:function:: run_transaction(db, callback, max_attempts=None, system_time=None, priority=None)
 
     Run SQL in a transaction with automatic client-side retries. See
     :py:meth:`CockroachDatabase.run_transaction` for details.

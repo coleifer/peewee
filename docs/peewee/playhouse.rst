@@ -233,7 +233,7 @@ table-valued functions by ``(t)``.
 
 **CONTROL_FLOW**
 
-.. py:function:: if_then_else(cond, truthy[, falsey=None])
+.. py:function:: if_then_else(cond, truthy, falsey=None)
 
     Simple ternary-type operator, where, depending on the truthiness of the
     ``cond`` parameter, either the ``truthy`` or ``falsey`` value will be
@@ -248,7 +248,7 @@ table-valued functions by ``(t)``.
 
     The time is not adjusted in any way, the timezone is simply removed.
 
-.. py:function:: humandelta(nseconds[, glue=', '])
+.. py:function:: humandelta(nseconds, glue=', ')
 
     :param int nseconds: Number of seconds, total, in timedelta.
     :param str glue: Fragment to join values.
@@ -280,7 +280,7 @@ table-valued functions by ``(t)``.
     Aggregate function that computes the duration from the smallest to the
     largest value in the list, returned in seconds.
 
-.. py:function:: date_series(start, stop[, step_seconds=86400])
+.. py:function:: date_series(start, stop, step_seconds=86400)
 
     :param datetime start: Start datetime
     :param datetime stop: Stop datetime
@@ -323,7 +323,7 @@ table-valued functions by ``(t)``.
 
 **HELPER**
 
-.. py:function:: gzip(data[, compression=9])
+.. py:function:: gzip(data, compression=9)
 
     :param bytes data: Data to compress.
     :param int compression: Compression level (9 is max).
@@ -354,7 +354,7 @@ table-valued functions by ``(t)``.
         >>> toggle('my-key')
         True
 
-.. py:function:: setting(key[, value=None])
+.. py:function:: setting(key, value=None)
 
     :param key: Key to set/retrieve.
     :param value: Value to set.
@@ -374,7 +374,7 @@ table-valued functions by ``(t)``.
 
 **MATH**
 
-.. py:function:: randomrange(start[, stop=None[, step=None]])
+.. py:function:: randomrange(start, stop=None, step=None)
 
     :param int start: Start of range (inclusive)
     :param int end: End of range(not inclusive)
@@ -880,17 +880,17 @@ You can select just keys, just values, or zip the two:
     >>> for h in House.select(House.address, House.features.keys().alias('keys')):
     ...     print(h.address, h.keys)
 
-    123 Main St [u'bath', u'garage']
+    123 Main St ['bath', 'garage']
 
     >>> for h in House.select(House.address, House.features.values().alias('vals')):
     ...     print(h.address, h.vals)
 
-    123 Main St [u'2 bath', u'2 cars']
+    123 Main St ['2 bath', '2 cars']
 
     >>> for h in House.select(House.address, House.features.items().alias('mtx')):
     ...     print(h.address, h.mtx)
 
-    123 Main St [[u'bath', u'2 bath'], [u'garage', u'2 cars']]
+    123 Main St [['bath', '2 bath'], ['garage', '2 cars']]
 
 You can retrieve a slice of data, for example, all the garage data:
 
@@ -923,7 +923,7 @@ Interval support
 
 Postgres supports durations through the ``INTERVAL`` data-type (`docs <https://www.postgresql.org/docs/current/static/datatype-datetime.html>`_).
 
-.. py:class:: IntervalField([null=False, [...]])
+.. py:class:: IntervalField(null=False, ...)
 
     Field class capable of storing Python ``datetime.timedelta`` instances.
 
@@ -1064,7 +1064,7 @@ For more information, see the `Postgres full-text search docs <https://www.postg
 postgres_ext API notes
 ^^^^^^^^^^^^^^^^^^^^^^
 
-.. py:class:: PostgresqlExtDatabase(database[, server_side_cursors=False[, register_hstore=False[, prefer_psycopg3=False[, ...]]]])
+.. py:class:: PostgresqlExtDatabase(database, server_side_cursors=False, register_hstore=False, prefer_psycopg3=False, ...)
 
     Identical to :py:class:`PostgresqlDatabase` but required in order to support:
 
@@ -1143,7 +1143,7 @@ postgres_ext API notes
 
 .. _pgarrays:
 
-.. py:class:: ArrayField([field_class=IntegerField[, field_kwargs=None[, dimensions=1[, convert_values=False]]]])
+.. py:class:: ArrayField(field_class=IntegerField, field_kwargs=None, dimensions=1, convert_values=False)
 
     :param field_class: a subclass of :py:class:`Field`, e.g. :py:class:`IntegerField`.
     :param dict field_kwargs: arguments to initialize ``field_class``.
@@ -1241,7 +1241,7 @@ postgres_ext API notes
             >>> for h in House.select(House.address, House.features.keys().alias('keys')):
             ...     print(h.address, h.keys)
 
-            123 Main St [u'bath', u'garage']
+            123 Main St ['bath', 'garage']
 
     .. py:method:: values()
 
@@ -1252,7 +1252,7 @@ postgres_ext API notes
             >>> for h in House.select(House.address, House.features.values().alias('vals')):
             ...     print(h.address, h.vals)
 
-            123 Main St [u'2 bath', u'2 cars']
+            123 Main St ['2 bath', '2 cars']
 
     .. py:method:: items()
 
@@ -1263,7 +1263,7 @@ postgres_ext API notes
             >>> for h in House.select(House.address, House.features.items().alias('mtx')):
             ...     print(h.address, h.mtx)
 
-            123 Main St [[u'bath', u'2 bath'], [u'garage', u'2 cars']]
+            123 Main St [['bath', '2 bath'], ['garage', '2 cars']]
 
     .. py:method:: slice(*args)
 
@@ -1601,7 +1601,7 @@ postgres_ext API notes
               content=content,
               search_content=fn.to_tsvector(content))  # Note `to_tsvector()`.
 
-    .. py:method:: match(query[, language=None[, plain=False]])
+    .. py:method:: match(query, language=None, plain=False)
 
         :param str query: the full-text search query.
         :param str language: language name (optional).
@@ -1678,7 +1678,7 @@ Additional MySQL-specific helpers:
 
         Extract a value from a JSON document at the given path.
 
-.. py:function:: Match(columns, expr[, modifier=None])
+.. py:function:: Match(columns, expr, modifier=None)
 
     :noindex:
     :param columns: a single :py:class:`Field` or a tuple of multiple fields.
@@ -1926,7 +1926,7 @@ API
         Provide a :py:class:`Table` reference to the specified table. If the
         table does not exist, it will be created.
 
-    .. py:method:: query(sql[, params=None[, commit=True]])
+    .. py:method:: query(sql, params=None, commit=True)
 
         :param str sql: A SQL query.
         :param list params: Optional parameters for the query.
@@ -1939,7 +1939,7 @@ API
 
         Create a context manager representing a new transaction (or savepoint).
 
-    .. py:method:: freeze(query[, format='csv'[, filename=None[, file_obj=None[, encoding='utf8'[, **kwargs]]]]])
+    .. py:method:: freeze(query, format='csv', filename=None, file_obj=None, encoding='utf8', **kwargs)
 
         :param query: A :py:class:`SelectQuery`, generated using :py:meth:`~Table.all` or `~Table.find`.
         :param format: Output format. By default, *csv* and *json* are supported.
@@ -1948,7 +1948,7 @@ API
         :param str encoding: File encoding.
         :param kwargs: Arbitrary parameters for export-specific functionality.
 
-    .. py:method:: thaw(table[, format='csv'[, filename=None[, file_obj=None[, strict=False[, encoding='utf8'[, **kwargs]]]]]])
+    .. py:method:: thaw(table, format='csv', filename=None, file_obj=None, strict=False, encoding='utf8', **kwargs)
 
         :param str table: The name of the table to load data into.
         :param format: Input format. By default, *csv* and *json* are supported.
@@ -1982,7 +1982,7 @@ API
 
         A dynamically-created :py:class:`Model` class.
 
-    .. py:method:: create_index(columns[, unique=False])
+    .. py:method:: create_index(columns, unique=False)
 
         Create an index on the given columns:
 
@@ -2045,14 +2045,14 @@ API
             # Delete all the secret messages.
             db['secret_messages'].delete()
 
-    .. py:method:: freeze([format='csv'[, filename=None[, file_obj=None[, **kwargs]]]])
+    .. py:method:: freeze(format='csv', filename=None, file_obj=None, **kwargs)
 
         :param format: Output format. By default, *csv* and *json* are supported.
         :param filename: Filename to write output to.
         :param file_obj: File-like object to write output to.
         :param kwargs: Arbitrary parameters for export-specific functionality.
 
-    .. py:method:: thaw([format='csv'[, filename=None[, file_obj=None[, strict=False[, **kwargs]]]]])
+    .. py:method:: thaw(format='csv', filename=None, file_obj=None, strict=False, **kwargs)
 
         :param format: Input format. By default, *csv* and *json* are supported.
         :param filename: Filename to read data from.
@@ -2067,7 +2067,7 @@ Fields
 
 These fields can be found in the ``playhouse.fields`` module.
 
-.. py:class:: CompressedField([compression_level=6[, algorithm='zlib'[, **kwargs]]])
+.. py:class:: CompressedField(compression_level=6, algorithm='zlib', **kwargs)
 
     :param int compression_level: A value from 0 to 9.
     :param str algorithm: Either ``'zlib'`` or ``'bz2'``.
@@ -2191,7 +2191,7 @@ Pretty neat, right? Thanks for the cool idea, SQLAlchemy!
 Hybrid API
 ^^^^^^^^^^
 
-.. py:class:: hybrid_method(func[, expr=None])
+.. py:class:: hybrid_method(func, expr=None)
 
     Method decorator that allows the definition of a Python object method with
     both instance-level and class-level behavior.
@@ -2228,7 +2228,7 @@ Hybrid API
 
         Method decorator for specifying the SQL-expression producing method.
 
-.. py:class:: hybrid_property(fget[, fset=None[, fdel=None[, expr=None]]])
+.. py:class:: hybrid_property(fget, fset=None, fdel=None, expr=None)
 
     Method decorator that allows the definition of a Python object property
     with both instance-level and class-level behavior.
@@ -2284,7 +2284,7 @@ Key/Value Store
 The ``playhouse.kv`` module contains the implementation of a persistent
 dictionary.
 
-.. py:class:: KeyValue([key_field=None[, value_field=None[, ordered=False[, database=None[, table_name='keyvalue']]]]])
+.. py:class:: KeyValue(key_field=None, value_field=None, ordered=False, database=None, table_name='keyvalue')
 
     :param Field key_field: field to use for key. Defaults to
         :py:class:`CharField`. **Must have** ``primary_key=True``.
@@ -2452,7 +2452,7 @@ dictionary.
 
         :returns: an iterable of all key/value pairs in the table.
 
-    .. py:method:: update([__data=None[, **mapping]])
+    .. py:method:: update(__data=None, **mapping)
 
         Efficiently bulk-insert or replace the given key/value pairs.
 
@@ -2476,7 +2476,7 @@ dictionary.
             >>> dict(KV)
             {'k1': 1, 'k2': -2, 'k3': 3, 'k4': 4}
 
-    .. py:method:: get(expr[, default=None])
+    .. py:method:: get(expr, default=None)
 
         :param expr: a single key or an expression.
         :param default: default value if key not found.
@@ -2486,7 +2486,7 @@ dictionary.
         value is returned, unless the key is an expression in which case an
         empty list will be returned.
 
-    .. py:method:: pop(expr[, default=Sentinel])
+    .. py:method:: pop(expr, default=Sentinel)
 
         :param expr: a single key or an expression.
         :param default: default value if key does not exist.
@@ -2510,7 +2510,7 @@ This module contains helper functions for expressing things that would
 otherwise be somewhat verbose or cumbersome using peewee's APIs. There are also
 helpers for serializing models to dictionaries and vice-versa.
 
-.. py:function:: model_to_dict(model[, recurse=True[, backrefs=False[, only=None[, exclude=None[, extra_attrs=None[, fields_from_query=None[, max_depth=None[, manytomany=False]]]]]]]])
+.. py:function:: model_to_dict(model, recurse=True, backrefs=False, only=None, exclude=None, extra_attrs=None, fields_from_query=None, max_depth=None, manytomany=False)
 
     :param bool recurse: Whether foreign-keys should be recursed.
     :param bool backrefs: Whether lists of related objects should be recursed.
@@ -2566,7 +2566,7 @@ helpers for serializing models to dictionaries and vice-versa.
     combination of parameters into this function. Just write a simple function
     that accomplishes exactly what you're attempting to do.
 
-.. py:function:: dict_to_model(model_class, data[, ignore_unknown=False])
+.. py:function:: dict_to_model(model_class, data, ignore_unknown=False)
 
     :param Model model_class: The model class to construct.
     :param dict data: A dictionary of data. Foreign keys can be included as nested dictionaries, and back-references as lists of dictionaries.
@@ -2605,7 +2605,7 @@ helpers for serializing models to dictionaries and vice-versa.
         'charlie'
 
 
-.. py:function:: update_model_from_dict(instance, data[, ignore_unknown=False])
+.. py:function:: update_model_from_dict(instance, data, ignore_unknown=False)
 
     :param Model instance: The model instance to update.
     :param dict data: A dictionary of data. Foreign keys can be included as nested dictionaries, and back-references as lists of dictionaries.
@@ -2614,7 +2614,7 @@ helpers for serializing models to dictionaries and vice-versa.
     Update a model instance with the given data dictionary.
 
 
-.. py:function:: resolve_multimodel_query(query[, key='_model_identifier'])
+.. py:function:: resolve_multimodel_query(query, key='_model_identifier')
 
     :param query: a compound select query.
     :param str key: key to use for storing model identifier
@@ -2751,7 +2751,7 @@ Signal API
     Stores a list of receivers (callbacks) and calls them when the "send"
     method is invoked.
 
-    .. py:method:: connect(receiver[, name=None[, sender=None]])
+    .. py:method:: connect(receiver, name=None, sender=None)
 
         :param callable receiver: a callable that takes at least two parameters,
             a "sender", which is the Model subclass that triggered the signal, and
@@ -2770,7 +2770,7 @@ Signal API
 
             post_save.connect(cache_buster, name='project.cache_buster')
 
-    .. py:method:: disconnect([receiver=None[, name=None[, sender=None]]])
+    .. py:method:: disconnect(receiver=None, name=None, sender=None)
 
         :param callable receiver: the callback to disconnect
         :param string name: a short alias
@@ -2793,7 +2793,7 @@ Signal API
         be called if the instance is an instance of the sender.
 
 
-    .. py:method __call__([name=None[, sender=None]])
+    .. py:method __call__(name=None, sender=None)
 
         :param string name: a short alias
         :param Model sender: disconnect model-specific handler.
@@ -3219,7 +3219,7 @@ Migrations API
             then an ``UPDATE`` statement will be executed to populate the column
             with the default value. Finally, the column will be marked as not null.
 
-    .. py:method:: drop_column(table, column_name[, cascade=True])
+    .. py:method:: drop_column(table, column_name, cascade=True)
 
         :param str table: Name of the table to drop column from.
         :param str column_name: Name of the column to drop.
@@ -3258,7 +3258,7 @@ Migrations API
         :param str table: Name of table containing column.
         :param str column: Name of the column to remove default from.
 
-    .. py:method:: alter_column_type(table, column, field[, cast=None])
+    .. py:method:: alter_column_type(table, column, field, cast=None)
 
         :param str table: Name of the table.
         :param str column_name: Name of the column to modify.
@@ -3276,7 +3276,7 @@ Migrations API
         :param str old_name: Current name of the table.
         :param str new_name: New name for the table.
 
-    .. py:method:: add_index(table, columns[, unique=False[, using=None]])
+    .. py:method:: add_index(table, columns, unique=False, using=None)
 
         :param str table: Name of table on which to create the index.
         :param list columns: List of columns which should be indexed.
@@ -3340,7 +3340,7 @@ The reflection module contains helpers for introspecting existing databases.
 This module is used internally by several other modules in the playhouse,
 including :ref:`dataset` and :ref:`pwiz`.
 
-.. py:function:: generate_models(database[, schema=None[, **options]])
+.. py:function:: generate_models(database, schema=None, **options)
 
     :param Database database: database instance to introspect.
     :param str schema: optional schema to introspect.
@@ -3440,14 +3440,14 @@ including :ref:`dataset` and :ref:`pwiz`.
           FOREIGN KEY ("user_id") REFERENCES "user" ("id")
         )
 
-.. py:class:: Introspector(metadata[, schema=None])
+.. py:class:: Introspector(metadata, schema=None)
 
     Metadata can be extracted from a database by instantiating an
     :py:class:`Introspector`. Rather than instantiating this class directly, it
     is recommended to use the factory method
     :py:meth:`~Introspector.from_database`.
 
-    .. py:classmethod:: from_database(database[, schema=None])
+    .. py:classmethod:: from_database(database, schema=None)
 
         :param database: a :py:class:`Database` instance.
         :param str schema: an optional schema (supported by some databases).
@@ -3468,7 +3468,7 @@ including :ref:`dataset` and :ref:`pwiz`.
             User = models['user']
             Tweet = models['tweet']
 
-    .. py:method:: generate_models([skip_invalid=False[, table_names=None[, literal_column_names=False[, bare_fields=False[, include_views=False]]]]])
+    .. py:method:: generate_models(skip_invalid=False, table_names=None, literal_column_names=False, bare_fields=False, include_views=False)
 
         :param bool skip_invalid: Skip tables whose names are invalid python
             identifiers.
@@ -3494,7 +3494,7 @@ Database URL
 This module contains a helper function to generate a database connection from a
 URL connection string.
 
-.. py:function:: connect(url, [unquote_password=False[, unquote_user=False[, **connect_params]]])
+.. py:function:: connect(url, unquote_password=False, unquote_user=False, **connect_params)
 
     :param url: the URL for the database, see examples below.
     :param bool unquote_password: unquote special characters in the password.
@@ -3542,7 +3542,7 @@ URL connection string.
         # back to a local Sqlite database if no database URL is specified.
         db = connect(os.environ.get('DATABASE') or 'sqlite:///default.db')
 
-.. py:function:: parse(url, [unquote_password=False[, unquote_user=False]])
+.. py:function:: parse(url, unquote_password=False, unquote_user=False)
 
     :param url: the URL for the database, see :py:func:`connect` above for examples.
     :param bool unquote_password: unquote special characters in the password.
@@ -3621,7 +3621,7 @@ connections, check out the :ref:`connection_management` section.
 Pool APIs
 ^^^^^^^^^
 
-.. py:class:: PooledDatabase(database[, max_connections=20[, stale_timeout=None[, timeout=None[, **kwargs]]]])
+.. py:class:: PooledDatabase(database, max_connections=20, stale_timeout=None, timeout=None, **kwargs)
 
     :param str database: The name of the database or database file.
     :param int max_connections: Maximum number of connections. Provide ``None`` for unlimited.
@@ -3645,7 +3645,7 @@ Pool APIs
         are currently in-use -- only those that were previously created but
         have since been returned back to the pool.
 
-    .. py:method:: close_stale([age=600])
+    .. py:method:: close_stale(age=600)
 
         :param int age: Age at which a connection should be considered stale.
         :returns: Number of connections closed.
@@ -3691,7 +3691,7 @@ Test Utils
 
 Contains utilities helpful when testing peewee projects.
 
-.. py:class:: count_queries([only_select=False])
+.. py:class:: count_queries(only_select=False)
 
     Context manager that will count the number of queries executed within
     the context.
@@ -3716,7 +3716,7 @@ Contains utilities helpful when testing peewee projects.
         parameters.
 
 
-.. py:function:: assert_query_count(expected[, only_select=False])
+.. py:function:: assert_query_count(expected, only_select=False)
 
     Function or method decorator that will raise an ``AssertionError`` if the
     number of queries executed in the decorated function does not equal the
@@ -3899,7 +3899,7 @@ The ``flask_utils`` module provides several helpers for managing queries in your
             post = get_object_or_404(public_posts, (Post.slug == slug))
             return render_template('post_detail.html', post=post)
 
-.. py:function:: object_list(template_name, query[, context_variable='object_list'[, paginate_by=20[, page_var='page'[, check_bounds=True[, **kwargs]]]]])
+.. py:function:: object_list(template_name, query, context_variable='object_list', paginate_by=20, page_var='page', check_bounds=True, **kwargs)
 
     :param template_name: The name of the template to render.
     :param query: A :py:class:`SelectQuery` instance to paginate.
@@ -3941,7 +3941,7 @@ The ``flask_utils`` module provides several helpers for managing queries in your
     * ``page``, which contains the current page based on the value of the ``page`` ``GET`` parameter.
     * ``pagination``, a :py:class:`PaginatedQuery` instance.
 
-.. py:class:: PaginatedQuery(query_or_model, paginate_by[, page_var='page'[, check_bounds=False]])
+.. py:class:: PaginatedQuery(query_or_model, paginate_by, page_var='page', check_bounds=False)
 
     :param query_or_model: Either a :py:class:`Model` or a :py:class:`SelectQuery` instance containing the collection of records you wish to paginate.
     :param paginate_by: Number of objects per-page.

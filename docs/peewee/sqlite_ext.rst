@@ -53,13 +53,12 @@ Using :py:class:`CySqliteDatabase`:
 APIs
 ----
 
-.. py:class:: SqliteExtDatabase(database[, pragmas=None[, timeout=5[, rank_functions=True[, regexp_function=False[, json_contains=False]]]]])
+.. py:class:: SqliteExtDatabase(database, pragmas=None, timeout=5, rank_functions=True, regexp_function=False, json_contains=False)
 
     :param list pragmas: A list of 2-tuples containing pragma key and value to
         set every time a connection is opened.
     :param timeout: Set the busy-timeout on the SQLite driver (in seconds).
     :param bool rank_functions: Make search result ranking functions available.
-    :param bool regexp_function: Make the REGEXP function available.
     :param bool json_contains: Make json_containts() function available.
 
     Extends :py:class:`SqliteDatabase` and inherits methods for declaring
@@ -73,8 +72,6 @@ APIs
 
         * accepts ``__init__`` arguments to register full-text search ranking
           functions (enabled by default).
-        * accepts ``__init__`` argument to register a regex function, allowing
-          SQLite to perform ``REGEXP`` queries.
         * accepts ``__init__`` argument to register ``json_contains()``
           user-defined funciton.
 
@@ -340,7 +337,7 @@ APIs
         Extract the value at the specified path as a SQL data-type. This
         corresponds to the ``->>`` operator added in Sqlite 3.38.
 
-    .. py:method:: set(value[, as_json=None])
+    .. py:method:: set(value, as_json=None)
 
         :param value: a scalar value, list, or dictionary.
         :param bool as_json: force the value to be treated as JSON, in which
@@ -353,7 +350,7 @@ APIs
         Uses the `json_set() <http://sqlite.org/json1.html#jset>`_ function
         from the json1 extension.
 
-    .. py:method:: replace(value[, as_json=None])
+    .. py:method:: replace(value, as_json=None)
 
         :param value: a scalar value, list, or dictionary.
         :param bool as_json: force the value to be treated as JSON, in which
@@ -366,7 +363,7 @@ APIs
         Uses the `json_replace() <http://sqlite.org/json1.html#jset>`_ function
         from the json1 extension.
 
-    .. py:method:: insert(value[, as_json=None])
+    .. py:method:: insert(value, as_json=None)
 
         :param value: a scalar value, list, or dictionary.
         :param bool as_json: force the value to be treated as JSON, in which
@@ -379,7 +376,7 @@ APIs
         Uses the `json_insert() <http://sqlite.org/json1.html#jset>`_ function
         from the json1 extension.
 
-    .. py:method:: append(value[, as_json=None])
+    .. py:method:: append(value, as_json=None)
 
         :param value: a scalar value, list, or dictionary.
         :param bool as_json: force the value to be treated as JSON, in which
@@ -544,7 +541,7 @@ APIs
              ('b',  'y2',  'z2',                           '$.x1.y2')]
 
 
-.. py:class:: JSONPath(field[, path=None])
+.. py:class:: JSONPath(field, path=None)
 
     :param JSONField field: the field object we intend to access.
     :param tuple path: Components comprising the JSON path.
@@ -575,7 +572,7 @@ APIs
                      .select(Post, first_tag.alias('first_tag'))
                      .order_by(first_tag))
 
-    .. py:method:: set(value[, as_json=None])
+    .. py:method:: set(value, as_json=None)
 
         :param value: a scalar value, list, or dictionary.
         :param bool as_json: force the value to be treated as JSON, in which
@@ -588,7 +585,7 @@ APIs
         Uses the `json_set() <http://sqlite.org/json1.html#jset>`_ function
         from the json1 extension.
 
-    .. py:method:: replace(value[, as_json=None])
+    .. py:method:: replace(value, as_json=None)
 
         :param value: a scalar value, list, or dictionary.
         :param bool as_json: force the value to be treated as JSON, in which
@@ -601,7 +598,7 @@ APIs
         Uses the `json_replace() <http://sqlite.org/json1.html#jset>`_ function
         from the json1 extension.
 
-    .. py:method:: insert(value[, as_json=None])
+    .. py:method:: insert(value, as_json=None)
 
         :param value: a scalar value, list, or dictionary.
         :param bool as_json: force the value to be treated as JSON, in which
@@ -614,7 +611,7 @@ APIs
         Uses the `json_insert() <http://sqlite.org/json1.html#jset>`_ function
         from the json1 extension.
 
-    .. py:method:: append(value[, as_json=None])
+    .. py:method:: append(value, as_json=None)
 
         :param value: a scalar value, list, or dictionary.
         :param bool as_json: force the value to be treated as JSON, in which
@@ -714,12 +711,12 @@ APIs
         {'k1': 'v1'}
 
 
-.. py:class:: JSONBPath(field[, path=None])
+.. py:class:: JSONBPath(field, path=None)
 
     Subclass of :py:class:`JSONPath` for working with ``jsonb`` data.
 
 
-.. py:class:: SearchField([unindexed=False[, column_name=None]])
+.. py:class:: SearchField(unindexed=False, column_name=None)
 
     Field-class to be used for columns on models representing full-text search
     virtual tables. The full-text search extensions prohibit the specification
@@ -998,7 +995,7 @@ APIs
             for result in query:
                 print('Result: %s' % result.title)
 
-    .. py:classmethod:: search(term[, weights=None[, with_score=False[, score_alias='score'[, explicit_ordering=False]]]])
+    .. py:classmethod:: search(term, weights=None, with_score=False, score_alias='score', explicit_ordering=False)
 
         :param str term: Search term to use.
         :param weights: A list of weights for the columns, ordered with respect
@@ -1037,7 +1034,7 @@ APIs
             for result in docs:
                 print(result.title, result.search_score)
 
-    .. py:classmethod:: search_bm25(term[, weights=None[, with_score=False[, score_alias='score'[, explicit_ordering=False]]]])
+    .. py:classmethod:: search_bm25(term, weights=None, with_score=False, score_alias='score', explicit_ordering=False)
 
         :param str term: Search term to use.
         :param weights: A list of weights for the columns, ordered with respect
@@ -1059,17 +1056,17 @@ APIs
             The BM25 ranking algorithm is only available for FTS4. If you are
             using FTS3, use the :py:meth:`~FTSModel.search` method instead.
 
-    .. py:classmethod:: search_bm25f(term[, weights=None[, with_score=False[, score_alias='score'[, explicit_ordering=False]]]])
+    .. py:classmethod:: search_bm25f(term, weights=None, with_score=False, score_alias='score', explicit_ordering=False)
 
         Same as :py:meth:`FTSModel.search_bm25`, but using the BM25f variant
         of the BM25 ranking algorithm.
 
-    .. py:classmethod:: search_lucene(term[, weights=None[, with_score=False[, score_alias='score'[, explicit_ordering=False]]]])
+    .. py:classmethod:: search_lucene(term, weights=None, with_score=False, score_alias='score', explicit_ordering=False)
 
         Same as :py:meth:`FTSModel.search_bm25`, but using the result ranking
         algorithm from the Lucene search engine.
 
-    .. py:classmethod:: rank([col1_weight, col2_weight...coln_weight])
+    .. py:classmethod:: rank(col1_weight, col2_weight...coln_weight)
 
         :param float col_weight: (Optional) weight to give to the *ith* column
             of the model. By default all columns have a weight of ``1.0``.
@@ -1102,7 +1099,7 @@ APIs
             for search_result in query:
                 print(search_result.title, search_result.score)
 
-    .. py:classmethod:: bm25([col1_weight, col2_weight...coln_weight])
+    .. py:classmethod:: bm25(col1_weight, col2_weight...coln_weight)
 
         :param float col_weight: (Optional) weight to give to the *ith* column
             of the model. By default all columns have a weight of ``1.0``.
@@ -1143,12 +1140,12 @@ APIs
                 for search_result in query:
                     print(search_result.title, search_result.score)
 
-    .. py:classmethod:: bm25f([col1_weight, col2_weight...coln_weight])
+    .. py:classmethod:: bm25f(col1_weight, col2_weight...coln_weight)
 
         Identical to :py:meth:`~FTSModel.bm25`, except that it uses the BM25f
         variant of the BM25 ranking algorithm.
 
-    .. py:classmethod:: lucene([col1_weight, col2_weight...coln_weight])
+    .. py:classmethod:: lucene(col1_weight, col2_weight...coln_weight)
 
         Identical to :py:meth:`~FTSModel.bm25`, except that it uses the Lucene
         search result ranking algorithm.
@@ -1189,7 +1186,7 @@ APIs
         Return a boolean indicating whether the FTS5 extension is installed. If
         it is not installed, an attempt will be made to load the extension.
 
-    .. py:classmethod:: search(term[, weights=None[, with_score=False[, score_alias='score']]])
+    .. py:classmethod:: search(term, weights=None, with_score=False, score_alias='score')
 
         :param str term: Search term to use.
         :param weights: A list of weights for the columns, ordered with respect
@@ -1227,12 +1224,12 @@ APIs
             for result in docs:
                 print(result.title, result.search_score)
 
-    .. py:classmethod:: search_bm25(term[, weights=None[, with_score=False[, score_alias='score']]])
+    .. py:classmethod:: search_bm25(term, weights=None, with_score=False, score_alias='score')
 
         With FTS5, :py:meth:`~FTS5Model.search_bm25` is identical to the
         :py:meth:`~FTS5Model.search` method.
 
-    .. py:classmethod:: rank([col1_weight, col2_weight...coln_weight])
+    .. py:classmethod:: rank(col1_weight, col2_weight...coln_weight)
 
         :param float col_weight: (Optional) weight to give to the *ith* column
             of the model. By default all columns have a weight of ``1.0``.
@@ -1268,13 +1265,13 @@ APIs
                 for search_result in query:
                     print(search_result.title, search_result.score)
 
-    .. py:classmethod:: bm25([col1_weight, col2_weight...coln_weight])
+    .. py:classmethod:: bm25(col1_weight, col2_weight...coln_weight)
 
         Because FTS5 provides built-in support for BM25, the
         :py:meth:`~FTS5Model.bm25` method is identical to the
         :py:meth:`~FTS5Model.rank` method.
 
-    .. py:classmethod:: VocabModel([table_type='row'|'col'|'instance'[, table_name=None]])
+    .. py:classmethod:: VocabModel(table_type='row'|'col'|'instance', table_name=None)
 
         :param str table_type: Either 'row', 'col' or 'instance'.
         :param table_name: Name for the vocab table. If not specified, will be
