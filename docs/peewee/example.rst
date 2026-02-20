@@ -5,18 +5,17 @@ Example app
 
 We'll be building a simple *twitter*-like site. The source code for the example
 can be found in the ``examples/twitter`` directory. You can also `browse the
-source-code <https://github.com/coleifer/peewee/tree/master/examples/twitter>`_
-on github. There is also an example `blog app
-<https://github.com/coleifer/peewee/tree/master/examples/blog>`_ if that's more
-to your liking, however it is not covered in this guide.
+source-code <https://github.com/coleifer/peewee/tree/master/examples/twitter>`__
+on github. There is also an example `blog app <https://github.com/coleifer/peewee/tree/master/examples/blog>`__
+if that's more to your liking, however it is not covered in this guide.
 
-The example app uses the `flask <http://flask.pocoo.org/>`_ web framework which
+The example app uses the `flask <http://flask.pocoo.org/>`__ web framework which
 is very easy to get started with. If you don't have flask already, you will
 need to install it to run the example:
 
-.. code-block:: console
+.. code-block:: shell
 
-    pip install flask
+   pip install flask
 
 Running the example
 -------------------
@@ -26,9 +25,9 @@ Running the example
 After ensuring that flask is installed, ``cd`` into the twitter example
 directory and execute the ``run_example.py`` script:
 
-.. code-block:: console
+.. code-block:: shell
 
-    python run_example.py
+   python run_example.py
 
 The example app will be accessible at http://localhost:5000/
 
@@ -73,54 +72,55 @@ In order to create these models we need to instantiate a
 the columns as :py:class:`Field` instances on the class.
 
 .. code-block:: python
+   :emphasize-lines: 3, 8, 13, 23, 39
 
-    # create a peewee database instance -- our models will use this database to
-    # persist information
-    database = SqliteDatabase(DATABASE)
+   # create a peewee database instance -- our models will use this database to
+   # persist information
+   database = SqliteDatabase(DATABASE)
 
-    # model definitions -- the standard "pattern" is to define a base model class
-    # that specifies which database to use.  then, any subclasses will automatically
-    # use the correct storage.
-    class BaseModel(Model):
-        class Meta:
-            database = database
+   # model definitions -- the standard "pattern" is to define a base model class
+   # that specifies which database to use.  then, any subclasses will automatically
+   # use the correct storage.
+   class BaseModel(Model):
+       class Meta:
+           database = database
 
-    # the user model specifies its fields (or columns) declaratively, like django
-    class User(BaseModel):
-        username = CharField(unique=True)
-        password = CharField()
-        email = CharField()
-        join_date = DateTimeField()
+   # the user model specifies its fields (or columns) declaratively, like django
+   class User(BaseModel):
+       username = CharField(unique=True)
+       password = CharField()
+       email = CharField()
+       join_date = DateTimeField()
 
-    # this model contains two foreign keys to user -- it essentially allows us to
-    # model a "many-to-many" relationship between users.  by querying and joining
-    # on different columns we can expose who a user is "related to" and who is
-    # "related to" a given user
-    class Relationship(BaseModel):
-        from_user = ForeignKeyField(User, backref='relationships')
-        to_user = ForeignKeyField(User, backref='related_to')
+   # this model contains two foreign keys to user -- it essentially allows us to
+   # model a "many-to-many" relationship between users.  by querying and joining
+   # on different columns we can expose who a user is "related to" and who is
+   # "related to" a given user
+   class Relationship(BaseModel):
+       from_user = ForeignKeyField(User, backref='relationships')
+       to_user = ForeignKeyField(User, backref='related_to')
 
-        class Meta:
-            # `indexes` is a tuple of 2-tuples, where the 2-tuples are
-            # a tuple of column names to index and a boolean indicating
-            # whether the index is unique or not.
-            indexes = (
-                # Specify a unique multi-column index on from/to-user.
-                (('from_user', 'to_user'), True),
-            )
+       class Meta:
+           # `indexes` is a tuple of 2-tuples, where the 2-tuples are
+           # a tuple of column names to index and a boolean indicating
+           # whether the index is unique or not.
+           indexes = (
+               # Specify a unique multi-column index on from/to-user.
+               (('from_user', 'to_user'), True),
+           )
 
-    # a dead simple one-to-many relationship: one user has 0..n messages, exposed by
-    # the foreign key. a users messages will be accessible as a special attribute,
-    # User.messages.
-    class Message(BaseModel):
-        user = ForeignKeyField(User, backref='messages')
-        content = TextField()
-        pub_date = DateTimeField()
+   # a dead simple one-to-many relationship: one user has 0..n messages, exposed by
+   # the foreign key. a users messages will be accessible as a special attribute,
+   # User.messages.
+   class Message(BaseModel):
+       user = ForeignKeyField(User, backref='messages')
+       content = TextField()
+       pub_date = DateTimeField()
 
 .. note::
-    Note that we create a *BaseModel* class that simply defines what database
-    we would like to use.  All other models then extend this class and will also
-    use the correct database connection.
+   Note that we create a *BaseModel* class that simply defines what database
+   we would like to use.  All other models then extend this class and will also
+   use the correct database connection.
 
 
 Peewee supports many different :ref:`field types <fields>` which map to
@@ -138,45 +138,53 @@ allowing you to use the following in your application:
 Creating tables
 ^^^^^^^^^^^^^^^
 
-In order to start using the models, its necessary to create the tables. This is
-a one-time operation and can be done quickly using the interactive interpreter.
-We can create a small helper function to accomplish this:
+In order to start using the models, its necessary to **create the tables**.
+This is a one-time operation and can be done quickly using the interactive
+interpreter. We can create a small helper function to accomplish this:
 
 .. code-block:: python
+   :emphasize-lines: 3
 
-    def create_tables():
-        with database:
-            database.create_tables([User, Relationship, Message])
+   def create_tables():
+       with database:
+           database.create_tables([User, Relationship, Message])
 
 Open a python shell in the directory alongside the example app and execute the
 following:
 
-.. code-block:: python
+.. code-block:: pycon
 
     >>> from app import *
     >>> create_tables()
 
-.. note::
-    If you encounter an *ImportError* it means that either *flask* or *peewee*
-    was not found and may not be installed correctly. Check the :ref:`installation`
-    document for instructions on installing peewee.
+.. attention::
+   If you encounter an **ImportError** it means that either *flask* or *peewee*
+   was not found and may not be installed correctly. Check the :ref:`installation`
+   document for instructions on installing peewee.
 
 Every model has a :py:meth:`~Model.create_table` classmethod which runs a SQL
 *CREATE TABLE* statement in the database. This method will create the table,
-including all columns, foreign-key constraints, indexes, and sequences. Usually
-this is something you'll only do once, whenever a new model is added.
+including:
+
+* columns
+* foreign-key constraints
+* indexes
+* sequences
+* check constraints
+
+Usually this is something you'll only do once, when a new model is added.
 
 Peewee provides a helper method :py:meth:`Database.create_tables` which will
 resolve inter-model dependencies and call :py:meth:`~Model.create_table` on
 each model, ensuring the tables are created in order.
 
 .. note::
-    Adding fields after the table has been created will require you to
-    either drop the table and re-create it or manually add the columns
-    using an *ALTER TABLE* query.
+   Adding, removing or modifying fields after the table has been created will
+   require you to either:
 
-    Alternatively, you can use the :ref:`schema migrations <migrate>` extension
-    to alter your database schema using Python.
+   * drop the table and re-create it, OR
+   * manually add, drop or modify the columns, OR
+   * use the :ref:`migration tools <migrate>` to script your changes.
 
 Establishing a database connection
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -190,44 +198,51 @@ model.
 This is a peewee idiom:
 
 .. code-block:: python
+   :emphasize-lines: 9, 10, 11
 
-    DATABASE = 'tweepee.db'
+   DATABASE = 'tweepee.db'
 
-    # Create a database instance that will manage the connection and
-    # execute queries
-    database = SqliteDatabase(DATABASE)
+   # Create a database instance that will manage the connection and
+   # execute queries
+   database = SqliteDatabase(DATABASE)
 
-    # Create a base-class all our models will inherit, which defines
-    # the database we'll be using.
-    class BaseModel(Model):
-        class Meta:
-            database = database
+   # Create a base-class all our models will inherit, which defines
+   # the database we'll be using.
+   class BaseModel(Model):
+       class Meta:
+           database = database
 
+When developing a web application, it's common to:
 
-When developing a web application, it's common to open a connection when a
-request starts, and close it when the response is returned. **You should always
-manage your connections explicitly**. For instance, if you are using a
-:ref:`connection pool <pool>`, connections will only be recycled correctly if
-you call :py:meth:`~Database.connect` and :py:meth:`~Database.close`.
+1. Open a connection when a request starts.
+2. Run your request-handler.
+3. Close the connection before returning the response.
 
-We will tell flask that during the request/response cycle we need to create a
-connection to the database. Flask provides some handy decorators to make this a
-snap:
+**You should always manage your connections explicitly**. For instance, if you
+are using a :ref:`connection pool <pool>`, connections will only be recycled
+correctly if you call :py:meth:`~Database.connect` and :py:meth:`~Database.close`.
+
+Flask provides some handy decorators to make this a snap:
 
 .. code-block:: python
+   :emphasize-lines: 1, 5
 
-    @app.before_request
-    def before_request():
-        database.connect()
+   @app.before_request
+   def before_request():
+       database.connect()
 
-    @app.after_request
-    def after_request(response):
-        database.close()
-        return response
+   @app.after_request
+   def after_request(response):
+       database.close()
+       return response
+
+.. seealso::
+   :ref:`framework-integration` covers setting-up hooks for a variety
+   of popular (and some not-so-popular) web frameworks.
 
 .. note::
-    Peewee uses thread local storage to manage connection state, so this
-    pattern can be used with multi-threaded WSGI servers.
+   Peewee uses thread local storage to manage connection state, so this
+   pattern can be used with multi-threaded WSGI servers.
 
 Making queries
 ^^^^^^^^^^^^^^
@@ -243,20 +258,20 @@ difference in the SQL *JOIN* and *WHERE* clauses:
 
 .. code-block:: python
 
-    def following(self):
-        # query other users through the "relationship" table
-        return (User
-                .select()
-                .join(Relationship, on=Relationship.to_user)
-                .where(Relationship.from_user == self)
-                .order_by(User.username))
+   def following(self):
+       # query other users through the "relationship" table
+       return (User
+               .select()
+               .join(Relationship, on=Relationship.to_user)
+               .where(Relationship.from_user == self)
+               .order_by(User.username))
 
-    def followers(self):
-        return (User
-                .select()
-                .join(Relationship, on=Relationship.from_user)
-                .where(Relationship.to_user == self)
-                .order_by(User.username))
+   def followers(self):
+       return (User
+               .select()
+               .join(Relationship, on=Relationship.from_user)
+               .where(Relationship.to_user == self)
+               .order_by(User.username))
 
 Creating new objects
 ^^^^^^^^^^^^^^^^^^^^
@@ -270,22 +285,22 @@ constraint, so if the username is taken the database will raise an
 
 .. code-block:: python
 
-    try:
-        with database.atomic():
-            # Attempt to create the user. If the username is taken, due to the
-            # unique constraint, the database will raise an IntegrityError.
-            user = User.create(
-                username=request.form['username'],
-                password=md5(request.form['password']).hexdigest(),
-                email=request.form['email'],
-                join_date=datetime.datetime.now())
+   try:
+       with database.atomic():
+           # Attempt to create the user. If the username is taken, due to the
+           # unique constraint, the database will raise an IntegrityError.
+           user = User.create(
+               username=request.form['username'],
+               password=md5(request.form['password']).hexdigest(),
+               email=request.form['email'],
+               join_date=datetime.datetime.now())
 
-        # mark the user as being 'authenticated' by setting the session vars
-        auth_user(user)
-        return redirect(url_for('homepage'))
+       # mark the user as being 'authenticated' by setting the session vars
+       auth_user(user)
+       return redirect(url_for('homepage'))
 
-    except IntegrityError:
-        flash('That username is already taken')
+   except IntegrityError:
+       flash('That username is already taken')
 
 We will use a similar approach when a user wishes to follow someone. To
 indicate a following relationship, we create a row in the *Relationship* table
@@ -294,14 +309,14 @@ pointing from one user to another. Due to the unique index on ``from_user`` and
 
 .. code-block:: python
 
-    user = get_object_or_404(User, username=username)
-    try:
-        with database.atomic():
-            Relationship.create(
-                from_user=get_current_user(),
-                to_user=user)
-    except IntegrityError:
-        pass
+   user = get_object_or_404(User, username=username)
+   try:
+       with database.atomic():
+           Relationship.create(
+               from_user=get_current_user(),
+               to_user=user)
+   except IntegrityError:
+       pass
 
 Performing subqueries
 ^^^^^^^^^^^^^^^^^^^^^
@@ -311,32 +326,32 @@ the users that you follow. In order to implement this cleanly, we can use a
 subquery:
 
 .. note::
-    The subquery, ``user.following()``, by default would ordinarily select all
-    the columns on the ``User`` model. Because we're using it as a subquery,
-    peewee will only select the primary key.
+   The subquery, ``user.following()``, by default would ordinarily select all
+   the columns on the ``User`` model. Because we're using it as a subquery,
+   peewee will only select the primary key.
 
 .. code-block:: python
 
-    # python code
-    user = get_current_user()
-    messages = (Message
-                .select()
-                .where(Message.user.in_(user.following()))
-                .order_by(Message.pub_date.desc()))
+   # python code
+   user = get_current_user()
+   messages = (Message
+               .select()
+               .where(Message.user.in_(user.following()))
+               .order_by(Message.pub_date.desc()))
 
 This code corresponds to the following SQL query:
 
 .. code-block:: sql
 
-    SELECT t1."id", t1."user_id", t1."content", t1."pub_date"
-    FROM "message" AS t1
-    WHERE t1."user_id" IN (
-        SELECT t2."id"
-        FROM "user" AS t2
-        INNER JOIN "relationship" AS t3
-            ON t2."id" = t3."to_user_id"
-        WHERE t3."from_user_id" = ?
-    )
+   SELECT t1."id", t1."user_id", t1."content", t1."pub_date"
+   FROM "message" AS t1
+   WHERE t1."user_id" IN (
+       SELECT t2."id"
+       FROM "user" AS t2
+       INNER JOIN "relationship" AS t3
+           ON t2."id" = t3."to_user_id"
+       WHERE t3."from_user_id" = ?
+   )
 
 Other topics of interest
 ^^^^^^^^^^^^^^^^^^^^^^^^
@@ -350,12 +365,12 @@ mentioning briefly.
 
   .. code-block:: python
 
-      def object_list(template_name, qr, var_name='object_list', **kwargs):
-          kwargs.update(
-              page=int(request.args.get('page', 1)),
-              pages=qr.count() / 20 + 1)
-          kwargs[var_name] = qr.paginate(kwargs['page'])
-          return render_template(template_name, **kwargs)
+     def object_list(template_name, qr, var_name='object_list', **kwargs):
+         kwargs.update(
+             page=int(request.args.get('page', 1)),
+             pages=qr.count() / 20 + 1)
+         kwargs[var_name] = qr.paginate(kwargs['page'])
+         return render_template(template_name, **kwargs)
 
 * Simple authentication system with a ``login_required`` decorator.  The first
   function simply adds user data into the current session when a user successfully
@@ -365,39 +380,39 @@ mentioning briefly.
 
   .. code-block:: python
 
-      def auth_user(user):
-          session['logged_in'] = True
-          session['user'] = user
-          session['username'] = user.username
-          flash('You are logged in as %s' % (user.username))
+     def auth_user(user):
+         session['logged_in'] = True
+         session['user'] = user
+         session['username'] = user.username
+         flash('You are logged in as %s' % (user.username))
 
-      def login_required(f):
-          @wraps(f)
-          def inner(*args, **kwargs):
-              if not session.get('logged_in'):
-                  return redirect(url_for('login'))
-              return f(*args, **kwargs)
-          return inner
+     def login_required(f):
+         @wraps(f)
+         def inner(*args, **kwargs):
+             if not session.get('logged_in'):
+                 return redirect(url_for('login'))
+             return f(*args, **kwargs)
+         return inner
 
 * Return a 404 response instead of throwing exceptions when an object is not
   found in the database.
 
   .. code-block:: python
 
-      def get_object_or_404(model, *expressions):
-          try:
-              return model.get(*expressions)
-          except model.DoesNotExist:
-              abort(404)
+     def get_object_or_404(model, *expressions):
+         try:
+             return model.get(*expressions)
+         except model.DoesNotExist:
+             abort(404)
 
 .. note::
-    To avoid having to frequently copy/paste :py:func:`object_list` or
-    :py:func:`get_object_or_404`, these functions are included as part of the
-    playhouse :ref:`flask extension module <flask_utils>`.
+   To avoid having to frequently copy/paste :py:func:`object_list` or
+   :py:func:`get_object_or_404`, these functions are included as part of the
+   playhouse :ref:`flask extension module <flask_utils>`.
 
-    .. code-block:: python
+   .. code-block:: python
 
-        from playhouse.flask_utils import get_object_or_404, object_list
+       from playhouse.flask_utils import get_object_or_404, object_list
 
 More examples
 -------------
@@ -410,6 +425,6 @@ There are more examples included in the peewee `examples directory
 * `Analytics web-service <https://github.com/coleifer/peewee/tree/master/examples/analytics>`_ (like a lite version of Google Analytics). Also check out the `companion blog post <https://charlesleifer.com/blog/saturday-morning-hacks-building-an-analytics-app-with-flask/>`_.
 
 .. note::
-    Like these snippets and interested in more?  Check out `flask-peewee <https://github.com/coleifer/flask-peewee>`_ -
-    a flask plugin that provides a django-like Admin interface, RESTful API, Authentication and
-    more for your peewee models.
+   Like these snippets and interested in more?  Check out `flask-peewee <https://github.com/coleifer/flask-peewee>`_ -
+   a flask plugin that provides a django-like Admin interface, RESTful API, Authentication and
+   more for your peewee models.
