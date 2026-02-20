@@ -75,7 +75,7 @@ from .test_utils import *
 
 try:
     from .pwasyncio import *
-except ImportError:
+except (ImportError, SyntaxError):
     print('Unable to import asyncio tests, skipping.')
 
 

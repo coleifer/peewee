@@ -24,7 +24,7 @@ from playhouse.sqlite_udf import rank
 try:
     import cysqlite
 except ImportError as exc:
-    raise ImportError('cysqlite is not installed') from exc
+    raise ImportError('cysqlite is not installed')
 
 
 logger = logging.getLogger('peewee')
