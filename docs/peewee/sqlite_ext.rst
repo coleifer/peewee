@@ -59,6 +59,7 @@ APIs
         set every time a connection is opened.
     :param timeout: Set the busy-timeout on the SQLite driver (in seconds).
     :param bool rank_functions: Make search result ranking functions available.
+    :param bool regexp_function: Make the REGEXP function available.
     :param bool json_contains: Make json_containts() function available.
 
     Extends :py:class:`SqliteDatabase` and inherits methods for declaring
