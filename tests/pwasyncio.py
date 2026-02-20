@@ -1,4 +1,5 @@
 import asyncio
+import contextvars
 import tempfile
 import os
 import sys
@@ -81,6 +82,25 @@ class TestGreenletSpawn(unittest.IsolatedAsyncioTestCase):
     def test_await_outside_greenlet(self):
         with self.assertRaises(MissingGreenletBridge):
             await_(Mock())
+
+    async def test_contextvars_handling(self):
+        state = []
+        var = contextvars.ContextVar('data', default='x')
+
+        def get_var():
+            nonlocal state
+            state.append(var.get())
+
+        async def aget_var():
+            await greenlet_spawn(get_var)
+
+        var.set('y')
+
+        await aget_var()
+        await greenlet_spawn(lambda: await_(aget_var()))
+        await aget_var()
+
+        self.assertEqual(state, ['y', 'y', 'y'])
 
 
 class TestTaskLocal(unittest.IsolatedAsyncioTestCase):
@@ -694,6 +714,21 @@ class TestDatabaseHelpers(BaseDatabaseTestCase):
 
         results = await self.db.run(iterate)
         self.assertEqual(results, [])
+
+    async def test_run_contextvars(self):
+        state = []
+        var = contextvars.ContextVar('data', default='x')
+
+        def do_run():
+            nonlocal state
+            state.append(var.get())
+
+        var.set('y')
+        state.append(var.get())
+        await self.db.run(do_run)
+        state.append(var.get())
+
+        self.assertEqual(state, ['y', 'y', 'y'])
 
 
 class TestModelOperations(BaseDatabaseTestCase):

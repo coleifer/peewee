@@ -49,6 +49,7 @@ async def greenlet_spawn(fn, *args, **kwargs):
     # back up to this runner, which can safely `await` the coroutine before
     # switching back to the sync code.
     g = greenlet(runner, parent=parent)
+    g.gr_context = parent.gr_context
     value = g.switch()
     while not g.dead:
         try:
