@@ -189,7 +189,7 @@ class JSONField(TextField):
     def _e(op):
         def inner(self, rhs):
             if isinstance(rhs, (list, dict)):
-                rhs = Value(rhs, converter=self.db_value, unpack=False)
+                rhs = AsIs(rhs, self.db_value)
             return Expression(self, op, rhs)
         return inner
     __eq__ = _e(OP.EQ)
