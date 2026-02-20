@@ -188,7 +188,7 @@ class ArrayValue(Node):
 
     def __sql__(self, ctx):
         return (ctx
-                .sql(Value(self.value, unpack=False))
+                .sql(AsIs(self.value))
                 .literal('::')
                 .sql(self.field.ddl_datatype(ctx)))
 
@@ -214,7 +214,7 @@ class HStoreField(IndexedFieldMixin, Field):
         return fn.hstore_to_matrix(self)
 
     def slice(self, *args):
-        return fn.slice(self, Value(list(args), unpack=False))
+        return fn.slice(self, AsIs(list(args)))
 
     def exists(self, key):
         return fn.exist(self, key)
@@ -226,21 +226,20 @@ class HStoreField(IndexedFieldMixin, Field):
         return Expression(self, HUPDATE, data)
 
     def delete(self, *keys):
-        value = Cast(Value(list(keys), unpack=False), 'text[]')
+        value = Cast(AsIs(list(keys)), 'text[]')
         return fn.delete(self, value)
 
     def contains(self, value):
         if isinstance(value, dict):
-            rhs = Value(value, unpack=False)
+            rhs = AsIs(value)
             return Expression(self, HCONTAINS_DICT, rhs)
         elif isinstance(value, (list, tuple)):
-            rhs = Value(value, unpack=False)
+            rhs = AsIs(value)
             return Expression(self, HCONTAINS_KEYS, rhs)
         return Expression(self, HCONTAINS_KEY, value)
 
     def contains_any(self, *keys):
-        return Expression(self, HCONTAINS_ANY_KEY, Value(list(keys),
-                                                         unpack=False))
+        return Expression(self, HCONTAINS_ANY_KEY, AsIs(list(keys)))
 
 
 class _JsonLookupBase(_LookupNode):
@@ -274,13 +273,13 @@ class _JsonLookupBase(_LookupNode):
         return Expression(
             self.as_json(True),
             JSONB_CONTAINS_ANY_KEY,
-            Value(list(keys), False, unpack=False))
+            AsIs(list(keys), False))
 
     def contains_all(self, *keys):
         return Expression(
             self.as_json(True),
             JSONB_CONTAINS_ALL_KEYS,
-            Value(list(keys), False, unpack=False))
+            AsIs(list(keys), False))
 
     def has_key(self, key):
         return Expression(self.as_json(True), JSONB_CONTAINS_KEY, key)
@@ -376,19 +375,19 @@ class BinaryJSONField(IndexedFieldMixin, JSONField):
         return Expression(
             self,
             JSONB_CONTAINS_ANY_KEY,
-            Value(list(items), False, unpack=False))
+            AsIs(list(items), False))
 
     def contains_all(self, *items):
         return Expression(
             self,
             JSONB_CONTAINS_ALL_KEYS,
-            Value(list(items), False, unpack=False))
+            AsIs(list(items), False))
 
     def has_key(self, key):
         return Expression(self, JSONB_CONTAINS_KEY, Value(key, False))
 
     def remove(self, *items):
-        value = Cast(Value(list(items), False, unpack=False), 'text[]')
+        value = Cast(AsIs(list(items), False), 'text[]')
         return Expression(self, JSONB_REMOVE, value)
 
 

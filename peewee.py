@@ -74,7 +74,7 @@ except ImportError:
         mysql = None
 
 
-__version__ = '3.19.0'
+__version__ = '4.0.0'
 __all__ = [
     'AnyField',
     'AsIs',
@@ -1489,8 +1489,8 @@ class ValueLiterals(WrappedNode):
             return ctx.sql(self.node)
 
 
-def AsIs(value):
-    return Value(value, unpack=False)
+def AsIs(value, converter=None):
+    return Value(value, converter, unpack=False)
 
 
 class Cast(WrappedNode):

@@ -1089,12 +1089,18 @@ Query-builder
     database driver understands.
 
 
-.. py:function:: AsIs(value)
+.. py:function:: AsIs(value, converter=None)
 
     Represents a :py:class:`Value` that is treated as-is, and passed directly
     back to the database driver. This may be useful if you are using database
     extensions that accept native Python data-types and you do not wish Peewee
     to impose any handling of the values.
+
+    In the event a converter is in scope for this value, the converter will be
+    applied unless ``converter=False`` (in which case no conversion is applied
+    by Peewee and the value is pased directly to the driver). The Postgres JSON
+    extensions make use of this to pass ``dict`` and ``list`` to the driver,
+    which then handles the JSON serialization more efficiently, for example.
 
 
 .. py:class:: Cast(node, cast)
