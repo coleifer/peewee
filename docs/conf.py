@@ -42,8 +42,8 @@ source_suffix = '.rst'
 master_doc = 'index'
 
 # General information about the project.
-project = u'peewee'
-copyright = u'charles leifer'
+project = 'peewee'
+copyright = 'charles leifer'
 
 # The version info for the project you're documenting, acts as replacement for
 # |version| and |release|, also used in various other places throughout the
@@ -109,7 +109,7 @@ html_theme_options = {
 # further.  For a list of options available for each theme, see the
 # documentation.
 #html_theme_options = {
-#    'index_logo': 'peewee-white.png'
+#    'index_logo': 'peewee4-logo.png'
 #}
 
 # Add any paths that contain custom themes here, relative to this directory.

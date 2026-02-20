@@ -6,7 +6,7 @@
 peewee
 ======
 
-.. image:: peewee3-logo.png
+.. image:: peewee4-logo.png
 
 Peewee is a simple and small ORM. It has few (but expressive) concepts, making
 it easy to learn and intuitive to use.
