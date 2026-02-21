@@ -140,10 +140,11 @@ This allows you to write code like the following:
    yet another message
 
 .. seealso::
-   Refer to the :ref:`relationships` document for an in-depth discussion of
-   foreign-keys, joins and relationships between models.
+   :ref:`relationships` provides an in-depth discussion of foreign-keys, joins
+   and relationships between models.
 
-For full documentation on fields, see the :ref:`Fields API notes <fields-api>`
+.. seealso::
+   :ref:`Fields API <fields-api>`.
 
 .. _field_types_table:
 
@@ -180,12 +181,7 @@ Field Type              Sqlite              Postgresql          MySQL
 ``ForeignKeyField``     integer             integer             integer
 =====================   =================   =================   =================
 
-.. note::
-   Don't see the field you're looking for in the above table? It's easy to
-   create custom field types and use them with your models.
-
-   * :ref:`custom-fields`
-   * :py:class:`Database`, particularly the ``fields`` parameter.
+.. seealso:: :ref:`custom-fields`
 
 Field initialization arguments
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
