@@ -872,10 +872,30 @@ class TestPostgresIsolationLevel(DatabaseTestCase):
 
         conn.set_isolation_level(2)
         self.assertEqual(conn.isolation_level, 2)
-
         self.database.close()
+
         conn = self.database.connection()
         self.assertEqual(conn.isolation_level, 3)
+        self.database.close()
+
+        self.database.set_isolation_level(2)
+        for _ in range(2):
+            conn = self.database.connection()
+            self.assertEqual(conn.isolation_level, 2)
+            self.database.close()
+
+    def test_isolation_level_str(self):
+        db = db_loader('postgres', isolation_level='SERIALIZABLE')
+        conn = db.connection()
+        self.assertEqual(conn.isolation_level,
+                         db._adapter.isolation_levels_inv['SERIALIZABLE'])
+        db.close()
+
+        db.set_isolation_level('READ COMMITTED')
+        conn = db.connection()
+        self.assertEqual(conn.isolation_level,
+                         db._adapter.isolation_levels_inv['READ COMMITTED'])
+        db.close()
 
 
 @skip_unless(pg12(), 'cte materialization requires pg >= 12')

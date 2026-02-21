@@ -3946,8 +3946,34 @@ class SqliteDatabase(Database):
         return fn.datetime(date_field, 'unixepoch')
 
 
-class Psycopg2Adapter(object):
+class _BasePsycopgAdapter(object):
+    isolation_levels = {}  # Map int -> str.
+
     def __init__(self):
+        self.isolation_levels_inv = {
+            v: k for k, v in self.isolation_levels.items()}
+
+    def isolation_level_int(self, isolation_level):
+        if isinstance(isolation_level, str):
+            return self.isolation_levels_inv[isolation_level]
+        return isolation_level
+
+    def isolation_level_str(self, isolation_level):
+        if isinstance(isolation_level, int):
+            return self.isolation_levels[isolation_level]
+        return isolation_level
+
+
+class Psycopg2Adapter(_BasePsycopgAdapter):
+    isolation_levels = {
+        1: 'READ COMMITTED',
+        2: 'REPEATABLE READ',
+        3: 'SERIALIZABLE',
+        4: 'READ UNCOMMITTED',
+    }
+
+    def __init__(self):
+        super(Psycopg2Adapter, self).__init__()
         self.json_type = Json_pg2
         self.jsonb_type = Json_pg2
         self.cast_json_case = True
@@ -4005,8 +4031,16 @@ class Psycopg2Adapter(object):
         return fn.EXTRACT(NodeList((date_part, SQL('FROM'), date_field)))
 
 
-class Psycopg3Adapter(object):
+class Psycopg3Adapter(_BasePsycopgAdapter):
+    isolation_levels = {
+        1: 'READ UNCOMMITTED',
+        2: 'READ COMMITTED',
+        3: 'REPEATABLE READ',
+        4: 'SERIALIZABLE',
+    }
+
     def __init__(self):
+        super(Psycopg3Adapter, self).__init__()
         self.json_type = Json_pg3
         self.jsonb_type = Jsonb_pg3
         self.cast_json_case = False
@@ -4084,13 +4118,17 @@ class PostgresqlDatabase(Database):
              isolation_level=None, **kwargs):
         self._register_unicode = register_unicode
         self._encoding = encoding
-        self._isolation_level = isolation_level
 
         prefer_psycopg3 = kwargs.pop('prefer_psycopg3', False)
         if psycopg is not None and prefer_psycopg3:
             self._adapter = self.psycopg3_adapter()
         else:
             self._adapter = self.psycopg2_adapter()
+
+        # Accept a string ('READ COMMITTED') or an int constant. Since the
+        # constants vary between psycopg2 & psycopg3 we have to abstract this.
+        self._isolation_level = self._adapter.isolation_level_int(
+            isolation_level)
 
         super(PostgresqlDatabase, self).init(database, **kwargs)
 
@@ -4137,7 +4175,8 @@ class PostgresqlDatabase(Database):
         if self.is_closed():
             self.connect()
         if isolation_level:
-            stmt = 'BEGIN TRANSACTION ISOLATION LEVEL %s' % isolation_level
+            txn_type = self._adapter.isolation_level_str(isolation_level)
+            stmt = 'BEGIN TRANSACTION ISOLATION LEVEL %s' % txn_type
         else:
             stmt = 'BEGIN'
         with __exception_wrapper__:
@@ -4281,6 +4320,10 @@ class PostgresqlDatabase(Database):
 
     def set_time_zone(self, timezone):
         self.execute_sql('set time zone "%s";' % timezone)
+
+    def set_isolation_level(self, isolation_level):
+        self._isolation_level = self._adapter.isolation_level_int(
+            isolation_level)
 
 
 class MySQLDatabase(Database):

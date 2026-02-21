@@ -620,8 +620,7 @@ Database
     :param bool register_unicode: Register unicode types.
     :param str encoding: Database encoding.
     :param int isolation_level: Isolation level constant, defined in the
-        ``psycopg2.extensions`` module or ``psycopg.connection.IsolationLevel``
-        enum (psycopg3).
+        ``psycopg2.extensions`` module or ``psycopg.IsolationLevel`` enum (psycopg3).
     :param bool prefer_psycopg3: If both psycopg2 and psycopg3 are installed,
         instruct Peewee to prefer psycopg3.
 
@@ -633,21 +632,29 @@ Database
         Set the timezone on the current connection. If no connection is open,
         then one will be opened.
 
+    .. py:method:: set_isolation_level(isolation_level)
+
+       :param int isolation_level: Isolation level constant, defined in the
+           ``psycopg2.extensions`` module or ``psycopg.IsolationLevel`` enum (psycopg3).
+           Set to ``None`` to use the server default.
+
     .. py:method:: atomic(isolation_level=None)
 
-        :param str isolation_level: Isolation strategy: SERIALIZABLE, READ COMMITTED, REPEATABLE READ, READ UNCOMMITTED
+        :param isolation_level: Isolation strategy: SERIALIZABLE, READ COMMITTED, REPEATABLE READ, READ UNCOMMITTED
+        :type isolation_level: ``int`` or ``str``.
 
         Create an atomic context-manager, optionally using the specified
-        isolation level (if unspecified, the server default will be used).
+        isolation level (if unspecified, the connection default will be used).
 
         .. note:: Isolation level only applies to the outermost ``atomic()`` block.
 
     .. py:method:: transaction(isolation_level=None)
 
-        :param str isolation_level: Isolation strategy: SERIALIZABLE, READ COMMITTED, REPEATABLE READ, READ UNCOMMITTED
+        :param isolation_level: Isolation strategy: SERIALIZABLE, READ COMMITTED, REPEATABLE READ, READ UNCOMMITTED
+        :type isolation_level: ``int`` or ``str``.
 
         Create a transaction context-manager, optionally using the specified
-        isolation level (if unspecified, the server default will be used).
+        isolation level (if unspecified, the connection default will be used).
 
 
 .. py:class:: MySQLDatabase(database, **kwargs)

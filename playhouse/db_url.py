@@ -9,9 +9,11 @@ from playhouse.cockroachdb import PooledCockroachDatabase
 from playhouse.pool import PooledCySqliteDatabase
 from playhouse.pool import PooledMySQLDatabase
 from playhouse.pool import PooledPostgresqlDatabase
+from playhouse.pool import PooledPostgresqlExtDatabase
 from playhouse.pool import PooledPsycopg3Database
 from playhouse.pool import PooledSqliteDatabase
 from playhouse.pool import PooledSqliteExtDatabase
+from playhouse.postgres_ext import PostgresqlExtDatabase
 from playhouse.postgres_ext import Psycopg3Database
 from playhouse.sqlite_ext import SqliteExtDatabase
 try:
@@ -31,6 +33,10 @@ schemes = {
     'postgresql': PostgresqlDatabase,
     'postgres+pool': PooledPostgresqlDatabase,
     'postgresql+pool': PooledPostgresqlDatabase,
+    'postgresext': PostgresqlExtDatabase,
+    'postgresqlext': PostgresqlExtDatabase,
+    'postgresext+pool': PooledPostgresqlExtDatabase,
+    'postgresqlext+pool': PooledPostgresqlExtDatabase,
     'psycopg3': Psycopg3Database,
     'psycopg3+pool': PooledPsycopg3Database,
     'sqlite': SqliteDatabase,
@@ -38,11 +44,6 @@ schemes = {
     'sqlite+pool': PooledSqliteDatabase,
     'sqliteext+pool': PooledSqliteExtDatabase,
 }
-if CySqliteDatabase is not None:
-    schemes.update({
-        'cysqlite': CySqliteDatabase,
-        'cysqlite+pool': PooledCySqliteDatabase,
-    })
 
 def register_database(db_class, *names):
     global schemes
@@ -136,8 +137,9 @@ else:
     register_database(APSWDatabase, 'apsw')
 
 try:
-    from playhouse.postgres_ext import PostgresqlExtDatabase
+    from playhouse.cysqlite_ext import CySqliteDatabase
 except ImportError:
     pass
 else:
-    register_database(PostgresqlExtDatabase, 'postgresext', 'postgresqlext')
+    register_database(CySqliteDatabase, 'cysqlite')
+    register_database(PooledCySqliteDatabase, 'cysqlite+pool')

@@ -18,34 +18,34 @@ Peewee comes with support for:
 
   .. code-block:: python
 
-      # SQLite database using WAL journal mode and 64MB cache.
-      sqlite_db = SqliteDatabase('/path/to/app.db', pragmas={
-          'journal_mode': 'wal',
-          'cache_size': -1024 * 64})
+     # SQLite database using WAL journal mode and 64MB cache.
+     sqlite_db = SqliteDatabase('/path/to/app.db', pragmas={
+         'journal_mode': 'wal',
+         'cache_size': -1024 * 64})
 
 * Postgres - :py:class:`PostgresqlDatabase` using ``psycopg2`` or ``psycopg3``.
 
   .. code-block:: python
 
-      # Connect to a Postgres database.
-      pg_db = PostgresqlDatabase(
-          'my_app',
-          user='postgres',
-          password='secret',
-          host='10.1.0.9',
-          port=5432)
+     # Connect to a Postgres database.
+     pg_db = PostgresqlDatabase(
+         'my_app',
+         user='postgres',
+         password='secret',
+         host='10.1.0.9',
+         port=5432)
 
 * MySQL and MariaDB - :py:class:`MySQLDatabase` using ``pymysql``.
 
   .. code-block:: python
 
-      # Connect to a MySQL database on network.
-      mysql_db = MySQLDatabase(
-          'my_app',
-          user='app',
-          password='db_password',
-          host='10.1.0.8',
-          port=3306)
+     # Connect to a MySQL database on network.
+     mysql_db = MySQLDatabase(
+         'my_app',
+         user='app',
+         password='db_password',
+         host='10.1.0.8',
+         port=3306)
 
 Initializing a Database
 -----------------------
@@ -64,7 +64,7 @@ Peewee :py:class:`Database` parameters, so they will be passed directly back to
 
     db = PostgresqlDatabase(
         'database_name',  # Required by Peewee.
-        user='postgres',  # Will be passed directly to psycopg2.
+        user='postgres',  # Will be passed directly to psycopg.
         password='secret',  # Ditto.
         host='db.mysite.com')  # Ditto.
 
@@ -74,7 +74,7 @@ value, simply pass in ``charset`` alongside your other values:
 
 .. code-block:: python
 
-    db = MySQLDatabase('database_name', user='www-data', charset='utf8mb4')
+   db = MySQLDatabase('database_name', user='www-data', charset='utf8mb4')
 
 Consult your database driver's documentation for the available parameters:
 
@@ -105,45 +105,57 @@ parameters:
 
 .. code-block:: python
 
-    psql_db = PostgresqlDatabase('my_database', user='postgres')
+   psql_db = PostgresqlDatabase('my_database', user='postgres')
 
-    class BaseModel(Model):
-        """A base model that will use our Postgresql database"""
-        class Meta:
-            database = psql_db
+   class BaseModel(Model):
+       """A base model that will use our Postgresql database"""
+       class Meta:
+           database = psql_db
 
-    class User(BaseModel):
-        username = CharField()
+   class User(BaseModel):
+       username = CharField()
 
 .. seealso::
-    Peewee includes a :ref:`Postgresql extension module <postgres_ext>` which
-    provides many postgres-specific features such as:
+   Peewee includes a :ref:`Postgresql extension module <postgres_ext>` which
+   provides many postgres-specific features such as:
 
-    * :ref:`Arrays <pgarrays>`
-    * :ref:`JSON <pgjson>`
-    * :ref:`Full Text Search <pg_fts>`
-    * Postgres-specific field types
+   * :ref:`Arrays <pgarrays>`
+   * :ref:`JSON <pgjson>`
+   * :ref:`Full Text Search <pg_fts>`
+   * Postgres-specific field types
 
-    To utilize these features use :py:class:`PostgresqlExtDatabase`.
+   To utilize these features use :py:class:`PostgresqlExtDatabase`.
 
-    .. code-block:: python
+   .. code-block:: python
 
-        from playhouse.postgres_ext import PostgresqlExtDatabase
+      from playhouse.postgres_ext import PostgresqlExtDatabase
 
-        psql_db = PostgresqlExtDatabase('my_database', user='postgres')
+      psql_db = PostgresqlExtDatabase('my_database', user='postgres')
 
 Isolation level
 ^^^^^^^^^^^^^^^
 
-The isolation level can be specified as an initialization parameter, using the
-constants in ``psycopg2.extensions``:
+The isolation level can be specified as an initialization parameter.
+
+Psycopg2 exposes isolation level constants in ``psycopg2.extensions``:
 
 .. code-block:: python
 
-    from psycopg2.extensions import ISOLATION_LEVEL_SERIALIZABLE
+   from psycopg2.extensions import ISOLATION_LEVEL_SERIALIZABLE
 
-    db = PostgresqlDatabase('my_app', user='postgres', host='db-host',
-                            isolation_level=ISOLATION_LEVEL_SERIALIZABLE)
+   db = PostgresqlDatabase('my_app', user='postgres', host='db-host',
+                           isolation_level=ISOLATION_LEVEL_SERIALIZABLE)
+
+Psycopg3 exposes isolation level constants as a module-level enum:
+
+.. code-block:: python
+
+   from psycopg import IsolationLevel
+
+   db = PostgresqlDatabase('my_app', user='postgres', host='db-host',
+                           isolation_level=IsolationLevel.SERIALIZABLE)
+
+.. seealso:: :meth:`PostgresqlDatabase.set_isolation_level`
 
 .. _using_sqlite:
 
@@ -161,44 +173,44 @@ you can specify a list or pragmas or any other arbitrary `sqlite3 parameters
 
 .. code-block:: python
 
-    sqlite_db = SqliteDatabase('my_app.db', pragmas={'journal_mode': 'wal'})
+   sqlite_db = SqliteDatabase('my_app.db', pragmas={'journal_mode': 'wal'})
 
-    class BaseModel(Model):
-        """A base model that will use our Sqlite database."""
-        class Meta:
-            database = sqlite_db
+   class BaseModel(Model):
+       """A base model that will use our Sqlite database."""
+       class Meta:
+           database = sqlite_db
 
-    class User(BaseModel):
-        username = TextField()
-        # etc, etc
+   class User(BaseModel):
+       username = TextField()
+       # etc, etc
 
 .. seealso::
-    Peewee includes a :ref:`SQLite extension module <sqlite_ext>` which
-    provides many SQLite-specific features such as:
+   Peewee includes a :ref:`SQLite extension module <sqlite_ext>` which
+   provides many SQLite-specific features such as:
 
-    * :ref:`JSON <sqlite-json1>`
-    * :ref:`Full Text Search <sqlite-fts>`
-    * SQLite-specific field types
+   * :ref:`JSON <sqlite-json1>`
+   * :ref:`Full Text Search <sqlite-fts>`
+   * SQLite-specific field types
 
-    Using :py:class:`SqliteExtDatabase`:
+   Using :py:class:`SqliteExtDatabase`:
 
-    .. code-block:: python
+   .. code-block:: python
 
-        from playhouse.sqlite_ext import SqliteExtDatabase
+      from playhouse.sqlite_ext import SqliteExtDatabase
 
-        sqlite_db = SqliteExtDatabase('my_app.db', pragmas={
-            'journal_mode': 'wal',
-            'cache_size': -64 * 1000})
+      sqlite_db = SqliteExtDatabase('my_app.db', pragmas={
+          'journal_mode': 'wal',
+          'cache_size': -64 * 1000})
 
-    Using :py:class:`CySqliteDatabase`:
+   Using :py:class:`CySqliteDatabase`:
 
-    .. code-block:: python
+   .. code-block:: python
 
-        from playhouse.cysqlite_ext import CySqliteDatabase
+       from playhouse.cysqlite_ext import CySqliteDatabase
 
-        sqlite_db = CySqliteDatabase('my_app.db', pragmas={
-            'journal_mode': 'wal',
-            'cache_size': -64 * 1000})
+       sqlite_db = CySqliteDatabase('my_app.db', pragmas={
+           'journal_mode': 'wal',
+           'cache_size': -64 * 1000})
 
 .. _sqlite-pragma:
 
@@ -214,11 +226,11 @@ and value:
 
 .. code-block:: python
 
-    db = SqliteDatabase('my_app.db', pragmas={
-        'journal_mode': 'wal',
-        'cache_size': 10000,  # 10000 pages, or ~40MB
-        'foreign_keys': 1,  # Enforce foreign-key constraints
-    })
+   db = SqliteDatabase('my_app.db', pragmas={
+       'journal_mode': 'wal',
+       'cache_size': 10000,  # 10000 pages, or ~40MB
+       'foreign_keys': 1,  # Enforce foreign-key constraints
+   })
 
 PRAGMAs may also be configured dynamically using either the
 :py:meth:`~SqliteDatabase.pragma` method or the special properties exposed on
@@ -226,30 +238,30 @@ the :py:class:`SqliteDatabase` object:
 
 .. code-block:: python
 
-    # Set cache size to 64MB for *current connection*.
-    db.pragma('cache_size', -1024 * 64)
+   # Set cache size to 64MB for *current connection*.
+   db.pragma('cache_size', -1024 * 64)
 
-    # Same as above.
-    db.cache_size = -1024 * 64
+   # Same as above.
+   db.cache_size = -1024 * 64
 
-    # Read the value of several pragmas:
-    print('cache_size:', db.cache_size)
-    print('foreign_keys:', db.foreign_keys)
-    print('journal_mode:', db.journal_mode)
-    print('page_size:', db.page_size)
+   # Read the value of several pragmas:
+   print('cache_size:', db.cache_size)
+   print('foreign_keys:', db.foreign_keys)
+   print('journal_mode:', db.journal_mode)
+   print('page_size:', db.page_size)
 
-    # Set foreign_keys pragma on current connection *AND* on all
-    # connections opened subsequently.
-    db.pragma('foreign_keys', 1, permanent=True)
+   # Set foreign_keys pragma on current connection *AND* on all
+   # connections opened subsequently.
+   db.pragma('foreign_keys', 1, permanent=True)
 
 .. attention::
-    Pragmas set using the :py:meth:`~SqliteDatabase.pragma` method, by default,
-    do not persist after the connection is closed. To configure a pragma to be
-    run whenever a connection is opened, specify ``permanent=True``.
+   Pragmas set using the :py:meth:`~SqliteDatabase.pragma` method, by default,
+   do not persist after the connection is closed. To configure a pragma to be
+   run whenever a connection is opened, specify ``permanent=True``.
 
 .. note::
-    A full list of PRAGMA settings, their meaning and accepted values can be
-    found in the SQLite documentation: https://sqlite.org/pragma.html
+   A full list of PRAGMA settings, their meaning and accepted values can be
+   found in the SQLite documentation: https://sqlite.org/pragma.html
 
 Recommended Settings
 ^^^^^^^^^^^^^^^^^^^^
@@ -271,12 +283,12 @@ Example database using the above options:
 
 .. code-block:: python
 
-    db = SqliteDatabase('my_app.db', pragmas={
-        'journal_mode': 'wal',
-        'cache_size': -1 * 64000,  # 64MB
-        'foreign_keys': 1,
-        'ignore_check_constraints': 0,
-        'synchronous': 0})
+   db = SqliteDatabase('my_app.db', pragmas={
+       'journal_mode': 'wal',
+       'cache_size': -1 * 64000,  # 64MB
+       'foreign_keys': 1,
+       'ignore_check_constraints': 0,
+       'synchronous': 0})
 
 .. _sqlite-user-functions:
 
@@ -298,46 +310,46 @@ Example user-defined function:
 
 .. code-block:: python
 
-    db = SqliteDatabase('analytics.db')
+   db = SqliteDatabase('analytics.db')
 
-    from urllib.parse import urlparse
+   from urllib.parse import urlparse
 
-    @db.func('hostname')
-    def hostname(url):
-        if url is not None:
-            return urlparse(url).netloc
+   @db.func('hostname')
+   def hostname(url):
+       if url is not None:
+           return urlparse(url).netloc
 
-    # Call this function in our code:
-    # The following finds the most common hostnames of referrers by count:
-    query = (PageView
-             .select(fn.hostname(PageView.referrer), fn.COUNT(PageView.id))
-             .group_by(fn.hostname(PageView.referrer))
-             .order_by(fn.COUNT(PageView.id).desc()))
+   # Call this function in our code:
+   # The following finds the most common hostnames of referrers by count:
+   query = (PageView
+            .select(fn.hostname(PageView.referrer), fn.COUNT(PageView.id))
+            .group_by(fn.hostname(PageView.referrer))
+            .order_by(fn.COUNT(PageView.id).desc()))
 
 Example user-defined aggregate:
 
 .. code-block:: python
 
-    from hashlib import md5
+   from hashlib import md5
 
-    @db.aggregate('md5')
-    class MD5Checksum(object):
-        def __init__(self):
-            self.checksum = md5()
+   @db.aggregate('md5')
+   class MD5Checksum(object):
+       def __init__(self):
+           self.checksum = md5()
 
-        def step(self, value):
-            self.checksum.update(value.encode('utf-8'))
+       def step(self, value):
+           self.checksum.update(value.encode('utf-8'))
 
-        def finalize(self):
-            return self.checksum.hexdigest()
+       def finalize(self):
+           return self.checksum.hexdigest()
 
-    # Usage:
-    # The following computes an aggregate MD5 checksum for files broken
-    # up into chunks and stored in the database.
-    query = (FileChunk
-             .select(FileChunk.filename, fn.MD5(FileChunk.data))
-             .group_by(FileChunk.filename)
-             .order_by(FileChunk.filename, FileChunk.sequence))
+   # Usage:
+   # The following computes an aggregate MD5 checksum for files broken
+   # up into chunks and stored in the database.
+   query = (FileChunk
+            .select(FileChunk.filename, fn.MD5(FileChunk.data))
+            .group_by(FileChunk.filename)
+            .order_by(FileChunk.filename, FileChunk.sequence))
 
 Example user-defined window function:
 
@@ -346,90 +358,90 @@ Example user-defined window function:
    # Window functions are normal aggregates with two additional methods:
    # inverse(value) - Perform the inverse of step(value).
    # value() - Report value at current step.
-    @db.aggregate('mysum')
-    class MySum(object):
-        def __init__(self):
-            self._value = 0
-        def step(self, value):
-            self._value += (value or 0)
-        def inverse(self, value):
-            self._value -= (value or 0)  # Do opposite of "step()".
-        def value(self):
-            return self._value
-        def finalize(self):
-            return self._value
+   @db.aggregate('mysum')
+   class MySum(object):
+       def __init__(self):
+           self._value = 0
+       def step(self, value):
+           self._value += (value or 0)
+       def inverse(self, value):
+           self._value -= (value or 0)  # Do opposite of "step()".
+       def value(self):
+           return self._value
+       def finalize(self):
+           return self._value
 
-    # e.g., aggregate sum of employee salaries over their department.
-    query = (Employee
-             .select(
-                 Employee.department,
-                 Employee.salary,
-                 fn.mysum(Employee.salary).over(partition_by=[Employee.department]))
-             .order_by(Employee.id))
+   # e.g., aggregate sum of employee salaries over their department.
+   query = (Employee
+            .select(
+                Employee.department,
+                Employee.salary,
+                fn.mysum(Employee.salary).over(partition_by=[Employee.department]))
+            .order_by(Employee.id))
 
 Example collation:
 
 .. code-block:: python
 
-    @db.collation('ireverse')
-    def collate_reverse(s1, s2):
-        # Case-insensitive reverse.
-        s1, s2 = s1.lower(), s2.lower()
-        return (s1 < s2) - (s1 > s2)  # Equivalent to -cmp(s1, s2)
+   @db.collation('ireverse')
+   def collate_reverse(s1, s2):
+       # Case-insensitive reverse.
+       s1, s2 = s1.lower(), s2.lower()
+       return (s1 < s2) - (s1 > s2)  # Equivalent to -cmp(s1, s2)
 
-    # To use this collation to sort books in reverse order...
-    Book.select().order_by(collate_reverse.collation(Book.title))
+   # To use this collation to sort books in reverse order...
+   Book.select().order_by(collate_reverse.collation(Book.title))
 
-    # Or...
-    Book.select().order_by(Book.title.asc(collation='reverse'))
+   # Or...
+   Book.select().order_by(Book.title.asc(collation='reverse'))
 
 Example user-defined table-value function (see `cysqlite TableFunction docs <https://cysqlite.readthedocs.io/en/latest/api.html#tablefunction>`_
 for details on ``TableFunction``).
 
 .. code-block:: python
 
-    from cysqlite import TableFunction
-    from playhouse.cysqlite_ext import CySqliteDatabase
+   from cysqlite import TableFunction
+   from playhouse.cysqlite_ext import CySqliteDatabase
 
-    db = CySqliteDatabase('my_app.db')
+   db = CySqliteDatabase('my_app.db')
 
-    @db.table_function('series')
-    class Series(TableFunction):
-        columns = ['value']
-        params = ['start', 'stop', 'step']
+   @db.table_function('series')
+   class Series(TableFunction):
+       columns = ['value']
+       params = ['start', 'stop', 'step']
 
-        def initialize(self, start=0, stop=None, step=1):
-            """
-            Table-functions declare an initialize() method, which is
-            called with whatever arguments the user has called the
-            function with.
-            """
-            self.start = self.current = start
-            self.stop = stop or float('Inf')
-            self.step = step
+       def initialize(self, start=0, stop=None, step=1):
+           """
+           Table-functions declare an initialize() method, which is
+           called with whatever arguments the user has called the
+           function with.
+           """
+           self.start = self.current = start
+           self.stop = stop or float('Inf')
+           self.step = step
 
-        def iterate(self, idx):
-            """
-            Iterate is called repeatedly by the SQLite database engine
-            until the required number of rows has been read **or** the
-            function raises a `StopIteration` signalling no more rows
-            are available.
-            """
-            if self.current > self.stop:
-                raise StopIteration
+       def iterate(self, idx):
+           """
+           Iterate is called repeatedly by the SQLite database engine
+           until the required number of rows has been read **or** the
+           function raises a `StopIteration` signalling no more rows
+           are available.
+           """
+           if self.current > self.stop:
+               raise StopIteration
 
-            ret, self.current = self.current, self.current + self.step
-            return (ret,)
+           ret, self.current = self.current, self.current + self.step
+           return (ret,)
 
-    # Usage:
-    cursor = db.execute_sql('SELECT * FROM series(?, ?, ?)', (0, 5, 2))
-    for value, in cursor:
-        print(value)
+   # Usage:
+   cursor = db.execute_sql('SELECT * FROM series(?, ?, ?)', (0, 5, 2))
+   for value, in cursor:
+       print(value)
 
-    # Prints:
-    # 0
-    # 2
-    # 4
+   # Prints:
+   # 0
+   # 2
+   # 4
 
 For more information, see:
 
@@ -479,6 +491,11 @@ For more information, see the SQLite `locking documentation <https://sqlite.org/
 To learn more about transactions in Peewee, see the :ref:`transactions`
 documentation.
 
+.. attention::
+   Do not alter the ``isolation_level`` property of the ``sqlite3.Connection``
+   object. Peewee requires the ``sqlite3`` driver be in autocommit-mode, which
+   is handled automatically by :class:`SqliteDatabase`.
+
 cysqlite, an alternate DB-API driver
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
@@ -493,6 +510,16 @@ driver. Additional functionality is provided by :py:class:`CySqliteDatabase`:
 * :py:meth:`~CySqliteDatabase.progress` - progress handler.
 * :py:meth:`~CySqliteDatabase.backup` / :py:meth:`~CySqliteDatabase.backup_to_file` - online backup APIs.
 * :py:meth:`~CySqliteDatabase.blob_open` - incremental BLOB I/O.
+
+Example:
+
+.. code-block:: python
+
+   from playhouse.cysqlite_ext import CySqliteDatabase
+
+   db = CySqliteDatabase('app.db', pragmas={
+       'journal_mode': 'wal',
+       'foreign_keys': 1})
 
 APSW, an Advanced SQLite Driver
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -514,22 +541,16 @@ If you would like to use APSW, use the :py:class:`APSWDatabase` from the
 
 .. code-block:: python
 
-    from playhouse.apsw_ext import APSWDatabase
+   from playhouse.apsw_ext import APSWDatabase
 
-    apsw_db = APSWDatabase('my_app.db')
+   apsw_db = APSWDatabase('my_app.db')
 
 .. _using_mariadb:
 
-Using MariaDB
--------------
-
-Peewee supports MariaDB. To use MariaDB, use the MySQL backend, which is shared
-between the two. See :ref:`"Using MySQL" <using_mysql>` for more details.
-
 .. _using_mysql:
 
-Using MySQL
------------
+Using MySQL or MariaDB
+----------------------
 
 To use Peewee with MySQL or MariaDB the recommended driver is ``pymysql``:
 
@@ -592,22 +613,23 @@ Example code:
 
 .. code-block:: python
 
-      import os
+   import os
 
-      from peewee import *
-      from playhouse.db_url import connect
+   from peewee import *
+   from playhouse.db_url import connect
 
-      # Connect to the database URL defined in the environment, falling
-      # back to a local Sqlite database if no database URL is specified.
-      db = connect(os.environ.get('DATABASE') or 'sqlite:///default.db')
+   # Connect to the database URL defined in the environment, falling
+   # back to a local Sqlite database if no database URL is specified.
+   db = connect(os.environ.get('DATABASE') or 'sqlite:///default.db')
 
-      class BaseModel(Model):
-          class Meta:
-              database = db
+   class BaseModel(Model):
+       class Meta:
+           database = db
 
 Example database URLs:
 
 * ``sqlite:///my_database.db`` will create a :py:class:`SqliteDatabase` instance for the file ``my_database.db`` in the current directory.
+* ``sqlite:////var/www/my_database.db`` will create a :py:class:`SqliteDatabase` instance for the file ``/var/www/my_database.db``.
 * ``sqlite:///:memory:`` will create an in-memory :py:class:`SqliteDatabase` instance.
 * ``postgresql://postgres:my_password@localhost:5432/my_database`` will create a :py:class:`PostgresqlDatabase` instance. A username and password are provided, as well as the host and port to connect to.
 * ``mysql://user:passwd@ip:port/my_db`` will create a :py:class:`MySQLDatabase` instance for the local MySQL database *my_db*.
@@ -624,28 +646,29 @@ these cases, you can *defer* the initialization of the database by specifying
 ``None`` as the database_name.
 
 .. code-block:: python
+   :emphasize-lines: 1
 
-    database = PostgresqlDatabase(None)  # Un-initialized database.
+   database = PostgresqlDatabase(None)  # Un-initialized database.
 
-    class SomeModel(Model):
-        class Meta:
-            database = database
+   class SomeModel(Model):
+       class Meta:
+           database = database
 
 If you try to connect or issue any queries while your database is uninitialized
 you will get an exception:
 
-.. code-block:: python
+.. code-block:: pycon
 
-    >>> database.connect()
-    Exception: Error, database not properly initialized before opening connection
+   >>> database.connect()
+   Exception: Error, database not properly initialized before opening connection
 
 To initialize your database, call the :py:meth:`~Database.init` method with the
 database name and any additional keyword arguments:
 
 .. code-block:: python
 
-    database_name = input('What is the name of the db? ')
-    database.init(database_name, host='localhost', user='postgres')
+   database_name = input('What is the name of the db? ')
+   database.init(database_name, host='localhost', user='postgres')
 
 For even more control over initializing your database, see the next section,
 :ref:`dynamic_db`.
@@ -663,25 +686,25 @@ the app is configured:
 
 .. code-block:: python
 
-    database_proxy = DatabaseProxy()  # Create a proxy for our db.
+   database_proxy = DatabaseProxy()  # Create a proxy for our db.
 
-    class BaseModel(Model):
-        class Meta:
-            database = database_proxy  # Use proxy for our DB.
+   class BaseModel(Model):
+       class Meta:
+           database = database_proxy  # Use proxy for our DB.
 
-    class User(BaseModel):
-        username = CharField()
+   class User(BaseModel):
+       username = CharField()
 
-    # Based on configuration, use a different database.
-    if app.config['DEBUG']:
-        database = SqliteDatabase('local.db')
-    elif app.config['TESTING']:
-        database = SqliteDatabase(':memory:')
-    else:
-        database = PostgresqlDatabase('mega_production_db')
+   # Based on configuration, use a different database.
+   if app.config['DEBUG']:
+       database = SqliteDatabase('local.db')
+   elif app.config['TESTING']:
+       database = SqliteDatabase(':memory:')
+   else:
+       database = PostgresqlDatabase('mega_production_db')
 
-    # Configure our proxy to use the db we specified in config.
-    database_proxy.initialize(database)
+   # Configure our proxy to use the db we specified in config.
+   database_proxy.initialize(database)
 
 .. warning::
     Only use this method if your actual database driver varies at run-time. For
@@ -706,26 +729,31 @@ Changing the database at run-time
 
 We have seen three ways that databases can be configured with Peewee:
 
-.. code-block:: python
+1. Initialize database immediately.
 
-    # The usual way:
-    db = SqliteDatabase('my_app.db', pragmas={'journal_mode': 'wal'})
+   .. code-block:: python
 
+      db = SqliteDatabase('my_app.db', pragmas={'journal_mode': 'wal'})
 
-    # Specify the details at run-time:
-    db = SqliteDatabase(None)
-    ...
-    db.init(db_filename, pragmas={'journal_mode': 'wal'})
+2. Initialize database at run-time.
 
+   .. code-block:: python
 
-    # Or use a placeholder:
-    db = DatabaseProxy()
-    ...
-    db.initialize(SqliteDatabase('my_app.db', pragmas={'journal_mode': 'wal'}))
+      db = SqliteDatabase(None)
+      ...
+      db.init(db_filename, pragmas={'journal_mode': 'wal'})
 
-Peewee can also set or change the database for your model classes. This
-technique is used by the Peewee test suite to bind test model classes to
-various database instances when running the tests.
+3. Use a placeholder and then bind the database at run-time (least desirable).
+
+   .. code-block:: python
+
+      db = DatabaseProxy()
+      ...
+      db.initialize(SqliteDatabase('my_app.db', pragmas={'journal_mode': 'wal'}))
+
+Peewee can also **set or change the database for your model classes** at
+run-time in a different way. This technique is used by the Peewee test suite to
+**bind** test model classes to various database instances when running the tests.
 
 There are two sets of complementary methods:
 
@@ -739,53 +767,55 @@ As an example, we'll declare two models **without** specifying any database:
 
 .. code-block:: python
 
-    class User(Model):
-        username = TextField()
+   class User(Model):
+       username = TextField()
 
-    class Tweet(Model):
-        user = ForeignKeyField(User, backref='tweets')
-        content = TextField()
-        timestamp = TimestampField()
+   class Tweet(Model):
+       user = ForeignKeyField(User, backref='tweets')
+       content = TextField()
+       timestamp = TimestampField()
 
 Bind the models to a database at run-time:
 
 .. code-block:: python
+   :emphasize-lines: 7, 10
 
-    postgres_db = PostgresqlDatabase('my_app', user='postgres')
-    sqlite_db = SqliteDatabase('my_app.db')
+   postgres_db = PostgresqlDatabase('my_app', user='postgres')
+   sqlite_db = SqliteDatabase('my_app.db')
 
-    # At this point, the User and Tweet models are NOT bound to any database.
+   # At this point, the User and Tweet models are NOT bound to any database.
 
-    # Let's bind them to the Postgres database:
-    postgres_db.bind([User, Tweet])
+   # Let's bind them to the Postgres database:
+   postgres_db.bind([User, Tweet])
 
-    # Now we will temporarily bind them to the sqlite database:
-    with sqlite_db.bind_ctx([User, Tweet]):
-        # User and Tweet are now bound to the sqlite database.
-        assert User._meta.database is sqlite_db
+   # Now we will temporarily bind them to the sqlite database:
+   with sqlite_db.bind_ctx([User, Tweet]):
+       # User and Tweet are now bound to the sqlite database.
+       assert User._meta.database is sqlite_db
 
-    # User and Tweet are once again bound to the Postgres database.
-    assert User._meta.database is postgres_db
+   # User and Tweet are once again bound to the Postgres database.
+   assert User._meta.database is postgres_db
 
 The :py:meth:`Model.bind` and :py:meth:`Model.bind_ctx` methods work the same
 for binding a given model class:
 
 .. code-block:: python
+   :emphasize-lines: 3, 9
 
-    # Bind the user model to the sqlite db. By default, Peewee will also
-    # bind any models that are related to User via foreign-key as well.
-    User.bind(sqlite_db)
+   # Bind the user model to the sqlite db. By default, Peewee will also
+   # bind any models that are related to User via foreign-key as well.
+   User.bind(sqlite_db)
 
-    assert User._meta.database is sqlite_db
-    assert Tweet._meta.database is sqlite_db  # Related models bound too.
+   assert User._meta.database is sqlite_db
+   assert Tweet._meta.database is sqlite_db  # Related models bound too.
 
-    # Here we will temporarily bind *just* the User model to the postgres db.
-    with User.bind_ctx(postgres_db, bind_backrefs=False):
-        assert User._meta.database is postgres_db
-        assert Tweet._meta.database is sqlite_db  # Has not changed.
+   # Here we will temporarily bind *just* the User model to the postgres db.
+   with User.bind_ctx(postgres_db, bind_backrefs=False):
+       assert User._meta.database is postgres_db
+       assert Tweet._meta.database is sqlite_db  # Has not changed.
 
-    # And now User is back to being bound to the sqlite_db.
-    assert User._meta.database is sqlite_db
+   # And now User is back to being bound to the sqlite_db.
+   assert User._meta.database is sqlite_db
 
 The :ref:`testing` section of this document also contains some examples of
 using the ``bind()`` methods.
@@ -800,13 +830,13 @@ accomplished with a custom model ``Metadata`` class (see :py:class:`ThreadSafeDa
 
 .. code-block:: python
 
-    from peewee import *
-    from playhouse.shortcuts import ThreadSafeDatabaseMetadata
+   from peewee import *
+   from playhouse.shortcuts import ThreadSafeDatabaseMetadata
 
-    class BaseModel(Model):
-        class Meta:
-            # Instruct peewee to use our thread-safe metadata implementation.
-            model_metadata_class = ThreadSafeDatabaseMetadata
+   class BaseModel(Model):
+       class Meta:
+           # Instruct peewee to use our thread-safe metadata implementation.
+           model_metadata_class = ThreadSafeDatabaseMetadata
 
 The database can now be swapped safely while running in a multi-threaded
 environment using the :py:meth:`Database.bind` or :py:meth:`Database.bind_ctx` methods.
@@ -819,34 +849,35 @@ Connection Management
 To open a connection to a database, use the :py:meth:`Database.connect` method:
 
 .. code-block:: pycon
+   :emphasize-lines: 2
 
-    >>> db = SqliteDatabase(':memory:')  # In-memory SQLite database.
-    >>> db.connect()
-    True
+   >>> db = SqliteDatabase(':memory:')  # In-memory SQLite database.
+   >>> db.connect()
+   True
 
 If we try to call ``connect()`` on an already-open database, we get a
 :py:class:`OperationalError`:
 
 .. code-block:: pycon
 
-    >>> db.connect()
-    Traceback (most recent call last):
-      File "<stdin>", line 1, in <module>
-      File "/home/charles/pypath/peewee.py", line 2390, in connect
-        raise OperationalError('Connection already opened.')
-    peewee.OperationalError: Connection already opened.
+   >>> db.connect()
+   Traceback (most recent call last):
+     File "<stdin>", line 1, in <module>
+     File "/home/charles/pypath/peewee.py", line 2390, in connect
+       raise OperationalError('Connection already opened.')
+   peewee.OperationalError: Connection already opened.
 
 To prevent this exception from being raised, we can call ``connect()`` with an
 additional argument, ``reuse_if_open``:
 
 .. code-block:: pycon
 
-    >>> db.close()  # Close connection.
-    True
-    >>> db.connect()
-    True
-    >>> db.connect(reuse_if_open=True)
-    False
+   >>> db.close()  # Close connection.
+   True
+   >>> db.connect()
+   True
+   >>> db.connect(reuse_if_open=True)
+   False
 
 Note that the call to ``connect()`` returns ``False`` if the database
 connection was already open.
@@ -854,9 +885,10 @@ connection was already open.
 To close a connection, use the :py:meth:`Database.close` method:
 
 .. code-block:: pycon
+   :emphasize-lines: 1
 
-    >>> db.close()
-    True
+   >>> db.close()
+   True
 
 Calling ``close()`` on an already-closed connection will not result in an
 exception, but will return ``False``:
@@ -897,10 +929,12 @@ For the best guarantee of correctness, disable ``autoconnect``:
 
 .. code-block:: python
 
-    db = PostgresqlDatabase('my_app', user='postgres', autoconnect=False)
+   db = PostgresqlDatabase('my_app', user='postgres', autoconnect=False)
 
 Thread Safety
 ^^^^^^^^^^^^^
+
+Database connections and transactions are thread-safe.
 
 Peewee keeps track of the connection state using thread-local storage, making
 the Peewee :py:class:`Database` object safe to use with multiple threads. Each
@@ -918,38 +952,37 @@ is rolled back).
 
 .. code-block:: pycon
 
-    >>> db.is_closed()
-    True
-    >>> with db:
-    ...     print(db.is_closed())  # db is open and in a transaction.
-    ...
-    False
-    >>> db.is_closed()  # db is closed, transaction is committed.
-    True
+   >>> db.is_closed()
+   True
+   >>> with db:
+   ...     print(db.is_closed())  # db is open and in a transaction.
+   ...
+   False
+   >>> db.is_closed()  # db is closed, transaction is committed.
+   True
 
 If you want to manage transactions separately, you can use the
 :py:meth:`Database.connection_context` context manager.
 
 .. code-block:: pycon
 
-    >>> with db.connection_context():
-    ...     # db is open.
-    ...     pass
-    ...
-    >>> db.is_closed()  # db connection is closed.
-    True
+   >>> with db.connection_context():
+   ...     # db is open.
+   ...     pass
+   ...
+   >>> db.is_closed()  # db connection is closed.
+   True
 
 The ``connection_context()`` method can also be used as a decorator:
 
 .. code-block:: python
 
-    @db.connection_context()
-    def prepare_database():
-        # DB connection will be managed by the decorator, which opens
-        # a connection, calls function, and closes upon returning.
-        db.create_tables(MODELS)  # Create schema.
-        load_fixture_data(db)
-
+   @db.connection_context()
+   def prepare_database():
+       # DB connection will be managed by the decorator, which opens
+       # a connection, calls function, and closes upon returning.
+       db.create_tables(MODELS)  # Create schema.
+       load_fixture_data(db)
 
 DB-API Connection Object
 ^^^^^^^^^^^^^^^^^^^^^^^^
@@ -961,8 +994,8 @@ connection.
 
 .. code-block:: pycon
 
-    >>> db.connection()
-    <sqlite3.Connection object at 0x7f94e9362f10>
+   >>> db.connection()
+   <sqlite3.Connection object at 0x7f94e9362f10>
 
 .. _connection_pooling:
 
@@ -977,17 +1010,17 @@ the :ref:`playhouse <playhouse>` extensions library. The pool supports:
 
 .. code-block:: python
 
-    from playhouse.pool import PooledPostgresqlExtDatabase
+   from playhouse.pool import PooledPostgresqlExtDatabase
 
-    db = PooledPostgresqlExtDatabase(
-        'my_database',
-        max_connections=8,
-        stale_timeout=300,
-        user='postgres')
+   db = PooledPostgresqlExtDatabase(
+       'my_database',
+       max_connections=8,
+       stale_timeout=300,
+       user='postgres')
 
-    class BaseModel(Model):
-        class Meta:
-            database = db
+   class BaseModel(Model):
+       class Meta:
+           database = db
 
 The following pooled database classes are available:
 
@@ -1011,17 +1044,17 @@ execute SQL directly, you can use the :py:meth:`Database.execute_sql` method.
 
 .. code-block:: python
 
-    db = SqliteDatabase('my_app.db')
-    db.connect()
+   db = SqliteDatabase('my_app.db')
+   db.connect()
 
-    # Example of executing a simple query and ignoring the results.
-    db.execute_sql("ATTACH DATABASE ':memory:' AS cache;")
+   # Example of executing a simple query and ignoring the results.
+   db.execute_sql("ATTACH DATABASE ':memory:' AS cache;")
 
-    # Example of iterating over the results of a query using the cursor.
-    cursor = db.execute_sql('SELECT * FROM users WHERE status = ?', (ACTIVE,))
-    for row in cursor.fetchall():
-        # Do something with row, which is a tuple containing column data.
-        pass
+   # Example of iterating over the results of a query using the cursor.
+   cursor = db.execute_sql('SELECT * FROM users WHERE status = ?', (ACTIVE,))
+   for row in cursor.fetchall():
+       # Do something with row, which is a tuple containing column data.
+       pass
 
 .. _transactions:
 
@@ -1041,105 +1074,114 @@ Examples:
 
 .. code-block:: python
 
-    # Transaction will commit automatically at the end of the "with" block:
-    with db.atomic() as txn:
-        User.create(username='u1')
+   # Transaction will commit automatically at the end of the "with" block:
+   with db.atomic() as txn:
+       User.create(username='u1')
 
-    # Unhandled exceptions will cause transaction to be rolled-back:
-    with db.atomic() as txn:
-        User.create(username='huey')
-        # User has been INSERTed into the database but the transaction is not
-        # yet committed because we haven't left the scope of the "with" block.
+   # Unhandled exceptions will cause transaction to be rolled-back:
+   with db.atomic() as txn:
+       User.create(username='huey')
+       # User has been INSERTed into the database but the transaction is not
+       # yet committed because we haven't left the scope of the "with" block.
 
-        raise ValueError('uh-oh')
-        # This exception is unhandled - the transaction will be rolled-back and
-        # the ValueError will be raised.
-
-.. note::
-    While inside a block wrapped by the :py:meth:`~Database.atomic` context
-    manager, you can explicitly rollback or commit at any point by calling
-    :py:meth:`Transaction.rollback` or :py:meth:`Transaction.commit`. When you
-    do this inside a wrapped block of code, a new transaction will be started
-    automatically.
-
-    .. code-block:: python
-
-        with db.atomic() as transaction:  # Opens new transaction.
-            try:
-                save_some_objects()
-            except ErrorSavingData:
-                # Because this block of code is wrapped with "atomic", a
-                # new transaction will begin automatically after the call
-                # to rollback().
-                transaction.rollback()
-                error_saving = True
-
-            create_report(error_saving=error_saving)
-            # Note: no need to call commit. Since this marks the end of the
-            # wrapped block of code, the `atomic` context manager will
-            # automatically call commit for us.
+       raise ValueError('uh-oh')
+       # This exception is unhandled - the transaction will be rolled-back and
+       # the ValueError will be raised.
 
 .. note::
-    :py:meth:`~Database.atomic` can be used as either a **context manager** or
-    a **decorator**.
+   While inside a block wrapped by the :py:meth:`~Database.atomic` context
+   manager, you can explicitly rollback or commit at any point by calling
+   :py:meth:`~Transaction.rollback` or :py:meth:`~Transaction.commit`. When you
+   do this inside a wrapped block of code, a new transaction will be started
+   automatically.
+
+   .. code-block:: python
+
+      with db.atomic() as transaction:  # Opens new transaction.
+          try:
+              save_some_objects()
+          except ErrorSavingData:
+              # Because this block of code is wrapped with "atomic", a
+              # new transaction will begin automatically after the call
+              # to rollback().
+              transaction.rollback()
+
+              # New transaction has begun.
+              error_saving = True
+
+          create_report(error_saving=error_saving)
+          # Note: no need to call commit. Since this marks the end of the
+          # wrapped block of code, the `atomic` context manager will
+          # automatically call commit for us.
 
 .. note::
-    Peewee's behavior differs from the DB-API 2.0 behavior you may be used to
-    (see PEP-249 for details). By default, Peewee puts all connections into
-    **autocommit-mode** and transaction management is handled by Peewee.
+   :py:meth:`~Database.atomic` can be used as either a **context manager** or
+   a **decorator**.
+
+.. note::
+   Peewee's behavior differs from the DB-API 2.0 behavior you may be used to
+   (see PEP-249 for details). Peewee requires all connections be in
+   **autocommit-mode** and transaction management is handled by Peewee.
 
 Context manager
 ^^^^^^^^^^^^^^^
 
-Using ``atomic`` as context manager:
+Using :py:meth:`Database.atomic` as context manager:
 
 .. code-block:: python
 
-    db = SqliteDatabase(':memory:')
+   db = SqliteDatabase(':memory:')
 
-    with db.atomic() as txn:
-        # This is the outer-most level, so this block corresponds to
-        # a transaction.
-        User.create(username='charlie')
+   with db.atomic() as txn:
+       # This is the outer-most level, so this block corresponds to
+       # a transaction.
+       User.create(username='charlie')
 
-        with db.atomic() as nested_txn:
-            # This block corresponds to a savepoint.
-            User.create(username='huey')
+       with db.atomic() as nested_txn:
+           # This block corresponds to a savepoint.
+           User.create(username='huey')
 
-            # This will roll back the above create() query.
-            nested_txn.rollback()
+           # This will roll back the above create() query and
+           # start a new nested transaction.
+           nested_txn.rollback()
 
-        User.create(username='mickey')
+           # A new savepoint has begun.
+           User.create(username='alice')
 
-    # When the block ends, the transaction is committed (assuming no error
-    # occurs). At that point there will be two users, "charlie" and "mickey".
+       User.create(username='mickey')
 
-You can use the ``atomic`` method to perform *get or create* operations as
-well:
+   # When the block ends, the transaction is committed (assuming no error
+   # occurs). At that point there will be three users:
+   # charlie
+   # alice
+   # mickey
+
+You can use the :py:meth:`Database.atomic` method to perform *get or create*
+operations as well:
 
 .. code-block:: python
 
-    try:
-        with db.atomic():
-            user = User.create(username=username)
-        return 'Success'
-    except peewee.IntegrityError:
-        return 'Failure: %s is already in use.' % username
+   try:
+       with db.atomic():
+           user = User.create(username=username)
+       return 'Success'
+   except peewee.IntegrityError:
+       return 'Failure: %s is already in use.' % username
 
 Decorator
 ^^^^^^^^^
 
-Using ``atomic`` as a decorator:
+Using :py:meth:`Database.atomic` as a decorator:
 
 .. code-block:: python
 
-    @db.atomic()
-    def create_user(username):
-        # This statement will run in a transaction. If the caller is already
-        # running in an `atomic` block, then a savepoint will be used instead.
-        return User.create(username=username)
+   @db.atomic()
+   def create_user(username):
+       # This statement will run in a transaction. If the caller is already
+       # running in an `atomic` block, then a savepoint will be used instead.
+       return User.create(username=username)
 
-    create_user('charlie')
+   create_user('charlie')
 
 Nesting Transactions
 ^^^^^^^^^^^^^^^^^^^^
@@ -1150,11 +1192,11 @@ transaction, and any nested calls will use savepoints.
 
 .. code-block:: python
 
-    with db.atomic() as txn:
-        perform_operation()
+   with db.atomic() as txn:
+       perform_operation()
 
-        with db.atomic() as nested_txn:
-            perform_another_operation()
+       with db.atomic() as nested_txn:
+           perform_another_operation()
 
 Peewee supports nested transactions through the use of savepoints (for more
 information, see :py:meth:`~Database.savepoint`).
@@ -1172,44 +1214,44 @@ Otherwise the statements will be committed at the end of the wrapped block.
 
 .. code-block:: python
 
-    db = SqliteDatabase(':memory:')
+   db = SqliteDatabase(':memory:')
 
-    with db.transaction() as txn:
-        # Delete the user and their associated tweets.
-        user.delete_instance(recursive=True)
+   with db.transaction() as txn:
+       # Delete the user and their associated tweets.
+       user.delete_instance(recursive=True)
 
 Transactions can be explicitly committed or rolled-back within the wrapped
 block. When this happens, a new transaction will be started.
 
 .. code-block:: python
 
-    with db.transaction() as txn:
-        User.create(username='mickey')
-        txn.commit()  # Changes are saved and a new transaction begins.
-        User.create(username='huey')
+   with db.transaction() as txn:
+       User.create(username='mickey')
+       txn.commit()  # Changes are saved and a new transaction begins.
+       User.create(username='huey')
 
-        # Roll back. "huey" will not be saved, but since "mickey" was already
-        # committed, that row will remain in the database.
-        txn.rollback()
+       # Roll back. "huey" will not be saved, but since "mickey" was already
+       # committed, that row will remain in the database.
+       txn.rollback()
 
-    with db.transaction() as txn:
-        User.create(username='whiskers')
-        # Roll back changes, which removes "whiskers".
-        txn.rollback()
+   with db.transaction() as txn:
+       User.create(username='whiskers')
+       # Roll back changes, which removes "whiskers".
+       txn.rollback()
 
-        # Create a new row for "mr. whiskers" which will be implicitly committed
-        # at the end of the `with` block.
-        User.create(username='mr. whiskers')
+       # Create a new row for "mr. whiskers" which will be implicitly committed
+       # at the end of the `with` block.
+       User.create(username='mr. whiskers')
 
 .. note::
-    If you attempt to nest transactions with peewee using the
-    :py:meth:`~Database.transaction` context manager, only the outer-most
-    transaction will be used. If an exception occurs in a nested block, the
-    transaction will NOT be rolled-back -- only exceptions that bubble-up to
-    the outer-most transaction will trigger a rollback.
+   If you attempt to nest transactions with peewee using the
+   :py:meth:`~Database.transaction` context manager, only the outer-most
+   transaction will be used. If an exception occurs in a nested block, the
+   transaction will NOT be rolled-back -- only exceptions that bubble-up to
+   the outer-most transaction will trigger a rollback.
 
-    As this may lead to unpredictable behavior, it is recommended that
-    you use :py:meth:`~Database.atomic`.
+   As this may lead to unpredictable behavior, it is recommended that
+   you use :py:meth:`~Database.atomic`.
 
 Explicit Savepoints
 ^^^^^^^^^^^^^^^^^^^
@@ -1220,19 +1262,19 @@ occur within a transaction, but can be nested arbitrarily deep.
 
 .. code-block:: python
 
-    with db.transaction() as txn:
-        with db.savepoint() as sp:
-            User.create(username='mickey')
+   with db.transaction() as txn:
+       with db.savepoint() as sp:
+           User.create(username='mickey')
 
-        with db.savepoint() as sp2:
-            User.create(username='zaizee')
-            sp2.rollback()  # "zaizee" will not be saved, but "mickey" will be.
+       with db.savepoint() as sp2:
+           User.create(username='zaizee')
+           sp2.rollback()  # "zaizee" will not be saved, but "mickey" will be.
 
 .. warning::
-    If you manually commit or roll back a savepoint, a new savepoint **will
-    not** automatically be created. This differs from the behavior of
-    :py:class:`transaction`, which will automatically open a new transaction
-    after manual commit/rollback.
+   If you manually commit or roll back a savepoint, a new savepoint **will
+   not** automatically be created. This differs from the behavior of
+   :py:class:`transaction`, which will automatically open a new transaction
+   after manual commit/rollback.
 
 Autocommit Mode
 ^^^^^^^^^^^^^^^
@@ -1250,21 +1292,21 @@ Here is how you might emulate the behavior of the
 
 .. code-block:: python
 
-    with db.manual_commit():
-        db.begin()  # Have to begin transaction explicitly.
-        try:
-            user.delete_instance(recursive=True)
-        except:
-            db.rollback()  # Rollback! An error occurred.
-            raise
-        else:
-            try:
-                db.commit()  # Commit changes.
-            except:
-                db.rollback()
-                raise
+   with db.manual_commit():
+       db.begin()  # Have to begin transaction explicitly.
+       try:
+           user.delete_instance(recursive=True)
+       except:
+           db.rollback()  # Rollback! An error occurred.
+           raise
+       else:
+           try:
+               db.commit()  # Commit changes.
+           except:
+               db.rollback()
+               raise
 
-Again -- I don't anticipate anyone needing this, but it's here just in case.
+I don't anticipate anyone needing this, but it's here just in case.
 
 .. _database-errors:
 
@@ -1315,35 +1357,35 @@ Example test-case setup:
 
 .. code-block:: python
 
-    # tests.py
-    import unittest
-    from my_app.models import EventLog, Relationship, Tweet, User
+   # tests.py
+   import unittest
+   from my_app.models import EventLog, Relationship, Tweet, User
 
-    MODELS = [User, Tweet, EventLog, Relationship]
+   MODELS = [User, Tweet, EventLog, Relationship]
 
-    # use an in-memory SQLite for tests.
-    test_db = SqliteDatabase(':memory:')
+   # use an in-memory SQLite for tests.
+   test_db = SqliteDatabase(':memory:')
 
-    class BaseTestCase(unittest.TestCase):
-        def setUp(self):
-            # Bind model classes to test db. Since we have a complete list of
-            # all models, we do not need to recursively bind dependencies.
-            test_db.bind(MODELS, bind_refs=False, bind_backrefs=False)
+   class BaseTestCase(unittest.TestCase):
+       def setUp(self):
+           # Bind model classes to test db. Since we have a complete list of
+           # all models, we do not need to recursively bind dependencies.
+           test_db.bind(MODELS, bind_refs=False, bind_backrefs=False)
 
-            test_db.connect()
-            test_db.create_tables(MODELS)
+           test_db.connect()
+           test_db.create_tables(MODELS)
 
-        def tearDown(self):
-            # Not strictly necessary since SQLite in-memory databases only live
-            # for the duration of the connection, and in the next step we close
-            # the connection...but a good practice all the same.
-            test_db.drop_tables(MODELS)
+       def tearDown(self):
+           # Not strictly necessary since SQLite in-memory databases only live
+           # for the duration of the connection, and in the next step we close
+           # the connection...but a good practice all the same.
+           test_db.drop_tables(MODELS)
 
-            # Close connection to db.
-            test_db.close()
+           # Close connection to db.
+           test_db.close()
 
-            # If we wanted, we could re-bind the models to their original
-            # database here. But for tests this is probably not necessary.
+           # If we wanted, we could re-bind the models to their original
+           # database here. But for tests this is probably not necessary.
 
 As an aside, and speaking from experience, I recommend testing your application
 using the same database backend you use in production, so as to avoid any
@@ -1379,24 +1421,24 @@ will make your connection async:
 
 .. code-block:: python
 
-    from gevent.socket import wait_read, wait_write
-    from psycopg2 import extensions
+   from gevent.socket import wait_read, wait_write
+   from psycopg2 import extensions
 
-    # Call this function after monkey-patching socket (etc).
-    def patch_psycopg2():
-        extensions.set_wait_callback(_psycopg2_gevent_callback)
+   # Call this function after monkey-patching socket (etc).
+   def patch_psycopg2():
+       extensions.set_wait_callback(_psycopg2_gevent_callback)
 
-    def _psycopg2_gevent_callback(conn, timeout=None):
-        while True:
-            state = conn.poll()
-            if state == extensions.POLL_OK:
-                break
-            elif state == extensions.POLL_READ:
-                wait_read(conn.fileno(), timeout=timeout)
-            elif state == extensions.POLL_WRITE:
-                wait_write(conn.fileno(), timeout=timeout)
-            else:
-                raise ValueError('poll() returned unexpected result')
+   def _psycopg2_gevent_callback(conn, timeout=None):
+       while True:
+           state = conn.poll()
+           if state == extensions.POLL_OK:
+               break
+           elif state == extensions.POLL_READ:
+               wait_read(conn.fileno(), timeout=timeout)
+           elif state == extensions.POLL_WRITE:
+               wait_write(conn.fileno(), timeout=timeout)
+           else:
+               raise ValueError('poll() returned unexpected result')
 
 **SQLite**, because it is embedded in the Python application itself, does not
 do any socket operations that would be a candidate for non-blocking. Async has
@@ -1429,9 +1471,9 @@ database, or a pool of multiple Postgres connections, peewee will handle the
 connections correctly.
 
 .. note::
-    Applications that receive lots of traffic may benefit from using a
-    :ref:`connection pool <pool>` to mitigate the cost of setting up and
-    tearing down connections on every request.
+   Applications that receive lots of traffic may benefit from using a
+   :ref:`connection pool <pool>` to mitigate the cost of setting up and
+   tearing down connections on every request.
 
 Flask
 ^^^^^
@@ -1443,24 +1485,24 @@ is returned.
 
 .. code-block:: python
 
-    from flask import Flask
-    from peewee import *
+   from flask import Flask
+   from peewee import *
 
-    database = SqliteDatabase('my_app.db')
-    app = Flask(__name__)
+   database = SqliteDatabase('my_app.db')
+   app = Flask(__name__)
 
-    # This hook ensures that a connection is opened to handle any queries
-    # generated by the request.
-    @app.before_request
-    def _db_connect():
-        database.connect()
+   # This hook ensures that a connection is opened to handle any queries
+   # generated by the request.
+   @app.before_request
+   def _db_connect():
+       database.connect()
 
-    # This hook ensures that the connection is closed when we've finished
-    # processing the request.
-    @app.teardown_request
-    def _db_close(exc):
-        if not database.is_closed():
-            database.close()
+   # This hook ensures that the connection is closed when we've finished
+   # processing the request.
+   @app.teardown_request
+   def _db_close(exc):
+       if not database.is_closed():
+           database.close()
 
 Django
 ^^^^^^
@@ -1477,51 +1519,33 @@ class:
 
 .. code-block:: python
 
-    # middleware.py
-    from my_blog.db import database  # Import the peewee database instance.
+   # middleware.py
+   from my_blog.db import database  # Import the peewee database instance.
 
-
-    def PeeweeConnectionMiddleware(get_response):
-        def middleware(request):
-            database.connect()
-            try:
-                response = get_response(request)
-            finally:
-                if not database.is_closed():
-                    database.close()
-            return response
-        return middleware
-
-
-    # Older Django < 1.10 middleware.
-    class PeeweeConnectionMiddleware(object):
-        def process_request(self, request):
-            database.connect()
-
-        def process_response(self, request, response):
-            if not database.is_closed():
-                database.close()
-            return response
+   def PeeweeConnectionMiddleware(get_response):
+       def middleware(request):
+           database.connect()
+           try:
+               response = get_response(request)
+           finally:
+               if not database.is_closed():
+                   database.close()
+           return response
+       return middleware
 
 To ensure this middleware gets executed, add it to your ``settings`` module:
 
 .. code-block:: python
 
     # settings.py
-    MIDDLEWARE_CLASSES = (
+    MIDDLEWARE = [
         # Our custom middleware appears first in the list.
         'my_blog.middleware.PeeweeConnectionMiddleware',
 
-        # These are the default Django 1.7 middlewares. Yours may differ,
-        # but the important this is that our Peewee middleware comes first.
-        'django.middleware.common.CommonMiddleware',
-        'django.contrib.sessions.middleware.SessionMiddleware',
-        'django.middleware.csrf.CsrfViewMiddleware',
-        'django.contrib.auth.middleware.AuthenticationMiddleware',
-        'django.contrib.messages.middleware.MessageMiddleware',
-    )
-
-    # ... other Django settings ...
+        # Other middleware classes.
+        'django....',
+        'django....',
+    ]
 
 Bottle
 ^^^^^^
@@ -1531,22 +1555,22 @@ following code should ensure the database connections are properly managed:
 
 .. code-block:: python
 
-    # app.py
-    from bottle import hook  #, route, etc, etc.
-    from peewee import *
+   # app.py
+   from bottle import hook  #, route, etc, etc.
+   from peewee import *
 
-    db = SqliteDatabase('my-bottle-app.db')
+   db = SqliteDatabase('my-bottle-app.db')
 
-    @hook('before_request')
-    def _connect_db():
-        db.connect()
+   @hook('before_request')
+   def _connect_db():
+       db.connect()
 
-    @hook('after_request')
-    def _close_db():
-        if not db.is_closed():
-            db.close()
+   @hook('after_request')
+   def _close_db():
+       if not db.is_closed():
+           db.close()
 
-    # Rest of your bottle app goes here.
+   # Rest of your bottle app goes here.
 
 Web.py
 ^^^^^^
@@ -1556,17 +1580,17 @@ See the documentation for
 
 .. code-block:: python
 
-    db = SqliteDatabase('my_webpy_app.db')
+   db = SqliteDatabase('my_webpy_app.db')
 
-    def connection_processor(handler):
-        db.connect()
-        try:
-            return handler()
-        finally:
-            if not db.is_closed():
-                db.close()
+   def connection_processor(handler):
+       db.connect()
+       try:
+           return handler()
+       finally:
+           if not db.is_closed():
+               db.close()
 
-    app.add_processor(connection_processor)
+   app.add_processor(connection_processor)
 
 Tornado
 ^^^^^^^
@@ -1576,19 +1600,19 @@ be used to open and close connections when a request is handled.
 
 .. code-block:: python
 
-    from tornado.web import RequestHandler
+   from tornado.web import RequestHandler
 
-    db = SqliteDatabase('my_db.db')
+   db = SqliteDatabase('my_db.db')
 
-    class PeeweeRequestHandler(RequestHandler):
-        def prepare(self):
-            db.connect()
-            return super(PeeweeRequestHandler, self).prepare()
+   class PeeweeRequestHandler(RequestHandler):
+       def prepare(self):
+           db.connect()
+           return super(PeeweeRequestHandler, self).prepare()
 
-        def on_finish(self):
-            if not db.is_closed():
-                db.close()
-            return super(PeeweeRequestHandler, self).on_finish()
+       def on_finish(self):
+           if not db.is_closed():
+               db.close()
+           return super(PeeweeRequestHandler, self).on_finish()
 
 In your app, instead of extending the default ``RequestHandler``, now you can
 extend ``PeeweeRequestHandler``.
@@ -1604,19 +1628,19 @@ The connection handling code can be placed in a `middleware
 
 .. code-block:: python
 
-    def peewee_middleware(request, following):
-        db.connect()
-        try:
-            response = following(request)
-        finally:
-            if not db.is_closed():
-                db.close()
-        return response
+   def peewee_middleware(request, following):
+       db.connect()
+       try:
+           response = following(request)
+       finally:
+           if not db.is_closed():
+               db.close()
+       return response
 
-    app = WSGIApplication(middleware=[
-        lambda x: peewee_middleware,
-        # ... other middlewares ...
-    ])
+   app = WSGIApplication(middleware=[
+       lambda x: peewee_middleware,
+       # ... other middlewares ...
+   ])
 
 Thanks to GitHub user *@tuukkamustonen* for submitting this code.
 
@@ -1628,23 +1652,23 @@ The connection handling code can be placed in a `middleware component
 
 .. code-block:: python
 
-    import falcon
-    from peewee import *
+   import falcon
+   from peewee import *
 
-    database = SqliteDatabase('my_app.db')
+   database = SqliteDatabase('my_app.db')
 
-    class PeeweeConnectionMiddleware(object):
-        def process_request(self, req, resp):
-            database.connect()
+   class PeeweeConnectionMiddleware(object):
+       def process_request(self, req, resp):
+           database.connect()
 
-        def process_response(self, req, resp, resource, req_succeeded):
-            if not database.is_closed():
-                database.close()
+       def process_response(self, req, resp, resource, req_succeeded):
+           if not database.is_closed():
+               database.close()
 
-    application = falcon.API(middleware=[
-        PeeweeConnectionMiddleware(),
-        # ... other middlewares ...
-    ])
+   application = falcon.API(middleware=[
+       PeeweeConnectionMiddleware(),
+       # ... other middlewares ...
+   ])
 
 Pyramid
 ^^^^^^^
@@ -1653,28 +1677,28 @@ Set up a Request factory that handles database connection lifetime as follows:
 
 .. code-block:: python
 
-    from pyramid.request import Request
+   from pyramid.request import Request
 
-    db = SqliteDatabase('pyramidapp.db')
+   db = SqliteDatabase('pyramidapp.db')
 
-    class MyRequest(Request):
-        def __init__(self, *args, **kwargs):
-            super().__init__(*args, **kwargs)
-            db.connect()
-            self.add_finished_callback(self.finish)
+   class MyRequest(Request):
+       def __init__(self, *args, **kwargs):
+           super().__init__(*args, **kwargs)
+           db.connect()
+           self.add_finished_callback(self.finish)
 
-        def finish(self, request):
-            if not db.is_closed():
-                db.close()
+       def finish(self, request):
+           if not db.is_closed():
+               db.close()
 
 In your application `main()` make sure `MyRequest` is used as
 `request_factory`:
 
 .. code-block:: python
 
-    def main(global_settings, **settings):
-        config = Configurator(settings=settings, ...)
-        config.set_request_factory(MyRequest)
+   def main(global_settings, **settings):
+       config = Configurator(settings=settings, ...)
+       config.set_request_factory(MyRequest)
 
 CherryPy
 ^^^^^^^^
@@ -1684,15 +1708,15 @@ See `Publish/Subscribe pattern
 
 .. code-block:: python
 
-    def _db_connect():
-        db.connect()
+   def _db_connect():
+       db.connect()
 
-    def _db_close():
-        if not db.is_closed():
-            db.close()
+   def _db_close():
+       if not db.is_closed():
+           db.close()
 
-    cherrypy.engine.subscribe('before_request', _db_connect)
-    cherrypy.engine.subscribe('after_request', _db_close)
+   cherrypy.engine.subscribe('before_request', _db_connect)
+   cherrypy.engine.subscribe('after_request', _db_close)
 
 Sanic
 ^^^^^
@@ -1702,15 +1726,15 @@ response middleware `sanic middleware <http://sanic.readthedocs.io/en/latest/san
 
 .. code-block:: python
 
-    # app.py
-    @app.middleware('request')
-    async def handle_request(request):
-        db.connect()
+   # app.py
+   @app.middleware('request')
+   async def handle_request(request):
+       db.connect()
 
-    @app.middleware('response')
-    async def handle_response(request, response):
-        if not db.is_closed():
-            db.close()
+   @app.middleware('response')
+   async def handle_response(request, response):
+       if not db.is_closed():
+           db.close()
 
 FastAPI
 ^^^^^^^
@@ -1735,11 +1759,11 @@ handler.
 
 .. code-block:: python
 
-    # Print all queries to stderr.
-    import logging
-    logger = logging.getLogger('peewee')
-    logger.addHandler(logging.StreamHandler())
-    logger.setLevel(logging.DEBUG)
+   # Print all queries to stderr.
+   import logging
+   logger = logging.getLogger('peewee')
+   logger.addHandler(logging.StreamHandler())
+   logger.setLevel(logging.DEBUG)
 
 Adding a new Database Driver
 ----------------------------
@@ -1752,7 +1776,7 @@ your database-of-choice should be really easy, provided the driver supports the
 `DB-API 2.0 spec <http://www.python.org/dev/peps/pep-0249/>`_.
 
 .. warning::
-    Peewee requires the database connection be put into autocommit-mode.
+   Peewee requires the database connection be put into autocommit-mode.
 
 The DB-API 2.0 spec should be familiar to you if you've used the standard
 library sqlite3 driver, psycopg2 or the like. Peewee currently relies on a
@@ -1775,13 +1799,13 @@ all the DB-API transaction semantics):
 
 .. code-block:: python
 
-    from peewee import Database
-    import foodb  # Our fictional DB-API 2.0 driver.
+   from peewee import Database
+   import foodb  # Our fictional DB-API 2.0 driver.
 
 
-    class FooDatabase(Database):
-        def _connect(self, database):
-            return foodb.connect(self.database, autocommit=True, **self.connect_params)
+   class FooDatabase(Database):
+       def _connect(self, database):
+           return foodb.connect(self.database, autocommit=True, **self.connect_params)
 
 The :py:class:`Database` provides a higher-level API and is responsible for
 executing queries, creating tables and indexes, and introspecting the database
@@ -1793,13 +1817,13 @@ has special "SHOW" statements:
 
 .. code-block:: python
 
-    class FooDatabase(Database):
-        def _connect(self):
-            return foodb.connect(self.database, autocommit=True, **self.connect_params)
+   class FooDatabase(Database):
+       def _connect(self):
+           return foodb.connect(self.database, autocommit=True, **self.connect_params)
 
-        def get_tables(self):
-            res = self.execute('SHOW TABLES;')
-            return [r[0] for r in res.fetchall()]
+       def get_tables(self):
+           res = self.execute('SHOW TABLES;')
+           return [r[0] for r in res.fetchall()]
 
 Other things the database handles that are not covered here include:
 
@@ -1814,23 +1838,23 @@ Refer to the :py:class:`Database` API reference or the `source code
 <https://github.com/coleifer/peewee/blob/master/peewee.py>`_. for details.
 
 .. note::
-    If your driver conforms to the DB-API 2.0 spec, there shouldn't be much
-    work needed to get up and running.
+   If your driver conforms to the DB-API 2.0 spec, there shouldn't be much
+   work needed to get up and running.
 
 Our new database can be used just like any of the other database subclasses:
 
 .. code-block:: python
 
-    from peewee import *
-    from foodb_ext import FooDatabase
+   from peewee import *
+   from foodb_ext import FooDatabase
 
-    db = FooDatabase('my_database', user='foo', password='secret')
+   db = FooDatabase('my_database', user='foo', password='secret')
 
-    class BaseModel(Model):
-        class Meta:
-            database = db
+   class BaseModel(Model):
+       class Meta:
+           database = db
 
-    class Blog(BaseModel):
-        title = CharField()
-        contents = TextField()
-        pub_date = DateTimeField()
+   class Blog(BaseModel):
+       title = CharField()
+       contents = TextField()
+       pub_date = DateTimeField()
