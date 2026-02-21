@@ -102,6 +102,7 @@ __all__ = [
     'DateField',
     'DateTimeField',
     'DecimalField',
+    'Default',
     'DeferredForeignKey',
     'DeferredThroughModel',
     'DJANGO_MAP',
@@ -1634,6 +1635,10 @@ def Check(constraint, name=None):
     if not name:
         return check
     return NodeList((SQL('CONSTRAINT'), Entity(name), check))
+
+
+def Default(value):
+    return SQL('DEFAULT %s' % value)
 
 
 class Function(ColumnBase):

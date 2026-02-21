@@ -1190,6 +1190,28 @@ Query-builder
          list instead of in the field instances ``constraints=[...]`` list.
 
 
+.. py:function:: Default(value)
+
+    :param value: default value (literal).
+
+    Represent a DEFAULT constraint. It is important to note that this
+    constraint does not accept a parameterized value, so the value literal must
+    be given. If a string value is intended, it must be quoted.
+
+    Examples:
+
+    .. code-block:: python
+
+       # "added" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP.
+       added = DateTimeField(constraints=[Default('CURRENT_TIMESTAMP')])
+
+       # "label" TEXT NOT NULL DEFAULT 'string literal'
+       label = TextField(constraints=[Default("'string literal'")])
+
+       # "status" INTEGER NOT NULL DEFAULT 0
+       status = IntegerField(constraints=[Default(0)])
+
+
 .. py:class:: Function(name, arguments, coerce=True, python_value=None)
 
     :param str name: Function name.

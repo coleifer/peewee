@@ -39,6 +39,7 @@ class TMIndexes(TestModel):
 class TMConstraints(TestModel):
     data = IntegerField(null=True, constraints=[Check('data < 5')])
     value = TextField(collation='NOCASE')
+    added = DateTimeField(constraints=[Default('CURRENT_TIMESTAMP')])
 
 
 class TMNamedConstraints(TestModel):
@@ -524,7 +525,8 @@ class TestModelDDL(ModelDatabaseTestCase):
             ('CREATE TABLE "tm_constraints" ('
              '"id" INTEGER NOT NULL PRIMARY KEY, '
              '"data" INTEGER CHECK (data < 5), '
-             '"value" TEXT NOT NULL COLLATE NOCASE)')])
+             '"value" TEXT NOT NULL COLLATE NOCASE, '
+             '"added" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP)')])
 
         self.assertCreateTable(TMNamedConstraints, [
             ('CREATE TABLE "tm_named_constraints" ('
