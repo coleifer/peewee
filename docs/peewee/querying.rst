@@ -13,10 +13,9 @@ relational database:
   *DELETE* queries.
 * :py:meth:`Model.select`, for executing *SELECT* queries.
 
-.. note::
-    There is also a large collection of example queries taken from the
-    `Postgresql Exercises <https://pgexercises.com/>`_ website. Examples are
-    listed on the :ref:`query examples <query_examples>` document.
+.. seealso::
+   :ref:`Large collection of Peewee query examples <query_examples>`. Examples
+   based on `Postgresql Exercises <https://pgexercises.com/>`_.
 
 Creating a new record
 ---------------------
@@ -27,8 +26,8 @@ model's fields. A new instance is returned and a row is added to the table.
 
 .. code-block:: pycon
 
-    >>> User.create(username='Charlie')
-    <__main__.User object at 0x2529350>
+   >>> User.create(username='Charlie')
+   <User: 1>
 
 This will *INSERT* a new row into the database. The primary key will
 automatically be retrieved and stored on the model instance.
@@ -38,44 +37,44 @@ Alternatively, you can build up a model instance programmatically and then call
 
 .. code-block:: pycon
 
-    >>> user = User(username='Charlie')
-    >>> user.save()  # save() returns the number of rows modified.
-    1
-    >>> user.id
-    1
-    >>> huey = User()
-    >>> huey.username = 'Huey'
-    >>> huey.save()
-    1
-    >>> huey.id
-    2
+   >>> user = User(username='Charlie')
+   >>> user.save()  # save() returns the number of rows modified.
+   1
+   >>> user.id
+   1
+   >>> huey = User()
+   >>> huey.username = 'Huey'
+   >>> huey.save()
+   1
+   >>> huey.id
+   2
 
 When a model has a foreign key, you can directly assign a model instance to the
 foreign key field when creating a new record.
 
 .. code-block:: pycon
 
-    >>> tweet = Tweet.create(user=huey, message='Hello!')
+   >>> tweet = Tweet.create(user=huey, message='Hello!')
 
 You can also use the value of the related object's primary key:
 
 .. code-block:: pycon
 
-    >>> tweet = Tweet.create(user=2, message='Hello again!')
+   >>> tweet = Tweet.create(user=2, message='Hello again!')
 
 If you simply wish to insert data and do not need to create a model instance,
 you can use :py:meth:`Model.insert`:
 
 .. code-block:: pycon
 
-    >>> User.insert(username='Mickey').execute()
-    3
+   >>> User.insert(username='Mickey').execute()
+   3
 
 After executing the insert query, the primary key of the new row is returned.
 
 .. note::
-    There are several ways you can speed up bulk insert operations. Check out
-    the :ref:`bulk_inserts` recipe section for more information.
+   There are several ways you can speed up bulk insert operations. Check out
+   the :ref:`bulk_inserts` recipe section for more information.
 
 .. _bulk_inserts:
 
@@ -87,96 +86,94 @@ approach is to simply call :py:meth:`Model.create` in a loop:
 
 .. code-block:: python
 
-    data_source = [
-        {'field1': 'val1-1', 'field2': 'val1-2'},
-        {'field1': 'val2-1', 'field2': 'val2-2'},
-        # ...
-    ]
+   data_source = [
+       {'field1': 'val1-1', 'field2': 'val1-2'},
+       {'field1': 'val2-1', 'field2': 'val2-2'},
+       # ...
+   ]
 
-    for data_dict in data_source:
-        MyModel.create(**data_dict)
+   for data_dict in data_source:
+       MyModel.create(**data_dict)
 
-The above approach is slow for a couple of reasons:
+The above approach is slow:
 
-1. If you are not wrapping the loop in a transaction then each call to
-   :py:meth:`~Model.create` happens in its own transaction. That is going to be
-   really slow!
-2. There is a decent amount of Python logic getting in your way, and each
-   :py:class:`InsertQuery` must be generated and parsed into SQL.
-3. That's a lot of data (in terms of raw bytes of SQL) you are sending to your
-   database to parse.
-4. We are retrieving the *last insert id*, which causes an additional query to
-   be executed in some cases.
+1. **Does not wrap the loop in a transaction.** Result is each :py:meth:`~Model.create`
+   happens in its own transaction.
+2. **Python interpreter** is getting in the way, and each :py:class:`InsertQuery`
+   must be generated and parsed into SQL.
+3. **Large amount of data** (in terms of raw bytes of SQL) sent to the database
+   to parse.
+4. **Retrieving the last insert id**, which may not be necessary.
 
 You can get a significant speedup by simply wrapping this in a transaction with
 :py:meth:`~Database.atomic`.
 
 .. code-block:: python
+   :emphasize-lines: 1
 
-    # This is much faster.
-    with db.atomic():
-        for data_dict in data_source:
-            MyModel.create(**data_dict)
+   with db.atomic():
+       for data_dict in data_source:
+           MyModel.create(**data_dict)
 
 The above code still suffers from points 2, 3 and 4. We can get another big
 boost by using :py:meth:`~Model.insert_many`. This method accepts a list of
 tuples or dictionaries, and inserts multiple rows in a single query:
 
 .. code-block:: python
+   :emphasize-lines: 8
 
-    data_source = [
-        {'field1': 'val1-1', 'field2': 'val1-2'},
-        {'field1': 'val2-1', 'field2': 'val2-2'},
-        # ...
-    ]
+   data_source = [
+       {'field1': 'val1-1', 'field2': 'val1-2'},
+       {'field1': 'val2-1', 'field2': 'val2-2'},
+       # ...
+   ]
 
-    # Fastest way to INSERT multiple rows.
-    MyModel.insert_many(data_source).execute()
+   # Fastest way to INSERT multiple rows.
+   MyModel.insert_many(data_source).execute()
 
 The :py:meth:`~Model.insert_many` method also accepts a list of row-tuples,
 provided you also specify the corresponding fields:
 
 .. code-block:: python
+   :emphasize-lines: 7
 
-    # We can INSERT tuples as well...
-    data = [('val1-1', 'val1-2'),
-            ('val2-1', 'val2-2'),
-            ('val3-1', 'val3-2')]
+   # We can INSERT tuples as well...
+   data = [('val1-1', 'val1-2'),
+           ('val2-1', 'val2-2'),
+           ('val3-1', 'val3-2')]
 
-    # But we need to indicate which fields the values correspond to.
-    MyModel.insert_many(data, fields=[MyModel.field1, MyModel.field2]).execute()
+   # But we need to indicate which fields the values correspond to.
+   MyModel.insert_many(data, fields=[MyModel.field1, MyModel.field2]).execute()
 
-It is also a good practice to wrap the bulk insert in a transaction:
+It is a good practice to wrap the bulk insert in a transaction:
 
 .. code-block:: python
 
-    # You can, of course, wrap this in a transaction as well:
-    with db.atomic():
-        MyModel.insert_many(data, fields=fields).execute()
+   with db.atomic():
+       MyModel.insert_many(data, fields=fields).execute()
 
 .. note::
-    SQLite users should be aware of some caveats when using bulk inserts.
-    Specifically, your SQLite3 version must be 3.7.11.0 or newer to take
-    advantage of the bulk insert API. Additionally, by default SQLite limits
-    the number of bound variables in a SQL query to ``999`` for SQLite versions
-    prior to 3.32.0 (2020-05-22) and 32766 for SQLite versions after 3.32.0.
+   SQLite users should be aware that by default SQLite limits the number of
+   bound variables in a SQL query (value depends on how SQLite was compiled),
+   but ``999`` is common for SQLite versions prior to 3.32.0 (2020-05-22) and
+   32766 for SQLite versions after 3.32.0.
 
 Inserting rows in batches
 ^^^^^^^^^^^^^^^^^^^^^^^^^
 
 Depending on the number of rows in your data source, you may need to break it
-up into chunks. SQLite in particular typically has a `limit of 999 or 32766 <https://www.sqlite.org/limits.html#max_variable_number>`_
-variables-per-query (batch size would then be 999 // row length or 32766 // row length).
+up into chunks. SQLite in particular may have a `limit of 32766 <https://www.sqlite.org/limits.html#max_variable_number>`_
+variables-per-query (batch size would then be 32766 // row length).
 
-You can write a loop to batch your data into chunks (in which case it is
-**strongly recommended** you use a transaction):
+You can write a loop to batch your data into chunks. It is **strongly recommended**
+you use a transaction:
 
 .. code-block:: python
 
-    # Insert rows 100 at a time.
-    with db.atomic():
-        for idx in range(0, len(data_source), 100):
-            MyModel.insert_many(data_source[idx:idx+100]).execute()
+   # Insert rows 100 at a time.
+   with db.atomic():
+       for idx in range(0, len(data_source), 100):
+           MyModel.insert_many(data_source[idx:idx+100]).execute()
 
 Peewee comes with a :py:func:`chunked` helper function which you can use for
 *efficiently* chunking a generic iterable into a series of *batch*-sized
@@ -212,51 +209,50 @@ the :py:meth:`~Model.bulk_create` API:
         User.bulk_create(users, batch_size=100)
 
 .. note::
-    If you are using Postgresql (which supports the ``RETURNING`` clause), then
-    the previously-unsaved model instances will have their new primary key
-    values automatically populated.
+   If you are using Postgresql (which supports the ``RETURNING`` clause), then
+   the previously-unsaved model instances will have their new primary key
+   values automatically populated.
 
 In addition, Peewee also offers :py:meth:`Model.bulk_update`, which can
 efficiently update one or more columns on a list of models. For example:
 
 .. code-block:: python
 
-    # First, create 3 users with usernames u1, u2, u3.
-    u1, u2, u3 = [User.create(username='u%s' % i) for i in (1, 2, 3)]
+   # First, create 3 users with usernames u1, u2, u3.
+   u1, u2, u3 = [User.create(username='u%s' % i) for i in (1, 2, 3)]
 
-    # Now we'll modify the user instances.
-    u1.username = 'u1-x'
-    u2.username = 'u2-y'
-    u3.username = 'u3-z'
+   # Now we'll modify the user instances.
+   u1.username = 'u1-x'
+   u2.username = 'u2-y'
+   u3.username = 'u3-z'
 
-    # Update all three users with a single UPDATE query.
-    User.bulk_update([u1, u2, u3], fields=[User.username])
+   # Update all three users with a single UPDATE query.
+   User.bulk_update([u1, u2, u3], fields=[User.username])
 
 This will result in executing the following SQL:
 
 .. code-block:: sql
 
-    UPDATE "users" SET "username" = CASE "users"."id"
-        WHEN 1 THEN "u1-x"
-        WHEN 2 THEN "u2-y"
-        WHEN 3 THEN "u3-z" END
-    WHERE "users"."id" IN (1, 2, 3);
+   UPDATE "users" SET "username" = CASE "users"."id"
+       WHEN 1 THEN "u1-x"
+       WHEN 2 THEN "u2-y"
+       WHEN 3 THEN "u3-z" END
+   WHERE "users"."id" IN (1, 2, 3);
 
 .. note::
-    For large lists of objects, you should specify a reasonable batch_size and
-    wrap the call to :py:meth:`~Model.bulk_update` with
-    :py:meth:`Database.atomic`:
+   For large lists of objects, you should specify a reasonable batch_size and
+   wrap the call to :py:meth:`~Model.bulk_update` with :py:meth:`Database.atomic`:
 
-    .. code-block:: python
+   .. code-block:: python
 
-        with database.atomic():
-            User.bulk_update(list_of_users, fields=['username'], batch_size=50)
+      with database.atomic():
+          User.bulk_update(list_of_users, fields=['username'], batch_size=50)
 
 .. warning::
-    :py:meth:`Model.bulk_update` may not be the most efficient method for
-    updating large numbers of records. This functionality is implemented such
-    that we create a "mapping" of primary key to corresponding field values for
-    all rows being updated using a SQL ``CASE`` statement.
+   :py:meth:`Model.bulk_update` may not be the most efficient method for
+   updating large numbers of records. This functionality is implemented such
+   that we create a "mapping" of primary key to corresponding field values for
+   all rows being updated using a SQL ``CASE`` statement.
 
 Alternatively, you can use the :py:meth:`Database.batch_commit` helper to
 process chunks of rows inside *batch*-sized transactions. This method also
@@ -265,13 +261,13 @@ the newly-created rows must be obtained.
 
 .. code-block:: python
 
-    # List of row data to insert.
-    row_data = [{'username': 'u1'}, {'username': 'u2'}, ...]
+   # List of row data to insert.
+   row_data = [{'username': 'u1'}, {'username': 'u2'}, ...]
 
-    # Assume there are 789 items in row_data. The following code will result in
-    # 8 total transactions (7x100 rows + 1x89 rows).
-    for row in db.batch_commit(row_data, 100):
-        User.create(**row)
+   # Assume there are 789 items in row_data. The following code will result in
+   # 8 total transactions (7x100 rows + 1x89 rows).
+   for row in db.batch_commit(row_data, 100):
+       User.create(**row)
 
 Bulk-loading from another table
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -282,19 +278,18 @@ also create *INSERT* queries whose source is a *SELECT* query. Use the
 
 .. code-block:: python
 
-    res = (TweetArchive
-           .insert_from(
-               Tweet.select(Tweet.user, Tweet.message),
-               fields=[TweetArchive.user, TweetArchive.message])
-           .execute())
+   res = (TweetArchive
+          .insert_from(
+              Tweet.select(Tweet.user, Tweet.message),
+              fields=[TweetArchive.user, TweetArchive.message])
+          .execute())
 
 The above query is equivalent to the following SQL:
 
 .. code-block:: sql
 
-    INSERT INTO "tweet_archive" ("user_id", "message")
-    SELECT "user_id", "message" FROM "tweet";
-
+   INSERT INTO "tweet_archive" ("user_id", "message")
+   SELECT "user_id", "message" FROM "tweet";
 
 Updating existing records
 -------------------------
@@ -305,17 +300,17 @@ The model's primary key will not change:
 
 .. code-block:: pycon
 
-    >>> user.save()  # save() returns the number of rows modified.
-    1
-    >>> user.id
-    1
-    >>> user.save()
-    >>> user.id
-    1
-    >>> huey.save()
-    1
-    >>> huey.id
-    2
+   >>> user.save()  # save() returns the number of rows modified.
+   1
+   >>> user.id
+   1
+   >>> user.save()
+   >>> user.id
+   1
+   >>> huey.save()
+   1
+   >>> huey.id
+   2
 
 If you want to update multiple records, issue an *UPDATE* query. The following
 example will update all ``Tweet`` objects, marking them as *published*, if they
@@ -323,19 +318,20 @@ were created before today. :py:meth:`Model.update` accepts keyword arguments
 where the keys correspond to the model's field names:
 
 .. code-block:: pycon
+   :emphasize-lines: 2
 
-    >>> today = datetime.today()
-    >>> query = Tweet.update(is_published=True).where(Tweet.creation_date < today)
-    >>> query.execute()  # Returns the number of rows that were updated.
-    4
+   >>> today = datetime.today()
+   >>> query = Tweet.update(is_published=True).where(Tweet.creation_date < today)
+   >>> query.execute()  # Returns the number of rows that were updated.
+   4
 
 For more information, see the documentation on :py:meth:`Model.update`,
 :py:class:`Update` and :py:meth:`Model.bulk_update`.
 
 .. note::
-    If you would like more information on performing atomic updates (such as
-    incrementing the value of a column), check out the :ref:`atomic update <atomic_updates>`
-    recipes.
+   If you would like more information on performing atomic updates (such as
+   incrementing the value of a column), check out the :ref:`atomic update <atomic_updates>`
+   recipes.
 
 .. _atomic_updates:
 
@@ -347,9 +343,9 @@ some counters. The naive approach would be to write something like this:
 
 .. code-block:: pycon
 
-    >>> for stat in Stat.select().where(Stat.url == request.url):
-    ...     stat.counter += 1
-    ...     stat.save()
+   >>> for stat in Stat.select().where(Stat.url == request.url):
+   ...     stat.counter += 1
+   ...     stat.save()
 
 **Do not do this!** Not only is this slow, but it is also vulnerable to race
 conditions if multiple processes are updating the counter at the same time.
@@ -358,16 +354,16 @@ Instead, you can update the counters atomically using :py:meth:`~Model.update`:
 
 .. code-block:: pycon
 
-    >>> query = Stat.update(counter=Stat.counter + 1).where(Stat.url == request.url)
-    >>> query.execute()
+   >>> query = Stat.update(counter=Stat.counter + 1).where(Stat.url == request.url)
+   >>> query.execute()
 
 You can make these update statements as complex as you like. Let's give all our
 employees a bonus equal to their previous bonus plus 10% of their salary:
 
 .. code-block:: pycon
 
-    >>> query = Employee.update(bonus=(Employee.bonus + (Employee.salary * .1)))
-    >>> query.execute()  # Give everyone a bonus!
+   >>> query = Employee.update(bonus=(Employee.bonus + (Employee.salary * .1)))
+   >>> query.execute()  # Give everyone a bonus!
 
 We can even use a subquery to update the value of a column. Suppose we had a
 denormalized column on the ``User`` model that stored the number of tweets a
@@ -376,66 +372,73 @@ write such a query:
 
 .. code-block:: pycon
 
-    >>> subquery = Tweet.select(fn.COUNT(Tweet.id)).where(Tweet.user == User.id)
-    >>> update = User.update(num_tweets=subquery)
-    >>> update.execute()
+   >>> subquery = Tweet.select(fn.COUNT(Tweet.id)).where(Tweet.user == User.id)
+   >>> update = User.update(num_tweets=subquery)
+   >>> update.execute()
 
 Upsert
-^^^^^^
+------
 
-Peewee provides support for varying types of upsert functionality. With SQLite
-prior to 3.24.0 and MySQL, Peewee offers the :py:meth:`~Model.replace`, which
+Peewee provides support for varying types of upsert functionality.
+
+* :py:meth:`Model.replace` - SQLite and MySQL
+* :py:meth:`Insert.on_conflict_replace` - SQLite and MySQL
+* :py:meth:`Insert.on_conflict_ignore` - SQLite, MySQL and Postgres
+* :py:meth:`Insert.on_conflict` - SQLite, MySQL and Postgres. This is the most
+  powerful and most general method.
+
+With SQLite and MySQL, Peewee offers the :py:meth:`~Model.replace`, which
 allows you to insert a record or, in the event of a constraint violation,
-replace the existing record. For Sqlite 3.24+ and Postgres, peewee provides full
-support for ``ON CONFLICT`` queries.
+replace the entire existing record.
 
 Example of using :py:meth:`~Model.replace` and :py:meth:`~Insert.on_conflict_replace`:
 
 .. code-block:: python
 
-    class User(Model):
-        username = TextField(unique=True)
-        last_login = DateTimeField(null=True)
+   class User(Model):
+       username = TextField(unique=True)
+       last_login = DateTimeField(null=True)
 
-    # Insert or update the user. The "last_login" value will be updated
-    # regardless of whether the user existed previously.
-    user_id = (User
-               .replace(username='the-user', last_login=datetime.now())
-               .execute())
+   # Insert or update the user. The "last_login" value will be updated
+   # regardless of whether the user existed previously.
+   user_id = (User
+              .replace(username='the-user', last_login=datetime.now())
+              .execute())
 
-    # This query is equivalent:
-    user_id = (User
-               .insert(username='the-user', last_login=datetime.now())
-               .on_conflict_replace()
-               .execute())
+   # This query is equivalent:
+   user_id = (User
+              .insert(username='the-user', last_login=datetime.now())
+              .on_conflict_replace()
+              .execute())
 
 .. note::
-    In addition to *replace*, SQLite, MySQL and Postgresql provide an *ignore*
-    action (see: :py:meth:`~Insert.on_conflict_ignore`) if you simply wish to
-    insert and ignore any potential constraint violation.
+   In addition to *replace*, SQLite, MySQL and Postgresql provide an *ignore*
+   action (see: :py:meth:`~Insert.on_conflict_ignore`) if you simply wish to
+   insert and ignore any potential constraint violation.
 
 **MySQL** supports upsert via the *ON DUPLICATE KEY UPDATE* clause. For
 example:
 
 .. code-block:: python
+   :emphasize-lines: 14, 15, 16
 
-    class User(Model):
-        username = TextField(unique=True)
-        last_login = DateTimeField(null=True)
-        login_count = IntegerField()
+   class User(Model):
+       username = TextField(unique=True)
+       last_login = DateTimeField(null=True)
+       login_count = IntegerField()
 
-    # Insert a new user.
-    User.create(username='huey', login_count=0)
+   # Insert a new user.
+   User.create(username='huey', login_count=0)
 
-    # Simulate the user logging in. The login count and timestamp will be
-    # either created or updated correctly.
-    now = datetime.now()
-    rowid = (User
-             .insert(username='huey', last_login=now, login_count=1)
-             .on_conflict(
-                 preserve=[User.last_login],  # Use the value we would have inserted.
-                 update={User.login_count: User.login_count + 1})
-             .execute())
+   # Simulate the user logging in. The login count and timestamp will be
+   # either created or updated correctly.
+   now = datetime.now()
+   rowid = (User
+            .insert(username='huey', last_login=now, login_count=1)
+            .on_conflict(
+                preserve=[User.last_login],  # Use the value we would have inserted.
+                update={User.login_count: User.login_count + 1})
+            .execute())
 
 In the above example, we could safely invoke the upsert query as many times as
 we wanted. The login count will be incremented atomically, the last login
@@ -445,37 +448,37 @@ column will be updated, and no duplicate rows will be created.
 allows for more granular control over which constraint violation should trigger
 the conflict resolution, and what values should be updated or preserved.
 
-Example of using :py:meth:`~Insert.on_conflict` to perform a Postgresql-style
-upsert (or SQLite 3.24+):
+Example of using :py:meth:`~Insert.on_conflict` to perform an upsert:
 
 .. code-block:: python
+   :emphasize-lines: 14, 15, 16, 17
 
-    class User(Model):
-        username = TextField(unique=True)
-        last_login = DateTimeField(null=True)
-        login_count = IntegerField()
+   class User(Model):
+       username = TextField(unique=True)
+       last_login = DateTimeField(null=True)
+       login_count = IntegerField()
 
-    # Insert a new user.
-    User.create(username='huey', login_count=0)
+   # Insert a new user.
+   User.create(username='huey', login_count=0)
 
-    # Simulate the user logging in. The login count and timestamp will be
-    # either created or updated correctly.
-    now = datetime.now()
-    rowid = (User
-             .insert(username='huey', last_login=now, login_count=1)
-             .on_conflict(
-                 conflict_target=[User.username],  # Which constraint?
-                 preserve=[User.last_login],  # Use the value we would have inserted.
-                 update={User.login_count: User.login_count + 1})
-             .execute())
+   # Simulate the user logging in. The login count and timestamp will be
+   # either created or updated correctly.
+   now = datetime.now()
+   rowid = (User
+            .insert(username='huey', last_login=now, login_count=1)
+            .on_conflict(
+                conflict_target=[User.username],  # Which constraint?
+                preserve=[User.last_login],  # Use the value we would have inserted.
+                update={User.login_count: User.login_count + 1})
+            .execute())
 
 In the above example, we could safely invoke the upsert query as many times as
 we wanted. The login count will be incremented atomically, the last login
 column will be updated, and no duplicate rows will be created.
 
 .. note::
-    The main difference between MySQL and Postgresql/SQLite is that Postgresql
-    and SQLite require that you specify a ``conflict_target``.
+   The main difference between MySQL and Postgresql/SQLite is that Postgresql
+   and SQLite require that you specify a ``conflict_target``.
 
 Here is a more advanced (if contrived) example using the :py:class:`EXCLUDED`
 namespace. The :py:class:`EXCLUDED` helper allows us to reference values in the
@@ -483,32 +486,33 @@ conflicting data. For our example, we'll assume a simple table mapping a unique
 key (string) to a value (integer):
 
 .. code-block:: python
+   :emphasize-lines: 15, 16
 
-    class KV(Model):
-        key = CharField(unique=True)
-        value = IntegerField()
+   class KV(Model):
+       key = CharField(unique=True)
+       value = IntegerField()
 
-    # Create one row.
-    KV.create(key='k1', value=1)
+   # Create one row.
+   KV.create(key='k1', value=1)
 
-    # Demonstrate usage of EXCLUDED.
-    # Here we will attempt to insert a new value for a given key. If that
-    # key already exists, then we will update its value with the *sum* of its
-    # original value and the value we attempted to insert -- provided that
-    # the new value is larger than the original value.
-    query = (KV.insert(key='k1', value=10)
-             .on_conflict(conflict_target=[KV.key],
-                          update={KV.value: KV.value + EXCLUDED.value},
-                          where=(EXCLUDED.value > KV.value)))
+   # Demonstrate usage of EXCLUDED.
+   # Here we will attempt to insert a new value for a given key. If that
+   # key already exists, then we will update its value with the *sum* of its
+   # original value and the value we attempted to insert -- provided that
+   # the new value is larger than the original value.
+   query = (KV.insert(key='k1', value=10)
+            .on_conflict(conflict_target=[KV.key],
+                         update={KV.value: KV.value + EXCLUDED.value},
+                         where=(EXCLUDED.value > KV.value)))
 
-    # Executing the above query will result in the following data being
-    # present in the "kv" table:
-    # (key='k1', value=11)
-    query.execute()
+   # Executing the above query will result in the following data being
+   # present in the "kv" table:
+   # (key='k1', value=11)
+   query.execute()
 
-    # If we attempted to execute the query *again*, then nothing would be
-    # updated, as the new value (10) is now less than the value in the
-    # original row (11).
+   # If we attempted to execute the query *again*, then nothing would be
+   # updated, as the new value (10) is now less than the value in the
+   # original row (11).
 
 There are several important concepts to understand when using ``ON CONFLICT``:
 
@@ -525,51 +529,50 @@ Full example:
 
 .. code-block:: python
 
-    class User(Model):
-        email = CharField(unique=True)  # Unique identifier for user.
-        last_login = DateTimeField()
-        login_count = IntegerField(default=0)
-        ip_log = TextField(default='')
+   class User(Model):
+       email = CharField(unique=True)  # Unique identifier for user.
+       last_login = DateTimeField()
+       login_count = IntegerField(default=0)
+       ip_log = TextField(default='')
 
 
-    # Demonstrates the above 4 concepts.
-    def login(email, ip):
-        rowid = (User
-                 .insert({User.email: email,
-                          User.last_login: datetime.now(),
-                          User.login_count: 1,
-                          User.ip_log: ip})
-                 .on_conflict(
-                     # If the INSERT fails due to a constraint violation on the
-                     # user email, then perform an UPDATE instead.
-                     conflict_target=[User.email],
+   # Demonstrates the above 4 concepts.
+   def login(email, ip):
+       rowid = (User
+                .insert({User.email: email,
+                         User.last_login: datetime.now(),
+                         User.login_count: 1,
+                         User.ip_log: ip})
+                .on_conflict(
+                    # If the INSERT fails due to a constraint violation on the
+                    # user email, then perform an UPDATE instead.
+                    conflict_target=[User.email],
 
-                     # Set the "last_login" to the value we would have inserted
-                     # (our call to datetime.now()).
-                     preserve=[User.last_login],
+                    # Set the "last_login" to the value we would have inserted
+                    # (our call to datetime.now()).
+                    preserve=[User.last_login],
 
-                     # Increment the user's login count and prepend the new IP
-                     # to the user's ip history.
-                     update={User.login_count: User.login_count + 1,
-                             User.ip_log: fn.CONCAT(EXCLUDED.ip_log, ',', User.ip_log)})
-                 .execute())
+                    # Increment the user's login count and prepend the new IP
+                    # to the user's ip history.
+                    update={User.login_count: User.login_count + 1,
+                            User.ip_log: fn.CONCAT(EXCLUDED.ip_log, ',', User.ip_log)})
+                .execute())
 
-        return rowid
+       return rowid
 
-    # This will insert the initial row, returning the new row id (1).
-    print(login('test@example.com', '127.1'))
+   # This will insert the initial row, returning the new row id (1).
+   print(login('test@example.com', '127.1'))
 
-    # Because test@example.com exists, this will trigger the UPSERT. The row id
-    # from above is returned again (1).
-    print(login('test@example.com', '127.2'))
+   # Because test@example.com exists, this will trigger the UPSERT. The row id
+   # from above is returned again (1).
+   print(login('test@example.com', '127.2'))
 
-    u = User.get()
-    print(u.login_count, u.ip_log)
+   u = User.get()
+   print(u.login_count, u.ip_log)
 
-    # Prints "2 127.2,127.1"
+   # Prints "2 127.2,127.1"
 
-For more information, see :py:meth:`Insert.on_conflict` and
-:py:class:`OnConflict`.
+.. seealso:: :py:meth:`Insert.on_conflict` and :py:class:`OnConflict`.
 
 Deleting records
 ----------------
@@ -580,24 +583,26 @@ will delete the given model instance and can optionally delete any dependent
 objects recursively (by specifying `recursive=True`).
 
 .. code-block:: pycon
+   :emphasize-lines: 2
 
-    >>> user = User.get(User.id == 1)
-    >>> user.delete_instance()  # Returns the number of rows deleted.
-    1
+   >>> user = User.get(User.id == 1)
+   >>> user.delete_instance()  # Returns the number of rows deleted.
+   1
 
-    >>> User.get(User.id == 1)
-    UserDoesNotExist: instance matching query does not exist:
-    SQL: SELECT t1."id", t1."username" FROM "user" AS t1 WHERE t1."id" = ?
-    PARAMS: [1]
+   >>> User.get(User.id == 1)
+   UserDoesNotExist: instance matching query does not exist:
+   SQL: SELECT t1."id", t1."username" FROM "user" AS t1 WHERE t1."id" = ?
+   PARAMS: [1]
 
 To delete an arbitrary set of rows, you can issue a *DELETE* query. The
 following will delete all ``Tweet`` objects that are over one year old:
 
 .. code-block:: pycon
+   :emphasize-lines: 1
 
-    >>> query = Tweet.delete().where(Tweet.creation_date < one_year_ago)
-    >>> query.execute()  # Returns the number of rows deleted.
-    7
+   >>> query = Tweet.delete().where(Tweet.creation_date < one_year_ago)
+   >>> query.execute()  # Returns the number of rows deleted.
+   7
 
 For more information, see the documentation on:
 
@@ -618,38 +623,38 @@ matches the given query, a ``DoesNotExist`` exception will be raised.
 
 .. code-block:: pycon
 
-    >>> User.get(User.id == 1)
-    <__main__.User object at 0x25294d0>
+   >>> User.get(User.id == 1)
+   <User: 1>
 
-    >>> User.get_by_id(1)  # Same as above.
-    <__main__.User object at 0x252df10>
+   >>> User.get_by_id(1)  # Same as above.
+   <User: 1>
 
-    >>> User[1]  # Also same as above.
-    <__main__.User object at 0x252dd10>
+   >>> User[1]  # Also same as above.
+   <User: 1>
 
-    >>> User.get(User.id == 1).username
-    u'Charlie'
+   >>> User.get(User.id == 1).username
+   'Charlie'
 
-    >>> User.get(User.username == 'Charlie')
-    <__main__.User object at 0x2529410>
+   >>> User.get(User.username == 'Charlie')
+   <User: 1>
 
-    >>> User.get(User.username == 'nobody')
-    UserDoesNotExist: instance matching query does not exist:
-    SQL: SELECT t1."id", t1."username" FROM "user" AS t1 WHERE t1."username" = ?
-    PARAMS: ['nobody']
+   >>> User.get(User.username == 'nobody')
+   UserDoesNotExist: <Model: User> instance matching query does not exist:
+   SQL: SELECT "t1"."id", "t1"."username" FROM "user" AS "t1" WHERE ...
+   Params: ['username', 1, 0]
 
 For more advanced operations, you can use :py:meth:`SelectBase.get`. The
 following query retrieves the latest tweet from the user named *charlie*:
 
 .. code-block:: pycon
 
-    >>> (Tweet
-    ...  .select()
-    ...  .join(User)
-    ...  .where(User.username == 'charlie')
-    ...  .order_by(Tweet.created_date.desc())
-    ...  .get())
-    <__main__.Tweet object at 0x2623410>
+   >>> (Tweet
+   ...  .select()
+   ...  .join(User)
+   ...  .where(User.username == 'charlie')
+   ...  .order_by(Tweet.created_date.desc())
+   ...  .get())
+   <Tweet: 3>
 
 For more information, see the documentation on:
 
@@ -676,13 +681,13 @@ guarantees to ensure we don't end up with duplicate usernames:
 
 .. code-block:: python
 
-    try:
-        with db.atomic():
-            return User.create(username=username)
-    except peewee.IntegrityError:
-        # `username` is a unique column, so this username already exists,
-        # making it safe to call .get().
-        return User.get(User.username == username)
+   try:
+       with db.atomic():
+           return User.create(username=username)
+   except peewee.IntegrityError:
+       # `username` is a unique column, so this username already exists,
+       # making it safe to call .get().
+       return User.get(User.username == username)
 
 You can easily encapsulate this type of logic as a ``classmethod`` on your own
 ``Model`` classes.
@@ -701,7 +706,7 @@ Here is how you might implement user account creation using
 
 .. code-block:: python
 
-    user, created = User.get_or_create(username=username)
+   user, created = User.get_or_create(username=username)
 
 Suppose we have a different model ``Person`` and would like to get or create a
 person object. The only conditions we care about when retrieving the ``Person``
@@ -710,10 +715,10 @@ record, we will also specify their date-of-birth and favorite color:
 
 .. code-block:: python
 
-    person, created = Person.get_or_create(
-        first_name=first_name,
-        last_name=last_name,
-        defaults={'dob': dob, 'favorite_color': 'green'})
+   person, created = Person.get_or_create(
+       first_name=first_name,
+       last_name=last_name,
+       defaults={'dob': dob, 'favorite_color': 'green'})
 
 Any keyword argument passed to :py:meth:`~Model.get_or_create` will be used in
 the ``get()`` portion of the logic, except for the ``defaults`` dictionary,
@@ -731,18 +736,18 @@ indexing and slicing operations:
 
 .. code-block:: pycon
 
-    >>> query = User.select()
-    >>> [user.username for user in query]
-    ['Charlie', 'Huey', 'Peewee']
+   >>> query = User.select()
+   >>> [user.username for user in query]
+   ['Charlie', 'Huey', 'Peewee']
 
-    >>> query[1]
-    <__main__.User at 0x7f83e80f5550>
+   >>> query[1]
+   <User: 1>
 
-    >>> query[1].username
-    'Huey'
+   >>> query[1].username
+   'Huey'
 
-    >>> query[:2]
-    [<__main__.User at 0x7f83e80f53a8>, <__main__.User at 0x7f83e80f5550>]
+   >>> query[:2]
+   [<User: 1>, <User: 2>]
 
 :py:class:`Select` queries are smart, in that you can iterate, index and slice
 the query multiple times but the query is only executed once.
@@ -753,17 +758,17 @@ This will return all the rows in the *User* table:
 
 .. code-block:: pycon
 
-    >>> for user in User.select():
-    ...     print(user.username)
-    ...
-    Charlie
-    Huey
-    Peewee
+   >>> for user in User.select():
+   ...     print(user.username)
+   ...
+   Charlie
+   Huey
+   Peewee
 
 .. note::
-    Subsequent iterations of the same query will not hit the database as the
-    results are cached. To disable this behavior (to reduce memory usage), call
-    :py:meth:`Select.iterator` when iterating.
+   Subsequent iterations of the same query will not hit the database as the
+   results are cached. To disable this behavior (to reduce memory usage), call
+   :py:meth:`Select.iterator` when iterating.
 
 When iterating over a model that contains a foreign key, be careful with the
 way you access values on related models. Accidentally resolving a foreign key
@@ -775,13 +780,13 @@ are exposed as :py:class:`Select` instances:
 
 .. code-block:: pycon
 
-    >>> tweet = Tweet.get()
-    >>> tweet.user  # Accessing a foreign key returns the related model.
-    <tw.User at 0x7f3ceb017f50>
+   >>> tweet = Tweet.get()
+   >>> tweet.user  # Accessing a foreign key returns the related model.
+   <User: 2>
 
-    >>> user = User.get()
-    >>> user.tweets  # Accessing a back-reference returns a query.
-    <peewee.ModelSelect at 0x7f73db3bafd0>
+   >>> user = User.get()
+   >>> user.tweets  # Accessing a back-reference returns a query.
+   <peewee.ModelSelect at 0x7f73db3bafd0>
 
 You can iterate over the ``user.tweets`` back-reference just like any other
 :py:class:`Select`:
@@ -801,13 +806,13 @@ it easier to work with rows as dictionaries, for example:
 
 .. code-block:: pycon
 
-    >>> query = User.select().dicts()
-    >>> for row in query:
-    ...     print(row)
+   >>> query = User.select().dicts()
+   >>> for row in query:
+   ...     print(row)
 
-    {'id': 1, 'username': 'Charlie'}
-    {'id': 2, 'username': 'Huey'}
-    {'id': 3, 'username': 'Peewee'}
+   {'id': 1, 'username': 'Charlie'}
+   {'id': 2, 'username': 'Huey'}
+   {'id': 3, 'username': 'Peewee'}
 
 See :py:meth:`~BaseQuery.namedtuples`, :py:meth:`~BaseQuery.tuples`,
 :py:meth:`~BaseQuery.dicts` for more information.
@@ -827,16 +832,17 @@ without caching each model returned, using much less memory when iterating over
 large result sets.
 
 .. code-block:: python
+   :emphasize-lines: 8
 
-    # Let's assume we've got 10 million stat objects to dump to a csv file.
-    stats = Stat.select()
+   # Let's assume we've got 10 million stat objects to dump to a csv file.
+   stats = Stat.select()
 
-    # Our imaginary serializer class
-    serializer = CSVSerializer()
+   # Our imaginary serializer class
+   serializer = CSVSerializer()
 
-    # Loop over all the stats and serialize.
-    for stat in stats.iterator():
-        serializer.serialize_object(stat)
+   # Loop over all the stats and serialize.
+   for stat in stats.iterator():
+       serializer.serialize_object(stat)
 
 For simple queries you can see further speed improvements by returning rows as
 dictionaries, namedtuples or tuples. The following methods can be used on any
@@ -850,16 +856,20 @@ Don't forget to append the :py:meth:`~BaseQuery.iterator` method call to also
 reduce memory consumption. For example, the above code might look like:
 
 .. code-block:: python
+   :emphasize-lines: 4, 5
 
-    # Let's assume we've got 10 million stat objects to dump to a csv file.
-    stats = Stat.select()
+   # Let's assume we've got 10 million stat objects to dump to a csv file.
+   stats = (Stat
+            .select()
+            .tuples()
+            .iterator())
 
-    # Our imaginary serializer class
-    serializer = CSVSerializer()
+   # Our imaginary serializer class
+   serializer = CSVSerializer()
 
-    # Loop over all the stats (rendered as tuples, without caching) and serialize.
-    for stat_tuple in stats.tuples().iterator():
-        serializer.serialize_tuple(stat_tuple)
+   # Loop over all the stats (rendered as tuples, without caching) and serialize.
+   for stat_tuple in stats:
+       serializer.serialize_tuple(stat_tuple)
 
 When iterating over a large number of rows that contain columns from multiple
 tables, peewee will reconstruct the model graph for each row returned. This
@@ -873,20 +883,21 @@ the model graph.
 For example:
 
 .. code-block:: python
+   :emphasize-lines: 12
 
-    query = (Tweet
-             .select(Tweet, User)  # Select tweet and user data.
-             .join(User))
+   query = (Tweet
+            .select(Tweet, User)  # Select tweet and user data.
+            .join(User))
 
-    # Note that the user columns are stored in a separate User instance
-    # accessible at tweet.user:
-    for tweet in query:
-        print(tweet.user.username, tweet.content)
+   # Note that the user columns are stored in a separate User instance
+   # accessible at tweet.user:
+   for tweet in query:
+       print(tweet.user.username, tweet.content)
 
-    # Using ".objects()" will not create the tweet.user object and assigns all
-    # user attributes to the tweet instance:
-    for tweet in query.objects():
-        print(tweet.username, tweet.content)
+   # Using ".objects()" will not create the tweet.user object and assigns all
+   # user attributes to the tweet instance:
+   for tweet in query.objects():
+       print(tweet.username, tweet.content)
 
 For maximum performance, you can execute queries and then iterate over the
 results using the underlying database cursor. :py:meth:`Database.execute`
@@ -894,11 +905,12 @@ accepts a query object, executes the query, and returns a DB-API 2.0 ``Cursor``
 object. The cursor will return the raw row-tuples:
 
 .. code-block:: python
+   :emphasize-lines: 2
 
-    query = Tweet.select(Tweet.content, User.username).join(User)
-    cursor = database.execute(query)
-    for (content, username) in cursor:
-        print(username, '->', content)
+   query = Tweet.select(Tweet.content, User.username).join(User)
+   cursor = database.execute(query)
+   for (content, username) in cursor:
+       print(username, '->', content)
 
 Filtering records
 -----------------
@@ -906,109 +918,108 @@ Filtering records
 You can filter for particular records using normal python operators. Peewee
 supports a wide variety of :ref:`query operators <query-operators>`.
 
-.. code-block:: pycon
+.. code-block:: python
 
-    >>> user = User.get(User.username == 'Charlie')
-    >>> for tweet in Tweet.select().where(Tweet.user == user, Tweet.is_published == True):
-    ...     print(tweet.user.username, '->', tweet.message)
-    ...
-    Charlie -> hello world
-    Charlie -> this is fun
+   tweets = (Tweet
+             .select(Tweet, User)
+             .join(User)
+             .where((User.username == 'Charlie') &
+                    (Tweet.is_published == True)))
+   for tweet in tweets:
+       print(tweet.user.username, '->', tweet.message)
 
-    >>> for tweet in Tweet.select().where(Tweet.created_date < datetime.datetime(2011, 1, 1)):
-    ...     print(tweet.message, tweet.created_date)
-    ...
-    Really old tweet 2010-01-01 00:00:00
+   # Charlie -> hello world
+   # Charlie -> this is fun
 
-You can also filter across joins:
+   tweets = (Tweet
+             .select()
+             .where(Tweet.created_date < datetime(2011, 1, 1)))
+   for tweet in tweets:
+       print(tweet.message, tweet.created_date)
 
-.. code-block:: pycon
-
-    >>> for tweet in Tweet.select().join(User).where(User.username == 'Charlie'):
-    ...     print(tweet.message)
-    hello world
-    this is fun
-    look at this picture of my food
+   # Really old tweet 2010-01-01 00:00:00
 
 If you want to express a complex query, use parentheses and python's bitwise
 *or* and *and* operators:
 
-.. code-block:: pycon
+.. code-block:: python
 
-    >>> Tweet.select().join(User).where(
-    ...     (User.username == 'Charlie') |
-    ...     (User.username == 'Peewee Herman'))
-
-.. note::
-    Note that Peewee uses **bitwise** operators (``&`` and ``|``) rather than
-    logical operators (``and`` and ``or``). The reason for this is that Python
-    coerces the return value of logical operations to a boolean value. This is
-    also the reason why "IN" queries must be expressed using ``.in_()`` rather
-    than the ``in`` operator.
-
-Check out :ref:`the table of query operations <query-operators>` to see what
-types of queries are possible.
+   Tweet.select().join(User).where(
+       (User.username == 'Charlie') |
+       (User.username == 'Peewee Herman'))
 
 .. note::
+   Note that Peewee uses **bitwise** operators (``&`` and ``|``) rather than
+   logical operators (``and`` and ``or``). The reason for this is that Python
+   coerces the return value of logical operations to a boolean value. This is
+   also the reason why "IN" queries must be expressed using ``.in_()`` rather
+   than the ``in`` operator.
 
-    A lot of fun things can go in the where clause of a query, such as:
+.. seealso:: :ref:`Query operations <query-operators>` to see all operators.
 
-    * A field expression, e.g. ``User.username == 'Charlie'``
-    * A function expression, e.g. ``fn.Lower(fn.Substr(User.username, 1, 1)) == 'a'``
-    * A comparison of one column to another, e.g. ``Employee.salary < (Employee.tenure * 1000) + 40000``
+.. note::
 
-    You can also nest queries, for example tweets by users whose username
-    starts with "a":
+   A lot of fun things can go in the where clause of a query, such as:
 
-    .. code-block:: python
+   * A field expression, e.g. ``User.username == 'Charlie'``
+   * A function expression, e.g. ``fn.Lower(fn.Substr(User.username, 1, 1)) == 'a'``
+   * A comparison of one column to another, e.g. ``Employee.salary < (Employee.tenure * 1000) + 40000``
 
-        # get users whose username starts with "a"
-        a_users = User.select().where(fn.Lower(fn.Substr(User.username, 1, 1)) == 'a')
+   You can also nest queries, for example tweets by users whose username
+   starts with "a":
 
-        # the ".in_()" method signifies an "IN" query
-        a_user_tweets = Tweet.select().where(Tweet.user.in_(a_users))
+   .. code-block:: python
+
+      # get users whose username starts with "a"
+      a_users = User.select().where(fn.Lower(fn.Substr(User.username, 1, 1)) == 'a')
+
+      # the ".in_()" method signifies an "IN" query
+      a_user_tweets = Tweet.select().where(Tweet.user.in_(a_users))
 
 More query examples
 ^^^^^^^^^^^^^^^^^^^
 
-.. note::
-    For a wide range of example queries, see the :ref:`Query Examples <query_examples>`
-    document, which shows how to implements queries from the `PostgreSQL Exercises <https://pgexercises.com/>`_
-    website.
+.. seealso::
+   :ref:`Large collection of Peewee query examples <query_examples>`. Examples
+   based on `Postgresql Exercises <https://pgexercises.com/>`_.
 
 Get active users:
 
 .. code-block:: python
 
-    User.select().where(User.active == True)
+   User.select().where(User.active == True)
 
 Get users who are either staff or superusers:
 
 .. code-block:: python
 
-    User.select().where(
-        (User.is_staff == True) | (User.is_superuser == True))
+   User.select().where(
+       (User.is_staff == True) | (User.is_superuser == True))
 
 Get tweets by user named "charlie":
 
 .. code-block:: python
 
-    Tweet.select().join(User).where(User.username == 'charlie')
+   Tweet.select().join(User).where(User.username == 'charlie')
 
 Get tweets by staff or superusers (assumes FK relationship):
 
 .. code-block:: python
 
-    Tweet.select().join(User).where(
-        (User.is_staff == True) | (User.is_superuser == True))
+   Tweet.select().join(User).where(
+       (User.is_staff == True) | (User.is_superuser == True))
 
 Get tweets by staff or superusers using a subquery:
 
 .. code-block:: python
 
-    staff_super = User.select(User.id).where(
-        (User.is_staff == True) | (User.is_superuser == True))
-    Tweet.select().where(Tweet.user.in_(staff_super))
+   staff_super = (User
+                  .select(User.id)
+                  .where(
+                      (User.is_staff == True) |
+                      (User.is_superuser == True)))
+
+   Tweet.select().where(Tweet.user.in_(staff_super))
 
 Sorting records
 ---------------
@@ -1016,51 +1027,55 @@ Sorting records
 To return rows in order, use the :py:meth:`~Query.order_by` method:
 
 .. code-block:: pycon
+   :emphasize-lines: 1, 8
 
-    >>> for t in Tweet.select().order_by(Tweet.created_date):
-    ...     print(t.pub_date)
-    ...
-    2010-01-01 00:00:00
-    2011-06-07 14:08:48
-    2011-06-07 14:12:57
+   >>> for t in Tweet.select().order_by(Tweet.created_date):
+   ...     print(t.pub_date)
+   ...
+   2010-01-01 00:00:00
+   2011-06-07 14:08:48
+   2011-06-07 14:12:57
 
-    >>> for t in Tweet.select().order_by(Tweet.created_date.desc()):
-    ...     print(t.pub_date)
-    ...
-    2011-06-07 14:12:57
-    2011-06-07 14:08:48
-    2010-01-01 00:00:00
+   >>> for t in Tweet.select().order_by(Tweet.created_date.desc()):
+   ...     print(t.pub_date)
+   ...
+   2011-06-07 14:12:57
+   2011-06-07 14:08:48
+   2010-01-01 00:00:00
 
 You can also use ``+`` and ``-`` prefix operators to indicate ordering:
 
 .. code-block:: python
 
-    # The following queries are equivalent:
-    Tweet.select().order_by(Tweet.created_date.desc())
+   # The following queries are equivalent:
+   Tweet.select().order_by(Tweet.created_date.desc())
 
-    Tweet.select().order_by(-Tweet.created_date)  # Note the "-" prefix.
+   Tweet.select().order_by(-Tweet.created_date)  # Note the "-" prefix.
 
-    # Similarly you can use "+" to indicate ascending order, though ascending
-    # is the default when no ordering is otherwise specified.
-    User.select().order_by(+User.username)
+   # Similarly you can use "+" to indicate ascending order, though ascending
+   # is the default when no ordering is otherwise specified.
+   User.select().order_by(+User.username)
 
 You can also order across joins. Assuming you want to order tweets by the
 username of the author, then by created_date:
 
 .. code-block:: pycon
 
-    query = (Tweet
-             .select()
-             .join(User)
-             .order_by(User.username, Tweet.created_date.desc()))
+   query = (Tweet
+            .select()
+            .join(User)
+            .order_by(User.username, Tweet.created_date.desc()))
 
 .. code-block:: sql
 
-    SELECT t1."id", t1."user_id", t1."message", t1."is_published", t1."created_date"
-    FROM "tweet" AS t1
-    INNER JOIN "user" AS t2
-      ON t1."user_id" = t2."id"
-    ORDER BY t2."username", t1."created_date" DESC
+   SELECT t1."id", t1."user_id", t1."message", t1."is_published", t1."created_date"
+   FROM "tweet" AS t1
+   INNER JOIN "user" AS t2
+     ON t1."user_id" = t2."id"
+   ORDER BY t2."username", t1."created_date" DESC
+
+Sorting by aggregate value
+^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 When sorting on a calculated value, you can either include the necessary SQL
 expressions, or reference the alias assigned to the value. Here are two
@@ -1068,24 +1083,24 @@ examples illustrating these methods:
 
 .. code-block:: python
 
-    # Let's start with our base query. We want to get all usernames and the number of
-    # tweets they've made. We wish to sort this list from users with most tweets to
-    # users with fewest tweets.
-    query = (User
-             .select(User.username, fn.COUNT(Tweet.id).alias('num_tweets'))
-             .join(Tweet, JOIN.LEFT_OUTER)
-             .group_by(User.username))
+   # Let's start with our base query. We want to get all usernames and the number of
+   # tweets they've made. We wish to sort this list from users with most tweets to
+   # users with fewest tweets.
+   query = (User
+            .select(User.username, fn.COUNT(Tweet.id).alias('num_tweets'))
+            .join(Tweet, JOIN.LEFT_OUTER)
+            .group_by(User.username))
 
 You can order using the same COUNT expression used in the ``select`` clause. In
 the example below we are ordering by the ``COUNT()`` of tweet ids descending:
 
 .. code-block:: python
 
-    query = (User
-             .select(User.username, fn.COUNT(Tweet.id).alias('num_tweets'))
-             .join(Tweet, JOIN.LEFT_OUTER)
-             .group_by(User.username)
-             .order_by(fn.COUNT(Tweet.id).desc()))
+   query = (User
+            .select(User.username, fn.COUNT(Tweet.id).alias('num_tweets'))
+            .join(Tweet, JOIN.LEFT_OUTER)
+            .group_by(User.username)
+            .order_by(fn.COUNT(Tweet.id).desc()))
 
 Alternatively, you can reference the alias assigned to the calculated value in
 the ``select`` clause. This method has the benefit of being a bit easier to
@@ -1094,22 +1109,22 @@ wrapping it using the :py:class:`SQL` helper:
 
 .. code-block:: python
 
-    query = (User
-             .select(User.username, fn.COUNT(Tweet.id).alias('num_tweets'))
-             .join(Tweet, JOIN.LEFT_OUTER)
-             .group_by(User.username)
-             .order_by(SQL('num_tweets').desc()))
+   query = (User
+            .select(User.username, fn.COUNT(Tweet.id).alias('num_tweets'))
+            .join(Tweet, JOIN.LEFT_OUTER)
+            .group_by(User.username)
+            .order_by(SQL('num_tweets').desc()))
 
 Or, to do things the "peewee" way:
 
 .. code-block:: python
 
-    ntweets = fn.COUNT(Tweet.id)
-    query = (User
-             .select(User.username, ntweets.alias('num_tweets'))
-             .join(Tweet, JOIN.LEFT_OUTER)
-             .group_by(User.username)
-             .order_by(ntweets.desc())
+   ntweets = fn.COUNT(Tweet.id)
+   query = (User
+            .select(User.username, ntweets.alias('num_tweets'))
+            .join(Tweet, JOIN.LEFT_OUTER)
+            .group_by(User.username)
+            .order_by(ntweets.desc())
 
 Getting random records
 ----------------------
@@ -1140,23 +1155,23 @@ records. :py:meth:`~Query.paginate` takes two parameters,
 ``page_number``, and ``items_per_page``.
 
 .. attention::
-    Page numbers are 1-based, so the first page of results will be page 1.
+   Page numbers are 1-based, so the first page of results will be page 1.
 
 .. code-block:: pycon
 
-    >>> for tweet in Tweet.select().order_by(Tweet.id).paginate(2, 10):
-    ...     print(tweet.message)
-    ...
-    tweet 10
-    tweet 11
-    tweet 12
-    tweet 13
-    tweet 14
-    tweet 15
-    tweet 16
-    tweet 17
-    tweet 18
-    tweet 19
+   >>> for tweet in Tweet.select().order_by(Tweet.id).paginate(2, 10):
+   ...     print(tweet.message)
+   ...
+   tweet 10
+   tweet 11
+   tweet 12
+   tweet 13
+   tweet 14
+   tweet 15
+   tweet 16
+   tweet 17
+   tweet 18
+   tweet 19
 
 If you would like more granular control, you can always use
 :py:meth:`~Query.limit` and :py:meth:`~Query.offset`.
@@ -1168,17 +1183,17 @@ You can count the number of rows in any select query:
 
 .. code-block:: python
 
-    >>> Tweet.select().count()
-    100
-    >>> Tweet.select().where(Tweet.id > 50).count()
-    50
+   >>> Tweet.select().count()
+   100
+   >>> Tweet.select().where(Tweet.id > 50).count()
+   50
 
 Peewee will wrap your query in an outer query that performs a count, which
 results in SQL like:
 
 .. code-block:: sql
 
-    SELECT COUNT(1) FROM ( ... your query ... );
+   SELECT COUNT(1) FROM ( ... your query ... );
 
 Aggregating records
 -------------------
@@ -1188,10 +1203,10 @@ of tweets in each.
 
 .. code-block:: python
 
-    query = (User
-             .select(User, fn.Count(Tweet.id).alias('count'))
-             .join(Tweet, JOIN.LEFT_OUTER)
-             .group_by(User))
+   query = (User
+            .select(User, fn.Count(Tweet.id).alias('count'))
+            .join(Tweet, JOIN.LEFT_OUTER)
+            .group_by(User))
 
 The resulting query will return *User* objects with all their normal attributes
 plus an additional attribute *count* which will contain the count of tweets for
@@ -1203,48 +1218,48 @@ models in a :ref:`many-to-many <manytomany>` configuration:
 
 .. code-block:: python
 
-    class Photo(Model):
-        image = CharField()
+   class Photo(Model):
+       image = CharField()
 
-    class Tag(Model):
-        name = CharField()
+   class Tag(Model):
+       name = CharField()
 
-    class PhotoTag(Model):
-        photo = ForeignKeyField(Photo)
-        tag = ForeignKeyField(Tag)
+   class PhotoTag(Model):
+       photo = ForeignKeyField(Photo)
+       tag = ForeignKeyField(Tag)
 
 Now say we want to find tags that have at least 5 photos associated with them:
 
 .. code-block:: python
 
-    query = (Tag
-             .select()
-             .join(PhotoTag)
-             .join(Photo)
-             .group_by(Tag)
-             .having(fn.Count(Photo.id) > 5))
+   query = (Tag
+            .select()
+            .join(PhotoTag)
+            .join(Photo)
+            .group_by(Tag)
+            .having(fn.Count(Photo.id) > 5))
 
 This query is equivalent to the following SQL:
 
 .. code-block:: sql
 
-    SELECT t1."id", t1."name"
-    FROM "tag" AS t1
-    INNER JOIN "phototag" AS t2 ON t1."id" = t2."tag_id"
-    INNER JOIN "photo" AS t3 ON t2."photo_id" = t3."id"
-    GROUP BY t1."id", t1."name"
-    HAVING Count(t3."id") > 5
+   SELECT t1."id", t1."name"
+   FROM "tag" AS t1
+   INNER JOIN "phototag" AS t2 ON t1."id" = t2."tag_id"
+   INNER JOIN "photo" AS t3 ON t2."photo_id" = t3."id"
+   GROUP BY t1."id", t1."name"
+   HAVING Count(t3."id") > 5
 
 Suppose we want to grab the associated count and store it on the tag:
 
 .. code-block:: python
 
-    query = (Tag
-             .select(Tag, fn.Count(Photo.id).alias('count'))
-             .join(PhotoTag)
-             .join(Photo)
-             .group_by(Tag)
-             .having(fn.Count(Photo.id) > 5))
+   query = (Tag
+            .select(Tag, fn.Count(Photo.id).alias('count'))
+            .join(PhotoTag)
+            .join(Photo)
+            .group_by(Tag)
+            .having(fn.Count(Photo.id) > 5))
 
 Retrieving Scalar Values
 ------------------------
@@ -1254,17 +1269,17 @@ instance:
 
 .. code-block:: python
 
-    >>> PageView.select(fn.Count(fn.Distinct(PageView.url))).scalar()
-    100
+   >>> PageView.select(fn.Count(fn.Distinct(PageView.url))).scalar()
+   100
 
 You can retrieve multiple scalar values by passing ``as_tuple=True``:
 
 .. code-block:: python
 
-    >>> Employee.select(
-    ...     fn.Min(Employee.salary), fn.Max(Employee.salary)
-    ... ).scalar(as_tuple=True)
-    (30000, 50000)
+   >>> Employee.select(
+   ...     fn.Min(Employee.salary), fn.Max(Employee.salary)
+   ... ).scalar(as_tuple=True)
+   (30000, 50000)
 
 .. _window-functions:
 
@@ -1288,16 +1303,16 @@ For the following examples, we'll use the following model and sample data:
 
 .. code-block:: python
 
-    class Sample(Model):
-        counter = IntegerField()
-        value = FloatField()
+   class Sample(Model):
+       counter = IntegerField()
+       value = FloatField()
 
-    data = [(1, 10),
-            (1, 20),
-            (2, 1),
-            (2, 3),
-            (3, 100)]
-    Sample.insert_many(data, fields=[Sample.counter, Sample.value]).execute()
+   data = [(1, 10),
+           (1, 20),
+           (2, 1),
+           (2, 3),
+           (3, 100)]
+   Sample.insert_many(data, fields=[Sample.counter, Sample.value]).execute()
 
 Our sample table now contains:
 
@@ -1320,39 +1335,39 @@ Sample's ``id`` field:
 
 .. code-block:: python
 
-    query = Sample.select(
-        Sample.counter,
-        Sample.value,
-        fn.SUM(Sample.value).over(order_by=[Sample.id]).alias('total'))
+   query = Sample.select(
+       Sample.counter,
+       Sample.value,
+       fn.SUM(Sample.value).over(order_by=[Sample.id]).alias('total'))
 
-    for sample in query:
-        print(sample.counter, sample.value, sample.total)
+   for sample in query:
+       print(sample.counter, sample.value, sample.total)
 
-    # 1    10.    10.
-    # 1    20.    30.
-    # 2     1.    31.
-    # 2     3.    34.
-    # 3   100    134.
+   # 1    10.    10.
+   # 1    20.    30.
+   # 2     1.    31.
+   # 2     3.    34.
+   # 3   100    134.
 
 For another example, we'll calculate the difference between the current value
 and the previous value, when ordered by the ``id``:
 
 .. code-block:: python
 
-    difference = Sample.value - fn.LAG(Sample.value, 1).over(order_by=[Sample.id])
-    query = Sample.select(
-        Sample.counter,
-        Sample.value,
-        difference.alias('diff'))
+   difference = Sample.value - fn.LAG(Sample.value, 1).over(order_by=[Sample.id])
+   query = Sample.select(
+       Sample.counter,
+       Sample.value,
+       difference.alias('diff'))
 
-    for sample in query:
-        print(sample.counter, sample.value, sample.diff)
+   for sample in query:
+       print(sample.counter, sample.value, sample.diff)
 
-    # 1    10.   NULL
-    # 1    20.    10.  -- (20 - 10)
-    # 2     1.   -19.  -- (1 - 20)
-    # 2     3.     2.  -- (3 - 1)
-    # 3   100     97.  -- (100 - 3)
+   # 1    10.   NULL
+   # 1    20.    10.  -- (20 - 10)
+   # 2     1.   -19.  -- (1 - 20)
+   # 2     3.     2.  -- (3 - 1)
+   # 3   100     97.  -- (100 - 3)
 
 Partitioned Windows
 ^^^^^^^^^^^^^^^^^^^
@@ -1364,19 +1379,19 @@ window that is partitioned depending on the ``counter`` field:
 
 .. code-block:: python
 
-    query = Sample.select(
-        Sample.counter,
-        Sample.value,
-        fn.AVG(Sample.value).over(partition_by=[Sample.counter]).alias('cavg'))
+   query = Sample.select(
+       Sample.counter,
+       Sample.value,
+       fn.AVG(Sample.value).over(partition_by=[Sample.counter]).alias('cavg'))
 
-    for sample in query:
-        print(sample.counter, sample.value, sample.cavg)
+   for sample in query:
+       print(sample.counter, sample.value, sample.cavg)
 
-    # 1    10.    15.
-    # 1    20.    15.
-    # 2     1.     2.
-    # 2     3.     2.
-    # 3   100    100.
+   # 1    10.    15.
+   # 1    20.    15.
+   # 2     1.     2.
+   # 2     3.     2.
+   # 3   100    100.
 
 We can use ordering within partitions by specifying both the ``order_by`` and
 ``partition_by`` parameters. For an example, let's rank the samples by value
@@ -1384,21 +1399,21 @@ within each distinct ``counter`` group.
 
 .. code-block:: python
 
-    query = Sample.select(
-        Sample.counter,
-        Sample.value,
-        fn.RANK().over(
-            order_by=[Sample.value],
-            partition_by=[Sample.counter]).alias('rank'))
+   query = Sample.select(
+       Sample.counter,
+       Sample.value,
+       fn.RANK().over(
+           order_by=[Sample.value],
+           partition_by=[Sample.counter]).alias('rank'))
 
-    for sample in query:
-        print(sample.counter, sample.value, sample.rank)
+   for sample in query:
+       print(sample.counter, sample.value, sample.rank)
 
-    # 1    10.    1
-    # 1    20.    2
-    # 2     1.    1
-    # 2     3.    2
-    # 3   100     1
+   # 1    10.    1
+   # 1    20.    2
+   # 2     1.    1
+   # 2     3.    2
+   # 3   100     1
 
 Bounded windows
 ^^^^^^^^^^^^^^^
@@ -1422,26 +1437,26 @@ running total of the current row and it's two preceding rows:
 
 .. code-block:: python
 
-    query = Sample.select(
-        Sample.counter,
-        Sample.value,
-        fn.SUM(Sample.value).over(
-            order_by=[Sample.id],
-            start=Window.preceding(2),
-            end=Window.CURRENT_ROW).alias('rsum'))
+   query = Sample.select(
+       Sample.counter,
+       Sample.value,
+       fn.SUM(Sample.value).over(
+           order_by=[Sample.id],
+           start=Window.preceding(2),
+           end=Window.CURRENT_ROW).alias('rsum'))
 
-    for sample in query:
-        print(sample.counter, sample.value, sample.rsum)
+   for sample in query:
+       print(sample.counter, sample.value, sample.rsum)
 
-    # 1    10.    10.
-    # 1    20.    30.  -- (20 + 10)
-    # 2     1.    31.  -- (1 + 20 + 10)
-    # 2     3.    24.  -- (3 + 1 + 20)
-    # 3   100    104.  -- (100 + 3 + 1)
+   # 1    10.    10.
+   # 1    20.    30.  -- (20 + 10)
+   # 2     1.    31.  -- (1 + 20 + 10)
+   # 2     3.    24.  -- (3 + 1 + 20)
+   # 3   100    104.  -- (100 + 3 + 1)
 
 .. note::
-    Technically we did not need to specify the ``end=Window.CURRENT`` because
-    that is the default. It was shown in the example for demonstration.
+   Technically we did not need to specify the ``end=Window.CURRENT`` because
+   that is the default. It was shown in the example for demonstration.
 
 Let's look at another example. In this example we will calculate the "opposite"
 of a running total, in which the total sum of all values is decreased by the
@@ -1450,19 +1465,19 @@ the sum from the current row to the last row.
 
 .. code-block:: python
 
-    query = Sample.select(
-        Sample.counter,
-        Sample.value,
-        fn.SUM(Sample.value).over(
-            order_by=[Sample.id],
-            start=Window.CURRENT_ROW,
-            end=Window.following()).alias('rsum'))
+   query = Sample.select(
+       Sample.counter,
+       Sample.value,
+       fn.SUM(Sample.value).over(
+           order_by=[Sample.id],
+           start=Window.CURRENT_ROW,
+           end=Window.following()).alias('rsum'))
 
-    # 1    10.   134.  -- (10 + 20 + 1 + 3 + 100)
-    # 1    20.   124.  -- (20 + 1 + 3 + 100)
-    # 2     1.   104.  -- (1 + 3 + 100)
-    # 2     3.   103.  -- (3 + 100)
-    # 3   100    100.  -- (100)
+   # 1    10.   134.  -- (10 + 20 + 1 + 3 + 100)
+   # 1    20.   124.  -- (20 + 1 + 3 + 100)
+   # 2     1.   104.  -- (1 + 3 + 100)
+   # 2     3.   103.  -- (3 + 100)
+   # 3   100    100.  -- (100)
 
 Filtered Aggregates
 ^^^^^^^^^^^^^^^^^^^
@@ -1477,24 +1492,24 @@ respect to the ``id``, but we will filter-out any samples whose ``counter=2``.
 
 .. code-block:: python
 
-    query = Sample.select(
-        Sample.counter,
-        Sample.value,
-        fn.SUM(Sample.value).filter(Sample.counter != 2).over(
-            order_by=[Sample.id]).alias('csum'))
+   query = Sample.select(
+       Sample.counter,
+       Sample.value,
+       fn.SUM(Sample.value).filter(Sample.counter != 2).over(
+           order_by=[Sample.id]).alias('csum'))
 
-    for sample in query:
-        print(sample.counter, sample.value, sample.csum)
+   for sample in query:
+       print(sample.counter, sample.value, sample.csum)
 
-    # 1    10.    10.
-    # 1    20.    30.
-    # 2     1.    30.
-    # 2     3.    30.
-    # 3   100    130.
+   # 1    10.    10.
+   # 1    20.    30.
+   # 2     1.    30.
+   # 2     3.    30.
+   # 3   100    130.
 
 .. note::
-    The call to :py:meth:`~Function.filter` must precede the call to
-    :py:meth:`~Function.over`.
+   The call to :py:meth:`~Function.filter` must precede the call to
+   :py:meth:`~Function.over`.
 
 Reusing Window Definitions
 ^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -1509,24 +1524,24 @@ and call several window functions using that window definition:
 
 .. code-block:: python
 
-    win = Window(order_by=[Sample.id])
-    query = Sample.select(
-        Sample.counter,
-        Sample.value,
-        fn.LEAD(Sample.value).over(win),
-        fn.LAG(Sample.value).over(win),
-        fn.SUM(Sample.value).over(win)
-    ).window(win)  # Include our window definition in query.
+   win = Window(order_by=[Sample.id])
+   query = Sample.select(
+       Sample.counter,
+       Sample.value,
+       fn.LEAD(Sample.value).over(win),
+       fn.LAG(Sample.value).over(win),
+       fn.SUM(Sample.value).over(win)
+   ).window(win)  # Include our window definition in query.
 
-    for row in query.tuples():
-        print(row)
+   for row in query.tuples():
+       print(row)
 
-    # counter  value  lead()  lag()  sum()
-    # 1          10.     20.   NULL    10.
-    # 1          20.      1.    10.    30.
-    # 2           1.      3.    20.    31.
-    # 2           3.    100.     1.    34.
-    # 3         100.    NULL     3.   134.
+   # counter  value  lead()  lag()  sum()
+   # 1          10.     20.   NULL    10.
+   # 1          20.      1.    10.    30.
+   # 2           1.      3.    20.    31.
+   # 2           3.    100.     1.    34.
+   # 3         100.    NULL     3.   134.
 
 Multiple window definitions
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -1538,24 +1553,24 @@ each window has a unique alias:
 
 .. code-block:: python
 
-    w1 = Window(order_by=[Sample.id]).alias('w1')
-    w2 = Window(partition_by=[Sample.counter]).alias('w2')
-    query = Sample.select(
-        Sample.counter,
-        Sample.value,
-        fn.SUM(Sample.value).over(w1).alias('rsum'),  # Running total.
-        fn.AVG(Sample.value).over(w2).alias('cavg')   # Avg per category.
-    ).window(w1, w2)  # Include our window definitions.
+   w1 = Window(order_by=[Sample.id]).alias('w1')
+   w2 = Window(partition_by=[Sample.counter]).alias('w2')
+   query = Sample.select(
+       Sample.counter,
+       Sample.value,
+       fn.SUM(Sample.value).over(w1).alias('rsum'),  # Running total.
+       fn.AVG(Sample.value).over(w2).alias('cavg')   # Avg per category.
+   ).window(w1, w2)  # Include our window definitions.
 
-    for sample in query:
-        print(sample.counter, sample.value, sample.rsum, sample.cavg)
+   for sample in query:
+       print(sample.counter, sample.value, sample.rsum, sample.cavg)
 
-    # counter  value   rsum     cavg
-    # 1          10.     10.     15.
-    # 1          20.     30.     15.
-    # 2           1.     31.      2.
-    # 2           3.     34.      2.
-    # 3         100     134.    100.
+   # counter  value   rsum     cavg
+   # 1          10.     10.     15.
+   # 1          20.     30.     15.
+   # 2           1.     31.      2.
+   # 2           3.     34.      2.
+   # 3         100     134.    100.
 
 Similarly, if you have multiple window definitions that share similar
 definitions, it is possible to extend a previously-defined window definition.
@@ -1565,28 +1580,28 @@ a second window that extends this partitioning, and adds an ordering clause:
 
 .. code-block:: python
 
-    w1 = Window(partition_by=[Sample.counter]).alias('w1')
+   w1 = Window(partition_by=[Sample.counter]).alias('w1')
 
-    # By extending w1, this window definition will also be partitioned
-    # by "counter".
-    w2 = Window(extends=w1, order_by=[Sample.value.desc()]).alias('w2')
+   # By extending w1, this window definition will also be partitioned
+   # by "counter".
+   w2 = Window(extends=w1, order_by=[Sample.value.desc()]).alias('w2')
 
-    query = (Sample
-             .select(Sample.counter, Sample.value,
-                     fn.SUM(Sample.value).over(w1).alias('group_sum'),
-                     fn.RANK().over(w2).alias('revrank'))
-             .window(w1, w2)
-             .order_by(Sample.id))
+   query = (Sample
+            .select(Sample.counter, Sample.value,
+                    fn.SUM(Sample.value).over(w1).alias('group_sum'),
+                    fn.RANK().over(w2).alias('revrank'))
+            .window(w1, w2)
+            .order_by(Sample.id))
 
-    for sample in query:
-        print(sample.counter, sample.value, sample.group_sum, sample.revrank)
+   for sample in query:
+       print(sample.counter, sample.value, sample.group_sum, sample.revrank)
 
-    # counter  value   group_sum   revrank
-    # 1        10.     30.         2
-    # 1        20.     30.         1
-    # 2        1.      4.          2
-    # 2        3.      4.          1
-    # 3        100.    100.        1
+   # counter  value   group_sum   revrank
+   # 1        10.     30.         2
+   # 1        20.     30.         1
+   # 2        1.      4.          2
+   # 2        3.      4.          1
+   # 3        100.    100.        1
 
 .. _window-frame-types:
 
@@ -1599,10 +1614,10 @@ difference:
 
 .. code-block:: pycon
 
-    >>> Sample.create(counter=1, value=20.)
-    <Sample 6>
-    >>> Sample.create(counter=2, value=1.)
-    <Sample 7>
+   >>> Sample.create(counter=1, value=20.)
+   <Sample 6>
+   >>> Sample.create(counter=2, value=1.)
+   <Sample 7>
 
 Our table now contains:
 
@@ -1631,24 +1646,24 @@ may lead to unexpected results:
 
 .. code-block:: python
 
-    query = Sample.select(
-        Sample.counter,
-        Sample.value,
-        fn.SUM(Sample.value).over(
-            order_by=[Sample.counter, Sample.value],
-            frame_type=Window.RANGE).alias('rsum'))
+   query = Sample.select(
+       Sample.counter,
+       Sample.value,
+       fn.SUM(Sample.value).over(
+           order_by=[Sample.counter, Sample.value],
+           frame_type=Window.RANGE).alias('rsum'))
 
-    for sample in query.order_by(Sample.counter, Sample.value):
-        print(sample.counter, sample.value, sample.rsum)
+   for sample in query.order_by(Sample.counter, Sample.value):
+       print(sample.counter, sample.value, sample.rsum)
 
-    # counter  value   rsum
-    # 1          10.     10.
-    # 1          20.     50.
-    # 1          20.     50.
-    # 2           1.     52.
-    # 2           1.     52.
-    # 2           3.     55.
-    # 3         100     155.
+   # counter  value   rsum
+   # 1          10.     10.
+   # 1          20.     50.
+   # 1          20.     50.
+   # 2           1.     52.
+   # 2           1.     52.
+   # 2           3.     55.
+   # 3         100     155.
 
 With the inclusion of the new rows we now have some rows that have duplicate
 ``category`` and ``value`` values. The :py:attr:`~Window.RANGE` frame type
@@ -1659,24 +1674,24 @@ the frame-type:
 
 .. code-block:: python
 
-    query = Sample.select(
-        Sample.counter,
-        Sample.value,
-        fn.SUM(Sample.value).over(
-            order_by=[Sample.counter, Sample.value],
-            frame_type=Window.ROWS).alias('rsum'))
+   query = Sample.select(
+       Sample.counter,
+       Sample.value,
+       fn.SUM(Sample.value).over(
+           order_by=[Sample.counter, Sample.value],
+           frame_type=Window.ROWS).alias('rsum'))
 
-    for sample in query.order_by(Sample.counter, Sample.value):
-        print(sample.counter, sample.value, sample.rsum)
+   for sample in query.order_by(Sample.counter, Sample.value):
+       print(sample.counter, sample.value, sample.rsum)
 
-    # counter  value   rsum
-    # 1          10.     10.
-    # 1          20.     30.
-    # 1          20.     50.
-    # 2           1.     51.
-    # 2           1.     52.
-    # 2           3.     55.
-    # 3         100     155.
+   # counter  value   rsum
+   # 1          10.     10.
+   # 1          20.     30.
+   # 1          20.     50.
+   # 2           1.     51.
+   # 2           1.     52.
+   # 2           3.     55.
+   # 3         100     155.
 
 Peewee uses these rules for determining what frame-type to use:
 
@@ -1693,42 +1708,42 @@ example:
 
 .. code-block:: python
 
-    query = (Sample
-             .select(Sample.counter, Sample.value,
-                     fn.SUM(Sample.value).over(
-                        order_by=[Sample.counter, Sample.value],
-                        frame_type=Window.GROUPS,
-                        start=Window.preceding(1)).alias('gsum'))
-             .order_by(Sample.counter, Sample.value))
+   query = (Sample
+            .select(Sample.counter, Sample.value,
+                    fn.SUM(Sample.value).over(
+                       order_by=[Sample.counter, Sample.value],
+                       frame_type=Window.GROUPS,
+                       start=Window.preceding(1)).alias('gsum'))
+            .order_by(Sample.counter, Sample.value))
 
-    for sample in query:
-        print(sample.counter, sample.value, sample.gsum)
+   for sample in query:
+       print(sample.counter, sample.value, sample.gsum)
 
-    #  counter   value    gsum
-    #  1         10       10
-    #  1         20       50
-    #  1         20       50   (10) + (20+0)
-    #  2         1        42
-    #  2         1        42   (20+20) + (1+1)
-    #  2         3        5    (1+1) + 3
-    #  3         100      103  (3) + 100
+   #  counter   value    gsum
+   #  1         10       10
+   #  1         20       50
+   #  1         20       50   (10) + (20+0)
+   #  2         1        42
+   #  2         1        42   (20+20) + (1+1)
+   #  2         3        5    (1+1) + 3
+   #  3         100      103  (3) + 100
 
 As you can hopefully infer, the window is grouped by its ordering term, which
 is ``(counter, value)``. We are looking at a window that extends between one
 previous group and the current group.
 
 .. note::
-    For information about the window function APIs, see:
+   For information about the window function APIs, see:
 
-    * :py:meth:`Function.over`
-    * :py:meth:`Function.filter`
-    * :py:class:`Window`
+   * :py:meth:`Function.over`
+   * :py:meth:`Function.filter`
+   * :py:class:`Window`
 
-    For general information on window functions, read the postgres `window functions tutorial <https://www.postgresql.org/docs/current/tutorial-window.html>`_
+   For general information on window functions, read the postgres `window functions tutorial <https://www.postgresql.org/docs/current/tutorial-window.html>`_
 
-    Additionally, the `postgres docs <https://www.postgresql.org/docs/current/sql-select.html#SQL-WINDOW>`_
-    and the `sqlite docs <https://www.sqlite.org/windowfunctions.html>`_
-    contain a lot of good information.
+   Additionally, the `postgres docs <https://www.postgresql.org/docs/current/sql-select.html#SQL-WINDOW>`_
+   and the `sqlite docs <https://www.sqlite.org/windowfunctions.html>`_
+   contain a lot of good information.
 
 .. _rowtypes:
 
@@ -1747,28 +1762,28 @@ want to iterate over the row data without needing all the APIs provided
 
 .. code-block:: python
 
-    stats = (Stat
-             .select(Stat.url, fn.Count(Stat.url))
-             .group_by(Stat.url)
-             .tuples())
+   stats = (Stat
+            .select(Stat.url, fn.Count(Stat.url))
+            .group_by(Stat.url)
+            .tuples())
 
-    # iterate over a list of 2-tuples containing the url and count
-    for stat_url, stat_count in stats:
-        print(stat_url, stat_count)
+   # iterate over a list of 2-tuples containing the url and count
+   for stat_url, stat_count in stats:
+       print(stat_url, stat_count)
 
 Similarly, you can return the rows from the cursor as dictionaries using
 :py:meth:`~BaseQuery.dicts`:
 
 .. code-block:: python
 
-    stats = (Stat
-             .select(Stat.url, fn.Count(Stat.url).alias('ct'))
-             .group_by(Stat.url)
-             .dicts())
+   stats = (Stat
+            .select(Stat.url, fn.Count(Stat.url).alias('ct'))
+            .group_by(Stat.url)
+            .dicts())
 
-    # iterate over a list of 2-tuples containing the url and count
-    for stat in stats:
-        print(stat['url'], stat['ct'])
+   # iterate over a list of 2-tuples containing the url and count
+   for stat in stats:
+       print(stat['url'], stat['ct'])
 
 .. _returning-clause:
 
@@ -1801,14 +1816,14 @@ this in a single ``UPDATE`` query with a ``RETURNING`` clause:
 
 .. code-block:: python
 
-    query = (User
-             .update(is_active=False)
-             .where(User.registration_expired == True)
-             .returning(User))
+   query = (User
+            .update(is_active=False)
+            .where(User.registration_expired == True)
+            .returning(User))
 
-    # Send an email to every user that was deactivated.
-    for deactivate_user in query.execute():
-        send_deactivation_email(deactivated_user.email)
+   # Send an email to every user that was deactivated.
+   for deactivate_user in query.execute():
+       send_deactivation_email(deactivated_user.email)
 
 The ``RETURNING`` clause is also available on :py:class:`Insert` and
 :py:class:`Delete`. When used with ``INSERT``, the newly-created rows will be
@@ -1825,30 +1840,30 @@ ID, Email and the creation timestamp in a single query:
 
 .. code-block:: python
 
-    query = (User
-             .insert(email='foo@bar.com', created=fn.now())
-             .returning(User))  # Shorthand for all columns on User.
+   query = (User
+            .insert(email='foo@bar.com', created=fn.now())
+            .returning(User))  # Shorthand for all columns on User.
 
-    # When using RETURNING, execute() returns a cursor.
-    cursor = query.execute()
+   # When using RETURNING, execute() returns a cursor.
+   cursor = query.execute()
 
-    # Get the user object we just inserted and log the data:
-    user = cursor[0]
-    logger.info('Created user %s (id=%s) at %s', user.email, user.id, user.created)
+   # Get the user object we just inserted and log the data:
+   user = cursor[0]
+   logger.info('Created user %s (id=%s) at %s', user.email, user.id, user.created)
 
 By default the cursor will return :py:class:`Model` instances, but you can
 specify a different row type:
 
 .. code-block:: python
 
-    data = [{'name': 'charlie'}, {'name': 'huey'}, {'name': 'mickey'}]
-    query = (User
-             .insert_many(data)
-             .returning(User.id, User.username)
-             .dicts())
+   data = [{'name': 'charlie'}, {'name': 'huey'}, {'name': 'mickey'}]
+   query = (User
+            .insert_many(data)
+            .returning(User.id, User.username)
+            .dicts())
 
-    for new_user in query.execute():
-        print('Added user "%s", id=%s' % (new_user['username'], new_user['id']))
+   for new_user in query.execute():
+       print('Added user "%s", id=%s' % (new_user['username'], new_user['id']))
 
 Just as with :py:class:`Select` queries, you can specify various :ref:`result row types <rowtypes>`.
 
@@ -1877,53 +1892,53 @@ floating-point value. Let's define our model and populate some test data:
 
 .. code-block:: python
 
-    class Sample(Model):
-        key = TextField()
-        value = FloatField()
+   class Sample(Model):
+       key = TextField()
+       value = FloatField()
 
-    data = (
-        ('a', (1.25, 1.5, 1.75)),
-        ('b', (2.1, 2.3, 2.5, 2.7, 2.9)),
-        ('c', (3.5, 3.5)))
+   data = (
+       ('a', (1.25, 1.5, 1.75)),
+       ('b', (2.1, 2.3, 2.5, 2.7, 2.9)),
+       ('c', (3.5, 3.5)))
 
-    # Populate data.
-    for key, values in data:
-        Sample.insert_many([(key, value) for value in values],
-                           fields=[Sample.key, Sample.value]).execute()
+   # Populate data.
+   for key, values in data:
+       Sample.insert_many([(key, value) for value in values],
+                          fields=[Sample.key, Sample.value]).execute()
 
 Let's use a CTE to calculate, for each distinct key, which values were
 above-average for that key.
 
 .. code-block:: python
 
-    # First we'll declare the query that will be used as a CTE. This query
-    # simply determines the average value for each key.
-    cte = (Sample
-           .select(Sample.key, fn.AVG(Sample.value).alias('avg_value'))
-           .group_by(Sample.key)
-           .cte('key_avgs', columns=('key', 'avg_value')))
+   # First we'll declare the query that will be used as a CTE. This query
+   # simply determines the average value for each key.
+   cte = (Sample
+          .select(Sample.key, fn.AVG(Sample.value).alias('avg_value'))
+          .group_by(Sample.key)
+          .cte('key_avgs', columns=('key', 'avg_value')))
 
-    # Now we'll query the sample table, using our CTE to find rows whose value
-    # exceeds the average for the given key. We'll calculate how far above the
-    # average the given sample's value is, as well.
-    query = (Sample
-             .select(Sample.key, Sample.value)
-             .join(cte, on=(Sample.key == cte.c.key))
-             .where(Sample.value > cte.c.avg_value)
-             .order_by(Sample.value)
-             .with_cte(cte))
+   # Now we'll query the sample table, using our CTE to find rows whose value
+   # exceeds the average for the given key. We'll calculate how far above the
+   # average the given sample's value is, as well.
+   query = (Sample
+            .select(Sample.key, Sample.value)
+            .join(cte, on=(Sample.key == cte.c.key))
+            .where(Sample.value > cte.c.avg_value)
+            .order_by(Sample.value)
+            .with_cte(cte))
 
 We can iterate over the samples returned by the query to see which samples had
 above-average values for their given group:
 
 .. code-block:: pycon
 
-    >>> for sample in query:
-    ...     print(sample.key, sample.value)
+   >>> for sample in query:
+   ...     print(sample.key, sample.value)
 
-    # 'a', 1.75
-    # 'b', 2.7
-    # 'b', 2.9
+   # 'a', 1.75
+   # 'b', 2.7
+   # 'b', 2.9
 
 Complex Example
 ^^^^^^^^^^^^^^^
@@ -1934,58 +1949,58 @@ Our model looks like this:
 
 .. code-block:: python
 
-    class Order(Model):
-        region = TextField()
-        amount = FloatField()
-        product = TextField()
-        quantity = IntegerField()
+   class Order(Model):
+       region = TextField()
+       amount = FloatField()
+       product = TextField()
+       quantity = IntegerField()
 
 Here is how the query might be written in SQL. This example can be found in
 the `postgresql documentation <https://www.postgresql.org/docs/current/static/queries-with.html>`_.
 
 .. code-block:: sql
 
-    WITH regional_sales AS (
-        SELECT region, SUM(amount) AS total_sales
-        FROM orders
-        GROUP BY region
-      ), top_regions AS (
-        SELECT region
-        FROM regional_sales
-        WHERE total_sales > (SELECT SUM(total_sales) / 10 FROM regional_sales)
-      )
-    SELECT region,
-           product,
-           SUM(quantity) AS product_units,
-           SUM(amount) AS product_sales
-    FROM orders
-    WHERE region IN (SELECT region FROM top_regions)
-    GROUP BY region, product;
+   WITH regional_sales AS (
+       SELECT region, SUM(amount) AS total_sales
+       FROM orders
+       GROUP BY region
+     ), top_regions AS (
+       SELECT region
+       FROM regional_sales
+       WHERE total_sales > (SELECT SUM(total_sales) / 10 FROM regional_sales)
+     )
+   SELECT region,
+          product,
+          SUM(quantity) AS product_units,
+          SUM(amount) AS product_sales
+   FROM orders
+   WHERE region IN (SELECT region FROM top_regions)
+   GROUP BY region, product;
 
 With Peewee, we would write:
 
 .. code-block:: python
 
-    reg_sales = (Order
-                 .select(Order.region,
-                         fn.SUM(Order.amount).alias('total_sales'))
-                 .group_by(Order.region)
-                 .cte('regional_sales'))
+   reg_sales = (Order
+                .select(Order.region,
+                        fn.SUM(Order.amount).alias('total_sales'))
+                .group_by(Order.region)
+                .cte('regional_sales'))
 
-    top_regions = (reg_sales
-                   .select(reg_sales.c.region)
-                   .where(reg_sales.c.total_sales > (
-                       reg_sales.select(fn.SUM(reg_sales.c.total_sales) / 10)))
-                   .cte('top_regions'))
+   top_regions = (reg_sales
+                  .select(reg_sales.c.region)
+                  .where(reg_sales.c.total_sales > (
+                      reg_sales.select(fn.SUM(reg_sales.c.total_sales) / 10)))
+                  .cte('top_regions'))
 
-    query = (Order
-             .select(Order.region,
-                     Order.product,
-                     fn.SUM(Order.quantity).alias('product_units'),
-                     fn.SUM(Order.amount).alias('product_sales'))
-             .where(Order.region.in_(top_regions.select(top_regions.c.region)))
-             .group_by(Order.region, Order.product)
-             .with_cte(reg_sales, top_regions))
+   query = (Order
+            .select(Order.region,
+                    Order.product,
+                    fn.SUM(Order.quantity).alias('product_units'),
+                    fn.SUM(Order.amount).alias('product_sales'))
+            .where(Order.region.in_(top_regions.select(top_regions.c.region)))
+            .group_by(Order.region, Order.product)
+            .with_cte(reg_sales, top_regions))
 
 Recursive CTEs
 ^^^^^^^^^^^^^^
@@ -2001,55 +2016,55 @@ foreign-key to its immediate parent category:
 
 .. code-block:: python
 
-    class Category(Model):
-        name = TextField()
-        parent = ForeignKeyField('self', backref='children', null=True)
+   class Category(Model):
+       name = TextField()
+       parent = ForeignKeyField('self', backref='children', null=True)
 
 To list all categories along with their depth and parents, we can use a
 recursive CTE:
 
 .. code-block:: python
 
-    # Define the base case of our recursive CTE. This will be categories that
-    # have a null parent foreign-key.
-    Base = Category.alias()
-    level = Value(1).alias('level')
-    path = Base.name.alias('path')
-    base_case = (Base
-                 .select(Base.id, Base.name, Base.parent, level, path)
-                 .where(Base.parent.is_null())
-                 .cte('base', recursive=True))
+   # Define the base case of our recursive CTE. This will be categories that
+   # have a null parent foreign-key.
+   Base = Category.alias()
+   level = Value(1).alias('level')
+   path = Base.name.alias('path')
+   base_case = (Base
+                .select(Base.id, Base.name, Base.parent, level, path)
+                .where(Base.parent.is_null())
+                .cte('base', recursive=True))
 
-    # Define the recursive terms.
-    RTerm = Category.alias()
-    rlevel = (base_case.c.level + 1).alias('level')
-    rpath = base_case.c.path.concat('->').concat(RTerm.name).alias('path')
-    recursive = (RTerm
-                 .select(RTerm.id, RTerm.name, RTerm.parent, rlevel, rpath)
-                 .join(base_case, on=(RTerm.parent == base_case.c.id)))
+   # Define the recursive terms.
+   RTerm = Category.alias()
+   rlevel = (base_case.c.level + 1).alias('level')
+   rpath = base_case.c.path.concat('->').concat(RTerm.name).alias('path')
+   recursive = (RTerm
+                .select(RTerm.id, RTerm.name, RTerm.parent, rlevel, rpath)
+                .join(base_case, on=(RTerm.parent == base_case.c.id)))
 
-    # The recursive CTE is created by taking the base case and UNION ALL with
-    # the recursive term.
-    cte = base_case.union_all(recursive)
+   # The recursive CTE is created by taking the base case and UNION ALL with
+   # the recursive term.
+   cte = base_case.union_all(recursive)
 
-    # We will now query from the CTE to get the categories, their levels,  and
-    # their paths.
-    query = (cte
-             .select_from(cte.c.name, cte.c.level, cte.c.path)
-             .order_by(cte.c.path))
+   # We will now query from the CTE to get the categories, their levels,  and
+   # their paths.
+   query = (cte
+            .select_from(cte.c.name, cte.c.level, cte.c.path)
+            .order_by(cte.c.path))
 
-    # We can now iterate over a list of all categories and print their names,
-    # absolute levels, and path from root -> category.
-    for category in query:
-        print(category.name, category.level, category.path)
+   # We can now iterate over a list of all categories and print their names,
+   # absolute levels, and path from root -> category.
+   for category in query:
+       print(category.name, category.level, category.path)
 
-    # Example output:
-    # root, 1, root
-    # p1, 2, root->p1
-    # c1-1, 3, root->p1->c1-1
-    # c1-2, 3, root->p1->c1-2
-    # p2, 2, root->p2
-    # c2-1, 3, root->p2->c2-1
+   # Example output:
+   # root, 1, root
+   # p1, 2, root->p1
+   # c1-1, 3, root->p1->c1-1
+   # c1-2, 3, root->p1->c1-2
+   # p2, 2, root->p2
+   # c2-1, 3, root->p2->c2-1
 
 Data-Modifying CTE
 ^^^^^^^^^^^^^^^^^^
@@ -2089,12 +2104,12 @@ The above corresponds to, roughly, the following SQL:
 
 .. code-block:: sql
 
-    WITH "moved_rows" AS (
-        DELETE FROM "event" WHERE ("timestamp" < XXXX-XX-XXTXX:XX:XX)
-        RETURNING "id", "name", "timestamp")
-    INSERT INTO "archive" ("id", "name", "timestamp")
-    SELECT "moved_rows"."id", "moved_rows"."name", "moved_rows"."timestamp"
-    FROM "moved_rows";
+   WITH "moved_rows" AS (
+       DELETE FROM "event" WHERE ("timestamp" < XXXX-XX-XXTXX:XX:XX)
+       RETURNING "id", "name", "timestamp")
+   INSERT INTO "archive" ("id", "name", "timestamp")
+   SELECT "moved_rows"."id", "moved_rows"."name", "moved_rows"."timestamp"
+   FROM "moved_rows";
 
 For additional examples, refer to the tests in ``models.py`` and ``sql.py``:
 
