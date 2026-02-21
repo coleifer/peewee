@@ -4680,8 +4680,9 @@ class _savepoint(object):
         self.db.execute_sql('RELEASE SAVEPOINT %s;' % self.quoted_sid)
         if begin: self._begin()
 
-    def rollback(self):
+    def rollback(self, begin=True):
         self.db.execute_sql('ROLLBACK TO SAVEPOINT %s;' % self.quoted_sid)
+        if begin: self._begin()
 
     def __enter__(self):
         self._begin()
@@ -4689,12 +4690,12 @@ class _savepoint(object):
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         if exc_type:
-            self.rollback()
+            self.rollback(False)
         else:
             try:
                 self.commit(begin=False)
             except:
-                self.rollback()
+                self.rollback(begin=False)
                 raise
 
 
