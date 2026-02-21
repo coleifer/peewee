@@ -405,7 +405,7 @@ mentioning briefly.
          except model.DoesNotExist:
              abort(404)
 
-.. note::
+.. tip::
    To avoid having to frequently copy/paste :py:func:`object_list` or
    :py:func:`get_object_or_404`, these functions are included as part of the
    playhouse :ref:`flask extension module <flask_utils>`.
@@ -424,7 +424,7 @@ There are more examples included in the peewee `examples directory
 * `An encrypted command-line diary <https://github.com/coleifer/peewee/blob/master/examples/diary.py>`_. There is a `companion blog post <https://charlesleifer.com/blog/dear-diary-an-encrypted-command-line-diary-with-python/>`_ you might enjoy as well.
 * `Analytics web-service <https://github.com/coleifer/peewee/tree/master/examples/analytics>`_ (like a lite version of Google Analytics). Also check out the `companion blog post <https://charlesleifer.com/blog/saturday-morning-hacks-building-an-analytics-app-with-flask/>`_.
 
-.. note::
+.. seealso::
    Like these snippets and interested in more?  Check out `flask-peewee <https://github.com/coleifer/flask-peewee>`_ -
    a flask plugin that provides a django-like Admin interface, RESTful API, Authentication and
    more for your peewee models.

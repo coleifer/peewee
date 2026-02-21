@@ -221,18 +221,18 @@ Let's list all the cats and their owner's name:
    # Kitty Bob
    # Mittens Jr Herb
 
-.. attention::
-    There is a big problem with the previous query: because we are accessing
-    ``pet.owner.name`` and we did not select this relation in our original
-    query, peewee will have to perform an additional query to retrieve the
-    pet's owner.  This behavior is referred to as :ref:`N+1 <nplusone>` and it
-    should generally be avoided.
+.. danger::
+   There is a big problem with the previous query: because we are accessing
+   ``pet.owner.name`` and we did not select this relation in our original
+   query, peewee will have to perform an additional query to retrieve the
+   pet's owner.  This behavior is referred to as :ref:`N+1 <nplusone>` and it
+   should generally be avoided.
 
-    For an in-depth guide to working with relationships and joins, refer to the
-    :ref:`relationships` documentation.
+   For an in-depth guide to working with relationships and joins, refer to the
+   :ref:`relationships` documentation.
 
 We can avoid the extra queries by selecting both *Pet* and *Person*, and adding
-a *join*.
+a :ref:`JOIN <relationships>`.
 
 .. code-block:: python
    :emphasize-lines: 2, 3
@@ -349,6 +349,7 @@ behavior. In this case, we're executing an additional query for every
 a *JOIN* and using a SQL function to aggregate the results.
 
 .. code-block:: python
+   :emphasize-lines: 2, 3
 
    query = (Person
             .select(Person, fn.COUNT(Pet.id).alias('pet_count'))

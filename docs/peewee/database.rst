@@ -135,7 +135,8 @@ parameters:
 Isolation level
 ^^^^^^^^^^^^^^^
 
-The isolation level can be specified as an initialization parameter.
+The isolation level can be specified as an initialization parameter or set at
+run-time with :py:meth:`~PostgresqlDatabase.set_isolation_level`.
 
 Psycopg2 exposes isolation level constants in ``psycopg2.extensions``:
 
@@ -255,13 +256,16 @@ the :py:class:`SqliteDatabase` object:
    db.pragma('foreign_keys', 1, permanent=True)
 
 .. attention::
-   Pragmas set using the :py:meth:`~SqliteDatabase.pragma` method, by default,
-   do not persist after the connection is closed. To configure a pragma to be
+   Pragmas set using the :py:meth:`~SqliteDatabase.pragma` method do not
+   get re-applied when a new connection opens. To configure a pragma to be
    run whenever a connection is opened, specify ``permanent=True``.
 
-.. note::
-   A full list of PRAGMA settings, their meaning and accepted values can be
-   found in the SQLite documentation: https://sqlite.org/pragma.html
+   .. code-block:: python
+
+      db.pragma('foreign_keys', 1, permanent=True)
+
+.. seealso::
+   SQLite PRAGMA documentation: https://sqlite.org/pragma.html
 
 Recommended Settings
 ^^^^^^^^^^^^^^^^^^^^
@@ -491,7 +495,7 @@ For more information, see the SQLite `locking documentation <https://sqlite.org/
 To learn more about transactions in Peewee, see the :ref:`transactions`
 documentation.
 
-.. attention::
+.. danger::
    Do not alter the ``isolation_level`` property of the ``sqlite3.Connection``
    object. Peewee requires the ``sqlite3`` driver be in autocommit-mode, which
    is handled automatically by :class:`SqliteDatabase`.
@@ -1114,11 +1118,11 @@ Examples:
           # wrapped block of code, the `atomic` context manager will
           # automatically call commit for us.
 
-.. note::
+.. tip::
    :py:meth:`~Database.atomic` can be used as either a **context manager** or
    a **decorator**.
 
-.. note::
+.. important::
    Peewee's behavior differs from the DB-API 2.0 behavior you may be used to
    (see PEP-249 for details). Peewee requires all connections be in
    **autocommit-mode** and transaction management is handled by Peewee.
@@ -1246,9 +1250,7 @@ block. When this happens, a new transaction will be started.
 .. note::
    If you attempt to nest transactions with peewee using the
    :py:meth:`~Database.transaction` context manager, only the outer-most
-   transaction will be used. If an exception occurs in a nested block, the
-   transaction will NOT be rolled-back -- only exceptions that bubble-up to
-   the outer-most transaction will trigger a rollback.
+   transaction will be used.
 
    As this may lead to unpredictable behavior, it is recommended that
    you use :py:meth:`~Database.atomic`.
@@ -1270,21 +1272,22 @@ occur within a transaction, but can be nested arbitrarily deep.
            User.create(username='zaizee')
            sp2.rollback()  # "zaizee" will not be saved, but "mickey" will be.
 
-.. warning::
-   If you manually commit or roll back a savepoint, a new savepoint **will
-   not** automatically be created. This differs from the behavior of
-   :py:class:`transaction`, which will automatically open a new transaction
-   after manual commit/rollback.
+           User.create(username='huey')
+
+   # mickey and huey were created.
+
+.. note::
+   If you manually commit or roll back a savepoint, a new savepoint will
+   automatically begin.
 
 Autocommit Mode
 ^^^^^^^^^^^^^^^
 
-By default, Peewee operates in *autocommit mode*, such that any statements
-executed outside of a transaction are run in their own transaction. To group
-multiple statements into a transaction, Peewee provides the
-:py:meth:`~Database.atomic` context-manager/decorator. This should cover all
-use-cases, but in the unlikely event you want to temporarily disable Peewee's
-transaction management completely, you can use the
+Peewee operates in *autocommit mode*, such that any statements executed outside
+of a transaction are run in their own transaction. To group multiple statements
+into a transaction, Peewee provides the :py:meth:`~Database.atomic` context-manager/decorator.
+This should cover all use-cases, but in the unlikely event you want to
+temporarily disable Peewee's transaction management completely, you can use the
 :py:meth:`Database.manual_commit` context-manager/decorator.
 
 Here is how you might emulate the behavior of the

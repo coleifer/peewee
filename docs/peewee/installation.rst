@@ -10,9 +10,8 @@ Most users will want to simply install the latest version, hosted on PyPI:
 
    pip install peewee
 
-Peewee has optional Sqlite C extensions which are not bundled as part of the
-wheel. If you wish to use these, you can install Peewee via source
-distribution:
+Peewee has an optional Sqlite C extension which is not bundled as part of the
+wheel. If you wish to use this, you can install Peewee via source distribution:
 
 .. code-block:: shell
 
