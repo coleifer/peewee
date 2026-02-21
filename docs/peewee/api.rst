@@ -86,13 +86,23 @@ Database
         for more info.
 
     .. py:method:: __enter__()
+    .. py:method:: __exit__(exc_type, exc_val, exc_tb)
 
         The :py:class:`Database` instance can be used as a context-manager, in
-        which case a connection will be held open for the duration of the
-        wrapped block.
+        which case a connection will be held open and a transaction run for the
+        duration of the wrapped block.
 
-        Additionally, any SQL executed within the wrapped block will be
-        executed in a transaction.
+        If an unhandled exception occurs, the transaction is rolled-back.
+
+        .. code-block:: python
+
+            db = SqliteDatabase('app.db')
+
+            with db:
+                # Connection is open and transaction is active.
+                pass
+
+            # Transaction commits and connection is closed.
 
     .. py:method:: connection_context()
 
