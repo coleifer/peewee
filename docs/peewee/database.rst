@@ -1507,76 +1507,58 @@ is returned.
        if not database.is_closed():
            database.close()
 
-Django
-^^^^^^
-
-While it's less common to see peewee used with Django, it is actually very easy
-to use the two. To manage your peewee database connections with Django, the
-easiest way in my opinion is to add a middleware to your app. The middleware
-should be the very first in the list of middlewares, to ensure it runs first
-when a request is handled, and last when the response is returned.
-
-If you have a django project named *my_blog* and your peewee database is
-defined in the module ``my_blog.db``, you might add the following middleware
-class:
-
-.. code-block:: python
-
-   # middleware.py
-   from my_blog.db import database  # Import the peewee database instance.
-
-   def PeeweeConnectionMiddleware(get_response):
-       def middleware(request):
-           database.connect()
-           try:
-               response = get_response(request)
-           finally:
-               if not database.is_closed():
-                   database.close()
-           return response
-       return middleware
-
-To ensure this middleware gets executed, add it to your ``settings`` module:
-
-.. code-block:: python
-
-    # settings.py
-    MIDDLEWARE = [
-        # Our custom middleware appears first in the list.
-        'my_blog.middleware.PeeweeConnectionMiddleware',
-
-        # Other middleware classes.
-        'django....',
-        'django....',
-    ]
-
-Tornado
+FastAPI
 ^^^^^^^
 
-It looks like Tornado's ``RequestHandler`` class implements two hooks which can
-be used to open and close connections when a request is handled.
+FastAPI is an asyncio-compatible framework. The :ref:`asyncio` documentation
+details how to use Peewee in an asyncio setting.
+
+The following example demonstrates how to:
+
+* Ensure connection is opened and closed for each request.
+* Create tables/resources when app server starts.
+* Shut-down connection pool when app server exits.
 
 .. code-block:: python
 
-   from tornado.web import RequestHandler
+   from fastapi import FastAPI
+   from peewee import *
+   from playhouse.pwasyncio import *
 
-   db = SqliteDatabase('my_db.db')
 
-   class PeeweeRequestHandler(RequestHandler):
-       def prepare(self):
-           db.connect()
-           return super(PeeweeRequestHandler, self).prepare()
+   app = FastAPI()
 
-       def on_finish(self):
-           if not db.is_closed():
-               db.close()
-           return super(PeeweeRequestHandler, self).on_finish()
+   db = AsyncPostgresqlDatabase('peewee_test', host='10.8.0.1', user='postgres')
 
-In your app, instead of extending the default ``RequestHandler``, now you can
-extend ``PeeweeRequestHandler``.
+   @app.middleware('http')
+   async def database_connection(request, call_next):
+       await db.aconnect()  # Obtain connection from connectoin pool.
+       try:
+           response = await call_next(request)
+       finally:
+           await db.aclose()  # Release connection back to pool.
+       return response
 
-Note that this does not address how to use peewee asynchronously with Tornado
-or another event loop.
+   @app.on_event('startup')
+   async def on_startup():
+       async with db:
+           await db.acreate_tables([Model1, Model2, Model3, ...])
+
+   @app.on_event('shutdown')
+   async def on_shutdown():
+       await db.close_pool()
+
+Example demonstrating executing an async query:
+
+.. code-block:: python
+
+   @app.get('/message/')
+   async def message():
+       # Get the latest message from the database.
+       message = await db.get(Message.select().order_by(Message.id.desc()))
+       return {'content': message.content, 'id': message.id}
+
+.. seealso:: :ref:`asyncio`
 
 Falcon
 ^^^^^^
@@ -1634,47 +1616,59 @@ In your application `main()` make sure `MyRequest` is used as
        config = Configurator(settings=settings, ...)
        config.set_request_factory(MyRequest)
 
-CherryPy
-^^^^^^^^
-
-See `Publish/Subscribe pattern
-<http://docs.cherrypy.org/en/latest/extend.html#publish-subscribe-pattern>`_.
-
-.. code-block:: python
-
-   def _db_connect():
-       db.connect()
-
-   def _db_close():
-       if not db.is_closed():
-           db.close()
-
-   cherrypy.engine.subscribe('before_request', _db_connect)
-   cherrypy.engine.subscribe('after_request', _db_close)
-
 Sanic
 ^^^^^
 
-In Sanic, the connection handling code can be placed in the request and
-response middleware `sanic middleware <http://sanic.readthedocs.io/en/latest/sanic/middleware.html>`_.
+Sanic is an asyncio-compatible framework. The :ref:`asyncio` documentation
+details how to use Peewee in an asyncio setting.
+
+The following example demonstrates how to:
+
+* Ensure connection is opened and closed for each request.
+* Create tables/resources when app server starts.
+* Shut-down connection pool when app server exits.
 
 .. code-block:: python
 
-   # app.py
-   @app.middleware('request')
-   async def handle_request(request):
-       db.connect()
+   from sanic import Sanic
+   from peewee import *
+   from playhouse.pwasyncio import *
 
-   @app.middleware('response')
-   async def handle_response(request, response):
-       if not db.is_closed():
-           db.close()
 
-FastAPI
-^^^^^^^
+   app = Sanic('PeeweeApp')
 
-FastAPI is an asyncio-compatible framework. See the :ref:`asyncio`
-documentation for details on how to use Peewee in an asyncio setting.
+   db = AsyncPostgresqlDatabase('peewee_test', host='10.8.0.1', user='postgres')
+
+   @app.on_request
+   async def open_connection(request):
+       await db.aconnect()  # Obtain connection from connectoin pool.
+
+   @app.on_response
+   async def close_connection(request, response):
+       await db.aclose()  # Return connection to pool.
+
+   @app.before_server_start
+   async def setup_db(app):
+       async with db:
+           await db.acreate_tables([Model1, Model2, Model3, ...])
+
+   @app.before_server_stop
+   async def shutdown_db(app):
+       await db.close_pool()
+
+Example demonstrating executing an async query:
+
+.. code-block:: python
+
+   from sanic import json
+
+   @app.get('/message/')
+   async def message(request):
+       # Get the latest message from the database.
+       message = await db.get(Message.select().order_by(Message.id.desc()))
+       return json({'content': message.content, 'id': message.id})
+
+.. seealso:: :ref:`asyncio`
 
 Other frameworks
 ^^^^^^^^^^^^^^^^
