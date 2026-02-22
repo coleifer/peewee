@@ -7,7 +7,7 @@ Models and Fields
 map to database concepts:
 
 ================= =================================
-Thing             Corresponds to...
+Object            Corresponds to...
 ================= =================================
 Model class       Database table
 Field instance    Column on a table
@@ -140,11 +140,8 @@ This allows you to write code like the following:
    yet another message
 
 .. seealso::
-   :ref:`relationships` provides an in-depth discussion of foreign-keys, joins
-   and relationships between models.
-
-.. seealso::
-   :ref:`Fields API <fields-api>`.
+   - :ref:`relationships` in-depth discussion of foreign-keys and joins.
+   - :ref:`Fields API <fields-api>`.
 
 .. _field_types_table:
 
@@ -188,26 +185,26 @@ Field initialization arguments
 
 Parameters accepted by all field types and their default values:
 
-======================== ======================================================================
-Parameter and Default
-======================== ======================================================================
-``null = False``         allow null values
-``index = False``        create an index on this column
-``unique = False``       create a unique index on this column.
-                         See also :ref:`adding composite indexes <model_indexes>`.
-``column_name = None``   explicitly specify the column name in the database.
-``default = None``       any value or callable to use as a default for uninitialized models
-``primary_key = False``  primary key for the table
-``constraints = None``   one or more constraints, e.g. ``[Check('price > 0')]``
-``sequence = None``      sequence name (if backend supports it)
-``collation = None``     collation to use for ordering the field / index
-``unindexed = False``    indicate field on virtual table should be unindexed (**SQLite-only**)
-``choices = None``       optional iterable containing 2-tuples of ``value``, ``display``
-``help_text = None``     string representing any helpful text for this field
-``verbose_name = None``  string representing the "user-friendly" name of this field
-``index_type = None``    specify a custom index-type, e.g. for Postgres you might
-                         specify a ``'BRIN'`` or ``'GIN'`` index.
-======================== ======================================================================
+================ ========= =======================================================================
+Parameter        Default   Description
+================ ========= =======================================================================
+``null``         ``False`` allow null values
+``index``        ``False`` create an index on this column
+``unique``       ``False`` create a unique index on this column.
+                           See also :ref:`adding composite indexes <model_indexes>`.
+``column_name``  ``None``  explicitly specify the column name in the database.
+``default``      ``None``  any value or callable to use as a default for uninitialized models
+``primary_key``  ``False`` primary key for the table
+``constraints``  ``None``  one or more constraints, e.g. ``[Check('price > 0')]``
+``sequence``     ``None``  sequence name (if backend supports it)
+``collation``    ``None``  collation to use for ordering the field / index
+``unindexed``    ``False`` indicate field on virtual table should be unindexed (**SQLite-only**)
+``choices``      ``None``  optional iterable containing 2-tuples of ``value``, ``display``
+``help_text``    ``None``  string representing any helpful text for this field
+``verbose_name`` ``None``  string representing the "user-friendly" name of this field
+``index_type``   ``None``  specify a custom index-type, e.g. for Postgres you might
+                           specify a ``'BRIN'`` or ``'GIN'`` index.
+================ ========= =======================================================================
 
 Some fields take special parameters...
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -724,14 +721,12 @@ TABLE* queries, additionally creating any constraints and indexes.
    db.create_tables([User, Tweet])
 
 .. note::
-   Strictly speaking, it is not necessary to call :py:meth:`~Database.connect`
-   but it is good practice to be explicit. That way if something goes wrong,
-   the error occurs at the connect step, rather than some arbitrary time
-   later.
+   Calling :py:meth:`~Database.connect` is not strictly required but is good
+   practice - errors will surface immediately rather than at query time.
 
 .. note::
-   By default, Peewee includes an ``IF NOT EXISTS`` clause when creating
-   tables. If you want to disable this, specify ``safe=False``.
+   By default, Peewee adds ``IF NOT EXISTS`` when creating tables. Specify
+   ``safe=False`` to disable this.
 
 After you have created your tables, if you choose to modify your database
 schema (by adding, removing or otherwise changing the columns) you will need to

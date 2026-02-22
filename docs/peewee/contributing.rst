@@ -33,7 +33,7 @@ and if not `create an issue on GitHub <https://github.com/coleifer/peewee/issues
 The more information you include, the more quickly the bug will get fixed, so
 please try to include the following:
 
-* Traceback and the error message (please `format your code <https://help.github.com/articles/markdown-basics/>`_!)
+* Traceback and the error message (please format your code).
 * Relevant portions of your code or code to reproduce the error
 * Peewee version: ``python -c "from peewee import __version__; print(__version__)"``
 * Which database you're using

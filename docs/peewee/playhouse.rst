@@ -2823,13 +2823,13 @@ affinities and foreign keys.
 If you install peewee using ``setup.py install``, pwiz will be installed as a
 "script" and you can just run:
 
-.. code-block:: console
+.. code-block:: shell
 
     python -m pwiz -e postgresql -u postgres my_postgres_db
 
 This will print a bunch of models to standard output. So you can do this:
 
-.. code-block:: console
+.. code-block:: shell
 
     python -m pwiz -e postgresql my_postgres_db > mymodels.py
     python # <-- fire up an interactive shell
@@ -2879,7 +2879,7 @@ pwiz examples
 
 Examples of introspecting various databases:
 
-.. code-block:: console
+.. code-block:: shell
 
     # Introspect a Sqlite database.
     python -m pwiz -e sqlite path/to/sqlite_database.db
@@ -2893,7 +2893,7 @@ Examples of introspecting various databases:
 
 Full example:
 
-.. code-block:: console
+.. code-block:: shell
 
     $ sqlite3 example.db << EOM
     CREATE TABLE "user" ("id" INTEGER NOT NULL PRIMARY KEY, "username" TEXT NOT NULL);

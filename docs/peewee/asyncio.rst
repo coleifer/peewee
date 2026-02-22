@@ -131,6 +131,19 @@ When running Peewee ORM code, you can choose between the two execution patterns
 depending on how explicit you want to be. See :ref:`async-helpers` for details
 on the available ``async``-friendly helper methods.
 
+Installation
+------------
+
+This module requires Python 3.8 or newer and depends on Peewee and greenlet,
+along with whatever async-compatible driver you intend to use.
+
+.. code-block:: shell
+
+    pip install peewee greenlet
+    pip install asyncpg  # Postgresql.
+    pip install aiomysql  # MySQL.
+    pip install aiosqlite  # Sqlite.
+
 Supported Backends
 ------------------
 
@@ -141,19 +154,6 @@ SQLite            aiosqlite     :py:class:`AsyncSqliteDatabase`
 MySQL / MariaDB   aiomysql      :py:class:`AsyncMySQLDatabase`
 PostgreSQL        asyncpg       :py:class:`AsyncPostgresqlDatabase`
 ================  ============  ===================================
-
-Installation
-------------
-
-This module requires Python 3.8 or newer and depends on Peewee and greenlet,
-along with whatever async-compatible driver you intend to use.
-
-.. code-block:: console
-
-    pip install peewee greenlet
-    pip install asyncpg  # Postgresql.
-    pip install aiomysql  # MySQL.
-    pip install aiosqlite  # Sqlite.
 
 Overview
 --------
@@ -176,7 +176,7 @@ Models are defined as expected:
         name = CharField()
 
 Executing Queries
-^^^^^^^^^^^^^^^^^
+-----------------
 
 Peewee queries must be executed using the database :py:meth:`~AsyncDatabaseMixin.run` method.
 
@@ -226,7 +226,7 @@ a function and sent to the :py:meth:`~AsyncDatabaseMixin.run` method.
 .. _async-helpers:
 
 Helper Methods
-^^^^^^^^^^^^^^
+--------------
 
 The :py:class:`AsyncDatabaseMixin` provides a number of async/await-friendly
 helpers for common operations.

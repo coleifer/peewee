@@ -76,8 +76,8 @@ Here is how you might combine expressions. Comparisons can be arbitrarily
 complex.
 
 .. note::
-   Note that the actual comparisons are wrapped in parentheses. Python's operator
-   precedence necessitates that comparisons be wrapped in parentheses.
+   Comparisons must be wrapped in parentheses due to Python operator
+   precedence rules.
 
 .. code-block:: python
 

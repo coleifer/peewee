@@ -91,7 +91,7 @@ Using Postgresql
 To use Peewee with Postgresql the recommended driver is either ``psycopg2`` or
 ``psycopg3``:
 
-.. code-block:: sh
+.. code-block:: shell
 
    $ pip install "psycopg2-binary"  # Psycopg2.
 
@@ -558,7 +558,7 @@ Using MySQL or MariaDB
 
 To use Peewee with MySQL or MariaDB the recommended driver is ``pymysql``:
 
-.. code-block:: sh
+.. code-block:: shell
 
    $ pip install "pymysql"
 
@@ -1550,51 +1550,6 @@ To ensure this middleware gets executed, add it to your ``settings`` module:
         'django....',
     ]
 
-Bottle
-^^^^^^
-
-I haven't used bottle myself, but looking at the documentation I believe the
-following code should ensure the database connections are properly managed:
-
-.. code-block:: python
-
-   # app.py
-   from bottle import hook  #, route, etc, etc.
-   from peewee import *
-
-   db = SqliteDatabase('my-bottle-app.db')
-
-   @hook('before_request')
-   def _connect_db():
-       db.connect()
-
-   @hook('after_request')
-   def _close_db():
-       if not db.is_closed():
-           db.close()
-
-   # Rest of your bottle app goes here.
-
-Web.py
-^^^^^^
-
-See the documentation for
-`application processors <http://webpy.org/cookbook/application_processors>`_.
-
-.. code-block:: python
-
-   db = SqliteDatabase('my_webpy_app.db')
-
-   def connection_processor(handler):
-       db.connect()
-       try:
-           return handler()
-       finally:
-           if not db.is_closed():
-               db.close()
-
-   app.add_processor(connection_processor)
-
 Tornado
 ^^^^^^^
 
@@ -1622,30 +1577,6 @@ extend ``PeeweeRequestHandler``.
 
 Note that this does not address how to use peewee asynchronously with Tornado
 or another event loop.
-
-Wheezy.web
-^^^^^^^^^^
-
-The connection handling code can be placed in a `middleware
-<https://pythonhosted.org/wheezy.http/userguide.html#middleware>`_.
-
-.. code-block:: python
-
-   def peewee_middleware(request, following):
-       db.connect()
-       try:
-           response = following(request)
-       finally:
-           if not db.is_closed():
-               db.close()
-       return response
-
-   app = WSGIApplication(middleware=[
-       lambda x: peewee_middleware,
-       # ... other middlewares ...
-   ])
-
-Thanks to GitHub user *@tuukkamustonen* for submitting this code.
 
 Falcon
 ^^^^^^
