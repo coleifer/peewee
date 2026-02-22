@@ -41,6 +41,7 @@ Contents:
    peewee/quickstart
    peewee/example
    peewee/database
+   peewee/transactions
    peewee/models
    peewee/querying
    peewee/query_operators

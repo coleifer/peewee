@@ -9,8 +9,8 @@ to open a connection to a database, and then can be used to:
 
 * Open and close connections.
 * Execute queries.
-* Manage transactions (and savepoints).
 * Introspect tables, columns, indexes, and constraints.
+* :ref:`Manage transactions and savepoints <transactions>`.
 
 Peewee comes with support for:
 
@@ -1060,257 +1060,6 @@ execute SQL directly, you can use the :py:meth:`Database.execute_sql` method.
        # Do something with row, which is a tuple containing column data.
        pass
 
-.. _transactions:
-
-Managing Transactions
----------------------
-
-Peewee provides several interfaces for working with transactions. The most
-general is the :py:meth:`Database.atomic` method, which also supports nested
-transactions. :py:meth:`~Database.atomic` blocks will be run in a transaction
-or savepoint, depending on the level of nesting.
-
-If an unhandled exception occurs in a wrapped block, the current
-transaction/savepoint will be rolled back. Otherwise the statements will be
-committed at the end of the wrapped block.
-
-Examples:
-
-.. code-block:: python
-
-   # Transaction will commit automatically at the end of the "with" block:
-   with db.atomic() as txn:
-       User.create(username='u1')
-
-   # Unhandled exceptions will cause transaction to be rolled-back:
-   with db.atomic() as txn:
-       User.create(username='huey')
-       # User has been INSERTed into the database but the transaction is not
-       # yet committed because we haven't left the scope of the "with" block.
-
-       raise ValueError('uh-oh')
-       # This exception is unhandled - the transaction will be rolled-back and
-       # the ValueError will be raised.
-
-.. note::
-   While inside a block wrapped by the :py:meth:`~Database.atomic` context
-   manager, you can explicitly rollback or commit at any point by calling
-   :py:meth:`~Transaction.rollback` or :py:meth:`~Transaction.commit`. When you
-   do this inside a wrapped block of code, a new transaction will be started
-   automatically.
-
-   .. code-block:: python
-
-      with db.atomic() as transaction:  # Opens new transaction.
-          try:
-              save_some_objects()
-          except ErrorSavingData:
-              # Because this block of code is wrapped with "atomic", a
-              # new transaction will begin automatically after the call
-              # to rollback().
-              transaction.rollback()
-
-              # New transaction has begun.
-              error_saving = True
-
-          create_report(error_saving=error_saving)
-          # Note: no need to call commit. Since this marks the end of the
-          # wrapped block of code, the `atomic` context manager will
-          # automatically call commit for us.
-
-.. tip::
-   :py:meth:`~Database.atomic` can be used as either a **context manager** or
-   a **decorator**.
-
-.. important::
-   Peewee's behavior differs from the DB-API 2.0 behavior you may be used to
-   (see PEP-249 for details). Peewee requires all connections be in
-   **autocommit-mode** and transaction management is handled by Peewee.
-
-Context manager
-^^^^^^^^^^^^^^^
-
-Using :py:meth:`Database.atomic` as context manager:
-
-.. code-block:: python
-
-   db = SqliteDatabase(':memory:')
-
-   with db.atomic() as txn:
-       # This is the outer-most level, so this block corresponds to
-       # a transaction.
-       User.create(username='charlie')
-
-       with db.atomic() as nested_txn:
-           # This block corresponds to a savepoint.
-           User.create(username='huey')
-
-           # This will roll back the above create() query and
-           # start a new nested transaction.
-           nested_txn.rollback()
-
-           # A new savepoint has begun.
-           User.create(username='alice')
-
-       User.create(username='mickey')
-
-   # When the block ends, the transaction is committed (assuming no error
-   # occurs). At that point there will be three users:
-   # charlie
-   # alice
-   # mickey
-
-You can use the :py:meth:`Database.atomic` method to perform *get or create*
-operations as well:
-
-.. code-block:: python
-
-   try:
-       with db.atomic():
-           user = User.create(username=username)
-       return 'Success'
-   except peewee.IntegrityError:
-       return 'Failure: %s is already in use.' % username
-
-Decorator
-^^^^^^^^^
-
-Using :py:meth:`Database.atomic` as a decorator:
-
-.. code-block:: python
-
-   @db.atomic()
-   def create_user(username):
-       # This statement will run in a transaction. If the caller is already
-       # running in an `atomic` block, then a savepoint will be used instead.
-       return User.create(username=username)
-
-   create_user('charlie')
-
-Nesting Transactions
-^^^^^^^^^^^^^^^^^^^^
-
-:py:meth:`~Database.atomic` provides transparent nesting of transactions. When
-using :py:meth:`~Database.atomic`, the outer-most call will be wrapped in a
-transaction, and any nested calls will use savepoints.
-
-.. code-block:: python
-
-   with db.atomic() as txn:
-       perform_operation()
-
-       with db.atomic() as nested_txn:
-           perform_another_operation()
-
-Peewee supports nested transactions through the use of savepoints (for more
-information, see :py:meth:`~Database.savepoint`).
-
-Explicit transaction
-^^^^^^^^^^^^^^^^^^^^
-
-If you wish to explicitly run code in a transaction, you can use
-:py:meth:`~Database.transaction`. Like :py:meth:`~Database.atomic`,
-:py:meth:`~Database.transaction` can be used as a context manager or as a
-decorator.
-
-If an exception occurs in a wrapped block, the transaction will be rolled back.
-Otherwise the statements will be committed at the end of the wrapped block.
-
-.. code-block:: python
-
-   db = SqliteDatabase(':memory:')
-
-   with db.transaction() as txn:
-       # Delete the user and their associated tweets.
-       user.delete_instance(recursive=True)
-
-Transactions can be explicitly committed or rolled-back within the wrapped
-block. When this happens, a new transaction will be started.
-
-.. code-block:: python
-
-   with db.transaction() as txn:
-       User.create(username='mickey')
-       txn.commit()  # Changes are saved and a new transaction begins.
-       User.create(username='huey')
-
-       # Roll back. "huey" will not be saved, but since "mickey" was already
-       # committed, that row will remain in the database.
-       txn.rollback()
-
-   with db.transaction() as txn:
-       User.create(username='whiskers')
-       # Roll back changes, which removes "whiskers".
-       txn.rollback()
-
-       # Create a new row for "mr. whiskers" which will be implicitly committed
-       # at the end of the `with` block.
-       User.create(username='mr. whiskers')
-
-.. note::
-   If you attempt to nest transactions with peewee using the
-   :py:meth:`~Database.transaction` context manager, only the outer-most
-   transaction will be used.
-
-   As this may lead to unpredictable behavior, it is recommended that
-   you use :py:meth:`~Database.atomic`.
-
-Explicit Savepoints
-^^^^^^^^^^^^^^^^^^^
-
-Just as you can explicitly create transactions, you can also explicitly create
-savepoints using the :py:meth:`~Database.savepoint` method. Savepoints must
-occur within a transaction, but can be nested arbitrarily deep.
-
-.. code-block:: python
-
-   with db.transaction() as txn:
-       with db.savepoint() as sp:
-           User.create(username='mickey')
-
-       with db.savepoint() as sp2:
-           User.create(username='zaizee')
-           sp2.rollback()  # "zaizee" will not be saved, but "mickey" will be.
-
-           User.create(username='huey')
-
-   # mickey and huey were created.
-
-.. note::
-   If you manually commit or roll back a savepoint, a new savepoint will
-   automatically begin.
-
-Autocommit Mode
-^^^^^^^^^^^^^^^
-
-Peewee operates in *autocommit mode*, such that any statements executed outside
-of a transaction are run in their own transaction. To group multiple statements
-into a transaction, Peewee provides the :py:meth:`~Database.atomic` context-manager/decorator.
-This should cover all use-cases, but in the unlikely event you want to
-temporarily disable Peewee's transaction management completely, you can use the
-:py:meth:`Database.manual_commit` context-manager/decorator.
-
-Here is how you might emulate the behavior of the
-:py:meth:`~Database.transaction` context manager:
-
-.. code-block:: python
-
-   with db.manual_commit():
-       db.begin()  # Have to begin transaction explicitly.
-       try:
-           user.delete_instance(recursive=True)
-       except:
-           db.rollback()  # Rollback! An error occurred.
-           raise
-       else:
-           try:
-               db.commit()  # Commit changes.
-           except:
-               db.rollback()
-               raise
-
-I don't anticipate anyone needing this, but it's here just in case.
-
 .. _database-errors:
 
 Database Errors
@@ -1400,27 +1149,25 @@ out Peewee's own `test-suite <https://github.com/coleifer/peewee/tree/master/tes
 Async with Gevent
 -----------------
 
-`gevent <http://www.gevent.org/>`_ is recommended for doing asynchronous I/O
-with Postgresql or MySQL. Reasons I prefer gevent:
+`gevent <https://www.gevent.org/>`_ is recommended for asynchronous I/O with
+Postgresql or MySQL.
 
-* No need for special-purpose "loop-aware" re-implementations of *everything*.
-  Third-party libraries using asyncio usually have to re-implement layers and
+* No need for special-purpose "loop-aware" implementation. Third-party
+  libraries using asyncio usually have to re-implement layers and
   layers of code as well as re-implementing the protocols themselves.
-* Gevent allows you to write your application in normal, clean, idiomatic
-  Python. No need to litter every line with "async", "await" and other noise.
+* Gevent allows you to write your application in normal, idiomatic
+  Python. No need to litter every line with "async" or "await".
   No callbacks, futures, tasks, promises. No cruft.
-* Gevent works with both Python 2 *and* Python 3.
-* Gevent is *Pythonic*. Asyncio is an un-pythonic abomination.
+* Gevent is very fast.
 
-Besides monkey-patching socket, no special steps are required if you are using
-**MySQL** with a pure Python driver like `pymysql <https://github.com/PyMySQL/PyMySQL>`_
-or are using `mysql-connector <https://dev.mysql.com/doc/connector-python/en/>`_
-in pure-python mode. MySQL drivers written in C will require special
-configuration which is beyond the scope of this document.
+Besides monkey-patching socket, no special steps are required if you are using:
 
-For **Postgres** and `psycopg2 <https://www.psycopg.org/docs/>`_, which is a C
-extension, you can use the following code snippet to register event hooks that
-will make your connection async:
+* `psycopg3 <https://www.psycopg.org/psycopg3/docs/>`_
+* `pymysql <https://github.com/PyMySQL/PyMySQL>`_
+* `mysql-connector <https://dev.mysql.com/doc/connector-python/en/>`_
+
+For `psycopg2 <https://www.psycopg.org/docs/>`_ use the following code snippet
+to register event hooks that will make your connection async:
 
 .. code-block:: python
 
@@ -1443,9 +1190,8 @@ will make your connection async:
            else:
                raise ValueError('poll() returned unexpected result')
 
-**SQLite**, because it is embedded in the Python application itself, does not
-do any socket operations that would be a candidate for non-blocking. Async has
-no effect one way or the other on SQLite databases.
+Because SQLite does not do any socket I/O, async has no effect when using
+SQLite.
 
 AsyncIO
 -------
