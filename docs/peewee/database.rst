@@ -1475,11 +1475,6 @@ These steps will ensure that regardless of whether you're using a simple SQLite
 database, or a pool of multiple Postgres connections, peewee will handle the
 connections correctly.
 
-.. note::
-   Applications that receive lots of traffic may benefit from using a
-   :ref:`connection pool <pool>` to mitigate the cost of setting up and
-   tearing down connections on every request.
-
 .. _flask:
 
 Flask
@@ -1495,7 +1490,14 @@ is returned.
    from flask import Flask
    from peewee import *
 
+
    database = SqliteDatabase('my_app.db')
+
+   # Or, use a pooled database implementation:
+   from playhouse.pool import PooledPostgresqlDatabase
+   database = PooledPostgresqlDatabase('my_app', user='postgres')
+
+
    app = Flask(__name__)
 
    # This hook ensures that a connection is opened to handle any queries
@@ -1518,8 +1520,7 @@ is returned.
 FastAPI
 ^^^^^^^
 
-FastAPI is an asyncio-compatible framework. The :ref:`asyncio` documentation
-details how to use Peewee in an asyncio setting.
+FastAPI is an :ref:`asyncio <asyncio>` framework.
 
 The following example demonstrates how to:
 
@@ -1579,7 +1580,13 @@ The connection handling code can be placed in a `middleware component
    import falcon
    from peewee import *
 
+
    database = SqliteDatabase('my_app.db')
+
+   # Or, use a pooled database implementation, e.g.
+   from playhouse.pool import PooledPostgresqlDatabase
+   database = PooledPostgresqlDatabase('my_app', user='postgres')
+
 
    class PeeweeConnectionMiddleware(object):
        def process_request(self, req, resp):
@@ -1601,6 +1608,7 @@ Set up a Request factory that handles database connection lifetime as follows:
 
 .. code-block:: python
 
+   from peewee import *
    from pyramid.request import Request
 
    db = SqliteDatabase('pyramidapp.db')
@@ -1627,8 +1635,7 @@ In your application `main()` make sure `MyRequest` is used as
 Sanic
 ^^^^^
 
-Sanic is an asyncio-compatible framework. The :ref:`asyncio` documentation
-details how to use Peewee in an asyncio setting.
+Sanic is an :ref:`asyncio <asyncio>` framework.
 
 The following example demonstrates how to:
 
@@ -1681,9 +1688,7 @@ Example demonstrating executing an async query:
 Other frameworks
 ^^^^^^^^^^^^^^^^
 
-Don't see your framework here? Please `open a GitHub ticket
-<https://github.com/coleifer/peewee/issues/new>`_ and I'll see about adding a
-section, or better yet, submit a documentation pull-request.
+Don't see your framework here? Please `open a GitHub ticket <https://github.com/coleifer/peewee/issues/new>`_.
 
 Logging queries
 ---------------
