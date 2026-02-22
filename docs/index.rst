@@ -18,22 +18,6 @@ it easy to learn and intuitive to use.
 * :ref:`tons of extensions <playhouse>`
 * use with :ref:`flask <flask>`, :ref:`fastapi <fastapi>` and :ref:`more <framework-integration>`
 
-.. image:: postgresql.png
-    :target: peewee/database.html#using-postgresql
-    :alt: postgresql
-
-.. image:: mysql.png
-    :target: peewee/database.html#using-mysql
-    :alt: mysql
-
-.. image:: mariadb.png
-    :target: peewee/database.html#using-mariadb
-    :alt: mariadb
-
-.. image:: sqlite.png
-    :target: peewee/database.html#using-sqlite
-    :alt: sqlite
-
 Peewee's source code hosted on `GitHub <https://github.com/coleifer/peewee>`_.
 
 New to peewee? These may help:
@@ -56,8 +40,6 @@ Contents:
    peewee/installation
    peewee/quickstart
    peewee/example
-   peewee/interactive
-   peewee/contributing
    peewee/database
    peewee/models
    peewee/querying
@@ -71,11 +53,15 @@ Contents:
    peewee/query_examples
    peewee/query_builder
    peewee/hacks
+   peewee/interactive
+   peewee/contributing
 
 Note
 ----
 
-If you find any bugs, odd behavior, or have an idea for a new feature please don't hesitate to `open an issue <https://github.com/coleifer/peewee/issues?state=open>`_ on GitHub or `contact me <https://charlesleifer.com/contact/>`_.
+If you find any bugs, odd behavior, or have an idea for a new feature please
+don't hesitate to `open an issue <https://github.com/coleifer/peewee/issues?state=open>`_
+on GitHub.
 
 Indices and tables
 ==================
