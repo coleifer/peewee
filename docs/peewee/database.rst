@@ -1459,6 +1459,8 @@ Peewee provides support for the following asyncio database drivers:
 Peewee support for asyncio is described in detail in the :ref:`asyncio`
 documentation.
 
+.. seealso:: :ref:`fastapi`
+
 .. _framework-integration:
 
 Framework Integration
@@ -1477,6 +1479,8 @@ connections correctly.
    Applications that receive lots of traffic may benefit from using a
    :ref:`connection pool <pool>` to mitigate the cost of setting up and
    tearing down connections on every request.
+
+.. _flask:
 
 Flask
 ^^^^^
@@ -1507,6 +1511,10 @@ is returned.
        if not database.is_closed():
            database.close()
 
+.. seealso:: :ref:`flask_utils`
+
+.. _fastapi:
+
 FastAPI
 ^^^^^^^
 
@@ -1532,7 +1540,7 @@ The following example demonstrates how to:
 
    @app.middleware('http')
    async def database_connection(request, call_next):
-       await db.aconnect()  # Obtain connection from connectoin pool.
+       await db.aconnect()  # Obtain connection from connection pool.
        try:
            response = await call_next(request)
        finally:
@@ -1641,7 +1649,7 @@ The following example demonstrates how to:
 
    @app.on_request
    async def open_connection(request):
-       await db.aconnect()  # Obtain connection from connectoin pool.
+       await db.aconnect()  # Obtain connection from connection pool.
 
    @app.on_response
    async def close_connection(request, response):
