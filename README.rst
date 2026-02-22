@@ -22,6 +22,8 @@ New to peewee? These may help:
 * `Models and fields <http://docs.peewee-orm.com/en/latest/peewee/models.html>`_
 * `Querying <http://docs.peewee-orm.com/en/latest/peewee/querying.html>`_
 * `Relationships and joins <http://docs.peewee-orm.com/en/latest/peewee/relationships.html>`_
+* `Flask setup <https://docs.peewee-orm.com/en/latest/peewee/database.html#flask>`_
+  or `FastAPI setup <https://docs.peewee-orm.com/en/latest/peewee/database.html#fastapi>`_
 
 Installation:
 
