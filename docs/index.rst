@@ -37,9 +37,9 @@ Contents:
    :maxdepth: 2
    :glob:
 
-   peewee/installation
-   peewee/quickstart
-   peewee/example
+   new/installation
+   new/quickstart
+   new/tutorial
    peewee/database
    peewee/transactions
    peewee/models

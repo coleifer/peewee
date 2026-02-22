@@ -1,26 +1,39 @@
 .. _querying:
 
-Querying
-========
+Basic Queries
+=============
 
 This section will cover the basic CRUD operations commonly performed on a
 relational database:
 
-* :py:meth:`Model.create`, for executing *INSERT* queries.
-* :py:meth:`Model.save` and :py:meth:`Model.update`, for executing *UPDATE*
-  queries.
-* :py:meth:`Model.delete_instance` and :py:meth:`Model.delete`, for executing
-  *DELETE* queries.
-* :py:meth:`Model.select`, for executing *SELECT* queries.
++-----------------+-----------------------------------------------------------+
+| Query           | Methods                                                   |
++=================+===========================================================+
+| INSERT          | * :meth:`Model.create`                                    |
+|                 | * :meth:`Model.insert`                                    |
+|                 | * :meth:`Model.insert_many`                               |
+|                 | * :meth:`Model.insert_from`                               |
+|                 | * :meth:`Model.replace` (Postgres unsupported)            |
+|                 | * :meth:`Model.replace_many` (Postgres unsupported)       |
++-----------------+-----------------------------------------------------------+
+| UPDATE          | * :meth:`Model.save`                                      |
+|                 | * :meth:`Model.update`                                    |
++-----------------+-----------------------------------------------------------+
+| DELETE          | * :meth:`Model.delete_instance`                           |
+|                 | * :meth:`Model.delete`                                    |
++-----------------+-----------------------------------------------------------+
+| SELECT          | * :meth:`Model.select`                                    |
+|                 | * :meth:`Model.get`                                       |
++-----------------+-----------------------------------------------------------+
 
 .. seealso::
    :ref:`Large collection of Peewee query examples <query_examples>`. Examples
    based on `Postgresql Exercises <https://pgexercises.com/>`_.
 
-Creating a new record
----------------------
+INSERT queries
+--------------
 
-You can use :py:meth:`Model.create` to create a new model instance. This method
+Use :meth:`Model.create` to create a new model instance. This method
 accepts keyword arguments, where the keys correspond to the names of the
 model's fields. A new instance is returned and a row is added to the table.
 
@@ -29,11 +42,10 @@ model's fields. A new instance is returned and a row is added to the table.
    >>> User.create(username='Charlie')
    <User: 1>
 
-This will *INSERT* a new row into the database. The primary key will
+This will INSERT a new row into the database. The primary key will
 automatically be retrieved and stored on the model instance.
 
-Alternatively, you can build up a model instance programmatically and then call
-:py:meth:`~Model.save`:
+You can also build a model instance programmatically and call :meth:`Model.save`:
 
 .. code-block:: pycon
 
@@ -62,8 +74,10 @@ You can also use the value of the related object's primary key:
 
    >>> tweet = Tweet.create(user=2, message='Hello again!')
 
-If you simply wish to insert data and do not need to create a model instance,
-you can use :py:meth:`Model.insert`:
+Insert
+^^^^^^
+
+To insert data when you do not need a model instance use :meth:`Model.insert`:
 
 .. code-block:: pycon
 
@@ -72,17 +86,16 @@ you can use :py:meth:`Model.insert`:
 
 After executing the insert query, the primary key of the new row is returned.
 
-.. note::
-   There are several ways you can speed up bulk insert operations. Check out
-   the :ref:`bulk_inserts` recipe section for more information.
+.. seealso::
+   * :ref:`bulk_inserts`
+   * :ref:`upsert`
 
 .. _bulk_inserts:
 
 Bulk inserts
-------------
+^^^^^^^^^^^^
 
-There are a couple of ways you can load lots of data quickly. The naive
-approach is to simply call :py:meth:`Model.create` in a loop:
+Calling :meth:`Model.create` or :meth:`Model.save` in a loop should be avoided:
 
 .. code-block:: python
 
@@ -95,18 +108,18 @@ approach is to simply call :py:meth:`Model.create` in a loop:
    for data_dict in data_source:
        MyModel.create(**data_dict)
 
-The above approach is slow:
+The above is slow:
 
-1. **Does not wrap the loop in a transaction.** Result is each :py:meth:`~Model.create`
+1. **Does not wrap the loop in a transaction.** Result is each :meth:`~Model.create`
    happens in its own transaction.
-2. **Python interpreter** is getting in the way, and each :py:class:`InsertQuery`
+2. **Python interpreter** is getting in the way, and each :class:`InsertQuery`
    must be generated and parsed into SQL.
 3. **Large amount of data** (in terms of raw bytes of SQL) sent to the database
    to parse.
 4. **Retrieving the last insert id**, which may not be necessary.
 
 You can get a significant speedup by simply wrapping this in a transaction with
-:py:meth:`~Database.atomic`.
+:meth:`~Database.atomic`.
 
 .. code-block:: python
    :emphasize-lines: 1
@@ -115,8 +128,8 @@ You can get a significant speedup by simply wrapping this in a transaction with
        for data_dict in data_source:
            MyModel.create(**data_dict)
 
-The above code still suffers from points 2, 3 and 4. We can get another big
-boost by using :py:meth:`~Model.insert_many`. This method accepts a list of
+The above code still suffers from points 2, 3 and 4. Performance can be
+increased by using :meth:`~Model.insert_many`. This method accepts a list of
 tuples or dictionaries, and inserts multiple rows in a single query:
 
 .. code-block:: python
@@ -131,7 +144,7 @@ tuples or dictionaries, and inserts multiple rows in a single query:
    # Fastest way to INSERT multiple rows.
    MyModel.insert_many(data_source).execute()
 
-The :py:meth:`~Model.insert_many` method also accepts a list of row-tuples,
+The :meth:`~Model.insert_many` method also accepts a list of row-tuples,
 provided you also specify the corresponding fields:
 
 .. code-block:: python
@@ -145,7 +158,7 @@ provided you also specify the corresponding fields:
    # But we need to indicate which fields the values correspond to.
    MyModel.insert_many(data, fields=[MyModel.field1, MyModel.field2]).execute()
 
-It is a good practice to wrap the bulk insert in a transaction:
+Optionally wrap the bulk insert in a transaction:
 
 .. code-block:: python
 

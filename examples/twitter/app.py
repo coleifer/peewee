@@ -153,13 +153,12 @@ def is_following(from_user, to_user):
 # to create and tear down a database connection on each request.
 @app.before_request
 def before_request():
-    g.db = database
-    g.db.connect()
+    database.connect()
 
-@app.after_request
-def after_request(response):
-    g.db.close()
-    return response
+@app.teardown_request
+def teardown_request(exc=None):
+    if not database.is_closed():
+        database.close()
 
 # views -- these are the actual mappings of url to view function
 @app.route('/')
