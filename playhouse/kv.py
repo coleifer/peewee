@@ -7,7 +7,7 @@ from playhouse.fields import PickleField
 try:
     from playhouse.cysqlite_ext import CySqliteDatabase as _SqliteDatabase
 except ImportError:
-    from playhouse.sqlite_ext import SqliteExtDatabase as _SqliteDatabase
+    _SqliteDatabase = SqliteDatabase
 
 
 Sentinel = type('Sentinel', (object,), {})

@@ -12,10 +12,8 @@ from playhouse.pool import PooledPostgresqlDatabase
 from playhouse.pool import PooledPostgresqlExtDatabase
 from playhouse.pool import PooledPsycopg3Database
 from playhouse.pool import PooledSqliteDatabase
-from playhouse.pool import PooledSqliteExtDatabase
 from playhouse.postgres_ext import PostgresqlExtDatabase
 from playhouse.postgres_ext import Psycopg3Database
-from playhouse.sqlite_ext import SqliteExtDatabase
 try:
     from playhouse.cysqlite_ext import CySqliteDatabase
 except ImportError:
@@ -40,9 +38,7 @@ schemes = {
     'psycopg3': Psycopg3Database,
     'psycopg3+pool': PooledPsycopg3Database,
     'sqlite': SqliteDatabase,
-    'sqliteext': SqliteExtDatabase,
     'sqlite+pool': PooledSqliteDatabase,
-    'sqliteext+pool': PooledSqliteExtDatabase,
 }
 
 def register_database(db_class, *names):

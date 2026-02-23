@@ -3,7 +3,6 @@ import datetime
 from peewee import *
 from playhouse.sqlite_changelog import ChangeLog
 from playhouse.sqlite_ext import JSONField
-from playhouse.sqlite_ext import SqliteExtDatabase
 
 from .base import ModelTestCase
 from .base import TestModel
@@ -12,7 +11,7 @@ from .base import skip_unless
 from .sqlite_helpers import json_installed
 
 
-database = SqliteExtDatabase(':memory:', pragmas={'foreign_keys': 1})
+database = SqliteDatabase(':memory:', pragmas={'foreign_keys': 1})
 
 
 class Person(TestModel):

@@ -843,35 +843,6 @@ class FTS5Model(BaseFTSModel):
         return getattr(cls, attr)
 
 
-class SqliteExtDatabase(SqliteDatabase):
-    def __init__(self, database, rank_functions=True, json_contains=False,
-                 *args, **kwargs):
-        super(SqliteExtDatabase, self).__init__(database, *args, **kwargs)
-        self._row_factory = None
-
-        if rank_functions:
-            register_udf_groups(self, RANK)
-        if json_contains:
-            register_udf_groups(self, JSON)
-
-    def _add_conn_hooks(self, conn):
-        super(SqliteExtDatabase, self)._add_conn_hooks(conn)
-        if self._row_factory:
-            conn.row_factory = self._row_factory
-
-    def row_factory(self, fn):
-        self._row_factory = fn
-
-
-class CSqliteExtDatabase(SqliteExtDatabase):
-    # XXX: here today, gone tomorrow.
-    def __init__(self, *args, **kwargs):
-        warnings.warn('CSqliteExtDatabase is deprecated. For equivalent '
-                      'functionality use cysqlite_ext.CySqliteDatabase.',
-                      DeprecationWarning)
-        super(CSqliteExtDatabase, self).__init__(*args, **kwargs)
-
-
 OP.MATCH = 'MATCH'
 
 def match(lhs, rhs):

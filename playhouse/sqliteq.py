@@ -18,7 +18,7 @@ try:
 except ImportError:
     GThread = GQueue = GEvent = None
 
-from playhouse.sqlite_ext import SqliteExtDatabase
+from peewee import SqliteDatabase
 
 
 logger = logging.getLogger('peewee.sqliteq')
@@ -188,7 +188,7 @@ class Writer(object):
         return obj.set_result(cursor, exc)
 
 
-class SqliteQueueDatabase(SqliteExtDatabase):
+class SqliteQueueDatabase(SqliteDatabase):
     WAL_MODE_ERROR_MESSAGE = ('SQLite must be configured to use the WAL '
                               'journal mode when using this feature. WAL mode '
                               'allows one or more readers to continue reading '

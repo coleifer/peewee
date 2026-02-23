@@ -3585,8 +3585,9 @@ class SqliteDatabase(Database):
     server_version = __sqlite_version__
     truncate_table = False
 
-    def __init__(self, database, regexp_function=False, *args, **kwargs):
-        self._pragmas = kwargs.pop('pragmas', ())
+    def __init__(self, database, pragmas=None, regexp_function=False,
+                 rank_functions=False, *args, **kwargs):
+        self._pragmas = pragmas or ()
         super(SqliteDatabase, self).__init__(database, *args, **kwargs)
         self._aggregates = {}
         self._collations = {}
@@ -3599,6 +3600,9 @@ class SqliteDatabase(Database):
         self.register_function(_sqlite_date_trunc, 'date_trunc', 2)
         if regexp_function:
             self.register_function(_sqlite_regexp, 'regexp', 2)
+        if rank_functions:
+            from playhouse.sqlite_udf import register_udf_groups, RANK
+            register_udf_groups(self, RANK)
 
     def init(self, database, pragmas=None, timeout=5, returning_clause=None,
              **kwargs):

@@ -49,7 +49,6 @@ import decimal
 import sys
 
 from peewee import *
-from playhouse.sqlite_ext import SqliteExtDatabase
 if sys.version_info[0] != 3:
     from pysqlcipher import dbapi2 as sqlcipher
 else:
@@ -99,8 +98,4 @@ class _SqlCipherDatabase(object):
 
 
 class SqlCipherDatabase(_SqlCipherDatabase, SqliteDatabase):
-    pass
-
-
-class SqlCipherExtDatabase(_SqlCipherDatabase, SqliteExtDatabase):
     pass

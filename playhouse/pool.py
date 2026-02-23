@@ -306,14 +306,6 @@ class PooledSqliteDatabase(_PooledSqliteDatabase, SqliteDatabase):
     pass
 
 try:
-    from playhouse.sqlite_ext import SqliteExtDatabase
-
-    class PooledSqliteExtDatabase(_PooledSqliteDatabase, SqliteExtDatabase):
-        pass
-except ImportError:
-    PooledSqliteExtDatabase = None
-
-try:
     from playhouse.cysqlite_ext import CySqliteDatabase
 
     class PooledCySqliteDatabase(_PooledSqliteDatabase, CySqliteDatabase):

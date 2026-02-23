@@ -16,12 +16,10 @@ PRAGMAS = {
     'cipher_log_level': 'none',
 }
 db = SqlCipherDatabase('peewee_test.dbc', passphrase=PASSPHRASE,
-                       pragmas=PRAGMAS)
-ext_db = SqlCipherExtDatabase('peewee_test.dbx', passphrase=PASSPHRASE,
-                              pragmas=PRAGMAS)
+                       pragmas=PRAGMAS, rank_functions=True)
 
 
-@ext_db.func('shazam')
+@db.func('shazam')
 def shazam(s):
     return sha1((s or '').encode('utf-8')).hexdigest()[:5]
 
@@ -122,12 +120,12 @@ class TestSqlCipherConfiguration(CleanUpModelTestCase):
 
 
 class SqlCipherExtTestCase(CleanUpModelTestCase):
-    database = ext_db
+    database = db
     requires = [Note]
 
     def setUp(self):
         super(SqlCipherExtTestCase, self).setUp()
-        FTSNote._meta.database = ext_db
+        FTSNote._meta.database = db
         FTSNote.drop_table(True)
         FTSNote.create_table(tokenize='porter', content=Note.content)
 
@@ -154,7 +152,7 @@ class SqlCipherExtTestCase(CleanUpModelTestCase):
             'relational databases are the best',
             'sqlite is the best relational database'])
 
-        alt_conn = SqliteDatabase(ext_db.database)
+        alt_conn = SqliteDatabase(db.database)
         self.assertRaises(
             DatabaseError,
             alt_conn.execute_sql,

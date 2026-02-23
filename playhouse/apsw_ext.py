@@ -27,10 +27,8 @@ from peewee import Insert
 from peewee import TimeField as _TimeField
 from peewee import logger
 
-from playhouse.sqlite_ext import SqliteExtDatabase
 
-
-class APSWDatabase(SqliteExtDatabase):
+class APSWDatabase(SqliteDatabase):
     server_version = tuple(int(i) for i in apsw.sqlitelibversion().split('.'))
 
     def __init__(self, database, **kwargs):
