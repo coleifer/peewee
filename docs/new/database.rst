@@ -380,6 +380,28 @@ for binding a given model class:
    The database can now be swapped safely while running in a multi-threaded
    environment using the :meth:`Database.bind` or :meth:`Database.bind_ctx`.
 
+Connecting via URL
+------------------
+
+The :ref:`db_url` playhouse module provides a :func:`~playhouse.db_url.connect`
+helper that accepts a database URL and returns the appropriate database
+instance:
+
+.. code-block:: python
+
+   from playhouse.db_url import connect
+
+   db = connect(os.environ.get('DATABASE_URL', 'sqlite:///local.db'))
+
+Example URLs:
+
+* ``sqlite:///my_app.db`` - SQLite file in the current directory.
+* ``sqlite:///:memory:`` - in-memory SQLite.
+* ``sqlite:////absolute/path/to/app.db`` - absolute path SQLite.
+* ``postgresql://user:password@host:5432/dbname``
+* ``mysql://user:password@host:3306/dbname``
+* :ref:`More examples in the db_url documentation <db_url>`.
+
 Connection Lifecycle
 --------------------
 
@@ -595,6 +617,69 @@ the standard library ``logging`` module:
 
 This is the simplest way to verify what queries are being issued during
 development.
+
+.. _testing:
+
+Testing Peewee Applications
+---------------------------
+
+When writing tests for an application that uses Peewee, it may be desirable to
+use a special database for tests. Another common practice is to run tests
+against a clean database, which means ensuring tables are empty at the start of
+each test.
+
+To bind your models to a test database at run-time:
+
+* :meth:`Database.bind_ctx` binds the given models to the database instance for
+  the duration of the wrapped block.
+* :meth:`Model.bind_ctx` binds the model (and optionally its dependencies) to
+  the given database for the duration of the wrapped block.
+* :meth:`Database.bind` is a one-time operation that binds the models (and
+  optionally their dependencies) to the given database.
+* :meth:`Model.bind` is a one-time operation that binds the model (and
+  optionally its dependencies) to the given database.
+
+Depending on your use-case, one of these options may be preferable.
+
+Example test-case setup:
+
+.. code-block:: python
+
+   # tests.py
+   import unittest
+   from my_app.models import EventLog, Relationship, Tweet, User
+
+   MODELS = [User, Tweet, EventLog, Relationship]
+
+   # use an in-memory SQLite for tests.
+   test_db = SqliteDatabase(':memory:')
+
+   class BaseTestCase(unittest.TestCase):
+       def setUp(self):
+           # Bind model classes to test db. Since we have a complete list of
+           # all models, we do not need to recursively bind dependencies.
+           test_db.bind(MODELS, bind_refs=False, bind_backrefs=False)
+
+           test_db.connect()
+           test_db.create_tables(MODELS)
+
+       def tearDown(self):
+           # Not strictly necessary since SQLite in-memory databases only live
+           # for the duration of the connection, and in the next step we close
+           # the connection...but a good practice all the same.
+           test_db.drop_tables(MODELS)
+
+           # Close connection to db.
+           test_db.close()
+
+           # If we wanted, we could re-bind the models to their original
+           # database here. But for tests this is probably not necessary.
+
+It is recommended to test using the same database backend used in production,
+so as to avoid any potential compatibility issues.
+
+For more examples of how to run tests using Peewee, check out Peewee's own
+`test-suite <https://github.com/coleifer/peewee/tree/master/tests>`__.
 
 Adding a Custom Database Driver
 ---------------------------------
