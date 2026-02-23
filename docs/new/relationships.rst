@@ -191,6 +191,18 @@ In the example schema, ``Tweet.user`` is a foreign key to ``User``. The
    hiss
    purr
 
+Taking a closer look at ``huey.tweets``, we can see that it is just a simple
+pre-filtered ``SELECT`` query:
+
+.. code-block:: pycon
+
+   >>> huey.tweets
+   <peewee.ModelSelect at 0x7f0483931fd0>
+
+   >>> huey.tweets.sql()
+   ('SELECT "t1"."id", "t1"."content", "t1"."timestamp", "t1"."user_id"
+     FROM "tweet" AS "t1" WHERE ("t1"."user_id" = ?)', [1])
+
 A back-reference behaves like any other :class:`Select` query and can be
 filtered, ordered, and chained:
 
@@ -395,7 +407,7 @@ written equivalently as:
 readable when a query branches across several paths.
 
 Selecting columns from joined models
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 When columns from multiple models are included in ``select()``, Peewee
 reconstructs the model graph and assigns related model instances to their
@@ -403,22 +415,44 @@ corresponding attributes.
 
 .. code-block:: pycon
 
-   >>> query = (Tweet
-   ...          .select(Tweet.content, User.username)
-   ...          .join(User))
+   query = (Tweet
+            .select(Tweet.content, User.username)
+            .join(User))
 
-   >>> for tweet in query:
-   ...     # tweet.user is a User instance populated from the joined data.
-   ...     # No additional query is issued.
-   ...     print(tweet.user.username, '->', tweet.content)
-   huey -> meow
-   huey -> hiss
-   huey -> purr
-   mickey -> woof
-   mickey -> whine
+   for tweet in query:
+       # tweet.user is a User instance populated from the joined data.
+       # No additional query is issued.
+       print(tweet.user.username, '->', tweet.content)
 
-Compare this to the N+1 version: here, only one query is executed regardless
-of how many tweets are returned.
+   # huey -> meow
+   # huey -> hiss
+   # huey -> purr
+   # mickey -> woof
+   # mickey -> whine
+
+To make it a bit more obvious that it's doing the correct thing, we can ask
+Peewee to return the rows as dictionaries.
+
+.. code-block:: pycon
+   :emphasize-lines: 2, 3
+
+   query = (Tweet
+            .select(Tweet.content, User.username)
+            .join(User)
+            .dicts())
+
+
+   for row in query:
+       print(row)
+
+   # {'content': 'meow', 'username': 'huey'}
+   # {'content': 'hiss', 'username': 'huey'}
+   # {'content': 'purr', 'username': 'huey'}
+   # {'content': 'woof', 'username': 'mickey'}
+   # {'content': 'whine', 'username': 'mickey'}
+
+Compare these queries to the N+1 version: here, only one query is executed
+regardless of how many tweets are returned.
 
 The attribute name that Peewee uses to store the joined instance follows the
 foreign key field name (``tweet.user`` in this case). To override it, pass
@@ -447,6 +481,186 @@ nesting them in a sub-object, append ``.objects()``:
    ...     # username is now an attribute on tweet directly.
    ...     print(tweet.username, '->', tweet.content)
    huey -> meow
+
+More complex example
+^^^^^^^^^^^^^^^^^^^^
+
+As a more complex example, in this query, we will write a single query that
+selects all the favorites, along with the user who created the favorite, the
+tweet that was favorited, and that tweet's author.
+
+In SQL we would write:
+
+.. code-block:: sql
+
+   SELECT owner.username, tweet.content, author.username AS author
+   FROM favorite
+   INNER JOIN user AS owner ON (favorite.user_id = owner.id)
+   INNER JOIN tweet ON (favorite.tweet_id = tweet.id)
+   INNER JOIN user AS author ON (tweet.user_id = author.id);
+
+Note that we are selecting from the user table twice - once in the context of
+the user who created the favorite, and again as the author of the tweet.
+
+With Peewee, we use :py:meth:`Model.alias` to alias a model class so it can be
+referenced twice in a single query:
+
+.. code-block:: python
+
+   Owner = User.alias()
+   query = (Favorite
+            .select(Favorite, Tweet.content, User.username, Owner.username)
+            .join_from(Favorite, Owner)  # Determine owner of favorite.
+            .join_from(Favorite, Tweet)  # Join favorite -> tweet.
+            .join_from(Tweet, User))     # Join tweet -> user.
+
+We can iterate over the results and access the joined values in the following
+way. Note how Peewee has resolved the fields from the various models we
+selected and reconstructed the model graph:
+
+.. code-block:: pycon
+
+   >>> for fav in query:
+   ...     print(fav.user.username, 'liked', fav.tweet.content, 'by', fav.tweet.user.username)
+   ...
+   huey liked whine by mickey
+   mickey liked purr by huey
+   zaizee liked meow by huey
+   zaizee liked purr by huey
+
+.. _join-subquery:
+
+Subqueries
+^^^^^^^^^^
+
+Peewee allows you to join on any table-like object, including subqueries or
+common table expressions (see :ref:`cte`). To demonstrate joining on a
+subquery, let's query for all users and their latest tweet.
+
+Here is the SQL:
+
+.. code-block:: sql
+
+   SELECT tweet.*, user.*
+   FROM tweet
+   INNER JOIN (
+       SELECT latest.user_id, MAX(latest.timestamp) AS max_ts
+       FROM tweet AS latest
+       GROUP BY latest.user_id) AS latest_query
+   ON ((tweet.user_id = latest_query.user_id) AND (tweet.timestamp = latest_query.max_ts))
+   INNER JOIN user ON (tweet.user_id = user.id)
+
+We'll do this by creating a subquery which selects each user and the timestamp
+of their latest tweet. Then we can query the tweets table in the outer query
+and join on the user and timestamp combination from the subquery.
+
+.. code-block:: python
+
+   # Define our subquery first. We'll use an alias of the Tweet model, since
+   # we will be querying from the Tweet model directly in the outer query.
+   Latest = Tweet.alias()
+   latest_query = (Latest
+                   .select(Latest.user, fn.MAX(Latest.timestamp).alias('max_ts'))
+                   .group_by(Latest.user)
+                   .alias('latest_query'))
+
+   # Our join predicate will ensure that we match tweets based on their
+   # timestamp *and* user_id.
+   predicate = ((Tweet.user == latest_query.c.user_id) &
+                (Tweet.timestamp == latest_query.c.max_ts))
+
+   # We put it all together, querying from tweet and joining on the subquery
+   # using the above predicate.
+   query = (Tweet
+            .select(Tweet, User)  # Select all columns from tweet and user.
+            .join_from(Tweet, latest_query, on=predicate)  # Join tweet -> subquery.
+            .join_from(Tweet, User))  # Join from tweet -> user.
+
+Iterating over the query, we can see each user and their latest tweet.
+
+.. code-block:: pycon
+
+   for tweet in query:
+       print(tweet.user.username, '->', tweet.content)
+
+   # huey -> purr
+   # mickey -> whine
+
+There are a couple things you may not have seen before in the code we used to
+create the query in this section:
+
+* We used :py:meth:`~ModelSelect.join_from` to explicitly specify the join
+  context. We wrote ``.join_from(Tweet, User)``, which is equivalent to
+  ``.switch(Tweet).join(User)``.
+* We referenced columns in the subquery using the magic ``.c`` attribute,
+  for example ``latest_query.c.max_ts``. The ``.c`` attribute is used to
+  dynamically create column references.
+* Instead of passing individual fields to ``Tweet.select()``, we passed the
+  ``Tweet`` and ``User`` models. This is shorthand for selecting all fields on
+  the given model.
+
+Common-table Expressions
+^^^^^^^^^^^^^^^^^^^^^^^^
+
+In the previous section we joined on a subquery, but we could just as easily
+have used a :ref:`common-table expression (CTE) <cte>`. We will repeat the same
+query as before, listing users and their latest tweets, but this time we will
+do it using a CTE.
+
+Here is the SQL:
+
+.. code-block:: sql
+
+   WITH latest AS (
+       SELECT user_id, MAX(timestamp) AS max_ts
+       FROM tweet
+       GROUP BY user_id)
+   SELECT tweet.*, user.*
+   FROM tweet
+   INNER JOIN latest
+       ON ((latest.user_id = tweet.user_id) AND (latest.max_ts = tweet.timestamp))
+   INNER JOIN user
+       ON (tweet.user_id = user.id)
+
+This example looks very similar to the previous example with the subquery:
+
+.. code-block:: python
+
+   # Define our CTE first. We'll use an alias of the Tweet model, since
+   # we will be querying from the Tweet model directly in the main query.
+   Latest = Tweet.alias()
+   cte = (Latest
+          .select(Latest.user, fn.MAX(Latest.timestamp).alias('max_ts'))
+          .group_by(Latest.user)
+          .cte('latest'))
+
+   # Our join predicate will ensure that we match tweets based on their
+   # timestamp *and* user_id.
+   predicate = ((Tweet.user == cte.c.user_id) &
+                (Tweet.timestamp == cte.c.max_ts))
+
+   # We put it all together, querying from tweet and joining on the CTE
+   # using the above predicate.
+   query = (Tweet
+            .select(Tweet, User)  # Select all columns from tweet and user.
+            .join(cte, on=predicate)  # Join tweet -> CTE.
+            .join_from(Tweet, User)  # Join from tweet -> user.
+            .with_cte(cte))
+
+We can iterate over the result-set, which consists of the latest tweets for
+each user:
+
+.. code-block:: pycon
+
+   >>> for tweet in query:
+   ...     print(tweet.user.username, '->', tweet.content)
+   ...
+   huey -> purr
+   mickey -> whine
+
+.. note::
+   For more information about using CTEs, including information on writing
+   recursive CTEs, see the :ref:`cte` section of the "Querying" document.
 
 Multiple foreign keys to the same model
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -653,17 +867,18 @@ Avoiding N+1 with Prefetch
 --------------------------
 
 Joins solve the N+1 problem when traversing from the *many* side toward the
-*one* side — for example, fetching tweets with their authors. Each tweet has
+*one* side - for example, fetching tweets with their authors. Each tweet has
 exactly one author, so a join produces exactly one result row per tweet.
 
 The situation is different when traversing from the *one* side toward the
-*many* side — for example, fetching users *with all their tweets*. A join in
+*many* side - for example, fetching users *with all their tweets*. A join in
 this direction produces one result row *per tweet*, which means users with
 multiple tweets appear multiple times in the result set. Deduplicating those
 rows in application code is awkward and error-prone.
 
 :py:func:`prefetch` solves this by issuing one query per table, then stitching
-the results together in Python:
+the results together in Python. Instead of *O(n)* queries for *n* rows, we will
+do *O(k)* queries for *k* tables:
 
 .. code-block:: python
 
@@ -716,16 +931,16 @@ Choosing between joins and prefetch
 
 Use a **join** when:
 
-* Traversing from the many side to the one side (tweet → author).
+* Traversing from the many side to the one side (tweet -> author).
 * Filtering on columns in the related table (tweets by users whose username
   starts with "h").
 * Only a subset of related fields is needed.
 
 Use **prefetch** when:
 
-* Traversing from the one side to the many side (user → all their tweets).
+* Traversing from the one side to the many side (user -> all their tweets).
 * The full set of related rows is needed for each parent row.
-* Nesting more than one level of related data (users → tweets → favorites).
+* Nesting more than one level of related data (users -> tweets -> favorites).
 
 .. note::
    ``LIMIT`` on the outer query of a :py:func:`prefetch` call works as
