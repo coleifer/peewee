@@ -3,26 +3,22 @@
 Installing and Testing
 ======================
 
-Most users will want to simply install the latest version, hosted on PyPI:
+Install the latest release from PyPI:
 
 .. code-block:: shell
 
    pip install peewee
 
-Peewee has an optional Sqlite C extension which is not bundled as part of the
+Peewee has an optional Sqlite C extension which is not bundled in the default
 wheel. It provides user-defined ranking functions for use with Sqlite FTS4 and
-functions for fuzzy string matching. If you wish to use this, you can install
-Peewee via source distribution:
+functions for fuzzy string matching. To build from source:
 
 .. code-block:: shell
 
    pip install peewee --no-binary :all:
 
-Installing with git
--------------------
-
-The project is hosted at https://github.com/coleifer/peewee and can be installed
-using git:
+Installing from source
+----------------------
 
 .. code-block:: shell
 
@@ -33,40 +29,32 @@ using git:
 Running tests
 -------------
 
-You can test your installation by running the test suite.
-
 .. code-block:: shell
 
    python runtests.py
+   python runtests.py --help  # Show options.
 
-You can test specific features or specific database drivers using the
-``runtests.py`` script. To view the available test runner options, use:
+To run tests against Postgres or MySQL create a database named ``peewee_test``.
+For the Postgres extension tests, enable hstore:
 
-.. code-block:: shell
+.. code-block:: sql
 
-   python runtests.py --help
+   CREATE EXTENSION hstore;
 
-.. note::
-   To run tests against Postgres or MySQL you need to create a database named
-   "peewee_test". To test the Postgres extension module, you will also want to
-   install the HStore extension in the postgres test database:
+Supported Drivers
+-----------------
 
-   .. code-block:: sql
-
-      -- install the hstore extension on the peewee_test postgres db.
-      CREATE EXTENSION hstore;
-
-Driver support
---------------
+Peewee works with any database for which a DB-API 2.0 driver exists. The
+following drivers are supported out of the box:
 
 +-----------------------+------------------------+--------------------------------------------+
 | Database              | Driver                 | Implementation                             |
 +=======================+========================+============================================+
 | **Sqlite**            | ``sqlite3``            | :py:class:`SqliteDatabase`                 |
 +-----------------------+------------------------+--------------------------------------------+
-| **Postgres**          | ``psycopg2``           | :py:class:`PostgresqlDatabase`             |
-+-----------------------+------------------------+--------------------------------------------+
 | **Postgres**          | ``psycopg3``           | :py:class:`PostgresqlDatabase`             |
++-----------------------+------------------------+--------------------------------------------+
+| **Postgres**          | ``psycopg2``           | :py:class:`PostgresqlDatabase`             |
 +-----------------------+------------------------+--------------------------------------------+
 | **MySQL**             | ``pymysql``            | :py:class:`MySQLDatabase`                  |
 +-----------------------+------------------------+--------------------------------------------+
@@ -86,3 +74,6 @@ Driver support
 +-----------------------+------------------------+--------------------------------------------+
 | MariaDB (alternate)   | ``mariadb-connector``  | :py:class:`MariaDBConnectorDatabase`       |
 +-----------------------+------------------------+--------------------------------------------+
+
+The three bolded rows cover the majority of deployments. All others are
+optional; install their drivers when needed.

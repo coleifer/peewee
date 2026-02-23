@@ -3,162 +3,165 @@
 Quickstart
 ==========
 
-This document presents a very brief, high-level overview of Peewee's primary
-features. This guide will cover:
+This guide walks through defining a schema, writing rows, and reading them
+back. It takes about ten minutes. Every concept introduced here is covered in
+depth in the following documents.
 
-* :ref:`model-definition`
-* :ref:`storing-data`
-* :ref:`retrieving-data`
-
-.. note::
-   If you'd like something more in-depth, there is a thorough tutorial on
-   :ref:`creating a "twitter"-style web app <tutorial>` using peewee and the
-   Flask framework. In the projects ``examples/`` folder you can find more
-   self-contained Peewee examples, like a `blog app <https://github.com/coleifer/peewee/tree/master/examples/blog>`__.
-
-.. _model-definition:
+.. tip::
+   Follow along in an interactive Python session.
 
 Model Definition
 -----------------
 
-Model classes, fields and model instances all map to database concepts:
-
-================= =================================
-Object            Corresponds to...
-================= =================================
-Model class       Database table
-Field instance    Column on a table
-Model instance    Row in a database table
-================= =================================
-
-When starting a project with peewee, it's best to begin with your data model:
+A Peewee application starts with a :class:`Database` object and one or more
+:class:`Model` classes. The database object manages connections; model
+classes map to tables.
 
 .. code-block:: python
 
    import datetime
-
    from peewee import *
 
+   # A local SQLite database. Or use PostgresqlDatabase or MySQLDatabase.
+   db = SqliteDatabase('quickstart.db')
 
-   db = SqliteDatabase('notes.db')
-
-
-   class Note(Model):
-       title = CharField()
-       content = TextField()
-       added = DateTimeField(
-          default=datetime.datetime.now,
-          index=True)
-
+   class BaseModel(Model):
+       """All models inherit this to share the database connection."""
        class Meta:
            database = db
 
-Begin by creating the table in the database.
+   class User(BaseModel):
+       username = TextField(unique=True)
+
+   class Tweet(BaseModel):
+       user = ForeignKeyField(User, backref='tweets')
+       content = TextField()
+       timestamp = DateTimeField(
+           default=datetime.datetime.now,
+           index=True)
+
+Three things to notice:
+
+* ``BaseModel`` exists only to carry the ``database`` setting. Every subclass
+  inherits it automatically.
+* Peewee adds an auto-incrementing integer ``id`` primary key to any model
+  that does not declare its own.
+* ``ForeignKeyField`` links ``Tweet`` to ``User``. The ``backref='tweets'``
+  parameter means every ``User`` instance gains a ``tweets`` attribute.
+
+Create the tables
+-----------------
 
 .. code-block:: python
 
-   db.create_tables([Note])
+   db.connect()
+   db.create_tables([User, Tweet])
 
-.. _storing-data:
+:meth:`~Database.create_tables` generates ``CREATE TABLE`` statements for
+each model. By default ``create_table()`` specifies ``safe=True``, which uses
+``CREATE TABLE IF NOT EXISTS``, making it safe to call on every startup.
 
-Storing data
+Writing data
 ------------
 
-To write to the database, we can use :meth:`~Model.create` and :meth:`~Model.save`.
+Create a row with :py:meth:`~Model.create` (one step) or instantiate a model
+and call :py:meth:`~Model.save` (two steps):
 
 .. code-block:: python
 
-   note = Note.create(title='First note', content='Testing out Peewee')
-   print((note.id, note.title, note.added))
+   # One-step creation - returns the saved instance.
+   charlie = User.create(username='charlie')
+   huey = User.create(username='huey')
 
-   # (1, 'First note', datetime.datetime(2026, ...))
+   # Two-step creation.
+   t = Tweet(user=charlie, content='Hello, world!')
+   t.save()
 
-   note = Note(title='Second note')
-   note.content = 'Creating another note'
-   note.save()
+   Tweet.create(user=charlie, content='My second tweet.')
+   Tweet.create(user=huey, content='meow')
 
-   print((note.id, note.title, note.added))
-   # (2, 'Second note', datetime.datetime(2026, ...))
-
-Data can be modified and saved with the :meth:`~Model.save` method:
-
-.. code-block:: python
-
-   note.content = 'Edited the second note'
-   note.save()
-
-Deleting data
--------------
-
-To delete a single object, use :meth:`~Model.delete_instance`:
+To update an existing row, modify attributes and call ``save()`` again:
 
 .. code-block:: python
 
-   note = Note.create(title='Third note', content='')
-   note.delete_instance()
+   charlie.username = 'charlie_admin'
+   charlie.save()
 
-.. _retrieving-data:
-
-Retrieving a record
--------------------
-
-To retrieve a single record use :meth:`Select.get`:
+To delete a row:
 
 .. code-block:: python
 
-   note = Note.select().where(Note.title == 'First note').get()
+   stale_tweet = Tweet.get(Tweet.content == 'My second tweet.')
+   stale_tweet.delete_instance()
 
-We can also use the equivalent :meth:`Model.get`:
+Reading data
+------------
 
-.. code-block:: python
-
-   note = Note.get(Note.title == 'First note')
-
-Lists of records
-----------------
-
-To list all the notes in the database, oldest to newest:
+Retrieve a single row with :meth:`~Model.get`. It raises :exc:`~Model.DoesNotExist`
+if no match is found:
 
 .. code-block:: python
 
-   for note in Note.select().order_by(Note.added):
-       print(note.title)
+   user = User.get(User.username == 'charlie_admin')
+   print(user.id, user.username)
 
-Filtering records
+Retrieve multiple rows with :py:meth:`~Model.select`. The result is a lazy
+query - rows are fetched only when you iterate:
+
+.. code-block:: python
+
+   for tweet in Tweet.select():
+       print(tweet.content)
+
+Filter with :py:meth:`~Query.where`:
+
+.. code-block:: python
+
+   for tweet in Tweet.select().where(Tweet.user == charlie):
+       print(tweet.content)
+
+   for tweet in Tweet.select().where(Tweet.timestamp.year == 2026):
+       print(tweet.content)
+
+Sort with :py:meth:`~Query.order_by`:
+
+.. code-block:: python
+
+   for tweet in Tweet.select().order_by(Tweet.timestamp.desc()):
+       print(tweet.timestamp, tweet.content)
+
+Join to combine data from related tables in a single query:
+
+.. code-block:: python
+
+   # Fetch each tweet alongside its author's username.
+   # Without the join, accessing tweet.user.username would issue
+   # an extra query per tweet — see the N+1 section in Relationships.
+   query = (Tweet
+            .select(Tweet, User)
+            .join(User)
+            .order_by(Tweet.timestamp.desc()))
+
+   for tweet in query:
+       print(tweet.user.username, '->', tweet.content)
+
+Simple aggregates
 -----------------
 
-Peewee supports filter expressions. Let's list all the notes added in 2026
-with empty content:
+How many tweets are in the database:
 
 .. code-block:: python
 
-   query = (Note
-            .select()
-            .where(
-                (Note.content == '') &
-                (Note.added.year == 2026)))
+   count = Tweet.select().count()
 
-   for note in query:
-       print(note.id, ': ', note.title)
-
-
-Simple Aggregates
------------------
-
-How many notes are in the database:
+When the most-recent tweet was added:
 
 .. code-block:: python
 
-   count = Note.select().count()
+   latest = Tweet.select(fn.MAX(Tweet.timestamp)).scalar()
 
-When the most-recent note was added:
-
-.. code-block:: python
-
-   latest = Note.select(fn.MAX(Note.added)).scalar()
-
-Database
---------
+Close the connection
+--------------------
 
 When done using the database, close the connection:
 
@@ -166,19 +169,36 @@ When done using the database, close the connection:
 
    db.close()
 
+In a web application you would open the connection when a request arrives and
+close it when the response is sent. See :ref:`framework-integration` for
+framework-specific patterns.
+
 Working with existing databases
 -------------------------------
 
-If you already have a database, peewee can generate models using :ref:`pwiz`.
+If you have an existing database, peewee can generate models using :ref:`pwiz`.
 For example to generate models for a Postgres database named ``blog_db``:
 
 .. code-block:: shell
 
    python -m pwiz -e postgresql blog > blog_models.py
 
-What next?
-----------
+Where to go next
+----------------
 
-This quick-start is intentionally minimal and omits many details. The
-:ref:`Twitter app tutorial <tutorial>` is a more thorough example of how to use
-Peewee.
+Each concept introduced above is covered in full detail in the following
+documents:
+
+* :ref:`database` - connection options, multiple backends, run-time
+  configuration, connection pooling.
+* :ref:`models` - field types, field parameters, model Meta options, indexes,
+  primary keys.
+* :ref:`relationships` - how foreign keys work at runtime, joins, the N+1
+  problem, many-to-many relationships.
+* :ref:`querying` - the full SELECT API: filtering, sorting, aggregates,
+  window functions, CTEs.
+* :ref:`writing` - INSERT, UPDATE, DELETE, bulk operations, upsert.
+* :ref:`transactions` - atomic blocks, nesting, savepoints.
+
+For a complete worked example building a small web application, see
+:ref:`tutorial`.

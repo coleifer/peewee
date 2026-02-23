@@ -12,8 +12,8 @@ on github.
    There is also an example `blog app <https://github.com/coleifer/peewee/tree/master/examples/blog>`__,
    however it is not covered in this guide.
 
-The example app uses the `flask <http://flask.pocoo.org/>`__ web framework.
-You will need to install it to run the example:
+The example app uses the `flask <https://flask.palletsprojects.com/en/stable/>`__
+web framework. You will need to install it to run the example:
 
 .. code-block:: shell
 
