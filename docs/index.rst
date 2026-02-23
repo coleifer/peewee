@@ -40,22 +40,23 @@ Contents:
    new/installation
    new/quickstart
    new/tutorial
-   peewee/database
-   peewee/transactions
-   peewee/models
-   peewee/querying
-   peewee/query_operators
-   peewee/relationships
-   peewee/api
-   peewee/sqlite_ext
-   peewee/cysqlite_ext
-   peewee/asyncio
-   peewee/playhouse
-   peewee/query_examples
-   peewee/query_builder
-   peewee/hacks
-   peewee/interactive
-   peewee/contributing
+   new/database
+   new/models
+   new/relationships
+   new/querying
+   new/writing
+   new/transactions
+   new/schema
+   new/query_operators
+   new/recipes
+   new/asyncio
+   new/framework_integration
+   new/interactive
+   new/query_builder
+   new/api
+   new/playhouse/index
+   new/query_examples
+   new/contributing
 
 Note
 ----

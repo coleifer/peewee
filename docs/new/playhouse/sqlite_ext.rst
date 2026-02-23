@@ -15,15 +15,26 @@ drivers:
    WAL-mode, ATTACH support. Full-text search and JSON are supported, but
    implementations are provided by ``playhouse.sqlite_ext``.
 
-:class:`CySqliteDatabase`
+:class:`CySqliteDatabase` (``playhouse.cysqlite_ext``)
    Extends :class:`SqliteDatabase` and uses `cysqlite <https://cysqlite.readthedocs.io/en/latest/>`__
    for the driver. Supports all of above and additionally table-valued
    functions, commit/rollback hooks, ``BLOB`` I/O, online backup, and more.
 
-:class:`APSWDatabase`
+:class:`APSWDatabase` (``playhouse.apsw_ext``)
    Extends :class:`SqliteDatabase` and uses `apsw <https://github.com/rogerbinns/apsw/>`__
    for the driver. APSW is a thin C-level driver that exposes the full range of
    SQLite functionality.
+
+:class:`SqlCipherDatabase` (``playhouse.sqlcipher_ext``)
+   Extends :class:`SqliteDatabase` and uses `sqlcipher3 <https://github.com/coleifer/sqlcipher3>`__
+   for the driver. SQLCipher provides transparent full-database encryption
+   using 256-bit AES, ensuring data on-disk is secure.
+
+:class:`SqliteQueueDatabase` (``playhouse.sqliteq``)
+   Extends :class:`SqliteDatabase` to provide a SQLite database implementation
+   that sends all write operations to a dedicated writer thread. This
+   implementation is useful when using Sqlite in multi-threaded environments
+   with frequent writes.
 
 All SQLite field types, FTS models and JSON utilities described in this document
 can be used with these three classes.
