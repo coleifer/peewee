@@ -3587,6 +3587,11 @@ class SqliteDatabase(Database):
 
     def __init__(self, database, pragmas=None, regexp_function=False,
                  rank_functions=False, *args, **kwargs):
+        isolation = kwargs.pop('isolation_level', None)
+        if isolation is not None:
+            raise ImproperlyConfigured('isolation_level must be None when '
+                                       'using peewee.')
+
         self._pragmas = pragmas or ()
         super(SqliteDatabase, self).__init__(database, *args, **kwargs)
         self._aggregates = {}

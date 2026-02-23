@@ -382,7 +382,7 @@ Generating models from an existing database
 The :ref:`pwiz` command-line tool introspects an existing database and emits
 Python model definitions:
 
-.. code-block:: console
+.. code-block:: shell
 
    python -m pwiz -e postgresql my_database > models.py
    python -m pwiz -e sqlite my_app.db > models.py

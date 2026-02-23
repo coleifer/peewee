@@ -26,7 +26,7 @@ Installation
 Requires Python 3.8 or newer, plus ``greenlet`` and an async-compatible
 database driver:
 
-.. code-block:: console
+.. code-block:: shell
 
    pip install peewee greenlet
 

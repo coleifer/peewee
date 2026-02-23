@@ -469,7 +469,7 @@ pwiz — Model Generator
 ready-to-use Peewee model code. If you have an existing database, running
 ``pwiz`` saves significant time generating the initial model definitions.
 
-.. code-block:: console
+.. code-block:: shell
 
    # Introspect a PostgreSQL database and write models to a file:
    python -m pwiz -e postgresql -u postgres my_db > models.py

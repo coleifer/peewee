@@ -89,15 +89,9 @@ Pragma                  Recommended value   Effect
 ``foreign_keys``        ``1``               Enforce ``FOREIGN KEY`` constraints.
 ======================= =================== ================================================
 
-.. warning::
-   Do not set the ``isolation_level`` property directly on the underlying
-   ``sqlite3.Connection`` object. Peewee requires the driver to run in
-   autocommit mode and manages transactions itself. Changing ``isolation_level``
-   will break transaction handling.
-
 .. seealso::
-   For SQLite-specific extensions (JSON, full-text search), see
-   :ref:`sqlite_ext`.
+   For SQLite-specific features and extensions (JSON, full-text search), see
+   :ref:`sqlite`.
 
 Using Postgresql
 ----------------
@@ -150,8 +144,8 @@ The isolation level can be set at initialization time:
                            isolation_level=IsolationLevel.SERIALIZABLE)
 
 .. seealso::
-   For PostgreSQL-specific extensions (arrays, JSONB, full-text search), see
-   :ref:`postgres_ext`.
+   For PostgreSQL-specific functionality and extensions (arrays, JSONB,
+   full-text search), see :ref:`postgresql`.
 
 Using MySQL / MariaDB
 ---------------------
@@ -194,6 +188,9 @@ Alternate drivers are available for both databases:
 
 * :class:`MySQLConnectorDatabase` - uses ``mysql-connector-python``.
 * :class:`MariaDBConnectorDatabase` - uses ``mariadb-connector-python``.
+
+.. seealso::
+   For MySQL-specific functionality and extensions, see :ref:`mysql`.
 
 Connection Parameters
 ---------------------
@@ -550,7 +547,6 @@ Available pooled classes:
 * :class:`PooledMySQLDatabase`
 * :class:`PooledSqliteDatabase`
 * :class:`PooledPostgresqlExtDatabase`
-* :class:`PooledSqliteExtDatabase`
 * :class:`PooledCySqliteDatabase`
 
 When using a connection pool, :meth:`~Database.connect` and :meth:`~Database.close`
@@ -678,8 +674,9 @@ Example test-case setup:
 It is recommended to test using the same database backend used in production,
 so as to avoid any potential compatibility issues.
 
-For more examples of how to run tests using Peewee, check out Peewee's own
-`test-suite <https://github.com/coleifer/peewee/tree/master/tests>`__.
+.. seealso::
+   * :ref:`test_utils`
+   * Peewee's `test-suite <https://github.com/coleifer/peewee/tree/master/tests>`__
 
 Adding a Custom Database Driver
 ---------------------------------
