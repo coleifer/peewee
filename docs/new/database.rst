@@ -70,7 +70,34 @@ After the database filename specify pragmas or other `sqlite3 parameters <https:
        username = TextField()
        ...
 
-.. seealso:: :ref:`advanced-sqlite`
+SQLite-specific options are set via `pragmas <https://www.sqlite.org/pragma.html>`__.
+The following settings are recommended for most applications:
+
+.. code-block:: python
+
+   db = SqliteDatabase('my_app.db', pragmas={
+       'journal_mode': 'wal',  # Allow readers while writer active.
+       'cache_size': -64000,  # 64 MB page cache.
+       'foreign_keys': 1,  # Enforce FK constraints.
+   })
+
+======================= =================== ================================================
+Pragma                  Recommended value   Effect
+======================= =================== ================================================
+``journal_mode``        ``wal``             Allow concurrent readers and one writer.
+``cache_size``          Negative KiB value  E.g. ``-64000`` = 64 MB.
+``foreign_keys``        ``1``               Enforce ``FOREIGN KEY`` constraints.
+======================= =================== ================================================
+
+.. warning::
+   Do not set the ``isolation_level`` property directly on the underlying
+   ``sqlite3.Connection`` object. Peewee requires the driver to run in
+   autocommit mode and manages transactions itself. Changing ``isolation_level``
+   will break transaction handling.
+
+.. seealso::
+   For SQLite-specific extensions (JSON, full-text search), see
+   :ref:`sqlite_ext`.
 
 Using Postgresql
 ----------------
@@ -79,11 +106,11 @@ To use Peewee with Postgresql install ``psycopg2`` or ``psycopg3``:
 
 .. code-block:: shell
 
-   $ pip install "psycopg2-binary"  # Psycopg2.
+   pip install "psycopg2-binary"  # Psycopg2.
 
-   $ pip install "psycopg[binary]"  # Psycopg3.
+   pip install "psycopg[binary]"  # Psycopg3.
 
-To connect to a Postgresql database, use :py:class:`PostgresqlDatabase`.
+To connect to a Postgresql database, use :class:`PostgresqlDatabase`.
 The first parameter is always the name of the database.
 
 After the database name specify additional `psycopg2 <https://www.psycopg.org/docs/module.html#psycopg2.connect>`__
@@ -95,19 +122,36 @@ connection parameters:
    db = PostgresqlDatabase(
        'my_database',
        user='postgres',
+       password='secret',
        host='10.8.0.1',
        port=5432)
 
    class BaseModel(Model):
        """A base model that will use our Postgresql database"""
        class Meta:
-           database = psql_db
+           database = db
 
    class User(BaseModel):
        username = CharField()
        ...
 
-.. seealso:: :ref:`advanced-postgresql`
+The isolation level can be set at initialization time:
+
+.. code-block:: python
+
+   # psycopg2
+   from psycopg2.extensions import ISOLATION_LEVEL_SERIALIZABLE
+   db = PostgresqlDatabase('my_app', user='postgres',
+                           isolation_level=ISOLATION_LEVEL_SERIALIZABLE)
+
+   # psycopg3
+   from psycopg import IsolationLevel
+   db = PostgresqlDatabase('my_app', user='postgres',
+                           isolation_level=IsolationLevel.SERIALIZABLE)
+
+.. seealso::
+   For PostgreSQL-specific extensions (arrays, JSONB, full-text search), see
+   :ref:`postgres_ext`.
 
 Using MySQL / MariaDB
 ---------------------
@@ -116,9 +160,9 @@ To use Peewee with MySQL or MariaDB install ``pymysql``:
 
 .. code-block:: shell
 
-   $ pip install pymysql
+   pip install pymysql
 
-To connect to a MySQL or MariaDB database, use :py:class:`MySQLDatabase`.
+To connect to a MySQL or MariaDB database, use :class:`MySQLDatabase`.
 The first parameter is always the name of the database.
 
 After the database name specify additional `pymysql Connection parameters
@@ -141,7 +185,15 @@ After the database name specify additional `pymysql Connection parameters
        username = CharField()
        # ...
 
-.. seealso:: :ref:`advanced-mysql`
+If MySQL drops idle connections (``Error 2006: MySQL server has gone away``),
+the solution is explicit connection management: open a connection at the start
+of each unit of work and close it when finished. See :ref:`connection-lifecycle`
+and :ref:`framework-integration`.
+
+Alternate drivers are available for both databases:
+
+* :class:`MySQLConnectorDatabase` - uses ``mysql-connector-python``.
+* :class:`MariaDBConnectorDatabase` - uses ``mariadb-connector-python``.
 
 Connection Parameters
 ---------------------
@@ -177,7 +229,6 @@ Consult your database driver's documentation for the available parameters:
   or `psycopg3 <https://www.psycopg.org/psycopg3/docs/api/module.html#psycopg.connect>`__
 * MySQL: `pymysql <https://github.com/PyMySQL/PyMySQL/blob/f08f01fe8a59e8acfb5f5add4a8fe874bec2a196/pymysql/connections.py#L494-L513>`__
 * SQLite: `sqlite3 <https://docs.python.org/3/library/sqlite3.html#sqlite3.connect>`__
-
 
 Initializing the Database
 -------------------------
@@ -337,23 +388,21 @@ To open a connection to a database, use the :meth:`Database.connect` method:
 .. code-block:: pycon
    :emphasize-lines: 2
 
-   >>> db = SqliteDatabase(':memory:')  # In-memory SQLite database.
-   >>> db.connect()
-   True
+   db = SqliteDatabase(':memory:')  # In-memory SQLite database.
+   db.connect()
+   # ... do work ...
+   db.close()
+
+If you call ``connect()`` on an already-open database, an :exc:`OperationalError`
+is raised. Pass ``reuse_if_open=True`` to suppress it:
+
+.. code-block:: python
+
+   db.connect(reuse_if_open=True)
 
 .. tip::
    Connections are stored in a thread-local by default. This enables Peewee to
-   safely be used in multi-threaded applications, or when using gevent.
-
-Calling ``connect()`` on an already-open database raises :class:`OperationalError`.
-To prevent this exception from being raised, pass ``reuse_if_open=True``:
-
-.. code-block:: pycon
-
-   >>> db.connect()
-   True
-   >>> db.connect(reuse_if_open=True)
-   False
+   safely be used in multi-threaded applications or when using gevent.
 
 To close a connection, use the :meth:`Database.close` method:
 
@@ -382,6 +431,37 @@ method:
    >>> db.is_closed()
    True
 
+Context managers
+^^^^^^^^^^^^^^^^
+
+The database object can be used as a context manager. The connection is opened
+on entry and closed on exit; a transaction wraps the block:
+
+.. code-block:: python
+
+   with db:
+       User.create(username='charlie')
+       # Transaction is committed when the block exits normally,
+       # rolled back if an exception is raised.
+
+To manage the connection lifetime without an implicit transaction, use
+:meth:`~Database.connection_context`:
+
+.. code-block:: python
+
+   with db.connection_context():
+       # Connection is open; no implicit transaction.
+       results = User.select()
+
+``connection_context()`` can also decorate a function:
+
+.. code-block:: python
+
+   @db.connection_context()
+   def load_fixtures():
+       db.create_tables([User, Tweet])
+       import_data()
+
 Using autoconnect
 ^^^^^^^^^^^^^^^^^
 
@@ -404,53 +484,9 @@ Thread Safety
 Database connections and associated transactions are thread-safe.
 
 Peewee keeps track of the connection state using thread-local storage, making
-the Peewee :py:class:`Database` object safe to use with multiple threads. Each
+the Peewee :class:`Database` object safe to use with multiple threads. Each
 thread will have it's own connection, and as a result any given thread will
 only have a single connection open at a given time.
-
-Context managers
-^^^^^^^^^^^^^^^^
-
-The database object can be used as a context-manager, which opens a connection
-for the duration of the wrapped block of code. Additionally, a transaction is
-opened at the start of the wrapped block and committed before the connection is
-closed (unless an error occurs, in which case the transaction is rolled back).
-
-.. code-block:: pycon
-
-   >>> db.is_closed()
-   True
-
-   >>> with db:
-   ...     print(db.is_closed())  # db is open and in a transaction.
-   ...
-   False
-
-   >>> db.is_closed()  # db is closed, transaction is committed.
-   True
-
-If you want to manage transactions separately, you can use the
-:meth:`Database.connection_context` context manager instead:
-
-.. code-block:: pycon
-
-   >>> with db.connection_context():
-   ...     # db is open.
-   ...     pass
-   ...
-   >>> db.is_closed()  # db connection is closed.
-   True
-
-The ``connection_context()`` method can also be used as a decorator:
-
-.. code-block:: python
-
-   @db.connection_context()
-   def prepare_database():
-       # DB connection will be managed by the decorator, which opens
-       # a connection, calls function, and closes upon returning.
-       db.create_tables(MODELS)  # Create schema.
-       load_fixture_data(db)
 
 DB-API Connection Object
 ^^^^^^^^^^^^^^^^^^^^^^^^
@@ -464,8 +500,44 @@ one exists, otherwise it will open a new connection.
    >>> db.connection()
    <sqlite3.Connection object at 0x7f94e9362f10>
 
-Executing Queries
------------------
+.. _connection-pooling:
+
+Connection Pooling
+------------------
+
+For web applications that handle many concurrent requests, opening and closing
+a database connection on every request adds latency. A connection pool keeps a
+set of connections open and lends them out as needed.
+
+Pooled database classes are available in :ref:`playhouse.pool <pool>`:
+
+.. code-block:: python
+
+   from playhouse.pool import PooledPostgresqlDatabase
+
+   db = PooledPostgresqlDatabase(
+       'my_app',
+       user='postgres',
+       max_connections=20,
+       stale_timeout=300,   # Recycle connections idle for 5 minutes.
+   )
+
+Available pooled classes:
+
+* :class:`PooledPostgresqlDatabase`
+* :class:`PooledMySQLDatabase`
+* :class:`PooledSqliteDatabase`
+* :class:`PooledPostgresqlExtDatabase`
+* :class:`PooledSqliteExtDatabase`
+* :class:`PooledCySqliteDatabase`
+
+When using a connection pool, :meth:`~Database.connect` and :meth:`~Database.close`
+do not open and close real connections - they acquire and release connections
+from the pool. It is therefore essential to call both explicitly (or use a
+context manager) so connections are returned to the pool for re-use.
+
+Executing SQL
+-------------
 
 SQL queries will typically be executed by calling ``execute()`` on a query
 constructed using the query-builder APIs (or by simply iterating over a query
@@ -508,3 +580,52 @@ from peewee:
 * ``ProgrammingError``
 
 .. note:: All of these error classes extend ``PeeweeException``.
+
+Logging Queries
+---------------
+
+Peewee logs every query to the ``peewee`` namespace at ``DEBUG`` level using
+the standard library ``logging`` module:
+
+.. code-block:: python
+
+   import logging
+   logging.getLogger('peewee').addHandler(logging.StreamHandler())
+   logging.getLogger('peewee').setLevel(logging.DEBUG)
+
+This is the simplest way to verify what queries are being issued during
+development.
+
+Adding a Custom Database Driver
+---------------------------------
+
+If your database driver conforms to DB-API 2.0, adding Peewee support requires
+subclassing :class:`Database` and overriding ``_connect``, which must return
+a connection in autocommit mode:
+
+.. code-block:: python
+
+   from peewee import Database
+   import foodb
+
+   class FooDatabase(Database):
+       def _connect(self):
+           return foodb.connect(self.database, autocommit=True,
+                                **self.connect_params)
+
+       def get_tables(self):
+           res = self.execute_sql('SHOW TABLES;')
+           return [r[0] for r in res.fetchall()]
+
+The minimum Peewee relies on from the driver is: ``Connection.commit``,
+``Connection.rollback``, ``Connection.execute``, ``Cursor.description``, and
+``Cursor.fetchone``. Everything else can be incrementally added.
+
+Other integration points on :class:`Database`:
+
+* ``param`` / ``quote`` — parameter placeholder and quoting characters.
+* ``field_types`` — mapping from Peewee type labels to vendor column types.
+* ``operations`` — mapping from operations such as ``ILIKE`` to vendor SQL.
+
+Refer to the :class:`Database` API reference or the `Peewee source
+<https://github.com/coleifer/peewee/blob/master/peewee.py>`_ for details.
