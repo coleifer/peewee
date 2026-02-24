@@ -384,6 +384,7 @@ class BaseFTSModel(VirtualModel):
         content = options.get('content')
         prefix = options.get('prefix')
         tokenize = options.get('tokenize')
+        content_rowid = options.get('content_rowid')
 
         if isinstance(content, basestring) and content == '':
             # Special-case content-less full-text search tables.
@@ -392,6 +393,9 @@ class BaseFTSModel(VirtualModel):
             # Special-case to ensure fields are fully-qualified.
             options['content'] = Entity(content.model._meta.table_name,
                                         content.column_name)
+
+        if content_rowid is not None:
+            options['content_rowid'] = content_rowid
 
         if prefix:
             if isinstance(prefix, (list, tuple)):
