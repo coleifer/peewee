@@ -390,13 +390,22 @@ class TestArrayField(ModelTestCase):
         row = AM.select(T[1].alias('arrtags')).dicts().get()
         self.assertEqual(row['arrtags'], 'beta')
 
+        row = AM.select(T[2:3].alias('foo')).dicts().get()
+        self.assertEqual(row['foo'], ['gamma'])
+
+        row = AM.select(T[:2].alias('foo')).dicts().get()
+        self.assertEqual(row['foo'], ['alpha', 'beta'])
+
+        row = AM.select(T[2:].alias('foo')).dicts().get()
+        self.assertEqual(row['foo'], ['gamma', 'delta'])
+
         row = AM.select(T[2:4].alias('foo')).dicts().get()
         self.assertEqual(row['foo'], ['gamma', 'delta'])
 
         row = AM.select(I[1][1].alias('ints')).dicts().get()
         self.assertEqual(row['ints'], 4)
 
-        row = AM.select(I[1:2][0].alias('ints')).dicts().get()
+        row = AM.select(I[1:3][0].alias('ints')).dicts().get()
         self.assertEqual(row['ints'], [[3], [5]])
 
     @requires_models(DecimalArray)

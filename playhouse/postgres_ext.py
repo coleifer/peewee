@@ -81,7 +81,8 @@ class ObjectSlice(_LookupNode):
     @classmethod
     def create(cls, node, value):
         if isinstance(value, slice):
-            parts = [value.start or 0, value.stop or 0]
+            stop = value.stop - 1 if value.stop is not None else None
+            parts = [value.start or 0, stop]
         elif isinstance(value, int):
             parts = [value]
         elif isinstance(value, Node):
@@ -96,7 +97,8 @@ class ObjectSlice(_LookupNode):
         if isinstance(self.parts, Node):
             ctx.literal('[').sql(self.parts).literal(']')
         else:
-            ctx.literal('[%s]' % ':'.join(str(p + 1) for p in self.parts))
+            ctx.literal('[%s]' % ':'.join([str(p + 1) if p is not None else ''
+                                           for p in self.parts]))
         return ctx
 
     def __getitem__(self, value):
@@ -222,7 +224,9 @@ class HStoreField(IndexedFieldMixin, Field):
     def defined(self, key):
         return fn.defined(self, key)
 
-    def update(self, **data):
+    def update(self, __data=None, **data):
+        if __data is not None:
+            data.update(__data)
         return Expression(self, HUPDATE, data)
 
     def delete(self, *keys):
@@ -285,7 +289,7 @@ class _JsonLookupBase(_LookupNode):
         return Expression(self.as_json(True), JSONB_CONTAINS_KEY, key)
 
     def path(self, *keys):
-        return JsonPath(self.as_json(True), keys)
+        return JsonPath(self.as_json(True), keys, as_json=True)
 
 
 class JsonLookup(_JsonLookupBase):
@@ -340,7 +344,7 @@ class JSONField(FieldDatabaseHook, Field):
         return JsonLookup(self, [value])
 
     def path(self, *keys):
-        return JsonPath(self, keys)
+        return JsonPath(self, keys, as_json=True)
 
     def concat(self, value):
         if not isinstance(value, Node):
