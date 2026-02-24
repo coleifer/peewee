@@ -1,29 +1,31 @@
 .. _playhouse:
 
-Playhouse
-=========
-
 The ``playhouse`` package bundles optional extensions that extend Peewee's
 core capabilities. All modules live under the ``playhouse`` namespace and are
 imported separately so that the core library stays lean.
 
 Extensions are grouped into five areas:
 
-**SQLite extensions** - features that require ``SqliteExtDatabase`` or the
-``cysqlite`` driver:
+**SQLite extensions**
 
 .. toctree::
    :maxdepth: 1
 
-   sqlite_ext
+   sqlite
 
-**PostgreSQL extensions** - field types and features that require
-``PostgresqlExtDatabase``:
+**PostgreSQL extensions**
 
 .. toctree::
    :maxdepth: 1
 
-   postgres_ext
+   postgres
+
+**MySQL extensions**
+
+.. toctree::
+   :maxdepth: 1
+
+   mysql
 
 **Database tooling** - connection management, schema migrations, code
 generation, and testing:

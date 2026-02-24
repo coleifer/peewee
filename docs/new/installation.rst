@@ -50,29 +50,29 @@ following drivers are supported out of the box:
 +-----------------------+------------------------+--------------------------------------------+
 | Database              | Driver                 | Implementation                             |
 +=======================+========================+============================================+
-| **Sqlite**            | ``sqlite3``            | :class:`SqliteDatabase`                 |
+| **Sqlite**            | ``sqlite3``            | :class:`SqliteDatabase`                    |
 +-----------------------+------------------------+--------------------------------------------+
-| **Postgres**          | ``psycopg3``           | :class:`PostgresqlDatabase`             |
+| **Postgres**          | ``psycopg3``           | :class:`PostgresqlDatabase`                |
 +-----------------------+------------------------+--------------------------------------------+
-| **Postgres**          | ``psycopg2``           | :class:`PostgresqlDatabase`             |
+| **Postgres**          | ``psycopg2``           | :class:`PostgresqlDatabase`                |
 +-----------------------+------------------------+--------------------------------------------+
-| **MySQL**             | ``pymysql``            | :class:`MySQLDatabase`                  |
+| **MySQL**             | ``pymysql``            | :class:`MySQLDatabase`                     |
 +-----------------------+------------------------+--------------------------------------------+
-| Sqlite (async)        | ``aiosqlite``          | :class:`AsyncSqliteDatabase`            |
+| Sqlite (async)        | ``aiosqlite``          | :class:`AsyncSqliteDatabase`               |
 +-----------------------+------------------------+--------------------------------------------+
-| Postgres (async)      | ``asyncpg``            | :class:`AsyncPostgresqlDatabase`        |
+| Postgres (async)      | ``asyncpg``            | :class:`AsyncPostgresqlDatabase`           |
 +-----------------------+------------------------+--------------------------------------------+
-| MySQL (async)         | ``aiomysql``           | :class:`AsyncMySQLDatabase`             |
+| MySQL (async)         | ``aiomysql``           | :class:`AsyncMySQLDatabase`                |
 +-----------------------+------------------------+--------------------------------------------+
-| Sqlite (alternate)    | ``cysqlite``           | :class:`CySqliteDatabase`               |
+| Sqlite (alternate)    | ``cysqlite``           | :class:`CySqliteDatabase`                  |
 +-----------------------+------------------------+--------------------------------------------+
-| Sqlite (alternate)    | ``apsw``               | :class:`APSWDatabase`                   |
+| Sqlite (alternate)    | ``apsw``               | :class:`APSWDatabase`                      |
 +-----------------------+------------------------+--------------------------------------------+
-| SqlCipher             | ``sqlcipher3``         | :class:`SqlCipherDatabase`              |
+| SqlCipher             | ``sqlcipher3``         | :class:`SqlCipherDatabase`                 |
 +-----------------------+------------------------+--------------------------------------------+
-| MySQL (alternate)     | ``mysql-connector``    | :class:`MySQLConnectorDatabase`         |
+| MySQL (alternate)     | ``mysql-connector``    | :class:`MySQLConnectorDatabase`            |
 +-----------------------+------------------------+--------------------------------------------+
-| MariaDB (alternate)   | ``mariadb-connector``  | :class:`MariaDBConnectorDatabase`       |
+| MariaDB (alternate)   | ``mariadb-connector``  | :class:`MariaDBConnectorDatabase`          |
 +-----------------------+------------------------+--------------------------------------------+
 
 The three bolded rows cover the majority of deployments. All others are

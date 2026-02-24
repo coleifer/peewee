@@ -54,7 +54,9 @@ Contents:
    new/interactive
    new/query_builder
    new/api
-   new/playhouse/index
+   new/sqlite
+   new/postgres
+   new/mysql
    new/query_examples
    new/contributing
 

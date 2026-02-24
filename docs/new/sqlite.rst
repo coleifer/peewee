@@ -687,6 +687,11 @@ Usage:
            blob.seek(0)
            image_data = blob.read(img_size)
 
+
+.. class:: PooledCySqliteDatabase(database, **kwargs)
+
+   Connection-pooling variant of :class:`CySqliteDatabase`.
+
 .. _apsw:
 
 APSW

@@ -51,6 +51,18 @@ PostgresqlExtDatabase
 
    When using ``server_side_cursors`` be sure to wrap your queries with :func:`ServerSide`.
 
+.. class:: PooledPostgresqlExtDatabase(database, **kwargs)
+
+   Connection-pooling variant of :class:`PostgresqlExtDatabase`.
+
+.. class:: Psycopg3Database(database, **kwargs)
+
+   Same as :class:`PostgresqlExtDatabase` but specifies ``prefer_psycopg3=True``.
+
+.. class:: PooledPsycopg3Database(database, **kwargs)
+
+   Connection-pooling variant of :class:`Psycopg3Database`.
+
 .. _postgres-json:
 
 JSON Support
@@ -904,9 +916,11 @@ CRDB API
 CRDB-specific field types:
 
 .. class:: UUIDKeyField()
+   :noindex:
 
    UUID primary key auto-populated with CRDB's ``gen_random_uuid()``.
 
 .. class:: RowIDField()
+   :noindex:
 
    Integer primary key auto-populated with CRDB's ``unique_rowid()``.

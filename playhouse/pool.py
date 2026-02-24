@@ -1,36 +1,3 @@
-"""
-Lightweight connection pooling for peewee.
-
-In a multi-threaded application, up to `max_connections` will be opened. Each
-thread (or, if using gevent, greenlet) will have it's own connection.
-
-In a single-threaded application, only one connection will be created. It will
-be continually recycled until either it exceeds the stale timeout or is closed
-explicitly (using `.manual_close()`).
-
-By default, all your application needs to do is ensure that connections are
-closed when you are finished with them, and they will be returned to the pool.
-For web applications, this typically means that at the beginning of a request,
-you will open a connection, and when you return a response, you will close the
-connection.
-
-Simple Postgres pool example code:
-
-    # Use the special postgresql extensions.
-    from playhouse.pool import PooledPostgresqlExtDatabase
-
-    db = PooledPostgresqlExtDatabase(
-        'my_app',
-        max_connections=32,
-        stale_timeout=300,  # 5 minutes.
-        user='postgres')
-
-    class BaseModel(Model):
-        class Meta:
-            database = db
-
-That's it!
-"""
 import functools
 import heapq
 import logging
@@ -253,7 +220,7 @@ class PooledDatabase(object):
         self._in_use = {}
 
 
-class PooledMySQLDatabase(PooledDatabase, MySQLDatabase):
+class _PooledMySQLDatabase(PooledDatabase):
     def _is_closed(self, conn):
         if self.server_version[0] == 8:
             args = ()
@@ -265,6 +232,9 @@ class PooledMySQLDatabase(PooledDatabase, MySQLDatabase):
             return True
         else:
             return False
+
+class PooledMySQLDatabase(_PooledMySQLDatabase, MySQLDatabase):
+    pass
 
 
 class _PooledPostgresqlDatabase(PooledDatabase):
@@ -279,19 +249,6 @@ class _PooledPostgresqlDatabase(PooledDatabase):
 class PooledPostgresqlDatabase(_PooledPostgresqlDatabase, PostgresqlDatabase):
     pass
 
-try:
-    from playhouse.postgres_ext import PostgresqlExtDatabase
-    from playhouse.postgres_ext import Psycopg3Database
-
-    class PooledPostgresqlExtDatabase(_PooledPostgresqlDatabase, PostgresqlExtDatabase):
-        pass
-
-    class PooledPsycopg3Database(PooledDatabase, Psycopg3Database):
-        pass
-except ImportError:
-    PooledPostgresqlExtDatabase = None
-    PooledPsycopg3Database = None
-
 
 class _PooledSqliteDatabase(PooledDatabase):
     def _is_closed(self, conn):
@@ -304,11 +261,3 @@ class _PooledSqliteDatabase(PooledDatabase):
 
 class PooledSqliteDatabase(_PooledSqliteDatabase, SqliteDatabase):
     pass
-
-try:
-    from playhouse.cysqlite_ext import CySqliteDatabase
-
-    class PooledCySqliteDatabase(_PooledSqliteDatabase, CySqliteDatabase):
-        pass
-except ImportError:
-    PooledCySqliteDatabase = None

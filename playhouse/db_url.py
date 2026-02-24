@@ -4,39 +4,18 @@ except ImportError:
     from urllib.parse import parse_qsl, unquote, urlparse
 
 from peewee import *
-from playhouse.cockroachdb import CockroachDatabase
-from playhouse.cockroachdb import PooledCockroachDatabase
-from playhouse.pool import PooledCySqliteDatabase
 from playhouse.pool import PooledMySQLDatabase
 from playhouse.pool import PooledPostgresqlDatabase
-from playhouse.pool import PooledPostgresqlExtDatabase
-from playhouse.pool import PooledPsycopg3Database
 from playhouse.pool import PooledSqliteDatabase
-from playhouse.postgres_ext import PostgresqlExtDatabase
-from playhouse.postgres_ext import Psycopg3Database
-try:
-    from playhouse.cysqlite_ext import CySqliteDatabase
-except ImportError:
-    CySqliteDatabase = None
 
 
 schemes = {
-    'cockroachdb': CockroachDatabase,
-    'cockroachdb+pool': PooledCockroachDatabase,
-    'crdb': CockroachDatabase,
-    'crdb+pool': PooledCockroachDatabase,
     'mysql': MySQLDatabase,
     'mysql+pool': PooledMySQLDatabase,
     'postgres': PostgresqlDatabase,
     'postgresql': PostgresqlDatabase,
     'postgres+pool': PooledPostgresqlDatabase,
     'postgresql+pool': PooledPostgresqlDatabase,
-    'postgresext': PostgresqlExtDatabase,
-    'postgresqlext': PostgresqlExtDatabase,
-    'postgresext+pool': PooledPostgresqlExtDatabase,
-    'postgresqlext+pool': PooledPostgresqlExtDatabase,
-    'psycopg3': Psycopg3Database,
-    'psycopg3+pool': PooledPsycopg3Database,
     'sqlite': SqliteDatabase,
     'sqlite+pool': PooledSqliteDatabase,
 }
@@ -115,27 +94,57 @@ def connect(url, unquote_password=False, unquote_user=False, **connect_params):
     return database_class(**connect_kwargs)
 
 # Conditionally register additional databases.
-try:
-    from playhouse.pool import PooledPostgresqlExtDatabase
-except ImportError:
-    pass
-else:
-    register_database(
-        PooledPostgresqlExtDatabase,
-        'postgresext+pool',
-        'postgresqlext+pool')
 
 try:
     from playhouse.apsw_ext import APSWDatabase
+    register_database(APSWDatabase, 'apsw')
 except ImportError:
     pass
-else:
-    register_database(APSWDatabase, 'apsw')
+
+try:
+    from playhouse.cockroachdb import CockroachDatabase
+    from playhouse.cockroachdb import PooledCockroachDatabase
+    register_database(CockroachDatabase, 'cockroachdb', 'crdb')
+    register_database(PooledCockroachDatabase, 'cockroachdb+pool', 'crdb+pool')
+except ImportError:
+    pass
 
 try:
     from playhouse.cysqlite_ext import CySqliteDatabase
-except ImportError:
-    pass
-else:
+    from playhouse.cysqlite_ext import PooledCySqliteDatabase
+
     register_database(CySqliteDatabase, 'cysqlite')
     register_database(PooledCySqliteDatabase, 'cysqlite+pool')
+except ImportError:
+    pass
+
+try:
+    from playhouse.mysql_ext import MariaDBConnectorDatabase
+    from playhouse.mysql_ext import MySQLConnectorDatabase
+    from playhouse.mysql_ext import PooledMariaDBConnectorDatabase
+    from playhouse.mysql_ext import PooledMySQLConnectorDatabase
+
+    register_database(MariaDBConnectorDatabase, 'mariadbconnector')
+    register_database(MySQLConnectorDatabase, 'mysqlconnector')
+    register_database(PooledMariaDBConnectorDatabase, 'mariadbconnector+pool')
+    register_database(PooledMySQLConnectorDatabase, 'mysqlconnector+pool')
+except ImportError:
+    pass
+
+try:
+    from playhouse.postgres_ext import PooledPostgresqlExtDatabase
+    from playhouse.postgres_ext import PooledPsycopg3Database
+    from playhouse.postgres_ext import PostgresqlExtDatabase
+    from playhouse.postgres_ext import Psycopg3Database
+
+    register_database(
+        PooledPostgresqlExtDatabase,
+        'postgresext+pool', 'postgresqlext+pool')
+    register_database(
+        PostgresqlExtDatabase,
+        'postgresext', 'postgresqlext')
+
+    register_database(PooledPsycopg3Database, 'psycopg3+pool')
+    register_database(Psycopg3Database, 'psycopg3')
+except ImportError:
+    pass
