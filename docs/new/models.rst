@@ -275,7 +275,7 @@ could declare the field with a default value:
        created = DateTimeField(default=datetime.datetime.now)
 
 For ``read_count``, Peewee uses the literal value ``0``. For ``created``,
-Peewee calls ``datetime.datetime.now`` at the moment of instantiation —
+Peewee calls ``datetime.datetime.now`` at the moment of instantiation -
 note that the function itself is passed, not its return value.
 
 **Mutable defaults require a factory function.** If a default value is a mutable
@@ -1053,13 +1053,13 @@ Creating Tables
 ---------------
 
 Once models are defined, create their corresponding tables with
-:py:meth:`Database.create_tables`:
+:meth:`Database.create_tables`:
 
 .. code-block:: python
 
    db.create_tables([User, Tweet, Favorite])
 
-To create a single table, use :py:meth:`Model.create_table`:
+To create a single table, use :meth:`Model.create_table`:
 
 .. code-block:: python
 
@@ -1099,7 +1099,7 @@ back-reference is named *children*.
 .. attention:: Self-referential foreign-keys should always be ``null=True``.
 
 Querying self-referential structures typically requires a self-join. Use
-:py:meth:`Model.alias` to create a distinct reference to the same table:
+:meth:`Model.alias` to create a distinct reference to the same table:
 
 .. code-block:: python
 
@@ -1145,7 +1145,7 @@ One option is to simply use an :class:`IntegerField` to store the raw ID:
        username = CharField()
        favorite_tweet_id = IntegerField(null=True)
 
-By using :py:class:`DeferredForeignKey` we can get around the problem and still
+By using :class:`DeferredForeignKey` we can get around the problem and still
 use a foreign key field:
 
 .. code-block:: python

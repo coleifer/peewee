@@ -32,7 +32,7 @@ Our terminal session might look like this:
    >>> from playhouse.reflection import generate_models, print_model, print_table_sql
    >>>
 
-The :py:func:`generate_models` function will introspect the database and
+The :func:`generate_models` function will introspect the database and
 generate model classes for all the tables that are found. This is a handy way
 to get started and can save a lot of typing. The function returns a dictionary
 keyed by the table name, with the generated model as the corresponding value:
@@ -49,7 +49,7 @@ keyed by the table name, with the generated model as the corresponding value:
    <Model: event>
 
 To take a look at the model definition, which lists the model's fields and
-data-type, we can use the :py:func:`print_model` function:
+data-type, we can use the :func:`print_model` function:
 
 .. code-block:: pycon
 
@@ -113,14 +113,14 @@ constraints, etc.
 
 The APIs discussed in this section:
 
-* :py:func:`generate_models`
-* :py:func:`print_model`
-* :py:func:`print_table_sql`
+* :func:`generate_models`
+* :func:`print_model`
+* :func:`print_table_sql`
 
-More low-level APIs are also available on the :py:class:`Database` instance:
+More low-level APIs are also available on the :class:`Database` instance:
 
-* :py:meth:`Database.get_tables`
-* :py:meth:`Database.get_indexes`
-* :py:meth:`Database.get_columns` (for a given table)
-* :py:meth:`Database.get_primary_keys` (for a given table)
-* :py:meth:`Database.get_foreign_keys` (for a given table)
+* :meth:`Database.get_tables`
+* :meth:`Database.get_indexes`
+* :meth:`Database.get_columns` (for a given table)
+* :meth:`Database.get_primary_keys` (for a given table)
+* :meth:`Database.get_foreign_keys` (for a given table)

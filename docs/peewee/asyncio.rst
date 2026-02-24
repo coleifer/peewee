@@ -20,7 +20,7 @@ The Peewee asyncio implementation can be found in ``playhouse.pwasyncio``:
     from playhouse.pwasyncio import AsyncMySQLDatabase
     from playhouse.pwasyncio import AsyncSqliteDatabase
 
-The :py:meth:`~AsyncDatabaseMixin.run` method is the primary entry point for
+The :meth:`~AsyncDatabaseMixin.run` method is the primary entry point for
 async execution. It accepts a synchronous callable and arbitrary arguments.
 When the underlying database driver would block, control is yielded back to the
 asyncio event-loop.
@@ -76,7 +76,7 @@ available on the async ``Database`` classes:
 
     asyncio.run(demo())
 
-Here is the same example as above demonstrating how :py:meth:`~AsyncDatabaseMixin.run`
+Here is the same example as above demonstrating how :meth:`~AsyncDatabaseMixin.run`
 can be used to wrap synchronous ORM operations to be async:
 
 .. code-block:: python
@@ -150,9 +150,9 @@ Supported Backends
 ================  ============  ===================================
 Database          Driver        Database Class
 ================  ============  ===================================
-SQLite            aiosqlite     :py:class:`AsyncSqliteDatabase`
-MySQL / MariaDB   aiomysql      :py:class:`AsyncMySQLDatabase`
-PostgreSQL        asyncpg       :py:class:`AsyncPostgresqlDatabase`
+SQLite            aiosqlite     :class:`AsyncSqliteDatabase`
+MySQL / MariaDB   aiomysql      :class:`AsyncMySQLDatabase`
+PostgreSQL        asyncpg       :class:`AsyncPostgresqlDatabase`
 ================  ============  ===================================
 
 Overview
@@ -178,7 +178,7 @@ Models are defined as expected:
 Executing Queries
 -----------------
 
-Peewee queries must be executed using the database :py:meth:`~AsyncDatabaseMixin.run` method.
+Peewee queries must be executed using the database :meth:`~AsyncDatabaseMixin.run` method.
 
 .. code-block:: python
 
@@ -219,39 +219,39 @@ Peewee queries must be executed using the database :py:meth:`~AsyncDatabaseMixin
 
     asyncio.run(main())
 
-The :py:meth:`~AsyncDatabaseMixin.run` method ensures synchronous Peewee code
+The :meth:`~AsyncDatabaseMixin.run` method ensures synchronous Peewee code
 is executed safely inside the event loop. Any arbitrary code can be wrapped in
-a function and sent to the :py:meth:`~AsyncDatabaseMixin.run` method.
+a function and sent to the :meth:`~AsyncDatabaseMixin.run` method.
 
 .. _async-helpers:
 
 Helper Methods
 --------------
 
-The :py:class:`AsyncDatabaseMixin` provides a number of async/await-friendly
+The :class:`AsyncDatabaseMixin` provides a number of async/await-friendly
 helpers for common operations.
 
-The most general-purpose helper is the :py:meth:`AsyncDatabaseMixin.run`
+The most general-purpose helper is the :meth:`AsyncDatabaseMixin.run`
 method, which accepts a callable and arbitrary arguments, and runs it in an
 asynchronous context.
 
 Database connection can be opened and closed asynchronously using the
 following helpers:
 
-* :py:meth:`~AsyncDatabaseMixin.aconnect` - acquire a connection from the pool for the current task.
-* :py:meth:`~AsyncDatabaseMixin.aclose` - release the connection back to the pool.
-* :py:meth:`~AsyncDatabaseMixin.close_pool` - close the connection pool.
+* :meth:`~AsyncDatabaseMixin.aconnect` - acquire a connection from the pool for the current task.
+* :meth:`~AsyncDatabaseMixin.aclose` - release the connection back to the pool.
+* :meth:`~AsyncDatabaseMixin.close_pool` - close the connection pool.
 
 Several common query patterns are exposed as async helpers:
 
-* :py:meth:`~AsyncDatabaseMixin.atomic` - can be used as an async context manager for created arbitrarily nested transactions.
-* :py:meth:`~AsyncDatabaseMixin.get` - get a single model instance or result.
-* :py:meth:`~AsyncDatabaseMixin.list` - get the results of a query (0...many).
-* :py:meth:`~AsyncDatabaseMixin.scalar` - get a single, scalar value from a query.
-* :py:meth:`~AsyncDatabaseMixin.aexecute` - execute a Query object.
-* :py:meth:`~AsyncDatabaseMixin.aexecute_sql` - execute a SQL query.
-* :py:meth:`~AsyncDatabaseMixin.acreate_tables` - create one or more tables.
-* :py:meth:`~AsyncDatabaseMixin.adrop_tables` - drop one or more tables.
+* :meth:`~AsyncDatabaseMixin.atomic` - can be used as an async context manager for created arbitrarily nested transactions.
+* :meth:`~AsyncDatabaseMixin.get` - get a single model instance or result.
+* :meth:`~AsyncDatabaseMixin.list` - get the results of a query (0...many).
+* :meth:`~AsyncDatabaseMixin.scalar` - get a single, scalar value from a query.
+* :meth:`~AsyncDatabaseMixin.aexecute` - execute a Query object.
+* :meth:`~AsyncDatabaseMixin.aexecute_sql` - execute a SQL query.
+* :meth:`~AsyncDatabaseMixin.acreate_tables` - create one or more tables.
+* :meth:`~AsyncDatabaseMixin.adrop_tables` - drop one or more tables.
 
 .. code-block:: python
 
@@ -304,9 +304,9 @@ possible.
 Connections can be acquired and released from the pool using the following
 helpers:
 
-* :py:meth:`~AsyncDatabaseMixin.aconnect`
-* :py:meth:`~AsyncDatabaseMixin.aclose`
-* :py:meth:`~AsyncDatabaseMixin.close_pool` - close the pool and exit cleanly.
+* :meth:`~AsyncDatabaseMixin.aconnect`
+* :meth:`~AsyncDatabaseMixin.aclose`
+* :meth:`~AsyncDatabaseMixin.close_pool` - close the pool and exit cleanly.
 
 Alternatively, you can use the database class as a context manager:
 
@@ -381,7 +381,7 @@ resumed in order to yield to the asyncio event loop. Yielding is done by the
 ``await_()`` helper, which suspends the greenlet and passes control to the
 asyncio coroutine.
 
-Peewee wraps all this up in a general-purpose :py:meth:`AsyncDatabaseMixin.run`
+Peewee wraps all this up in a general-purpose :meth:`AsyncDatabaseMixin.run`
 method, which is the entrypoint for pretty much all async operations:
 
 .. code-block:: python
@@ -411,8 +411,8 @@ The basic flow goes something like this:
 8. We call ``fetchall()`` on the result cursor, which returns all the rows
    loaded during (5).
 
-If we try to run :py:meth:`~AsyncDatabaseMixin.execute_sql()` outside of the
-greenlet helper, Peewee will raise a :py:class:`MissingGreenletBridge` exception:
+If we try to run :meth:`~AsyncDatabaseMixin.execute_sql()` outside of the
+greenlet helper, Peewee will raise a :class:`MissingGreenletBridge` exception:
 
 .. code-block:: python
 
@@ -461,7 +461,7 @@ This fails because the relationship ``tweet.user`` was not explicitly fetched,
 so Peewee attempts to issue a ``SELECT`` query to get the related user. This
 fails because we are not operating inside the greenlet-bridged environment.
 
-One solution is to resolve foreign keys inside :py:meth:`~AsyncDatabaseMixin.run`:
+One solution is to resolve foreign keys inside :meth:`~AsyncDatabaseMixin.run`:
 
 .. code-block:: python
 
@@ -509,7 +509,7 @@ expand this section or work to find other solutions to the problems.
 API
 ---
 
-.. py:class:: AsyncDatabaseMixin(database, pool_size=10, pool_min_size=1, acquire_timeout=10, validate_conn_timeout=2, **kwargs)
+.. class:: AsyncDatabaseMixin(database, pool_size=10, pool_min_size=1, acquire_timeout=10, validate_conn_timeout=2, **kwargs)
 
     :param str database: Database name or filename for SQLite.
     :param int pool_size: Maximum size of the driver-managed connection pool
@@ -530,7 +530,7 @@ API
     acquired and released back to the pool when the task completes or the
     database context exits.
 
-    .. py:method:: run(fn, *args, **kwargs)
+    .. method:: run(fn, *args, **kwargs)
         :async:
 
         :param fn: A synchronous callable.
@@ -542,7 +542,7 @@ API
         This method is the primary entry point for executing Peewee ORM
         operations in an asyncio context.
 
-    .. py:method:: aconnect()
+    .. method:: aconnect()
         :async:
 
         :returns: A wrapped async connection.
@@ -550,30 +550,30 @@ API
         Establish a connection to the database for the currently-running asyncio
         task, if one is not already open.
 
-    .. py:method:: aclose()
+    .. method:: aclose()
         :async:
 
         Close and release the connection associated with the current asyncio
         task.
 
-    .. py:method:: close_pool()
+    .. method:: close_pool()
         :async:
 
         Close the underlying connection pool and release all active connections.
 
         This method should be called during application shutdown.
 
-    .. py:method:: __aenter__()
+    .. method:: __aenter__()
         :async:
 
         Enter an async database context, acquiring a connection.
 
-    .. py:method:: __aexit__(exc_type, exc, tb)
+    .. method:: __aexit__(exc_type, exc, tb)
         :async:
 
         Exit the async database context, releasing the connection.
 
-    .. py:method:: aexecute(query)
+    .. method:: aexecute(query)
         :async:
 
         :param Query query: a Select, Insert, Update or Delete query.
@@ -581,14 +581,14 @@ API
 
         Execute a query asynchronously.
 
-    .. py:method:: get(query)
+    .. method:: get(query)
         :async:
 
         :param Query query: a Select query.
 
         Execute a query and return a single model instance.
 
-    .. py:method:: list(query)
+    .. method:: list(query)
         :async:
 
         :param Query query: a Select query, or an Insert, Update or Delete
@@ -596,76 +596,76 @@ API
 
         Execute a query and return a list of results.
 
-    .. py:method:: scalar(query)
+    .. method:: scalar(query)
         :async:
 
         :param Query query: a Select query.
 
         Execute a query and return a scalar value.
 
-    .. py:method:: atomic()
+    .. method:: atomic()
 
-        :returns: An :py:class:`async_atomic` instance.
+        :returns: An :class:`async_atomic` instance.
 
         Return an asyncio-aware atomic transaction context manager.
         Supports use as a synchronous or async context manager.
 
-    .. py:method:: acreate_tables(models, **options)
+    .. method:: acreate_tables(models, **options)
         :async:
 
         Asynchronously create database tables.
 
-    .. py:method:: adrop_tables(models, **options)
+    .. method:: adrop_tables(models, **options)
         :async:
 
         Asynchronously drop database tables.
 
-    .. py:method:: aexecute_sql(sql, params=None)
+    .. method:: aexecute_sql(sql, params=None)
         :async:
 
         :param str sql: SQL query to execute.
         :param tuple params: Optional query parameters.
-        :returns: A :py:class:`CursorAdapter` instance.
+        :returns: A :class:`CursorAdapter` instance.
 
         Execute a SQL query asynchronously using the underlying async driver.
 
-    .. py:method:: execute_sql(sql, params=None)
+    .. method:: execute_sql(sql, params=None)
 
-        Synchronous wrapper around :py:meth:`aexecute_sql`.
+        Synchronous wrapper around :meth:`aexecute_sql`.
 
         This method may only be called from code executing inside
-        :py:meth:`~AsyncDatabaseMixin.run`.
+        :meth:`~AsyncDatabaseMixin.run`.
 
 
-.. py:class:: AsyncSqliteDatabase(database, **kwargs)
+.. class:: AsyncSqliteDatabase(database, **kwargs)
 
     Async SQLite database implementation.
 
     Uses ``aiosqlite`` and maintains a single shared connection. Pool-related
     configuration options are ignored.
 
-    Inherits from :py:class:`AsyncDatabaseMixin` and
-    :py:class:`peewee.SqliteDatabase`.
+    Inherits from :class:`AsyncDatabaseMixin` and
+    :class:`peewee.SqliteDatabase`.
 
-.. py:class:: AsyncMySQLDatabase(database, **kwargs)
+.. class:: AsyncMySQLDatabase(database, **kwargs)
 
     Async MySQL / MariaDB database implementation.
 
     Uses ``aiomysql`` and the driver's native connection pool.
 
-    Inherits from :py:class:`AsyncDatabaseMixin` and
-    :py:class:`peewee.MySQLDatabase`.
+    Inherits from :class:`AsyncDatabaseMixin` and
+    :class:`peewee.MySQLDatabase`.
 
-.. py:class:: AsyncPostgresqlDatabase(database, **kwargs)
+.. class:: AsyncPostgresqlDatabase(database, **kwargs)
 
     Async PostgreSQL database implementation.
 
     Uses ``asyncpg`` and the driver's native connection pool.
 
-    Inherits from :py:class:`AsyncDatabaseMixin` and
-    :py:class:`peewee.PostgresqlDatabase`.
+    Inherits from :class:`AsyncDatabaseMixin` and
+    :class:`peewee.PostgresqlDatabase`.
 
-.. py:class:: MissingGreenletBridge(RuntimeError)
+.. class:: MissingGreenletBridge(RuntimeError)
 
     Exception that is raised when Peewee attempts to run a blocking operation
     like ``execute_sql()`` outside a greenlet-spawn context. Generally

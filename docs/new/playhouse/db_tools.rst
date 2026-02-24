@@ -34,17 +34,17 @@ Common schemes:
 +------------------------+------------------------------------------+
 | Scheme                 | Database class                           |
 +========================+==========================================+
-| ``sqlite:///path``     | :py:class:`SqliteDatabase`               |
+| ``sqlite:///path``     | :class:`SqliteDatabase`               |
 +------------------------+------------------------------------------+
-| ``sqliteext:///path``  | :py:class:`SqliteExtDatabase`            |
+| ``sqliteext:///path``  | :class:`SqliteExtDatabase`            |
 +------------------------+------------------------------------------+
-| ``postgres://...``     | :py:class:`PostgresqlDatabase`           |
+| ``postgres://...``     | :class:`PostgresqlDatabase`           |
 +------------------------+------------------------------------------+
-| ``postgresext://...``  | :py:class:`PostgresqlExtDatabase`        |
+| ``postgresext://...``  | :class:`PostgresqlExtDatabase`        |
 +------------------------+------------------------------------------+
-| ``mysql://...``        | :py:class:`MySQLDatabase`                |
+| ``mysql://...``        | :class:`MySQLDatabase`                |
 +------------------------+------------------------------------------+
-| ``cockroachdb://...``  | :py:class:`CockroachDatabase`            |
+| ``cockroachdb://...``  | :class:`CockroachDatabase`            |
 +------------------------+------------------------------------------+
 
 Pass additional keyword arguments in the query string:
@@ -53,11 +53,11 @@ Pass additional keyword arguments in the query string:
 
    db = connect('postgres://user:pass@host/db?max_connections=20')
 
-.. py:function:: connect(url, **connect_kwargs)
+.. function:: connect(url, **connect_kwargs)
 
-   Parse ``url`` and return an appropriate :py:class:`Database` instance.
+   Parse ``url`` and return an appropriate :class:`Database` instance.
 
-.. py:function:: parse(url, unquote_password=False, unquote_user=False)
+.. function:: parse(url, unquote_password=False, unquote_user=False)
 
    Parse a URL and return a dictionary with ``database``, ``host``,
    ``port``, ``user``, and ``password`` keys plus any extra connect
@@ -70,10 +70,10 @@ Pass additional keyword arguments in the query string:
        params = parse('postgres://user:pass@host:5432/mydb')
        db = MyCustomDatabase(**params)
 
-.. py:function:: register_database(db_class, *names)
+.. function:: register_database(db_class, *names)
 
    Register a custom database class under one or more URL scheme names so
-   that :py:func:`connect` can instantiate it:
+   that :func:`connect` can instantiate it:
 
    .. code-block:: python
 
@@ -94,7 +94,7 @@ pool maintains up to ``max_connections`` open connections at any time.
 In single-threaded applications, a single connection is recycled.
 
 The application only needs to ensure that connections are *closed* when work
-is done — typically at the end of an HTTP request. Closing a pooled connection
+is done - typically at the end of an HTTP request. Closing a pooled connection
 returns it to the pool rather than actually disconnecting.
 
 .. code-block:: python
@@ -110,14 +110,14 @@ returns it to the pool rather than actually disconnecting.
 
 Available pooled classes:
 
-- :py:class:`PooledPostgresqlDatabase`
-- :py:class:`PooledPostgresqlExtDatabase`
-- :py:class:`PooledMySQLDatabase`
-- :py:class:`PooledSqliteDatabase`
-- :py:class:`PooledSqliteExtDatabase`
-- :py:class:`PooledCySqliteDatabase`
+- :class:`PooledPostgresqlDatabase`
+- :class:`PooledPostgresqlExtDatabase`
+- :class:`PooledMySQLDatabase`
+- :class:`PooledSqliteDatabase`
+- :class:`PooledSqliteExtDatabase`
+- :class:`PooledCySqliteDatabase`
 
-.. py:class:: PooledDatabase(database, max_connections=20, stale_timeout=None, timeout=None, **kwargs)
+.. class:: PooledDatabase(database, max_connections=20, stale_timeout=None, timeout=None, **kwargs)
 
    Mixin class mixed into the specific backend subclasses above.
 
@@ -129,28 +129,28 @@ Available pooled classes:
        ``0`` blocks indefinitely; ``None`` (default) raises immediately.
 
    .. note::
-       Stale connections are checked lazily — a connection is only actually
+       Stale connections are checked lazily - a connection is only actually
        closed when it would be reused.
 
    .. note::
        If the pool is exhausted and no ``timeout`` is configured, a
        ``ValueError`` is raised.
 
-   .. py:method:: manual_close()
+   .. method:: manual_close()
 
       Close the current connection permanently without returning it to the
       pool. Use this when a connection has entered a bad state.
 
-   .. py:method:: close_idle()
+   .. method:: close_idle()
 
       Close all pooled connections that are not currently in use.
 
-   .. py:method:: close_stale(age=600)
+   .. method:: close_stale(age=600)
 
       Close in-use connections that have exceeded ``age`` seconds.
       Use with caution.
 
-   .. py:method:: close_all()
+   .. method:: close_all()
 
       Close all connections including those currently in use.
       Use with caution.
@@ -322,7 +322,7 @@ Peewee appends by default):
 Migration API
 ^^^^^^^^^^^^^
 
-.. py:function:: migrate(*operations)
+.. function:: migrate(*operations)
 
    Execute one or more schema-altering operations atomically within the
    database driver. Pass ``migrate()`` the return values of
@@ -335,41 +335,41 @@ Migration API
            migrator.add_index('t', ('col',), False),
        )
 
-.. py:class:: SchemaMigrator(database)
+.. class:: SchemaMigrator(database)
 
    Base class; do not instantiate directly. Use the backend-specific
    subclass instead.
 
    All methods return an operation object to be passed to
-   :py:func:`migrate`.
+   :func:`migrate`.
 
-   .. py:method:: add_column(table, column_name, field)
-   .. py:method:: drop_column(table, column_name, cascade=True)
-   .. py:method:: rename_column(table, old_name, new_name)
-   .. py:method:: add_not_null(table, column)
-   .. py:method:: drop_not_null(table, column)
-   .. py:method:: add_column_default(table, column, default)
-   .. py:method:: drop_column_default(table, column)
-   .. py:method:: alter_column_type(table, column, field, cast=None)
-   .. py:method:: rename_table(old_name, new_name)
-   .. py:method:: add_index(table, columns, unique=False, using=None)
-   .. py:method:: drop_index(table, index_name)
-   .. py:method:: add_constraint(table, name, constraint)
-   .. py:method:: drop_constraint(table, name)
-   .. py:method:: add_unique(table, *column_names)
+   .. method:: add_column(table, column_name, field)
+   .. method:: drop_column(table, column_name, cascade=True)
+   .. method:: rename_column(table, old_name, new_name)
+   .. method:: add_not_null(table, column)
+   .. method:: drop_not_null(table, column)
+   .. method:: add_column_default(table, column, default)
+   .. method:: drop_column_default(table, column)
+   .. method:: alter_column_type(table, column, field, cast=None)
+   .. method:: rename_table(old_name, new_name)
+   .. method:: add_index(table, columns, unique=False, using=None)
+   .. method:: drop_index(table, index_name)
+   .. method:: add_constraint(table, name, constraint)
+   .. method:: drop_constraint(table, name)
+   .. method:: add_unique(table, *column_names)
 
-.. py:class:: PostgresqlMigrator(database)
+.. class:: PostgresqlMigrator(database)
 
-   .. py:method:: set_search_path(schema_name)
+   .. method:: set_search_path(schema_name)
 
       Set the Postgres search path for subsequent operations.
 
-.. py:class:: SqliteMigrator(database)
+.. class:: SqliteMigrator(database)
 
    SQLite-specific subclass. Does not support ``add_constraint``,
    ``drop_constraint``, or ``add_unique``.
 
-.. py:class:: MySQLMigrator(database)
+.. class:: MySQLMigrator(database)
 
    MySQL-specific subclass.
 
@@ -397,14 +397,14 @@ generates Peewee model classes from its schema. It is used internally by
    for user in User.select():
        print(user.name)
 
-.. py:function:: generate_models(database, schema=None, **options)
+.. function:: generate_models(database, schema=None, **options)
 
-   :param database: A :py:class:`Database` instance.
+   :param database: A :class:`Database` instance.
    :param str schema: Optional schema to introspect (PostgreSQL).
-   :param options: Forwarded to :py:meth:`Introspector.generate_models`.
+   :param options: Forwarded to :meth:`Introspector.generate_models`.
    :returns: ``dict`` mapping table names to model classes.
 
-.. py:function:: print_model(model)
+.. function:: print_model(model)
 
    Print a human-readable summary of a model's fields and indexes to
    stdout. Useful for interactive exploration:
@@ -420,7 +420,7 @@ generates Peewee model classes from its schema. It is used internally by
        index(es)
          email UNIQUE
 
-.. py:function:: print_table_sql(model)
+.. function:: print_table_sql(model)
 
    Print the ``CREATE TABLE`` SQL for a model class (without indexes or
    constraints):
@@ -435,11 +435,11 @@ generates Peewee model classes from its schema. It is used internally by
          FOREIGN KEY ("user_id") REFERENCES "user" ("id")
        )
 
-.. py:class:: Introspector(metadata, schema=None)
+.. class:: Introspector(metadata, schema=None)
 
-   .. py:classmethod:: from_database(database, schema=None)
+   .. classmethod:: from_database(database, schema=None)
 
-      Create an :py:class:`Introspector` from an open database connection.
+      Create an :class:`Introspector` from an open database connection.
 
       .. code-block:: python
 
@@ -448,7 +448,7 @@ generates Peewee model classes from its schema. It is used internally by
           User  = models['user']
           Tweet = models['tweet']
 
-   .. py:method:: generate_models(skip_invalid=False, table_names=None, literal_column_names=False, bare_fields=False, include_views=False)
+   .. method:: generate_models(skip_invalid=False, table_names=None, literal_column_names=False, bare_fields=False, include_views=False)
 
       :param bool skip_invalid: Skip tables whose names are not valid Python
           identifiers.
@@ -456,13 +456,13 @@ generates Peewee model classes from its schema. It is used internally by
       :param bool literal_column_names: Use the exact database column names
           as field names (rather than converting to Python naming conventions).
       :param bool bare_fields: Do not attempt to detect field types; use
-          :py:class:`BareField` for all columns.
+          :class:`BareField` for all columns.
       :param bool include_views: Also generate models for views.
 
 
 .. _pwiz:
 
-pwiz — Model Generator
+pwiz - Model Generator
 -----------------------
 
 ``pwiz`` is a command-line tool that introspects a database and prints
@@ -554,7 +554,7 @@ Test Utilities
 ``playhouse.test_utils`` provides helpers for asserting query counts in your
 test suite.
 
-.. py:class:: count_queries(only_select=False)
+.. class:: count_queries(only_select=False)
 
    Context manager that counts the number of SQL queries executed within
    its block.
@@ -569,15 +569,15 @@ test suite.
 
        assert counter.count == 2
 
-   .. py:attribute:: count
+   .. attribute:: count
 
       Number of queries executed.
 
-   .. py:method:: get_queries()
+   .. method:: get_queries()
 
       Return a list of ``(sql, params)`` 2-tuples for each query executed.
 
-.. py:function:: assert_query_count(expected, only_select=False)
+.. function:: assert_query_count(expected, only_select=False)
 
    Decorator or context manager that raises ``AssertionError`` if the number
    of queries executed does not match ``expected``.

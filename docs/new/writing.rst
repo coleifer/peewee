@@ -53,7 +53,7 @@ Inserting Records
 Creating a single row
 ^^^^^^^^^^^^^^^^^^^^^
 
-:py:meth:`~Model.create` inserts a row and returns the saved model instance:
+:meth:`~Model.create` inserts a row and returns the saved model instance:
 
 .. code-block:: pycon
 
@@ -64,7 +64,7 @@ Creating a single row
 This will INSERT a new row into the database. The primary key will
 automatically be retrieved and stored on the model instance.
 
-Alternatively, instantiate the model and call :py:meth:`~Model.save`. The
+Alternatively, instantiate the model and call :meth:`~Model.save`. The
 first call to ``save()`` on a new instance performs an INSERT:
 
 .. code-block:: pycon
@@ -179,12 +179,12 @@ you use a transaction:
        for batch in chunked(data, 100):
            User.insert_many(batch).execute()
 
-:py:func:`chunked` works on any iterable, including generators.
+:func:`chunked` works on any iterable, including generators.
 
 Bulk-creating model instances
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-:py:meth:`~Model.bulk_create` accepts a list of unsaved model instances and
+:meth:`~Model.bulk_create` accepts a list of unsaved model instances and
 inserts them efficiently. Pass ``batch_size`` to avoid hitting database limits:
 
 .. code-block:: python
@@ -226,7 +226,7 @@ Updating Records
 Updating a model instance
 ^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Modify attributes on a fetched instance and call :py:meth:`~Model.save` to
+Modify attributes on a fetched instance and call :meth:`~Model.save` to
 persist the changes:
 
 .. code-block:: python
@@ -328,7 +328,7 @@ specify a ``batch_size`` and wrap in a transaction:
    ``bulk_update`` may be slower than a direct UPDATE query when the list is
    very large, because the generated ``CASE`` expression grows proportionally.
    For updates that can be expressed as a single WHERE clause, the direct
-   :py:meth:`~Model.update` approach is faster.
+   :meth:`~Model.update` approach is faster.
 
 .. _upsert:
 
@@ -340,7 +340,7 @@ would be violated, updates the existing row instead.
 
 Peewee provides two complementary approaches.
 
-``on_conflict_replace`` — SQLite and MySQL
+``on_conflict_replace`` - SQLite and MySQL
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 SQLite and MySQL support a ``REPLACE`` query, which will replace the row in the
@@ -364,7 +364,7 @@ event of a conflict:
    ``on_conflict`` (below) when the primary key must be preserved, or when
    only some columns should be updated.
 
-``on_conflict`` — all backends
+``on_conflict`` - all backends
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 The :meth:`~Insert.on_conflict` method is much more powerful.
@@ -483,7 +483,7 @@ Full example:
 
    # Prints "2 127.2,127.1"
 
-.. seealso:: :py:meth:`Insert.on_conflict` and :py:class:`OnConflict`.
+.. seealso:: :meth:`Insert.on_conflict` and :class:`OnConflict`.
 
 ``on_conflict_ignore``
 ^^^^^^^^^^^^^^^^^^^^^^
@@ -500,7 +500,7 @@ Supported by SQLite, MySQL, and PostgreSQL.
 Deleting Records
 ----------------
 
-Delete a single fetched instance with :py:meth:`~Model.delete_instance`:
+Delete a single fetched instance with :meth:`~Model.delete_instance`:
 
 .. code-block:: python
 
@@ -517,7 +517,7 @@ reference it via foreign key), pass ``recursive=True``:
 
 .. warning::
    ``recursive=True`` works by querying for dependent rows and deleting them
-   first in Python-orchestrated batches — it does not rely on ``ON DELETE
+   first in Python-orchestrated batches - it does not rely on ``ON DELETE
    CASCADE``. For large graphs of related data, this can be slow and may not be
    atomic. Consider using database-level cascade constraints on the foreign keys
    for production use cases.
@@ -536,6 +536,6 @@ To delete an arbitrary set of rows without fetching them:
             .execute())
 
 .. seealso::
-   * :py:meth:`Model.delete_instance`
-   * :py:meth:`Model.delete`
-   * :py:class:`DeleteQuery`
+   * :meth:`Model.delete_instance`
+   * :meth:`Model.delete`
+   * :class:`DeleteQuery`

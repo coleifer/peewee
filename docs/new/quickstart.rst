@@ -64,8 +64,8 @@ each model. By default ``create_table()`` specifies ``safe=True``, which uses
 Writing data
 ------------
 
-Create a row with :py:meth:`~Model.create` (one step) or instantiate a model
-and call :py:meth:`~Model.save` (two steps):
+Create a row with :meth:`~Model.create` (one step) or instantiate a model
+and call :meth:`~Model.save` (two steps):
 
 .. code-block:: python
 
@@ -105,7 +105,7 @@ if no match is found:
    user = User.get(User.username == 'charlie_admin')
    print(user.id, user.username)
 
-Retrieve multiple rows with :py:meth:`~Model.select`. The result is a lazy
+Retrieve multiple rows with :meth:`~Model.select`. The result is a lazy
 query - rows are fetched only when you iterate:
 
 .. code-block:: python
@@ -113,7 +113,7 @@ query - rows are fetched only when you iterate:
    for tweet in Tweet.select():
        print(tweet.content)
 
-Filter with :py:meth:`~Query.where`:
+Filter with :meth:`~Query.where`:
 
 .. code-block:: python
 
@@ -123,7 +123,7 @@ Filter with :py:meth:`~Query.where`:
    for tweet in Tweet.select().where(Tweet.timestamp.year == 2026):
        print(tweet.content)
 
-Sort with :py:meth:`~Query.order_by`:
+Sort with :meth:`~Query.order_by`:
 
 .. code-block:: python
 
@@ -136,7 +136,7 @@ Join to combine data from related tables in a single query:
 
    # Fetch each tweet alongside its author's username.
    # Without the join, accessing tweet.user.username would issue
-   # an extra query per tweet — see the N+1 section in Relationships.
+   # an extra query per tweet - see the N+1 section in Relationships.
    query = (Tweet
             .select(Tweet, User)
             .join(User)

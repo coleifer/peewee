@@ -68,8 +68,8 @@ If you like UML, these are the tables and relationships:
 .. image:: schema.jpg
 
 In order to create these models we need to instantiate a
-:py:class:`SqliteDatabase` object. Then we define our model classes, specifying
-the columns as :py:class:`Field` instances on the class.
+:class:`SqliteDatabase` object. Then we define our model classes, specifying
+the columns as :class:`Field` instances on the class.
 
 .. code-block:: python
    :emphasize-lines: 3, 8, 13, 23, 39
@@ -162,7 +162,7 @@ following:
    was not found and may not be installed correctly. Check the :ref:`installation`
    document for instructions on installing peewee.
 
-Every model has a :py:meth:`~Model.create_table` classmethod which runs a SQL
+Every model has a :meth:`~Model.create_table` classmethod which runs a SQL
 *CREATE TABLE* statement in the database. This method will create the table,
 including:
 
@@ -174,8 +174,8 @@ including:
 
 Usually this is something you'll only do once, when a new model is added.
 
-Peewee provides a helper method :py:meth:`Database.create_tables` which will
-resolve inter-model dependencies and call :py:meth:`~Model.create_table` on
+Peewee provides a helper method :meth:`Database.create_tables` which will
+resolve inter-model dependencies and call :meth:`~Model.create_table` on
 each model, ensuring the tables are created in order.
 
 .. note::
@@ -220,7 +220,7 @@ When developing a web application, it's common to:
 
 **You should always manage your connections explicitly**. For instance, if you
 are using a :ref:`connection pool <pool>`, connections will only be recycled
-correctly if you call :py:meth:`~Database.connect` and :py:meth:`~Database.close`.
+correctly if you call :meth:`~Database.connect` and :meth:`~Database.close`.
 
 Flask provides some handy decorators to make this a snap:
 
@@ -279,7 +279,7 @@ Creating new objects
 When a new user wants to join the site we need to make sure the username is
 available, and if so, create a new *User* record. Looking at the *join()* view,
 we can see that our application attempts to create the User using
-:py:meth:`Model.create`. We defined the *User.username* field with a unique
+:meth:`Model.create`. We defined the *User.username* field with a unique
 constraint, so if the username is taken the database will raise an
 ``IntegrityError``.
 
@@ -406,8 +406,8 @@ mentioning briefly.
              abort(404)
 
 .. tip::
-   To avoid having to frequently copy/paste :py:func:`object_list` or
-   :py:func:`get_object_or_404`, these functions are included as part of the
+   To avoid having to frequently copy/paste :func:`object_list` or
+   :func:`get_object_or_404`, these functions are included as part of the
    playhouse :ref:`flask extension module <flask_utils>`.
 
    .. code-block:: python

@@ -4,8 +4,8 @@ PostgreSQL Extensions
 =====================
 
 The ``playhouse.postgres_ext`` module exposes PostgreSQL-specific field types
-and features that are not available in the standard :py:class:`PostgresqlDatabase`.
-Most of these features require substituting :py:class:`PostgresqlExtDatabase`
+and features that are not available in the standard :class:`PostgresqlDatabase`.
+Most of these features require substituting :class:`PostgresqlExtDatabase`
 for the standard class.
 
 .. code-block:: python
@@ -24,21 +24,21 @@ for the standard class.
 PostgresqlExtDatabase
 ---------------------
 
-.. py:class:: PostgresqlExtDatabase(database, server_side_cursors=False, register_hstore=False, prefer_psycopg3=False, **kwargs)
+.. class:: PostgresqlExtDatabase(database, server_side_cursors=False, register_hstore=False, prefer_psycopg3=False, **kwargs)
 
-   Extends :py:class:`PostgresqlDatabase` and is required to use:
+   Extends :class:`PostgresqlDatabase` and is required to use:
 
-   - :py:class:`ArrayField`
-   - :py:class:`DateTimeTZField`
-   - :py:class:`JSONField` / :py:class:`BinaryJSONField`
-   - :py:class:`HStoreField`
-   - :py:class:`TSVectorField`
+   - :class:`ArrayField`
+   - :class:`DateTimeTZField`
+   - :class:`JSONField` / :class:`BinaryJSONField`
+   - :class:`HStoreField`
+   - :class:`TSVectorField`
    - Server-side cursors
 
    :param bool server_side_cursors: Use server-side cursors for all
        ``SELECT`` queries by default.
    :param bool register_hstore: Register the HStore extension with each
-       connection. Required when using :py:class:`HStoreField`.
+       connection. Required when using :class:`HStoreField`.
    :param bool prefer_psycopg3: When both psycopg2 and psycopg3 are
        installed, prefer psycopg3.
 
@@ -48,12 +48,12 @@ JSON Support
 
 Peewee provides two JSON field types for PostgreSQL:
 
-- :py:class:`JSONField` — stores JSON as text, supports key access and
+- :class:`JSONField` - stores JSON as text, supports key access and
   comparison (PostgreSQL 9.2+).
-- :py:class:`BinaryJSONField` — stores JSON in the efficient binary ``jsonb``
+- :class:`BinaryJSONField` - stores JSON in the efficient binary ``jsonb``
   format and adds containment operators (PostgreSQL 9.4+).
 
-For most new applications, prefer :py:class:`BinaryJSONField`.
+For most new applications, prefer :class:`BinaryJSONField`.
 
 .. code-block:: python
 
@@ -78,22 +78,22 @@ For most new applications, prefer :py:class:`BinaryJSONField`.
    for e in Event.select(Event.payload['user_id'].alias('uid')):
        print(e.uid)
 
-.. py:class:: JSONField()
+.. class:: JSONField()
 
    Field that stores and retrieves JSON data. Supports ``__getitem__`` key
    access for filtering and sub-object retrieval.
 
-   .. py:method:: as_json()
+   .. method:: as_json()
 
       Return the value at this path as deserialized Python data rather than
       a raw string.
 
-.. py:class:: BinaryJSONField()
+.. class:: BinaryJSONField()
 
-   Extends :py:class:`JSONField` for the ``jsonb`` type. Supports all
-   :py:class:`JSONField` methods plus:
+   Extends :class:`JSONField` for the ``jsonb`` type. Supports all
+   :class:`JSONField` methods plus:
 
-   .. py:method:: contains(other)
+   .. method:: contains(other)
 
       Test whether this field's value contains ``other`` (as a subset).
       ``other`` may be a partial dict, list, or scalar value.
@@ -103,28 +103,28 @@ For most new applications, prefer :py:class:`BinaryJSONField`.
           # Find events where the payload contains both keys.
           Event.select().where(Event.payload.contains({'ip': '1.2.3.4'}))
 
-   .. py:method:: contains_any(*items)
+   .. method:: contains_any(*items)
 
       Test whether any of ``items`` is present in the JSON value.
 
-   .. py:method:: contains_all(*items)
+   .. method:: contains_all(*items)
 
       Test whether all of ``items`` are present in the JSON value.
 
-   .. py:method:: contained_by(other)
+   .. method:: contained_by(other)
 
       Test whether this field's value is a subset of ``other``.
 
-   .. py:method:: concat(data)
+   .. method:: concat(data)
 
       Concatenate the field value with ``data``. Note this is a shallow
       operation and does not deep-merge nested objects.
 
-   .. py:method:: has_key(key)
+   .. method:: has_key(key)
 
       Test whether ``key`` exists at the top level of the JSON object.
 
-   .. py:method:: remove(*keys)
+   .. method:: remove(*keys)
 
       Remove one or more top-level keys from the JSON object.
 
@@ -159,7 +159,7 @@ passing ``register_hstore=True`` when constructing the database:
    # Filter by key existence:
    Property.select().where(Property.features.exists('garage'))
 
-   # Atomic update — adds new keys, updates existing ones:
+   # Atomic update - adds new keys, updates existing ones:
    new_features = Property.features.update({'bath': '2.5 bath', 'sqft': '1100'})
    Property.update(features=new_features).where(Property.id == p.id).execute()
 
@@ -188,11 +188,11 @@ Available operations: ``contains(key_or_dict_or_list)``, ``exists(key)``,
 Arrays
 ------
 
-.. py:class:: ArrayField(field_class=IntegerField, field_kwargs=None, dimensions=1, convert_values=False)
+.. class:: ArrayField(field_class=IntegerField, field_kwargs=None, dimensions=1, convert_values=False)
 
    Stores a PostgreSQL array of the given field type.
 
-   :param field_class: Element type (e.g. :py:class:`CharField`).
+   :param field_class: Element type (e.g. :class:`CharField`).
    :param int dimensions: Number of array dimensions.
    :param bool convert_values: Apply ``field_class`` value conversion to
        retrieved data.
@@ -212,11 +212,11 @@ Arrays
        # Get a slice (first two tags):
        Post.select(Post.tags[1:3].alias('first_two'))
 
-   .. py:method:: contains(*items)
+   .. method:: contains(*items)
 
       Filter rows where the array contains all of the given values.
 
-   .. py:method:: contains_any(*items)
+   .. method:: contains_any(*items)
 
       Filter rows where the array contains any of the given values.
 
@@ -226,7 +226,7 @@ Arrays
 Interval
 --------
 
-.. py:class:: IntervalField(**kwargs)
+.. class:: IntervalField(**kwargs)
 
    Stores Python ``datetime.timedelta`` instances using PostgreSQL's native
    ``INTERVAL`` type.
@@ -250,7 +250,7 @@ For large result sets, server-side (named) cursors stream rows from the server
 rather than loading the entire result into memory. The default fetch size is
 2000 rows; rows are fetched transparently as you iterate.
 
-Wrap any SELECT query with :py:func:`ServerSide`:
+Wrap any SELECT query with :func:`ServerSide`:
 
 .. code-block:: python
 
@@ -280,10 +280,10 @@ For explicit batch control:
    (not psycopg3), cursors are declared ``WITH HOLD`` and must be fully
    exhausted or explicitly closed to release server resources.
 
-.. py:function:: ServerSide(select_query)
+.. function:: ServerSide(select_query)
 
    Wrap ``select_query`` in a transaction and iterate using
-   :py:meth:`~SelectQuery.iterator` (disables row caching).
+   :meth:`~SelectQuery.iterator` (disables row caching).
 
 
 .. _pg-fts:
@@ -292,11 +292,11 @@ Full-Text Search
 ----------------
 
 PostgreSQL full-text search uses the ``tsvector`` and ``tsquery`` types.
-Peewee offers two approaches: the simple :py:func:`Match` function (no schema
-changes required) and the :py:class:`TSVectorField` for dedicated search columns
+Peewee offers two approaches: the simple :func:`Match` function (no schema
+changes required) and the :class:`TSVectorField` for dedicated search columns
 (better performance).
 
-**Simple approach** — no schema changes required:
+**Simple approach** - no schema changes required:
 
 .. code-block:: python
 
@@ -329,12 +329,12 @@ For better performance, create a GIN index:
    # Search:
    Post.select().where(Post.search_content.match('python asyncio'))
 
-.. py:function:: Match(field, query)
+.. function:: Match(field, query)
 
    Generate a full-text search expression that converts ``field`` to
    ``tsvector`` and ``query`` to ``tsquery`` automatically.
 
-.. py:class:: TSVectorField()
+.. class:: TSVectorField()
 
    Field type for storing pre-computed ``tsvector`` data. Automatically
    created with a GIN index (use ``index=False`` to disable).
@@ -343,7 +343,7 @@ For better performance, create a GIN index:
        Data must be explicitly converted to ``tsvector`` on write using
        ``fn.to_tsvector()``.
 
-   .. py:method:: match(query, language=None, plain=False)
+   .. method:: match(query, language=None, plain=False)
 
       :param str query: Full-text search query.
       :param str language: Optional language name.
@@ -356,7 +356,7 @@ For better performance, create a GIN index:
 DateTimeTZ Field
 -----------------
 
-.. py:class:: DateTimeTZField(**kwargs)
+.. class:: DateTimeTZField(**kwargs)
 
    Timezone-aware datetime field using PostgreSQL's ``TIMESTAMP WITH TIME ZONE``
    type.
@@ -369,7 +369,7 @@ CockroachDB
 
 `CockroachDB <https://www.cockroachlabs.com>`_ (CRDB) is compatible with
 PostgreSQL's wire protocol and is well-supported by Peewee. Use the dedicated
-:py:class:`CockroachDatabase` class rather than :py:class:`PostgresqlDatabase`
+:class:`CockroachDatabase` class rather than :class:`PostgresqlDatabase`
 to get CRDB-specific handling.
 
 .. note:: CRDB requires the ``psycopg2`` driver.
@@ -380,7 +380,7 @@ to get CRDB-specific handling.
 
    db = CockroachDatabase('my_app', user='root', host='10.1.0.8')
 
-   # Cockroach Cloud — connection string form:
+   # Cockroach Cloud - connection string form:
    db = CockroachDatabase('postgresql://root:secret@host:26257/defaultdb?...')
 
 SSL configuration:
@@ -398,11 +398,11 @@ Key differences from PostgreSQL
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 - **No nested transactions.** CRDB does not support savepoints, so calling
-  :py:meth:`~Database.atomic` inside another ``atomic()`` block raises an
-  exception. Use :py:meth:`~Database.transaction` instead, which ignores
+  :meth:`~Database.atomic` inside another ``atomic()`` block raises an
+  exception. Use :meth:`~Database.transaction` instead, which ignores
   nested calls and commits only when the outermost block exits.
 - **Client-side retries.** CRDB may abort transactions due to contention.
-  Use :py:meth:`~CockroachDatabase.run_transaction` for automatic retries.
+  Use :meth:`~CockroachDatabase.run_transaction` for automatic retries.
 
 .. code-block:: python
 
@@ -436,11 +436,11 @@ Client-side retries:
 CRDB API
 ^^^^^^^^^
 
-.. py:class:: CockroachDatabase(database, **kwargs)
+.. class:: CockroachDatabase(database, **kwargs)
 
-   Subclass of :py:class:`PostgresqlDatabase` for CockroachDB.
+   Subclass of :class:`PostgresqlDatabase` for CockroachDB.
 
-   .. py:method:: run_transaction(callback, max_attempts=None, system_time=None, priority=None)
+   .. method:: run_transaction(callback, max_attempts=None, system_time=None, priority=None)
 
       :param callback: Callable accepting a single ``db`` argument.
           Must not manage the transaction itself. May be called multiple times.
@@ -451,17 +451,17 @@ CRDB API
 
       Execute SQL in a transaction with automatic client-side retries.
 
-.. py:class:: PooledCockroachDatabase(database, **kwargs)
+.. class:: PooledCockroachDatabase(database, **kwargs)
 
-   Connection-pooling variant of :py:class:`CockroachDatabase`.
+   Connection-pooling variant of :class:`CockroachDatabase`.
 
 CRDB-specific field types:
 
-.. py:class:: UUIDKeyField()
+.. class:: UUIDKeyField()
 
    UUID primary key auto-populated with CRDB's ``gen_random_uuid()``.
 
-.. py:class:: RowIDField()
+.. class:: RowIDField()
 
    Integer primary key auto-populated with CRDB's ``unique_rowid()``.
 
@@ -473,7 +473,7 @@ MySQL Extensions
 
 Peewee provides alternate drivers for MySQL through ``playhouse.mysql_ext``.
 
-.. py:class:: MySQLConnectorDatabase(database, **kwargs)
+.. class:: MySQLConnectorDatabase(database, **kwargs)
 
    Database implementation using the official
    `mysql-connector-python <https://dev.mysql.com/doc/connector-python/en/>`_
@@ -485,7 +485,7 @@ Peewee provides alternate drivers for MySQL through ``playhouse.mysql_ext``.
 
        db = MySQLConnectorDatabase('my_db', host='1.2.3.4', user='mysql')
 
-.. py:class:: MariaDBConnectorDatabase(database, **kwargs)
+.. class:: MariaDBConnectorDatabase(database, **kwargs)
 
    Database implementation using the
    `mariadb-connector <https://mariadb-corporation.github.io/mariadb-connector-python/>`_
@@ -503,20 +503,20 @@ Peewee provides alternate drivers for MySQL through ``playhouse.mysql_ext``.
 
 MySQL-specific helpers:
 
-.. py:class:: JSONField()
+.. class:: JSONField()
 
-   Extends :py:class:`TextField` with transparent JSON encoding/decoding.
+   Extends :class:`TextField` with transparent JSON encoding/decoding.
 
-   .. py:method:: extract(path)
+   .. method:: extract(path)
 
       Extract a value from a JSON document at the given JSON path
       (e.g. ``'$.key'``).
 
-.. py:function:: Match(columns, expr, modifier=None)
+.. function:: Match(columns, expr, modifier=None)
 
    Helper for MySQL full-text search using ``MATCH ... AGAINST`` syntax.
 
-   :param columns: A single :py:class:`Field` or a tuple of fields.
+   :param columns: A single :class:`Field` or a tuple of fields.
    :param str expr: Full-text search expression.
    :param str modifier: Optional modifier, e.g. ``'IN BOOLEAN MODE'``.
 

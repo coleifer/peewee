@@ -120,7 +120,7 @@ Usage:
 Get-or-Create Safely
 ---------------------
 
-:py:meth:`~Model.get_or_create` is convenient but has a small race window
+:meth:`~Model.get_or_create` is convenient but has a small race window
 between the SELECT and the INSERT when the row does not yet exist. Two
 concurrent processes can both fail the SELECT and both attempt the INSERT,
 causing one to fail with an ``IntegrityError``.
@@ -363,7 +363,7 @@ Bulk-Loading with Explicit Primary Keys
 -----------------------------------------
 
 When loading relational data from an external source where primary keys are
-already assigned, use :py:meth:`~Model.insert_many` with the ``id`` field
+already assigned, use :meth:`~Model.insert_many` with the ``id`` field
 included. This avoids the ``auto_increment`` workaround that was common in
 older Peewee versions:
 
@@ -431,9 +431,9 @@ Verify a password at login:
            return None
 
 .. seealso::
-   :py:meth:`SqliteDatabase.func`,
-   :py:meth:`SqliteDatabase.aggregate`,
-   :py:meth:`SqliteDatabase.window_function`.
+   :meth:`SqliteDatabase.func`,
+   :meth:`SqliteDatabase.aggregate`,
+   :meth:`SqliteDatabase.window_function`.
 
 
 Date Arithmetic Across Databases

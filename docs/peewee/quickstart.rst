@@ -35,7 +35,7 @@ Model instance    Row in a database table
 ================= =================================
 
 When starting a project with peewee, it's typically best to begin with your
-data model, by defining one or more :py:class:`Model` classes:
+data model, by defining one or more :class:`Model` classes:
 
 .. code-block:: python
    :emphasize-lines: 5
@@ -107,7 +107,7 @@ Storing data
 ------------
 
 Let's begin by populating the database with some people. We will use the
-:py:meth:`~Model.save` and :py:meth:`~Model.create` methods to add and update
+:meth:`~Model.save` and :meth:`~Model.create` methods to add and update
 people's records.
 
 .. code-block:: python
@@ -119,10 +119,10 @@ people's records.
    # Returns: 1
 
 .. note::
-   When you call :py:meth:`~Model.save`, the number of rows modified is
+   When you call :meth:`~Model.save`, the number of rows modified is
    returned.
 
-You can also add a person by calling the :py:meth:`~Model.create` method, which
+You can also add a person by calling the :meth:`~Model.create` method, which
 returns a model instance:
 
 .. code-block:: python
@@ -130,7 +130,7 @@ returns a model instance:
    grandma = Person.create(name='Grandma', birthday=date(1935, 3, 1))
    herb = Person.create(name='Herb', birthday=date(1950, 5, 5))
 
-To update a row, modify the model instance and call :py:meth:`~Model.save` to
+To update a row, modify the model instance and call :meth:`~Model.save` to
 persist the changes. Here we will change Grandma's name and then save the
 changes in the database:
 
@@ -160,7 +160,7 @@ the database:
    # Returns: 1
 
 .. note::
-   The return value of :py:meth:`~Model.delete_instance` is the number of rows
+   The return value of :meth:`~Model.delete_instance` is the number of rows
    removed from the database.
 
 Uncle Bob decides that too many animals have been dying at Herb's house, so he
@@ -184,13 +184,13 @@ Getting single records
 ^^^^^^^^^^^^^^^^^^^^^^
 
 Let's retrieve Grandma's record from the database. To get a single record from
-the database, use :py:meth:`Select.get`:
+the database, use :meth:`Select.get`:
 
 .. code-block:: python
 
    grandma = Person.select().where(Person.name == 'Grandma L.').get()
 
-We can also use the equivalent shorthand :py:meth:`Model.get`:
+We can also use the equivalent shorthand :meth:`Model.get`:
 
 .. code-block:: python
 
@@ -270,7 +270,7 @@ Sorting
 ^^^^^^^
 
 Let's make sure these are sorted alphabetically by adding an
-:py:meth:`~Select.order_by` clause:
+:meth:`~Select.order_by` clause:
 
 .. code-block:: python
 
@@ -366,7 +366,7 @@ a *JOIN* and using a SQL function to aggregate the results.
    # Herb 1 pets
 
 .. note::
-   Peewee provides a magical helper :py:func:`fn`, which can be used to call
+   Peewee provides a magical helper :func:`fn`, which can be used to call
    any SQL function. In the above example, ``fn.COUNT(Pet.id).alias('pet_count')``
    would be translated into ``COUNT(pet.id) AS pet_count``.
 
@@ -407,7 +407,7 @@ It would look like this:
 Usually this type of duplication is undesirable. To accommodate the more common
 (and intuitive) workflow of listing a person and attaching **a list** of that
 person's pets, we can use a special method called
-:py:meth:`~ModelSelect.prefetch`:
+:meth:`~ModelSelect.prefetch`:
 
 .. code-block:: python
 

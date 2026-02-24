@@ -353,7 +353,7 @@ The last example uses a ``LIMIT`` clause in a correlated subquery.
 Writing custom functions with SQLite
 ------------------------------------
 
-SQLite is very easy to extend with custom functions written in Python, that are then callable from your SQL statements. By using the :py:class:`SqliteExtDatabase` and the :py:meth:`~SqliteExtDatabase.func` decorator, you can very easily define your own functions.
+SQLite is very easy to extend with custom functions written in Python, that are then callable from your SQL statements. By using the :class:`SqliteExtDatabase` and the :meth:`~SqliteExtDatabase.func` decorator, you can very easily define your own functions.
 
 Here is an example function that generates a hashed version of a user-supplied password. We can also use this to implement ``login`` functionality for matching a user and password.
 

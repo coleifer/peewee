@@ -64,12 +64,10 @@ drivers:
 PRAGMA statements
 -----------------
 
-SQLite allows run-time configuration of a number of parameters through
-``PRAGMA`` statements (`SQLite documentation <https://www.sqlite.org/pragma.html>`_).
+SQLite allows run-time configuration through ``PRAGMA`` statements (`SQLite documentation <https://www.sqlite.org/pragma.html>`_).
 These statements are typically run when a new database connection is created.
-To run one or more ``PRAGMA`` statements against new connections, you can
-specify them as a dictionary or a list of 2-tuples containing the pragma name
-and value:
+
+To specify default ``PRAGMA`` statements for connections:
 
 .. code-block:: python
 
@@ -101,9 +99,9 @@ method or the special properties exposed on the :class:`SqliteDatabase` object:
    db.pragma('foreign_keys', 1, permanent=True)
 
 .. attention::
-   Pragmas set using the :py:meth:`~SqliteDatabase.pragma` method do not
-   get re-applied when a new connection opens. To configure a pragma to be
-   run whenever a connection is opened, specify ``permanent=True``.
+   Pragmas set using the :meth:`~SqliteDatabase.pragma` method are not
+   re-applied when a new connection opens. To configure a pragma to be
+   run whenever a new connection is opened, specify ``permanent=True``.
 
    .. code-block:: python
 
@@ -237,7 +235,8 @@ methods:
             .select(
                 Employee.department,
                 Employee.salary,
-                fn.mysum(Employee.salary).over(partition_by=[Employee.department]))
+                fn.mysum(Employee.salary).over(
+                    partition_by=[Employee.department]))
             .order_by(Employee.id))
 
 Collation example
@@ -386,7 +385,7 @@ Usage:
        'foreign_keys': 1,
    })
 
-.. py:class:: CySqliteDatabase(database, **kwargs)
+.. class:: CySqliteDatabase(database, **kwargs)
 
    :param list pragmas: A list of 2-tuples containing pragma key and value to
        set every time a connection is opened.
@@ -395,7 +394,7 @@ Usage:
    :param bool regexp_function: Make the REGEXP function available.
 
    .. seealso::
-      CySqliteDatabase extends :py:class:`SqliteDatabase` and inherits all
+      CySqliteDatabase extends :class:`SqliteDatabase` and inherits all
       methods for declaring user-defined functions, aggregates, window
       functions, collations, pragmas, etc.
 
@@ -405,7 +404,7 @@ Usage:
 
        db = CySqliteDatabase('app.db', pragmas={'journal_mode': 'wal'})
 
-   .. py:method:: table_function(name)
+   .. method:: table_function(name)
 
       Class-decorator for registering a ``cysqlite.TableFunction``. Table
       functions are user-defined functions that, rather than returning a
@@ -455,14 +454,14 @@ Usage:
          # 2
          # 4
 
-   .. py:method:: unregister_table_function(name)
+   .. method:: unregister_table_function(name)
 
        :param name: Name of the user-defined table function.
        :returns: True or False, depending on whether the function was removed.
 
        Unregister the user-defined scalar function.
 
-    .. py:method:: on_commit(fn)
+    .. method:: on_commit(fn)
 
        :param fn: callable or ``None`` to clear the current hook.
 
@@ -470,7 +469,7 @@ Usage:
        on the current connection. The callback accepts no parameters and the
        return value is ignored.
 
-       However, if the callback raises a :py:class:`ValueError`, the
+       However, if the callback raises a :class:`ValueError`, the
        transaction will be aborted and rolled-back.
 
        Example:
@@ -483,7 +482,7 @@ Usage:
           def on_commit():
               logger.info('COMMITing changes')
 
-    .. py:method:: on_rollback(fn)
+    .. method:: on_rollback(fn)
 
        :param fn: callable or ``None`` to clear the current hook.
 
@@ -499,7 +498,7 @@ Usage:
           def on_rollback():
               logger.info('Rolling back changes')
 
-    .. py:method:: on_update(fn)
+    .. method:: on_update(fn)
 
        :param fn: callable or ``None`` to clear the current hook.
 
@@ -525,7 +524,7 @@ Usage:
               # e.g. INSERT row 3 into table users.
               logger.info('%s row %s into table %s', query_type, rowid, table)
 
-    .. py:method:: authorizer(fn)
+    .. method:: authorizer(fn)
 
        :param fn: callable or ``None`` to clear the current authorizer.
 
@@ -551,7 +550,7 @@ Usage:
 
        More details can be found in the `cysqlite docs <https://cysqlite.readthedocs.io/en/latest/api.html#Connection.authorizer>`_.
 
-    .. py:method:: trace(fn, mask=2):
+    .. method:: trace(fn, mask=2):
 
        :param fn: callable or ``None`` to clear the current trace hook.
        :param int mask: mask of what types of events to trace. Default value
@@ -571,7 +570,7 @@ Usage:
 
        More details can be found in the `cysqlite docs <https://cysqlite.readthedocs.io/en/latest/api.html#Connection.trace>`_.
 
-    .. py:method:: progress(fn, n=1)
+    .. method:: progress(fn, n=1)
 
        :param fn: callable or ``None`` to clear the current progress handler.
        :param int n: approximate number of VM instructions to execute between
@@ -583,11 +582,11 @@ Usage:
 
        More details can be found in the `cysqlite docs <https://cysqlite.readthedocs.io/en/latest/api.html#Connection.progress>`_.
 
-    .. py:attribute:: autocommit
+    .. attribute:: autocommit
 
        Property which returns a boolean indicating if autocommit is enabled.
        By default, this value will be ``True`` except when inside a
-       transaction (or :py:meth:`~Database.atomic` block).
+       transaction (or :meth:`~Database.atomic` block).
 
        Example:
 
@@ -603,7 +602,7 @@ Usage:
           >>> db.autocommit
           True
 
-    .. py:method:: backup(destination, pages=None, name=None, progress=None)
+    .. method:: backup(destination, pages=None, name=None, progress=None)
 
        :param CySqliteDatabase destination: Database object to serve as
            destination for the backup.
@@ -625,7 +624,7 @@ Usage:
           # Backup the contents of master to replica.
           master.backup(replica)
 
-    .. py:method:: backup_to_file(filename, pages, name, progress)
+    .. method:: backup_to_file(filename, pages, name, progress)
 
        :param filename: Filename to store the database backup.
        :param int pages: Number of pages per iteration. Default value of -1
@@ -649,7 +648,7 @@ Usage:
               filename = 'backup-%s.db' % (datetime.date.today())
               db.backup_to_file(filename)
 
-    .. py:method:: blob_open(table, column, rowid, read_only=False)
+    .. method:: blob_open(table, column, rowid, read_only=False)
 
        :param str table: Name of table containing data.
        :param str column: Name of column containing data.
@@ -721,14 +720,14 @@ Usage:
    ``playhouse.apsw_ext.DateTimeField`` instead of ``peewee.DateTimeField``.
 
 
-.. py:class:: APSWDatabase(database, **connect_kwargs)
+.. class:: APSWDatabase(database, **connect_kwargs)
 
    Subclass of :class:`SqliteDatabase` using the APSW driver.
 
    :param string database: filename of sqlite database
    :param connect_kwargs: keyword arguments passed to apsw when opening a connection
 
-   .. py:method:: register_module(mod_name, mod_inst)
+   .. method:: register_module(mod_name, mod_inst)
 
       Register a virtual table module globally. See the `APSW virtual table
       documentation <https://rogerbinns.github.io/apsw/vtable.html>`_.
@@ -736,7 +735,7 @@ Usage:
       :param string mod_name: name to use for module
       :param object mod_inst: an object implementing the `Virtual Table <http://rogerbinns.github.io/apsw/vtable.html#vttable-class>`_ interface
 
-   .. py:method:: unregister_module(mod_name)
+   .. method:: unregister_module(mod_name)
 
       Unregister a previously registered module.
 
@@ -802,7 +801,7 @@ Pragma configuration (e.g. increasing PBKDF2 iterations):
    SQLCipher can be configured using a number of extension PRAGMAs. The list
    of PRAGMAs and their descriptions can be found in the `SQLCipher documentation <https://www.zetetic.net/sqlcipher/sqlcipher-api/>`_.
 
-.. py:class:: SqlCipherDatabase(database, passphrase, **kwargs)
+.. class:: SqlCipherDatabase(database, passphrase, **kwargs)
 
    :param str database: Path to the encrypted database file.
    :param str passphrase: Encryption passphrase (should be 8 character minimum;
@@ -816,7 +815,7 @@ Pragma configuration (e.g. increasing PBKDF2 iterations):
    attempting to access the database (typically ``DatabaseError: file is not a
    database``).
 
-   .. py:method:: rekey(passphrase)
+   .. method:: rekey(passphrase)
 
       Change the encryption passphrase for the open database.
 
@@ -873,10 +872,10 @@ would with any other database. Only writes are funneled through the queue.
    ``transaction()`` methods raise a ``ValueError`` if called.
 
    If you need to temporarily bypass the queue and write directly (for
-   example, during a batch import), use :py:meth:`~SqliteQueueDatabase.pause`
-   and :py:meth:`~SqliteQueueDatabase.unpause`.
+   example, during a batch import), use :meth:`~SqliteQueueDatabase.pause`
+   and :meth:`~SqliteQueueDatabase.unpause`.
 
-.. py:class:: SqliteQueueDatabase(database, use_gevent=False, autostart=True, queue_max_size=None, results_timeout=None, **kwargs)
+.. class:: SqliteQueueDatabase(database, use_gevent=False, autostart=True, queue_max_size=None, results_timeout=None, **kwargs)
 
    :param str database: database filename.
    :param bool use_gevent: use gevent instead of ``threading``.
@@ -885,26 +884,26 @@ would with any other database. Only writes are funneled through the queue.
    :param float results_timeout: timeout for waiting for query results from
        write thread (seconds).
 
-   .. py:method:: start()
+   .. method:: start()
 
       Start the background writer thread.
 
-   .. py:method:: stop()
+   .. method:: stop()
 
       Signal the writer thread to stop. Blocks until all pending writes
       are flushed.
 
-   .. py:method:: is_stopped()
+   .. method:: is_stopped()
 
       Return ``True`` if the writer thread is not running.
 
-   .. py:method:: pause()
+   .. method:: pause()
 
       Block until the writer thread finishes its current work, then
       disconnect it. The calling thread takes over direct database access.
-      Must be followed by a call to :py:meth:`~SqliteQueueDatabase.unpause`.
+      Must be followed by a call to :meth:`~SqliteQueueDatabase.unpause`.
 
-   .. py:method:: unpause()
+   .. method:: unpause()
 
       Resume the writer thread and reconnect the queue.
 
@@ -922,7 +921,7 @@ These field classes live in ``playhouse.sqlite_ext`` and can be used with:
 * :class:`SqlCipherDatabase`
 * :class:`SqliteQueueDatabase`
 
-.. py:class:: RowIDField()
+.. class:: RowIDField()
 
    Primary-key field mapped to SQLite's implicit ``rowid`` column.
 
@@ -944,43 +943,24 @@ These field classes live in ``playhouse.sqlite_ext`` and can be used with:
           id = RowIDField()
           ...
 
-.. py:class:: DocIDField()
-
-   Subclass of :py:class:`RowIDField` for use on virtual tables that
-   specifically use the convention of ``docid`` for the primary key. This only
-   pertains to tables using the FTS3 and FTS4 full-text search extensions.
-
-   .. attention::
-      In FTS3 and FTS4, "docid" is simply an alias for "rowid". To reduce
-      confusion, it's recommended to always use :py:class:`RowIDField` instead.
-
-   .. code-block:: python
-
-      class NoteIndex(FTSModel):
-          docid = DocIDField()  # "docid" is used as an alias for "rowid".
-          content = SearchField()
-
-          class Meta:
-              database = db
-
-.. py:class:: AutoIncrementField()
+.. class:: AutoIncrementField()
 
    Integer primary key that uses SQLite's ``AUTOINCREMENT`` keyword,
    guaranteeing the primary key is always strictly increasing even after
    deletions. Has a small performance cost versus the default
-   :class:`PrimaryKeyField`.
+   :class:`PrimaryKeyField` or :class:`RowIDField`.
 
    See the `SQLite AUTOINCREMENT documentation <https://sqlite.org/autoinc.html>`_ for details.
 
-.. py:class:: ISODateTimeField()
+.. class:: ISODateTimeField()
 
-   Subclass of :py:class:`DateTimeField` that preserves UTC offset
+   Subclass of :class:`DateTimeField` that preserves UTC offset
    information for timezone-aware datetimes when storing to SQLite's
    text-based datetime representation.
 
-.. py:class:: TDecimalField(max_digits=10, decimal_places=5, auto_round=False, rounding=None, *args, **kwargs)
+.. class:: TDecimalField(max_digits=10, decimal_places=5, auto_round=False, rounding=None, *args, **kwargs)
 
-   Subclass of :py:class:`DecimalField` that stores decimal values in a
+   Subclass of :class:`DecimalField` that stores decimal values in a
    ``TEXT`` column to avoid any potential loss of precision that may occur when
    storing in a ``REAL`` (double-precision floating point) column. SQLite does
    not have a true numeric type, so this field ensures no precision is lost
@@ -991,18 +971,19 @@ These field classes live in ``playhouse.sqlite_ext`` and can be used with:
 SQLite JSON
 -----------
 
-Peewee provides :class:`JSONField` for storing JSON data in SQLite, with
-special methods designed to work with the `SQLite json functions <https://sqlite.org/json1.html>`_.
+:class:`JSONField` enables storing and querying JSON data in SQLite using
+the `SQLite json functions <https://sqlite.org/json1.html>`_.
 
-.. py:class:: JSONField(json_dumps=None, json_loads=None, **kwargs)
+.. class:: JSONField(json_dumps=None, json_loads=None, **kwargs)
 
    :param json_dumps: Custom JSON serializer. Defaults to ``json.dumps``.
    :param json_loads: Custom JSON deserializer. Defaults to ``json.loads``.
 
-   Stores and retrieves JSON data transparently. Python dicts and lists are
-   automatically serialized on write and deserialized on read.
+   Stores and retrieves JSON data transparently and provides efficient
+   implementations for in-place modification and querying. Data is
+   automatically serialized on write, deserialized on read.
 
-   Code examples will be based on the following:
+   Example model:
 
    .. code-block:: python
 
@@ -1101,9 +1082,9 @@ special methods designed to work with the `SQLite json functions <https://sqlite
       # [('[1,99,1,1]', 4), ('[1,1]', 2)]
 
    Let's add a nested value and then see how to iterate through it's contents
-   recursively using the :py:meth:`~JSONField.tree` method:
+   recursively using the :meth:`~JSONField.tree` method:
 
-   .. code-block:: pycon
+   .. code-block:: python
 
       Config.create(data={'x1': {'y1': 'z1', 'y2': 'z2'}, 'x2': [1, 2]})
 
@@ -1123,11 +1104,11 @@ special methods designed to work with the `SQLite json functions <https://sqlite
       (1, '$.x1.y1', 'z1'),
       (1, '$.x1.y2', 'z2')]
 
-   The :py:meth:`~JSONField.tree` and :py:meth:`~JSONField.children` methods
+   The :meth:`~JSONField.tree` and :meth:`~JSONField.children` methods
    are powerful. For more information on how to utilize them, see the
    `json1 extension documentation <http://sqlite.org/json1.html#jtree>`_.
 
-   .. py:method:: __getitem__(item)
+   .. method:: __getitem__(item)
 
       :param item: Access a specific key or array index in the JSON data.
       :return: a special object exposing access to the JSON data.
@@ -1145,30 +1126,30 @@ special methods designed to work with the `SQLite json functions <https://sqlite
          # extract the first tag in this way:
          Post.select(Post, Post.metadata['tags'][0].alias('first_tag'))
 
-      For more examples see the :py:class:`JSONPath` API documentation.
+      For more examples see the :class:`JSONPath` API documentation.
 
-   .. py:method:: extract(*paths)
+   .. method:: extract(*paths)
 
       :param paths: One or more JSON paths to extract.
 
       Extract one or more JSON path values. Returns a list when multiple
       paths are given.
 
-   .. py:method:: extract_json(path)
+   .. method:: extract_json(path)
 
       :param str path: JSON path
 
       Extract the value at the specified path as a JSON data-type. This
       corresponds to the ``->`` operator added in Sqlite 3.38.
 
-   .. py:method:: extract_text(path)
+   .. method:: extract_text(path)
 
       :param str path: JSON path
 
       Extract the value at the specified path as a SQL data-type. This
       corresponds to the ``->>`` operator added in Sqlite 3.38.
 
-   .. py:method:: set(value, as_json=None)
+   .. method:: set(value, as_json=None)
 
       :param value: a scalar value, list, or dictionary.
       :param bool as_json: force the value to be treated as JSON, in which
@@ -1176,12 +1157,12 @@ special methods designed to work with the `SQLite json functions <https://sqlite
           default, lists and dictionaries are treated as JSON to be
           serialized, while strings and integers are passed as-is.
 
-      Set the value stored in a :py:class:`JSONField`.
+      Set the value stored in a :class:`JSONField`.
 
       Uses the `json_set() <http://sqlite.org/json1.html#jset>`_ function
       from the json1 extension.
 
-   .. py:method:: replace(value, as_json=None)
+   .. method:: replace(value, as_json=None)
 
       :param value: a scalar value, list, or dictionary.
       :param bool as_json: force the value to be treated as JSON, in which
@@ -1189,12 +1170,12 @@ special methods designed to work with the `SQLite json functions <https://sqlite
           default, lists and dictionaries are treated as JSON to be
           serialized, while strings and integers are passed as-is.
 
-      Replace the existing value stored in a :py:class:`JSONField`.
+      Replace the existing value stored in a :class:`JSONField`.
 
       Uses the `json_replace() <http://sqlite.org/json1.html#jset>`_ function
       from the json1 extension.
 
-   .. py:method:: insert(value, as_json=None)
+   .. method:: insert(value, as_json=None)
 
       :param value: a scalar value, list, or dictionary.
       :param bool as_json: force the value to be treated as JSON, in which
@@ -1202,12 +1183,12 @@ special methods designed to work with the `SQLite json functions <https://sqlite
           default, lists and dictionaries are treated as JSON to be
           serialized, while strings and integers are passed as-is.
 
-      Insert value into :py:class:`JSONField`.
+      Insert value into :class:`JSONField`.
 
       Uses the `json_insert() <http://sqlite.org/json1.html#jset>`_ function
       from the json1 extension.
 
-   .. py:method:: append(value, as_json=None)
+   .. method:: append(value, as_json=None)
 
       :param value: a scalar value, list, or dictionary.
       :param bool as_json: force the value to be treated as JSON, in which
@@ -1215,36 +1196,36 @@ special methods designed to work with the `SQLite json functions <https://sqlite
           default, lists and dictionaries are treated as JSON to be
           serialized, while strings and integers are passed as-is.
 
-      Append to the array stored in a :py:class:`JSONField`.
+      Append to the array stored in a :class:`JSONField`.
 
       Uses the `json_set() <http://sqlite.org/json1.html#jset>`_ function
       from the json1 extension.
 
-   .. py:method:: update(data)
+   .. method:: update(data)
 
       :param data: a scalar value, list or dictionary to merge with the data
-          currently stored in a :py:class:`JSONField`. To remove a particular
+          currently stored in a :class:`JSONField`. To remove a particular
           key, set that key to ``None`` in the updated data.
 
       Merge new data into the JSON value using the RFC-7396 MergePatch
       algorithm to apply a patch (``data`` parameter) against the column
       data. MergePatch can add, modify, or delete elements of a JSON object,
-      which means :py:meth:`~JSONField.update` is a generalized replacement
-      for both :py:meth:`~JSONField.set` and :py:meth:`~JSONField.remove`.
+      which means :meth:`~JSONField.update` is a generalized replacement
+      for both :meth:`~JSONField.set` and :meth:`~JSONField.remove`.
       MergePatch treats JSON array objects as atomic, so ``update()`` cannot
       append to an array, nor modify individual elements of an array.
 
       For more information as well as examples, see the SQLite `json_patch() <http://sqlite.org/json1.html#jpatch>`_
       function documentation.
 
-   .. py:method:: remove()
+   .. method:: remove()
 
-      Remove the data stored in the :py:class:`JSONField`.
+      Remove the data stored in the :class:`JSONField`.
 
       Uses the `json_remove <https://www.sqlite.org/json1.html#jrm>`_ function
       from the json1 extension.
 
-   .. py:method:: json_type()
+   .. method:: json_type()
 
       Return a string identifying the type of value stored in the column.
 
@@ -1263,14 +1244,14 @@ special methods designed to work with the `SQLite json functions <https://sqlite
       Uses the `json_type <https://www.sqlite.org/json1.html#jtype>`_
       function from the json1 extension.
 
-   .. py:method:: length()
+   .. method:: length()
 
       Return the length of the array stored in the column.
 
       Uses the `json_array_length <https://www.sqlite.org/json1.html#jarraylen>`_
       function from the json1 extension.
 
-   .. py:method:: children()
+   .. method:: children()
 
       The ``children`` function corresponds to ``json_each``, a table-valued
       function that walks the JSON value provided and returns the immediate
@@ -1282,7 +1263,7 @@ special methods designed to work with the `SQLite json functions <https://sqlite
 
       * ``key``: the key of the current element relative to its parent.
       * ``value``: the value of the current element.
-      * ``type``: one of the data-types (see :py:meth:`~JSONField.json_type`).
+      * ``type``: one of the data-types (see :meth:`~JSONField.json_type`).
       * ``atom``: the scalar value for primitive types, ``NULL`` for arrays and objects.
       * ``id``: a unique ID referencing the current node in the tree.
       * ``parent``: the ID of the containing node.
@@ -1292,7 +1273,7 @@ special methods designed to work with the `SQLite json functions <https://sqlite
       Internally this method uses the `json_each <https://www.sqlite.org/json1.html#jeach>`_
       (documentation link) function from the json1 extension.
 
-      Example usage (compare to :py:meth:`~JSONField.tree` method):
+      Example usage (compare to :meth:`~JSONField.tree` method):
 
       .. code-block:: python
 
@@ -1318,7 +1299,7 @@ special methods designed to work with the `SQLite json functions <https://sqlite
            ('a', 'x1', '{"y1":"z1"}',           '$.x1'),
            ('b', 'x1', '{"y1":"z1","y2":"z2"}', '$.x1')]
 
-   .. py:method:: tree()
+   .. method:: tree()
 
       The ``tree`` function corresponds to ``json_tree``, a table-valued
       function that recursively walks the JSON value provided and returns
@@ -1326,11 +1307,11 @@ special methods designed to work with the `SQLite json functions <https://sqlite
       that path is treated as the top-most element.
 
       The rows returned by calls to ``tree()`` have the same attributes as
-      rows returned by calls to :py:meth:`~JSONField.children`:
+      rows returned by calls to :meth:`~JSONField.children`:
 
       * ``key``: the key of the current element relative to its parent.
       * ``value``: the value of the current element.
-      * ``type``: one of the data-types (see :py:meth:`~JSONField.json_type`).
+      * ``type``: one of the data-types (see :meth:`~JSONField.json_type`).
       * ``atom``: the scalar value for primitive types, ``NULL`` for arrays and objects.
       * ``id``: a unique ID referencing the current node in the tree.
       * ``parent``: the ID of the containing node.
@@ -1372,7 +1353,7 @@ special methods designed to work with the `SQLite json functions <https://sqlite
            ('b',  'y2',  'z2',                           '$.x1.y2')]
 
 
-.. py:class:: JSONPath(field, path=None)
+.. class:: JSONPath(field, path=None)
 
    :param JSONField field: the field object we intend to access.
    :param tuple path: Components comprising the JSON path.
@@ -1391,7 +1372,7 @@ special methods designed to work with the `SQLite json functions <https://sqlite
                .select(Config.data['timeout'])
                .where(Config.data['retries']['max'] < 10))
 
-.. py:class:: JSONBField(json_dumps=None, json_loads=None, **kwargs)
+.. class:: JSONBField(json_dumps=None, json_loads=None, **kwargs)
 
    Extends :class:`JSONField` and stores data in the binary ``jsonb`` format
    (SQLite 3.45.0+). When reading raw column values the data is in its
@@ -1422,11 +1403,15 @@ The general pattern is:
    :class:`SearchField` columns.
 2. When a row is created or updated in the source table, insert or update
    the corresponding row in the search index.
-3. Query the index using :py:meth:`~FTSModel.match` and rank results with
-   :meth:`~FTSModel.bm25` (or :py:meth:`~FTSModel.rank` for FTS5).
+3. Query the index using :meth:`~FTSModel.match` and rank results with
+   :meth:`~FTSModel.bm25` (or :meth:`~FTSModel.rank` for FTS5).
 
+Consult the SQLite documentation for FTS query syntax diagrams:
 
-.. py:class:: SearchField(unindexed=False, column_name=None)
+* `FTS3 and FTS4 <https://www.sqlite.org/fts3.html#full_text_index_queries>`__
+* `FTS5 <https://sqlite.org/fts5.html#full_text_query_syntax>`__
+
+.. class:: SearchField(unindexed=False, column_name=None)
 
    Field type for full-text search virtual tables. Raises an exception if
    constraints (``null=False``, ``unique=True``, etc.) are specified, since
@@ -1443,15 +1428,15 @@ The general pattern is:
           tags = SearchField()
           timestamp = SearchField(unindexed=True)
 
-   .. py:method:: match(term)
+   .. method:: match(term)
 
       :param str term: full-text search query/terms.
-      :return: a :py:class:`Expression` corresponding to the ``MATCH``
+      :return: a :class:`Expression` corresponding to the ``MATCH``
           operator.
 
       Sqlite's full-text search supports searching either the full table,
       including all indexed columns, **or** searching individual columns. The
-      :py:meth:`~SearchField.match` method can be used to restrict search to
+      :meth:`~SearchField.match` method can be used to restrict search to
       a single column:
 
       .. code-block:: python
@@ -1475,7 +1460,7 @@ The general pattern is:
                   .where(DocumentIndex.match('python'))
                   .order_by(DocumentIndex.bm25()))
 
-   .. py:method:: highlight(left, right)
+   .. method:: highlight(left, right)
 
       :param str left: opening tag for highlight, e.g. ``'<b>'``
       :param str right: closing tag for highlight, e.g. ``'</b>'``
@@ -1497,7 +1482,7 @@ The general pattern is:
          # For example, might print:
          # Learn [python] the hard way
 
-   .. py:method:: snippet(left, right, over_length='...', max_tokens=16)
+   .. method:: snippet(left, right, over_length='...', max_tokens=16)
 
       :param str left: opening tag for highlight, e.g. ``'<b>'``
       :param str right: closing tag for highlight, e.g. ``'</b>'``
@@ -1527,39 +1512,35 @@ FTS4 / ``FTSModel``
 FTSModel enables Peewee applications to store data in an efficient full-text
 search index using SQLite `FTS4 <https://www.sqlite.org/fts3.html>`_.
 
-FTSModel subclasses should be defined normally, however there are a couple
-caveats:
+FTSModel caveats:
 
-* Unique constraints, not null constraints, check constraints and foreign
-  keys are not supported.
-* Indexes on fields and multi-column indexes are ignored completely.
-* Sqlite will treat all column types as ``TEXT``.
-* FTS models contain a ``rowid`` field which is automatically created and
-  managed by SQLite (unless you choose to explicitly set it during model
-  creation). Lookups on this column **are fast and efficient**.
-* FTS3 and 4 do not provide built-in ranking. Peewee provides several
-  implementations which can be automatically registered by passing
-  ``rank_functions=True`` to ``SqliteDatabase(...)``.
+* All queries **except** ``MATCH`` and ``rowid`` lookup require a full table scan.
+* Constraints, foreign-keys, and indexes are not supported.
+* All columns are treated as ``TEXT``.
+* No built-in ranking. Peewee provides several implementations which can be
+  automatically registered by passing ``rank_functions=True`` to ``SqliteDatabase(...)``.
+* FTSModel ``rowid`` primary key may be declared using :class:`RowIDField`.
+  Lookups on the ``rowid`` are very efficient.
 
-Given these constraints all fields declared on an ``FTSModel`` subclass should
-be instances of :class:`SearchField`.
-
-The only exception to the above is for the ``rowid`` primary key, which can
-be declared using :class:`RowIDField`. Lookups on the ``rowid`` are very
-efficient.
+Given these constraints all fields besides ``rowid`` should be instances of
+:class:`SearchField` to ensure correctness.
 
 .. tip::
-   Because of the lack of secondary indexes, it usually makes sense to use
-   the ``rowid`` primary key as a pointer to a row in a regular table.
+   Because of the lack of secondary indexes, it usually makes sense to treat
+   the ``FTSModel.rowid`` primary key as a foreign-key to a row in a normal
+   SQLite table.
 
 Example:
 
 .. code-block:: python
 
+   from peewee import *
+   from playhouse.sqlite_ext import FTSModel, SearchField
+
    db = SqliteDatabase('app.db', rank_functions=True)
 
    class Document(Model):
-       # Canonical source of data, stored in a regular table.
+       # Canonical source of data, stored in a normal table.
        author = ForeignKeyField(User, backref='documents')
        title = TextField(null=False, unique=True)
        content = TextField(null=False)
@@ -1579,7 +1560,7 @@ Example:
            database = db
            # Use the porter stemming algorithm to tokenize content, optimize
            # prefix searches of 3 or 4 characters.
-           options = {'tokenize': 'porter', 'prefix': [3, 4]}
+           options = {'tokenize': 'porter unicode61', 'prefix': [3, 4]}
 
 Store data by inserting it into the FTS table:
 
@@ -1587,9 +1568,9 @@ Store data by inserting it into the FTS table:
 
    # Store a document in the index:
    DocumentIndex.create(
-       rowid=document.id,
+       rowid=document.id,  # Set rowid to match Document's id.
        title=document.title,
-       body=document.body,
+       content=document.content,
        author=document.author.get_full_name())
 
    # Equivalent:
@@ -1597,7 +1578,7 @@ Store data by inserting it into the FTS table:
     .insert({
         'rowid': document.id,
         'title': document.title,
-        'body': document.body,
+        'content': document.content,
         'author': document.author.get_full_name()})
     .execute())
 
@@ -1611,7 +1592,7 @@ Store data by inserting it into the FTS table:
    # BM25 search With score and per-column weighting:
    results = DocumentIndex.search_bm25(
        'python sqlite',
-       weights={'title': 2.0, 'body': 1.0},
+       weights={'title': 2.0, 'content': 1.0},
        with_score=True,
        score_alias='relevance')
 
@@ -1692,16 +1673,16 @@ Store data by inserting it into the FTS table:
    attention to keeping data synchronized.
 
 
-.. py:class:: FTSModel()
+.. class:: FTSModel()
 
-   Base Model class suitable for working with SQLite FTS4 and FTS3.
+   Base Model class suitable for working with SQLite FTS3 / FTS4.
 
    Supports the following options:
 
-   * content: :class:`Model` containing external content, or empty string
+   * ``content``: :class:`Model` containing external content, or empty string
      for "contentless"
-   * prefix: integer(s). Ex: '2' or '2,3,4'
-   * tokenize: simple, porter, unicode61. Ex: 'porter'
+   * ``prefix``: integer(s). Ex: '2' or '2,3,4'
+   * ``tokenize``: simple, porter, unicode61. Ex: 'porter'
 
    Example:
 
@@ -1718,9 +1699,9 @@ Store data by inserting it into the FTS table:
                   'prefix': '3',
               }
 
-   .. py:classmethod:: match(term)
+   .. classmethod:: match(term)
 
-      :param term: Search term or expression.
+      :param term: Search term or expression. `FTS syntax documentation <https://www.sqlite.org/fts3.html#full_text_index_queries>`__.
 
       Generate a SQL expression representing a search for the given term or
       expression in the table. SQLite uses the ``MATCH`` operator to indicate
@@ -1740,9 +1721,9 @@ Store data by inserting it into the FTS table:
          for result in query:
              print('Result: %s' % result.title)
 
-   .. py:classmethod:: search(term, weights=None, with_score=False, score_alias='score', explicit_ordering=False)
+   .. classmethod:: search(term, weights=None, with_score=False, score_alias='score', explicit_ordering=False)
 
-      :param str term: Search term to use.
+      :param term: Search term or expression. `FTS syntax documentation <https://www.sqlite.org/fts3.html#full_text_index_queries>`__.
       :param weights: A list of weights for the columns, ordered with respect
         to the column's position in the table. **Or**, a dictionary keyed by
         the field or field name and mapped to a value.
@@ -1761,7 +1742,7 @@ Store data by inserting it into the FTS table:
       .. note::
          This method uses a simplified algorithm for determining the
          relevance rank of results. For more sophisticated result ranking,
-         use the :py:meth:`~FTSModel.search_bm25` method.
+         use the :meth:`~FTSModel.search_bm25` method.
 
       .. code-block:: python
 
@@ -1779,9 +1760,9 @@ Store data by inserting it into the FTS table:
          for result in docs:
              print(result.title, result.search_score)
 
-   .. py:classmethod:: search_bm25(term, weights=None, with_score=False, score_alias='score', explicit_ordering=False)
+   .. classmethod:: search_bm25(term, weights=None, with_score=False, score_alias='score', explicit_ordering=False)
 
-      :param str term: Search term to use.
+      :param term: Search term or expression. `FTS syntax documentation <https://www.sqlite.org/fts3.html#full_text_index_queries>`__.
       :param weights: A list of weights for the columns, ordered with respect
         to the column's position in the table. **Or**, a dictionary keyed by
         the field or field name and mapped to a value.
@@ -1799,19 +1780,19 @@ Store data by inserting it into the FTS table:
 
       .. attention::
          The BM25 ranking algorithm is only available for FTS4. If you are
-         using FTS3, use the :py:meth:`~FTSModel.search` method instead.
+         using FTS3, use the :meth:`~FTSModel.search` method instead.
 
-   .. py:classmethod:: search_bm25f(term, weights=None, with_score=False, score_alias='score', explicit_ordering=False)
+   .. classmethod:: search_bm25f(term, weights=None, with_score=False, score_alias='score', explicit_ordering=False)
 
-      Same as :py:meth:`FTSModel.search_bm25`, but using the BM25f variant
+      Same as :meth:`FTSModel.search_bm25`, but using the BM25f variant
       of the BM25 ranking algorithm.
 
-   .. py:classmethod:: search_lucene(term, weights=None, with_score=False, score_alias='score', explicit_ordering=False)
+   .. classmethod:: search_lucene(term, weights=None, with_score=False, score_alias='score', explicit_ordering=False)
 
-      Same as :py:meth:`FTSModel.search_bm25`, but using the result ranking
+      Same as :meth:`FTSModel.search_bm25`, but using the result ranking
       algorithm from the Lucene search engine.
 
-   .. py:classmethod:: rank(col1_weight, col2_weight...coln_weight)
+   .. classmethod:: rank(col1_weight, col2_weight...coln_weight)
 
       :param float col_weight: (Optional) weight to give to the *ith* column
           of the model. By default all columns have a weight of ``1.0``.
@@ -1824,12 +1805,12 @@ Store data by inserting it into the FTS table:
       all columns are considered of equal importance.
 
       .. note::
-         The algorithm used by :py:meth:`~FTSModel.rank` is simple and
+         The algorithm used by :meth:`~FTSModel.rank` is simple and
          relatively quick. For more sophisticated result ranking, use:
 
-         * :py:meth:`~FTSModel.bm25`
-         * :py:meth:`~FTSModel.bm25f`
-         * :py:meth:`~FTSModel.lucene`
+         * :meth:`~FTSModel.bm25`
+         * :meth:`~FTSModel.bm25f`
+         * :meth:`~FTSModel.lucene`
 
       .. code-block:: python
 
@@ -1843,7 +1824,7 @@ Store data by inserting it into the FTS table:
          for search_result in query:
              print(search_result.title, search_result.score)
 
-   .. py:classmethod:: bm25(col1_weight, col2_weight...coln_weight)
+   .. classmethod:: bm25(col1_weight, col2_weight...coln_weight)
 
       :param float col_weight: (Optional) weight to give to the *ith* column
           of the model. By default all columns have a weight of ``1.0``.
@@ -1852,14 +1833,14 @@ Store data by inserting it into the FTS table:
       the search match using the `BM25 algorithm <https://en.wikipedia.org/wiki/Okapi_BM25>`_.
       This value can be used to sort the search results.
 
-      Like :py:meth:`~FTSModel.rank`, ``bm25`` function accepts optional
+      Like :meth:`~FTSModel.rank`, ``bm25`` function accepts optional
       parameters that allow you to specify weights for the various columns.
       If no weights are specified, all columns are considered of equal
       importance.
 
       .. attention::
          The BM25 result ranking algorithm requires FTS4. If you are using
-         FTS3, use :py:meth:`~FTSModel.rank` instead.
+         FTS3, use :meth:`~FTSModel.rank` instead.
 
       .. code-block:: python
 
@@ -1875,7 +1856,7 @@ Store data by inserting it into the FTS table:
 
       .. note::
          The above code example is equivalent to calling the
-         :py:meth:`~FTSModel.search_bm25` method:
+         :meth:`~FTSModel.search_bm25` method:
 
           .. code-block:: python
 
@@ -1883,22 +1864,22 @@ Store data by inserting it into the FTS table:
              for search_result in query:
                  print(search_result.title, search_result.score)
 
-   .. py:classmethod:: bm25f(col1_weight, col2_weight...coln_weight)
+   .. classmethod:: bm25f(col1_weight, col2_weight...coln_weight)
 
-      Identical to :py:meth:`~FTSModel.bm25`, except that it uses the BM25f
+      Identical to :meth:`~FTSModel.bm25`, except that it uses the BM25f
       variant of the BM25 ranking algorithm.
 
-   .. py:classmethod:: lucene(col1_weight, col2_weight...coln_weight)
+   .. classmethod:: lucene(col1_weight, col2_weight...coln_weight)
 
-      Identical to :py:meth:`~FTSModel.bm25`, except that it uses the Lucene
+      Identical to :meth:`~FTSModel.bm25`, except that it uses the Lucene
       search result ranking algorithm.
 
-   .. py:classmethod:: rebuild()
+   .. classmethod:: rebuild()
 
       Rebuild the search index. Only valid when the ``content`` option
       was specified (content tables).
 
-   .. py:classmethod:: optimize()
+   .. classmethod:: optimize()
 
       Optimize the index.
 
@@ -1911,26 +1892,20 @@ FTS5Model enables Peewee applications to store data in an efficient full-text
 search index using SQLite `FTS5 <https://www.sqlite.org/fts5.html>`_. FTS5 also
 comes with native BM25 result ranking.
 
-FTS5Model subclasses should be defined normally, however there are a couple
-caveats:
+FTS5Model caveats:
 
-* FTS5 explicitly disallows specification of any constraints, data-type or
-  indexes on columns. For that reason, all columns **must** be instances
-  of :py:class:`SearchField`.
-* FTS5 models contain a ``rowid`` field which is automatically created and
-  managed by SQLite (unless you choose to explicitly set it during model
-  creation). Lookups on this column **are fast and efficient**.
-* Indexes on fields and multi-column indexes are not supported.
-
-The only exception to the above is for the ``rowid`` primary key, which can
-be declared using :class:`RowIDField`. Lookups on the ``rowid`` are very
-efficient.
+* All queries **except** ``MATCH`` and ``rowid`` lookup require a full table scan.
+* Constraints, foreign-keys, and indexes are not supported. All columns **must**
+  be instances of :class:`SearchField`.
+* FTS5Model ``rowid`` primary key may be declared using :class:`RowIDField`.
+  Lookups on the ``rowid`` are very efficient.
 
 .. tip::
-   Because of the lack of secondary indexes, it usually makes sense to use
-   the ``rowid`` primary key as a pointer to a row in a regular table.
+   Because of the lack of secondary indexes, it usually makes sense to treat
+   the ``FTS5Model.rowid`` primary key as a foreign-key to a row in a normal
+   SQLite table.
 
-Example usage:
+Example:
 
 .. code-block:: python
 
@@ -1940,7 +1915,7 @@ Example usage:
    db = SqliteDatabase('app.db')
 
    class Document(Model):
-       # Canonical source of data, stored in a regular table.
+       # Canonical source of data, stored in a normal table.
        author = ForeignKeyField(User, backref='documents')
        title = TextField(null=False, unique=True)
        content = TextField(null=False)
@@ -1954,6 +1929,7 @@ Example usage:
        rowid = RowIDField()
        title = SearchField()
        content = SearchField()
+       author = SearchField(unindexed=True)
 
        class Meta:
            database = db
@@ -1971,9 +1947,9 @@ Store data by inserting it into the FTS5 table:
 
    # Store a document in the index:
    DocumentIndex.create(
-       rowid=document.id,
+       rowid=document.id,  # Set rowid to match Document's id.
        title=document.title,
-       body=document.body,
+       content=document.content,
        author=document.author.get_full_name())
 
    # Equivalent:
@@ -1981,7 +1957,7 @@ Store data by inserting it into the FTS5 table:
     .insert({
         'rowid': document.id,
         'title': document.title,
-        'body': document.body,
+        'content': document.content,
         'author': document.author.get_full_name()})
     .execute())
 
@@ -1995,7 +1971,7 @@ Store data by inserting it into the FTS5 table:
    # With score and per-column weighting:
    results = DocumentIndex.search(
        'python sqlite',
-       weights={'title': 2.0, 'body': 1.0},
+       weights={'title': 2.0, 'content': 1.0},
        with_score=True,
        score_alias='relevance')
 
@@ -2034,17 +2010,17 @@ additional copy of the search index content. See :ref:`External Content
 <sqlite-fts4-external-content>` for implementation details. The `FTS5 documentation <https://www.sqlite.org/fts5.html#external_content_and_contentless_tables>`_
 has more information.
 
-.. py:class:: FTS5Model()
+.. class:: FTS5Model()
 
-   Inherits all :py:class:`FTSModel` methods plus.
+   Inherits all :class:`FTSModel` methods plus.
 
    Supports the following options:
 
-   * content: :class:`Model` containing external content, or empty string
+   * ``content``: :class:`Model` containing external content, or empty string
      for "contentless"
-   * content_rowid: :class:`Field` (external content primary key)
-   * prefix: integer(s). Ex: '2' or ``[2, 3]``
-   * tokenize: simple, porter, unicode61. Ex: 'porter unicode61'
+   * ``content_rowid``: :class:`Field` (external content primary key)
+   * ``prefix``: integer(s). Ex: '2' or ``[2, 3]``
+   * ``tokenize``: simple, porter, unicode61. Ex: 'porter unicode61'
 
    Example:
 
@@ -2061,13 +2037,35 @@ has more information.
                   'prefix': '3',
               }
 
-   .. py:classmethod:: fts5_installed()
+   .. classmethod:: fts5_installed()
 
       Return ``True`` if FTS5 is available.
 
-   .. py:classmethod:: search(term, weights=None, with_score=False, score_alias='score')
+   .. classmethod:: match(term)
 
-      :param str term: Search term to use.
+      :param term: Search term or expression. `FTS5 syntax documentation <https://sqlite.org/fts5.html#full_text_query_syntax>`__.
+
+      Generate a SQL expression representing a search for the given term or
+      expression in the table. SQLite uses the ``MATCH`` operator to indicate
+      a full-text search.
+
+      Example:
+
+      .. code-block:: python
+
+         # Search index for "search phrase" and return results ranked
+         # by relevancy using the BM25 algorithm.
+         query = (DocumentIndex
+                  .select()
+                  .where(DocumentIndex.match('search phrase'))
+                  .order_by(DocumentIndex.rank()))
+
+         for result in query:
+             print('Result: %s' % result.title)
+
+   .. classmethod:: search(term, weights=None, with_score=False, score_alias='score')
+
+      :param term: Search term or expression. `FTS5 syntax documentation <https://sqlite.org/fts5.html#full_text_query_syntax>`__.
       :param weights: A list of weights for the columns, ordered with respect
         to the column's position in the table. **Or**, a dictionary keyed by
         the field or field name and mapped to a value.
@@ -2101,12 +2099,12 @@ has more information.
           for result in docs:
               print(result.title, result.search_score)
 
-   .. py:classmethod:: search_bm25(term, weights=None, with_score=False, score_alias='score')
+   .. classmethod:: search_bm25(term, weights=None, with_score=False, score_alias='score')
 
-      With FTS5, :py:meth:`~FTS5Model.search_bm25` is identical to the
-      :py:meth:`~FTS5Model.search` method.
+      With FTS5, :meth:`~FTS5Model.search_bm25` is identical to the
+      :meth:`~FTS5Model.search` method.
 
-   .. py:classmethod:: rank(col1_weight, col2_weight...coln_weight)
+   .. classmethod:: rank(col1_weight, col2_weight...coln_weight)
 
       :param float col_weight: (Optional) weight to give to the *ith* column
           of the model. By default all columns have a weight of ``1.0``.
@@ -2115,7 +2113,7 @@ has more information.
       the search match using the `BM25 algorithm <https://en.wikipedia.org/wiki/Okapi_BM25>`_.
       This value can be used to sort the search results.
 
-      The :py:meth:`~FTS5Model.rank` function accepts optional parameters
+      The :meth:`~FTS5Model.rank` function accepts optional parameters
       that allow you to specify weights for the various columns.  If no
       weights are specified, all columns are considered of equal importance.
 
@@ -2133,7 +2131,7 @@ has more information.
 
       .. note::
           The above code example is equivalent to calling the
-          :py:meth:`~FTS5Model.search` method:
+          :meth:`~FTS5Model.search` method:
 
           .. code-block:: python
 
@@ -2141,12 +2139,12 @@ has more information.
               for search_result in query:
                   print(search_result.title, search_result.score)
 
-   .. py:classmethod:: bm25(col1_weight, col2_weight...coln_weight)
+   .. classmethod:: bm25(col1_weight, col2_weight...coln_weight)
 
       Because FTS5 provides built-in support for BM25, this method is identical
-      to :py:meth:`~FTS5Model.rank` method.
+      to :meth:`~FTS5Model.rank` method.
 
-   .. py:classmethod:: VocabModel(table_type='row'|'col'|'instance', table_name=None)
+   .. classmethod:: VocabModel(table_type='row'|'col'|'instance', table_name=None)
 
       :param str table_type: Either 'row', 'col' or 'instance'.
       :param table_name: Name for the vocab table. If not specified, will be
@@ -2155,37 +2153,37 @@ has more information.
       Generate a model class suitable for accessing the `vocab table <http://sqlite.org/fts5.html#the_fts5vocab_virtual_table_module>`_
       corresponding to FTS5 search index.
 
-   .. py:classmethod:: rebuild()
+   .. classmethod:: rebuild()
 
       Rebuild the search index. Only valid when the ``content`` option
       was specified (content tables).
 
-   .. py:classmethod:: optimize()
+   .. classmethod:: optimize()
 
       Optimize the index.
 
 
 .. _sqlite-udf:
 
-SQLite User-Defined Functions
--------------------------------
+User-Defined Function Collection
+---------------------------------
 
-The ``playhouse.sqlite_udf`` module ships a library of Python-implemented
-scalar functions, aggregate functions, and (when using CySqlite)
+The ``playhouse.sqlite_udf`` contains a number of functions, aggregates, and
 table-valued functions grouped into named collections.
 
 .. code-block:: python
 
    from playhouse.sqlite_udf import register_all, register_groups
+   from playhouse.sqlite_udf import DATE, STRING
 
    db = SqliteDatabase('my_app.db')
 
-   register_all(db)                     # Register every function.
-   register_groups(db, 'DATE', 'MATH')  # Register selected groups.
+   register_all(db)                   # Register every function.
+   register_groups(db, DATE, STRING)  # Register selected groups.
 
-   # Register a single function by hand:
+   # Register individual functions:
    from playhouse.sqlite_udf import gzip, gunzip
-   db.register_function(gzip,   'gzip')
+   db.register_function(gzip, 'gzip')
    db.register_function(gunzip, 'gunzip')
 
 Once registered, call functions via Peewee's ``fn`` namespace or raw SQL:
@@ -2199,63 +2197,255 @@ Once registered, call functions via Peewee's ``fn`` namespace or raw SQL:
             .order_by(fn.COUNT(Link.id).desc())
             .tuples())
 
-Available collections and functions:
+Available functions
+^^^^^^^^^^^^^^^^^^^
 
 **CONTROL_FLOW**
 
-- ``if_then_else(cond, truthy, falsey=None)`` — ternary expression.
+.. function:: if_then_else(cond, truthy, falsey=None)
+
+   Simple ternary-type operator, where, depending on the truthiness of the
+   ``cond`` parameter, either the ``truthy`` or ``falsey`` value will be
+   returned.
 
 **DATE**
 
-- ``strip_tz(date_str)`` — remove timezone offset from a datetime string
-  (does not adjust the time).
-- ``humandelta(nseconds, glue=', ')`` (a) — human-readable timedelta,
-  e.g. ``86471`` → ``"1 day, 1 minute, 11 seconds"``.
-- ``mintdiff(datetime_value)`` (a) — minimum difference between any two
-  values in a set.
-- ``avgtdiff(datetime_value)`` (a) — average difference between consecutive
-  values.
-- ``duration(datetime_value)`` (a) — duration from smallest to largest value
-  in seconds.
-- ``date_series(start, stop, step_seconds=86400)`` (t) — table-valued
-  function yielding dates/datetimes between ``start`` and ``stop``.
+.. function:: strip_tz(date_str)
+
+   :param date_str: A datetime, encoded as a string.
+   :returns: The datetime with any timezone info stripped off.
+
+   The time is not adjusted in any way, the timezone is simply removed.
+
+.. function:: humandelta(nseconds, glue=', ')
+
+   :param int nseconds: Number of seconds, total, in timedelta.
+   :param str glue: Fragment to join values.
+   :returns: Easy-to-read description of timedelta.
+
+   Example, 86471 -> "1 day, 1 minute, 11 seconds"
+
+.. function:: mintdiff(datetime_value)
+
+   :param datetime_value: A date-time.
+   :returns: Minimum difference between any two values in list.
+
+   *Aggregate*: minimum difference between any two datetimes.
+
+.. function:: avgtdiff(datetime_value)
+
+   :param datetime_value: A date-time.
+   :returns: Average difference between values in list.
+
+   *Aggregate*: average difference between consecutive values.
+
+.. function:: duration(datetime_value)
+
+   :param datetime_value: A date-time.
+   :returns: Duration from smallest to largest value in list, in seconds.
+
+   *Aggregate*: duration from the smallest to the largest value, in seconds.
+
+.. function:: date_series(start, stop, step_seconds=86400)
+
+   :param datetime start: Start datetime
+   :param datetime stop: Stop datetime
+   :param int step_seconds: Number of seconds comprising a step.
+
+   *Table-value function*: returns rows consisting of the date/+time values
+   encountered iterating from start to stop, ``step_seconds`` at a time.
+
+   Additionally, if start does not have a time component and step_seconds is
+   greater-than-or-equal-to one day (86400 seconds), the values returned will
+   be dates. Conversely, if start does not have a date component, values will
+   be returned as times. Otherwise values are returned as datetimes.
+
+   Example:
+
+   .. code-block:: sql
+
+       SELECT * FROM date_series('2017-01-28', '2017-02-02');
+
+       value
+       -----
+       2017-01-28
+       2017-01-29
+       2017-01-30
+       2017-01-31
+       2017-02-01
+       2017-02-02
 
 **FILE**
 
-- ``file_ext(filename)`` — extract file extension including the leading dot.
-- ``file_read(filename)`` — return the contents of a file.
+.. function:: file_ext(filename)
+
+   :param str filename: Filename to extract extension from.
+   :return: Returns the file extension, including the leading ".".
+
+.. function:: file_read(filename)
+
+   :param str filename: Filename to read.
+   :return: Contents of the file.
 
 **HELPER**
 
-- ``gzip(data, compression=9)`` — compress bytes.
-- ``gunzip(data)`` — decompress bytes.
-- ``hostname(url)`` — extract hostname from a URL.
-- ``toggle(key)`` / ``clear_toggles()`` — in-memory boolean toggle per key.
-- ``setting(key, value=None)`` / ``clear_settings()`` — in-memory key/value
-  settings store.
+.. function:: gzip(data, compression=9)
+
+   :param bytes data: Data to compress.
+   :param int compression: Compression level (9 is max).
+   :returns: Compressed binary data.
+
+.. function:: gunzip(data)
+
+   :param bytes data: Compressed data.
+   :returns: Uncompressed binary data.
+
+.. function:: hostname(url)
+
+   :param str url: URL to extract hostname from.
+   :returns: hostname portion of URL
+
+.. function:: toggle(key)
+
+   :param key: Key to toggle.
+
+   Toggle a key between True/False state. Example:
+
+   .. code-block:: pycon
+
+      >>> toggle('my-key')
+      True
+      >>> toggle('my-key')
+      False
+      >>> toggle('my-key')
+      True
+
+.. function:: setting(key, value=None)
+
+   :param key: Key to set/retrieve.
+   :param value: Value to set.
+   :returns: Value associated with key.
+
+   Store/retrieve a setting in memory and persist during lifetime of
+   application. To get the current value, specify key. To set a new
+   value, call with key and new value.
+
+.. function:: clear_toggles()
+
+   Clears all state associated with the :func:`toggle` function.
+
+.. function:: clear_settings()
+
+   Clears all state associated with the :func:`setting` function.
 
 **MATH**
 
-- ``randomrange(start, stop=None, step=None)`` — random integer in range.
-- ``gauss_distribution(mean, sigma)`` — Gaussian random value.
-- ``sqrt(n)`` — square root.
-- ``tonumber(s)`` — parse a string to integer or float, or NULL.
-- ``mode(val)`` (a) — most common value in a set.
-- ``minrange(val)`` (a) — minimum difference between any two numbers.
-- ``avgrange(val)`` (a) — average distance between consecutive numbers.
-- ``range(val)`` (a) — difference between smallest and largest value.
-- ``median(val)`` (a) — middle value (requires ``_sqlite_udf`` extension).
+.. function:: randomrange(start, stop=None, step=None)
+
+   :param int start: Start of range (inclusive)
+   :param int end: End of range(not inclusive)
+   :param int step: Interval at which to return a value.
+
+   Return a random integer between ``[start, end)``.
+
+.. function:: gauss_distribution(mean, sigma)
+
+   :param float mean: Mean value
+   :param float sigma: Standard deviation
+
+.. function:: sqrt(n)
+
+   Calculate the square root of ``n``.
+
+.. function:: tonumber(s)
+
+   :param str s: String to convert to number.
+   :returns: Integer, floating-point or NULL on failure.
+
+.. function:: mode(val)
+
+   :param val: Numbers in list.
+   :returns: The mode, or most-common, number observed.
+
+   *Aggregate*: calculates *mode* of values.
+
+.. function:: minrange(val)
+
+   :param val: Value
+   :returns: Min difference between two values.
+
+   *Aggregate*: minimum distance between two numbers in the sequence.
+
+.. function:: avgrange(val)
+
+   :param val: Value
+   :returns: Average difference between values.
+
+   *Aggregate*: average distance between consecutive numbers in the sequence.
+
+.. function:: range(val)
+
+   :param val: Value
+   :returns: The range from the smallest to largest value in sequence.
+
+   *Aggregate*: range of values observed.
+
+.. function:: median(val)
+
+   :param val: Value
+   :returns: The median, or middle, value in a sequence.
+
+   *Aggregate*: median value of a sequence.
+
+   .. note:: Only available if you compiled the ``_sqlite_udf`` extension.
 
 **STRING**
 
-- ``substr_count(haystack, needle)`` — count occurrences of a substring.
-- ``strip_chars(haystack, chars)`` — strip characters from both ends.
-- ``damerau_levenshtein_dist(s1, s2)`` — edit distance with transpositions
-  (requires ``_sqlite_udf``).
-- ``levenshtein_dist(s1, s2)`` — edit distance (requires ``_sqlite_udf``).
-- ``str_dist(s1, s2)`` — edit distance via ``SequenceMatcher``
-  (requires ``_sqlite_udf``).
-- ``regex_search(regex, string)`` (t) — table-valued function returning
-  all regex matches in a string (requires CySqlite).
+.. function:: substr_count(haystack, needle)
 
-*(a) = aggregate function, (t) = table-valued function*
+   Returns number of times ``needle`` appears in ``haystack``.
+
+.. function:: strip_chars(haystack, chars)
+
+   Strips any characters in ``chars`` from beginning and end of ``haystack``.
+
+.. function:: damerau_levenshtein_dist(s1, s2)
+
+   Computes the edit distance from s1 to s2 using the damerau variant of the
+   levenshtein algorithm.
+
+   .. note:: Only available if you compiled the ``_sqlite_udf`` extension.
+
+.. function:: levenshtein_dist(s1, s2)
+
+   Computes the edit distance from s1 to s2 using the levenshtein algorithm.
+
+   .. note:: Only available if you compiled the ``_sqlite_udf`` extension.
+
+.. function:: str_dist(s1, s2)
+
+   Computes the edit distance from s1 to s2 using the standard library
+   SequenceMatcher's algorithm.
+
+   .. note:: Only available if you compiled the ``_sqlite_udf`` extension.
+
+.. function:: regex_search(regex, search_string)
+
+   :param str regex: Regular expression
+   :param str search_string: String to search for instances of regex.
+
+   *Table-value function*: searches a string for substrings that match
+   the provided ``regex``. Returns rows for each match found.
+
+   Example:
+
+   .. code-block:: python
+
+      SELECT * FROM regex_search('\w+', 'extract words, ignore! symbols');
+
+      value
+      -----
+      extract
+      words
+      ignore
+      symbols

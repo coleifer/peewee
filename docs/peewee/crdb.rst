@@ -58,34 +58,34 @@ Cockroach Extension APIs
 The ``playhouse.cockroachdb`` extension module provides the following classes
 and helpers:
 
-* :py:class:`CockroachDatabase` - a subclass of :py:class:`PostgresqlDatabase`,
+* :class:`CockroachDatabase` - a subclass of :class:`PostgresqlDatabase`,
   designed specifically for working with CRDB.
-* :py:class:`PooledCockroachDatabase` - like the above, but implements
+* :class:`PooledCockroachDatabase` - like the above, but implements
   connection-pooling.
-* :py:meth:`~CockroachDatabase.run_transaction` - runs a function inside a
+* :meth:`~CockroachDatabase.run_transaction` - runs a function inside a
   transaction and provides automatic client-side retry logic.
 
 Special field-types that may be useful when using CRDB:
 
-* :py:class:`UUIDKeyField` - a primary-key field implementation that uses
+* :class:`UUIDKeyField` - a primary-key field implementation that uses
   CRDB's ``UUID`` type with a default randomly-generated UUID.
-* :py:class:`RowIDField` - a primary-key field implementation that uses CRDB's
+* :class:`RowIDField` - a primary-key field implementation that uses CRDB's
   ``INT`` type with a default ``unique_rowid()``.
-* :py:class:`JSONField` - same as the Postgres :py:class:`BinaryJSONField`, as
+* :class:`JSONField` - same as the Postgres :class:`BinaryJSONField`, as
   CRDB treats JSON as JSONB.
-* :py:class:`ArrayField` - same as the Postgres extension (but does not support
+* :class:`ArrayField` - same as the Postgres extension (but does not support
   multi-dimensional arrays).
 
 CRDB is compatible with Postgres' wire protocol and exposes a very similar
 SQL interface, so it is possible (though **not recommended**) to use
-:py:class:`PostgresqlDatabase` with CRDB:
+:class:`PostgresqlDatabase` with CRDB:
 
 1. CRDB does not support nested transactions (savepoints), so the
-   :py:meth:`~Database.atomic` method has been implemented to enforce this when
-   using :py:class:`CockroachDatabase`. For more info :ref:`crdb-transactions`.
+   :meth:`~Database.atomic` method has been implemented to enforce this when
+   using :class:`CockroachDatabase`. For more info :ref:`crdb-transactions`.
 2. CRDB may have subtle differences in field-types, date functions and
    introspection from Postgres.
-3. CRDB-specific features are exposed by the :py:class:`CockroachDatabase`,
+3. CRDB-specific features are exposed by the :class:`CockroachDatabase`,
    such as specifying a transaction priority or the ``AS OF SYSTEM TIME``
    clause.
 
@@ -95,10 +95,10 @@ CRDB Transactions
 ^^^^^^^^^^^^^^^^^
 
 CRDB does not support nested transactions (savepoints), so the
-:py:meth:`~Database.atomic` method on the :py:class:`CockroachDatabase` has
+:meth:`~Database.atomic` method on the :class:`CockroachDatabase` has
 been modified to raise an exception if an invalid nesting is encountered. If
 you would like to be able to nest transactional code, you can use the
-:py:meth:`~Database.transaction` method, which will ensure that the outer-most
+:meth:`~Database.transaction` method, which will ensure that the outer-most
 block will manage the transaction (e.g., exiting a nested-block will not cause
 an early commit).
 
@@ -128,11 +128,11 @@ Example:
 
 
 CRDB provides client-side transaction retries, which are available using a
-special :py:meth:`~CockroachDatabase.run_transaction` helper. This helper
+special :meth:`~CockroachDatabase.run_transaction` helper. This helper
 method accepts a callable, which is responsible for executing any transactional
 statements that may need to be retried.
 
-Simplest possible example of :py:meth:`~CockroachDatabase.run_transaction`:
+Simplest possible example of :meth:`~CockroachDatabase.run_transaction`:
 
 .. code-block:: python
 
@@ -152,7 +152,7 @@ Simplest possible example of :py:meth:`~CockroachDatabase.run_transaction`:
     SQL is mal-formed, violates a constraint, etc., then the function will
     raise the exception to the caller.
 
-Example of using :py:meth:`~CockroachDatabase.run_transaction` to implement
+Example of using :meth:`~CockroachDatabase.run_transaction` to implement
 client-side retries for a transaction that transfers an amount from one account
 to another:
 
@@ -200,9 +200,9 @@ to another:
 CRDB APIs
 ^^^^^^^^^
 
-.. py:class:: CockroachDatabase(database, **kwargs)
+.. class:: CockroachDatabase(database, **kwargs)
 
-    CockroachDB implementation, based on the :py:class:`PostgresqlDatabase` and
+    CockroachDB implementation, based on the :class:`PostgresqlDatabase` and
     using the ``psycopg2`` driver.
 
     Additional keyword arguments are passed to the psycopg2 connection
@@ -211,7 +211,7 @@ CRDB APIs
 
     Alternatively, the connection details can be specified in URL-form.
 
-    .. py:method:: run_transaction(callback, max_attempts=None, system_time=None, priority=None)
+    .. method:: run_transaction(callback, max_attempts=None, system_time=None, priority=None)
 
         :param callback: callable that accepts a single ``db`` parameter (which
             will be the database instance this method is called from).
@@ -249,16 +249,16 @@ CRDB APIs
 
             user = create_user('huey@example.com')
 
-.. py:class:: PooledCockroachDatabase(database, **kwargs)
+.. class:: PooledCockroachDatabase(database, **kwargs)
 
     CockroachDB connection-pooling implementation, based on
-    :py:class:`PooledPostgresqlDatabase`. Implements the same APIs as
-    :py:class:`CockroachDatabase`, but will do client-side connection pooling.
+    :class:`PooledPostgresqlDatabase`. Implements the same APIs as
+    :class:`CockroachDatabase`, but will do client-side connection pooling.
 
-.. py:function:: run_transaction(db, callback, max_attempts=None, system_time=None, priority=None)
+.. function:: run_transaction(db, callback, max_attempts=None, system_time=None, priority=None)
 
     Run SQL in a transaction with automatic client-side retries. See
-    :py:meth:`CockroachDatabase.run_transaction` for details.
+    :meth:`CockroachDatabase.run_transaction` for details.
 
     :param CockroachDatabase db: database instance.
     :param callback: callable that accepts a single ``db`` parameter (which
@@ -266,20 +266,20 @@ CRDB APIs
 
     .. note::
         This function is equivalent to the identically-named method on
-        the :py:class:`CockroachDatabase` class.
+        the :class:`CockroachDatabase` class.
 
-.. py:class:: UUIDKeyField()
+.. class:: UUIDKeyField()
 
     UUID primary-key field that uses the CRDB ``gen_random_uuid()`` function to
     automatically populate the initial value.
 
-.. py:class:: RowIDField()
+.. class:: RowIDField()
 
     Auto-incrementing integer primary-key field that uses the CRDB
     ``unique_rowid()`` function to automatically populate the initial value.
 
 See also:
 
-* :py:class:`BinaryJSONField` from the Postgresql extension (available in the
+* :class:`BinaryJSONField` from the Postgresql extension (available in the
   ``cockroachdb`` extension module, and aliased to ``JSONField``).
-* :py:class:`ArrayField` from the Postgresql extension.
+* :class:`ArrayField` from the Postgresql extension.

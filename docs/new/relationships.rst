@@ -10,13 +10,13 @@ cross table boundaries efficiently.
 
 By the end of this document you will understand:
 
-* How :py:class:`ForeignKeyField` behaves at runtime, not just at schema
+* How :class:`ForeignKeyField` behaves at runtime, not just at schema
   definition time.
 * What a back-reference is and when to use one.
 * What the N+1 problem is and how to recognise it.
 * How to write joins, including multi-table and self-referential joins.
 * How many-to-many relationships are modelled.
-* When to use :py:func:`prefetch` instead of a join.
+* When to use :func:`prefetch` instead of a join.
 
 
 Model definitions
@@ -102,8 +102,8 @@ zaizee    (no tweets)
 ========= ============= ==================
 
 .. note::
-   To log every query Peewee executes to the console — useful for verifying
-   query counts while working through this document — add the following before
+   To log every query Peewee executes to the console - useful for verifying
+   query counts while working through this document - add the following before
    running any queries:
 
    .. code-block:: python
@@ -139,7 +139,7 @@ whenever only the ID value is needed, since it avoids the extra query entirely.
 Lazy loading
 ^^^^^^^^^^^^
 
-By default, a :py:class:`ForeignKeyField` is *lazy-loaded*: the related object
+By default, a :class:`ForeignKeyField` is *lazy-loaded*: the related object
 is not fetched until the attribute is first accessed, at which point a
 ``SELECT`` query is issued automatically. This is convenient but can lead to
 performance problems - see :ref:`nplusone` below.
@@ -170,8 +170,8 @@ than issuing a query, matching the behaviour of the ``_id`` accessor:
 Back-references
 ---------------
 
-Every :py:class:`ForeignKeyField` automatically creates a *back-reference* on
-the related model. The back-reference is a pre-filtered :py:class:`Select`
+Every :class:`ForeignKeyField` automatically creates a *back-reference* on
+the related model. The back-reference is a pre-filtered :class:`Select`
 query that returns all rows pointing at a given instance.
 
 In the example schema, ``Tweet.user`` is a foreign key to ``User``. The
@@ -356,7 +356,7 @@ context forward, this chain can be written directly:
        print(f'{user.username}: {user.fav_count} favorites received')
 
 Both joins use ``LEFT OUTER`` because a user may have no tweets, and a tweet
-may have no favorites — yet both should appear in the result with a count of
+may have no favorites - yet both should appear in the result with a count of
 zero.
 
 Switching join context
@@ -502,7 +502,7 @@ In SQL we would write:
 Note that we are selecting from the user table twice - once in the context of
 the user who created the favorite, and again as the author of the tweet.
 
-With Peewee, we use :py:meth:`Model.alias` to alias a model class so it can be
+With Peewee, we use :meth:`Model.alias` to alias a model class so it can be
 referenced twice in a single query:
 
 .. code-block:: python
@@ -589,7 +589,7 @@ Iterating over the query, we can see each user and their latest tweet.
 There are a couple things you may not have seen before in the code we used to
 create the query in this section:
 
-* We used :py:meth:`~ModelSelect.join_from` to explicitly specify the join
+* We used :meth:`~ModelSelect.join_from` to explicitly specify the join
   context. We wrote ``.join_from(Tweet, User)``, which is equivalent to
   ``.switch(Tweet).join(User)``.
 * We referenced columns in the subquery using the magic ``.c`` attribute,
@@ -755,8 +755,8 @@ to create the alias:
 Many-to-Many Relationships
 --------------------------
 
-A many-to-many relationship — where one row in table A can relate to many rows
-in table B *and vice versa* — requires an intermediate *through table* that
+A many-to-many relationship - where one row in table A can relate to many rows
+in table B *and vice versa* - requires an intermediate *through table* that
 holds pairs of foreign keys.
 
 Manual through table (recommended)
@@ -818,7 +818,7 @@ handles any querying requirement without special casing.
 ManyToManyField
 ^^^^^^^^^^^^^^^
 
-:py:class:`ManyToManyField` provides a shortcut API that manages the through
+:class:`ManyToManyField` provides a shortcut API that manages the through
 table automatically. It is suitable for simple cases where the through table
 requires no extra columns and complex querying is not needed.
 
@@ -851,14 +851,14 @@ requires no extra columns and complex querying is not needed.
        print(course.title)
 
 .. warning::
-   :py:class:`ManyToManyField` does not work correctly with model inheritance.
+   :class:`ManyToManyField` does not work correctly with model inheritance.
    The through table contains foreign keys back to the original models, and
    those pointers are not automatically updated for subclasses. For any model
    that will be subclassed, use an explicit through table instead.
 
 .. seealso::
-   :py:meth:`ManyToManyField.add`, :py:meth:`ManyToManyField.remove`,
-   :py:meth:`ManyToManyField.clear`, :py:meth:`ManyToManyField.get_through_model`.
+   :meth:`ManyToManyField.add`, :meth:`ManyToManyField.remove`,
+   :meth:`ManyToManyField.clear`, :meth:`ManyToManyField.get_through_model`.
 
 
 .. _prefetch:
@@ -876,7 +876,7 @@ this direction produces one result row *per tweet*, which means users with
 multiple tweets appear multiple times in the result set. Deduplicating those
 rows in application code is awkward and error-prone.
 
-:py:func:`prefetch` solves this by issuing one query per table, then stitching
+:func:`prefetch` solves this by issuing one query per table, then stitching
 the results together in Python. Instead of *O(n)* queries for *n* rows, we will
 do *O(k)* queries for *k* tables:
 
@@ -892,7 +892,7 @@ do *O(k)* queries for *k* tables:
        for tweet in user.tweets:    # No additional query.
            print(f'  {tweet.content}')
 
-The models passed to :py:func:`prefetch` must be linked by foreign keys.
+The models passed to :func:`prefetch` must be linked by foreign keys.
 Peewee infers the relationships and assigns the prefetched rows to the
 appropriate back-reference attribute on each instance.
 
@@ -943,10 +943,10 @@ Use **prefetch** when:
 * Nesting more than one level of related data (users -> tweets -> favorites).
 
 .. note::
-   ``LIMIT`` on the outer query of a :py:func:`prefetch` call works as
+   ``LIMIT`` on the outer query of a :func:`prefetch` call works as
    expected. Limiting the *inner* queries (the prefetched tables) is not
-   directly supported and requires a manual approach — see
+   directly supported and requires a manual approach - see
    :ref:`top_n_per_group` in the recipes document for techniques.
 
 .. seealso::
-   :py:func:`prefetch` API reference.
+   :func:`prefetch` API reference.

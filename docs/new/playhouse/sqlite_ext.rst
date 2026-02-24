@@ -75,11 +75,11 @@ Usage:
 
 Extra capabilities compared to :class:`SqliteDatabase`:
 
-.. py:class:: CySqliteDatabase(database, **kwargs)
+.. class:: CySqliteDatabase(database, **kwargs)
 
-   .. py:method:: table_function(name)
+   .. method:: table_function(name)
 
-      Decorator to register a :py:class:`TableFunction` class as a
+      Decorator to register a :class:`TableFunction` class as a
       user-defined table-valued function. See the
       `cysqlite documentation <https://cysqlite.readthedocs.io>`_ for the
       full ``TableFunction`` interface.
@@ -107,29 +107,29 @@ Extra capabilities compared to :class:`SqliteDatabase`:
           cursor = db.execute_sql('SELECT * FROM series(?, ?, ?)', (0, 5, 2))
           # Returns rows: (0,), (2,), (4,)
 
-   .. py:method:: on_commit(fn)
+   .. method:: on_commit(fn)
 
       Register a callback that is invoked when a transaction is committed.
 
-   .. py:method:: on_rollback(fn)
+   .. method:: on_rollback(fn)
 
       Register a callback that is invoked when a transaction is rolled back.
 
-   .. py:method:: on_update(fn)
+   .. method:: on_update(fn)
 
       Register a callback invoked when a row is updated, inserted, or deleted.
 
-   .. py:method:: backup(dest_db)
+   .. method:: backup(dest_db)
 
       Online backup of this database to ``dest_db``.
 
-   .. py:method:: backup_to_file(filename)
+   .. method:: backup_to_file(filename)
 
       Online backup to a file at ``filename``.
 
-   .. py:method:: blob_open(table, column, rowid, read_only=False)
+   .. method:: blob_open(table, column, rowid, read_only=False)
 
-      Open a :py:class:`ZeroBlobField` BLOB for incremental I/O.
+      Open a :class:`ZeroBlobField` BLOB for incremental I/O.
 
 
 .. _apsw:
@@ -159,16 +159,16 @@ Install: ``pip install apsw``
    from ``peewee``. For example, import ``DateTimeField`` from ``apsw_ext``,
    not from ``peewee``, to ensure correct type adaption.
 
-.. py:class:: APSWDatabase(database, **connect_kwargs)
+.. class:: APSWDatabase(database, **connect_kwargs)
 
-   Subclass of :py:class:`SqliteExtDatabase` using the APSW driver.
+   Subclass of :class:`SqliteExtDatabase` using the APSW driver.
 
-   .. py:method:: register_module(mod_name, mod_inst)
+   .. method:: register_module(mod_name, mod_inst)
 
       Register a virtual table module globally. See the `APSW virtual table
       documentation <https://rogerbinns.github.io/apsw/vtable.html>`_.
 
-   .. py:method:: unregister_module(mod_name)
+   .. method:: unregister_module(mod_name)
 
       Unregister a previously registered module.
 
@@ -179,8 +179,8 @@ SQLCipher (Encrypted SQLite)
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 `SQLCipher <https://www.zetetic.net/sqlcipher/>`_ is an encrypted wrapper
-around SQLite. Peewee exposes it through :py:class:`SqlCipherDatabase`, which
-is API-identical to :py:class:`SqliteDatabase` except for its constructor.
+around SQLite. Peewee exposes it through :class:`SqlCipherDatabase`, which
+is API-identical to :class:`SqliteDatabase` except for its constructor.
 
 Install: ``pip install sqlcipher3``
 
@@ -189,7 +189,7 @@ Install: ``pip install sqlcipher3``
    The underlying ``sqlcipher3`` and ``sqlcipher`` libraries are widely deployed,
    but use this in security-sensitive applications with appropriate care.
 
-.. py:class:: SqlCipherDatabase(database, passphrase, **kwargs)
+.. class:: SqlCipherDatabase(database, passphrase, **kwargs)
 
    :param str database: Path to the encrypted database file.
    :param str passphrase: Encryption passphrase (minimum 8 characters;
@@ -199,7 +199,7 @@ Install: ``pip install sqlcipher3``
    key derived from ``passphrase``. If it does exist, ``passphrase`` must
    match the one used when the file was created.
 
-   .. py:method:: rekey(passphrase)
+   .. method:: rekey(passphrase)
 
        Change the encryption passphrase for the open database.
 
@@ -243,7 +243,7 @@ Pragma configuration (e.g. increasing PBKDF2 iterations):
 SqliteQueueDatabase
 -------------------
 
-:py:class:`SqliteQueueDatabase` serializes all write queries through a
+:class:`SqliteQueueDatabase` serializes all write queries through a
 single long-lived connection on a dedicated background thread. This allows
 multiple application threads to write to a SQLite database concurrently
 without conflict or timeout errors.
@@ -276,7 +276,7 @@ Stop the writer thread on application shutdown (waits for pending writes):
    def _stop():
        db.stop()
 
-Read queries work as normal — open and close the connection per-request as you
+Read queries work as normal - open and close the connection per-request as you
 would with any other database. Only writes are funneled through the queue.
 
 .. warning::
@@ -287,31 +287,31 @@ would with any other database. Only writes are funneled through the queue.
    ``transaction()`` methods raise an exception if called.
 
    If you need to temporarily bypass the queue and write directly (for
-   example, during a batch import), use :py:meth:`~SqliteQueueDatabase.pause`
-   and :py:meth:`~SqliteQueueDatabase.unpause`.
+   example, during a batch import), use :meth:`~SqliteQueueDatabase.pause`
+   and :meth:`~SqliteQueueDatabase.unpause`.
 
-.. py:class:: SqliteQueueDatabase(database, use_gevent=False, autostart=True, queue_max_size=None, results_timeout=None, **kwargs)
+.. class:: SqliteQueueDatabase(database, use_gevent=False, autostart=True, queue_max_size=None, results_timeout=None, **kwargs)
 
-   .. py:method:: start()
+   .. method:: start()
 
       Start the background writer thread.
 
-   .. py:method:: stop()
+   .. method:: stop()
 
       Signal the writer thread to stop. Blocks until all pending writes
       are flushed.
 
-   .. py:method:: is_stopped()
+   .. method:: is_stopped()
 
       Return ``True`` if the writer thread is not running.
 
-   .. py:method:: pause()
+   .. method:: pause()
 
       Block until the writer thread finishes its current work, then
       disconnect it. The calling thread takes over direct database access.
-      Must be followed by a call to :py:meth:`~SqliteQueueDatabase.unpause`.
+      Must be followed by a call to :meth:`~SqliteQueueDatabase.unpause`.
 
-   .. py:method:: unpause()
+   .. method:: unpause()
 
       Resume the writer thread and reconnect the queue.
 
@@ -323,7 +323,7 @@ SQLite-Specific Fields
 
 These field classes live in ``playhouse.sqlite_ext``.
 
-.. py:class:: RowIDField()
+.. class:: RowIDField()
 
    Primary-key field mapped to SQLite's implicit ``rowid`` column. Useful
    for explicit ``rowid`` access without a separate integer primary key.
@@ -335,19 +335,19 @@ These field classes live in ``playhouse.sqlite_ext``.
            content = TextField()
            timestamp = TimestampField()
 
-.. py:class:: AutoIncrementField()
+.. class:: AutoIncrementField()
 
    Integer primary key that uses SQLite's ``AUTOINCREMENT`` keyword,
    guaranteeing the primary key is always strictly increasing even after
    deletions. Has a small performance cost versus the default
-   :py:class:`PrimaryKeyField`.
+   :class:`PrimaryKeyField`.
 
    See the `SQLite AUTOINCREMENT documentation
    <https://sqlite.org/autoinc.html>`_ for details.
 
-.. py:class:: ISODateTimeField()
+.. class:: ISODateTimeField()
 
-   Subclass of :py:class:`DateTimeField` that preserves UTC offset
+   Subclass of :class:`DateTimeField` that preserves UTC offset
    information for timezone-aware datetimes when storing to SQLite's
    text-based datetime representation.
 
@@ -358,9 +358,9 @@ SQLite JSON (json1 extension)
 ------------------------------
 
 SQLite 3.9+ includes the ``json1`` extension, exposed by
-:py:class:`JSONField` in ``playhouse.sqlite_ext``.
+:class:`JSONField` in ``playhouse.sqlite_ext``.
 
-.. py:class:: JSONField(json_dumps=None, json_loads=None, **kwargs)
+.. class:: JSONField(json_dumps=None, json_loads=None, **kwargs)
 
    :param json_dumps: Custom JSON serializer. Defaults to ``json.dumps``.
    :param json_loads: Custom JSON deserializer. Defaults to ``json.loads``.
@@ -389,58 +389,58 @@ SQLite 3.9+ includes the ``json1`` extension, exposed by
        # Set a specific path:
        Config.update(data=Config.data['timeout'].set(120)).execute()
 
-   .. py:method:: __getitem__(item)
+   .. method:: __getitem__(item)
 
-      Return a :py:class:`JSONPath` for the given key or array index. Paths
+      Return a :class:`JSONPath` for the given key or array index. Paths
       can be chained: ``field['a']['b'][0]``.
 
-   .. py:method:: extract(*paths)
+   .. method:: extract(*paths)
 
       Extract one or more JSON path values. Returns a list when multiple
       paths are given.
 
-   .. py:method:: set(value, as_json=None)
+   .. method:: set(value, as_json=None)
 
       Set the entire field value. Uses ``json_set()``.
 
-   .. py:method:: update(data)
+   .. method:: update(data)
 
       Merge ``data`` into the stored JSON using RFC-7396 MergePatch. Setting
       a key to ``None`` removes it. Arrays are treated as atomic (cannot be
       partially updated with this method).
 
-   .. py:method:: remove()
+   .. method:: remove()
 
       Remove the stored value.
 
-   .. py:method:: json_type()
+   .. method:: json_type()
 
       Return a string describing the JSON type of the stored value:
       ``'object'``, ``'array'``, ``'integer'``, ``'real'``, ``'true'``,
       ``'false'``, ``'text'``, ``'null'``, or ``NULL`` (path not found).
 
-   .. py:method:: length()
+   .. method:: length()
 
       Return the length of the stored array.
 
-   .. py:method:: children()
+   .. method:: children()
 
       Table-valued function (``json_each``) that yields the direct children
       of the stored JSON object or array as rows with the attributes
       ``key``, ``value``, ``type``, ``atom``, ``id``, ``parent``,
       ``fullkey``, and ``path``.
 
-   .. py:method:: tree()
+   .. method:: tree()
 
       Table-valued function (``json_tree``) that recursively yields all
       descendants of the stored JSON value. Same row attributes as
-      :py:meth:`~JSONField.children`.
+      :meth:`~JSONField.children`.
 
-.. py:class:: JSONBField(json_dumps=None, json_loads=None, **kwargs)
+.. class:: JSONBField(json_dumps=None, json_loads=None, **kwargs)
 
-   Like :py:class:`JSONField` but stores data in the binary ``jsonb`` format
+   Like :class:`JSONField` but stores data in the binary ``jsonb`` format
    (SQLite 3.45.0+). When reading raw column values the data is in its
-   encoded binary form; use the :py:meth:`~JSONBField.json` method to decode:
+   encoded binary form; use the :meth:`~JSONBField.json` method to decode:
 
    .. code-block:: python
 
@@ -463,14 +463,14 @@ SQLite 3.7.4+) full-text search extensions.
 
 The general pattern is:
 
-1. Define a :py:class:`FTSModel` or :py:class:`FTS5Model` subclass with
-   :py:class:`SearchField` columns.
+1. Define a :class:`FTSModel` or :class:`FTS5Model` subclass with
+   :class:`SearchField` columns.
 2. When a row is created or updated in the source table, insert or update
    the corresponding row in the search index.
-3. Query the index using :py:meth:`~FTSModel.match` and rank results with
-   :py:meth:`~FTSModel.bm25` (or :py:meth:`~FTSModel.rank` for FTS4).
+3. Query the index using :meth:`~FTSModel.match` and rank results with
+   :meth:`~FTSModel.bm25` (or :meth:`~FTSModel.rank` for FTS4).
 
-.. py:class:: SearchField(unindexed=False, column_name=None)
+.. class:: SearchField(unindexed=False, column_name=None)
 
    Column type for full-text search virtual tables. Raises an exception if
    constraints (``null=False``, ``unique=True``, etc.) are specified, since
@@ -486,18 +486,18 @@ The general pattern is:
            content  = SearchField()
            timestamp = SearchField(unindexed=True)  # Stored but not searched.
 
-   .. py:method:: match(term)
+   .. method:: match(term)
 
       Generate a ``MATCH`` expression that restricts full-text search to
-      this column only (as opposed to :py:meth:`FTSModel.match`, which
+      this column only (as opposed to :meth:`FTSModel.match`, which
       searches all indexed columns).
 
-   .. py:method:: highlight(left, right)
+   .. method:: highlight(left, right)
 
       FTS5 only. Wrap matched terms with ``left`` and ``right`` strings
       (e.g. ``'<b>'`` / ``'</b>'``).
 
-   .. py:method:: snippet(left, right, over_length='...', max_tokens=16)
+   .. method:: snippet(left, right, over_length='...', max_tokens=16)
 
       FTS5 only. Return a short extract of the column value with matched
       terms highlighted. ``max_tokens`` must be 1–64.
@@ -548,38 +548,38 @@ working on an existing FTS4 index.
    All queries on an ``FTSModel`` perform a full-table scan **except**
    ``MATCH`` searches and ``rowid`` lookups.
 
-.. py:class:: FTSModel()
+.. class:: FTSModel()
 
-   .. py:classmethod:: match(term)
+   .. classmethod:: match(term)
 
       Return a ``MATCH`` expression for use in ``WHERE``.
 
-   .. py:classmethod:: search(term, weights=None, with_score=False, score_alias='score')
+   .. classmethod:: search(term, weights=None, with_score=False, score_alias='score')
 
       Shorthand that generates a query with ``MATCH`` and ``ORDER BY`` rank
       (using BM25). Pass ``with_score=True`` to include the score in the
       SELECT.
 
-   .. py:classmethod:: search_bm25(term, weights=None, with_score=False, score_alias='score')
+   .. classmethod:: search_bm25(term, weights=None, with_score=False, score_alias='score')
 
-      Like :py:meth:`~FTSModel.search` but always uses the BM25 ranking
+      Like :meth:`~FTSModel.search` but always uses the BM25 ranking
       algorithm. Requires FTS4.
 
-   .. py:classmethod:: rank(*col_weights)
+   .. classmethod:: rank(*col_weights)
 
       Return an expression representing the relevance score. Higher is better.
 
-   .. py:classmethod:: bm25(*col_weights)
+   .. classmethod:: bm25(*col_weights)
 
       Return an expression representing the BM25 relevance score. Requires FTS4.
       Optional ``col_weights`` arguments provide per-column importance weights.
 
-   .. py:classmethod:: rebuild()
+   .. classmethod:: rebuild()
 
       Rebuild the search index. Only valid when the ``content`` option
       was specified (content tables).
 
-   .. py:classmethod:: optimize()
+   .. classmethod:: optimize()
 
       Optimize the index.
 
@@ -608,7 +608,7 @@ FTS5 / ``FTS5Model``
 ^^^^^^^^^^^^^^^^^^^^^
 
 FTS5 is the current recommended implementation. It has built-in BM25 and
-a cleaner API. All columns must use :py:class:`SearchField`.
+a cleaner API. All columns must use :class:`SearchField`.
 
 .. code-block:: python
 
@@ -644,15 +644,15 @@ a cleaner API. All columns must use :py:class:`SearchField`.
              .select(ArticleIndex.title.highlight('[', ']').alias('hi'))):
        print(r.hi)  # e.g. "Learn [python] the hard way"
 
-.. py:class:: FTS5Model()
+.. class:: FTS5Model()
 
-   Inherits all :py:class:`FTSModel` methods plus:
+   Inherits all :class:`FTSModel` methods plus:
 
-   .. py:classmethod:: fts5_installed()
+   .. classmethod:: fts5_installed()
 
       Return ``True`` if FTS5 is available.
 
-   .. py:classmethod:: VocabModel(table_type='row'|'col'|'instance', table_name=None)
+   .. classmethod:: VocabModel(table_type='row'|'col'|'instance', table_name=None)
 
       Generate a model for the FTS5 vocabulary table, which exposes
       per-term token statistics.
@@ -696,59 +696,59 @@ Available collections and functions:
 
 **CONTROL_FLOW**
 
-- ``if_then_else(cond, truthy, falsey=None)`` — ternary expression.
+- ``if_then_else(cond, truthy, falsey=None)`` - ternary expression.
 
 **DATE**
 
-- ``strip_tz(date_str)`` — remove timezone offset from a datetime string
+- ``strip_tz(date_str)`` - remove timezone offset from a datetime string
   (does not adjust the time).
-- ``humandelta(nseconds, glue=', ')`` (a) — human-readable timedelta,
+- ``humandelta(nseconds, glue=', ')`` (a) - human-readable timedelta,
   e.g. ``86471`` → ``"1 day, 1 minute, 11 seconds"``.
-- ``mintdiff(datetime_value)`` (a) — minimum difference between any two
+- ``mintdiff(datetime_value)`` (a) - minimum difference between any two
   values in a set.
-- ``avgtdiff(datetime_value)`` (a) — average difference between consecutive
+- ``avgtdiff(datetime_value)`` (a) - average difference between consecutive
   values.
-- ``duration(datetime_value)`` (a) — duration from smallest to largest value
+- ``duration(datetime_value)`` (a) - duration from smallest to largest value
   in seconds.
-- ``date_series(start, stop, step_seconds=86400)`` (t) — table-valued
+- ``date_series(start, stop, step_seconds=86400)`` (t) - table-valued
   function yielding dates/datetimes between ``start`` and ``stop``.
 
 **FILE**
 
-- ``file_ext(filename)`` — extract file extension including the leading dot.
-- ``file_read(filename)`` — return the contents of a file.
+- ``file_ext(filename)`` - extract file extension including the leading dot.
+- ``file_read(filename)`` - return the contents of a file.
 
 **HELPER**
 
-- ``gzip(data, compression=9)`` — compress bytes.
-- ``gunzip(data)`` — decompress bytes.
-- ``hostname(url)`` — extract hostname from a URL.
-- ``toggle(key)`` / ``clear_toggles()`` — in-memory boolean toggle per key.
-- ``setting(key, value=None)`` / ``clear_settings()`` — in-memory key/value
+- ``gzip(data, compression=9)`` - compress bytes.
+- ``gunzip(data)`` - decompress bytes.
+- ``hostname(url)`` - extract hostname from a URL.
+- ``toggle(key)`` / ``clear_toggles()`` - in-memory boolean toggle per key.
+- ``setting(key, value=None)`` / ``clear_settings()`` - in-memory key/value
   settings store.
 
 **MATH**
 
-- ``randomrange(start, stop=None, step=None)`` — random integer in range.
-- ``gauss_distribution(mean, sigma)`` — Gaussian random value.
-- ``sqrt(n)`` — square root.
-- ``tonumber(s)`` — parse a string to integer or float, or NULL.
-- ``mode(val)`` (a) — most common value in a set.
-- ``minrange(val)`` (a) — minimum difference between any two numbers.
-- ``avgrange(val)`` (a) — average distance between consecutive numbers.
-- ``range(val)`` (a) — difference between smallest and largest value.
-- ``median(val)`` (a) — middle value (requires ``_sqlite_udf`` extension).
+- ``randomrange(start, stop=None, step=None)`` - random integer in range.
+- ``gauss_distribution(mean, sigma)`` - Gaussian random value.
+- ``sqrt(n)`` - square root.
+- ``tonumber(s)`` - parse a string to integer or float, or NULL.
+- ``mode(val)`` (a) - most common value in a set.
+- ``minrange(val)`` (a) - minimum difference between any two numbers.
+- ``avgrange(val)`` (a) - average distance between consecutive numbers.
+- ``range(val)`` (a) - difference between smallest and largest value.
+- ``median(val)`` (a) - middle value (requires ``_sqlite_udf`` extension).
 
 **STRING**
 
-- ``substr_count(haystack, needle)`` — count occurrences of a substring.
-- ``strip_chars(haystack, chars)`` — strip characters from both ends.
-- ``damerau_levenshtein_dist(s1, s2)`` — edit distance with transpositions
+- ``substr_count(haystack, needle)`` - count occurrences of a substring.
+- ``strip_chars(haystack, chars)`` - strip characters from both ends.
+- ``damerau_levenshtein_dist(s1, s2)`` - edit distance with transpositions
   (requires ``_sqlite_udf``).
-- ``levenshtein_dist(s1, s2)`` — edit distance (requires ``_sqlite_udf``).
-- ``str_dist(s1, s2)`` — edit distance via ``SequenceMatcher``
+- ``levenshtein_dist(s1, s2)`` - edit distance (requires ``_sqlite_udf``).
+- ``str_dist(s1, s2)`` - edit distance via ``SequenceMatcher``
   (requires ``_sqlite_udf``).
-- ``regex_search(regex, string)`` (t) — table-valued function returning
+- ``regex_search(regex, string)`` (t) - table-valued function returning
   all regex matches in a string (requires CySqlite).
 
 *(a) = aggregate function, (t) = table-valued function*

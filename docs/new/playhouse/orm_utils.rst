@@ -23,7 +23,7 @@ swapping.
 Model Serialization
 ^^^^^^^^^^^^^^^^^^^
 
-.. py:function:: model_to_dict(model, recurse=True, backrefs=False, only=None, exclude=None, extra_attrs=None, fields_from_query=None, max_depth=None, manytomany=False)
+.. function:: model_to_dict(model, recurse=True, backrefs=False, only=None, exclude=None, extra_attrs=None, fields_from_query=None, max_depth=None, manytomany=False)
 
    Convert a model instance to a dictionary.
 
@@ -63,7 +63,7 @@ Model Serialization
        than trying to coerce ``model_to_dict`` with a complex combination
        of parameters.
 
-.. py:function:: dict_to_model(model_class, data, ignore_unknown=False)
+.. function:: dict_to_model(model_class, data, ignore_unknown=False)
 
    Construct a model instance from a dictionary. Foreign keys may be
    provided as nested dicts; back-references as lists of dicts.
@@ -82,22 +82,22 @@ Model Serialization
            'user': {'id': 1, 'username': 'alice'}})
        tweet.user.username   # 'alice'
 
-.. py:function:: update_model_from_dict(instance, data, ignore_unknown=False)
+.. function:: update_model_from_dict(instance, data, ignore_unknown=False)
 
    Update an existing model instance with values from a dictionary.
-   Follows the same rules as :py:func:`dict_to_model`.
+   Follows the same rules as :func:`dict_to_model`.
 
 
 Compound Query Resolution
 ^^^^^^^^^^^^^^^^^^^^^^^^^
 
-.. py:function:: resolve_multimodel_query(query, key='_model_identifier')
+.. function:: resolve_multimodel_query(query, key='_model_identifier')
 
    Resolve rows from a compound ``UNION`` or similar query to the correct
    model class. Useful when two tables are unioned and you need each row
    as an instance of the appropriate model.
 
-   :param query: A compound :py:class:`SelectQuery`.
+   :param query: A compound :class:`SelectQuery`.
    :param str key: Name of the column used to identify the model.
    :returns: An iterable that yields properly typed model instances.
 
@@ -105,7 +105,7 @@ Compound Query Resolution
 Thread-Safe Database Swapping
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-.. py:class:: ThreadSafeDatabaseMetadata()
+.. class:: ThreadSafeDatabaseMetadata()
 
    A ``Metadata`` implementation that protects the ``database`` attribute
    with a read/write lock. Use this when your application may swap the
@@ -191,13 +191,13 @@ When the Python and SQL implementations differ, provide a separate
        def radius(cls):
            return fn.ABS(cls.length) / 2   # SQL: uses fn.ABS()
 
-.. py:class:: hybrid_property(fget, fset=None, fdel=None, expr=None)
+.. class:: hybrid_property(fget, fset=None, fdel=None, expr=None)
 
    Decorator for defining a property with separate instance and class
    behaviors. Use ``@prop.expression`` to specify the SQL form when it
    differs from the Python form.
 
-.. py:class:: hybrid_method(func, expr=None)
+.. class:: hybrid_method(func, expr=None)
 
    Decorator for defining a method with separate instance and class
    behaviors. Use ``@method.expression`` to specify the SQL form.
@@ -233,12 +233,12 @@ Key/Value Store
    # Expression-based deletion:
    del KV[KV.key > 'k1']
 
-.. py:class:: KeyValue(key_field=None, value_field=None, ordered=False, database=None, table_name='keyvalue')
+.. class:: KeyValue(key_field=None, value_field=None, ordered=False, database=None, table_name='keyvalue')
 
    :param Field key_field: Field for the key. Defaults to
-       :py:class:`CharField` with ``primary_key=True``.
+       :class:`CharField` with ``primary_key=True``.
    :param Field value_field: Field for the value. Defaults to
-       :py:class:`PickleField`.
+       :class:`PickleField`.
    :param bool ordered: Return keys in sorted order when iterating.
    :param Database database: Database to use. Defaults to an in-memory
        SQLite database.
@@ -247,22 +247,22 @@ Key/Value Store
    The table is created automatically on construction if it does not exist.
    Supports the standard dictionary interface plus expression-based access.
 
-   .. py:method:: update(data=None, **kwargs)
+   .. method:: update(data=None, **kwargs)
 
       Efficiently upsert one or more key/value pairs.
 
-   .. py:method:: get(expr, default=None)
+   .. method:: get(expr, default=None)
 
       Return the value for a key, or ``default`` if missing. If ``expr``
       is an expression rather than a scalar key, returns a list (empty if
       none match).
 
-   .. py:method:: pop(expr, default=Sentinel)
+   .. method:: pop(expr, default=Sentinel)
 
       Return and remove the value for a key. If ``expr`` is an expression,
       returns and removes all matching pairs as a list.
 
-   .. py:method:: clear()
+   .. method:: clear()
 
       Remove all entries.
 
@@ -294,9 +294,9 @@ Available signals: ``pre_init``, ``pre_save``, ``post_save``, ``pre_delete``,
 
 .. warning::
    Signals fire only through the high-level instance methods
-   (:py:meth:`~Model.save`, :py:meth:`~Model.delete_instance`). Bulk
-   operations via :py:meth:`~Model.insert`, :py:meth:`~Model.update`, and
-   :py:meth:`~Model.delete` do not trigger signals because no model instance
+   (:meth:`~Model.save`, :meth:`~Model.delete_instance`). Bulk
+   operations via :meth:`~Model.insert`, :meth:`~Model.update`, and
+   :meth:`~Model.delete` do not trigger signals because no model instance
    is involved.
 
 Connecting handlers
@@ -334,18 +334,18 @@ Signal callback signature:
 - ``pre_delete(model_class, instance)``
 - ``post_delete(model_class, instance)``
 
-.. py:class:: Signal()
+.. class:: Signal()
 
-   .. py:method:: connect(receiver, name=None, sender=None)
+   .. method:: connect(receiver, name=None, sender=None)
 
       Register a callback. If ``sender`` is given, the callback only fires
       for instances of that model class.
 
-   .. py:method:: disconnect(receiver=None, name=None, sender=None)
+   .. method:: disconnect(receiver=None, name=None, sender=None)
 
       Unregister a callback by reference or by name.
 
-   .. py:method:: send(instance, *args, **kwargs)
+   .. method:: send(instance, *args, **kwargs)
 
       Invoke registered callbacks in connection order.
 
@@ -392,80 +392,80 @@ loading, and CSV/JSON import-export.
    # Import from CSV:
    db.thaw('user', format='csv', filename='import.csv')
 
-.. py:class:: DataSet(url, **kwargs)
+.. class:: DataSet(url, **kwargs)
 
-   :param url: A database URL string or a :py:class:`Database` instance.
+   :param url: A database URL string or a :class:`Database` instance.
 
-   .. py:attribute:: tables
+   .. attribute:: tables
 
       List of table names in the database (computed dynamically).
 
-   .. py:method:: __getitem__(table_name)
+   .. method:: __getitem__(table_name)
 
-      Return a :py:class:`Table` for the given name. Creates the table if
+      Return a :class:`Table` for the given name. Creates the table if
       it doesn't exist.
 
-   .. py:method:: query(sql, params=None, commit=True)
+   .. method:: query(sql, params=None, commit=True)
 
       Execute raw SQL and return a cursor.
 
-   .. py:method:: transaction()
+   .. method:: transaction()
 
       Return a context manager representing a transaction.
 
-   .. py:method:: freeze(query, format='csv', filename=None, file_obj=None, encoding='utf8', **kwargs)
+   .. method:: freeze(query, format='csv', filename=None, file_obj=None, encoding='utf8', **kwargs)
 
       Export the rows returned by ``query`` to a file. Supported formats:
       ``'csv'``, ``'json'``.
 
-   .. py:method:: thaw(table, format='csv', filename=None, file_obj=None, strict=False, encoding='utf8', **kwargs)
+   .. method:: thaw(table, format='csv', filename=None, file_obj=None, strict=False, encoding='utf8', **kwargs)
 
       Import data from a file into ``table``. If ``strict=False`` (default),
       new columns are added automatically.
 
-   .. py:method:: connect() / close()
+   .. method:: connect() / close()
 
       Open or close the underlying database connection.
 
-.. py:class:: Table(dataset, name, model_class)
+.. class:: Table(dataset, name, model_class)
 
-   .. py:attribute:: columns
+   .. attribute:: columns
 
       List of column names.
 
-   .. py:method:: insert(**data)
+   .. method:: insert(**data)
 
       Insert a row, adding new columns as needed.
 
-   .. py:method:: update(columns=None, conjunction=None, **data)
+   .. method:: update(columns=None, conjunction=None, **data)
 
       Update matching rows. ``columns`` specifies which fields to use for
       the ``WHERE`` clause.
 
-   .. py:method:: find(**query)
+   .. method:: find(**query)
 
       Return all rows matching equality conditions (all rows if no
       conditions given).
 
-   .. py:method:: find_one(**query)
+   .. method:: find_one(**query)
 
       Return the first matching row, or ``None``.
 
-   .. py:method:: all()
+   .. method:: all()
 
       Return all rows.
 
-   .. py:method:: delete(**query)
+   .. method:: delete(**query)
 
       Delete matching rows (all rows if no conditions given).
 
-   .. py:method:: create_index(columns, unique=False)
+   .. method:: create_index(columns, unique=False)
 
       Create an index on the given column names.
 
-   .. py:method:: freeze(...) / thaw(...)
+   .. method:: freeze(...) / thaw(...)
 
-      Table-level variants of the :py:class:`DataSet` methods.
+      Table-level variants of the :class:`DataSet` methods.
 
 
 .. _extra-fields:
@@ -475,10 +475,10 @@ Extra Field Types
 
 ``playhouse.fields`` provides two general-purpose field types.
 
-.. py:class:: CompressedField(compression_level=6, algorithm='zlib', **kwargs)
+.. class:: CompressedField(compression_level=6, algorithm='zlib', **kwargs)
 
    Stores compressed binary data using ``zlib`` or ``bz2``. Extends
-   :py:class:`BlobField`; compression and decompression are transparent:
+   :class:`BlobField`; compression and decompression are transparent:
 
    .. code-block:: python
 
@@ -487,13 +487,13 @@ Extra Field Types
        class LogEntry(Model):
            payload = CompressedField(algorithm='zlib', compression_level=9)
 
-   :param int compression_level: 0–9 (9 is maximum compression).
+   :param int compression_level: 0-9 (9 is maximum compression).
    :param str algorithm: ``'zlib'`` or ``'bz2'``.
 
-.. py:class:: PickleField()
+.. class:: PickleField()
 
    Stores arbitrary Python objects by pickling them into a
-   :py:class:`BlobField`. Uses ``cPickle`` if available:
+   :class:`BlobField`. Uses ``cPickle`` if available:
 
    .. code-block:: python
 
@@ -516,7 +516,7 @@ Flask Utilities
 FlaskDB Wrapper
 ^^^^^^^^^^^^^^^^
 
-:py:class:`FlaskDB` handles three boilerplate tasks:
+:class:`FlaskDB` handles three boilerplate tasks:
 
 1. Creates a Peewee database instance from Flask's ``app.config``.
 2. Provides a ``Model`` base class whose ``Meta.database`` is wired to the
@@ -570,7 +570,7 @@ Application factory pattern:
        db_wrapper.init_app(app)
        return app
 
-Configuration via dict or a :py:class:`Database` instance directly:
+Configuration via dict or a :class:`Database` instance directly:
 
 .. code-block:: python
 
@@ -592,22 +592,22 @@ Excluding routes from connection management:
 
    app.config['FLASKDB_EXCLUDED_ROUTES'] = ('health_check', 'static')
 
-.. py:class:: FlaskDB(app=None, database=None)
+.. class:: FlaskDB(app=None, database=None)
 
    :param app: Flask application instance (optional; use ``init_app()`` for
        the factory pattern).
    :param database: A database URL string, configuration dictionary, or a
-       :py:class:`Database` instance.
+       :class:`Database` instance.
 
-   .. py:attribute:: database
+   .. attribute:: database
 
-      The underlying :py:class:`Database` instance.
+      The underlying :class:`Database` instance.
 
-   .. py:attribute:: Model
+   .. attribute:: Model
 
-      A base :py:class:`Model` class bound to this database instance.
+      A base :class:`Model` class bound to this database instance.
 
-   .. py:method:: init_app(app)
+   .. method:: init_app(app)
 
       Bind to a Flask application (factory pattern).
 
@@ -615,13 +615,13 @@ Excluding routes from connection management:
 Query Helpers
 ^^^^^^^^^^^^^
 
-.. py:function:: get_object_or_404(query_or_model, *query)
+.. function:: get_object_or_404(query_or_model, *query)
 
    Retrieve a single object matching the given query, or abort with HTTP
    404 if no match is found.
 
-   :param query_or_model: Either a :py:class:`Model` class or a pre-filtered
-       :py:class:`SelectQuery`.
+   :param query_or_model: Either a :class:`Model` class or a pre-filtered
+       :class:`SelectQuery`.
    :param query: Peewee filter expressions.
 
    .. code-block:: python
@@ -633,12 +633,12 @@ Query Helpers
                Post.slug == slug)
            return render_template('post_detail.html', post=post)
 
-.. py:function:: object_list(template_name, query, context_variable='object_list', paginate_by=20, page_var='page', check_bounds=True, **kwargs)
+.. function:: object_list(template_name, query, context_variable='object_list', paginate_by=20, page_var='page', check_bounds=True, **kwargs)
 
    Paginate a query and render a template with the results.
 
    :param str template_name: Template to render.
-   :param query: :py:class:`SelectQuery` to paginate.
+   :param query: :class:`SelectQuery` to paginate.
    :param str context_variable: Template variable name for the page of
        objects (default: ``'object_list'``).
    :param int paginate_by: Items per page.
@@ -648,9 +648,9 @@ Query Helpers
 
    The template receives:
 
-   - ``object_list`` (or ``context_variable``) — page of objects.
-   - ``page`` — current page number.
-   - ``pagination`` — a :py:class:`PaginatedQuery` instance.
+   - ``object_list`` (or ``context_variable``) - page of objects.
+   - ``page`` - current page number.
+   - ``pagination`` - a :class:`PaginatedQuery` instance.
 
    .. code-block:: python
 
@@ -661,20 +661,20 @@ Query Helpers
                query=Post.select().where(Post.published == True),
                paginate_by=10)
 
-.. py:class:: PaginatedQuery(query_or_model, paginate_by, page_var='page', check_bounds=False)
+.. class:: PaginatedQuery(query_or_model, paginate_by, page_var='page', check_bounds=False)
 
    Helper for pagination based on a GET parameter.
 
-   .. py:method:: get_page()
+   .. method:: get_page()
 
       Return the current page number (1-based; defaults to 1).
 
-   .. py:method:: get_page_count()
+   .. method:: get_page_count()
 
       Return the total number of pages.
 
-   .. py:method:: get_object_list()
+   .. method:: get_object_list()
 
-      Return the :py:class:`SelectQuery` for the requested page, with
+      Return the :class:`SelectQuery` for the requested page, with
       appropriate ``LIMIT`` and ``OFFSET`` applied. Returns a 404 if
       ``check_bounds=True`` and the page is empty.

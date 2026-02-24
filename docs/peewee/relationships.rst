@@ -34,9 +34,9 @@ We'll use the following model definitions for our examples:
        user = ForeignKeyField(User, backref='favorites')
        tweet = ForeignKeyField(Tweet, backref='favorites')
 
-Peewee uses :py:class:`ForeignKeyField` to define foreign-key relationships
+Peewee uses :class:`ForeignKeyField` to define foreign-key relationships
 between models. Every foreign-key field has an implied back-reference, which is
-exposed as a pre-filtered :py:class:`Select` query using the provided
+exposed as a pre-filtered :class:`Select` query using the provided
 ``backref`` attribute.
 
 Creating test data
@@ -98,11 +98,11 @@ mickey    whine      huey
    In SQLite, foreign keys are not enabled by default. Most things, including
    the Peewee foreign-key API, will work fine, but ON DELETE behaviour will be
    ignored, even if you explicitly specify ``on_delete`` in your
-   :py:class:`ForeignKeyField`. In conjunction with the default
-   :py:class:`AutoField` behaviour (where deleted record IDs can be reused),
+   :class:`ForeignKeyField`. In conjunction with the default
+   :class:`AutoField` behaviour (where deleted record IDs can be reused),
    this can lead to subtle bugs. To avoid problems, I recommend that you
    enable foreign-key constraints when using SQLite, by setting
-   ``pragmas={'foreign_keys': 1}`` when you instantiate :py:class:`SqliteDatabase`.
+   ``pragmas={'foreign_keys': 1}`` when you instantiate :class:`SqliteDatabase`.
 
    .. code-block:: python
 
@@ -190,7 +190,7 @@ query, expressed in SQL, would be:
     tweets or, if they have tweets, none of them may have been favorited.
 
 Peewee has a concept of a **join context**, meaning that whenever we call the
-:py:meth:`~ModelSelect.join` method, we are implicitly joining on the
+:meth:`~ModelSelect.join` method, we are implicitly joining on the
 previously-joined model (or if this is the first call, the model we are
 selecting from). Since we are joining straight through, from user to tweet,
 then from tweet to favorite, we can simply write:
@@ -250,14 +250,14 @@ write in SQL:
             .where(User.username == 'huey')
             .group_by(Tweet.content))
 
-Note the call to :py:meth:`~ModelSelect.switch` - that instructs Peewee to set
+Note the call to :meth:`~ModelSelect.switch` - that instructs Peewee to set
 the *join context* back to ``Tweet``. If we had omitted the explicit call to
 switch, Peewee would have used ``User`` (the last model we joined) as the join
 context and constructed the join from User to Favorite using the
 ``Favorite.user`` foreign-key, which would have given us incorrect results.
 
 If we wanted to omit the join-context switching we could instead use the
-:py:meth:`~ModelSelect.join_from` method. The following query is equivalent to
+:meth:`~ModelSelect.join_from` method. The following query is equivalent to
 the previous one:
 
 .. code-block:: python
@@ -382,7 +382,7 @@ the above query, by specifying an ``attr`` in the ``join()`` method:
    mickey -> whine
 
 Conversely, if we simply wish *all* attributes we select to be attributes of
-the ``Tweet`` instance, we can add a call to :py:meth:`~ModelSelect.objects` at
+the ``Tweet`` instance, we can add a call to :meth:`~ModelSelect.objects` at
 the end of our query (similar to how we called ``dicts()``):
 
 .. code-block:: pycon
@@ -413,7 +413,7 @@ In SQL we would write:
 Note that we are selecting from the user table twice - once in the context of
 the user who created the favorite, and again as the author of the tweet.
 
-With Peewee, we use :py:meth:`Model.alias` to alias a model class so it can be
+With Peewee, we use :meth:`Model.alias` to alias a model class so it can be
 referenced twice in a single query:
 
 .. code-block:: python
@@ -501,7 +501,7 @@ Iterating over the query, we can see each user and their latest tweet.
 There are a couple things you may not have seen before in the code we used to
 create the query in this section:
 
-* We used :py:meth:`~ModelSelect.join_from` to explicitly specify the join
+* We used :meth:`~ModelSelect.join_from` to explicitly specify the join
   context. We wrote ``.join_from(Tweet, User)``, which is equivalent to
   ``.switch(Tweet).join(User)``.
 * We referenced columns in the subquery using the magic ``.c`` attribute,
@@ -628,7 +628,7 @@ join, but you must manually specify the join predicate.
 In the following example, there is no explicit foreign-key between *User* and
 *ActivityLog*, but there is an implied relationship between the
 *ActivityLog.object_id* field and *User.id*. Rather than joining on a specific
-:py:class:`Field`, we will join using an :py:class:`Expression`.
+:class:`Field`, we will join using an :class:`Expression`.
 
 .. code-block:: python
 
@@ -696,7 +696,7 @@ What if we wanted to query all categories whose parent category is
             .join(Parent, on=(Category.parent == Parent.id))
             .where(Parent.name == 'Electronics'))
 
-When performing a join that uses a :py:class:`ModelAlias`, it is necessary to
+When performing a join that uses a :class:`ModelAlias`, it is necessary to
 specify the join condition using the ``on`` keyword argument. In this case we
 are joining the category with its parent category.
 
@@ -818,12 +818,12 @@ whole iteration with just 1 query.
 ManyToManyField
 ^^^^^^^^^^^^^^^
 
-The :py:class:`ManyToManyField` provides a *field-like* API over many-to-many
+The :class:`ManyToManyField` provides a *field-like* API over many-to-many
 fields. For all but the simplest many-to-many situations, you're better off
 using the standard peewee APIs. But, if your models are very simple and your
-querying needs are not very complex, :py:class:`ManyToManyField` may work.
+querying needs are not very complex, :class:`ManyToManyField` may work.
 
-Modeling students and courses using :py:class:`ManyToManyField`:
+Modeling students and courses using :class:`ManyToManyField`:
 
 .. code-block:: python
 
@@ -885,9 +885,9 @@ Modeling students and courses using :py:class:`ManyToManyField`:
 
 .. warning::
    It is **strongly recommended** that you do not attempt to subclass models
-   containing :py:class:`ManyToManyField` instances.
+   containing :class:`ManyToManyField` instances.
 
-   A :py:class:`ManyToManyField`, despite its name, is not a field in the
+   A :class:`ManyToManyField`, despite its name, is not a field in the
    usual sense. Instead of being a column on a table, the many-to-many field
    covers the fact that behind-the-scenes there's actually a separate table
    with two foreign-key pointers (the *through table*).
@@ -900,10 +900,10 @@ Modeling students and courses using :py:class:`ManyToManyField`:
 
 For more examples, see:
 
-* :py:meth:`ManyToManyField.add`
-* :py:meth:`ManyToManyField.remove`
-* :py:meth:`ManyToManyField.clear`
-* :py:meth:`ManyToManyField.get_through_model`
+* :meth:`ManyToManyField.add`
+* :meth:`ManyToManyField.remove`
+* :meth:`ManyToManyField.clear`
+* :meth:`ManyToManyField.get_through_model`
 
 .. _nplusone:
 
@@ -990,7 +990,7 @@ Using prefetch
 ^^^^^^^^^^^^^^
 
 peewee supports pre-fetching related data using sub-queries. This method
-requires the use of a special API, :py:func:`prefetch`. Prefetch, as its name
+requires the use of a special API, :func:`prefetch`. Prefetch, as its name
 implies, will eagerly load the appropriate tweets for the given users using
 subqueries. This means instead of *O(n)* queries for *n* rows, we will do
 *O(k)* queries for *k* tables.
@@ -1016,13 +1016,13 @@ created within the past week.
 
 .. note::
    Note that neither the ``User`` query, nor the ``Tweet`` query contained a
-   JOIN clause. When using :py:func:`prefetch` you do not need to specify the
+   JOIN clause. When using :func:`prefetch` you do not need to specify the
    join.
 
-:py:func:`prefetch` can be used to query an arbitrary number of tables. Check
+:func:`prefetch` can be used to query an arbitrary number of tables. Check
 the API documentation for more examples.
 
-Some things to consider when using :py:func:`prefetch`:
+Some things to consider when using :func:`prefetch`:
 
 * Foreign keys must exist between the models being prefetched.
 * `LIMIT` works as you'd expect on the outer-most query, but may be difficult

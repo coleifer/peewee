@@ -1,4 +1,4 @@
-.. py:method:: pragma(key, value=SENTINEL, permanent=False)
+.. method:: pragma(key, value=SENTINEL, permanent=False)
 
     :param key: Setting name.
     :param value: New value for the setting (optional).
@@ -17,47 +17,47 @@
         ``permanent=True`` to ensure the pragma is set on subsequent
         connections.
 
-.. py:attribute:: cache_size
+.. attribute:: cache_size
 
     Get or set the cache_size pragma for the current connection.
 
-.. py:attribute:: foreign_keys
+.. attribute:: foreign_keys
 
     Get or set the foreign_keys pragma for the current connection.
 
-.. py:attribute:: journal_mode
+.. attribute:: journal_mode
 
     Get or set the journal_mode pragma.
 
-.. py:attribute:: journal_size_limit
+.. attribute:: journal_size_limit
 
     Get or set the journal_size_limit pragma.
 
-.. py:attribute:: mmap_size
+.. attribute:: mmap_size
 
     Get or set the mmap_size pragma for the current connection.
 
-.. py:attribute:: page_size
+.. attribute:: page_size
 
     Get or set the page_size pragma.
 
-.. py:attribute:: read_uncommitted
+.. attribute:: read_uncommitted
 
     Get or set the read_uncommitted pragma for the current connection.
 
-.. py:attribute:: synchronous
+.. attribute:: synchronous
 
     Get or set the synchronous pragma for the current connection.
 
-.. py:attribute:: wal_autocheckpoint
+.. attribute:: wal_autocheckpoint
 
     Get or set the wal_autocheckpoint pragma for the current connection.
 
-.. py:attribute:: timeout
+.. attribute:: timeout
 
     Get or set the busy timeout (seconds).
 
-.. py:method:: register_aggregate(klass, name=None, num_params=-1)
+.. method:: register_aggregate(klass, name=None, num_params=-1)
 
     :param klass: Class implementing aggregate API.
     :param str name: Aggregate function name (defaults to name of class).
@@ -70,7 +70,7 @@
     Additionally, if a connection is already open, the aggregate will be
     registered with the open connection.
 
-.. py:method:: aggregate(name=None, num_params=-1)
+.. method:: aggregate(name=None, num_params=-1)
 
     :param str name: Name of the aggregate (defaults to class name).
     :param int num_params: Number of parameters the aggregate accepts,
@@ -106,7 +106,7 @@
             def finalize(self):
                 return self.product
 
-.. py:method:: register_collation(fn, name=None)
+.. method:: register_collation(fn, name=None)
 
     :param fn: The collation function.
     :param str name: Name of collation (defaults to function name)
@@ -116,7 +116,7 @@
     already open, the collation will be registered with the open
     connection.
 
-.. py:method:: collation(name=None)
+.. method:: collation(name=None)
 
     :param str name: Name of collation (defaults to function name)
 
@@ -141,7 +141,7 @@
     extra attribute provides a shorthand way to generate the SQL necessary
     to use our custom collation.
 
-.. py:method:: register_function(fn, name=None, num_params=-1, deterministic=None)
+.. method:: register_function(fn, name=None, num_params=-1, deterministic=None)
 
     :param fn: The user-defined scalar function.
     :param str name: Name of function (defaults to function name)
@@ -157,7 +157,7 @@
     connection is already open, the function will be registered with the
     open connection.
 
-.. py:method:: func(name=None, num_params=-1, deterministic=None)
+.. method:: func(name=None, num_params=-1, deterministic=None)
 
     :param str name: Name of the function (defaults to function name).
     :param int num_params: Number of parameters the function accepts,
@@ -180,7 +180,7 @@
         # Usage:
         title_case_books = Book.select(fn.title_case(Book.title))
 
-.. py:method:: register_window_function(klass, name=None, num_params=-1)
+.. method:: register_window_function(klass, name=None, num_params=-1)
 
     :param klass: Class implementing window function API.
     :param str name: Window function name (defaults to name of class).
@@ -195,7 +195,7 @@
     opened. Additionally, if a connection is already open, the window
     function will be registered with the open connection.
 
-.. py:method:: window_function(name=None, num_params=-1)
+.. method:: window_function(name=None, num_params=-1)
 
     :param str name: Name of the window function (defaults to class name).
     :param int num_params: Number of parameters the function accepts, or -1
@@ -230,25 +230,25 @@
             def finalize(self):
                 return self._value
 
-.. py:method:: unregister_aggregate(name)
+.. method:: unregister_aggregate(name)
 
     :param name: Name of the user-defined aggregate function.
 
     Unregister the user-defined aggregate function.
 
-.. py:method:: unregister_collation(name)
+.. method:: unregister_collation(name)
 
     :param name: Name of the user-defined collation.
 
     Unregister the user-defined collation.
 
-.. py:method:: unregister_function(name)
+.. method:: unregister_function(name)
 
     :param name: Name of the user-defined scalar function.
 
     Unregister the user-defined scalar function.
 
-.. py:method:: load_extension(extension_module)
+.. method:: load_extension(extension_module)
 
     Load the given C extension. If a connection is currently open in the
     calling thread, then the extension will be loaded for that connection
@@ -262,7 +262,7 @@
         db = SqliteExtDatabase('my_app.db')
         db.load_extension('closure')
 
-.. py:method:: attach(filename, name)
+.. method:: attach(filename, name)
 
     :param str filename: Database to attach (or ``:memory:`` for in-memory)
     :param str name: Schema name for attached database.
@@ -276,7 +276,7 @@
         Databases that are attached using this method will be attached
         every time a database connection is opened.
 
-.. py:method:: detach(name)
+.. method:: detach(name)
 
     :param str name: Schema name for attached database.
     :return: boolean indicating success
@@ -285,7 +285,7 @@
     call to ``attach()``. If the main database is currently connected, the
     attached database will be detached from the open connection.
 
-.. py:method:: atomic(lock_type=None)
+.. method:: atomic(lock_type=None)
 
     :param str lock_type: Locking strategy: DEFERRED, IMMEDIATE, EXCLUSIVE.
 
@@ -294,7 +294,7 @@
 
     .. note:: Lock type only applies to the outermost ``atomic()`` block.
 
-.. py:method:: transaction(lock_type=None)
+.. method:: transaction(lock_type=None)
 
     :param str lock_type: Locking strategy: DEFERRED, IMMEDIATE, EXCLUSIVE.
 

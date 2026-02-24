@@ -221,7 +221,7 @@ Return the name and monthly maintenance of the facilities in question.
     cost = Case(None, [(Facility.monthlymaintenance > 100, 'expensive')], 'cheap')
     query = Facility.select(Facility.name, cost.alias('cost'))
 
-.. note:: See documentation :py:class:`Case` for more examples.
+.. note:: See documentation :class:`Case` for more examples.
 
 
 Working with dates

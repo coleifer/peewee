@@ -188,7 +188,7 @@ you use a transaction:
        for idx in range(0, len(data_source), 100):
            MyModel.insert_many(data_source[idx:idx+100]).execute()
 
-Peewee comes with a :py:func:`chunked` helper function which you can use for
+Peewee comes with a :func:`chunked` helper function which you can use for
 *efficiently* chunking a generic iterable into a series of *batch*-sized
 iterables:
 
@@ -204,10 +204,10 @@ iterables:
 Alternatives
 ^^^^^^^^^^^^
 
-The :py:meth:`Model.bulk_create` method behaves much like
-:py:meth:`Model.insert_many`, but instead it accepts a list of unsaved model
+The :meth:`Model.bulk_create` method behaves much like
+:meth:`Model.insert_many`, but instead it accepts a list of unsaved model
 instances to insert, and it optionally accepts a batch-size parameter. To use
-the :py:meth:`~Model.bulk_create` API:
+the :meth:`~Model.bulk_create` API:
 
 .. code-block:: python
 
@@ -226,7 +226,7 @@ the :py:meth:`~Model.bulk_create` API:
    the previously-unsaved model instances will have their new primary key
    values automatically populated.
 
-In addition, Peewee also offers :py:meth:`Model.bulk_update`, which can
+In addition, Peewee also offers :meth:`Model.bulk_update`, which can
 efficiently update one or more columns on a list of models. For example:
 
 .. code-block:: python
@@ -254,7 +254,7 @@ This will result in executing the following SQL:
 
 .. note::
    For large lists of objects, you should specify a reasonable batch_size and
-   wrap the call to :py:meth:`~Model.bulk_update` with :py:meth:`Database.atomic`:
+   wrap the call to :meth:`~Model.bulk_update` with :meth:`Database.atomic`:
 
    .. code-block:: python
 
@@ -262,12 +262,12 @@ This will result in executing the following SQL:
           User.bulk_update(list_of_users, fields=['username'], batch_size=50)
 
 .. warning::
-   :py:meth:`Model.bulk_update` may not be the most efficient method for
+   :meth:`Model.bulk_update` may not be the most efficient method for
    updating large numbers of records. This functionality is implemented such
    that we create a "mapping" of primary key to corresponding field values for
    all rows being updated using a SQL ``CASE`` statement.
 
-Alternatively, you can use the :py:meth:`Database.batch_commit` helper to
+Alternatively, you can use the :meth:`Database.batch_commit` helper to
 process chunks of rows inside *batch*-sized transactions. This method also
 provides a workaround for databases besides Postgresql, when the primary-key of
 the newly-created rows must be obtained.
@@ -287,7 +287,7 @@ Bulk-loading from another table
 
 If the data you would like to bulk load is stored in another table, you can
 also create *INSERT* queries whose source is a *SELECT* query. Use the
-:py:meth:`Model.insert_from` method:
+:meth:`Model.insert_from` method:
 
 .. code-block:: python
 
@@ -308,7 +308,7 @@ Updating existing records
 -------------------------
 
 Once a model instance has a primary key, any subsequent call to
-:py:meth:`~Model.save` will result in an *UPDATE* rather than another *INSERT*.
+:meth:`~Model.save` will result in an *UPDATE* rather than another *INSERT*.
 The model's primary key will not change:
 
 .. code-block:: pycon
@@ -327,7 +327,7 @@ The model's primary key will not change:
 
 If you want to update multiple records, issue an *UPDATE* query. The following
 example will update all ``Tweet`` objects, marking them as *published*, if they
-were created before today. :py:meth:`Model.update` accepts keyword arguments
+were created before today. :meth:`Model.update` accepts keyword arguments
 where the keys correspond to the model's field names:
 
 .. code-block:: pycon
@@ -338,8 +338,8 @@ where the keys correspond to the model's field names:
    >>> query.execute()  # Returns the number of rows that were updated.
    4
 
-For more information, see the documentation on :py:meth:`Model.update`,
-:py:class:`Update` and :py:meth:`Model.bulk_update`.
+For more information, see the documentation on :meth:`Model.update`,
+:class:`Update` and :meth:`Model.bulk_update`.
 
 .. note::
    If you would like more information on performing atomic updates (such as
@@ -363,7 +363,7 @@ some counters. The naive approach would be to write something like this:
 **Do not do this!** Not only is this slow, but it is also vulnerable to race
 conditions if multiple processes are updating the counter at the same time.
 
-Instead, you can update the counters atomically using :py:meth:`~Model.update`:
+Instead, you can update the counters atomically using :meth:`~Model.update`:
 
 .. code-block:: pycon
 
@@ -394,17 +394,17 @@ Upsert
 
 Peewee provides support for varying types of upsert functionality.
 
-* :py:meth:`Model.replace` - SQLite and MySQL
-* :py:meth:`Insert.on_conflict_replace` - SQLite and MySQL
-* :py:meth:`Insert.on_conflict_ignore` - SQLite, MySQL and Postgres
-* :py:meth:`Insert.on_conflict` - SQLite, MySQL and Postgres. This is the most
+* :meth:`Model.replace` - SQLite and MySQL
+* :meth:`Insert.on_conflict_replace` - SQLite and MySQL
+* :meth:`Insert.on_conflict_ignore` - SQLite, MySQL and Postgres
+* :meth:`Insert.on_conflict` - SQLite, MySQL and Postgres. This is the most
   powerful and most general method.
 
-With SQLite and MySQL, Peewee offers the :py:meth:`~Model.replace`, which
+With SQLite and MySQL, Peewee offers the :meth:`~Model.replace`, which
 allows you to insert a record or, in the event of a constraint violation,
 replace the entire existing record.
 
-Example of using :py:meth:`~Model.replace` and :py:meth:`~Insert.on_conflict_replace`:
+Example of using :meth:`~Model.replace` and :meth:`~Insert.on_conflict_replace`:
 
 .. code-block:: python
 
@@ -426,7 +426,7 @@ Example of using :py:meth:`~Model.replace` and :py:meth:`~Insert.on_conflict_rep
 
 .. note::
    In addition to *replace*, SQLite, MySQL and Postgresql provide an *ignore*
-   action (see: :py:meth:`~Insert.on_conflict_ignore`) if you simply wish to
+   action (see: :meth:`~Insert.on_conflict_ignore`) if you simply wish to
    insert and ignore any potential constraint violation.
 
 **MySQL** supports upsert via the *ON DUPLICATE KEY UPDATE* clause. For
@@ -461,7 +461,7 @@ column will be updated, and no duplicate rows will be created.
 allows for more granular control over which constraint violation should trigger
 the conflict resolution, and what values should be updated or preserved.
 
-Example of using :py:meth:`~Insert.on_conflict` to perform an upsert:
+Example of using :meth:`~Insert.on_conflict` to perform an upsert:
 
 .. code-block:: python
    :emphasize-lines: 14, 15, 16, 17
@@ -493,8 +493,8 @@ column will be updated, and no duplicate rows will be created.
    The main difference between MySQL and Postgresql/SQLite is that Postgresql
    and SQLite require that you specify a ``conflict_target``.
 
-Here is a more advanced (if contrived) example using the :py:class:`EXCLUDED`
-namespace. The :py:class:`EXCLUDED` helper allows us to reference values in the
+Here is a more advanced (if contrived) example using the :class:`EXCLUDED`
+namespace. The :class:`EXCLUDED` helper allows us to reference values in the
 conflicting data. For our example, we'll assume a simple table mapping a unique
 key (string) to a value (integer):
 
@@ -585,13 +585,13 @@ Full example:
 
    # Prints "2 127.2,127.1"
 
-.. seealso:: :py:meth:`Insert.on_conflict` and :py:class:`OnConflict`.
+.. seealso:: :meth:`Insert.on_conflict` and :class:`OnConflict`.
 
 Deleting records
 ----------------
 
 To delete a single model instance, you can use the
-:py:meth:`Model.delete_instance` shortcut. :py:meth:`~Model.delete_instance`
+:meth:`Model.delete_instance` shortcut. :meth:`~Model.delete_instance`
 will delete the given model instance and can optionally delete any dependent
 objects recursively (by specifying `recursive=True`).
 
@@ -619,18 +619,18 @@ following will delete all ``Tweet`` objects that are over one year old:
 
 For more information, see the documentation on:
 
-* :py:meth:`Model.delete_instance`
-* :py:meth:`Model.delete`
-* :py:class:`DeleteQuery`
+* :meth:`Model.delete_instance`
+* :meth:`Model.delete`
+* :class:`DeleteQuery`
 
 Selecting a single record
 -------------------------
 
-You can use the :py:meth:`Model.get` method to retrieve a single instance
+You can use the :meth:`Model.get` method to retrieve a single instance
 matching the given query. For primary-key lookups, you can also use the
-shortcut method :py:meth:`Model.get_by_id`.
+shortcut method :meth:`Model.get_by_id`.
 
-This method is a shortcut that calls :py:meth:`Model.select` with the given
+This method is a shortcut that calls :meth:`Model.select` with the given
 query, but limits the result set to a single row. Additionally, if no model
 matches the given query, a ``DoesNotExist`` exception will be raised.
 
@@ -656,7 +656,7 @@ matches the given query, a ``DoesNotExist`` exception will be raised.
    SQL: SELECT "t1"."id", "t1"."username" FROM "user" AS "t1" WHERE ...
    Params: ['username', 1, 0]
 
-For more advanced operations, you can use :py:meth:`SelectBase.get`. The
+For more advanced operations, you can use :meth:`SelectBase.get`. The
 following query retrieves the latest tweet from the user named *charlie*:
 
 .. code-block:: pycon
@@ -671,18 +671,18 @@ following query retrieves the latest tweet from the user named *charlie*:
 
 For more information, see the documentation on:
 
-* :py:meth:`Model.get`
-* :py:meth:`Model.get_by_id`
-* :py:meth:`Model.get_or_none` - if no matching row is found, return ``None``.
-* :py:meth:`Model.select`
-* :py:meth:`SelectBase.get`
-* :py:meth:`SelectBase.first` - return first record of result-set or ``None``.
+* :meth:`Model.get`
+* :meth:`Model.get_by_id`
+* :meth:`Model.get_or_none` - if no matching row is found, return ``None``.
+* :meth:`Model.select`
+* :meth:`SelectBase.get`
+* :meth:`SelectBase.first` - return first record of result-set or ``None``.
 
 Create or get
 -------------
 
 Peewee has one helper method for performing "get/create" type operations:
-:py:meth:`Model.get_or_create`, which first attempts to retrieve the matching
+:meth:`Model.get_or_create`, which first attempts to retrieve the matching
 row. Failing that, a new row will be created.
 
 For "create or get" type logic, typically one would rely on a *unique*
@@ -708,14 +708,14 @@ You can easily encapsulate this type of logic as a ``classmethod`` on your own
 The above example first attempts at creation, then falls back to retrieval,
 relying on the database to enforce a unique constraint. If you prefer to
 attempt to retrieve the record first, you can use
-:py:meth:`~Model.get_or_create`. This method is implemented along the same
+:meth:`~Model.get_or_create`. This method is implemented along the same
 lines as the Django function of the same name. You can use the Django-style
 keyword argument filters to specify your ``WHERE`` conditions. The function
 returns a 2-tuple containing the instance and a boolean value indicating if the
 object was created.
 
 Here is how you might implement user account creation using
-:py:meth:`~Model.get_or_create`:
+:meth:`~Model.get_or_create`:
 
 .. code-block:: python
 
@@ -733,16 +733,16 @@ record, we will also specify their date-of-birth and favorite color:
        last_name=last_name,
        defaults={'dob': dob, 'favorite_color': 'green'})
 
-Any keyword argument passed to :py:meth:`~Model.get_or_create` will be used in
+Any keyword argument passed to :meth:`~Model.get_or_create` will be used in
 the ``get()`` portion of the logic, except for the ``defaults`` dictionary,
 which will be used to populate values on newly-created instances.
 
-For more details read the documentation for :py:meth:`Model.get_or_create`.
+For more details read the documentation for :meth:`Model.get_or_create`.
 
 Selecting multiple records
 --------------------------
 
-We can use :py:meth:`Model.select` to retrieve rows from the table. When you
+We can use :meth:`Model.select` to retrieve rows from the table. When you
 construct a *SELECT* query, the database will return any rows that correspond
 to your query. Peewee allows you to iterate over these rows, as well as use
 indexing and slicing operations:
@@ -762,11 +762,11 @@ indexing and slicing operations:
    >>> query[:2]
    [<User: 1>, <User: 2>]
 
-:py:class:`Select` queries are smart, in that you can iterate, index and slice
+:class:`Select` queries are smart, in that you can iterate, index and slice
 the query multiple times but the query is only executed once.
 
-In the following example, we will simply call :py:meth:`~Model.select` and
-iterate over the return value, which is an instance of :py:class:`Select`.
+In the following example, we will simply call :meth:`~Model.select` and
+iterate over the return value, which is an instance of :class:`Select`.
 This will return all the rows in the *User* table:
 
 .. code-block:: pycon
@@ -781,7 +781,7 @@ This will return all the rows in the *User* table:
 .. note::
    Subsequent iterations of the same query will not hit the database as the
    results are cached. To disable this behavior (to reduce memory usage), call
-   :py:meth:`Select.iterator` when iterating.
+   :meth:`Select.iterator` when iterating.
 
 When iterating over a model that contains a foreign key, be careful with the
 way you access values on related models. Accidentally resolving a foreign key
@@ -789,7 +789,7 @@ or iterating over a back-reference can cause :ref:`N+1 query behavior <nplusone>
 
 When you create a foreign key, such as ``Tweet.user``, you can use the
 *backref* to create a back-reference (``User.tweets``). Back-references
-are exposed as :py:class:`Select` instances:
+are exposed as :class:`Select` instances:
 
 .. code-block:: pycon
 
@@ -802,7 +802,7 @@ are exposed as :py:class:`Select` instances:
    <peewee.ModelSelect at 0x7f73db3bafd0>
 
 You can iterate over the ``user.tweets`` back-reference just like any other
-:py:class:`Select`:
+:class:`Select`:
 
 .. code-block:: pycon
 
@@ -813,7 +813,7 @@ You can iterate over the ``user.tweets`` back-reference just like any other
     this is fun
     look at this picture of my food
 
-In addition to returning model instances, :py:class:`Select` queries can return
+In addition to returning model instances, :class:`Select` queries can return
 dictionaries, tuples and namedtuples. Depending on your use-case, you may find
 it easier to work with rows as dictionaries, for example:
 
@@ -827,20 +827,20 @@ it easier to work with rows as dictionaries, for example:
    {'id': 2, 'username': 'Huey'}
    {'id': 3, 'username': 'Peewee'}
 
-See :py:meth:`~BaseQuery.namedtuples`, :py:meth:`~BaseQuery.tuples`,
-:py:meth:`~BaseQuery.dicts` for more information.
+See :meth:`~BaseQuery.namedtuples`, :meth:`~BaseQuery.tuples`,
+:meth:`~BaseQuery.dicts` for more information.
 
 Iterating over large result-sets
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 By default peewee will cache the rows returned when iterating over a
-:py:class:`Select` query. This is an optimization to allow multiple iterations
+:class:`Select` query. This is an optimization to allow multiple iterations
 as well as indexing and slicing without causing additional queries. This
 caching can be problematic, however, when you plan to iterate over a large
 number of rows.
 
 To reduce the amount of memory used by peewee when iterating over a query, use
-the :py:meth:`~BaseQuery.iterator` method. This method allows you to iterate
+the :meth:`~BaseQuery.iterator` method. This method allows you to iterate
 without caching each model returned, using much less memory when iterating over
 large result sets.
 
@@ -859,13 +859,13 @@ large result sets.
 
 For simple queries you can see further speed improvements by returning rows as
 dictionaries, namedtuples or tuples. The following methods can be used on any
-:py:class:`Select` query to change the result row type:
+:class:`Select` query to change the result row type:
 
-* :py:meth:`~BaseQuery.dicts`
-* :py:meth:`~BaseQuery.namedtuples`
-* :py:meth:`~BaseQuery.tuples`
+* :meth:`~BaseQuery.dicts`
+* :meth:`~BaseQuery.namedtuples`
+* :meth:`~BaseQuery.tuples`
 
-Don't forget to append the :py:meth:`~BaseQuery.iterator` method call to also
+Don't forget to append the :meth:`~BaseQuery.iterator` method call to also
 reduce memory consumption. For example, the above code might look like:
 
 .. code-block:: python
@@ -889,7 +889,7 @@ tables, peewee will reconstruct the model graph for each row returned. This
 operation can be slow for complex graphs. For example, if we were selecting a
 list of tweets along with the username and avatar of the tweet's author, Peewee
 would have to create two objects for each row (a tweet and a user). In addition
-to the above row-types, there is a fourth method :py:meth:`~BaseQuery.objects`
+to the above row-types, there is a fourth method :meth:`~BaseQuery.objects`
 which will return the rows as model instances, but will not attempt to resolve
 the model graph.
 
@@ -913,7 +913,7 @@ For example:
        print(tweet.username, tweet.content)
 
 For maximum performance, you can execute queries and then iterate over the
-results using the underlying database cursor. :py:meth:`Database.execute`
+results using the underlying database cursor. :meth:`Database.execute`
 accepts a query object, executes the query, and returns a DB-API 2.0 ``Cursor``
 object. The cursor will return the raw row-tuples:
 
@@ -1037,7 +1037,7 @@ Get tweets by staff or superusers using a subquery:
 Sorting records
 ---------------
 
-To return rows in order, use the :py:meth:`~Query.order_by` method:
+To return rows in order, use the :meth:`~Query.order_by` method:
 
 .. code-block:: pycon
    :emphasize-lines: 1, 8
@@ -1118,7 +1118,7 @@ the example below we are ordering by the ``COUNT()`` of tweet ids descending:
 Alternatively, you can reference the alias assigned to the calculated value in
 the ``select`` clause. This method has the benefit of being a bit easier to
 read. Note that we are not referring to the named alias directly, but are
-wrapping it using the :py:class:`SQL` helper:
+wrapping it using the :class:`SQL` helper:
 
 .. code-block:: python
 
@@ -1163,8 +1163,8 @@ MySQL uses *Rand*:
 Paginating records
 ------------------
 
-The :py:meth:`~Query.paginate` method makes it easy to grab a *page* or
-records. :py:meth:`~Query.paginate` takes two parameters,
+The :meth:`~Query.paginate` method makes it easy to grab a *page* or
+records. :meth:`~Query.paginate` takes two parameters,
 ``page_number``, and ``items_per_page``.
 
 .. attention::
@@ -1187,7 +1187,7 @@ records. :py:meth:`~Query.paginate` takes two parameters,
    tweet 19
 
 If you would like more granular control, you can always use
-:py:meth:`~Query.limit` and :py:meth:`~Query.offset`.
+:meth:`~Query.limit` and :meth:`~Query.offset`.
 
 Counting records
 ----------------
@@ -1277,7 +1277,7 @@ Suppose we want to grab the associated count and store it on the tag:
 Retrieving Scalar Values
 ------------------------
 
-You can retrieve scalar values by calling :py:meth:`Query.scalar`. For
+You can retrieve scalar values by calling :meth:`Query.scalar`. For
 instance:
 
 .. code-block:: python
@@ -1299,7 +1299,7 @@ You can retrieve multiple scalar values by passing ``as_tuple=True``:
 Window functions
 ----------------
 
-A :py:class:`Window` function refers to an aggregate function that operates on
+A :class:`Window` function refers to an aggregate function that operates on
 a sliding window of data that is being processed as part of a ``SELECT`` query.
 Window functions make it possible to do things like:
 
@@ -1309,7 +1309,7 @@ Window functions make it possible to do things like:
 4. Compare a row value to a value in the preceding (or succeeding!) row(s).
 
 peewee comes with support for SQL window functions, which can be created by
-calling :py:meth:`Function.over` and passing in your partitioning or ordering
+calling :meth:`Function.over` and passing in your partitioning or ordering
 parameters.
 
 For the following examples, we'll use the following model and sample data:
@@ -1434,14 +1434,14 @@ Bounded windows
 By default, window functions are evaluated using an *unbounded preceding* start
 for the window, and the *current row* as the end. We can change the bounds of
 the window our aggregate functions operate on by specifying a ``start`` and/or
-``end`` in the call to :py:meth:`Function.over`. Additionally, Peewee comes
-with helper-methods on the :py:class:`Window` object for generating the
+``end`` in the call to :meth:`Function.over`. Additionally, Peewee comes
+with helper-methods on the :class:`Window` object for generating the
 appropriate boundary references:
 
-* :py:attr:`Window.CURRENT_ROW` - attribute that references the current row.
-* :py:meth:`Window.preceding` - specify number of row(s) preceding, or omit
+* :attr:`Window.CURRENT_ROW` - attribute that references the current row.
+* :meth:`Window.preceding` - specify number of row(s) preceding, or omit
   number to indicate **all** preceding rows.
-* :py:meth:`Window.following` - specify number of row(s) following, or omit
+* :meth:`Window.following` - specify number of row(s) following, or omit
   number to indicate **all** following rows.
 
 To examine how boundaries work, we'll calculate a running total of the
@@ -1498,7 +1498,7 @@ Filtered Aggregates
 Aggregate functions may also support filter functions (Postgres and Sqlite
 3.25+), which get translated into a ``FILTER (WHERE...)`` clause. Filter
 expressions are added to an aggregate function with the
-:py:meth:`Function.filter` method.
+:meth:`Function.filter` method.
 
 For an example, we will calculate the running sum of the ``value`` field with
 respect to the ``id``, but we will filter-out any samples whose ``counter=2``.
@@ -1521,15 +1521,15 @@ respect to the ``id``, but we will filter-out any samples whose ``counter=2``.
    # 3   100    130.
 
 .. note::
-   The call to :py:meth:`~Function.filter` must precede the call to
-   :py:meth:`~Function.over`.
+   The call to :meth:`~Function.filter` must precede the call to
+   :meth:`~Function.over`.
 
 Reusing Window Definitions
 ^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 If you intend to use the same window definition for multiple aggregates, you
-can create a :py:class:`Window` object. The :py:class:`Window` object takes the
-same parameters as :py:meth:`Function.over`, and can be passed to the
+can create a :class:`Window` object. The :class:`Window` object takes the
+same parameters as :meth:`Function.over`, and can be passed to the
 ``over()`` method in-place of the individual parameters.
 
 Here we'll declare a single window, ordered with respect to the sample ``id``,
@@ -1559,7 +1559,7 @@ and call several window functions using that window definition:
 Multiple window definitions
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-In the previous example, we saw how to declare a :py:class:`Window` definition
+In the previous example, we saw how to declare a :class:`Window` definition
 and re-use it for multiple different aggregations. You can include as many
 window definitions as you need in your queries, but it is necessary to ensure
 each window has a unique alias:
@@ -1650,11 +1650,11 @@ Let's examine the difference by calculating a "running sum" of the samples,
 ordered with respect to the ``counter`` and ``value`` fields. To specify the
 frame type, we can use either:
 
-* :py:attr:`Window.RANGE`
-* :py:attr:`Window.ROWS`
-* :py:attr:`Window.GROUPS`
+* :attr:`Window.RANGE`
+* :attr:`Window.ROWS`
+* :attr:`Window.GROUPS`
 
-The behavior of :py:attr:`~Window.RANGE`, when there are logical duplicates,
+The behavior of :attr:`~Window.RANGE`, when there are logical duplicates,
 may lead to unexpected results:
 
 .. code-block:: python
@@ -1679,10 +1679,10 @@ may lead to unexpected results:
    # 3         100     155.
 
 With the inclusion of the new rows we now have some rows that have duplicate
-``category`` and ``value`` values. The :py:attr:`~Window.RANGE` frame type
+``category`` and ``value`` values. The :attr:`~Window.RANGE` frame type
 causes these duplicates to be evaluated together rather than separately.
 
-The more expected result can be achieved by using :py:attr:`~Window.ROWS` as
+The more expected result can be achieved by using :attr:`~Window.ROWS` as
 the frame-type:
 
 .. code-block:: python
@@ -1714,7 +1714,7 @@ Peewee uses these rules for determining what frame-type to use:
 * If the user did not specify frame type or start/end boundaries, Peewee will
   use the database default, which is ``RANGE``.
 
-The :py:attr:`Window.GROUPS` frame type looks at the window range specification
+The :attr:`Window.GROUPS` frame type looks at the window range specification
 in terms of groups of rows, based on the ordering term(s). Using ``GROUPS``, we
 can define the frame so it covers distinct groupings of rows. Let's look at an
 example:
@@ -1748,9 +1748,9 @@ previous group and the current group.
 .. note::
    For information about the window function APIs, see:
 
-   * :py:meth:`Function.over`
-   * :py:meth:`Function.filter`
-   * :py:class:`Window`
+   * :meth:`Function.over`
+   * :meth:`Function.filter`
+   * :class:`Window`
 
    For general information on window functions, read the postgres `window functions tutorial <https://www.postgresql.org/docs/current/tutorial-window.html>`_
 
@@ -1765,12 +1765,12 @@ Retrieving row tuples / dictionaries / namedtuples
 
 Sometimes you do not need the overhead of creating model instances and simply
 want to iterate over the row data without needing all the APIs provided
-:py:class:`Model`. To do this, use:
+:class:`Model`. To do this, use:
 
-* :py:meth:`~BaseQuery.dicts`
-* :py:meth:`~BaseQuery.namedtuples`
-* :py:meth:`~BaseQuery.tuples`
-* :py:meth:`~BaseQuery.objects` -- accepts an arbitrary constructor function
+* :meth:`~BaseQuery.dicts`
+* :meth:`~BaseQuery.namedtuples`
+* :meth:`~BaseQuery.tuples`
+* :meth:`~BaseQuery.objects` -- accepts an arbitrary constructor function
   which is called with the row tuple.
 
 .. code-block:: python
@@ -1785,7 +1785,7 @@ want to iterate over the row data without needing all the APIs provided
        print(stat_url, stat_count)
 
 Similarly, you can return the rows from the cursor as dictionaries using
-:py:meth:`~BaseQuery.dicts`:
+:meth:`~BaseQuery.dicts`:
 
 .. code-block:: python
 
@@ -1803,7 +1803,7 @@ Similarly, you can return the rows from the cursor as dictionaries using
 Returning Clause
 ----------------
 
-:py:class:`PostgresqlDatabase` supports a ``RETURNING`` clause on ``UPDATE``,
+:class:`PostgresqlDatabase` supports a ``RETURNING`` clause on ``UPDATE``,
 ``INSERT`` and ``DELETE`` queries. Specifying a ``RETURNING`` clause allows you
 to iterate over the rows accessed by the query.
 
@@ -1821,7 +1821,7 @@ an iterable cursor object.
 Postgresql allows, via the ``RETURNING`` clause, to return data from the rows
 inserted or modified by a query.
 
-For example, let's say you have an :py:class:`Update` that deactivates all
+For example, let's say you have an :class:`Update` that deactivates all
 user accounts whose registration has expired. After deactivating them, you want
 to send each user an email letting them know their account was deactivated.
 Rather than writing two queries, a ``SELECT`` and an ``UPDATE``, you can do
@@ -1838,13 +1838,13 @@ this in a single ``UPDATE`` query with a ``RETURNING`` clause:
    for deactivate_user in query.execute():
        send_deactivation_email(deactivated_user.email)
 
-The ``RETURNING`` clause is also available on :py:class:`Insert` and
-:py:class:`Delete`. When used with ``INSERT``, the newly-created rows will be
+The ``RETURNING`` clause is also available on :class:`Insert` and
+:class:`Delete`. When used with ``INSERT``, the newly-created rows will be
 returned. When used with ``DELETE``, the deleted rows will be returned.
 
 The only limitation of the ``RETURNING`` clause is that it can only consist of
 columns from tables listed in the query's ``FROM`` clause. To select all
-columns from a particular table, you can simply pass in the :py:class:`Model`
+columns from a particular table, you can simply pass in the :class:`Model`
 class.
 
 As another example, let's add a user and set their creation-date to the
@@ -1864,7 +1864,7 @@ ID, Email and the creation timestamp in a single query:
    user = cursor[0]
    logger.info('Created user %s (id=%s) at %s', user.email, user.id, user.created)
 
-By default the cursor will return :py:class:`Model` instances, but you can
+By default the cursor will return :class:`Model` instances, but you can
 specify a different row type:
 
 .. code-block:: python
@@ -1878,7 +1878,7 @@ specify a different row type:
    for new_user in query.execute():
        print('Added user "%s", id=%s' % (new_user['username'], new_user['id']))
 
-Just as with :py:class:`Select` queries, you can specify various :ref:`result row types <rowtypes>`.
+Just as with :class:`Select` queries, you can specify various :ref:`result row types <rowtypes>`.
 
 .. _cte:
 
@@ -1892,10 +1892,10 @@ of queries. CTEs may be useful for:
 * Grouping or filtering by a column derived in the CTE's result set.
 * Writing recursive queries.
 
-To declare a :py:class:`Select` query for use as a CTE, use
-:py:meth:`~SelectQuery.cte` method, which wraps the query in a :py:class:`CTE`
-object. To indicate that a :py:class:`CTE` should be included as part of a
-query, use the :py:meth:`Query.with_cte` method, passing a list of CTE objects.
+To declare a :class:`Select` query for use as a CTE, use
+:meth:`~SelectQuery.cte` method, which wraps the query in a :class:`CTE`
+object. To indicate that a :class:`CTE` should be included as part of a
+query, use the :meth:`Query.with_cte` method, passing a list of CTE objects.
 
 Simple Example
 ^^^^^^^^^^^^^^

@@ -3,7 +3,7 @@
 Models and Fields
 =================
 
-:py:class:`Model` classes, :py:class:`Field` instances and model instances all
+:class:`Model` classes, :class:`Field` instances and model instances all
 map to database concepts:
 
 ================= =================================
@@ -40,14 +40,14 @@ connection and model classes.
        created_date = DateTimeField(default=datetime.datetime.now)
        is_published = BooleanField(default=True)
 
-1. Create an instance of a :py:class:`Database`.
+1. Create an instance of a :class:`Database`.
 
     .. code-block:: python
 
        db = SqliteDatabase('my_app.db')
 
     The ``db`` object will be used to manage the connections to the Sqlite
-    database. In this example we're using :py:class:`SqliteDatabase`, but you
+    database. In this example we're using :class:`SqliteDatabase`, but you
     could also use one of the other :ref:`database engines <database>`.
 
 2. Create a base model class which specifies our database.
@@ -93,12 +93,12 @@ connection and model classes.
 Fields
 ------
 
-The :py:class:`Field` class is used to describe the mapping of
-:py:class:`Model` attributes to database columns. Each field type has a
+The :class:`Field` class is used to describe the mapping of
+:class:`Model` attributes to database columns. Each field type has a
 corresponding SQL storage class (i.e. varchar, int), and conversion between
 python data types and underlying storage is handled transparently.
 
-When creating a :py:class:`Model` class, fields are defined as class
+When creating a :class:`Model` class, fields are defined as class
 attributes. This should look familiar to users of the django framework. Here's
 an example:
 
@@ -111,10 +111,10 @@ an example:
 
 In the above example, because none of the fields are initialized with
 ``primary_key=True``, an auto-incrementing primary key will automatically be
-created and named ``id``. Peewee uses :py:class:`AutoField` to signify an
+created and named ``id``. Peewee uses :class:`AutoField` to signify an
 auto-incrementing integer primary key, which implies ``primary_key=True``.
 
-There is one special type of field, :py:class:`ForeignKeyField`, which allows
+There is one special type of field, :class:`ForeignKeyField`, which allows
 you to represent foreign-key relationships between models in an intuitive way:
 
 .. code-block:: python
@@ -212,26 +212,26 @@ Some fields take special parameters...
 +--------------------------------+------------------------------------------------+
 | Field type                     | Special Parameters                             |
 +================================+================================================+
-| :py:class:`CharField`          | ``max_length``                                 |
+| :class:`CharField`          | ``max_length``                                 |
 +--------------------------------+------------------------------------------------+
-| :py:class:`FixedCharField`     | ``max_length``                                 |
+| :class:`FixedCharField`     | ``max_length``                                 |
 +--------------------------------+------------------------------------------------+
-| :py:class:`DateTimeField`      | ``formats``                                    |
+| :class:`DateTimeField`      | ``formats``                                    |
 +--------------------------------+------------------------------------------------+
-| :py:class:`DateField`          | ``formats``                                    |
+| :class:`DateField`          | ``formats``                                    |
 +--------------------------------+------------------------------------------------+
-| :py:class:`TimeField`          | ``formats``                                    |
+| :class:`TimeField`          | ``formats``                                    |
 +--------------------------------+------------------------------------------------+
-| :py:class:`TimestampField`     | ``resolution``, ``utc``                        |
+| :class:`TimestampField`     | ``resolution``, ``utc``                        |
 +--------------------------------+------------------------------------------------+
-| :py:class:`DecimalField`       | ``max_digits``, ``decimal_places``,            |
+| :class:`DecimalField`       | ``max_digits``, ``decimal_places``,            |
 |                                | ``auto_round``, ``rounding``                   |
 +--------------------------------+------------------------------------------------+
-| :py:class:`ForeignKeyField`    | ``model``, ``field``, ``backref``,             |
+| :class:`ForeignKeyField`    | ``model``, ``field``, ``backref``,             |
 |                                | ``on_delete``, ``on_update``, ``deferrable``   |
 |                                | ``lazy_load``                                  |
 +--------------------------------+------------------------------------------------+
-| :py:class:`BareField`          | ``adapt``                                      |
+| :class:`BareField`          | ``adapt``                                      |
 +--------------------------------+------------------------------------------------+
 
 .. note::
@@ -324,7 +324,7 @@ user object.
    Refer to the :ref:`relationships` document for an in-depth discussion of
    foreign keys, joins and relationships between models.
 
-In peewee, accessing the value of a :py:class:`ForeignKeyField` will return the
+In peewee, accessing the value of a :class:`ForeignKeyField` will return the
 entire related object, e.g.:
 
 .. code-block:: python
@@ -367,7 +367,7 @@ foreign key field's name:
        print(tweet.user_id, tweet.message)
 
 To prevent accidentally resolving a foreign-key and triggering an additional
-query, :py:class:`ForeignKeyField` supports an initialization paramater
+query, :class:`ForeignKeyField` supports an initialization paramater
 ``lazy_load`` which, when disabled, behaves like the ``"_id"`` attribute. For
 example:
 
@@ -400,7 +400,7 @@ example:
 ForeignKeyField Back-references
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-:py:class:`ForeignKeyField` allows for a backreferencing property to be bound
+:class:`ForeignKeyField` allows for a backreferencing property to be bound
 to the target model. Implicitly, this property will be named ``<classname>_set``,
 where ``classname`` is the lowercase name of the class, but can be overridden
 using the parameter ``backref``:
@@ -427,19 +427,19 @@ DateTimeField, DateField and TimeField
 The three fields devoted to working with dates and times have special properties
 which allow access to things like the year, month, hour, etc.
 
-:py:class:`DateField` has properties for:
+:class:`DateField` has properties for:
 
 * ``year``
 * ``month``
 * ``day``
 
-:py:class:`TimeField` has properties for:
+:class:`TimeField` has properties for:
 
 * ``hour``
 * ``minute``
 * ``second``
 
-:py:class:`DateTimeField` has all of the above.
+:class:`DateTimeField` has all of the above.
 
 These properties can be used just like any other expression. Let's say we have
 an events calendar and want to highlight all the days in the current month that
@@ -464,16 +464,16 @@ have an event attached:
 BitField and BigBitField
 ^^^^^^^^^^^^^^^^^^^^^^^^
 
-The :py:class:`BitField` and :py:class:`BigBitField` are suitable for storing
-bitmap data. :py:class:`BitField` provides a subclass of :py:class:`IntegerField`
+The :class:`BitField` and :class:`BigBitField` are suitable for storing
+bitmap data. :class:`BitField` provides a subclass of :class:`IntegerField`
 that is suitable for storing feature toggles as an integer bitmask. The latter
 is suitable for storing a bitmap for a large data-set, e.g. expressing
 membership or bitmap-type data.
 
-As an example of using :py:class:`BitField`, let's say we have a *Post* model
+As an example of using :class:`BitField`, let's say we have a *Post* model
 and we wish to store certain True/False flags about how the post. We could
-store all these feature toggles in their own :py:class:`BooleanField` objects,
-or we could use a single :py:class:`BitField` instead:
+store all these feature toggles in their own :class:`BooleanField` objects,
+or we could use a single :class:`BitField` instead:
 
 .. code-block:: python
 
@@ -511,13 +511,13 @@ We can also use the flags on the Post class to build expressions in queries:
    # Query for sticky + favorite posts:
    sticky_faves = Post.select().where(Post.is_sticky & Post.is_favorite)
 
-Since the :py:class:`BitField` is stored in an integer, there is a maximum of
+Since the :class:`BitField` is stored in an integer, there is a maximum of
 64 flags you can represent (64-bits is common size of integer column). For
-storing arbitrarily large bitmaps, you can instead use :py:class:`BigBitField`,
+storing arbitrarily large bitmaps, you can instead use :class:`BigBitField`,
 which uses an automatically managed buffer of bytes, stored in a
-:py:class:`BlobField`.
+:class:`BlobField`.
 
-When bulk-updating one or more bits in a :py:class:`BitField`, you can use
+When bulk-updating one or more bits in a :class:`BitField`, you can use
 bitwise operators to set or clear one or more bits:
 
 .. code-block:: python
@@ -580,15 +580,15 @@ Example usage:
 BareField
 ^^^^^^^^^
 
-The :py:class:`BareField` class is intended to be used only with SQLite. Since
+The :class:`BareField` class is intended to be used only with SQLite. Since
 SQLite uses dynamic typing and data-types are not enforced, it can be perfectly
 fine to declare fields without *any* data-type. In those cases you can use
-:py:class:`BareField`. It is also common for SQLite virtual tables to use
+:class:`BareField`. It is also common for SQLite virtual tables to use
 meta-columns or untyped columns, so for those cases as well you may wish to use
 an untyped field (although for full-text search, you should use
-:py:class:`SearchField` instead!).
+:class:`SearchField` instead!).
 
-:py:class:`BareField` accepts a special parameter ``adapt``. This parameter is
+:class:`BareField` accepts a special parameter ``adapt``. This parameter is
 a function that takes a value coming from the database and converts it into the
 appropriate Python type. For instance, if you have a virtual table with an
 un-typed column but you know that it will return ``int`` objects, you can
@@ -620,15 +620,15 @@ It is easy to add support for custom field types in peewee. In this example we
 will create a UUID field for postgresql (which has a native UUID column type).
 
 .. note::
-   Peewee provides a :py:class:`UUIDField`, the following code is intended
+   Peewee provides a :class:`UUIDField`, the following code is intended
    only as an **example**.
 
 To add a custom field type you need to first identify what type of column the
 field data will be stored in. If you just want to add python behavior atop,
 say, a decimal field (for instance to make a currency field) you would just
-subclass :py:class:`DecimalField`. On the other hand, if the database offers a
+subclass :class:`DecimalField`. On the other hand, if the database offers a
 custom column type you will need to let peewee know. This is controlled by the
-:py:attr:`Field.field_type` attribute.
+:attr:`Field.field_type` attribute.
 
 Let's start by defining our UUID field:
 
@@ -662,7 +662,7 @@ two places:
 for the column's data-type in the database schema. If you need to support
 multiple databases which use different data-types for your field-data, we need
 to let the database know how to map this *uuid* label to an actual *uuid*
-column type in the database. Specify the overrides in the :py:class:`Database` constructor:
+column type in the database. Specify the overrides in the :class:`Database` constructor:
 
   .. code-block:: python
 
@@ -680,8 +680,8 @@ example code, check out the JSONField in `postgres_ext <https://github.com/colei
 Field-naming conflicts
 ^^^^^^^^^^^^^^^^^^^^^^
 
-:py:class:`Model` classes implement a number of class- and instance-methods,
-for example :py:meth:`Model.save` or :py:meth:`Model.create`. If you declare a
+:class:`Model` classes implement a number of class- and instance-methods,
+for example :meth:`Model.save` or :meth:`Model.create`. If you declare a
 field whose name coincides with a model method, it could cause problems.
 Consider:
 
@@ -721,7 +721,7 @@ TABLE* queries, additionally creating any constraints and indexes.
    db.create_tables([User, Tweet])
 
 .. note::
-   Calling :py:meth:`~Database.connect` is not strictly required but is good
+   Calling :meth:`~Database.connect` is not strictly required but is good
    practice - errors will surface immediately rather than at query time.
 
 .. note::
@@ -779,7 +779,7 @@ instead use ``ModelClass._meta``:
    >>> Person._meta
    <peewee.Metadata object at 0x7f51a2f03790>
 
-The :py:class:`Metadata` class implements several methods which may be of
+The :class:`Metadata` class implements several methods which may be of
 use for retrieving model metadata (such as lists of fields, foreign key
 relationships, and more).
 
@@ -806,7 +806,7 @@ Option                  Meaning                                                I
 ``table_name``          name of the table to store data                        no
 ``table_function``      function to generate table name dynamically            yes
 ``indexes``             a list of fields to index                              yes
-``primary_key``         a :py:class:`CompositeKey` instance                    yes
+``primary_key``         a :class:`CompositeKey` instance                    yes
 ``constraints``         a list of table constraints                            yes
 ``schema``              the database schema for the model                      yes
 ``only_save_dirty``     when calling model.save(), only save dirty fields      yes
@@ -841,7 +841,7 @@ Meta.primary_key
 ^^^^^^^^^^^^^^^^
 
 The ``Meta.primary_key`` attribute is used to specify either a
-:py:class:`CompositeKey` or to indicate that the model has *no* primary key.
+:class:`CompositeKey` or to indicate that the model has *no* primary key.
 Composite primary keys are discussed in more detail here: :ref:`composite-key`.
 
 To indicate that a model should have NO primary key, then set ``primary_key = False``.
@@ -999,8 +999,8 @@ Advanced Index Creation
 ^^^^^^^^^^^^^^^^^^^^^^^
 
 Peewee supports a more structured API for declaring indexes on a model using
-the :py:meth:`Model.add_index` method or by directly using the
-:py:class:`ModelIndex` helper class.
+the :meth:`Model.add_index` method or by directly using the
+:class:`ModelIndex` helper class.
 
 Examples:
 
@@ -1029,7 +1029,7 @@ Examples:
 .. warning::
    SQLite does not support parameterized ``CREATE INDEX`` queries. This means
    that when using SQLite to create an index that involves an expression or
-   scalar value, you will need to declare the index using the :py:class:`SQL`
+   scalar value, you will need to declare the index using the :class:`SQL`
    helper:
 
    .. code-block:: python
@@ -1038,19 +1038,19 @@ Examples:
        # we declare it manually.
        Article.add_index(SQL('CREATE INDEX ...'))
 
-   See :py:meth:`~Model.add_index` for details.
+   See :meth:`~Model.add_index` for details.
 
 For more information, see:
 
-* :py:meth:`Model.add_index`
-* :py:meth:`Model.index`
-* :py:class:`ModelIndex`
-* :py:class:`Index`
+* :meth:`Model.add_index`
+* :meth:`Model.index`
+* :class:`ModelIndex`
+* :class:`Index`
 
 Table constraints
 ^^^^^^^^^^^^^^^^^
 
-Peewee allows you to add arbitrary constraints to your :py:class:`Model`, that
+Peewee allows you to add arbitrary constraints to your :class:`Model`, that
 will be part of the table definition when the schema is created.
 
 For instance, suppose you have a *people* table with a composite primary key of
@@ -1092,7 +1092,7 @@ You can also implement ``CHECK`` constraints at the table level:
 Primary Keys, Composite Keys and other Tricks
 ---------------------------------------------
 
-The :py:class:`AutoField` is used to identify an auto-incrementing integer
+The :class:`AutoField` is used to identify an auto-incrementing integer
 primary key. If you do not specify a primary key, Peewee will automatically
 create an auto-incrementing primary key named "id".
 
@@ -1135,8 +1135,8 @@ address as the primary key:
       class MyModel(Model):
           id = AutoField()  # primary_key=True is implied.
 
-Composite primary keys can be declared using :py:class:`CompositeKey`. Note
-that doing this may cause issues with :py:class:`ForeignKeyField`, as Peewee
+Composite primary keys can be declared using :class:`CompositeKey`. Note
+that doing this may cause issues with :class:`ForeignKeyField`, as Peewee
 does not support the concept of a "composite foreign-key". As such, I've found
 it only advisable to use composite primary keys in a handful of situations,
 such as trivial many-to-many junction tables:
@@ -1167,7 +1167,7 @@ Non-integer primary keys
 If you would like use a non-integer primary key (which I generally don't
 recommend), you can specify ``primary_key=True`` when creating a field. When
 you wish to create a new instance for a model using a non-autoincrementing
-primary key, you need to be sure you :py:meth:`~Model.save` specifying
+primary key, you need to be sure you :meth:`~Model.save` specifying
 ``force_insert=True``.
 
 .. code-block:: python
@@ -1179,7 +1179,7 @@ primary key, you need to be sure you :py:meth:`~Model.save` specifying
 
 Auto-incrementing IDs are, as their name says, automatically generated for you
 when you insert a new row into the database. When you call
-:py:meth:`~Model.save`, peewee determines whether to do an *INSERT* versus an
+:meth:`~Model.save`, peewee determines whether to do an *INSERT* versus an
 *UPDATE* based on the presence of a primary key value. Since, with our uuid
 example, the database driver won't generate a new ID, we need to specify it
 manually. When we call save() for the first time, pass in ``force_insert = True``:
@@ -1210,7 +1210,7 @@ Composite primary keys
 
 Peewee has very basic support for composite keys.  In order to use a composite
 key, you must set the ``primary_key`` attribute of the model options to a
-:py:class:`CompositeKey` instance:
+:class:`CompositeKey` instance:
 
 .. code-block:: python
 
@@ -1224,7 +1224,7 @@ key, you must set the ``primary_key`` attribute of the model options to a
 
 .. warning::
    Peewee does not support foreign-keys to models that define a
-   :py:class:`CompositeKey` primary key. If you wish to add a foreign-key to a
+   :class:`CompositeKey` primary key. If you wish to add a foreign-key to a
    model that has a composite primary key, replicate the columns on the
    related model and add a custom accessor (e.g. a property).
 
@@ -1249,7 +1249,7 @@ during the import:
    User._meta.auto_increment = True
 
 Although a better way to accomplish the above, without resorting to hacks, is
-to use the :py:meth:`Model.insert_many` API:
+to use the :meth:`Model.insert_many` API:
 
 .. code-block:: python
 
@@ -1259,7 +1259,7 @@ to use the :py:meth:`Model.insert_many` API:
        User.insert_many(data, fields=fields).execute()
 
 If you *always* want to have control over the primary key, simply do not use
-the :py:class:`AutoField` field type, but use a normal :py:class:`IntegerField` (or other column type):
+the :class:`AutoField` field type, but use a normal :class:`IntegerField` (or other column type):
 
 .. code-block:: python
 
@@ -1299,9 +1299,9 @@ This will yield the following DDL:
 
 .. warning::
    Some model APIs may not work correctly for models without a primary key,
-   for instance :py:meth:`~Model.save` and :py:meth:`~Model.delete_instance`
-   (you can instead use :py:meth:`~Model.insert`, :py:meth:`~Model.update` and
-   :py:meth:`~Model.delete`).
+   for instance :meth:`~Model.save` and :meth:`~Model.delete_instance`
+   (you can instead use :meth:`~Model.insert`, :meth:`~Model.update` and
+   :meth:`~Model.delete`).
 
 Self-referential foreign keys
 -----------------------------
@@ -1325,7 +1325,7 @@ back-reference is named *children*.
 
 When querying against a model that contains a self-referential foreign key you
 may sometimes need to perform a self-join. In those cases you can use
-:py:meth:`Model.alias` to create a table reference. Here is how you might query
+:meth:`Model.alias` to create a table reference. Here is how you might query
 the category and parent model using a self-join:
 
 .. code-block:: python
@@ -1366,7 +1366,7 @@ defined yet, causing a ``NameError``.
        message = TextField()
        user = ForeignKeyField(User, backref='tweets')
 
-One option is to simply use an :py:class:`IntegerField` to store the raw ID:
+One option is to simply use an :class:`IntegerField` to store the raw ID:
 
 .. code-block:: python
 
@@ -1374,7 +1374,7 @@ One option is to simply use an :py:class:`IntegerField` to store the raw ID:
        username = CharField()
        favorite_tweet_id = IntegerField(null=True)
 
-By using :py:class:`DeferredForeignKey` we can get around the problem and still
+By using :class:`DeferredForeignKey` we can get around the problem and still
 use a foreign key field:
 
 .. code-block:: python
@@ -1394,12 +1394,12 @@ use a foreign key field:
    # <ForeignKeyField: "user"."favorite_tweet">
 
 There is one more quirk to watch out for, though. When you call
-:py:class:`~Model.create_table` we will again encounter the same issue. For
+:class:`~Model.create_table` we will again encounter the same issue. For
 this reason peewee will not automatically create a foreign key constraint for
 any *deferred* foreign keys.
 
 To create the tables *and* the foreign-key constraint, you can use the
-:py:meth:`SchemaManager.create_foreign_key` method to create the constraint
+:meth:`SchemaManager.create_foreign_key` method to create the constraint
 after creating the tables:
 
 .. code-block:: python

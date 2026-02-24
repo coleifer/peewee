@@ -554,6 +554,8 @@ do not open and close real connections - they acquire and release connections
 from the pool. It is therefore essential to call both explicitly (or use a
 context manager) so connections are returned to the pool for re-use.
 
+.. seealso:: :ref:`pool`
+
 Executing SQL
 -------------
 
@@ -705,9 +707,9 @@ The minimum Peewee relies on from the driver is: ``Connection.commit``,
 
 Other integration points on :class:`Database`:
 
-* ``param`` / ``quote`` — parameter placeholder and quoting characters.
-* ``field_types`` — mapping from Peewee type labels to vendor column types.
-* ``operations`` — mapping from operations such as ``ILIKE`` to vendor SQL.
+* ``param`` / ``quote`` - parameter placeholder and quoting characters.
+* ``field_types`` - mapping from Peewee type labels to vendor column types.
+* ``operations`` - mapping from operations such as ``ILIKE`` to vendor SQL.
 
 Refer to the :class:`Database` API reference or the `Peewee source
 <https://github.com/coleifer/peewee/blob/master/peewee.py>`_ for details.

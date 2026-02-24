@@ -234,8 +234,8 @@ common types of expressions.
 There are two primary types of objects that can be composed to create
 expressions:
 
-* :py:class:`Field` instances
-* SQL aggregations and functions using :py:class:`fn`
+* :class:`Field` instances
+* SQL aggregations and functions using :class:`fn`
 
 We will assume a simple "User" model with fields for username and other things.
 It looks like this:
@@ -305,7 +305,7 @@ Row values
 
 Many databases support `row values <https://www.sqlite.org/rowvalue.html>`_,
 which are similar to Python `tuple` objects. In Peewee, it is possible to use
-row-values in expressions via :py:class:`Tuple`. For example,
+row-values in expressions via :class:`Tuple`. For example,
 
 .. code-block:: python
 
@@ -351,7 +351,7 @@ correlate incidents with certain events:
 
 Other ways to express this type of query would be to use a :ref:`join <relationships>`
 or to :ref:`join on a subquery <join-subquery>`. The above example is there
-just to give you and idea how :py:class:`Tuple` might be used.
+just to give you and idea how :class:`Tuple` might be used.
 
 You can also use row-values to update multiple columns in a table, when the new
 data is derived from a subquery. For an example, see `here <https://www.sqlite.org/rowvalue.html#update_multiple_columns_of_a_table_based_on_a_query>`_.
@@ -360,7 +360,7 @@ SQL Functions
 -------------
 
 SQL functions, like ``COUNT()`` or ``SUM()``, can be expressed using the
-:py:func:`fn` helper:
+:func:`fn` helper:
 
 .. code-block:: python
 
@@ -383,7 +383,7 @@ Nesting function calls
 Suppose you need to want to get a list of all users whose username begins with
 *a*. There are a couple ways to do this, but one method might be to use some
 SQL functions like *LOWER* and *SUBSTR*. To use arbitrary SQL functions, use
-the special :py:func:`fn` object to construct queries:
+the special :func:`fn` object to construct queries:
 
 .. code-block:: python
 
@@ -401,7 +401,7 @@ SQL Helper
 ----------
 
 There are times when you may want to simply pass in some arbitrary sql. You can
-do this using the special :py:class:`SQL` class. One use-case is when
+do this using the special :class:`SQL` class. One use-case is when
 referencing an alias:
 
 .. code-block:: python
@@ -421,8 +421,8 @@ referencing an alias:
 
 There are two ways to execute hand-crafted SQL statements with peewee:
 
-1. :py:meth:`Database.execute_sql` for executing any type of query
-2. :py:class:`RawQuery` for executing ``SELECT`` queries and returning model
+1. :meth:`Database.execute_sql` for executing any type of query
+2. :class:`RawQuery` for executing ``SELECT`` queries and returning model
    instances.
 
 Security and SQL Injection
@@ -456,4 +456,4 @@ Use parameters to prevent SQL injection:
    MySQL and Postgresql use ``'%s'`` to denote parameters. SQLite, on the
    other hand, uses ``'?'``. Be sure to use the character appropriate to your
    database. You can also find this parameter by checking
-   :py:attr:`Database.param`.
+   :attr:`Database.param`.

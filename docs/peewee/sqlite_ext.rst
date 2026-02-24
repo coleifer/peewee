@@ -3,7 +3,7 @@
 SQLite Extensions
 =================
 
-The default :py:class:`SqliteDatabase` already includes many SQLite-specific
+The default :class:`SqliteDatabase` already includes many SQLite-specific
 features:
 
 * :ref:`General notes on using SQLite <using_sqlite>`.
@@ -19,16 +19,16 @@ The ``playhouse.sqlite_ext`` includes even more SQLite features, including:
 
 .. note::
    These features are also included in the ``playhouse.cysqlite_ext`` module and
-   can be used interchangeably with :py:class:`CySqliteDatabase`.
+   can be used interchangeably with :class:`CySqliteDatabase`.
 
 Getting started
 ---------------
 
 To get started with the features described in this document, you will want to
-use the :py:class:`SqliteExtDatabase` class from the ``playhouse.sqlite_ext``
-module or :py:class:`CySqliteDatabase` from ``playhouse.cysqlite_ext``.
+use the :class:`SqliteExtDatabase` class from the ``playhouse.sqlite_ext``
+module or :class:`CySqliteDatabase` from ``playhouse.cysqlite_ext``.
 
-Using :py:class:`SqliteExtDatabase`:
+Using :class:`SqliteExtDatabase`:
 
 .. code-block:: python
 
@@ -39,7 +39,7 @@ Using :py:class:`SqliteExtDatabase`:
         ('journal_mode', 'wal'),  # Use WAL-mode (you should always use this!).
         ('foreign_keys', 1)))  # Enforce foreign-key constraints.
 
-Using :py:class:`CySqliteDatabase`:
+Using :class:`CySqliteDatabase`:
 
 .. code-block:: python
 
@@ -53,7 +53,7 @@ Using :py:class:`CySqliteDatabase`:
 APIs
 ----
 
-.. py:class:: SqliteExtDatabase(database, pragmas=None, timeout=5, rank_functions=True, regexp_function=False, json_contains=False)
+.. class:: SqliteExtDatabase(database, pragmas=None, timeout=5, rank_functions=True, regexp_function=False, json_contains=False)
 
     :param list pragmas: A list of 2-tuples containing pragma key and value to
         set every time a connection is opened.
@@ -62,13 +62,13 @@ APIs
     :param bool regexp_function: Make the REGEXP function available.
     :param bool json_contains: Make json_containts() function available.
 
-    Extends :py:class:`SqliteDatabase` and inherits methods for declaring
+    Extends :class:`SqliteDatabase` and inherits methods for declaring
     user-defined functions, pragmas, etc.
 
     .. attention::
-        In past versions :py:class:`SqliteExtDatabase` contained additional
+        In past versions :class:`SqliteExtDatabase` contained additional
         functionality, but practically all of that functionality has been moved
-        into the standard :py:class:`SqliteDatabase`. The only functionality
+        into the standard :class:`SqliteDatabase`. The only functionality
         that remains specific solely to ``SqliteExtDatabase`` is:
 
         * accepts ``__init__`` arguments to register full-text search ranking
@@ -78,7 +78,7 @@ APIs
 
 .. _sqlite-fields:
 
-.. py:class:: RowIDField()
+.. class:: RowIDField()
 
     Primary-key field that corresponds to the SQLite ``rowid`` field. For more
     information, see the SQLite documentation on `rowid tables <https://www.sqlite.org/rowidtable.html>`_..
@@ -93,17 +93,17 @@ APIs
             timestamp = TimestampField()
 
 
-.. py:class:: DocIDField()
+.. class:: DocIDField()
 
-    Subclass of :py:class:`RowIDField` for use on virtual tables that
+    Subclass of :class:`RowIDField` for use on virtual tables that
     specifically use the convention of ``docid`` for the primary key. As far as
     I know this only pertains to tables using the FTS3 and FTS4 full-text
     search extensions.
 
     .. attention::
         In FTS3 and FTS4, "docid" is simply an alias for "rowid". To reduce
-        confusion, it's probably best to just always use :py:class:`RowIDField`
-        and never use :py:class:`DocIDField`.
+        confusion, it's probably best to just always use :class:`RowIDField`
+        and never use :class:`DocIDField`.
 
     .. code-block:: python
 
@@ -115,25 +115,25 @@ APIs
                 database = db
 
 
-.. py:class:: AutoIncrementField()
+.. class:: AutoIncrementField()
 
     SQLite, by default, may reuse primary key values after rows are deleted. To
     ensure that the primary key is *always* monotonically increasing,
-    regardless of deletions, you should use :py:class:`AutoIncrementField`.
+    regardless of deletions, you should use :class:`AutoIncrementField`.
     There is a small performance cost for this feature. For more information,
     see the SQLite docs on `autoincrement <https://sqlite.org/autoinc.html>`_.
 
 
-.. py:class:: ISODateTimeField()
+.. class:: ISODateTimeField()
 
     SQLite does not have a native DateTime data-type. Python ``datetime``
     objects are stored as strings by default. This subclass of
-    :py:class:`DateTimeField` ensures that the UTC offset is stored properly
+    :class:`DateTimeField` ensures that the UTC offset is stored properly
     for tz-aware datetimes and read-back properly when decoding row data.
 
 .. _sqlite-json1:
 
-.. py:class:: JSONField(json_dumps=None, json_loads=None, ...)
+.. class:: JSONField(json_dumps=None, json_loads=None, ...)
 
     Field class suitable for storing JSON data, with special methods designed
     to work with the `json1 extension <https://sqlite.org/json1.html>`_.
@@ -141,10 +141,10 @@ APIs
     SQLite 3.9.0 added `JSON support <https://www.sqlite.org/json1.html>`_ in
     the form of an extension library. The SQLite json1 extension provides a
     number of helper functions for working with JSON data. These APIs are
-    exposed as methods of a special field-type, :py:class:`JSONField`.
+    exposed as methods of a special field-type, :class:`JSONField`.
 
     To access or modify specific object keys or array indexes in a JSON
-    structure, you can treat the :py:class:`JSONField` as if it were a
+    structure, you can treat the :class:`JSONField` as if it were a
     dictionary/list.
 
     :param json_dumps: (optional) function for serializing data to JSON
@@ -202,7 +202,7 @@ APIs
         >>> KV.get(KV.value['k1'] == 'v1').key
         'a'
 
-    It's possible to update a JSON value in-place using the :py:meth:`~JSONField.update`
+    It's possible to update a JSON value in-place using the :meth:`~JSONField.update`
     method. Note that "k1=v1" is preserved:
 
     .. code-block:: pycon
@@ -223,7 +223,7 @@ APIs
         >>> KV.get(KV.key == 'a').value
         {'k1': 'v1-x', 'k2': 'v2'}
 
-    We can also set individual parts of the JSON data using the :py:meth:`~JSONField.set` method:
+    We can also set individual parts of the JSON data using the :meth:`~JSONField.set` method:
 
     .. code-block:: pycon
 
@@ -232,7 +232,7 @@ APIs
         >>> KV.get(KV.key == 'a').value
         {'k1': 'v1', 'k2': 'v2'}
 
-    The :py:meth:`~JSONField.set` method can also be used with objects, in
+    The :meth:`~JSONField.set` method can also be used with objects, in
     addition to scalar values:
 
     .. code-block:: pycon
@@ -243,7 +243,7 @@ APIs
         {'k1': 'v1', 'k2': {'x2': 'y2'}}
 
     Individual parts of the JSON data can be removed atomically as well, using
-    :py:meth:`~JSONField.remove`:
+    :meth:`~JSONField.remove`:
 
     .. code-block:: pycon
 
@@ -253,7 +253,7 @@ APIs
         {'k1': 'v1'}
 
     We can also get the type of value stored at a specific location in the JSON
-    data using the :py:meth:`~JSONField.json_type` method:
+    data using the :meth:`~JSONField.json_type` method:
 
     .. code-block:: pycon
 
@@ -261,7 +261,7 @@ APIs
         [('object', 'text')]
 
     Let's add a nested value and then see how to iterate through it's contents
-    recursively using the :py:meth:`~JSONField.tree` method:
+    recursively using the :meth:`~JSONField.tree` method:
 
     .. code-block:: pycon
 
@@ -280,11 +280,11 @@ APIs
          ('b', '$.x1.y1', 'z1'),
          ('b', '$.x1.y2', 'z2')]
 
-    The :py:meth:`~JSONField.tree` and :py:meth:`~JSONField.children` methods
+    The :meth:`~JSONField.tree` and :meth:`~JSONField.children` methods
     are powerful. For more information on how to utilize them, see the
     `json1 extension documentation <http://sqlite.org/json1.html#jtree>`_.
 
-    Also note, that :py:class:`JSONField` lookups can be chained:
+    Also note, that :class:`JSONField` lookups can be chained:
 
     .. code-block:: pycon
 
@@ -297,14 +297,14 @@ APIs
 
     For more information, refer to the `sqlite json1 documentation <http://sqlite.org/json1.html>`_.
 
-    .. py:method:: __getitem__(item)
+    .. method:: __getitem__(item)
 
         :param item: Access a specific key or array index in the JSON data.
         :return: a special object exposing access to the JSON data.
         :rtype: JSONPath
 
         Access a specific key or array index in the JSON data. Returns a
-        :py:class:`JSONPath` object, which exposes convenient methods for
+        :class:`JSONPath` object, which exposes convenient methods for
         reading or modifying a particular part of a JSON object.
 
         Example:
@@ -315,30 +315,30 @@ APIs
             # extract the first tag in this way:
             Post.select(Post, Post.metadata['tags'][0].alias('first_tag'))
 
-        For more examples see the :py:class:`JSONPath` API documentation.
+        For more examples see the :class:`JSONPath` API documentation.
 
-    .. py:method:: extract(*paths)
+    .. method:: extract(*paths)
 
         :param paths: One or more JSON paths to extract.
 
         Extract the value(s) at the specified JSON paths. If multiple paths are
         provided, then Sqlite will return the values as a ``list``.
 
-    .. py:method:: extract_json(path)
+    .. method:: extract_json(path)
 
         :param str path: JSON path
 
         Extract the value at the specified path as a JSON data-type. This
         corresponds to the ``->`` operator added in Sqlite 3.38.
 
-    .. py:method:: extract_text(path)
+    .. method:: extract_text(path)
 
         :param str path: JSON path
 
         Extract the value at the specified path as a SQL data-type. This
         corresponds to the ``->>`` operator added in Sqlite 3.38.
 
-    .. py:method:: set(value, as_json=None)
+    .. method:: set(value, as_json=None)
 
         :param value: a scalar value, list, or dictionary.
         :param bool as_json: force the value to be treated as JSON, in which
@@ -346,12 +346,12 @@ APIs
             default, lists and dictionaries are treated as JSON to be
             serialized, while strings and integers are passed as-is.
 
-        Set the value stored in a :py:class:`JSONField`.
+        Set the value stored in a :class:`JSONField`.
 
         Uses the `json_set() <http://sqlite.org/json1.html#jset>`_ function
         from the json1 extension.
 
-    .. py:method:: replace(value, as_json=None)
+    .. method:: replace(value, as_json=None)
 
         :param value: a scalar value, list, or dictionary.
         :param bool as_json: force the value to be treated as JSON, in which
@@ -359,12 +359,12 @@ APIs
             default, lists and dictionaries are treated as JSON to be
             serialized, while strings and integers are passed as-is.
 
-        Replace the existing value stored in a :py:class:`JSONField`.
+        Replace the existing value stored in a :class:`JSONField`.
 
         Uses the `json_replace() <http://sqlite.org/json1.html#jset>`_ function
         from the json1 extension.
 
-    .. py:method:: insert(value, as_json=None)
+    .. method:: insert(value, as_json=None)
 
         :param value: a scalar value, list, or dictionary.
         :param bool as_json: force the value to be treated as JSON, in which
@@ -372,12 +372,12 @@ APIs
             default, lists and dictionaries are treated as JSON to be
             serialized, while strings and integers are passed as-is.
 
-        Insert value into :py:class:`JSONField`.
+        Insert value into :class:`JSONField`.
 
         Uses the `json_insert() <http://sqlite.org/json1.html#jset>`_ function
         from the json1 extension.
 
-    .. py:method:: append(value, as_json=None)
+    .. method:: append(value, as_json=None)
 
         :param value: a scalar value, list, or dictionary.
         :param bool as_json: force the value to be treated as JSON, in which
@@ -385,36 +385,36 @@ APIs
             default, lists and dictionaries are treated as JSON to be
             serialized, while strings and integers are passed as-is.
 
-        Append to the array stored in a :py:class:`JSONField`.
+        Append to the array stored in a :class:`JSONField`.
 
         Uses the `json_set() <http://sqlite.org/json1.html#jset>`_ function
         from the json1 extension.
 
-    .. py:method:: update(data)
+    .. method:: update(data)
 
         :param data: a scalar value, list or dictionary to merge with the data
-            currently stored in a :py:class:`JSONField`. To remove a particular
+            currently stored in a :class:`JSONField`. To remove a particular
             key, set that key to ``None`` in the updated data.
 
         Merge new data into the JSON value using the RFC-7396 MergePatch
         algorithm to apply a patch (``data`` parameter) against the column
         data. MergePatch can add, modify, or delete elements of a JSON object,
-        which means :py:meth:`~JSONField.update` is a generalized replacement
-        for both :py:meth:`~JSONField.set` and :py:meth:`~JSONField.remove`.
+        which means :meth:`~JSONField.update` is a generalized replacement
+        for both :meth:`~JSONField.set` and :meth:`~JSONField.remove`.
         MergePatch treats JSON array objects as atomic, so ``update()`` cannot
         append to an array, nor modify individual elements of an array.
 
         For more information as well as examples, see the SQLite `json_patch() <http://sqlite.org/json1.html#jpatch>`_
         function documentation.
 
-    .. py:method:: remove()
+    .. method:: remove()
 
-        Remove the data stored in the :py:class:`JSONField`.
+        Remove the data stored in the :class:`JSONField`.
 
         Uses the `json_remove <https://www.sqlite.org/json1.html#jrm>`_ function
         from the json1 extension.
 
-    .. py:method:: json_type()
+    .. method:: json_type()
 
         Return a string identifying the type of value stored in the column.
 
@@ -433,14 +433,14 @@ APIs
         Uses the `json_type <https://www.sqlite.org/json1.html#jtype>`_
         function from the json1 extension.
 
-    .. py:method:: length()
+    .. method:: length()
 
         Return the length of the array stored in the column.
 
         Uses the `json_array_length <https://www.sqlite.org/json1.html#jarraylen>`_
         function from the json1 extension.
 
-    .. py:method:: children()
+    .. method:: children()
 
         The ``children`` function corresponds to ``json_each``, a table-valued
         function that walks the JSON value provided and returns the immediate
@@ -452,7 +452,7 @@ APIs
 
         * ``key``: the key of the current element relative to its parent.
         * ``value``: the value of the current element.
-        * ``type``: one of the data-types (see :py:meth:`~JSONField.json_type`).
+        * ``type``: one of the data-types (see :meth:`~JSONField.json_type`).
         * ``atom``: the scalar value for primitive types, ``NULL`` for arrays and objects.
         * ``id``: a unique ID referencing the current node in the tree.
         * ``parent``: the ID of the containing node.
@@ -462,7 +462,7 @@ APIs
         Internally this method uses the `json_each <https://www.sqlite.org/json1.html#jeach>`_
         (documentation link) function from the json1 extension.
 
-        Example usage (compare to :py:meth:`~JSONField.tree` method):
+        Example usage (compare to :meth:`~JSONField.tree` method):
 
         .. code-block:: python
 
@@ -488,7 +488,7 @@ APIs
              ('a', 'x1', '{"y1":"z1"}',           '$.x1'),
              ('b', 'x1', '{"y1":"z1","y2":"z2"}', '$.x1')]
 
-    .. py:method:: tree()
+    .. method:: tree()
 
         The ``tree`` function corresponds to ``json_tree``, a table-valued
         function that recursively walks the JSON value provided and returns
@@ -496,11 +496,11 @@ APIs
         that path is treated as the top-most element.
 
         The rows returned by calls to ``tree()`` have the same attributes as
-        rows returned by calls to :py:meth:`~JSONField.children`:
+        rows returned by calls to :meth:`~JSONField.children`:
 
         * ``key``: the key of the current element relative to its parent.
         * ``value``: the value of the current element.
-        * ``type``: one of the data-types (see :py:meth:`~JSONField.json_type`).
+        * ``type``: one of the data-types (see :meth:`~JSONField.json_type`).
         * ``atom``: the scalar value for primitive types, ``NULL`` for arrays and objects.
         * ``id``: a unique ID referencing the current node in the tree.
         * ``parent``: the ID of the containing node.
@@ -542,24 +542,24 @@ APIs
              ('b',  'y2',  'z2',                           '$.x1.y2')]
 
 
-.. py:class:: JSONPath(field, path=None)
+.. class:: JSONPath(field, path=None)
 
     :param JSONField field: the field object we intend to access.
     :param tuple path: Components comprising the JSON path.
 
     A convenient, Pythonic way of representing JSON paths for use with
-    :py:class:`JSONField`.
+    :class:`JSONField`.
 
     The ``JSONPath`` object implements ``__getitem__``, accumulating path
     components, which it can turn into the corresponding json-path expression.
 
-    .. py:method:: __getitem__(item)
+    .. method:: __getitem__(item)
 
         :param item: Access a sub-key key or array index.
-        :return: a :py:class:`JSONPath` representing the new path.
+        :return: a :class:`JSONPath` representing the new path.
 
         Access a sub-key or array index in the JSON data. Returns a
-        :py:class:`JSONPath` object, which exposes convenient methods for
+        :class:`JSONPath` object, which exposes convenient methods for
         reading or modifying a particular part of a JSON object.
 
         Example:
@@ -573,7 +573,7 @@ APIs
                      .select(Post, first_tag.alias('first_tag'))
                      .order_by(first_tag))
 
-    .. py:method:: set(value, as_json=None)
+    .. method:: set(value, as_json=None)
 
         :param value: a scalar value, list, or dictionary.
         :param bool as_json: force the value to be treated as JSON, in which
@@ -586,7 +586,7 @@ APIs
         Uses the `json_set() <http://sqlite.org/json1.html#jset>`_ function
         from the json1 extension.
 
-    .. py:method:: replace(value, as_json=None)
+    .. method:: replace(value, as_json=None)
 
         :param value: a scalar value, list, or dictionary.
         :param bool as_json: force the value to be treated as JSON, in which
@@ -599,7 +599,7 @@ APIs
         Uses the `json_replace() <http://sqlite.org/json1.html#jset>`_ function
         from the json1 extension.
 
-    .. py:method:: insert(value, as_json=None)
+    .. method:: insert(value, as_json=None)
 
         :param value: a scalar value, list, or dictionary.
         :param bool as_json: force the value to be treated as JSON, in which
@@ -612,7 +612,7 @@ APIs
         Uses the `json_insert() <http://sqlite.org/json1.html#jset>`_ function
         from the json1 extension.
 
-    .. py:method:: append(value, as_json=None)
+    .. method:: append(value, as_json=None)
 
         :param value: a scalar value, list, or dictionary.
         :param bool as_json: force the value to be treated as JSON, in which
@@ -625,7 +625,7 @@ APIs
         Uses the `json_set() <http://sqlite.org/json1.html#jset>`_ function
         from the json1 extension.
 
-    .. py:method:: update(data)
+    .. method:: update(data)
 
         :param data: a scalar value, list or dictionary to merge with the data
             at the given location in the JSON data. To remove a particular key,
@@ -634,22 +634,22 @@ APIs
         Merge new data into the JSON value using the RFC-7396 MergePatch
         algorithm to apply a patch (``data`` parameter) against the column
         data. MergePatch can add, modify, or delete elements of a JSON object,
-        which means :py:meth:`~JSONPath.update` is a generalized replacement
-        for both :py:meth:`~JSONPath.set` and :py:meth:`~JSONPath.remove`.
+        which means :meth:`~JSONPath.update` is a generalized replacement
+        for both :meth:`~JSONPath.set` and :meth:`~JSONPath.remove`.
         MergePatch treats JSON array objects as atomic, so ``update()`` cannot
         append to an array, nor modify individual elements of an array.
 
         For more information as well as examples, see the SQLite `json_patch() <http://sqlite.org/json1.html#jpatch>`_
         function documentation.
 
-    .. py:method:: remove()
+    .. method:: remove()
 
         Remove the data stored in at the given location in the JSON data.
 
         Uses the `json_type <https://www.sqlite.org/json1.html#jrm>`_ function
         from the json1 extension.
 
-    .. py:method:: json_type()
+    .. method:: json_type()
 
         Return a string identifying the type of value stored at the given
         location in the JSON data.
@@ -669,7 +669,7 @@ APIs
         Uses the `json_type <https://www.sqlite.org/json1.html#jtype>`_
         function from the json1 extension.
 
-    .. py:method:: length()
+    .. method:: length()
 
         Return the length of the array stored at the given location in the JSON
         data.
@@ -677,18 +677,18 @@ APIs
         Uses the `json_array_length <https://www.sqlite.org/json1.html#jarraylen>`_
         function from the json1 extension.
 
-    .. py:method:: children()
+    .. method:: children()
 
         Table-valued function that exposes the direct descendants of a JSON
-        object at the given location. See also :py:meth:`JSONField.children`.
+        object at the given location. See also :meth:`JSONField.children`.
 
-    .. py:method:: tree()
+    .. method:: tree()
 
         Table-valued function that exposes all descendants, recursively, of a
-        JSON object at the given location. See also :py:meth:`JSONField.tree`.
+        JSON object at the given location. See also :meth:`JSONField.tree`.
 
 
-.. py:class:: JSONBField(json_dumps=None, json_loads=None, ...)
+.. class:: JSONBField(json_dumps=None, json_loads=None, ...)
 
     Field-class suitable for use with data stored on-disk in ``jsonb`` format
     (available starting Sqlite 3.45.0). This field-class should be used with
@@ -703,7 +703,7 @@ APIs
         b"l'k1'v1"
 
     To get the JSON value, it is necessary to use ``fn.json()`` or the helper
-    :py:meth:`JSONBField.json` method:
+    :meth:`JSONBField.json` method:
 
     .. code-block:: pycon
 
@@ -712,17 +712,17 @@ APIs
         {'k1': 'v1'}
 
 
-.. py:class:: JSONBPath(field, path=None)
+.. class:: JSONBPath(field, path=None)
 
-    Subclass of :py:class:`JSONPath` for working with ``jsonb`` data.
+    Subclass of :class:`JSONPath` for working with ``jsonb`` data.
 
 
-.. py:class:: SearchField(unindexed=False, column_name=None)
+.. class:: SearchField(unindexed=False, column_name=None)
 
     Field-class to be used for columns on models representing full-text search
     virtual tables. The full-text search extensions prohibit the specification
     of any typing or constraints on columns. This behavior is enforced by the
-    :py:class:`SearchField`, which raises an exception if any configuration is
+    :class:`SearchField`, which raises an exception if any configuration is
     attempted that would be incompatible with the full-text search extensions.
 
     Example model for document search index (timestamp is stored in the table
@@ -736,15 +736,15 @@ APIs
             tags = SearchField()
             timestamp = SearchField(unindexed=True)
 
-    .. py:method:: match(term)
+    .. method:: match(term)
 
         :param str term: full-text search query/terms
-        :return: a :py:class:`Expression` corresponding to the ``MATCH``
+        :return: a :class:`Expression` corresponding to the ``MATCH``
             operator.
 
         Sqlite's full-text search supports searching either the full table,
         including all indexed columns, **or** searching individual columns. The
-        :py:meth:`~SearchField.match` method can be used to restrict search to
+        :meth:`~SearchField.match` method can be used to restrict search to
         a single column:
 
         .. code-block:: python
@@ -761,7 +761,7 @@ APIs
                      .order_by(SearchIndex.bm25()))
 
         To instead search *all* indexed columns, use the
-        :py:meth:`FTSModel.match` method:
+        :meth:`FTSModel.match` method:
 
         .. code-block:: python
 
@@ -772,7 +772,7 @@ APIs
                      .where(SearchIndex.match('python'))
                      .order_by(SearchIndex.bm25()))
 
-    .. py:method:: highlight(left, right)
+    .. method:: highlight(left, right)
 
         :param str left: opening tag for highlight, e.g. ``'<b>'``
         :param str right: closing tag for highlight, e.g. ``'</b>'``
@@ -794,7 +794,7 @@ APIs
             # For example, might print:
             # Learn [python] the hard way
 
-    .. py:method:: snippet(left, right, over_length='...', max_tokens=16)
+    .. method:: snippet(left, right, over_length='...', max_tokens=16)
 
         :param str left: opening tag for highlight, e.g. ``'<b>'``
         :param str right: closing tag for highlight, e.g. ``'</b>'``
@@ -817,7 +817,7 @@ APIs
                 print(result.snip)
 
 
-.. py:class:: VirtualModel()
+.. class:: VirtualModel()
 
     Model class designed to be used to represent virtual tables. The default
     metadata settings are slightly different, to match those frequently used by
@@ -841,9 +841,9 @@ APIs
 
 .. _sqlite-fts:
 
-.. py:class:: FTSModel()
+.. class:: FTSModel()
 
-    Subclass of :py:class:`VirtualModel` to be used with the `FTS3 and FTS4 <https://sqlite.org/fts3.html>`_
+    Subclass of :class:`VirtualModel` to be used with the `FTS3 and FTS4 <https://sqlite.org/fts3.html>`_
     full-text search extensions.
 
     FTSModel subclasses should be defined normally, however there are a couple
@@ -860,16 +860,16 @@ APIs
 
     Given these constraints, it is strongly recommended that all fields
     declared on an ``FTSModel`` subclass be instances of
-    :py:class:`SearchField` (though an exception is made for explicitly
-    declaring a :py:class:`RowIDField`). Using :py:class:`SearchField` will
+    :class:`SearchField` (though an exception is made for explicitly
+    declaring a :class:`RowIDField`). Using :class:`SearchField` will
     help prevent you accidentally creating invalid column constraints. If you
     wish to store metadata in the index but would not like it to be included in
     the full-text index, then specify ``unindexed=True`` when instantiating the
-    :py:class:`SearchField`.
+    :class:`SearchField`.
 
     The only exception to the above is for the ``rowid`` primary key, which can
-    be declared using :py:class:`RowIDField`. Lookups on the ``rowid`` are very
-    efficient. If you are using FTS4 you can also use :py:class:`DocIDField`,
+    be declared using :class:`RowIDField`. Lookups on the ``rowid`` are very
+    efficient. If you are using FTS4 you can also use :class:`DocIDField`,
     which is an alias for the rowid (though there is no benefit to doing so).
 
     Because of the lack of secondary indexes, it usually makes sense to use
@@ -970,12 +970,12 @@ APIs
         # Optimize the index.
         BlogIndex.optimize()
 
-    The ``content`` option accepts either a single :py:class:`Field` or a
-    :py:class:`Model` and can reduce the amount of storage used by the database
+    The ``content`` option accepts either a single :class:`Field` or a
+    :class:`Model` and can reduce the amount of storage used by the database
     file. However, content will need to be manually moved to/from the
     associated ``FTSModel``.
 
-    .. py:classmethod:: match(term)
+    .. classmethod:: match(term)
 
         :param term: Search term or expression.
 
@@ -996,7 +996,7 @@ APIs
             for result in query:
                 print('Result: %s' % result.title)
 
-    .. py:classmethod:: search(term, weights=None, with_score=False, score_alias='score', explicit_ordering=False)
+    .. classmethod:: search(term, weights=None, with_score=False, score_alias='score', explicit_ordering=False)
 
         :param str term: Search term to use.
         :param weights: A list of weights for the columns, ordered with respect
@@ -1017,7 +1017,7 @@ APIs
         .. note::
             This method uses a simplified algorithm for determining the
             relevance rank of results. For more sophisticated result ranking,
-            use the :py:meth:`~FTSModel.search_bm25` method.
+            use the :meth:`~FTSModel.search_bm25` method.
 
         .. code-block:: python
 
@@ -1035,7 +1035,7 @@ APIs
             for result in docs:
                 print(result.title, result.search_score)
 
-    .. py:classmethod:: search_bm25(term, weights=None, with_score=False, score_alias='score', explicit_ordering=False)
+    .. classmethod:: search_bm25(term, weights=None, with_score=False, score_alias='score', explicit_ordering=False)
 
         :param str term: Search term to use.
         :param weights: A list of weights for the columns, ordered with respect
@@ -1055,19 +1055,19 @@ APIs
 
         .. attention::
             The BM25 ranking algorithm is only available for FTS4. If you are
-            using FTS3, use the :py:meth:`~FTSModel.search` method instead.
+            using FTS3, use the :meth:`~FTSModel.search` method instead.
 
-    .. py:classmethod:: search_bm25f(term, weights=None, with_score=False, score_alias='score', explicit_ordering=False)
+    .. classmethod:: search_bm25f(term, weights=None, with_score=False, score_alias='score', explicit_ordering=False)
 
-        Same as :py:meth:`FTSModel.search_bm25`, but using the BM25f variant
+        Same as :meth:`FTSModel.search_bm25`, but using the BM25f variant
         of the BM25 ranking algorithm.
 
-    .. py:classmethod:: search_lucene(term, weights=None, with_score=False, score_alias='score', explicit_ordering=False)
+    .. classmethod:: search_lucene(term, weights=None, with_score=False, score_alias='score', explicit_ordering=False)
 
-        Same as :py:meth:`FTSModel.search_bm25`, but using the result ranking
+        Same as :meth:`FTSModel.search_bm25`, but using the result ranking
         algorithm from the Lucene search engine.
 
-    .. py:classmethod:: rank(col1_weight, col2_weight...coln_weight)
+    .. classmethod:: rank(col1_weight, col2_weight...coln_weight)
 
         :param float col_weight: (Optional) weight to give to the *ith* column
             of the model. By default all columns have a weight of ``1.0``.
@@ -1081,12 +1081,12 @@ APIs
         all columns are considered of equal importance.
 
         .. note::
-            The algorithm used by :py:meth:`~FTSModel.rank` is simple and
+            The algorithm used by :meth:`~FTSModel.rank` is simple and
             relatively quick. For more sophisticated result ranking, use:
 
-            * :py:meth:`~FTSModel.bm25`
-            * :py:meth:`~FTSModel.bm25f`
-            * :py:meth:`~FTSModel.lucene`
+            * :meth:`~FTSModel.bm25`
+            * :meth:`~FTSModel.bm25f`
+            * :meth:`~FTSModel.lucene`
 
         .. code-block:: python
 
@@ -1100,7 +1100,7 @@ APIs
             for search_result in query:
                 print(search_result.title, search_result.score)
 
-    .. py:classmethod:: bm25(col1_weight, col2_weight...coln_weight)
+    .. classmethod:: bm25(col1_weight, col2_weight...coln_weight)
 
         :param float col_weight: (Optional) weight to give to the *ith* column
             of the model. By default all columns have a weight of ``1.0``.
@@ -1110,14 +1110,14 @@ APIs
         This value can be used to sort the search results, with higher scores
         corresponding to better matches.
 
-        Like :py:meth:`~FTSModel.rank`, ``bm25`` function accepts optional
+        Like :meth:`~FTSModel.rank`, ``bm25`` function accepts optional
         parameters that allow you to specify weights for the various columns.
         If no weights are specified, all columns are considered of equal
         importance.
 
         .. attention::
             The BM25 result ranking algorithm requires FTS4. If you are using
-            FTS3, use :py:meth:`~FTSModel.rank` instead.
+            FTS3, use :meth:`~FTSModel.rank` instead.
 
         .. code-block:: python
 
@@ -1133,7 +1133,7 @@ APIs
 
         .. note::
             The above code example is equivalent to calling the
-            :py:meth:`~FTSModel.search_bm25` method:
+            :meth:`~FTSModel.search_bm25` method:
 
             .. code-block:: python
 
@@ -1141,29 +1141,29 @@ APIs
                 for search_result in query:
                     print(search_result.title, search_result.score)
 
-    .. py:classmethod:: bm25f(col1_weight, col2_weight...coln_weight)
+    .. classmethod:: bm25f(col1_weight, col2_weight...coln_weight)
 
-        Identical to :py:meth:`~FTSModel.bm25`, except that it uses the BM25f
+        Identical to :meth:`~FTSModel.bm25`, except that it uses the BM25f
         variant of the BM25 ranking algorithm.
 
-    .. py:classmethod:: lucene(col1_weight, col2_weight...coln_weight)
+    .. classmethod:: lucene(col1_weight, col2_weight...coln_weight)
 
-        Identical to :py:meth:`~FTSModel.bm25`, except that it uses the Lucene
+        Identical to :meth:`~FTSModel.bm25`, except that it uses the Lucene
         search result ranking algorithm.
 
-    .. py:classmethod:: rebuild()
+    .. classmethod:: rebuild()
 
         Rebuild the search index -- this only works when the ``content`` option
         was specified during table creation.
 
-    .. py:classmethod:: optimize()
+    .. classmethod:: optimize()
 
         Optimize the search index.
 
 
-.. py:class:: FTS5Model()
+.. class:: FTS5Model()
 
-    Subclass of :py:class:`VirtualModel` to be used with the `FTS5 <https://sqlite.org/fts5.html>`_
+    Subclass of :class:`VirtualModel` to be used with the `FTS5 <https://sqlite.org/fts5.html>`_
     full-text search extensions.
 
     FTS5Model subclasses should be defined normally, however there are a couple
@@ -1171,7 +1171,7 @@ APIs
 
     * FTS5 explicitly disallows specification of any constraints, data-type or
       indexes on columns. For that reason, all columns **must** be instances
-      of :py:class:`SearchField`.
+      of :class:`SearchField`.
     * FTS5 models contain a ``rowid`` field which is automatically created and
       managed by SQLite (unless you choose to explicitly set it during model
       creation). Lookups on this column **are fast and efficient**.
@@ -1182,12 +1182,12 @@ APIs
     have been overridden to use the builtin ranking functions rather than
     user-defined functions.
 
-    .. py:classmethod:: fts5_installed()
+    .. classmethod:: fts5_installed()
 
         Return a boolean indicating whether the FTS5 extension is installed. If
         it is not installed, an attempt will be made to load the extension.
 
-    .. py:classmethod:: search(term, weights=None, with_score=False, score_alias='score')
+    .. classmethod:: search(term, weights=None, with_score=False, score_alias='score')
 
         :param str term: Search term to use.
         :param weights: A list of weights for the columns, ordered with respect
@@ -1225,12 +1225,12 @@ APIs
             for result in docs:
                 print(result.title, result.search_score)
 
-    .. py:classmethod:: search_bm25(term, weights=None, with_score=False, score_alias='score')
+    .. classmethod:: search_bm25(term, weights=None, with_score=False, score_alias='score')
 
-        With FTS5, :py:meth:`~FTS5Model.search_bm25` is identical to the
-        :py:meth:`~FTS5Model.search` method.
+        With FTS5, :meth:`~FTS5Model.search_bm25` is identical to the
+        :meth:`~FTS5Model.search` method.
 
-    .. py:classmethod:: rank(col1_weight, col2_weight...coln_weight)
+    .. classmethod:: rank(col1_weight, col2_weight...coln_weight)
 
         :param float col_weight: (Optional) weight to give to the *ith* column
             of the model. By default all columns have a weight of ``1.0``.
@@ -1240,7 +1240,7 @@ APIs
         This value can be used to sort the search results, with higher scores
         corresponding to better matches.
 
-        The :py:meth:`~FTS5Model.rank` function accepts optional parameters
+        The :meth:`~FTS5Model.rank` function accepts optional parameters
         that allow you to specify weights for the various columns.  If no
         weights are specified, all columns are considered of equal importance.
 
@@ -1258,7 +1258,7 @@ APIs
 
         .. note::
             The above code example is equivalent to calling the
-            :py:meth:`~FTS5Model.search` method:
+            :meth:`~FTS5Model.search` method:
 
             .. code-block:: python
 
@@ -1266,13 +1266,13 @@ APIs
                 for search_result in query:
                     print(search_result.title, search_result.score)
 
-    .. py:classmethod:: bm25(col1_weight, col2_weight...coln_weight)
+    .. classmethod:: bm25(col1_weight, col2_weight...coln_weight)
 
         Because FTS5 provides built-in support for BM25, the
-        :py:meth:`~FTS5Model.bm25` method is identical to the
-        :py:meth:`~FTS5Model.rank` method.
+        :meth:`~FTS5Model.bm25` method is identical to the
+        :meth:`~FTS5Model.rank` method.
 
-    .. py:classmethod:: VocabModel(table_type='row'|'col'|'instance', table_name=None)
+    .. classmethod:: VocabModel(table_type='row'|'col'|'instance', table_name=None)
 
         :param str table_type: Either 'row', 'col' or 'instance'.
         :param table_name: Name for the vocab table. If not specified, will be

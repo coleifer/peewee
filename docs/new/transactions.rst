@@ -144,7 +144,7 @@ Otherwise the statements will be committed at the end of the wrapped block.
    transaction will be used.
 
    As this may lead to unpredictable behavior, it is recommended that
-   you use :py:meth:`~Database.atomic`.
+   you use :meth:`~Database.atomic`.
 
 Explicit Savepoints
 -------------------
@@ -220,11 +220,11 @@ control over read-write locking is required:
 
 The three modes:
 
-* **DEFERRED** (default) — acquires the minimum necessary lock as reads and
+* **DEFERRED** (default) - acquires the minimum necessary lock as reads and
   writes occur. Another writer can intervene between BEGIN and your first write.
-* **IMMEDIATE** — acquires a write reservation lock at BEGIN. Other writers are
+* **IMMEDIATE** - acquires a write reservation lock at BEGIN. Other writers are
   blocked; readers can proceed.
-* **EXCLUSIVE** — acquires an exclusive lock at BEGIN. No other connection can
+* **EXCLUSIVE** - acquires an exclusive lock at BEGIN. No other connection can
   read or write until the transaction completes.
 
 .. seealso::

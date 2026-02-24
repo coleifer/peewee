@@ -4,8 +4,8 @@ Transactions
 ============
 
 Peewee provides several interfaces for working with transactions. The most
-general is the :py:meth:`Database.atomic` method, which supports nested
-transactions. :py:meth:`~Database.atomic` blocks will be run in a transaction
+general is the :meth:`Database.atomic` method, which supports nested
+transactions. :meth:`~Database.atomic` blocks will be run in a transaction
 or savepoint, depending on the level of nesting.
 
 If an unhandled exception occurs in a wrapped block, the current
@@ -37,14 +37,14 @@ Example of implicit rollback:
        # the ValueError will be raised.
 
 .. tip::
-   :py:meth:`~Database.atomic` can be used as either a **context manager** or
+   :meth:`~Database.atomic` can be used as either a **context manager** or
    a **decorator**.
 
 Nesting Transactions
 --------------------
 
-:py:meth:`~Database.atomic` provides transparent nesting of transactions. When
-using :py:meth:`~Database.atomic`, the outer-most call will be wrapped in a
+:meth:`~Database.atomic` provides transparent nesting of transactions. When
+using :meth:`~Database.atomic`, the outer-most call will be wrapped in a
 transaction, and any nested calls will use savepoints.
 
 .. code-block:: python
@@ -58,9 +58,9 @@ transaction, and any nested calls will use savepoints.
 Explicit Commit / Rollback
 --------------------------
 
-While inside a block wrapped by the :py:meth:`~Database.atomic` context
+While inside a block wrapped by the :meth:`~Database.atomic` context
 manager, you can explicitly rollback or commit at any point by calling
-:py:meth:`~Transaction.rollback` or :py:meth:`~Transaction.commit`. When you
+:meth:`~Transaction.rollback` or :meth:`~Transaction.commit`. When you
 do this inside a wrapped block of code, a new transaction will be started
 automatically.
 
@@ -82,7 +82,7 @@ automatically.
 Context Manager
 ---------------
 
-Using :py:meth:`Database.atomic` as context manager:
+Using :meth:`Database.atomic` as context manager:
 
 .. code-block:: python
 
@@ -112,7 +112,7 @@ Using :py:meth:`Database.atomic` as context manager:
    # alice
    # mickey
 
-You can use the :py:meth:`Database.atomic` method to perform *get or create*
+You can use the :meth:`Database.atomic` method to perform *get or create*
 operations as well:
 
 .. code-block:: python
@@ -126,7 +126,7 @@ operations as well:
 Decorator
 ---------
 
-Using :py:meth:`Database.atomic` as a decorator:
+Using :meth:`Database.atomic` as a decorator:
 
 .. code-block:: python
 
@@ -142,8 +142,8 @@ Explicit Transaction
 --------------------
 
 If you wish to explicitly run code in a transaction, you can use
-:py:meth:`~Database.transaction`. Like :py:meth:`~Database.atomic`,
-:py:meth:`~Database.transaction` can be used as a context manager or as a
+:meth:`~Database.transaction`. Like :meth:`~Database.atomic`,
+:meth:`~Database.transaction` can be used as a context manager or as a
 decorator.
 
 If an exception occurs in a wrapped block, the transaction will be rolled back.
@@ -182,17 +182,17 @@ block. When this happens, a new transaction will be started.
 
 .. note::
    If you attempt to nest transactions with peewee using the
-   :py:meth:`~Database.transaction` context manager, only the outer-most
+   :meth:`~Database.transaction` context manager, only the outer-most
    transaction will be used.
 
    As this may lead to unpredictable behavior, it is recommended that
-   you use :py:meth:`~Database.atomic`.
+   you use :meth:`~Database.atomic`.
 
 Explicit Savepoints
 -------------------
 
 Just as you can explicitly create transactions, you can also explicitly create
-savepoints using the :py:meth:`~Database.savepoint` method. Savepoints must
+savepoints using the :meth:`~Database.savepoint` method. Savepoints must
 occur within a transaction, but can be nested arbitrarily deep.
 
 .. code-block:: python
@@ -218,12 +218,12 @@ Autocommit Mode
 
 Peewee operates in *autocommit mode*, such that any statements executed outside
 of a transaction are run in their own transaction. To group multiple statements
-into a transaction, Peewee provides the :py:meth:`~Database.atomic` context-manager/decorator.
+into a transaction, Peewee provides the :meth:`~Database.atomic` context-manager/decorator.
 
 To temporarily disable Peewee's transaction management completely, you can use the
-:py:meth:`Database.manual_commit` context-manager/decorator.
+:meth:`Database.manual_commit` context-manager/decorator.
 
-Here is how you might emulate the behavior of the :py:meth:`~Database.transaction` context manager:
+Here is how you might emulate the behavior of the :meth:`~Database.transaction` context manager:
 
 .. code-block:: python
 

@@ -30,7 +30,7 @@ approach for each.
    Applications that handle significant traffic should use a
    :ref:`connection pool <connection-pooling>` to avoid the overhead of
    establishing a new connection per request. The integration hooks below
-   work identically with pooled databases — ``connect()`` acquires from the
+   work identically with pooled databases - ``connect()`` acquires from the
    pool and ``close()`` returns to it.
 
 Flask

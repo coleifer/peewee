@@ -7,19 +7,19 @@ SQLite database implementation using `cysqlite <https://cysqlite.readthedocs.io/
 as the driver. The ``cysqlite`` extension also works with the following SQLite
 extensions, which can be imported from ``playhouse.cysqlite_ext``:
 
-* :py:class:`RowIDField`
-* :py:class:`DocIDField`
-* :py:class:`AutoIncrementField`
-* :py:class:`ISODateTimeField`
-* :py:class:`JSONField` and :py:class:`JSONPath`
-* :py:class:`JSONBField` and :py:class:`JSONBPath`
-* :py:class:`SearchField`
-* :py:class:`VirtualModel`
-* :py:class:`FTSModel`, providing full-text search.
-* :py:class:`FTS5Model`, providing full-text search using FTS5.
+* :class:`RowIDField`
+* :class:`DocIDField`
+* :class:`AutoIncrementField`
+* :class:`ISODateTimeField`
+* :class:`JSONField` and :class:`JSONPath`
+* :class:`JSONBField` and :class:`JSONBPath`
+* :class:`SearchField`
+* :class:`VirtualModel`
+* :class:`FTSModel`, providing full-text search.
+* :class:`FTS5Model`, providing full-text search using FTS5.
 
 
-.. py:class:: CySqliteDatabase(database, pragmas=None, timeout=5, rank_functions=True, regexp_function=True, **kwargs)
+.. class:: CySqliteDatabase(database, pragmas=None, timeout=5, rank_functions=True, regexp_function=True, **kwargs)
 
     :param list pragmas: A list of 2-tuples containing pragma key and value to
         set every time a connection is opened.
@@ -28,7 +28,7 @@ extensions, which can be imported from ``playhouse.cysqlite_ext``:
     :param bool regexp_function: Make the REGEXP function available.
 
     .. seealso::
-       CySqliteDatabase extends :py:class:`SqliteDatabase` and inherits all
+       CySqliteDatabase extends :class:`SqliteDatabase` and inherits all
        methods for declaring user-defined functions, aggregates, window
        functions, collations, pragmas, etc.
 
@@ -38,7 +38,7 @@ extensions, which can be imported from ``playhouse.cysqlite_ext``:
 
         db = CySqliteDatabase('app.db', pragmas={'journal_mode': 'wal'})
 
-    .. py:method:: table_function(name=None)
+    .. method:: table_function(name=None)
 
         Class-decorator for registering a ``cysqlite.TableFunction``. Table
         functions are user-defined functions that, rather than returning a
@@ -91,14 +91,14 @@ extensions, which can be imported from ``playhouse.cysqlite_ext``:
             # 2
             # 4
 
-    .. py:method:: unregister_table_function(name)
+    .. method:: unregister_table_function(name)
 
         :param name: Name of the user-defined table function.
         :returns: True or False, depending on whether the function was removed.
 
         Unregister the user-defined scalar function.
 
-    .. py:method:: on_commit(fn)
+    .. method:: on_commit(fn)
 
         :param fn: callable or ``None`` to clear the current hook.
 
@@ -106,7 +106,7 @@ extensions, which can be imported from ``playhouse.cysqlite_ext``:
         on the current connection. The callback accepts no parameters and the
         return value is ignored.
 
-        However, if the callback raises a :py:class:`ValueError`, the
+        However, if the callback raises a :class:`ValueError`, the
         transaction will be aborted and rolled-back.
 
         Example:
@@ -119,7 +119,7 @@ extensions, which can be imported from ``playhouse.cysqlite_ext``:
             def on_commit():
                 logger.info('COMMITing changes')
 
-    .. py:method:: on_rollback(fn)
+    .. method:: on_rollback(fn)
 
         :param fn: callable or ``None`` to clear the current hook.
 
@@ -135,7 +135,7 @@ extensions, which can be imported from ``playhouse.cysqlite_ext``:
             def on_rollback():
                 logger.info('Rolling back changes')
 
-    .. py:method:: on_update(fn)
+    .. method:: on_update(fn)
 
         :param fn: callable or ``None`` to clear the current hook.
 
@@ -161,7 +161,7 @@ extensions, which can be imported from ``playhouse.cysqlite_ext``:
                 # e.g. INSERT row 3 into table users.
                 logger.info('%s row %s into table %s', query_type, rowid, table)
 
-    .. py:method:: authorizer(fn)
+    .. method:: authorizer(fn)
 
         :param fn: callable or ``None`` to clear the current authorizer.
 
@@ -187,7 +187,7 @@ extensions, which can be imported from ``playhouse.cysqlite_ext``:
 
         More details can be found in the `cysqlite docs <https://cysqlite.readthedocs.io/en/latest/api.html#Connection.authorizer>`_.
 
-    .. py:method:: trace(fn, mask=2):
+    .. method:: trace(fn, mask=2):
 
         :param fn: callable or ``None`` to clear the current trace hook.
         :param int mask: mask of what types of events to trace. Default value
@@ -207,7 +207,7 @@ extensions, which can be imported from ``playhouse.cysqlite_ext``:
 
         More details can be found in the `cysqlite docs <https://cysqlite.readthedocs.io/en/latest/api.html#Connection.trace>`_.
 
-    .. py:method:: progress(fn, n=1)
+    .. method:: progress(fn, n=1)
 
         :param fn: callable or ``None`` to clear the current progress handler.
         :param int n: approximate number of VM instructions to execute between
@@ -219,11 +219,11 @@ extensions, which can be imported from ``playhouse.cysqlite_ext``:
 
         More details can be found in the `cysqlite docs <https://cysqlite.readthedocs.io/en/latest/api.html#Connection.progress>`_.
 
-    .. py:attribute:: autocommit
+    .. attribute:: autocommit
 
         Property which returns a boolean indicating if autocommit is enabled.
         By default, this value will be ``True`` except when inside a
-        transaction (or :py:meth:`~Database.atomic` block).
+        transaction (or :meth:`~Database.atomic` block).
 
         Example:
 
@@ -239,7 +239,7 @@ extensions, which can be imported from ``playhouse.cysqlite_ext``:
             >>> db.autocommit
             True
 
-    .. py:method:: backup(destination, pages=None, name=None, progress=None)
+    .. method:: backup(destination, pages=None, name=None, progress=None)
 
         :param CySqliteDatabase destination: Database object to serve as
             destination for the backup.
@@ -261,7 +261,7 @@ extensions, which can be imported from ``playhouse.cysqlite_ext``:
             # Backup the contents of master to replica.
             master.backup(replica)
 
-    .. py:method:: backup_to_file(filename, pages, name, progress)
+    .. method:: backup_to_file(filename, pages, name, progress)
 
         :param filename: Filename to store the database backup.
         :param int pages: Number of pages per iteration. Default value of -1
@@ -285,7 +285,7 @@ extensions, which can be imported from ``playhouse.cysqlite_ext``:
                 filename = 'backup-%s.db' % (datetime.date.today())
                 db.backup_to_file(filename)
 
-    .. py:method:: blob_open(table, column, rowid, read_only=False)
+    .. method:: blob_open(table, column, rowid, read_only=False)
 
         :param str table: Name of table containing data.
         :param str column: Name of column containing data.

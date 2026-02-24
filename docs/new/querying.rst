@@ -62,7 +62,7 @@ To select specific columns rather than all columns, pass field expressions to
 
    for user in User.select(User.username):
        print(user.username)
-       # user.id is not populated — it was not selected.
+       # user.id is not populated - it was not selected.
 
 To select columns from multiple models, pass both model classes or their
 fields. Peewee reconstructs the model graph from the result set:
@@ -288,7 +288,7 @@ Sorting by a calculated or aliased value
 
 When ordering by an aggregate or expression that appears in ``select()``,
 reference it by re-using the expression or by wrapping the alias in
-:py:class:`SQL`:
+:class:`SQL`:
 
 .. code-block:: python
 
@@ -322,21 +322,21 @@ Random ordering
 Pagination, Limiting, and Offsetting
 --------------------------------------
 
-:py:meth:`~Query.limit` and :py:meth:`~Query.offset` map directly to SQL:
+:meth:`~Query.limit` and :meth:`~Query.offset` map directly to SQL:
 
 .. code-block:: python
 
    # First 10 rows.
    Tweet.select().order_by(Tweet.id).limit(10)
 
-   # Rows 11–20.
+   # Rows 11-20.
    Tweet.select().order_by(Tweet.id).limit(10).offset(10)
 
-:py:meth:`~Query.paginate` is a convenience wrapper:
+:meth:`~Query.paginate` is a convenience wrapper:
 
 .. code-block:: python
 
-   # Page 3, 20 items per page (rows 41–60).
+   # Page 3, 20 items per page (rows 41-60).
    Tweet.select().order_by(Tweet.id).paginate(3, 20)
 
 .. attention::
@@ -346,7 +346,7 @@ Pagination, Limiting, and Offsetting
 Counting
 --------
 
-:py:meth:`~SelectBase.count` wraps the query in a ``SELECT COUNT(1)`` and
+:meth:`~SelectBase.count` wraps the query in a ``SELECT COUNT(1)`` and
 returns an integer:
 
 .. code-block:: python
@@ -358,7 +358,7 @@ returns an integer:
 Aggregates and GROUP BY
 ------------------------
 
-Use :py:class:`fn` to call aggregate functions and :py:meth:`~Select.group_by`
+Use :class:`fn` to call aggregate functions and :meth:`~Select.group_by`
 to group:
 
 .. code-block:: python
@@ -372,7 +372,7 @@ to group:
    for user in query:
        print(user.username, user.tweet_count)
 
-Filter groups with :py:meth:`~Select.having`:
+Filter groups with :meth:`~Select.having`:
 
 .. code-block:: python
 
@@ -449,7 +449,7 @@ Iterating Over Large Result Sets
 ----------------------------------
 
 For queries returning many rows, disable result caching with
-:py:meth:`~BaseQuery.iterator` to keep memory usage flat:
+:meth:`~BaseQuery.iterator` to keep memory usage flat:
 
 .. code-block:: python
 
@@ -626,14 +626,14 @@ Bounded windows
 By default, window functions are evaluated using an *unbounded preceding* start
 for the window, and the *current row* as the end. We can change the bounds of
 the window our aggregate functions operate on by specifying a ``start`` and/or
-``end`` in the call to :py:meth:`Function.over`. Additionally, Peewee comes
-with helper-methods on the :py:class:`Window` object for generating the
+``end`` in the call to :meth:`Function.over`. Additionally, Peewee comes
+with helper-methods on the :class:`Window` object for generating the
 appropriate boundary references:
 
-* :py:attr:`Window.CURRENT_ROW` - attribute that references the current row.
-* :py:meth:`Window.preceding` - specify number of row(s) preceding, or omit
+* :attr:`Window.CURRENT_ROW` - attribute that references the current row.
+* :meth:`Window.preceding` - specify number of row(s) preceding, or omit
   number to indicate **all** preceding rows.
-* :py:meth:`Window.following` - specify number of row(s) following, or omit
+* :meth:`Window.following` - specify number of row(s) following, or omit
   number to indicate **all** following rows.
 
 To examine how boundaries work, we'll calculate a running total of the
@@ -690,7 +690,7 @@ Filtered Aggregates
 Aggregate functions may also support filter functions (Postgres and Sqlite
 3.25+), which get translated into a ``FILTER (WHERE...)`` clause. Filter
 expressions are added to an aggregate function with the
-:py:meth:`Function.filter` method.
+:meth:`Function.filter` method.
 
 For an example, we will calculate the running sum of the ``value`` field with
 respect to the ``id``, but we will filter-out any samples whose ``counter=2``.
@@ -713,15 +713,15 @@ respect to the ``id``, but we will filter-out any samples whose ``counter=2``.
    # 3   100    130.
 
 .. note::
-   The call to :py:meth:`~Function.filter` must precede the call to
-   :py:meth:`~Function.over`.
+   The call to :meth:`~Function.filter` must precede the call to
+   :meth:`~Function.over`.
 
 Reusing Window Definitions
 ^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 If you intend to use the same window definition for multiple aggregates, you
-can create a :py:class:`Window` object. The :py:class:`Window` object takes the
-same parameters as :py:meth:`Function.over`, and can be passed to the
+can create a :class:`Window` object. The :class:`Window` object takes the
+same parameters as :meth:`Function.over`, and can be passed to the
 ``over()`` method in-place of the individual parameters.
 
 Here we'll declare a single window, ordered with respect to the sample ``id``,
@@ -751,7 +751,7 @@ and call several window functions using that window definition:
 Multiple window definitions
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-In the previous example, we saw how to declare a :py:class:`Window` definition
+In the previous example, we saw how to declare a :class:`Window` definition
 and re-use it for multiple different aggregations. You can include as many
 window definitions as you need in your queries, but it is necessary to ensure
 each window has a unique alias:
@@ -842,11 +842,11 @@ Let's examine the difference by calculating a "running sum" of the samples,
 ordered with respect to the ``counter`` and ``value`` fields. To specify the
 frame type, we can use either:
 
-* :py:attr:`Window.RANGE`
-* :py:attr:`Window.ROWS`
-* :py:attr:`Window.GROUPS`
+* :attr:`Window.RANGE`
+* :attr:`Window.ROWS`
+* :attr:`Window.GROUPS`
 
-The behavior of :py:attr:`~Window.RANGE`, when there are logical duplicates,
+The behavior of :attr:`~Window.RANGE`, when there are logical duplicates,
 may lead to unexpected results:
 
 .. code-block:: python
@@ -871,10 +871,10 @@ may lead to unexpected results:
    # 3         100     155.
 
 With the inclusion of the new rows we now have some rows that have duplicate
-``category`` and ``value`` values. The :py:attr:`~Window.RANGE` frame type
+``category`` and ``value`` values. The :attr:`~Window.RANGE` frame type
 causes these duplicates to be evaluated together rather than separately.
 
-The more expected result can be achieved by using :py:attr:`~Window.ROWS` as
+The more expected result can be achieved by using :attr:`~Window.ROWS` as
 the frame-type:
 
 .. code-block:: python
@@ -906,7 +906,7 @@ Peewee uses these rules for determining what frame-type to use:
 * If the user did not specify frame type or start/end boundaries, Peewee will
   use the database default, which is ``RANGE``.
 
-The :py:attr:`Window.GROUPS` frame type looks at the window range specification
+The :attr:`Window.GROUPS` frame type looks at the window range specification
 in terms of groups of rows, based on the ordering term(s). Using ``GROUPS``, we
 can define the frame so it covers distinct groupings of rows. Let's look at an
 example:
@@ -940,9 +940,9 @@ previous group and the current group.
 .. note::
    For information about the window function APIs, see:
 
-   * :py:meth:`Function.over`
-   * :py:meth:`Function.filter`
-   * :py:class:`Window`
+   * :meth:`Function.over`
+   * :meth:`Function.filter`
+   * :class:`Window`
 
    For general information on window functions, read the postgres `window functions tutorial <https://www.postgresql.org/docs/current/tutorial-window.html>`_
 
@@ -958,8 +958,8 @@ Common Table Expressions
 A CTE factors out a subquery and gives it a name, making complex queries more
 readable and sometimes more efficient. CTEs also support recursion.
 
-Define a CTE with :py:meth:`~SelectQuery.cte` and include it with
-:py:meth:`~Query.with_cte`:
+Define a CTE with :meth:`~SelectQuery.cte` and include it with
+:meth:`~Query.with_cte`:
 
 Simple Example
 ^^^^^^^^^^^^^^
@@ -1233,13 +1233,13 @@ this in a single ``UPDATE`` query with a ``RETURNING`` clause:
    for deactivate_user in query.execute():
        send_deactivation_email(deactivated_user.email)
 
-The ``RETURNING`` clause is also available on :py:class:`Insert` and
-:py:class:`Delete`. When used with ``INSERT``, the newly-created rows will be
+The ``RETURNING`` clause is also available on :class:`Insert` and
+:class:`Delete`. When used with ``INSERT``, the newly-created rows will be
 returned. When used with ``DELETE``, the deleted rows will be returned.
 
 The only limitation of the ``RETURNING`` clause is that it can only consist of
 columns from tables listed in the query's ``FROM`` clause. To select all
-columns from a particular table, you can simply pass in the :py:class:`Model`
+columns from a particular table, you can simply pass in the :class:`Model`
 class.
 
 As another example, let's add a user and set their creation-date to the
@@ -1259,7 +1259,7 @@ ID, Email and the creation timestamp in a single query:
    user = cursor[0]
    logger.info('Created user %s (id=%s) at %s', user.email, user.id, user.created)
 
-By default the cursor will return :py:class:`Model` instances, but you can
+By default the cursor will return :class:`Model` instances, but you can
 specify a different row type:
 
 .. code-block:: python
@@ -1273,4 +1273,4 @@ specify a different row type:
    for new_user in query.execute():
        print('Added user "%s", id=%s' % (new_user['username'], new_user['id']))
 
-Just as with :py:class:`Select` queries, you can specify various :ref:`result row types <rowtypes>`.
+Just as with :class:`Select` queries, you can specify various :ref:`result row types <rowtypes>`.

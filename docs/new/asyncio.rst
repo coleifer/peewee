@@ -39,9 +39,9 @@ Supported backends:
 ================  ============  ====================================
 Database          Driver        Peewee class
 ================  ============  ====================================
-SQLite            aiosqlite     :py:class:`AsyncSqliteDatabase`
-PostgreSQL        asyncpg       :py:class:`AsyncPostgresqlDatabase`
-MySQL / MariaDB   aiomysql      :py:class:`AsyncMySQLDatabase`
+SQLite            aiosqlite     :class:`AsyncSqliteDatabase`
+PostgreSQL        asyncpg       :class:`AsyncPostgresqlDatabase`
+MySQL / MariaDB   aiomysql      :class:`AsyncMySQLDatabase`
 ================  ============  ====================================
 
 
@@ -217,9 +217,9 @@ MySQL and PostgreSQL use the driver's native connection pool.
 
 Pool configuration options include:
 
-* ``pool_size`` – Maximum number of connections
-* ``pool_min_size`` – Minimum pool size
-* ``acquire_timeout`` – Timeout when acquiring a connection
+* ``pool_size`` - Maximum number of connections
+* ``pool_min_size`` - Minimum pool size
+* ``acquire_timeout`` - Timeout when acquiring a connection
 
 .. code-block:: python
 
@@ -255,7 +255,7 @@ Fix by selecting the related model in the original query:
 
    query = Tweet.select(Tweet, User).join(User)
    tweet = await db.get(query)
-   print(tweet.user.name)   # OK — no extra query.
+   print(tweet.user.name)   # OK - no extra query.
 
 Or by wrapping the access in ``db.run()``:
 
@@ -302,7 +302,7 @@ Solutions:
        return prefetch(user_q, Tweet.select())[0]
 
    user = await db.run(get_user_with_tweets, user_id)
-   for tweet in user.tweets:   # Prefetched — no extra query.
+   for tweet in user.tweets:   # Prefetched - no extra query.
        print(tweet.content)
 
 The general rule is: any code that triggers a database query must execute
@@ -313,7 +313,7 @@ call.
 API Reference
 -------------
 
-.. py:class:: AsyncDatabaseMixin(database, pool_size=10, pool_min_size=1, acquire_timeout=10, **kwargs)
+.. class:: AsyncDatabaseMixin(database, pool_size=10, pool_min_size=1, acquire_timeout=10, **kwargs)
 
    :param str database: Database name or filename for SQLite.
    :param int pool_size: Maximum size of the driver-managed connection pool
@@ -326,15 +326,15 @@ API Reference
        driver when creating connections (e.g., ``user``, ``password``,
        ``host``).
 
-   Mixin class providing asyncio execution support. Not used directly —
-   instantiate :py:class:`AsyncSqliteDatabase`,
-   :py:class:`AsyncPostgresqlDatabase`, or :py:class:`AsyncMySQLDatabase`.
+   Mixin class providing asyncio execution support. Not used directly -
+   instantiate :class:`AsyncSqliteDatabase`,
+   :class:`AsyncPostgresqlDatabase`, or :class:`AsyncMySQLDatabase`.
 
    Each asyncio task maintains its own connection state. Connections are
    acquired and released back to the pool when the task completes or the
    database context exits.
 
-   .. py:method:: run(fn, *args, **kwargs)
+   .. method:: run(fn, *args, **kwargs)
       :async:
 
       :param fn: A synchronous callable.
@@ -344,36 +344,36 @@ API Reference
       This is the primary entry point for executing Peewee ORM code in an
       async context.
 
-   .. py:method:: aconnect()
+   .. method:: aconnect()
       :async:
 
       :return: A wrapped async connection.
 
       Acquire a connection from the pool for the current task.
 
-   .. py:method:: aclose()
+   .. method:: aclose()
       :async:
 
       Release the current task's connection back to the pool.
 
-   .. py:method:: close_pool()
+   .. method:: close_pool()
       :async:
 
       Close the underlying connection pool and release all active connections.
 
       This method should be called during application shutdown.
 
-   .. py:method:: __aenter__()
+   .. method:: __aenter__()
       :async:
 
       Enter an async database context, acquiring a connection.
 
-   .. py:method:: __aexit__(exc_type, exc, tb)
+   .. method:: __aexit__(exc_type, exc, tb)
       :async:
 
       Exit the async database context, releasing the connection.
 
-   .. py:method:: aexecute(query)
+   .. method:: aexecute(query)
       :async:
 
       :param Query query: a Select, Insert, Update or Delete query.
@@ -381,15 +381,15 @@ API Reference
 
       Execute any Peewee query object and return its natural result.
 
-   .. py:method:: get(query)
+   .. method:: get(query)
       :async:
 
       :param Query query: a Select query.
 
       Execute a SELECT query and return a single model instance.
-      Raises :py:exc:`~Model.DoesNotExist` if no row matches.
+      Raises :exc:`~Model.DoesNotExist` if no row matches.
 
-   .. py:method:: list(query)
+   .. method:: list(query)
       :async:
 
       :param Query query: a Select query, or an Insert, Update or Delete
@@ -398,68 +398,68 @@ API Reference
       Execute a SELECT (or INSERT/UPDATE/DELETE with RETURNING) and return
       a list of results.
 
-   .. py:method:: scalar(query)
+   .. method:: scalar(query)
       :async:
 
       :param Query query: a Select query.
 
       Execute a SELECT and return the first column of the first row.
 
-   .. py:method:: atomic()
+   .. method:: atomic()
 
       Return an async-aware atomic context manager. Supports both
       ``async with`` and ``with``.
 
-   .. py:method:: acreate_tables(models, **options)
+   .. method:: acreate_tables(models, **options)
       :async:
 
       Create tables asynchronously.
 
-   .. py:method:: adrop_tables(models, **options)
+   .. method:: adrop_tables(models, **options)
       :async:
 
       Drop tables asynchronously.
 
-   .. py:method:: aexecute_sql(sql, params=None)
+   .. method:: aexecute_sql(sql, params=None)
       :async:
 
       :param str sql: SQL query to execute.
       :param tuple params: Optional query parameters.
-      :returns: A :py:class:`CursorAdapter` instance.
+      :returns: A :class:`CursorAdapter` instance.
 
       Execute raw SQL asynchronously. Returns a cursor-like object whose
       rows are already fetched (call ``.fetchall()`` synchronously).
 
 
-.. py:class:: AsyncSqliteDatabase(database, **kwargs)
+.. class:: AsyncSqliteDatabase(database, **kwargs)
 
    Async SQLite database implementation.
 
    Uses ``aiosqlite`` and maintains a single shared connection. Pool-related
    configuration options are ignored.
 
-   Inherits from :py:class:`AsyncDatabaseMixin` and
-   :py:class:`peewee.SqliteDatabase`.
+   Inherits from :class:`AsyncDatabaseMixin` and
+   :class:`peewee.SqliteDatabase`.
 
-.. py:class:: AsyncPostgresqlDatabase(database, **kwargs)
+.. class:: AsyncPostgresqlDatabase(database, **kwargs)
 
    Async PostgreSQL database implementation.
 
    Uses ``asyncpg`` and the driver's native connection pool.
 
-   Inherits from :py:class:`AsyncDatabaseMixin` and
-   :py:class:`peewee.PostgresqlDatabase`.
+   Inherits from :class:`AsyncDatabaseMixin` and
+   :class:`peewee.PostgresqlDatabase`.
 
-.. py:class:: AsyncMySQLDatabase(database, **kwargs)
+.. class:: AsyncMySQLDatabase(database, **kwargs)
 
    Async MySQL / MariaDB database implementation.
 
    Uses ``aiomysql`` and the driver's native connection pool.
 
-   Inherits from :py:class:`AsyncDatabaseMixin` and
-   :py:class:`peewee.MySQLDatabase`.
+   Inherits from :class:`AsyncDatabaseMixin` and
+   :class:`peewee.MySQLDatabase`.
 
-.. py:class:: MissingGreenletBridge(RuntimeError)
+.. class:: MissingGreenletBridge(RuntimeError)
 
    Raised when Peewee attempts to execute a query outside a greenlet context.
    This indicates that a query was triggered outside of ``db.run()`` or an

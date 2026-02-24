@@ -38,7 +38,7 @@ created along with the table.
 .. note::
    A common pattern in web applications is to call ``db.create_tables(MODELS, safe=True)``
    once at startup. This ensures all tables exist without failing on an already-
-   initialized database. It does **not** apply schema changes — for that, see
+   initialized database. It does **not** apply schema changes - for that, see
    :ref:`migrations`.
 
 Dropping Tables

@@ -50,29 +50,29 @@ following drivers are supported out of the box:
 +-----------------------+------------------------+--------------------------------------------+
 | Database              | Driver                 | Implementation                             |
 +=======================+========================+============================================+
-| **Sqlite**            | ``sqlite3``            | :py:class:`SqliteDatabase`                 |
+| **Sqlite**            | ``sqlite3``            | :class:`SqliteDatabase`                 |
 +-----------------------+------------------------+--------------------------------------------+
-| **Postgres**          | ``psycopg3``           | :py:class:`PostgresqlDatabase`             |
+| **Postgres**          | ``psycopg3``           | :class:`PostgresqlDatabase`             |
 +-----------------------+------------------------+--------------------------------------------+
-| **Postgres**          | ``psycopg2``           | :py:class:`PostgresqlDatabase`             |
+| **Postgres**          | ``psycopg2``           | :class:`PostgresqlDatabase`             |
 +-----------------------+------------------------+--------------------------------------------+
-| **MySQL**             | ``pymysql``            | :py:class:`MySQLDatabase`                  |
+| **MySQL**             | ``pymysql``            | :class:`MySQLDatabase`                  |
 +-----------------------+------------------------+--------------------------------------------+
-| Sqlite (async)        | ``aiosqlite``          | :py:class:`AsyncSqliteDatabase`            |
+| Sqlite (async)        | ``aiosqlite``          | :class:`AsyncSqliteDatabase`            |
 +-----------------------+------------------------+--------------------------------------------+
-| Postgres (async)      | ``asyncpg``            | :py:class:`AsyncPostgresqlDatabase`        |
+| Postgres (async)      | ``asyncpg``            | :class:`AsyncPostgresqlDatabase`        |
 +-----------------------+------------------------+--------------------------------------------+
-| MySQL (async)         | ``aiomysql``           | :py:class:`AsyncMySQLDatabase`             |
+| MySQL (async)         | ``aiomysql``           | :class:`AsyncMySQLDatabase`             |
 +-----------------------+------------------------+--------------------------------------------+
-| Sqlite (alternate)    | ``cysqlite``           | :py:class:`CySqliteDatabase`               |
+| Sqlite (alternate)    | ``cysqlite``           | :class:`CySqliteDatabase`               |
 +-----------------------+------------------------+--------------------------------------------+
-| Sqlite (alternate)    | ``apsw``               | :py:class:`APSWDatabase`                   |
+| Sqlite (alternate)    | ``apsw``               | :class:`APSWDatabase`                   |
 +-----------------------+------------------------+--------------------------------------------+
-| SqlCipher             | ``sqlcipher3``         | :py:class:`SqlCipherDatabase`              |
+| SqlCipher             | ``sqlcipher3``         | :class:`SqlCipherDatabase`              |
 +-----------------------+------------------------+--------------------------------------------+
-| MySQL (alternate)     | ``mysql-connector``    | :py:class:`MySQLConnectorDatabase`         |
+| MySQL (alternate)     | ``mysql-connector``    | :class:`MySQLConnectorDatabase`         |
 +-----------------------+------------------------+--------------------------------------------+
-| MariaDB (alternate)   | ``mariadb-connector``  | :py:class:`MariaDBConnectorDatabase`       |
+| MariaDB (alternate)   | ``mariadb-connector``  | :class:`MariaDBConnectorDatabase`       |
 +-----------------------+------------------------+--------------------------------------------+
 
 The three bolded rows cover the majority of deployments. All others are
