@@ -59,7 +59,7 @@ Use ``before_request`` and ``teardown_request``:
 ``teardown_request`` is called regardless of whether the request succeeded or
 raised an exception, making it the correct hook for cleanup.
 
-For a complete Flask + Peewee application example, see :ref:`tutorial`.
+For a complete Flask + Peewee application example, see :ref:`example`.
 
 .. seealso:: :ref:`flask-utils`
 

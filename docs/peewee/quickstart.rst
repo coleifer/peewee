@@ -201,4 +201,4 @@ documents:
 * :ref:`transactions` - atomic blocks, nesting, savepoints.
 
 For a complete worked example building a small web application, see
-:ref:`tutorial`.
+:ref:`example`.

@@ -23,7 +23,7 @@ Peewee's source code hosted on `GitHub <https://github.com/coleifer/peewee>`_.
 New to peewee? These may help:
 
 * :ref:`Quickstart <quickstart>`
-* :ref:`Example twitter app <tutorial>`
+* :ref:`Example twitter app <example>`
 * :ref:`Using peewee interactively <interactive>`
 * :ref:`Models and fields <models>`
 * :ref:`Querying <querying>`
@@ -38,7 +38,7 @@ Contents:
 
    peewee/installation
    peewee/quickstart
-   peewee/tutorial
+   peewee/example
    peewee/database
    peewee/models
    peewee/relationships

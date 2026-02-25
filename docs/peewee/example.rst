@@ -1,7 +1,7 @@
-.. _tutorial:
+.. _example:
 
-Tutorial
-========
+Example app
+===========
 
 We'll be building a simple *twitter*-like site. The source code for the example
 can be found in the ``examples/twitter`` directory. You can also `browse the
@@ -40,7 +40,7 @@ For simplicity all example code is contained within a single module,
 ``examples/twitter/app.py``. For a guide on structuring larger Flask apps with
 peewee, check out `Structuring Flask Apps <https://charlesleifer.com/blog/structuring-flask-apps-a-how-to-for-those-coming-from-django/>`_.
 
-.. _tutorial-models:
+.. _example-models:
 
 Models
 ^^^^^^

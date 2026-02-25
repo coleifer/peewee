@@ -4640,7 +4640,7 @@ Model
             sq = Tweet.select().join(User).where(User.is_admin == True)
 
         Example selecting users and joining on a particular foreign key field.
-        See the :ref:`tutorial app <tutorial>` for a real-life usage:
+        See the :ref:`example app <example>` for a real-life usage:
 
         .. code-block:: python
 

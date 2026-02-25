@@ -1095,7 +1095,7 @@ the `SQLite json functions <https://sqlite.org/json1.html>`_.
 
       # Query length of an array:
       cfg1 = Config.create(data={'statuses': [1, 99, 1, 1]})
-      cfg2 = Config.create(data={'statuses': [1, 1])
+      cfg2 = Config.create(data={'statuses': [1, 1]})
 
       query = (Config
                .select(
