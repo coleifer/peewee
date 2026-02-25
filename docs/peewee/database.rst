@@ -537,7 +537,7 @@ It is helpful to be explicit about connection lifetimes. If a connection cannot
 be opened, the exception will be caught when the connection is being opened,
 rather than at query time.
 
-Thread Safety
+Thread safety
 ^^^^^^^^^^^^^
 
 Database connections and associated transactions are thread-safe.
@@ -550,7 +550,7 @@ only have a single connection open at a given time.
 Peewee's :ref:`asyncio integration <asyncio>` stores connection state in
 task-local storage, so the same applies to async applications.
 
-DB-API Connection Object
+DB-API Connection object
 ^^^^^^^^^^^^^^^^^^^^^^^^
 
 :meth:`Database.connection` returns a reference to the underlying DB-API driver

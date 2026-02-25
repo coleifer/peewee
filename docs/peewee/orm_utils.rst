@@ -833,10 +833,6 @@ Introspection:
           # Create a unique index on the `username` column.
           db['users'].create_index(['username'], unique=True)
 
-   .. method:: freeze(...) / thaw(...)
-
-      Table-level variants of the :class:`DataSet` methods.
-
    .. method:: freeze(format='csv', filename=None, file_obj=None, **kwargs)
 
       :param format: Output format. By default, *csv* and *json* are supported.

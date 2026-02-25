@@ -97,7 +97,7 @@ Three things to note:
    automatically add an auto-incrementing integer primary key field named
    *id*.
 
-Model inheritance
+Model Inheritance
 -----------------
 
 Model subclasses inherit the ``Meta`` configuration of their parent as well as
@@ -662,7 +662,7 @@ Example usage:
 
 .. _model-options:
 
-Model settings
+Model Settings
 --------------
 
 Model-specific configuration is placed in a special :class:`Metadata` class
@@ -1022,7 +1022,7 @@ work on keyless models, since both require a primary key to target a specific
 row. Use :meth:`Model.insert`, :meth:`Model.update`, and :meth:`Model.delete`
 (the class-level query methods) instead.
 
-Table constraints
+Table Constraints
 -----------------
 
 Peewee allows arbitrary constraints to :class:`Model` classes.

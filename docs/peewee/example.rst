@@ -19,7 +19,7 @@ web framework. You will need to install it to run the example:
 
    pip install flask
 
-Running the example
+Running the Example
 -------------------
 
 .. image:: tweepee.png
@@ -33,7 +33,7 @@ directory and execute the ``run_example.py`` script:
 
 The example app will be accessible at http://localhost:5000/
 
-Code structure
+Code Structure
 --------------
 
 For simplicity all example code is contained within a single module,
@@ -137,7 +137,7 @@ allowing you to use the following in your application:
 * ``None`` (NULL)
 * Binary data
 
-Creating tables
+Creating Tables
 ---------------
 
 In order to start using the models, its necessary to **create the tables**.
@@ -188,7 +188,7 @@ each model, ensuring the tables are created in order.
    * manually add, drop or modify the columns, OR
    * use the :ref:`migration tools <migrate>` to script your changes.
 
-Database connection
+Database Connection
 -------------------
 
 You may have noticed in the above model code that there is a class defined on
@@ -249,7 +249,7 @@ Flask provides connection setup/teardown hooks via decorators:
    Peewee's :ref:`asyncio integration <asyncio>` stores connection state in
    task-local storage, so the same pattern applies.
 
-Making queries
+Making Queries
 --------------
 
 In the *User* model there are a few instance methods that encapsulate some
@@ -278,7 +278,7 @@ difference in the SQL *JOIN* and *WHERE* clauses:
                .where(Relationship.to_user == self)
                .order_by(User.username))
 
-Storing data
+Storing Data
 ------------
 
 When a new user wants to join the site we need to make sure the username is
@@ -357,7 +357,7 @@ This code corresponds to the following SQL query:
        WHERE t3."from_user_id" = ?
    )
 
-Other topics
+Other Topics
 ------------
 
 There are a couple other neat things going on in the example app that are worth
@@ -417,17 +417,17 @@ mentioning briefly.
 
       from playhouse.flask_utils import get_object_or_404, object_list
 
-More examples
+More Examples
 -------------
 
 There are more examples included in the peewee `examples directory
 <https://github.com/coleifer/peewee/blob/master/examples/>`_, including:
 
-* `Example blog app <https://github.com/coleifer/peewee/tree/master/examples/blog>`_ using Flask and peewee. Also see `accompanying blog post <https://charlesleifer.com/blog/how-to-make-a-flask-blog-in-one-hour-or-less/>`_.
-* `An encrypted command-line diary <https://github.com/coleifer/peewee/blob/master/examples/diary.py>`_. There is a `companion blog post <https://charlesleifer.com/blog/dear-diary-an-encrypted-command-line-diary-with-python/>`_ you might enjoy as well.
-* `Analytics web-service <https://github.com/coleifer/peewee/tree/master/examples/analytics>`_ (like a lite version of Google Analytics). Also check out the `companion blog post <https://charlesleifer.com/blog/saturday-morning-hacks-building-an-analytics-app-with-flask/>`_.
+* `Example blog app <https://github.com/coleifer/peewee/tree/master/examples/blog>`__ using Flask and peewee. Also see `accompanying blog post <https://charlesleifer.com/blog/how-to-make-a-flask-blog-in-one-hour-or-less/>`__.
+* `An encrypted command-line diary <https://github.com/coleifer/peewee/blob/master/examples/diary.py>`_. There is a `companion blog post <https://charlesleifer.com/blog/dear-diary-an-encrypted-command-line-diary-with-python/>`__ you might enjoy as well.
+* `Analytics web-service <https://github.com/coleifer/peewee/tree/master/examples/analytics>`_ (like a lite version of Google Analytics). Also check out the `companion blog post <https://charlesleifer.com/blog/saturday-morning-hacks-building-an-analytics-app-with-flask/>`__.
 
 .. seealso::
-   Like these snippets and interested in more?  Check out `flask-peewee <https://github.com/coleifer/flask-peewee>`_ -
+   Like these snippets and interested in more?  Check out `flask-peewee <https://github.com/coleifer/flask-peewee>`__ -
    a flask plugin that provides a django-like Admin interface, RESTful API, Authentication and
    more for your peewee models.

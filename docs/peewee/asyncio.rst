@@ -115,7 +115,7 @@ Use ``db.run()`` when:
 * A single operation involves multiple queries (e.g. a transaction).
 * You need to pass results between queries without async overhead.
 
-Async helper methods
+Async Helper Methods
 ^^^^^^^^^^^^^^^^^^^^^
 
 For single-query operations, the async helpers are more direct:

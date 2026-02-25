@@ -110,7 +110,7 @@ method or the special properties exposed on the :class:`SqliteDatabase` object:
 
 .. _sqlite-user-functions:
 
-User-defined functions
+User-Defined Functions
 ----------------------
 
 SQLite can be extended with user-defined Python code. The
@@ -331,7 +331,7 @@ Example:
 
 .. _sqlite-locking:
 
-Locking mode for transactions
+Locking Mode for Transactions
 -----------------------------
 
 SQLite transactions can be opened in three different modes:
@@ -429,7 +429,7 @@ Usage:
       functions are user-defined functions that, rather than returning a
       single, scalar value, can return any number of rows of tabular data.
 
-      See `cysqlite docs <https://cysqlite.readthedocs.io/en/latest/api.html#tablefunction>`_ for details on
+      See `cysqlite docs <https://cysqlite.readthedocs.io/en/latest/api.html#tablefunction>`__ for details on
       ``TableFunction`` API.
 
       .. code-block:: python
@@ -567,7 +567,7 @@ Usage:
         the operation from occuring.
       * ``cysqlite.SQLITE_DENY``: prevent statement compilation.
 
-      More details can be found in the `cysqlite docs <https://cysqlite.readthedocs.io/en/latest/api.html#Connection.authorizer>`_.
+      More details can be found in the `cysqlite docs <https://cysqlite.readthedocs.io/en/latest/api.html#Connection.authorizer>`__.
 
    .. method:: trace(fn, mask=2):
 
@@ -587,7 +587,7 @@ Usage:
 
       Any return value from callback is ignored.
 
-      More details can be found in the `cysqlite docs <https://cysqlite.readthedocs.io/en/latest/api.html#Connection.trace>`_.
+      More details can be found in the `cysqlite docs <https://cysqlite.readthedocs.io/en/latest/api.html#Connection.trace>`__.
 
    .. method:: progress(fn, n=1)
 
@@ -599,7 +599,7 @@ Usage:
       takes no arguments and returns 0 to allow progress to continue or any
       non-zero value to interrupt progress.
 
-      More details can be found in the `cysqlite docs <https://cysqlite.readthedocs.io/en/latest/api.html#Connection.progress>`_.
+      More details can be found in the `cysqlite docs <https://cysqlite.readthedocs.io/en/latest/api.html#Connection.progress>`__.
 
    .. attribute:: autocommit
 
@@ -716,7 +716,7 @@ Usage:
 APSW
 ----
 
-`APSW <https://rogerbinns.github.io/apsw/>`_ is a thin C wrapper over
+`APSW <https://rogerbinns.github.io/apsw/>`__ is a thin C wrapper over
 SQLite's C API that exposes nearly every SQLite feature including virtual
 tables, virtual filesystems, and BLOB I/O.
 
@@ -769,7 +769,7 @@ Usage:
 SQLCipher
 ---------
 
-`SQLCipher <https://www.zetetic.net/sqlcipher/>`_ is an encrypted wrapper
+`SQLCipher <https://www.zetetic.net/sqlcipher/>`__ is an encrypted wrapper
 around SQLite. Peewee exposes it through :class:`SqlCipherDatabase`, which
 is API-identical to :class:`SqliteDatabase` except for its constructor.
 
@@ -823,7 +823,7 @@ Pragma configuration (e.g. increasing PBKDF2 iterations):
 
 .. note::
    SQLCipher can be configured using a number of extension PRAGMAs. The list
-   of PRAGMAs and their descriptions can be found in the `SQLCipher documentation <https://www.zetetic.net/sqlcipher/sqlcipher-api/>`_.
+   of PRAGMAs and their descriptions can be found in the `SQLCipher documentation <https://www.zetetic.net/sqlcipher/sqlcipher-api/>`__.
 
 .. class:: SqlCipherDatabase(database, passphrase, **kwargs)
 

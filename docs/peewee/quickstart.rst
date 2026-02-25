@@ -49,7 +49,7 @@ Three things to notice:
 * ``ForeignKeyField`` links ``Tweet`` to ``User``. The ``backref='tweets'``
   parameter means every ``User`` instance gains a ``tweets`` attribute.
 
-Create the tables
+Create the Tables
 -----------------
 
 .. code-block:: python
@@ -61,7 +61,7 @@ Create the tables
 each model. By default ``create_table()`` specifies ``safe=True``, which uses
 ``CREATE TABLE IF NOT EXISTS``, making it safe to call on every startup.
 
-Writing data
+Writing Data
 ------------
 
 Create a row with :meth:`~Model.create` (one step) or instantiate a model
@@ -94,7 +94,7 @@ To delete a row:
    stale_tweet = Tweet.get(Tweet.content == 'My second tweet.')
    stale_tweet.delete_instance()
 
-Reading data
+Reading Data
 ------------
 
 Retrieve a single row with :meth:`~Model.get`. It raises :exc:`~Model.DoesNotExist`
@@ -145,7 +145,7 @@ Join to combine data from related tables in a single query:
    for tweet in query:
        print(tweet.user.username, '->', tweet.content)
 
-Simple aggregates
+Simple Aggregates
 -----------------
 
 How many tweets are in the database:
@@ -160,7 +160,7 @@ When the most-recent tweet was added:
 
    Tweet.select(fn.MAX(Tweet.timestamp)).scalar()
 
-Close the connection
+Close the Connection
 --------------------
 
 When done using the database, close the connection:
@@ -173,7 +173,7 @@ In a web application you would open the connection when a request arrives and
 close it when the response is sent. See :ref:`framework-integration` for
 framework-specific patterns.
 
-Working with existing databases
+Working with Existing databases
 -------------------------------
 
 If you have an existing database, peewee can generate models using :ref:`pwiz`.
@@ -183,8 +183,8 @@ For example to generate models for a Postgres database named ``blog_db``:
 
    python -m pwiz -e postgresql blog > blog_models.py
 
-Where to go next
-----------------
+What Next
+---------
 
 Each concept introduced above is covered in full detail in the following
 documents:

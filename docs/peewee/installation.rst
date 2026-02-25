@@ -17,7 +17,7 @@ functions for fuzzy string matching. To build from source:
 
    pip install peewee --no-binary :all:
 
-Installing from source
+Installing from Source
 ----------------------
 
 .. code-block:: shell
@@ -26,7 +26,7 @@ Installing from source
    cd peewee
    pip install .
 
-Running tests
+Running Tests
 -------------
 
 .. code-block:: shell

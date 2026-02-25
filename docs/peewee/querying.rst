@@ -631,7 +631,7 @@ within each distinct ``counter`` group.
    # 2     3.    2
    # 3   100     1
 
-Bounded windows
+Bounded Windows
 ^^^^^^^^^^^^^^^
 
 By default, window functions are evaluated using an *unbounded preceding* start
@@ -759,7 +759,7 @@ and call several window functions using that window definition:
    # 2           3.    100.     1.    34.
    # 3         100.    NULL     3.   134.
 
-Multiple window definitions
+Multiple Window Definitions
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 In the previous example, we saw how to declare a :class:`Window` definition
@@ -821,7 +821,7 @@ a second window that extends this partitioning, and adds an ordering clause:
 
 .. _window-frame-types:
 
-Frame types: RANGE vs ROWS vs GROUPS
+Frame Types: RANGE vs ROWS vs GROUPS
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 Depending on the frame type, the database will process ordered groups

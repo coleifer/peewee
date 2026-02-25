@@ -1,6 +1,6 @@
 .. _query-operators:
 
-Query operators
+Query Operators
 ===============
 
 The following types of comparisons are supported by peewee:
@@ -131,7 +131,7 @@ For more examples, see the :ref:`expressions` section.
    percent-sign. If you are using SQLite and want case-sensitive partial
    string matching, remember to use asterisks for the wildcard.
 
-Three valued logic
+Three Valued Logic
 ------------------
 
 Because of the way SQL handles ``NULL``, there are some special operations
@@ -183,8 +183,8 @@ semantics use the special ``IS NOT`` and ``NOT IN`` operators:
 
 .. _custom-operators:
 
-Adding user-defined operators
------------------------------
+User-Defined Operators
+-----------------------
 
 Because I ran out of python operators to overload, there are some missing
 operators in peewee, for instance ``modulo``. If you find that you need to

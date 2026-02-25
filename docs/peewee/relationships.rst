@@ -19,7 +19,7 @@ By the end of this document you will understand:
 * When to use :func:`prefetch` instead of a join.
 
 
-Model definitions
+Model Definitions
 -----------------
 
 All examples in this document use the following three models. They will be

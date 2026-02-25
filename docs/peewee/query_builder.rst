@@ -172,7 +172,7 @@ associated note content:
     The ".c" attribute will not work on tables that explicitly define their
     columns, to prevent confusion.
 
-Insert queries
+Insert Queries
 --------------
 
 Inserting data is straightforward. We can specify data to
@@ -215,7 +215,7 @@ Examples:
         ('Nuggie', 'Bar')]
     Person.insert(people, columns=[Person.first, Person.last]).execute()
 
-Update queries
+Update Queries
 --------------
 
 :meth:`~Table.update` queries accept either keyword arguments or a
@@ -251,7 +251,7 @@ count for some URL:
      .where(PageView.url == some_url)
      .execute())
 
-Delete queries
+Delete Queries
 --------------
 
 :meth:`~Table.delete` queries are simplest of all, as they do not accept any

@@ -7,12 +7,16 @@ These query examples are taken from the site `Postgresql Exercises
 <https://pgexercises.com/>`_. A sample data-set can be found on the `getting
 started page <https://pgexercises.com/gettingstarted.html>`_.
 
-Here is a visual representation of the schema used in these examples:
-
-.. image:: schema-horizontal.png
+.. contents:: On this page
+   :local:
+   :depth: 1
 
 Model Definitions
 -----------------
+
+Here is a visual representation of the schema used in these examples:
+
+.. image:: schema-horizontal.png
 
 To begin working with the data, we'll define the model classes that correspond
 to the tables in the diagram.

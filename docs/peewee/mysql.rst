@@ -44,6 +44,8 @@ Peewee provides alternate drivers for MySQL through ``playhouse.mysql_ext``.
 
 MySQL-specific helpers:
 
+.. module:: playhouse.mysql_ext:
+
 .. class:: JSONField()
    :noindex:
 
