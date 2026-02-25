@@ -3,15 +3,29 @@
 Relationships and Joins
 =======================
 
-In this document we'll cover how Peewee handles relationships between models.
+Relational databases derive most of their power from the ability to link rows
+across tables. This document explains how Peewee models those links, what
+happens under the hood when you traverse them, and how to write queries that
+cross table boundaries efficiently.
+
+By the end of this document you will understand:
+
+* How :class:`ForeignKeyField` behaves at runtime, not just at schema
+  definition time.
+* What a back-reference is and when to use one.
+* What the N+1 problem is and how to recognise it.
+* How to write joins, including multi-table and self-referential joins.
+* How many-to-many relationships are modelled.
+* When to use :func:`prefetch` instead of a join.
+
 
 Model definitions
 -----------------
 
-We'll use the following model definitions for our examples:
+All examples in this document use the following three models. They will be
+defined once here and reused throughout.
 
 .. code-block:: python
-   :emphasize-lines: 16, 19, 20
 
    import datetime
    from peewee import *
@@ -26,131 +40,153 @@ We'll use the following model definitions for our examples:
        username = TextField()
 
    class Tweet(BaseModel):
+       user = ForeignKeyField(User, backref='tweets')
        content = TextField()
        timestamp = DateTimeField(default=datetime.datetime.now)
-       user = ForeignKeyField(User, backref='tweets')
 
    class Favorite(BaseModel):
        user = ForeignKeyField(User, backref='favorites')
        tweet = ForeignKeyField(Tweet, backref='favorites')
 
-Peewee uses :class:`ForeignKeyField` to define foreign-key relationships
-between models. Every foreign-key field has an implied back-reference, which is
-exposed as a pre-filtered :class:`Select` query using the provided
-``backref`` attribute.
+A :class:`ForeignKeyField` links one model to another. ``Tweet.user`` links
+each tweet to the user who wrote it. ``Favorite.user`` and ``Favorite.tweet``
+together record which users have favorited which tweets.
 
-Creating test data
-^^^^^^^^^^^^^^^^^^
-
-To follow along with the examples, let's populate this database with some test
-data:
+The following helper populates test data that the examples below will query:
 
 .. code-block:: python
 
-   def populate_test_data():
+   def create_test_data():
        db.create_tables([User, Tweet, Favorite])
 
-       data = (
-           ('huey', ('meow', 'hiss', 'purr')),
-           ('mickey', ('woof', 'whine')),
-           ('zaizee', ()))
-       for username, tweets in data:
-           user = User.create(username=username)
-           for tweet in tweets:
-               Tweet.create(user=user, content=tweet)
+       users = {
+           name: User.create(username=name)
+           for name in ('huey', 'mickey', 'zaizee')
+       }
 
-       # Populate a few favorites for our users, such that:
+       tweet_data = {
+           'huey':   ('meow', 'hiss', 'purr'),
+           'mickey': ('woof', 'whine'),
+           'zaizee': (),
+       }
+       tweets = {}
+       for username, contents in tweet_data.items():
+           for content in contents:
+               tweets[content] = Tweet.create(
+                   user=users[username],
+                   content=content)
+
+       # huey favorites mickey's "whine",
+       # mickey favorites huey's "purr",
+       # zaizee favorites huey's "meow" and "purr".
        favorite_data = (
-           ('huey', ['whine']),
+           ('huey',   ['whine']),
            ('mickey', ['purr']),
-           ('zaizee', ['meow', 'purr']))
-       for username, favorites in favorite_data:
-           user = User.get(User.username == username)
-           for content in favorites:
-               tweet = Tweet.get(Tweet.content == content)
-               Favorite.create(user=user, tweet=tweet)
+           ('zaizee', ['meow', 'purr']),
+       )
+       for username, contents in favorite_data:
+           for content in contents:
+               Favorite.create(user=users[username], tweet=tweets[content])
 
-This gives us the following:
+This gives the following data:
 
-========= ========== ===========================
-User      Tweet      Favorited by
-========= ========== ===========================
-huey      meow       zaizee
+========= ============= ==================
+User      Tweet         Favorited by
+========= ============= ==================
+huey      meow          zaizee
 huey      hiss
-huey      purr       mickey, zaizee
+huey      purr          mickey, zaizee
 mickey    woof
-mickey    whine      huey
-========= ========== ===========================
-
-.. attention::
-   In the following examples we will be executing a number of queries. If you
-   are unsure how many queries are being executed, you can add the following
-   code, which will log all queries to the console:
-
-   .. code-block:: python
-
-       import logging
-       logger = logging.getLogger('peewee')
-       logger.addHandler(logging.StreamHandler())
-       logger.setLevel(logging.DEBUG)
+mickey    whine         huey
+zaizee    (no tweets)
+========= ============= ==================
 
 .. note::
-   In SQLite, foreign keys are not enabled by default. Most things, including
-   the Peewee foreign-key API, will work fine, but ON DELETE behaviour will be
-   ignored, even if you explicitly specify ``on_delete`` in your
-   :class:`ForeignKeyField`. In conjunction with the default
-   :class:`AutoField` behaviour (where deleted record IDs can be reused),
-   this can lead to subtle bugs. To avoid problems, I recommend that you
-   enable foreign-key constraints when using SQLite, by setting
-   ``pragmas={'foreign_keys': 1}`` when you instantiate :class:`SqliteDatabase`.
+   To log every query Peewee executes to the console - useful for verifying
+   query counts while working through this document - add the following before
+   running any queries:
 
    .. code-block:: python
 
-      # Ensure foreign-key constraints are enforced.
-      db = SqliteDatabase('my_app.db', pragmas={'foreign_keys': 1})
+      import logging
+      logging.getLogger('peewee').addHandler(logging.StreamHandler())
+      logging.getLogger('peewee').setLevel(logging.DEBUG)
 
-Performing simple joins
------------------------
+.. _foreign-keys:
 
-As an exercise in learning how to perform joins with Peewee, let's write a
-query to print out all the tweets by "huey". To do this we'll select from the
-``Tweet`` model and join on the ``User`` model, so we can then filter on the
-``User.username`` field:
+Foreign Keys
+------------
 
-.. code-block:: pycon
+When you declare a :class:`ForeignKeyField`, Peewee creates two things on
+the model: a field that stores the raw integer ID value, and a descriptor that
+resolves that ID into a full model instance on access.
 
-   >>> query = Tweet.select().join(User).where(User.username == 'huey')
-   >>> for tweet in query:
-   ...     print(tweet.content)
-   ...
-   meow
-   hiss
-   purr
+.. code-block:: python
 
-.. note::
-   We did not have to explicitly specify the join predicate (the "ON" clause),
-   because Peewee inferred from the models that when we joined from Tweet to
-   User, we were joining on the ``Tweet.user`` foreign-key.
+   tweet = Tweet.get(Tweet.content == 'meow')
 
-   The following code is equivalent, but more explicit:
+   # Accessing .user resolves the foreign key - Peewee issues a SELECT
+   # query to fetch the related User row.
+   print(tweet.user.username)  # 'huey'
 
-   .. code-block:: python
-      :emphasize-lines: 3
+   # Accessing .user_id returns the raw integer stored in the column,
+   # without issuing any query.
+   print(tweet.user_id)  # 1
 
-       query = (Tweet
-                .select()
-                .join(User, on=(Tweet.user == User.id))
-                .where(User.username == 'huey'))
+The ``_id`` suffix accessor is available for every foreign key field. Use it
+whenever only the ID value is needed, since it avoids the extra query entirely.
 
-If we already had a reference to the ``User`` object for "huey", we could use
-the ``User.tweets`` back-reference to list all of huey's tweets:
+Lazy loading
+^^^^^^^^^^^^
+
+By default, a :class:`ForeignKeyField` is *lazy-loaded*: the related object
+is not fetched until the attribute is first accessed, at which point a
+``SELECT`` query is issued automatically. This is convenient but can lead to
+performance problems - see :ref:`nplusone` below.
+
+To disable lazy loading on a specific field, pass ``lazy_load=False``. With
+lazy loading disabled, accessing the attribute returns the raw ID value rather
+than issuing a query, matching the behaviour of the ``_id`` accessor:
+
+.. code-block:: python
+
+   class Tweet(BaseModel):
+       user = ForeignKeyField(User, backref='tweets', lazy_load=False)
+
+   for tweet in Tweet.select():
+       # Returns the integer ID, not a User instance. No extra query.
+       print(tweet.user)
+
+   # If the User data was eagerly loaded via a join, the full User
+   # instance is accessible as normal, even with lazy_load=False.
+   for tweet in Tweet.select(Tweet, User).join(User):
+       print(tweet.user.username)
+
+.. seealso::
+   :ref:`nplusone` explains when and why disabling lazy loading is useful.
+
+.. _backreferences:
+
+Back-references
+---------------
+
+Every :class:`ForeignKeyField` automatically creates a *back-reference* on
+the related model. The back-reference is a pre-filtered :class:`Select`
+query that returns all rows pointing at a given instance.
+
+In the example schema, ``Tweet.user`` is a foreign key to ``User``. The
+``backref='tweets'`` parameter means that every ``User`` instance gains a
+``tweets`` attribute, which is a pre-filtered :class:`Select` query:
 
 .. code-block:: pycon
 
    >>> huey = User.get(User.username == 'huey')
+
+   >>> huey.tweets  # back-reference is a Select query.
+   <peewee.ModelSelect object at 0x...>
+
    >>> for tweet in huey.tweets:
    ...     print(tweet.content)
-   ...
    meow
    hiss
    purr
@@ -167,231 +203,292 @@ pre-filtered ``SELECT`` query:
    ('SELECT "t1"."id", "t1"."content", "t1"."timestamp", "t1"."user_id"
      FROM "tweet" AS "t1" WHERE ("t1"."user_id" = ?)', [1])
 
-Joining multiple tables
------------------------
-
-Let's take another look at joins by querying the list of users and getting the
-count of how many tweet's they've authored that were favorited. This will
-require us to join twice: from user to tweet, and from tweet to favorite. We'll
-add the additional requirement that users should be included who have not
-created any tweets, as well as users whose tweets have not been favorited. The
-query, expressed in SQL, would be:
-
-.. code-block:: sql
-
-    SELECT user.username, COUNT(favorite.id)
-    FROM user
-    LEFT OUTER JOIN tweet ON tweet.user_id = user.id
-    LEFT OUTER JOIN favorite ON favorite.tweet_id = tweet.id
-    GROUP BY user.username
-
-.. note::
-    In the above query both joins are LEFT OUTER, since a user may not have any
-    tweets or, if they have tweets, none of them may have been favorited.
-
-Peewee has a concept of a **join context**, meaning that whenever we call the
-:meth:`~ModelSelect.join` method, we are implicitly joining on the
-previously-joined model (or if this is the first call, the model we are
-selecting from). Since we are joining straight through, from user to tweet,
-then from tweet to favorite, we can simply write:
+A back-reference behaves like any other :class:`Select` query and can be
+filtered, ordered, and chained:
 
 .. code-block:: python
-   :emphasize-lines: 3, 4
 
+   recent = (huey.tweets
+             .order_by(Tweet.timestamp.desc())
+             .limit(2))
+
+If no ``backref`` name is specified, Peewee generates one automatically using
+the pattern ``<lowercase_classname>_set``. Specifying an explicit ``backref``
+is recommended for clarity.
+
+.. _nplusone:
+
+The N+1 Problem
+---------------
+
+The *N+1 problem* occurs when code issues one query to fetch a list of N rows,
+then issues one or more additional queries *per row* to fetch related data -
+N+1 queries in total instead of one or two. At small scale this is invisible,
+but at production scale it can make pages that should take milliseconds take
+seconds.
+
+Consider printing every tweet alongside its author's username:
+
+.. code-block:: python
+
+   # Bad: issues 1 query for tweets + 1 query per tweet for the user.
+   for tweet in Tweet.select():
+       print(tweet.user.username, '->', tweet.content)
+
+Each access to ``tweet.user`` triggers a ``SELECT`` on the ``user`` table.
+With five tweets, this produces six queries. With five thousand tweets, it
+produces five thousand and one.
+
+The same problem appears when iterating over back-references:
+
+.. code-block:: python
+
+   # Bad: issues 1 query for users + 1 query per user for their tweets.
+   for user in User.select():
+       print(user.username)
+       for tweet in user.tweets:  # A new query for each user.
+           print('  ', tweet.content)
+
+Peewee provides two complementary tools for avoiding N+1 queries:
+
+* **Joins** - combine rows from multiple tables in a single ``SELECT``. Best
+  when traversing a foreign key *toward* its target (many-to-one direction),
+  for example fetching tweets with their authors.
+* **Prefetch** - issue one query per table and stitch the results together in
+  Python. Best when traversing a back-reference (one-to-many direction), for
+  example fetching users with all their tweets.
+
+Both are covered in the sections below. The choice between them depends on the
+shape of the query.
+
+.. _joins:
+
+Joins
+-----
+
+A SQL join combines columns from two or more tables into a single result set.
+Peewee's :meth:`~ModelSelect.join` method generates the appropriate ``JOIN``
+clause and, when the full result is returned as model instances, reconstructs
+the model graph automatically.
+
+Join context
+^^^^^^^^^^^^
+
+Peewee tracks a *join context*: the model from which the next ``join()`` call
+will depart. At the start of a query the join context is the model being
+selected from. Each call to ``join()`` moves the join context to the model just
+joined.
+
+.. code-block:: python
+
+   # Context starts at Tweet.
+   # After .join(User), context moves to User.
+   query = Tweet.select().join(User)
+
+When joining through multiple tables in a chain, this is usually what you want.
+When joining from one model to two different models, the join context needs to
+be reset explicitly using :meth:`~ModelSelect.switch` or
+:meth:`~ModelSelect.join_from`.
+
+Peewee infers the join predicate (the ``ON`` clause) from the foreign keys
+defined on the models. If only one foreign key exists between two models, no
+additional specification is required. If multiple foreign keys exist, the
+relevant one must be specified explicitly.
+
+The following code is equivalent to the prevoius example:
+
+.. code-block:: python
+   :emphasize-lines: 3
+
+   query = (Tweet
+            .select()
+            .join(User, on=(Tweet.user == User.id))
+            .where(User.username == 'huey'))
+
+Simple joins
+^^^^^^^^^^^^
+
+To fetch all of huey's tweets, join from ``Tweet`` to ``User`` and filter on
+the username:
+
+.. code-block:: python
+
+   query = (Tweet
+            .select()
+            .join(User)
+            .where(User.username == 'huey'))
+
+   for tweet in query:
+       print(tweet.content)
+
+Peewee inferred the join predicate since ``Tweet.user`` is the only key between
+the two models. To explicitly specify the join predicate use ``on=``:
+
+.. code-block:: python
+
+   query = (Tweet
+            .select()
+            .join(User, on=(Tweet.user == User.id))
+            .where(User.username == 'huey'))
+
+If a ``User`` instance is already available, the back-reference is simpler and
+equivalent for straightforward cases:
+
+.. code-block:: python
+
+   huey = User.get(User.username == 'huey')
+   for tweet in huey.tweets:
+       print(tweet.content)
+
+The join is the better choice when filtering or joining further. The
+back-reference is more readable for simple access to related rows.
+
+Joining across multiple tables
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+To count how many favorites each user has received across all their tweets,
+a join must traverse ``User -> Tweet -> Favorite``. Because each join moves the
+context forward, this chain can be written directly:
+
+.. code-block:: python
+
+   # Context: User -> join -> Tweet -> join -> Favorite
    query = (User
-            .select(User.username, fn.COUNT(Favorite.id).alias('count'))
-            .join(Tweet, JOIN.LEFT_OUTER)  # Joins user -> tweet.
-            .join(Favorite, JOIN.LEFT_OUTER)  # Joins tweet -> favorite.
+            .select(User.username, fn.COUNT(Favorite.id).alias('fav_count'))
+            .join(Tweet, JOIN.LEFT_OUTER)
+            .join(Favorite, JOIN.LEFT_OUTER)
             .group_by(User.username))
 
-Iterating over the results:
+   for user in query:
+       print(f'{user.username}: {user.fav_count} favorites received')
 
-.. code-block:: pycon
+Both joins use ``LEFT OUTER`` because a user may have no tweets, and a tweet
+may have no favorites - yet both should appear in the result with a count of
+zero.
 
-   >>> for user in query:
-   ...     print(user.username, user.count)
-   ...
-   huey 3
-   mickey 1
-   zaizee 0
+Switching join context
+^^^^^^^^^^^^^^^^^^^^^^
 
-For a more complicated example involving multiple joins and switching join
-contexts, let's find all the tweets by Huey and the number of times they've
-been favorited. To do this we'll need to perform two joins and we'll also use
-an aggregate function to calculate the favorite count.
+When a query needs to branch - joining from one model to two different models
+- the join context must be reset manually using :meth:`~ModelSelect.switch`.
 
-Here is how we would write this query in SQL:
-
-.. code-block:: sql
-
-   SELECT tweet.content, COUNT(favorite.id)
-   FROM tweet
-   INNER JOIN user ON tweet.user_id = user.id
-   LEFT OUTER JOIN favorite ON favorite.tweet_id = tweet.id
-   WHERE user.username = 'huey'
-   GROUP BY tweet.content;
-
-.. note::
-   We use a **LEFT OUTER** join from tweet to favorite since a tweet may not
-   have any favorites, yet we still wish to display it's content (along with a
-   count of zero) in the result set.
-
-With Peewee, the resulting Python code looks very similar to what we would
-write in SQL:
+To find all tweets by huey and how many times each has been favorited:
 
 .. code-block:: python
-   :emphasize-lines: 3, 4, 5
 
+   # Context: Tweet -> join -> User (context is now User)
+   # switch(Tweet) resets context to Tweet
+   # -> join -> Favorite (context is now Favorite)
    query = (Tweet
-            .select(Tweet.content, fn.COUNT(Favorite.id).alias('count'))
-            .join(User)  # Join from tweet -> user.
-            .switch(Tweet)  # Move "join context" back to tweet.
-            .join(Favorite, JOIN.LEFT_OUTER)  # Join from tweet -> favorite.
+            .select(Tweet.content, fn.COUNT(Favorite.id).alias('fav_count'))
+            .join(User)
+            .switch(Tweet)
+            .join(Favorite, JOIN.LEFT_OUTER)
             .where(User.username == 'huey')
             .group_by(Tweet.content))
 
-Note the call to :meth:`~ModelSelect.switch` - that instructs Peewee to set
-the *join context* back to ``Tweet``. If we had omitted the explicit call to
-switch, Peewee would have used ``User`` (the last model we joined) as the join
-context and constructed the join from User to Favorite using the
-``Favorite.user`` foreign-key, which would have given us incorrect results.
+   for tweet in query:
+       print(f'{tweet.content}: favorited {tweet.fav_count} times')
 
-If we wanted to omit the join-context switching we could instead use the
-:meth:`~ModelSelect.join_from` method. The following query is equivalent to
-the previous one:
+Without the call to ``.switch(Tweet)``, Peewee would attempt to join from
+``User`` to ``Favorite`` using ``Favorite.user``, which would produce
+incorrect results.
+
+Using ``join_from``
+^^^^^^^^^^^^^^^^^^^
+
+:meth:`~ModelSelect.join_from` is an alternative to ``switch().join()`` that
+makes the join source explicit in a single call. The above query can be
+written equivalently as:
 
 .. code-block:: python
-   :emphasize-lines: 3, 4
 
    query = (Tweet
-            .select(Tweet.content, fn.COUNT(Favorite.id).alias('count'))
-            .join_from(Tweet, User)  # Join tweet -> user.
-            .join_from(Tweet, Favorite, JOIN.LEFT_OUTER)  # Join tweet -> favorite.
+            .select(Tweet.content, fn.COUNT(Favorite.id).alias('fav_count'))
+            .join_from(Tweet, User)
+            .join_from(Tweet, Favorite, JOIN.LEFT_OUTER)
             .where(User.username == 'huey')
             .group_by(Tweet.content))
 
-We can iterate over the results of the above query to print the tweet's content
-and the favorite count:
+``join_from(A, B)`` is equivalent to ``switch(A).join(B)`` and is often more
+readable when a query branches across several paths.
 
-.. code-block:: pycon
+Selecting columns from joined models
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-   >>> for tweet in query:
-   ...     print('%s favorited %d times' % (tweet.content, tweet.count))
-   ...
-   meow favorited 1 times
-   hiss favorited 0 times
-   purr favorited 2 times
+When columns from multiple models are included in ``select()``, Peewee
+reconstructs the model graph and assigns related model instances to their
+corresponding attributes.
 
-.. _multiple-sources:
+.. code-block:: python
 
-Selecting from multiple sources
--------------------------------
+   query = (Tweet
+            .select(Tweet.content, User.username)
+            .join(User))
 
-If we wished to list all the tweets in the database, along with the username of
-their author, you might try writing this:
+   for tweet in query:
+       # tweet.user is a User instance populated from the joined data.
+       # No additional query is issued.
+       print(tweet.user.username, '->', tweet.content)
 
-.. code-block:: pycon
+   # huey -> meow
+   # huey -> hiss
+   # huey -> purr
+   # mickey -> woof
+   # mickey -> whine
 
-   >>> for tweet in Tweet.select():
-   ...     print(tweet.user.username, '->', tweet.content)  # NOT GOOD.
-   ...
-   huey -> meow
-   huey -> hiss
-   huey -> purr
-   mickey -> woof
-   mickey -> whine
-
-There is a big problem with the above loop: it executes an additional query for
-every tweet to look up the ``tweet.user`` foreign-key. For our small table the
-performance penalty isn't obvious, but we would find the delays grew as the
-number of rows increased.
-
-If you're familiar with SQL, you might remember that it's possible to SELECT
-from multiple tables, allowing us to get the tweet content *and* the username
-in a single query:
-
-.. code-block:: sql
-
-   SELECT tweet.content, user.username
-   FROM tweet
-   INNER JOIN user ON tweet.user_id = user.id;
-
-Peewee makes this quite easy. In fact, we only need to modify our query a
-little bit. We tell Peewee we wish to select ``Tweet.content`` as well as
-the ``User.username`` field, then we include a join from tweet to user.
 To make it a bit more obvious that it's doing the correct thing, we can ask
 Peewee to return the rows as dictionaries.
 
-.. code-block:: pycon
-   :emphasize-lines: 2, 3
+.. code-block:: python
 
-   >>> query = (Tweet
-   ...          .select(Tweet.content, User.username)
-   ...          .join(User)
-   ...          .dicts())
-   ...
+   query = (Tweet
+            .select(Tweet.content, User.username)
+            .join(User)
+            .dicts())
 
-   >>> for row in query:
-   ...     print(row)
-   ...
-   {'content': 'meow', 'username': 'huey'}
-   {'content': 'hiss', 'username': 'huey'}
-   {'content': 'purr', 'username': 'huey'}
-   {'content': 'woof', 'username': 'mickey'}
-   {'content': 'whine', 'username': 'mickey'}
+   for row in query:
+       print(row)
 
-Now we'll leave off the call to ".dicts()" and return the rows as ``Tweet``
-objects. Notice that Peewee assigns the ``username`` value to
-``tweet.user.username`` -- NOT ``tweet.username``!  Because there is a
-foreign-key from tweet to user, and we have selected fields from both models,
-Peewee will reconstruct the model-graph for us:
+   # {'content': 'meow', 'username': 'huey'}
+   # {'content': 'hiss', 'username': 'huey'}
+   # {'content': 'purr', 'username': 'huey'}
+   # {'content': 'woof', 'username': 'mickey'}
+   # {'content': 'whine', 'username': 'mickey'}
 
-.. code-block:: pycon
-   :emphasize-lines: 6
+Compare these queries to the N+1 version: here, only one query is executed
+regardless of how many tweets are returned.
 
-   >>> query = (Tweet
-   ...          .select(Tweet.content, User.username)
-   ...          .join(User)
+The attribute name that Peewee uses to store the joined instance follows the
+foreign key field name (``tweet.user`` in this case). To override it, pass
+``attr`` to ``join()``:
 
-   >>> for tweet in query:
-   ...     print(tweet.user.username, '->', tweet.content)
-   ...
-   huey -> meow
-   huey -> hiss
-   huey -> purr
-   mickey -> woof
-   mickey -> whine
+.. code-block:: python
 
-If we wish to, we can control where Peewee puts the joined ``User`` instance in
-the above query, by specifying an ``attr`` in the ``join()`` method:
+   query = (Tweet
+            .select(Tweet.content, User.username)
+            .join(User, attr='author'))
 
-.. code-block:: pycon
-   :emphasize-lines: 3, 6
+   for tweet in query:
+       print(tweet.author.username, '->', tweet.content)
 
-   >>> query = (Tweet
-   ...          .select(Tweet.content, User.username)
-   ...          .join(User, attr='author')
+To flatten all selected columns onto the primary model instance rather than
+nesting them in a sub-object, append ``.objects()``:
 
-   >>> for tweet in query:
-   ...     print(tweet.author.username, '->', tweet.content)
-   ...
-   huey -> meow
-   huey -> hiss
-   huey -> purr
-   mickey -> woof
-   mickey -> whine
+.. code-block:: python
 
-Conversely, if we simply wish *all* attributes we select to be attributes of
-the ``Tweet`` instance, we can add a call to :meth:`~ModelSelect.objects` at
-the end of our query (similar to how we called ``dicts()``):
+   query = (Tweet
+            .select(Tweet.content, User.username)
+            .join(User)
+            .objects())
 
-.. code-block:: pycon
+   for tweet in query:
+       # username is now an attribute on tweet directly.
+       print(tweet.username, '->', tweet.content)
 
-   >>> for tweet in query.objects():
-   ...     print(tweet.username, '->', tweet.content)
-   ...
-   huey -> meow
-   (etc)
+   # huey -> meow
+
+See :ref:`row-types` for the different ways Peewee can return rows.
 
 More complex example
 ^^^^^^^^^^^^^^^^^^^^
@@ -421,33 +518,32 @@ referenced twice in a single query:
    Owner = User.alias()
    query = (Favorite
             .select(Favorite, Tweet.content, User.username, Owner.username)
-            .join(Owner)  # Join favorite -> user (owner of favorite).
-            .switch(Favorite)
-            .join(Tweet)  # Join favorite -> tweet
-            .join(User))   # Join tweet -> user
+            .join_from(Favorite, Owner)  # Determine owner of favorite.
+            .join_from(Favorite, Tweet)  # Join favorite -> tweet.
+            .join_from(Tweet, User))     # Join tweet -> user.
 
 We can iterate over the results and access the joined values in the following
 way. Note how Peewee has resolved the fields from the various models we
 selected and reconstructed the model graph:
 
-.. code-block:: pycon
+.. code-block:: python
 
-   >>> for fav in query:
-   ...     print(fav.user.username, 'liked', fav.tweet.content, 'by', fav.tweet.user.username)
-   ...
-   huey liked whine by mickey
-   mickey liked purr by huey
-   zaizee liked meow by huey
-   zaizee liked purr by huey
+   for fav in query:
+       print(fav.user.username, 'liked', fav.tweet.content, 'by', fav.tweet.user.username)
+
+   # huey liked whine by mickey
+   # mickey liked purr by huey
+   # zaizee liked meow by huey
+   # zaizee liked purr by huey
 
 .. _join-subquery:
 
 Subqueries
-----------
+^^^^^^^^^^
 
 Peewee allows you to join on any table-like object, including subqueries or
-common table expressions (CTEs). To demonstrate joining on a subquery, let's
-query for all users and their latest tweet.
+common table expressions (see :ref:`cte`). To demonstrate joining on a
+subquery, let's query for all users and their latest tweet.
 
 Here is the SQL:
 
@@ -485,18 +581,18 @@ and join on the user and timestamp combination from the subquery.
    # using the above predicate.
    query = (Tweet
             .select(Tweet, User)  # Select all columns from tweet and user.
-            .join(latest_query, on=predicate)  # Join tweet -> subquery.
+            .join_from(Tweet, latest_query, on=predicate)  # Join tweet -> subquery.
             .join_from(Tweet, User))  # Join from tweet -> user.
 
 Iterating over the query, we can see each user and their latest tweet.
 
-.. code-block:: pycon
+.. code-block:: python
 
-   >>> for tweet in query:
-   ...     print(tweet.user.username, '->', tweet.content)
-   ...
-   huey -> purr
-   mickey -> whine
+   for tweet in query:
+       print(tweet.user.username, '->', tweet.content)
+
+   # huey -> purr
+   # mickey -> whine
 
 There are a couple things you may not have seen before in the code we used to
 create the query in this section:
@@ -562,470 +658,312 @@ This example looks very similar to the previous example with the subquery:
 We can iterate over the result-set, which consists of the latest tweets for
 each user:
 
-.. code-block:: pycon
+.. code-block:: python
 
-   >>> for tweet in query:
-   ...     print(tweet.user.username, '->', tweet.content)
-   ...
-   huey -> purr
-   mickey -> whine
+   for tweet in query:
+       print(tweet.user.username, '->', tweet.content)
+
+   # huey -> purr
+   # mickey -> whine
 
 .. note::
    For more information about using CTEs, including information on writing
    recursive CTEs, see the :ref:`cte` section of the "Querying" document.
 
-Multiple foreign-keys to the same Model
----------------------------------------
+Multiple foreign keys to the same model
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-When there are multiple foreign keys to the same model, it is good practice to
-explicitly specify which field you are joining on.
+When two foreign keys on the same model both point at the same target model,
+Peewee cannot infer which one to use for a join. The field must be specified
+explicitly.
 
-Referring back to the :ref:`example app's models <example-app-models>`,
-consider the *Relationship* model, which is used to denote when one user
-follows another. Here is the model definition:
+Consider a ``Relationship`` model recording which users follow which other
+users:
 
 .. code-block:: python
 
    class Relationship(BaseModel):
-       from_user = ForeignKeyField(User, backref='relationships')
-       to_user = ForeignKeyField(User, backref='related_to')
+       from_user = ForeignKeyField(User, backref='following')
+       to_user = ForeignKeyField(User, backref='followers')
 
        class Meta:
-           indexes = (
-               # Specify a unique multi-column index on from/to-user.
-               (('from_user', 'to_user'), True),
-           )
+           indexes = ((('from_user', 'to_user'), True),)
 
-Since there are two foreign keys to *User*, we should always specify which
-field we are using in a join.
-
-For example, to determine which users I am following, I would write:
+To find everyone that ``huey`` follows:
 
 .. code-block:: python
 
-   (User
-    .select()
-    .join(Relationship, on=Relationship.to_user)
-    .where(Relationship.from_user == charlie))
+   huey = User.get(User.username == 'huey')
 
-On the other hand, if I wanted to determine which users are following me, I
-would instead join on the *from_user* column and filter on the relationship's
-*to_user*:
+   following = (User
+                .select()
+                .join(Relationship, on=Relationship.to_user)
+                .where(Relationship.from_user == huey))
 
-.. code-block:: python
-
-   (User
-    .select()
-    .join(Relationship, on=Relationship.from_user)
-    .where(Relationship.to_user == charlie))
-
-Joining on arbitrary fields
----------------------------
-
-If a foreign key does not exist between two tables you can still perform a
-join, but you must manually specify the join predicate.
-
-In the following example, there is no explicit foreign-key between *User* and
-*ActivityLog*, but there is an implied relationship between the
-*ActivityLog.object_id* field and *User.id*. Rather than joining on a specific
-:class:`Field`, we will join using an :class:`Expression`.
+To find everyone who follows ``huey``:
 
 .. code-block:: python
 
-   user_log = (User
-               .select(User, ActivityLog)
-               .join(ActivityLog, on=(User.id == ActivityLog.object_id), attr='log')
-               .where(
-                   (ActivityLog.activity_type == 'user_activity') &
-                   (User.username == 'charlie')))
+   followers = (User
+                .select()
+                .join(Relationship, on=Relationship.from_user)
+                .where(Relationship.to_user == huey))
 
-   for user in user_log:
-       print(user.username, user.log.description)
+Passing the field instance to ``on=`` tells Peewee which foreign key column to
+use for the join.
 
-   #### Print something like ####
-   charlie logged in
-   charlie posted a tweet
-   charlie retweeted
-   charlie posted a tweet
-   charlie logged out
+Joining without a foreign key
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-.. note::
-   Recall that we can control the attribute Peewee will assign the joined
-   instance to by specifying the ``attr`` parameter in the ``join()`` method.
-   In the previous example, we used the following *join*:
+A join can be performed on any two tables, even when no :class:`ForeignKeyField`
+exists between them, by supplying an explicit join predicate as an expression:
 
-   .. code-block:: python
+.. code-block:: python
 
-      join(ActivityLog, on=(User.id == ActivityLog.object_id), attr='log')
+   query = (User
+            .select(User, ActivityLog)
+            .join(ActivityLog,
+                  on=(User.id == ActivityLog.object_id),
+                  attr='log')
+            .where(
+                (ActivityLog.activity_type == 'login') &
+                (User.username == 'huey')))
 
-   Then when iterating over the query, we were able to directly access the
-   joined *ActivityLog* without incurring an additional query:
-
-   .. code-block:: python
-
-      for user in user_log:
-          print(user.username, user.log.description)
+   for user in query:
+       print(user.username, '->', user.log.description)
 
 Self-joins
-----------
+^^^^^^^^^^
 
-Peewee supports constructing queries containing a self-join.
-
-Using model aliases
-^^^^^^^^^^^^^^^^^^^
-
-To join on the same model (table) twice, it is necessary to create a model
-alias to represent the second instance of the table in a query. Consider the
-following model:
+A self-join queries a model against an alias of itself. Use :meth:`Model.alias`
+to create the alias:
 
 .. code-block:: python
 
-   class Category(Model):
-       name = CharField()
-       parent = ForeignKeyField('self', backref='children')
-
-What if we wanted to query all categories whose parent category is
-*Electronics*. One way would be to perform a self-join:
-
-.. code-block:: python
-   :emphasize-lines: 1
-
-   Parent = Category.alias()  # Allow a self-join.
-   query = (Category
-            .select()
-            .join(Parent, on=(Category.parent == Parent.id))
-            .where(Parent.name == 'Electronics'))
-
-When performing a join that uses a :class:`ModelAlias`, it is necessary to
-specify the join condition using the ``on`` keyword argument. In this case we
-are joining the category with its parent category.
-
-Using subqueries
-^^^^^^^^^^^^^^^^
-
-Another less common approach involves the use of subqueries. Here is another
-way we might construct a query to get all the categories whose parent category
-is *Electronics* using a subquery:
-
-.. code-block:: python
-   :emphasize-lines: 9
+   # Find all categories and their immediate parent name.
+   class Category(BaseModel):
+       name = TextField()
+       parent = ForeignKeyField('self', null=True, backref='children')
 
    Parent = Category.alias()
-   join_query = Parent.select().where(Parent.name == 'Electronics')
-
-   # Subqueries used as JOINs need to have an alias.
-   join_query = join_query.alias('jq')
-
    query = (Category
-            .select()
-            .join(join_query, on=(Category.parent == join_query.c.id)))
+            .select(Category.name, Parent.name)
+            .join(Parent, JOIN.LEFT_OUTER, on=(Category.parent == Parent.id))
+            .order_by(Category.name))
 
-This will generate the following SQL query:
+   for row in query:
+       print(row.name, 'parent:', row.parent.name if row.parent else 'None')
 
-.. code-block:: sql
-
-   SELECT t1."id", t1."name", t1."parent_id"
-   FROM "category" AS t1
-   INNER JOIN (
-     SELECT t2."id"
-     FROM "category" AS t2
-     WHERE (t2."name" = ?)) AS jq ON (t1."parent_id" = "jq"."id")
-
-To access the ``id`` value from the subquery, we use the ``.c`` magic lookup
-which will generate the appropriate SQL expression:
-
-.. code-block:: python
-
-   Category.parent == join_query.c.id
-   # Becomes: (t1."parent_id" = "jq"."id")
+.. seealso::
+   Recursive queries over self-referential structures are covered in
+   :ref:`cte` using recursive CTEs.
 
 .. _manytomany:
 
-Implementing Many to Many
--------------------------
+Many-to-Many Relationships
+--------------------------
 
-Peewee provides a field for representing many-to-many relationships, much like
-Django does. This feature was added due to many requests from users, but I
-strongly advocate against using it, since it conflates the idea of a field with
-a junction table and hidden joins. It's just a nasty hack to provide convenient
-accessors.
+A many-to-many relationship - where one row in table A can relate to many rows
+in table B *and vice versa* - requires an intermediate *through table* that
+holds pairs of foreign keys.
 
-To implement many-to-many **correctly** with peewee, you will therefore create
-the intermediary table yourself and query through it:
+Manual through table (recommended)
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-.. code-block:: python
-   :emphasize-lines: 8, 9
-
-   class Student(Model):
-       name = CharField()
-
-   class Course(Model):
-       name = CharField()
-
-   class StudentCourse(Model):
-       student = ForeignKeyField(Student)
-       course = ForeignKeyField(Course)
-
-To query, let's say we want to find students who are enrolled in math class:
+The explicit approach gives full control over the through table and its
+queries:
 
 .. code-block:: python
 
-   query = (Student
-            .select()
-            .join(StudentCourse)
-            .join(Course)
-            .where(Course.name == 'math'))
-   for student in query:
-       print(student.name)
+   class Student(BaseModel):
+       name = TextField()
 
-To query what classes a given student is enrolled in:
+   class Course(BaseModel):
+       title = TextField()
+
+   class Enrollment(BaseModel):
+       """Through table linking students to courses."""
+       student = ForeignKeyField(Student, backref='enrollments')
+       course = ForeignKeyField(Course, backref='enrollments')
+       enrolled_on = DateField(default=datetime.date.today)
+
+       class Meta:
+           indexes = (
+               (('student', 'course'), True),
+           )
+
+To query all courses a given student is enrolled in:
 
 .. code-block:: python
+
+   huey = Student.get(Student.name == 'Huey')
 
    courses = (Course
               .select()
-              .join(StudentCourse)
-              .join(Student)
-              .where(Student.name == 'da vinci'))
+              .join(Enrollment)
+              .where(Enrollment.student == huey)
+              .order_by(Course.title))
 
    for course in courses:
-       print(course.name)
+       print(course.title)
 
-To efficiently iterate over a many-to-many relation, i.e., list all students
-and their respective courses, we will query the *through* model
-``StudentCourse`` and *precompute* the Student and Course:
+To query all students in a given course, along with when they enrolled:
 
 .. code-block:: python
 
-   query = (StudentCourse
-            .select(StudentCourse, Student, Course)
-            .join(Course)
-            .switch(StudentCourse)
-            .join(Student)
+   cs101 = Course.get(Course.title == 'CS 101')
+
+   query = (Student
+            .select(Student, Enrollment.enrolled_on)
+            .join(Enrollment)
+            .where(Enrollment.course == cs101)
             .order_by(Student.name))
 
-To print a list of students and their courses you might do the following:
+   for student in query:
+       print(student.name, student.enrollment.enrolled_on)
 
-.. code-block:: python
+   # To attach enrollment date to the Student for simplicity:
+   for student in query.objects():
+       print(student.name, student.enrolled_on)
 
-   for student_course in query:
-       print(student_course.student.name, '->', student_course.course.name)
-
-Since we selected all fields from ``Student`` and ``Course`` in the *select*
-clause of the query, these foreign key traversals are "free" and we've done the
-whole iteration with just 1 query.
+Since all data is available via the through table model, this approach is most
+flexible and handles any querying requirement without special casing.
 
 ManyToManyField
 ^^^^^^^^^^^^^^^
 
-The :class:`ManyToManyField` provides a *field-like* API over many-to-many
-fields. For all but the simplest many-to-many situations, you're better off
-using the standard peewee APIs. But, if your models are very simple and your
-querying needs are not very complex, :class:`ManyToManyField` may work.
-
-Modeling students and courses using :class:`ManyToManyField`:
+:class:`ManyToManyField` provides a shortcut API that manages the through
+table automatically. It is suitable for simple cases where the through table
+requires no extra columns and complex querying is not needed.
 
 .. code-block:: python
-
-   from peewee import *
-
-   db = SqliteDatabase('school.db')
-
-   class BaseModel(Model):
-       class Meta:
-           database = db
 
    class Student(BaseModel):
-       name = CharField()
+       name = TextField()
 
    class Course(BaseModel):
-       name = CharField()
+       title = TextField()
        students = ManyToManyField(Student, backref='courses')
 
-   StudentCourse = Course.students.get_through_model()
+   # Retrieve the auto-generated through model if direct access is needed.
+   Enrollment = Course.students.get_through_model()
 
-   db.create_tables([
-       Student,
-       Course,
-       StudentCourse])
+   db.create_tables([Student, Course, Enrollment])
 
-   # Get all classes that "huey" is enrolled in:
-   huey = Student.get(Student.name == 'Huey')
-   for course in huey.courses.order_by(Course.name):
-       print(course.name)
+   huey = Student.create(name='Huey')
+   cs101 = Course.create(title='CS 101')
 
-   # Get all students in "English 101":
-   engl_101 = Course.get(Course.name == 'English 101')
-   for student in engl_101.students:
-       print(student.name)
+   # Adding and removing relationships:
+   huey.courses.add(cs101)
+   huey.courses.add(Course.select().where(Course.title.contains('Math')))
 
-   # When adding objects to a many-to-many relationship, we can pass
-   # in either a single model instance, a list of models, or even a
-   # query of models:
-   huey.courses.add(Course.select().where(Course.name.contains('English')))
+   cs101.students.remove(huey)
+   cs101.students.clear()   # Removes all students from this course.
 
-   engl_101.students.add(Student.get(Student.name == 'Mickey'))
-   engl_101.students.add([
-       Student.get(Student.name == 'Charlie'),
-       Student.get(Student.name == 'Zaizee')])
-
-   # The same rules apply for removing items from a many-to-many:
-   huey.courses.remove(Course.select().where(Course.name.startswith('CS')))
-
-   engl_101.students.remove(huey)
-
-   # Calling .clear() will remove all associated objects:
-   cs_150.students.clear()
-
-.. attention::
-   Before many-to-many relationships can be added, the objects being
-   referenced will need to be saved first. In order to create relationships in
-   the many-to-many through table, Peewee needs to know the primary keys of
-   the models being referenced.
+   # Querying through the field:
+   for course in huey.courses.order_by(Course.title):
+       print(course.title)
 
 .. warning::
-   It is **strongly recommended** that you do not attempt to subclass models
-   containing :class:`ManyToManyField` instances.
+   :class:`ManyToManyField` does not work correctly with model inheritance.
+   The through table contains foreign keys back to the original models, and
+   those pointers are not automatically updated for subclasses. For any model
+   that will be subclassed, use an explicit through table instead.
 
-   A :class:`ManyToManyField`, despite its name, is not a field in the
-   usual sense. Instead of being a column on a table, the many-to-many field
-   covers the fact that behind-the-scenes there's actually a separate table
-   with two foreign-key pointers (the *through table*).
+.. seealso::
+   :meth:`ManyToManyField.add`, :meth:`ManyToManyField.remove`,
+   :meth:`ManyToManyField.clear`, :meth:`ManyToManyField.get_through_model`.
 
-   Therefore, when a subclass is created that inherits a many-to-many field,
-   what actually needs to be inherited is the *through table*. Because of the
-   potential for subtle bugs, Peewee does not attempt to automatically
-   subclass the through model and modify its foreign-key pointers. As a
-   result, many-to-many fields typically will not work with inheritance.
-
-For more examples, see:
-
-* :meth:`ManyToManyField.add`
-* :meth:`ManyToManyField.remove`
-* :meth:`ManyToManyField.clear`
-* :meth:`ManyToManyField.get_through_model`
-
-.. _nplusone:
-
-Avoiding the N+1 problem
-------------------------
-
-The *N+1 problem* refers to a situation where an application performs a query,
-then for each row of the result set, the application performs at least one
-other query (another way to conceptualize this is as a nested loop). In many
-cases, these *n* queries can be avoided through the use of a SQL join or
-subquery. The database itself may do a nested loop, but it will usually be more
-performant than doing *n* queries in your application code, which involves
-latency communicating with the database and may not take advantage of indices
-or other optimizations employed by the database when joining or executing a
-subquery.
-
-Peewee provides several APIs for mitigating *N+1* query behavior. Recollecting
-the models used throughout this document, *User* and *Tweet*, this section will
-try to outline some common *N+1* scenarios, and how peewee can help you avoid
-them.
-
-.. attention::
-   In some cases, N+1 queries will not result in a significant or measurable
-   performance hit. It all depends on the data you are querying, the database
-   you are using, and the latency involved in executing queries and retrieving
-   results. As always when making optimizations, profile before and after to
-   ensure the changes do what you expect them to.
-
-List recent tweets
-^^^^^^^^^^^^^^^^^^
-
-The twitter timeline displays a list of tweets from multiple users. In addition
-to the tweet's content, the username of the tweet's author is also displayed.
-The N+1 scenario here would be:
-
-1. Fetch the 10 most recent tweets.
-2. For each tweet, select the author (10 queries).
-
-By selecting both tables and using a *join*, peewee makes it possible to
-accomplish this in a single query:
-
-.. code-block:: python
-
-   query = (Tweet
-            .select(Tweet, User)  # Note that we are selecting both models.
-            .join(User)  # Use an INNER join because every tweet has an author.
-            .order_by(Tweet.id.desc())  # Get the most recent tweets.
-            .limit(10))
-
-   for tweet in query:
-       print(tweet.user.username, '-', tweet.message)
-
-Without the join, accessing ``tweet.user.username`` would trigger a query to
-resolve the foreign key ``tweet.user`` and retrieve the associated user. But
-since we have selected and joined on ``User``, peewee will automatically
-resolve the foreign-key for us.
-
-.. note::
-   This technique is discussed in more detail in :ref:`multiple-sources`.
-
-List users and all their tweets
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-
-Let's say you want to build a page that shows several users and all of their
-tweets. The N+1 scenario would be:
-
-1. Fetch some users.
-2. For each user, fetch their tweets.
-
-This situation is similar to the previous example, but there is one important
-difference: when we selected tweets, they only have a single associated user,
-so we could directly assign the foreign key. The reverse is not true, however,
-as one user may have any number of tweets (or none at all).
-
-Peewee provides an approach to avoiding *O(n)* queries in this situation. Fetch
-users first, then fetch all the tweets associated with those users.  Once
-peewee has the big list of tweets, it will assign them out, matching them with
-the appropriate user. This method is usually faster but will involve a query
-for each table being selected.
 
 .. _prefetch:
 
-Using prefetch
-^^^^^^^^^^^^^^
+Avoiding N+1 with Prefetch
+--------------------------
 
-peewee supports pre-fetching related data using sub-queries. This method
-requires the use of a special API, :func:`prefetch`. Prefetch, as its name
-implies, will eagerly load the appropriate tweets for the given users using
-subqueries. This means instead of *O(n)* queries for *n* rows, we will do
-*O(k)* queries for *k* tables.
+Joins solve the N+1 problem when traversing from the *many* side toward the
+*one* side - for example, fetching tweets with their authors. Each tweet has
+exactly one author, so a join produces exactly one result row per tweet.
 
-Here is an example of how we might fetch several users and any tweets they
-created within the past week.
+The situation is different when traversing from the *one* side toward the
+*many* side - for example, fetching users *with all their tweets*. A join in
+this direction produces one result row *per tweet*, which means users with
+multiple tweets appear multiple times in the result set. Deduplicating those
+rows in application code is awkward and error-prone.
+
+:func:`prefetch` solves this by issuing one query per table, then stitching
+the results together in Python. Instead of *O(n)* queries for *n* rows, we will
+do *O(k)* queries for *k* tables:
 
 .. code-block:: python
 
-   week_ago = datetime.date.today() - datetime.timedelta(days=7)
-   users = User.select()
-   tweets = (Tweet
-             .select()
-             .where(Tweet.timestamp >= week_ago))
+   # Two queries total, regardless of how many users or tweets there are:
+   # SELECT * FROM user
+   # SELECT * FROM tweet WHERE user_id IN (...)
+   users = User.select().prefetch(Tweet)
 
-   # This will perform two queries.
-   users_with_tweets = prefetch(users, tweets)
+   # Equivalent to above.
+   users = prefetch(User.select(), Tweet.select())
 
-   for user in users_with_tweets:
+   for user in users:
        print(user.username)
+       for tweet in user.tweets:  # No additional query, user.tweets is a list.
+           print(f'  {tweet.content}')
+
+The models passed to :func:`prefetch` must be linked by foreign keys.
+Peewee infers the relationships and assigns the prefetched rows to the
+appropriate back-reference attribute on each instance.
+
+Prefetch can span more than two tables. To fetch users, their tweets, and the
+favorites on each tweet in three queries:
+
+.. code-block:: python
+
+   users = prefetch(User.select(), Tweet.select(), Favorite.select())
+
+   for user in users:
        for tweet in user.tweets:
-           print('  ', tweet.message)
+           print(f'{user.username}: {tweet.content} '
+                 f'({len(tweet.favorites)} favorites)')
+
+Filtering prefetched rows
+^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Both the outer query and the prefetch subqueries can carry ``WHERE`` clauses
+and other modifiers independently:
+
+.. code-block:: python
+
+   one_week_ago = datetime.date.today() - datetime.timedelta(days=7)
+
+   users = prefetch(
+       User.select().order_by(User.username),
+       Tweet.select().where(Tweet.timestamp >= one_week_ago),
+   )
+
+The filter on ``Tweet`` applies only to the prefetched tweets; it does not
+affect which users are returned.
+
+Choosing between joins and prefetch
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Use a **join** when:
+
+* Traversing from the many side to the one side (tweet -> author).
+* Filtering on columns in the related table (tweets by users whose username
+  starts with "h").
+* Only a subset of related fields is needed.
+
+Use **prefetch** when:
+
+* Traversing from the one side to the many side (user -> all their tweets).
+* The full set of related rows is needed for each parent row.
+* Nesting more than one level of related data (users -> tweets -> favorites).
 
 .. note::
-   Note that neither the ``User`` query, nor the ``Tweet`` query contained a
-   JOIN clause. When using :func:`prefetch` you do not need to specify the
-   join.
+   ``LIMIT`` on the outer query of a :func:`prefetch` call works as
+   expected. Limiting the *inner* queries (the prefetched tables) is not
+   directly supported and requires a manual approach - see
+   :ref:`top-n-per-group` in the recipes document for techniques.
 
-:func:`prefetch` can be used to query an arbitrary number of tables. Check
-the API documentation for more examples.
-
-Some things to consider when using :func:`prefetch`:
-
-* Foreign keys must exist between the models being prefetched.
-* `LIMIT` works as you'd expect on the outer-most query, but may be difficult
-  to implement correctly if trying to limit the size of the sub-selects.
-* The parameter `prefetch_type` may be used when `LIMIT` is not supported
-  with the default query construction (e.g. with MySQL).
+.. seealso::
+   :func:`prefetch` API reference.

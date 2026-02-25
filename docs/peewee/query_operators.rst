@@ -9,11 +9,11 @@ The following types of comparisons are supported by peewee:
 Comparison       Meaning
 ================ =======================================
 ``==``           x equals y
+``!=``           x is not equal to y
 ``<``            x is less than y
 ``<=``           x is less than or equal to y
 ``>``            x is greater than y
 ``>=``           x is greater than or equal to y
-``!=``           x is not equal to y
 ``<<``           x IN y, where y is a list or query
 ``>>``           x IS y, where y is None/NULL
 ``%``            x LIKE y where y may contain wildcards
@@ -22,8 +22,7 @@ Comparison       Meaning
 ``~``            Unary negation (e.g., NOT x)
 ================ =======================================
 
-Because I ran out of operators to override, there are some additional query
-operations available as methods:
+Additional operations are provided as methods:
 
 ======================= ===============================================
 Method                  Meaning
@@ -119,7 +118,7 @@ complex.
    * Use ``.is_null()`` instead of ``is None`` or ``== None``.
    * Use ``==`` and ``!=`` for comparing against ``True`` and ``False``, or
      you may use the implicit value of the expression.
-   * **Don't forget to wrap your comparisons in parentheses when using logical operators.**
+   * **Don't forget to wrap comparisons in parentheses when using logical operators.**
 
 For more examples, see the :ref:`expressions` section.
 
@@ -171,23 +170,16 @@ If you don't like operator overloads, you can call the Field methods instead:
    User.select().where(User.username.in_(usernames))
 
 To negate the above queries, you can use unary negation, but for the correct
-semantics you may need to use the special ``IS NOT`` and ``NOT IN`` operators:
+semantics use the special ``IS NOT`` and ``NOT IN`` operators:
 
 .. code-block:: python
 
    # Get all User objects whose last login is *NOT* NULL.
    User.select().where(User.last_login.is_null(False))
 
-   # Using unary negation instead.
-   User.select().where(~(User.last_login >> None))
-
    # Get users whose username is *NOT* in the given list.
    usernames = ['charlie', 'huey', 'mickey']
    User.select().where(User.username.not_in(usernames))
-
-   # Using unary negation instead.
-   usernames = ['charlie', 'huey', 'mickey']
-   User.select().where(~(User.username << usernames))
 
 .. _custom-operators:
 
@@ -219,9 +211,6 @@ Now you can use these custom operators to build richer queries:
    # Users with even ids.
    User.select().where(mod(User.id, 2) == 0)
 
-For more examples check out the source to the ``playhouse.postgresql_ext``
-module, as it contains numerous operators specific to postgresql's hstore.
-
 .. _expressions:
 
 Expressions
@@ -231,8 +220,7 @@ Peewee is designed to provide a simple, expressive, and pythonic way of
 constructing SQL queries. This section will provide a quick overview of some
 common types of expressions.
 
-There are two primary types of objects that can be composed to create
-expressions:
+Two common types of objects that are composed to create expressions:
 
 * :class:`Field` instances
 * SQL aggregations and functions using :class:`fn`
@@ -394,8 +382,8 @@ the special :func:`fn` object to construct queries:
    # Alternatively we could select only users whose username begins with 'a'
    a_users = User.select().where(first_letter == 'a')
 
-   >>> for user in a_users:
-   ...    print(user.username)
+   for user in a_users:
+       print(user.username)
 
 SQL Helper
 ----------

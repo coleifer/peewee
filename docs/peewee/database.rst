@@ -5,30 +5,31 @@ Database
 
 The Peewee :class:`Database` object represents a connection to a database.
 The :class:`Database` class is instantiated with all the information needed
-to open a connection to a database, and then can be used to:
+to connect to a database.
 
-* Open and close connections.
-* Execute queries.
-* Introspect tables, columns, indexes, and constraints.
-* :ref:`Manage transactions and savepoints <transactions>`.
+Database responsibilities:
 
-Peewee comes with support for:
+* :ref:`connection-lifecycle`
+* :ref:`executing-sql`
+* :ref:`Manage database schema <schema>`
+* :ref:`Manage transactions <transactions>`
+
+Peewee supports:
 
 * SQLite - :class:`SqliteDatabase` using the standard library ``sqlite3``.
 
   .. code-block:: python
 
-     # SQLite database using WAL journal mode and 64MB cache.
-     sqlite_db = SqliteDatabase('/path/to/app.db', pragmas={
+     # SQLite database (use WAL journal mode and 64MB cache).
+     db = SqliteDatabase('/path/to/app.db', pragmas={
          'journal_mode': 'wal',
-         'cache_size': -1024 * 64})
+         'cache_size': -64000})
 
-* Postgres - :class:`PostgresqlDatabase` using ``psycopg2`` or ``psycopg3``.
+* Postgresql - :class:`PostgresqlDatabase` using ``psycopg2`` or ``psycopg3``.
 
   .. code-block:: python
 
-     # Connect to a Postgres database.
-     pg_db = PostgresqlDatabase(
+     db = PostgresqlDatabase(
          'my_app',
          user='postgres',
          password='secret',
@@ -39,26 +40,169 @@ Peewee comes with support for:
 
   .. code-block:: python
 
-     # Connect to a MySQL database on network.
-     mysql_db = MySQLDatabase(
+     db = MySQLDatabase(
          'my_app',
          user='app',
          password='db_password',
          host='10.1.0.8',
          port=3306)
 
-Initializing a Database
------------------------
 
-The :class:`Database` initialization method expects the name of the database
-as the first parameter. Subsequent keyword arguments are passed to the
-underlying database driver when establishing the connection, allowing you to
-pass vendor-specific parameters easily.
+Using SQLite
+------------
 
-For instance, with Postgresql it is common to need to specify the ``host``,
-``user`` and ``password`` when creating your connection. These are not standard
-Peewee :class:`Database` parameters, so they will be passed directly back to
-``psycopg2``/``psycopg3`` when creating connections:
+To connect to a SQLite database, use :class:`SqliteDatabase`. The first
+parameter is the filename containing the database, or the string ``':memory:'``
+to create an in-memory database.
+
+After the database filename specify pragmas or other `sqlite3 parameters <https://docs.python.org/3/library/sqlite3.html#sqlite3.connect>`__.
+
+.. code-block:: python
+
+   db = SqliteDatabase('my_app.db', pragmas={'journal_mode': 'wal'})
+
+   class BaseModel(Model):
+       """Base model that will use our Sqlite database."""
+       class Meta:
+           database = db
+
+   class User(BaseModel):
+       username = TextField()
+       ...
+
+SQLite-specific options are set via `pragmas <https://www.sqlite.org/pragma.html>`__.
+The following settings are recommended for most applications:
+
+.. code-block:: python
+
+   db = SqliteDatabase('my_app.db', pragmas={
+       'journal_mode': 'wal',  # Allow readers while writer active.
+       'cache_size': -64000,  # 64 MB page cache.
+       'foreign_keys': 1,  # Enforce FK constraints.
+   })
+
+======================= =================== ================================================
+Pragma                  Recommended value   Effect
+======================= =================== ================================================
+``journal_mode``        ``wal``             Allow concurrent readers and one writer.
+``cache_size``          Negative KiB value  E.g. ``-64000`` = 64 MB.
+``foreign_keys``        ``1``               Enforce ``FOREIGN KEY`` constraints.
+======================= =================== ================================================
+
+.. seealso::
+   For SQLite-specific features and extensions (JSON, full-text search), see
+   :ref:`sqlite`.
+
+Using Postgresql
+----------------
+
+To use Peewee with Postgresql install ``psycopg2`` or ``psycopg3``:
+
+.. code-block:: shell
+
+   pip install "psycopg2-binary"  # Psycopg2.
+
+   pip install "psycopg[binary]"  # Psycopg3.
+
+To connect to a Postgresql database, use :class:`PostgresqlDatabase`.
+The first parameter is always the name of the database.
+
+After the database name specify additional `psycopg2 <https://www.psycopg.org/docs/module.html#psycopg2.connect>`__
+or `psycopg3 <https://www.psycopg.org/psycopg3/docs/api/module.html#psycopg.connect>`__
+connection parameters:
+
+.. code-block:: python
+
+   db = PostgresqlDatabase(
+       'my_database',
+       user='postgres',
+       password='secret',
+       host='10.8.0.1',
+       port=5432)
+
+   class BaseModel(Model):
+       """A base model that will use our Postgresql database"""
+       class Meta:
+           database = db
+
+   class User(BaseModel):
+       username = CharField()
+       ...
+
+The isolation level can be set at initialization time:
+
+.. code-block:: python
+
+   # psycopg2
+   from psycopg2.extensions import ISOLATION_LEVEL_SERIALIZABLE
+   db = PostgresqlDatabase('my_app', user='postgres',
+                           isolation_level=ISOLATION_LEVEL_SERIALIZABLE)
+
+   # psycopg3
+   from psycopg import IsolationLevel
+   db = PostgresqlDatabase('my_app', user='postgres',
+                           isolation_level=IsolationLevel.SERIALIZABLE)
+
+.. seealso::
+   For Postgresql-specific functionality and extensions (arrays, JSONB,
+   full-text search), see :ref:`postgresql`.
+
+Using MySQL / MariaDB
+---------------------
+
+To use Peewee with MySQL or MariaDB install ``pymysql``:
+
+.. code-block:: shell
+
+   pip install pymysql
+
+To connect to a MySQL or MariaDB database, use :class:`MySQLDatabase`.
+The first parameter is always the name of the database.
+
+After the database name specify additional `pymysql Connection parameters
+<https://pymysql.readthedocs.io/en/latest/modules/connections.html>`__:
+
+.. code-block:: python
+
+   db = MySQLDatabase(
+       'my_database',
+       host='10.8.0.1',
+       port=3306,
+       connection_timeout=5)
+
+   class BaseModel(Model):
+       """A base model that will use our MySQL database"""
+       class Meta:
+           database = mysql_db
+
+   class User(BaseModel):
+       username = CharField()
+       # ...
+
+If MySQL drops idle connections (``Error 2006: MySQL server has gone away``),
+the solution is explicit connection management: open a connection at the start
+of each unit of work and close it when finished. See :ref:`connection-lifecycle`
+and :ref:`framework-integration`.
+
+Alternate drivers are available for both databases:
+
+* :class:`MySQLConnectorDatabase` - uses ``mysql-connector-python``.
+* :class:`MariaDBConnectorDatabase` - uses ``mariadb-connector-python``.
+
+.. seealso::
+   For MySQL-specific functionality and extensions, see :ref:`mysql`.
+
+Connection Parameters
+---------------------
+
+:class:`Database` initialization methods expect the name of the database as the
+first parameter. Subsequent keyword arguments are passed to the underlying
+database driver when establishing the connection.
+
+With Postgresql it is common to need to specify the ``host``, ``user`` and
+``password`` when creating a connection. These should be specified when
+initializing the database, and they will be passed directly back to
+``psycopg`` when creating connections:
 
 .. code-block:: python
 
@@ -70,7 +214,7 @@ Peewee :class:`Database` parameters, so they will be passed directly back to
 
 As another example, the ``pymysql`` driver accepts a ``charset`` parameter
 which is not a standard Peewee :class:`Database` parameter. To set this
-value, simply pass in ``charset`` alongside your other values:
+value, pass in ``charset`` alongside your other settings:
 
 .. code-block:: python
 
@@ -78,686 +222,82 @@ value, simply pass in ``charset`` alongside your other values:
 
 Consult your database driver's documentation for the available parameters:
 
-* Postgres: `psycopg2 <https://www.psycopg.org/docs/module.html#psycopg2.connect>`_
-  or `psycopg3 <https://www.psycopg.org/psycopg3/docs/api/module.html#psycopg.connect>`_
-* MySQL: `pymysql <https://github.com/PyMySQL/PyMySQL/blob/f08f01fe8a59e8acfb5f5add4a8fe874bec2a196/pymysql/connections.py#L494-L513>`_
-* SQLite: `sqlite3 <https://docs.python.org/3/library/sqlite3.html#sqlite3.connect>`_
+* Postgresql: `psycopg2 <https://www.psycopg.org/docs/module.html#psycopg2.connect>`__
+  or `psycopg3 <https://www.psycopg.org/psycopg3/docs/api/module.html#psycopg.connect>`__
+* MySQL: `pymysql <https://github.com/PyMySQL/PyMySQL/blob/f08f01fe8a59e8acfb5f5add4a8fe874bec2a196/pymysql/connections.py#L494-L513>`__
+* SQLite: `sqlite3 <https://docs.python.org/3/library/sqlite3.html#sqlite3.connect>`__
 
-.. _using_postgresql:
+.. _initializing-database:
 
-Using Postgresql
-----------------
+Initializing the Database
+-------------------------
 
-To use Peewee with Postgresql the recommended driver is either ``psycopg2`` or
-``psycopg3``:
+There are three ways to initialize a database:
 
-.. code-block:: shell
-
-   $ pip install "psycopg2-binary"  # Psycopg2.
-
-   $ pip install "psycopg[binary]"  # Psycopg3.
-
-To connect to a Postgresql database, we will use :class:`PostgresqlDatabase`.
-The first parameter is always the name of the database, and after that you can
-specify arbitrary `psycopg2 <https://www.psycopg.org/docs/module.html#psycopg2.connect>`_
-or `psycopg3 <https://www.psycopg.org/psycopg3/docs/api/module.html#psycopg.connect>`_
-parameters:
-
-.. code-block:: python
-
-   psql_db = PostgresqlDatabase('my_database', user='postgres')
-
-   class BaseModel(Model):
-       """A base model that will use our Postgresql database"""
-       class Meta:
-           database = psql_db
-
-   class User(BaseModel):
-       username = CharField()
-
-.. seealso::
-   Peewee includes a :ref:`Postgresql extension module <postgres_ext>` which
-   provides many postgres-specific features such as:
-
-   * :ref:`Arrays <pgarrays>`
-   * :ref:`JSON <pgjson>`
-   * :ref:`Full Text Search <pg_fts>`
-   * Postgres-specific field types
-
-   To utilize these features use :class:`PostgresqlExtDatabase`.
+1. **Initialize database directly**. Use when connection settings are available at
+   the time the database is declared:
 
    .. code-block:: python
 
-      from playhouse.postgres_ext import PostgresqlExtDatabase
+      db = SqliteDatabase('/path/to/app.db')
 
-      psql_db = PostgresqlExtDatabase('my_database', user='postgres')
-
-Isolation level
-^^^^^^^^^^^^^^^
-
-The isolation level can be specified as an initialization parameter or set at
-run-time with :meth:`~PostgresqlDatabase.set_isolation_level`.
-
-Psycopg2 exposes isolation level constants in ``psycopg2.extensions``:
-
-.. code-block:: python
-
-   from psycopg2.extensions import ISOLATION_LEVEL_SERIALIZABLE
-
-   db = PostgresqlDatabase('my_app', user='postgres', host='db-host',
-                           isolation_level=ISOLATION_LEVEL_SERIALIZABLE)
-
-Psycopg3 exposes isolation level constants as a module-level enum:
-
-.. code-block:: python
-
-   from psycopg import IsolationLevel
-
-   db = PostgresqlDatabase('my_app', user='postgres', host='db-host',
-                           isolation_level=IsolationLevel.SERIALIZABLE)
-
-.. seealso:: :meth:`PostgresqlDatabase.set_isolation_level`
-
-.. _using_sqlite:
-
-Using SQLite
-------------
-
-To use Peewee with SQLite, the recommended driver is the standard library
-``sqlite3`` module.
-
-To connect to a SQLite database, use :class:`SqliteDatabase`. The
-first parameter is the filename containing the database, or the string
-``':memory:'`` to create an in-memory database. After the database filename,
-you can specify a list or pragmas or any other arbitrary `sqlite3 parameters
-<https://docs.python.org/3/library/sqlite3.html#sqlite3.connect>`_.
-
-.. code-block:: python
-
-   sqlite_db = SqliteDatabase('my_app.db', pragmas={'journal_mode': 'wal'})
-
-   class BaseModel(Model):
-       """A base model that will use our Sqlite database."""
-       class Meta:
-           database = sqlite_db
-
-   class User(BaseModel):
-       username = TextField()
-       # etc, etc
-
-.. seealso::
-   Peewee includes a :ref:`SQLite extension module <sqlite_ext>` which
-   provides many SQLite-specific features such as:
-
-   * :ref:`JSON <sqlite-json1>`
-   * :ref:`Full Text Search <sqlite-fts>`
-   * SQLite-specific field types
-
-   Using :class:`SqliteExtDatabase`:
+   Environment variables, config settings, etc. typically fall into this
+   category as well:
 
    .. code-block:: python
 
-      from playhouse.sqlite_ext import SqliteExtDatabase
+      import os
 
-      sqlite_db = SqliteExtDatabase('my_app.db', pragmas={
-          'journal_mode': 'wal',
-          'cache_size': -64 * 1000})
+      db = PostgresqlDatabase(
+          database=app.config['APP_NAME'],
+          user=os.environ.get('PGUSER') or 'postgres',
+          host=os.environ.get('PGHOST') or '127.0.0.1')
 
-   Using :class:`CySqliteDatabase`:
-
-   .. code-block:: python
-
-       from playhouse.cysqlite_ext import CySqliteDatabase
-
-       sqlite_db = CySqliteDatabase('my_app.db', pragmas={
-           'journal_mode': 'wal',
-           'cache_size': -64 * 1000})
-
-.. _sqlite-pragma:
-
-PRAGMA statements
-^^^^^^^^^^^^^^^^^
-
-SQLite allows run-time configuration of a number of parameters through
-``PRAGMA`` statements (`SQLite documentation <https://www.sqlite.org/pragma.html>`_).
-These statements are typically run when a new database connection is created.
-To run one or more ``PRAGMA`` statements against new connections, you can
-specify them as a dictionary or a list of 2-tuples containing the pragma name
-and value:
-
-.. code-block:: python
-
-   db = SqliteDatabase('my_app.db', pragmas={
-       'journal_mode': 'wal',
-       'cache_size': 10000,  # 10000 pages, or ~40MB
-       'foreign_keys': 1,  # Enforce foreign-key constraints
-   })
-
-PRAGMAs may also be configured dynamically using either the
-:meth:`~SqliteDatabase.pragma` method or the special properties exposed on
-the :class:`SqliteDatabase` object:
-
-.. code-block:: python
-
-   # Set cache size to 64MB for *current connection*.
-   db.pragma('cache_size', -1024 * 64)
-
-   # Same as above.
-   db.cache_size = -1024 * 64
-
-   # Read the value of several pragmas:
-   print('cache_size:', db.cache_size)
-   print('foreign_keys:', db.foreign_keys)
-   print('journal_mode:', db.journal_mode)
-   print('page_size:', db.page_size)
-
-   # Set foreign_keys pragma on current connection *AND* on all
-   # connections opened subsequently.
-   db.pragma('foreign_keys', 1, permanent=True)
-
-.. attention::
-   Pragmas set using the :meth:`~SqliteDatabase.pragma` method do not
-   get re-applied when a new connection opens. To configure a pragma to be
-   run whenever a connection is opened, specify ``permanent=True``.
+2. **Defer initialization**. This method is needed when a connection setting is not
+   available until run-time or it is inconvenient to import connection settings
+   where the database is declared:
 
    .. code-block:: python
 
-      db.pragma('foreign_keys', 1, permanent=True)
+      db = PostgresqlDatabase(None)
 
-.. seealso::
-   SQLite PRAGMA documentation: https://sqlite.org/pragma.html
+      # ... some time later ...
+      db_name = input('Enter database name: ')
 
-Recommended Settings
-^^^^^^^^^^^^^^^^^^^^
+      # Initialize the database now.
+      db.init(db_name, user='postgres', host='10.8.0.1')
 
-The following settings are what I use with SQLite for a typical web
-application database.
+   Attempting to use an uninitialized database will raise an :class:`InterfaceError`.
 
-========================= =================== ===============================================
-pragma                    recommended setting explanation
-========================= =================== ===============================================
-journal_mode              wal                 allow readers and writers to co-exist
-cache_size                -1 * data_size_kb   set page-cache size in KiB, e.g. -32000 = 32MB
-foreign_keys              1                   enforce foreign-key constraints
-ignore_check_constraints  0                   enforce CHECK constraints
-synchronous               0                   let OS handle fsync (use with caution)
-========================= =================== ===============================================
+3. **Proxy**. Use a :class:`DatabaseProxy` and set the database at run-time.
+   This method is needed when the database implementation may change at
+   run-time. For example it may be either Sqlite or Postgresql depending on a
+   command-line option:
 
-Example database using the above options:
+   .. code-block:: python
 
-.. code-block:: python
+      db = DatabaseProxy()
 
-   db = SqliteDatabase('my_app.db', pragmas={
-       'journal_mode': 'wal',
-       'cache_size': -1 * 64000,  # 64MB
-       'foreign_keys': 1,
-       'ignore_check_constraints': 0,
-       'synchronous': 0})
+      # ... some time later ...
+      if app.config['DEBUG']:
+          database = SqliteDatabase('local.db')
+      elif app.config['TESTING']:
+          database = SqliteDatabase(':memory:')
+      else:
+          database = PostgresqlDatabase('production')
 
-.. _sqlite-user-functions:
+      db.initialize(database)
 
-User-defined functions
-^^^^^^^^^^^^^^^^^^^^^^
-
-SQLite can be extended with user-defined Python code. The
-:class:`SqliteDatabase` class supports three types of user-defined
-extensions:
-
-* Functions - which take any number of parameters and return a single value.
-* Aggregates - which aggregate parameters from multiple rows and return a
-  single value.
-* Window Functions - aggregates which support operating on windows of data.
-* Collations - which describe how to sort some value.
-* Table Functions - fully user-defined tables (requres ``cysqlite``).
-
-Example user-defined function:
-
-.. code-block:: python
-
-   db = SqliteDatabase('analytics.db')
-
-   from urllib.parse import urlparse
-
-   @db.func('hostname')
-   def hostname(url):
-       if url is not None:
-           return urlparse(url).netloc
-
-   # Call this function in our code:
-   # The following finds the most common hostnames of referrers by count:
-   query = (PageView
-            .select(fn.hostname(PageView.referrer), fn.COUNT(PageView.id))
-            .group_by(fn.hostname(PageView.referrer))
-            .order_by(fn.COUNT(PageView.id).desc()))
-
-Example user-defined aggregate:
-
-.. code-block:: python
-
-   from hashlib import md5
-
-   @db.aggregate('md5')
-   class MD5Checksum(object):
-       def __init__(self):
-           self.checksum = md5()
-
-       def step(self, value):
-           self.checksum.update(value.encode('utf-8'))
-
-       def finalize(self):
-           return self.checksum.hexdigest()
-
-   # Usage:
-   # The following computes an aggregate MD5 checksum for files broken
-   # up into chunks and stored in the database.
-   query = (FileChunk
-            .select(FileChunk.filename, fn.MD5(FileChunk.data))
-            .group_by(FileChunk.filename)
-            .order_by(FileChunk.filename, FileChunk.sequence))
-
-Example user-defined window function:
-
-.. code-block:: python
-
-   # Window functions are normal aggregates with two additional methods:
-   # inverse(value) - Perform the inverse of step(value).
-   # value() - Report value at current step.
-   @db.aggregate('mysum')
-   class MySum(object):
-       def __init__(self):
-           self._value = 0
-       def step(self, value):
-           self._value += (value or 0)
-       def inverse(self, value):
-           self._value -= (value or 0)  # Do opposite of "step()".
-       def value(self):
-           return self._value
-       def finalize(self):
-           return self._value
-
-   # e.g., aggregate sum of employee salaries over their department.
-   query = (Employee
-            .select(
-                Employee.department,
-                Employee.salary,
-                fn.mysum(Employee.salary).over(partition_by=[Employee.department]))
-            .order_by(Employee.id))
-
-Example collation:
-
-.. code-block:: python
-
-   @db.collation('ireverse')
-   def collate_reverse(s1, s2):
-       # Case-insensitive reverse.
-       s1, s2 = s1.lower(), s2.lower()
-       return (s1 < s2) - (s1 > s2)  # Equivalent to -cmp(s1, s2)
-
-   # To use this collation to sort books in reverse order...
-   Book.select().order_by(collate_reverse.collation(Book.title))
-
-   # Or...
-   Book.select().order_by(Book.title.asc(collation='reverse'))
-
-Example user-defined table-value function (see `cysqlite TableFunction docs <https://cysqlite.readthedocs.io/en/latest/api.html#tablefunction>`_
-for details on ``TableFunction``).
-
-.. code-block:: python
-
-   from cysqlite import TableFunction
-   from playhouse.cysqlite_ext import CySqliteDatabase
-
-   db = CySqliteDatabase('my_app.db')
-
-   @db.table_function('series')
-   class Series(TableFunction):
-       columns = ['value']
-       params = ['start', 'stop', 'step']
-
-       def initialize(self, start=0, stop=None, step=1):
-           """
-           Table-functions declare an initialize() method, which is
-           called with whatever arguments the user has called the
-           function with.
-           """
-           self.start = self.current = start
-           self.stop = stop or float('Inf')
-           self.step = step
-
-       def iterate(self, idx):
-           """
-           Iterate is called repeatedly by the SQLite database engine
-           until the required number of rows has been read **or** the
-           function raises a `StopIteration` signalling no more rows
-           are available.
-           """
-           if self.current > self.stop:
-               raise StopIteration
-
-           ret, self.current = self.current, self.current + self.step
-           return (ret,)
-
-   # Usage:
-   cursor = db.execute_sql('SELECT * FROM series(?, ?, ?)', (0, 5, 2))
-   for value, in cursor:
-       print(value)
-
-   # Prints:
-   # 0
-   # 2
-   # 4
-
-For more information, see:
-
-* :meth:`SqliteDatabase.func`
-* :meth:`SqliteDatabase.aggregate`
-* :meth:`SqliteDatabase.window_function`
-* :meth:`SqliteDatabase.collation`
-* :meth:`CySqliteDatabase.table_function`
-
-.. _sqlite-locking:
-
-Locking mode for transactions
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-
-SQLite transactions can be opened in three different modes:
-
-* *Deferred* (**default**) - only acquires lock when a read or write is
-  performed. The first read creates a `shared lock <https://sqlite.org/lockingv3.html#locking>`_
-  and the first write creates a `reserved lock <https://sqlite.org/lockingv3.html#locking>`_.
-  Because the acquisition of the lock is deferred until actually needed, it is
-  possible that another thread or process could create a separate transaction
-  and write to the database after the BEGIN on the current thread has executed.
-* *Immediate* - a `reserved lock <https://sqlite.org/lockingv3.html#locking>`_
-  is acquired immediately. In this mode, no other database may write to the
-  database or open an *immediate* or *exclusive* transaction. Other processes
-  can continue to read from the database, however.
-* *Exclusive* - opens an `exclusive lock <https://sqlite.org/lockingv3.html#locking>`_
-  which prevents all (except for read uncommitted) connections from accessing
-  the database until the transaction is complete.
-
-Example specifying the locking mode:
-
-.. code-block:: python
-
-    db = SqliteDatabase('app.db')
-
-    with db.atomic('EXCLUSIVE'):
-        do_something()
-
-
-    @db.atomic('IMMEDIATE')
-    def some_other_function():
-        # This function is wrapped in an "IMMEDIATE" transaction.
-        do_something_else()
-
-For more information, see the SQLite `locking documentation <https://sqlite.org/lockingv3.html#locking>`_.
-To learn more about transactions in Peewee, see the :ref:`transactions`
-documentation.
-
-.. danger::
-   Do not alter the ``isolation_level`` property of the ``sqlite3.Connection``
-   object. Peewee requires the ``sqlite3`` driver be in autocommit-mode, which
-   is handled automatically by :class:`SqliteDatabase`.
-
-cysqlite, an alternate DB-API driver
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-
-Peewee comes with support for the `cysqlite <https://cysqlite.readthedocs.io>`_
-driver. Additional functionality is provided by :class:`CySqliteDatabase`:
-
-* :meth:`~CySqliteDatabase.table_function` - user-defined table functions.
-* :meth:`~CySqliteDatabase.on_commit`  / :meth:`~CySqliteDatabase.on_rollback` - commit and rollback hooks.
-* :meth:`~CySqliteDatabase.on_update` - update hook.
-* :meth:`~CySqliteDatabase.authorizer` - authorizer callback.
-* :meth:`~CySqliteDatabase.trace` - trace callback.
-* :meth:`~CySqliteDatabase.progress` - progress handler.
-* :meth:`~CySqliteDatabase.backup` / :meth:`~CySqliteDatabase.backup_to_file` - online backup APIs.
-* :meth:`~CySqliteDatabase.blob_open` - incremental BLOB I/O.
-
-Example:
-
-.. code-block:: python
-
-   from playhouse.cysqlite_ext import CySqliteDatabase
-
-   db = CySqliteDatabase('app.db', pragmas={
-       'journal_mode': 'wal',
-       'foreign_keys': 1})
-
-APSW, an Advanced SQLite Driver
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-
-Peewee also comes with an alternate SQLite database that uses :ref:`apsw`.
-More information on APSW can be obtained on the
-`APSW project website <https://rogerbinns.github.io/apsw/>`_. APSW provides
-special features like:
-
-* Virtual tables, virtual file-systems, Blob I/O, backups and file control.
-* Connections can be shared across threads without any additional locking.
-* Transactions are managed explicitly by your code.
-* Unicode is handled *correctly*.
-* APSW is faster that the standard library sqlite3 module.
-* Exposes pretty much the entire SQLite C API to your Python app.
-
-If you would like to use APSW, use the :class:`APSWDatabase` from the
-`apsw_ext` module:
-
-.. code-block:: python
-
-   from playhouse.apsw_ext import APSWDatabase
-
-   apsw_db = APSWDatabase('my_app.db')
-
-.. _using_mariadb:
-
-.. _using_mysql:
-
-Using MySQL or MariaDB
-----------------------
-
-To use Peewee with MySQL or MariaDB the recommended driver is ``pymysql``:
-
-.. code-block:: shell
-
-   $ pip install "pymysql"
-
-To connect to a MySQL database, we will use :class:`MySQLDatabase`. After
-the database name, you can specify arbitrary connection parameters that will be
-passed back to the driver.
-
-.. code-block:: python
-
-    mysql_db = MySQLDatabase('my_database')
-
-    class BaseModel(Model):
-        """A base model that will use our MySQL database"""
-        class Meta:
-            database = mysql_db
-
-    class User(BaseModel):
-        username = CharField()
-        # etc, etc
-
-Driver information:
-
-* `pymysql <https://github.com/PyMySQL/PyMySQL>`_ is a pure-python mysql client.
-  Peewee will use attempt to use pymysql first.
-* `mysqlclient <https://github.com/PyMySQL/mysqlclient-python>`_ uses a C
-  extension. Peewee will attempt to use this module if pymysql is not installed.
-* `mysql-connector python <https://github.com/mysql/mysql-connector-python>`_
-  to use this driver you can use :class:`MySQLConnectorDatabase`
-  from the ``playhouse.mysql_ext`` extension.
-
-Error 2006: MySQL server has gone away
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-
-This particular error can occur when MySQL kills an idle database connection.
-This typically happens with web apps that do not explicitly manage database
-connections. What happens is your application starts, a connection is opened to
-handle the first query that executes, and, since that connection is never
-closed, it remains open, waiting for more queries.
-
-To fix this, make sure you are explicitly connecting to the database when you
-need to execute queries, and close your connection when you are done. In a
-web-application, this typically means you will open a connection when a request
-comes in, and close the connection when you return a response.
-
-See the :ref:`framework-integration` section for examples of configuring common
-web frameworks to manage database connections.
-
-Connecting using a Database URL
--------------------------------
-
-The playhouse module :ref:`db_url` provides a helper :func:`connect`
-function that accepts a database URL and returns a :class:`Database`
-instance.
-
-Example code:
-
-.. code-block:: python
-
-   import os
-
-   from peewee import *
-   from playhouse.db_url import connect
-
-   # Connect to the database URL defined in the environment, falling
-   # back to a local Sqlite database if no database URL is specified.
-   db = connect(os.environ.get('DATABASE') or 'sqlite:///default.db')
-
-   class BaseModel(Model):
-       class Meta:
-           database = db
-
-Example database URLs:
-
-* ``sqlite:///my_database.db`` will create a :class:`SqliteDatabase` instance for the file ``my_database.db`` in the current directory.
-* ``sqlite:////var/www/my_database.db`` will create a :class:`SqliteDatabase` instance for the file ``/var/www/my_database.db``.
-* ``sqlite:///:memory:`` will create an in-memory :class:`SqliteDatabase` instance.
-* ``postgresql://postgres:my_password@localhost:5432/my_database`` will create a :class:`PostgresqlDatabase` instance. A username and password are provided, as well as the host and port to connect to.
-* ``mysql://user:passwd@ip:port/my_db`` will create a :class:`MySQLDatabase` instance for the local MySQL database *my_db*.
-* :ref:`More examples in the db_url documentation <db_url>`.
-
-.. _deferring_initialization:
-
-Run-time database configuration
--------------------------------
-
-Sometimes the database connection settings are not known until run-time, when
-these values may be loaded from a configuration file or the environment. In
-these cases, you can *defer* the initialization of the database by specifying
-``None`` as the database_name.
-
-.. code-block:: python
-   :emphasize-lines: 1
-
-   database = PostgresqlDatabase(None)  # Un-initialized database.
-
-   class SomeModel(Model):
-       class Meta:
-           database = database
-
-If you try to connect or issue any queries while your database is uninitialized
-you will get an exception:
-
-.. code-block:: pycon
-
-   >>> database.connect()
-   Exception: Error, database not properly initialized before opening connection
-
-To initialize your database, call the :meth:`~Database.init` method with the
-database name and any additional keyword arguments:
-
-.. code-block:: python
-
-   database_name = input('What is the name of the db? ')
-   database.init(database_name, host='localhost', user='postgres')
-
-For even more control over initializing your database, see the next section,
-:ref:`dynamic_db`.
-
-.. _dynamic_db:
-
-Dynamically defining a database
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-
-For even more control over how your database is defined/initialized, you can
-use the :class:`DatabaseProxy` helper. :class:`DatabaseProxy` objects act
-as a placeholder, and then at run-time you can swap it out for a different
-object. In the example below, we will swap out the database depending on how
-the app is configured:
-
-.. code-block:: python
-
-   database_proxy = DatabaseProxy()  # Create a proxy for our db.
-
-   class BaseModel(Model):
-       class Meta:
-           database = database_proxy  # Use proxy for our DB.
-
-   class User(BaseModel):
-       username = CharField()
-
-   # Based on configuration, use a different database.
-   if app.config['DEBUG']:
-       database = SqliteDatabase('local.db')
-   elif app.config['TESTING']:
-       database = SqliteDatabase(':memory:')
-   else:
-       database = PostgresqlDatabase('mega_production_db')
-
-   # Configure our proxy to use the db we specified in config.
-   database_proxy.initialize(database)
-
-.. warning::
-    Only use this method if your actual database driver varies at run-time. For
-    instance, if your tests and local dev environment run on SQLite, but your
-    deployed app uses PostgreSQL, you can use the :class:`DatabaseProxy` to
-    swap out engines at run-time.
-
-    However, if it is only connection values that vary at run-time, such as the
-    path to the database file, or the database host, you should instead use
-    :meth:`Database.init`. See :ref:`deferring_initialization` for more
-    details.
-
-.. note::
-    It may be easier to avoid the use of :class:`DatabaseProxy` and instead
-    use :meth:`Database.bind` and related methods to set or change the
-    database. See :ref:`binding_database` for details.
+   Attempting to use an uninitialized database proxy will raise an ``AttributeError``.
 
 .. _binding_database:
 
 Changing the database at run-time
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-We have seen three ways that databases can be configured with Peewee:
-
-1. Initialize database immediately.
-
-   .. code-block:: python
-
-      db = SqliteDatabase('my_app.db', pragmas={'journal_mode': 'wal'})
-
-2. Initialize database at run-time.
-
-   .. code-block:: python
-
-      db = SqliteDatabase(None)
-      ...
-      db.init(db_filename, pragmas={'journal_mode': 'wal'})
-
-3. Use a placeholder and then bind the database at run-time (least desirable).
-
-   .. code-block:: python
-
-      db = DatabaseProxy()
-      ...
-      db.initialize(SqliteDatabase('my_app.db', pragmas={'journal_mode': 'wal'}))
-
-Peewee can also **set or change the database for your model classes** at
-run-time in a different way. This technique is used by the Peewee test suite to
-**bind** test model classes to various database instances when running the tests.
+Peewee can also set or change the database at run-time in a different way. This
+technique is used by the Peewee test suite to **bind** test model classes to
+various database instances when running tests.
 
 There are two sets of complementary methods:
 
@@ -789,10 +329,10 @@ Bind the models to a database at run-time:
 
    # At this point, the User and Tweet models are NOT bound to any database.
 
-   # Let's bind them to the Postgres database:
+   # Bind them to the Postgres database:
    postgres_db.bind([User, Tweet])
 
-   # Now we will temporarily bind them to the sqlite database:
+   # Temporarily bind them to the sqlite database:
    with sqlite_db.bind_ctx([User, Tweet]):
        # User and Tweet are now bound to the sqlite database.
        assert User._meta.database is sqlite_db
@@ -813,83 +353,89 @@ for binding a given model class:
    assert User._meta.database is sqlite_db
    assert Tweet._meta.database is sqlite_db  # Related models bound too.
 
-   # Here we will temporarily bind *just* the User model to the postgres db.
+   # Temporarily bind *just* the User model to the postgres db.
    with User.bind_ctx(postgres_db, bind_backrefs=False):
        assert User._meta.database is postgres_db
        assert Tweet._meta.database is sqlite_db  # Has not changed.
 
-   # And now User is back to being bound to the sqlite_db.
+   # User is back to being bound to the sqlite_db.
    assert User._meta.database is sqlite_db
 
-The :ref:`testing` section of this document also contains some examples of
-using the ``bind()`` methods.
+.. note::
+   Peewee database connections are thread-safe. However, if you plan to **bind**
+   the database at run-time in a multi-threaded application, storing the model's
+   database in a thread-local is necessary. This can be accomplished with
+   the :class:`ThreadSafeDatabaseMetadata` included in ``playhouse.shortcuts``:
 
-Thread-Safety and Multiple Databases
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   .. code-block:: python
 
-Peewee database connections are thread-safe. However, if you plan to **change**
-the database at run-time in a multi-threaded application, storing the model's
-database in a thread-local will prevent race-conditions. This can be
-accomplished with a custom model ``Metadata`` class (see :class:`ThreadSafeDatabaseMetadata`, included in ``playhouse.shortcuts``):
+      from peewee import *
+      from playhouse.shortcuts import ThreadSafeDatabaseMetadata
+
+      class BaseModel(Model):
+          class Meta:
+              model_metadata_class = ThreadSafeDatabaseMetadata
+
+   The database can now be swapped safely while running in a multi-threaded
+   environment using the :meth:`Database.bind` or :meth:`Database.bind_ctx`.
+
+Connecting via URL
+------------------
+
+The :ref:`db-url` playhouse module provides a :func:`~playhouse.db_url.connect`
+helper that accepts a database URL and returns the appropriate database
+instance:
 
 .. code-block:: python
 
-   from peewee import *
-   from playhouse.shortcuts import ThreadSafeDatabaseMetadata
+   from playhouse.db_url import connect
 
-   class BaseModel(Model):
-       class Meta:
-           # Instruct peewee to use our thread-safe metadata implementation.
-           model_metadata_class = ThreadSafeDatabaseMetadata
+   db = connect(os.environ.get('DATABASE_URL', 'sqlite:///local.db'))
 
-The database can now be swapped safely while running in a multi-threaded
-environment using the :meth:`Database.bind` or :meth:`Database.bind_ctx` methods.
+Example URLs:
 
-.. _connection_management:
+* ``sqlite:///my_app.db`` - SQLite file in the current directory.
+* ``sqlite:///:memory:`` - in-memory SQLite.
+* ``sqlite:////absolute/path/to/app.db`` - absolute path SQLite.
+* ``postgresql://user:password@host:5432/dbname``
+* ``mysql://user:password@host:3306/dbname``
+* :ref:`More examples in the db_url documentation <db-url>`.
 
-Connection Management
----------------------
+.. _connection-lifecycle:
+
+Connection Lifecycle
+--------------------
+
+Applications will generally fall into two categories:
+
+* Single-user applications which open a connection at startup and close at
+  exit.
+* Multi-user or web appliactions, which open a connection per request and close
+  it at the end of the request.
 
 To open a connection to a database, use the :meth:`Database.connect` method:
 
 .. code-block:: pycon
-   :emphasize-lines: 2
 
    >>> db = SqliteDatabase(':memory:')  # In-memory SQLite database.
    >>> db.connect()
    True
 
-If we try to call ``connect()`` on an already-open database, we get a
-:class:`OperationalError`:
+   >>> pass  # ... do work ...
+
+   >>> db.close()
+   True
+
+If you call ``connect()`` on an already-open database, an :exc:`OperationalError`
+is raised. Pass ``reuse_if_open=True`` to suppress it:
 
 .. code-block:: pycon
 
-   >>> db.connect()
-   Traceback (most recent call last):
-     File "<stdin>", line 1, in <module>
-     File "/home/charles/pypath/peewee.py", line 2390, in connect
-       raise OperationalError('Connection already opened.')
-   peewee.OperationalError: Connection already opened.
-
-To prevent this exception from being raised, we can call ``connect()`` with an
-additional argument, ``reuse_if_open``:
-
-.. code-block:: pycon
-
-   >>> db.close()  # Close connection.
-   True
-   >>> db.connect()
-   True
    >>> db.connect(reuse_if_open=True)
-   False
-
-Note that the call to ``connect()`` returns ``False`` if the database
-connection was already open.
 
 To close a connection, use the :meth:`Database.close` method:
 
 .. code-block:: pycon
-   :emphasize-lines: 1
 
    >>> db.close()
    True
@@ -906,145 +452,156 @@ exception, but will return ``False``:
     >>> db.close()  # Connection already closed, returns False.
     False
 
-You can test whether the database is closed using the
-:meth:`Database.is_closed` method:
+Determine whether the database is closed using the :meth:`Database.is_closed`
+method:
 
 .. code-block:: pycon
 
-    >>> db.is_closed()
-    True
+   >>> db.is_closed()
+   True
+
+Web applications will typically use framework-provided hooks to manage
+connection lifecycles.
+
+.. code-block:: python
+
+   @app.before_request
+   def _db_connect():
+       db.connect()
+
+   @app.teardown_request
+   def _db_close(exc):
+       if not db.is_closed():
+           db.close()
+
+See :ref:`framework-integration` for framework-specific examples.
+
+.. tip::
+   Peewee uses thread local storage to manage connection state, so this
+   pattern can be used with multi-threaded or gevent applications.
+
+   Peewee's :ref:`asyncio integration <asyncio>` stores connection state in
+   task-local storage, so the same pattern applies.
+
+Context managers
+^^^^^^^^^^^^^^^^
+
+The database object can be used as a context manager.
+
+1. Connection opens when context manager is entered.
+2. Peewee begins a transaction.
+3. Control is passed to user for duration of block.
+4. Peewee commits transaction if block exits cleanly, otherwise issues a
+   rollback.
+5. Peewee closes the connection.
+6. Any unhandled exception is raised.
+
+.. code-block:: python
+
+   with db:
+       User.create(username='charlie')
+       # Transaction is committed when the block exits normally,
+       # rolled back if an exception is raised.
+
+To manage the connection lifetime without an implicit transaction, use
+:meth:`~Database.connection_context`:
+
+.. code-block:: python
+
+   with db.connection_context():
+       # Connection is open; no implicit transaction.
+       results = User.select()
+
+``connection_context()`` can also decorate a function:
+
+.. code-block:: python
+
+   @db.connection_context()
+   def load_fixtures():
+       db.create_tables([User, Tweet])
+       import_data()
 
 Using autoconnect
 ^^^^^^^^^^^^^^^^^
 
-It is not necessary to explicitly connect to the database before using
-it if the database is initialized with ``autoconnect=True`` (the default).
-Managing connections explicitly is considered a **best practice**, therefore
-you may consider disabling the ``autoconnect`` behavior.
-
-It is very helpful to be explicit about your connection lifetimes. If the
-connection fails, for instance, the exception will be caught when the
-connection is being opened, rather than some arbitrary time later when a query
-is executed. Furthermore, if using a :ref:`connection pool <pool>`, it is
-necessary to call :meth:`~Database.connect` and :meth:`~Database.close`
-to ensure connections are recycled properly.
-
-For the best guarantee of correctness, disable ``autoconnect``:
+By default Peewee will automatically open a connection if one is not available.
+This behavior is controlled by the ``autoconnect`` Database parameter. Managing
+connections explicitly is considered a **best practice**, therefore
+consider disabling the ``autoconnect`` behavior:
 
 .. code-block:: python
 
-   db = PostgresqlDatabase('my_app', user='postgres', autoconnect=False)
+   db = PostgresqlDatabase('app', autoconnect=False)
+
+It is helpful to be explicit about connection lifetimes. If a connection cannot
+be opened, the exception will be caught when the connection is being opened,
+rather than at query time.
 
 Thread Safety
 ^^^^^^^^^^^^^
 
-Database connections and transactions are thread-safe.
+Database connections and associated transactions are thread-safe.
 
 Peewee keeps track of the connection state using thread-local storage, making
 the Peewee :class:`Database` object safe to use with multiple threads. Each
 thread will have it's own connection, and as a result any given thread will
 only have a single connection open at a given time.
 
-Context managers
-^^^^^^^^^^^^^^^^
-
-The database object itself can be used as a context-manager, which opens a
-connection for the duration of the wrapped block of code. Additionally, a
-transaction is opened at the start of the wrapped block and committed before
-the connection is closed (unless an error occurs, in which case the transaction
-is rolled back).
-
-.. code-block:: pycon
-
-   >>> db.is_closed()
-   True
-   >>> with db:
-   ...     print(db.is_closed())  # db is open and in a transaction.
-   ...
-   False
-   >>> db.is_closed()  # db is closed, transaction is committed.
-   True
-
-If you want to manage transactions separately, you can use the
-:meth:`Database.connection_context` context manager.
-
-.. code-block:: pycon
-
-   >>> with db.connection_context():
-   ...     # db is open.
-   ...     pass
-   ...
-   >>> db.is_closed()  # db connection is closed.
-   True
-
-The ``connection_context()`` method can also be used as a decorator:
-
-.. code-block:: python
-
-   @db.connection_context()
-   def prepare_database():
-       # DB connection will be managed by the decorator, which opens
-       # a connection, calls function, and closes upon returning.
-       db.create_tables(MODELS)  # Create schema.
-       load_fixture_data(db)
+Peewee's :ref:`asyncio integration <asyncio>` stores connection state in
+task-local storage, so the same applies to async applications.
 
 DB-API Connection Object
 ^^^^^^^^^^^^^^^^^^^^^^^^
 
-To obtain a reference to the underlying DB-API 2.0 connection, use the
-:meth:`Database.connection` method. This method will return the
-currently-open connection object, if one exists, otherwise it will open a new
-connection.
+:meth:`Database.connection` returns a reference to the underlying DB-API driver
+connection. This method will return the currently-open connection object, if
+one exists, otherwise it will open a new connection.
 
 .. code-block:: pycon
 
    >>> db.connection()
    <sqlite3.Connection object at 0x7f94e9362f10>
 
-.. _connection_pooling:
+.. _connection-pooling:
 
 Connection Pooling
 ------------------
 
-Connection pooling is provided by the :ref:`pool module <pool>`, included in
-the :ref:`playhouse <playhouse>` extensions library. The pool supports:
+For web applications that handle many requests, opening and closing a database
+connection on every request adds latency. A connection pool keeps a set of
+connections open and lends them out as needed.
 
-* Timeout after which connections will be recycled.
-* Upper bound on the number of open connections.
+Pooled database classes are available in :ref:`playhouse.pool <pool>`:
 
 .. code-block:: python
 
-   from playhouse.pool import PooledPostgresqlExtDatabase
+   from playhouse.pool import PooledPostgresqlDatabase
 
-   db = PooledPostgresqlExtDatabase(
-       'my_database',
-       max_connections=8,
-       stale_timeout=300,
-       user='postgres')
+   db = PooledPostgresqlDatabase(
+       'my_app',
+       user='postgres',
+       max_connections=20,
+       stale_timeout=300,   # Recycle connections idle for 5 minutes.
+   )
 
-   class BaseModel(Model):
-       class Meta:
-           database = db
+.. include:: pool-snippet.rst
 
-The following pooled database classes are available:
+When using a connection pool, :meth:`~Database.connect` and :meth:`~Database.close`
+do not open and close real connections - they acquire and release connections
+from the pool. It is therefore essential to call both explicitly (or use a
+context manager) so connections are returned to the pool for re-use.
 
-* :class:`PooledPostgresqlDatabase`
-* :class:`PooledPostgresqlExtDatabase`
-* :class:`PooledMySQLDatabase`
-* :class:`PooledSqliteDatabase`
-* :class:`PooledSqliteExtDatabase`
-* :class:`PooledCySqliteDatabase`
+.. seealso:: :ref:`pool`
 
-For an in-depth discussion of peewee's connection pool, see the :ref:`pool`
-section of the :ref:`playhouse <playhouse>` documentation.
+.. _executing-sql:
 
-Executing Queries
------------------
+Executing SQL
+-------------
 
 SQL queries will typically be executed by calling ``execute()`` on a query
 constructed using the query-builder APIs (or by simply iterating over a query
 object in the case of a :class:`Select` query). For cases where you wish to
-execute SQL directly, you can use the :meth:`Database.execute_sql` method.
+execute SQL directly, use the :meth:`Database.execute_sql`:
 
 .. code-block:: python
 
@@ -1065,7 +622,12 @@ execute SQL directly, you can use the :meth:`Database.execute_sql` method.
 Database Errors
 ---------------
 
-The Python DB-API 2.0 spec describes `several types of exceptions <https://www.python.org/dev/peps/pep-0249/#exceptions>`_. Because most database drivers have their own implementations of these exceptions, Peewee simplifies things by providing its own wrappers around any implementation-specific exception classes. That way, you don't need to worry about importing any special exception classes, you can just use the ones from peewee:
+The Python DB-API 2.0 spec describes `several types of exceptions <https://www.python.org/dev/peps/pep-0249/#exceptions>`_.
+Because most database drivers have their own implementations of these
+exceptions, Peewee simplifies things by providing its own wrappers around any
+implementation-specific exception classes. That way, you don't need to worry
+about dealing with driver-specific exception classes, you can just use the ones
+from peewee:
 
 * ``DatabaseError``
 * ``DataError``
@@ -1078,6 +640,21 @@ The Python DB-API 2.0 spec describes `several types of exceptions <https://www.p
 
 .. note:: All of these error classes extend ``PeeweeException``.
 
+Logging Queries
+---------------
+
+Peewee logs every query to the ``peewee`` namespace at ``DEBUG`` level using
+the standard library ``logging`` module:
+
+.. code-block:: python
+
+   import logging
+   logging.getLogger('peewee').addHandler(logging.StreamHandler())
+   logging.getLogger('peewee').setLevel(logging.DEBUG)
+
+This is the simplest way to verify what queries are being issued during
+development.
+
 .. _testing:
 
 Testing Peewee Applications
@@ -1088,22 +665,7 @@ use a special database for tests. Another common practice is to run tests
 against a clean database, which means ensuring tables are empty at the start of
 each test.
 
-To bind your models to a database at run-time, you can use the following
-methods:
-
-* :meth:`Database.bind_ctx`, which returns a context-manager that will bind
-  the given models to the database instance for the duration of the wrapped
-  block.
-* :meth:`Model.bind_ctx`, which likewise returns a context-manager that
-  binds the model (and optionally its dependencies) to the given database for
-  the duration of the wrapped block.
-* :meth:`Database.bind`, which is a one-time operation that binds the models
-  (and optionally its dependencies) to the given database.
-* :meth:`Model.bind`, which is a one-time operation that binds the model
-  (and optionally its dependencies) to the given database.
-
-Depending on your use-case, one of these options may make more sense. For the
-examples below, I will use :meth:`Model.bind`.
+Binding models to a database at run-time is described here: :ref:`binding_database`.
 
 Example test-case setup:
 
@@ -1139,409 +701,43 @@ Example test-case setup:
            # If we wanted, we could re-bind the models to their original
            # database here. But for tests this is probably not necessary.
 
-As an aside, and speaking from experience, I recommend testing your application
-using the same database backend you use in production, so as to avoid any
-potential compatibility issues.
-
-If you'd like to see some more examples of how to run tests using Peewee, check
-out Peewee's own `test-suite <https://github.com/coleifer/peewee/tree/master/tests>`_.
-
-Async with Gevent
------------------
-
-`gevent <https://www.gevent.org/>`_ is recommended for asynchronous I/O with
-Postgresql or MySQL.
-
-* No need for special-purpose "loop-aware" implementation. Third-party
-  libraries using asyncio usually have to re-implement layers and
-  layers of code as well as re-implementing the protocols themselves.
-* Gevent allows you to write your application in normal, idiomatic
-  Python. No need to litter every line with "async" or "await".
-  No callbacks, futures, tasks, promises. No cruft.
-* Gevent is very fast.
-
-Besides monkey-patching socket, no special steps are required if you are using:
-
-* `psycopg3 <https://www.psycopg.org/psycopg3/docs/>`_
-* `pymysql <https://github.com/PyMySQL/PyMySQL>`_
-* `mysql-connector <https://dev.mysql.com/doc/connector-python/en/>`_
-
-For `psycopg2 <https://www.psycopg.org/docs/>`_ use the following code snippet
-to register event hooks that will make your connection async:
-
-.. code-block:: python
-
-   from gevent.socket import wait_read, wait_write
-   from psycopg2 import extensions
-
-   # Call this function after monkey-patching socket (etc).
-   def patch_psycopg2():
-       extensions.set_wait_callback(_psycopg2_gevent_callback)
-
-   def _psycopg2_gevent_callback(conn, timeout=None):
-       while True:
-           state = conn.poll()
-           if state == extensions.POLL_OK:
-               break
-           elif state == extensions.POLL_READ:
-               wait_read(conn.fileno(), timeout=timeout)
-           elif state == extensions.POLL_WRITE:
-               wait_write(conn.fileno(), timeout=timeout)
-           else:
-               raise ValueError('poll() returned unexpected result')
-
-Because SQLite does not do any socket I/O, async has no effect when using
-SQLite.
-
-AsyncIO
--------
-
-Peewee provides support for the following asyncio database drivers:
-
-* aiosqlite
-* aiomysql
-* asyncpg
-
-Peewee support for asyncio is described in detail in the :ref:`asyncio`
-documentation.
-
-.. seealso:: :ref:`fastapi`
-
-.. _framework-integration:
-
-Framework Integration
----------------------
-
-For web applications, it is common to open a connection when a request is
-received, and to close the connection when the response is delivered. In this
-section I will describe how to add hooks to your web app to ensure the database
-connection is handled properly.
-
-These steps will ensure that regardless of whether you're using a simple SQLite
-database, or a pool of multiple Postgres connections, peewee will handle the
-connections correctly.
-
-.. _flask:
-
-Flask
-^^^^^
-
-Flask and peewee are a great combo and my go-to for projects of any size. Flask
-provides two hooks which we will use to open and close our db connection. We'll
-open the connection when a request is received, then close it when the response
-is returned.
-
-.. code-block:: python
-
-   from flask import Flask
-   from peewee import *
-
-
-   database = SqliteDatabase('my_app.db')
-
-   # Or, use a pooled database implementation:
-   from playhouse.pool import PooledPostgresqlDatabase
-   database = PooledPostgresqlDatabase('my_app', user='postgres')
-
-
-   app = Flask(__name__)
-
-   # This hook ensures that a connection is opened to handle any queries
-   # generated by the request.
-   @app.before_request
-   def _db_connect():
-       database.connect()
-
-   # This hook ensures that the connection is closed when we've finished
-   # processing the request.
-   @app.teardown_request
-   def _db_close(exc):
-       if not database.is_closed():
-           database.close()
-
-.. seealso:: :ref:`flask_utils`
-
-.. _fastapi:
-
-FastAPI
-^^^^^^^
-
-FastAPI is an :ref:`asyncio <asyncio>` framework.
-
-The following example demonstrates how to:
-
-* Ensure connection is opened and closed for each request.
-* Create tables/resources when app server starts.
-* Shut-down connection pool when app server exits.
-
-.. code-block:: python
-
-   from fastapi import FastAPI
-   from peewee import *
-   from playhouse.pwasyncio import *
-
-
-   app = FastAPI()
-
-   db = AsyncPostgresqlDatabase('peewee_test', host='10.8.0.1', user='postgres')
-
-   @app.middleware('http')
-   async def database_connection(request, call_next):
-       await db.aconnect()  # Obtain connection from connection pool.
-       try:
-           response = await call_next(request)
-       finally:
-           await db.aclose()  # Release connection back to pool.
-       return response
-
-   @app.on_event('startup')
-   async def on_startup():
-       async with db:
-           await db.acreate_tables([Model1, Model2, Model3, ...])
-
-   @app.on_event('shutdown')
-   async def on_shutdown():
-       await db.close_pool()
-
-Example demonstrating executing an async query:
-
-.. code-block:: python
-
-   @app.get('/message/')
-   async def message():
-       # Get the latest message from the database.
-       message = await db.get(Message.select().order_by(Message.id.desc()))
-       return {'content': message.content, 'id': message.id}
-
-.. seealso:: :ref:`asyncio`
-
-Falcon
-^^^^^^
-
-The connection handling code can be placed in a `middleware component
-<https://falcon.readthedocs.io/en/stable/api/middleware.html>`_.
-
-.. code-block:: python
-
-   import falcon
-   from peewee import *
-
-
-   database = SqliteDatabase('my_app.db')
-
-   # Or, use a pooled database implementation, e.g.
-   from playhouse.pool import PooledPostgresqlDatabase
-   database = PooledPostgresqlDatabase('my_app', user='postgres')
-
-
-   class PeeweeConnectionMiddleware(object):
-       def process_request(self, req, resp):
-           database.connect()
-
-       def process_response(self, req, resp, resource, req_succeeded):
-           if not database.is_closed():
-               database.close()
-
-   application = falcon.API(middleware=[
-       PeeweeConnectionMiddleware(),
-       # ... other middlewares ...
-   ])
-
-Pyramid
-^^^^^^^
-
-Set up a Request factory that handles database connection lifetime as follows:
-
-.. code-block:: python
-
-   from peewee import *
-   from pyramid.request import Request
-
-   db = SqliteDatabase('pyramidapp.db')
-
-   class MyRequest(Request):
-       def __init__(self, *args, **kwargs):
-           super().__init__(*args, **kwargs)
-           db.connect()
-           self.add_finished_callback(self.finish)
-
-       def finish(self, request):
-           if not db.is_closed():
-               db.close()
-
-In your application `main()` make sure `MyRequest` is used as
-`request_factory`:
-
-.. code-block:: python
-
-   def main(global_settings, **settings):
-       config = Configurator(settings=settings, ...)
-       config.set_request_factory(MyRequest)
-
-Sanic
-^^^^^
-
-Sanic is an :ref:`asyncio <asyncio>` framework.
-
-The following example demonstrates how to:
-
-* Ensure connection is opened and closed for each request.
-* Create tables/resources when app server starts.
-* Shut-down connection pool when app server exits.
-
-.. code-block:: python
-
-   from sanic import Sanic
-   from peewee import *
-   from playhouse.pwasyncio import *
-
-
-   app = Sanic('PeeweeApp')
-
-   db = AsyncPostgresqlDatabase('peewee_test', host='10.8.0.1', user='postgres')
-
-   @app.on_request
-   async def open_connection(request):
-       await db.aconnect()  # Obtain connection from connection pool.
-
-   @app.on_response
-   async def close_connection(request, response):
-       await db.aclose()  # Return connection to pool.
-
-   @app.before_server_start
-   async def setup_db(app):
-       async with db:
-           await db.acreate_tables([Model1, Model2, Model3, ...])
-
-   @app.before_server_stop
-   async def shutdown_db(app):
-       await db.close_pool()
-
-Example demonstrating executing an async query:
-
-.. code-block:: python
-
-   from sanic import json
-
-   @app.get('/message/')
-   async def message(request):
-       # Get the latest message from the database.
-       message = await db.get(Message.select().order_by(Message.id.desc()))
-       return json({'content': message.content, 'id': message.id})
-
-.. seealso:: :ref:`asyncio`
-
-Other frameworks
-^^^^^^^^^^^^^^^^
-
-Don't see your framework here? Please `open a GitHub ticket <https://github.com/coleifer/peewee/issues/new>`_.
-
-Logging queries
----------------
-
-All queries are logged to the *peewee* namespace using the standard library
-``logging`` module. Queries are logged using the *DEBUG* level.  If you're
-interested in doing something with the queries, you can simply register a
-handler.
-
-.. code-block:: python
-
-   # Print all queries to stderr.
-   import logging
-   logger = logging.getLogger('peewee')
-   logger.addHandler(logging.StreamHandler())
-   logger.setLevel(logging.DEBUG)
-
-Adding a new Database Driver
-----------------------------
-
-Peewee comes with built-in support for Postgres, MySQL, MariaDB and SQLite.
-These databases are very popular and run the gamut from fast, embeddable
-databases to heavyweight servers suitable for large-scale deployments.  That
-being said, there are a ton of cool databases out there and adding support for
-your database-of-choice should be really easy, provided the driver supports the
-`DB-API 2.0 spec <http://www.python.org/dev/peps/pep-0249/>`_.
-
-.. warning::
-   Peewee requires the database connection be put into autocommit-mode.
-
-The DB-API 2.0 spec should be familiar to you if you've used the standard
-library sqlite3 driver, psycopg2 or the like. Peewee currently relies on a
-handful of parts:
-
-* `Connection.commit`
-* `Connection.execute`
-* `Connection.rollback`
-* `Cursor.description`
-* `Cursor.fetchone`
-
-These methods are generally wrapped up in higher-level abstractions and exposed
-by the :class:`Database`, so even if your driver doesn't do these exactly
-you can still get a lot of mileage out of peewee.  An example is the `apsw
-sqlite driver <http://code.google.com/p/apsw/>`_ in the "playhouse" module.
-
-The first thing is to provide a subclass of :class:`Database` that will open
-a connection, and ensure the connection is in autocommit-mode (thus disabling
-all the DB-API transaction semantics):
+It is recommended to test using the same database backend used in production,
+so as to avoid any potential compatibility issues.
+
+.. seealso::
+   * :ref:`test-utils`
+   * Peewee's `test-suite <https://github.com/coleifer/peewee/tree/master/tests>`__
+
+Adding a Custom Database Driver
+---------------------------------
+
+If your database driver conforms to DB-API 2.0, adding Peewee support requires
+subclassing :class:`Database` and overriding ``_connect``, which must return
+a connection in autocommit mode:
 
 .. code-block:: python
 
    from peewee import Database
-   import foodb  # Our fictional DB-API 2.0 driver.
-
-
-   class FooDatabase(Database):
-       def _connect(self, database):
-           return foodb.connect(self.database, autocommit=True, **self.connect_params)
-
-The :class:`Database` provides a higher-level API and is responsible for
-executing queries, creating tables and indexes, and introspecting the database
-to get lists of tables. The above implementation is the absolute minimum
-needed, though some features will not work -- for best results you will want to
-additionally add a method for extracting a list of tables and indexes for a
-table from the database.  We'll pretend that ``FooDB`` is a lot like MySQL and
-has special "SHOW" statements:
-
-.. code-block:: python
+   import foodb
 
    class FooDatabase(Database):
        def _connect(self):
-           return foodb.connect(self.database, autocommit=True, **self.connect_params)
+           return foodb.connect(self.database, autocommit=True,
+                                **self.connect_params)
 
        def get_tables(self):
-           res = self.execute('SHOW TABLES;')
+           res = self.execute_sql('SHOW TABLES;')
            return [r[0] for r in res.fetchall()]
 
-Other things the database handles that are not covered here include:
+The minimum Peewee relies on from the driver is: ``Connection.commit``,
+``Connection.rollback``, ``Connection.execute``, ``Cursor.description``, and
+``Cursor.fetchone``. Everything else can be incrementally added.
 
-* :meth:`~Database.last_insert_id` and :meth:`~Database.rows_affected`
-* :attr:`~Database.param` and :attr:`~Database.quote`, which tell the
-  SQL-generating code how to add parameter placeholders and quote entity names.
-* :attr:`~Database.field_types` for mapping data-types like INT or TEXT to
-  their vendor-specific type names.
-* :attr:`~Database.operations` for mapping operations such as "LIKE/ILIKE" to their database equivalent
+Other integration points on :class:`Database`:
 
-Refer to the :class:`Database` API reference or the `source code
-<https://github.com/coleifer/peewee/blob/master/peewee.py>`_. for details.
+* ``param`` / ``quote`` - parameter placeholder and quoting characters.
+* ``field_types`` - mapping from Peewee type labels to vendor column types.
+* ``operations`` - mapping from operations such as ``ILIKE`` to vendor SQL.
 
-.. note::
-   If your driver conforms to the DB-API 2.0 spec, there shouldn't be much
-   work needed to get up and running.
-
-Our new database can be used just like any of the other database subclasses:
-
-.. code-block:: python
-
-   from peewee import *
-   from foodb_ext import FooDatabase
-
-   db = FooDatabase('my_database', user='foo', password='secret')
-
-   class BaseModel(Model):
-       class Meta:
-           database = db
-
-   class Blog(BaseModel):
-       title = CharField()
-       contents = TextField()
-       pub_date = DateTimeField()
+Refer to the :class:`Database` API reference or the `Peewee source
+<https://github.com/coleifer/peewee/blob/master/peewee.py>`_ for details.

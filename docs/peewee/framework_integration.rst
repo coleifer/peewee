@@ -29,9 +29,10 @@ approach for each.
 .. note::
    Applications that handle significant traffic should use a
    :ref:`connection pool <connection-pooling>` to avoid the overhead of
-   establishing a new connection per request. The integration hooks below
-   work identically with pooled databases - ``connect()`` acquires from the
-   pool and ``close()`` returns to it.
+   establishing a new connection per request. Pooled databases can be used as
+   drop-in replacements for their non-pooled counterparts.
+
+.. _flask:
 
 Flask
 -----
@@ -58,9 +59,9 @@ Use ``before_request`` and ``teardown_request``:
 ``teardown_request`` is called regardless of whether the request succeeded or
 raised an exception, making it the correct hook for cleanup.
 
-For a complete Flask + Peewee application example, see :ref:`example-app`.
+For a complete Flask + Peewee application example, see :ref:`tutorial`.
 
-.. seealso:: :ref:`flask_utils`
+.. seealso:: :ref:`flask-utils`
 
 .. _fastapi:
 

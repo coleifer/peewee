@@ -23,6 +23,8 @@ swapping.
 Model Serialization
 ^^^^^^^^^^^^^^^^^^^
 
+.. module:: playhouse.shortcuts
+
 .. function:: model_to_dict(model, recurse=True, backrefs=False, only=None, exclude=None, extra_attrs=None, fields_from_query=None, max_depth=None, manytomany=False)
 
    Convert a model instance to a dictionary.
@@ -129,6 +131,8 @@ Thread-Safe Database Swapping
 
 .. _hybrid:
 
+.. module:: playhouse.hybrid
+
 Hybrid Attributes
 -----------------
 
@@ -205,6 +209,8 @@ When the Python and SQL implementations differ, provide a separate
 
 .. _kv:
 
+.. module:: playhouse.kv
+
 Key/Value Store
 ---------------
 
@@ -268,6 +274,8 @@ Key/Value Store
 
 
 .. _signals:
+
+.. module:: playhouse.signals
 
 Signals
 -------
@@ -351,6 +359,8 @@ Signal callback signature:
 
 
 .. _dataset:
+
+.. module:: playhouse.dataset
 
 DataSet
 -------
@@ -470,6 +480,8 @@ loading, and CSV/JSON import-export.
 
 .. _extra-fields:
 
+.. module:: playhouse.fields
+
 Extra Field Types
 -----------------
 
@@ -506,6 +518,8 @@ Extra Field Types
 
 
 .. _flask-utils:
+
+.. module:: playhouse.flask_utils
 
 Flask Utilities
 ---------------

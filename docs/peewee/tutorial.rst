@@ -1,17 +1,19 @@
-.. _example-app:
+.. _tutorial:
 
-Example app
-===========
+Tutorial
+========
 
 We'll be building a simple *twitter*-like site. The source code for the example
 can be found in the ``examples/twitter`` directory. You can also `browse the
 source-code <https://github.com/coleifer/peewee/tree/master/examples/twitter>`__
-on github. There is also an example `blog app <https://github.com/coleifer/peewee/tree/master/examples/blog>`__
-if that's more to your liking, however it is not covered in this guide.
+on github.
 
-The example app uses the `flask <http://flask.pocoo.org/>`__ web framework which
-is very easy to get started with. If you don't have flask already, you will
-need to install it to run the example:
+.. tip::
+   There is also an example `blog app <https://github.com/coleifer/peewee/tree/master/examples/blog>`__,
+   however it is not covered in this guide.
+
+The example app uses the `flask <https://flask.palletsprojects.com/en/stable/>`__
+web framework. You will need to install it to run the example:
 
 .. code-block:: shell
 
@@ -31,35 +33,33 @@ directory and execute the ``run_example.py`` script:
 
 The example app will be accessible at http://localhost:5000/
 
-Diving into the code
---------------------
+Code structure
+--------------
 
 For simplicity all example code is contained within a single module,
 ``examples/twitter/app.py``. For a guide on structuring larger Flask apps with
-peewee, check out `Structuring Flask Apps
-<https://charlesleifer.com/blog/structuring-flask-apps-a-how-to-for-those-coming-from-django/>`_.
+peewee, check out `Structuring Flask Apps <https://charlesleifer.com/blog/structuring-flask-apps-a-how-to-for-those-coming-from-django/>`_.
 
-.. _example-app-models:
+.. _tutorial-models:
 
 Models
 ^^^^^^
 
-In the spirit of the popular web framework Django, peewee uses declarative
-model definitions. If you're not familiar with Django, the idea is that you
-declare a model class for each table. The model class then defines one or more
-field attributes which correspond to the table's columns. For the twitter
-clone, there are just three models:
+peewee uses declarative model definitions. Declare a model class for each
+table. The model class then defines one or more field attributes which
+correspond to the table's columns. For the twitter clone, there are three
+models:
 
-*User*:
+**User**:
     Represents a user account and stores the username and password, an email
-    address for generating avatars using *gravatar*, and a datetime field
+    address for generating avatars using *gravatar* and a datetime field
     indicating when that account was created.
 
-*Relationship*:
+**Relationship**:
     This is a utility model that contains two foreign-keys to
     the *User* model and stores which users follow one another.
 
-*Message*:
+**Message**:
     Analogous to a tweet. The Message model stores the text content of
     the tweet, when it was created, and who posted it (foreign key to User).
 
@@ -67,9 +67,11 @@ If you like UML, these are the tables and relationships:
 
 .. image:: schema.jpg
 
-In order to create these models we need to instantiate a
-:class:`SqliteDatabase` object. Then we define our model classes, specifying
-the columns as :class:`Field` instances on the class.
+In order to create these models we need:
+
+1. declare a :class:`SqliteDatabase` object
+2. declare our model classes
+3. declare columns as :class:`Field` instances on the model classes
 
 .. code-block:: python
    :emphasize-lines: 3, 8, 13, 23, 39
@@ -136,7 +138,7 @@ allowing you to use the following in your application:
 * Binary data
 
 Creating tables
-^^^^^^^^^^^^^^^
+---------------
 
 In order to start using the models, its necessary to **create the tables**.
 This is a one-time operation and can be done quickly using the interactive
@@ -186,8 +188,8 @@ each model, ensuring the tables are created in order.
    * manually add, drop or modify the columns, OR
    * use the :ref:`migration tools <migrate>` to script your changes.
 
-Establishing a database connection
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Database connection
+-------------------
 
 You may have noticed in the above model code that there is a class defined on
 the base model named *Meta* that sets the ``database`` attribute. Peewee allows
@@ -222,7 +224,7 @@ When developing a web application, it's common to:
 are using a :ref:`connection pool <pool>`, connections will only be recycled
 correctly if you call :meth:`~Database.connect` and :meth:`~Database.close`.
 
-Flask provides some handy decorators to make this a snap:
+Flask provides connection setup/teardown hooks via decorators:
 
 .. code-block:: python
    :emphasize-lines: 1, 5
@@ -231,21 +233,24 @@ Flask provides some handy decorators to make this a snap:
    def before_request():
        database.connect()
 
-   @app.after_request
-   def after_request(response):
-       database.close()
-       return response
+   @app.teardown_request
+   def teardown_request(exc):
+       if not database.is_closed():
+           database.close()
 
 .. seealso::
    :ref:`framework-integration` covers setting-up hooks for a variety
-   of popular (and some not-so-popular) web frameworks.
+   of popular web frameworks.
 
 .. note::
    Peewee uses thread local storage to manage connection state, so this
-   pattern can be used with multi-threaded WSGI servers.
+   pattern can be used with multi-threaded or gevent WSGI servers.
+
+   Peewee's :ref:`asyncio integration <asyncio>` stores connection state in
+   task-local storage, so the same pattern applies.
 
 Making queries
-^^^^^^^^^^^^^^
+--------------
 
 In the *User* model there are a few instance methods that encapsulate some
 user-specific functionality:
@@ -257,9 +262,9 @@ These methods are similar in their implementation but with an important
 difference in the SQL *JOIN* and *WHERE* clauses:
 
 .. code-block:: python
+   :emphasize-lines: 4, 5, 11, 12
 
    def following(self):
-       # query other users through the "relationship" table
        return (User
                .select()
                .join(Relationship, on=Relationship.to_user)
@@ -273,15 +278,14 @@ difference in the SQL *JOIN* and *WHERE* clauses:
                .where(Relationship.to_user == self)
                .order_by(User.username))
 
-Creating new objects
-^^^^^^^^^^^^^^^^^^^^
+Storing data
+------------
 
 When a new user wants to join the site we need to make sure the username is
-available, and if so, create a new *User* record. Looking at the *join()* view,
-we can see that our application attempts to create the User using
-:meth:`Model.create`. We defined the *User.username* field with a unique
-constraint, so if the username is taken the database will raise an
-``IntegrityError``.
+available, and if so, create a new ``User`` record. Looking at the ``join()``
+view, we can see that our application attempts to create the ``User`` using
+:meth:`Model.create`. ``User.username`` field has a unique constraint, so if
+the username is taken the database will raise an :class:`IntegrityError`.
 
 .. code-block:: python
 
@@ -303,9 +307,9 @@ constraint, so if the username is taken the database will raise an
        flash('That username is already taken')
 
 We will use a similar approach when a user wishes to follow someone. To
-indicate a following relationship, we create a row in the *Relationship* table
-pointing from one user to another. Due to the unique index on ``from_user`` and
-``to_user``, we will be sure not to end up with duplicate rows:
+indicate a following relationship, we create a row in the ``Relationship``
+table pointing from one user to another. Due to the unique index on
+``(from_user, to_user)``, we will be sure not to end up with duplicate rows:
 
 .. code-block:: python
 
@@ -318,19 +322,19 @@ pointing from one user to another. Due to the unique index on ``from_user`` and
    except IntegrityError:
        pass
 
-Performing subqueries
-^^^^^^^^^^^^^^^^^^^^^
+Subqueries
+----------
 
 If you are logged-in and visit the twitter homepage, you will see tweets from
 the users that you follow. In order to implement this cleanly, we can use a
 subquery:
 
 .. note::
-   The subquery, ``user.following()``, by default would ordinarily select all
-   the columns on the ``User`` model. Because we're using it as a subquery,
-   peewee will only select the primary key.
+   ``user.following()`` will automatically only select ``User.id`` when it used
+   in a subquery.
 
 .. code-block:: python
+   :emphasize-lines: 5
 
    # python code
    user = get_current_user()
@@ -353,15 +357,14 @@ This code corresponds to the following SQL query:
        WHERE t3."from_user_id" = ?
    )
 
-Other topics of interest
-^^^^^^^^^^^^^^^^^^^^^^^^
+Other topics
+------------
 
 There are a couple other neat things going on in the example app that are worth
 mentioning briefly.
 
 * Support for paginating lists of results is implemented in a simple function called
-  ``object_list`` (after it's corollary in Django).  This function is used by all
-  the views that return lists of objects.
+  ``object_list``. This function is used by all the views that return lists of objects.
 
   .. code-block:: python
 
@@ -372,9 +375,9 @@ mentioning briefly.
          kwargs[var_name] = qr.paginate(kwargs['page'])
          return render_template(template_name, **kwargs)
 
-* Simple authentication system with a ``login_required`` decorator.  The first
+* Simple authentication system with a ``login_required`` decorator. The first
   function simply adds user data into the current session when a user successfully
-  logs in.  The decorator ``login_required`` can be used to wrap view functions,
+  logs in. The decorator ``login_required`` can be used to wrap view functions,
   checking for whether the session is authenticated and if not redirecting to the
   login page.
 
@@ -408,11 +411,11 @@ mentioning briefly.
 .. tip::
    To avoid having to frequently copy/paste :func:`object_list` or
    :func:`get_object_or_404`, these functions are included as part of the
-   playhouse :ref:`flask extension module <flask_utils>`.
+   playhouse :ref:`flask extension module <flask-utils>`.
 
    .. code-block:: python
 
-       from playhouse.flask_utils import get_object_or_404, object_list
+      from playhouse.flask_utils import get_object_or_404, object_list
 
 More examples
 -------------

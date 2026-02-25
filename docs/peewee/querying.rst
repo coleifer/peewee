@@ -1,1302 +1,505 @@
 .. _querying:
 
-Basic Queries
-=============
+Querying
+========
 
-This section will cover the basic CRUD operations commonly performed on a
-relational database:
+This document covers reading data from the database: SELECT queries, filtering,
+sorting, aggregation, and result-set iteration. Writing data (INSERT, UPDATE,
+DELETE) is covered in :ref:`writing`.
 
-+-----------------+-----------------------------------------------------------+
-| Query           | Methods                                                   |
-+=================+===========================================================+
-| INSERT          | * :meth:`Model.create`                                    |
-|                 | * :meth:`Model.insert`                                    |
-|                 | * :meth:`Model.insert_many`                               |
-|                 | * :meth:`Model.insert_from`                               |
-|                 | * :meth:`Model.replace` (Postgres unsupported)            |
-|                 | * :meth:`Model.replace_many` (Postgres unsupported)       |
-+-----------------+-----------------------------------------------------------+
-| UPDATE          | * :meth:`Model.save`                                      |
-|                 | * :meth:`Model.update`                                    |
-+-----------------+-----------------------------------------------------------+
-| DELETE          | * :meth:`Model.delete_instance`                           |
-|                 | * :meth:`Model.delete`                                    |
-+-----------------+-----------------------------------------------------------+
-| SELECT          | * :meth:`Model.select`                                    |
-|                 | * :meth:`Model.get`                                       |
-+-----------------+-----------------------------------------------------------+
+All examples use the following models (see :ref:`models`):
+
+.. code-block:: python
+
+   import datetime
+   from peewee import *
+
+   db = SqliteDatabase(':memory:')
+
+   class BaseModel(Model):
+       class Meta:
+           database = db
+
+   class User(BaseModel):
+       username = TextField(unique=True)
+
+   class Tweet(BaseModel):
+       user = ForeignKeyField(User, backref='tweets')
+       content = TextField()
+       timestamp = DateTimeField(default=datetime.datetime.now)
+       is_published = BooleanField(default=True)
+
+
+Selecting Records
+-----------------
+
+:meth:`Model.select` returns a :class:`Select` query. The query is lazy - the
+database is not queried until you iterate over the result, index, slice or call
+a method that forces execution.
+
+.. code-block:: python
+
+   # All users. No query issued yet.
+   query = User.select()
+
+   # Query executes here.
+   for user in query:
+       print(user.username)
+
+Iterating over the same query object a second time does not re-query the
+database: results are cached on the query object. To disable caching (for
+example, when iterating over a large result set), use :meth:`~BaseQuery.iterator`:
+
+.. code-block:: python
+
+   for user in User.select().iterator():
+       process(user)   # One row at a time, not cached.
+
+To select specific columns rather than all columns, pass field expressions to
+``select()``:
+
+.. code-block:: python
+
+   for user in User.select(User.username):
+       print(user.username)
+       # user.id is not populated - it was not selected.
+
+To select columns from multiple models, pass both model classes or their
+fields. Peewee reconstructs the model graph from the result set:
+
+.. code-block:: python
+
+   query = Tweet.select(Tweet, User).join(User)
+   for tweet in query:
+       # tweet.user is a fully populated User instance.
+       # No extra query is issued.
+       print(tweet.user.username, '->', tweet.content)
 
 .. seealso::
-   :ref:`Large collection of Peewee query examples <query_examples>`. Examples
-   based on `Postgresql Exercises <https://pgexercises.com/>`_.
+   :ref:`relationships` covers joins in detail.
 
-INSERT queries
---------------
 
-Use :meth:`Model.create` to create a new model instance. This method
-accepts keyword arguments, where the keys correspond to the names of the
-model's fields. A new instance is returned and a row is added to the table.
+Retrieving a Single Record
+--------------------------
 
-.. code-block:: pycon
-
-   >>> User.create(username='Charlie')
-   <User: 1>
-
-This will INSERT a new row into the database. The primary key will
-automatically be retrieved and stored on the model instance.
-
-You can also build a model instance programmatically and call :meth:`Model.save`:
-
-.. code-block:: pycon
-
-   >>> user = User(username='Charlie')
-   >>> user.save()  # save() returns the number of rows modified.
-   1
-   >>> user.id
-   1
-   >>> huey = User()
-   >>> huey.username = 'Huey'
-   >>> huey.save()
-   1
-   >>> huey.id
-   2
-
-When a model has a foreign key, you can directly assign a model instance to the
-foreign key field when creating a new record.
-
-.. code-block:: pycon
-
-   >>> tweet = Tweet.create(user=huey, message='Hello!')
-
-You can also use the value of the related object's primary key:
-
-.. code-block:: pycon
-
-   >>> tweet = Tweet.create(user=2, message='Hello again!')
-
-Insert
-^^^^^^
-
-To insert data when you do not need a model instance use :meth:`Model.insert`:
-
-.. code-block:: pycon
-
-   >>> User.insert(username='Mickey').execute()
-   3
-
-After executing the insert query, the primary key of the new row is returned.
-
-.. seealso::
-   * :ref:`bulk_inserts`
-   * :ref:`upsert`
-
-.. _bulk_inserts:
-
-Bulk inserts
-^^^^^^^^^^^^
-
-Calling :meth:`Model.create` or :meth:`Model.save` in a loop should be avoided:
+:meth:`Model.get` executes the query and returns the first matching row.
+If no row matches, :exc:`~Model.DoesNotExist` is raised:
 
 .. code-block:: python
 
-   data_source = [
-       {'field1': 'val1-1', 'field2': 'val1-2'},
-       {'field1': 'val2-1', 'field2': 'val2-2'},
-       # ...
-   ]
+   user = User.get(User.username == 'charlie')
 
-   for data_dict in data_source:
-       MyModel.create(**data_dict)
+   # Equivalent long form:
+   user = User.select().where(User.username == 'charlie').get()
 
-The above is slow:
-
-1. **Does not wrap the loop in a transaction.** Result is each :meth:`~Model.create`
-   happens in its own transaction.
-2. **Python interpreter** is getting in the way, and each :class:`InsertQuery`
-   must be generated and parsed into SQL.
-3. **Large amount of data** (in terms of raw bytes of SQL) sent to the database
-   to parse.
-4. **Retrieving the last insert id**, which may not be necessary.
-
-You can get a significant speedup by simply wrapping this in a transaction with
-:meth:`~Database.atomic`.
-
-.. code-block:: python
-   :emphasize-lines: 1
-
-   with db.atomic():
-       for data_dict in data_source:
-           MyModel.create(**data_dict)
-
-The above code still suffers from points 2, 3 and 4. Performance can be
-increased by using :meth:`~Model.insert_many`. This method accepts a list of
-tuples or dictionaries, and inserts multiple rows in a single query:
-
-.. code-block:: python
-   :emphasize-lines: 8
-
-   data_source = [
-       {'field1': 'val1-1', 'field2': 'val1-2'},
-       {'field1': 'val2-1', 'field2': 'val2-2'},
-       # ...
-   ]
-
-   # Fastest way to INSERT multiple rows.
-   MyModel.insert_many(data_source).execute()
-
-The :meth:`~Model.insert_many` method also accepts a list of row-tuples,
-provided you also specify the corresponding fields:
-
-.. code-block:: python
-   :emphasize-lines: 7
-
-   # We can INSERT tuples as well...
-   data = [('val1-1', 'val1-2'),
-           ('val2-1', 'val2-2'),
-           ('val3-1', 'val3-2')]
-
-   # But we need to indicate which fields the values correspond to.
-   MyModel.insert_many(data, fields=[MyModel.field1, MyModel.field2]).execute()
-
-Optionally wrap the bulk insert in a transaction:
+:meth:`~Model.get_by_id` and the subscript operator are shortcuts for
+primary-key lookups:
 
 .. code-block:: python
 
-   with db.atomic():
-       MyModel.insert_many(data, fields=fields).execute()
+   user = User.get_by_id(1)
+   user = User[1]             # Same.
 
-.. note::
-   SQLite users should be aware that by default SQLite limits the number of
-   bound variables in a SQL query (value depends on how SQLite was compiled),
-   but ``999`` is common for SQLite versions prior to 3.32.0 (2020-05-22) and
-   32766 for SQLite versions after 3.32.0.
-
-Inserting rows in batches
-^^^^^^^^^^^^^^^^^^^^^^^^^
-
-Depending on the number of rows in your data source, you may need to break it
-up into chunks. SQLite in particular may have a `limit of 32766 <https://www.sqlite.org/limits.html#max_variable_number>`_
-variables-per-query (batch size would then be 32766 // row length).
-
-You can write a loop to batch your data into chunks. It is **strongly recommended**
-you use a transaction:
+:meth:`~Model.get_or_none` returns ``None`` instead of raising an exception
+when no row is found:
 
 .. code-block:: python
 
-   # Insert rows 100 at a time.
-   with db.atomic():
-       for idx in range(0, len(data_source), 100):
-           MyModel.insert_many(data_source[idx:idx+100]).execute()
+   user = User.get_or_none(User.username == 'charlie')
+   if user is None:
+       print('Not found.')
 
-Peewee comes with a :func:`chunked` helper function which you can use for
-*efficiently* chunking a generic iterable into a series of *batch*-sized
-iterables:
+:meth:`~SelectBase.first` returns the first row of a query, or ``None``:
 
 .. code-block:: python
 
-    from peewee import chunked
+   latest = Tweet.select().order_by(Tweet.timestamp.desc()).first()
 
-    # Insert rows 100 at a time.
-    with db.atomic():
-        for batch in chunked(data_source, 100):
-            MyModel.insert_many(batch).execute()
+Get or Create
+^^^^^^^^^^^^^
 
-Alternatives
-^^^^^^^^^^^^
-
-The :meth:`Model.bulk_create` method behaves much like
-:meth:`Model.insert_many`, but instead it accepts a list of unsaved model
-instances to insert, and it optionally accepts a batch-size parameter. To use
-the :meth:`~Model.bulk_create` API:
+:meth:`~Model.get_or_create` retrieves a matching row, or creates it if it
+does not exist. It returns a ``(instance, created)`` tuple:
 
 .. code-block:: python
 
-    # Read list of usernames from a file, for example.
-    with open('user_list.txt') as fh:
-        # Create a list of unsaved User instances.
-        users = [User(username=line.strip()) for line in fh.readlines()]
+   user, created = User.get_or_create(username='charlie')
+   if created:
+       print('New user created.')
 
-    # Wrap the operation in a transaction and batch INSERT the users
-    # 100 at a time.
-    with db.atomic():
-        User.bulk_create(users, batch_size=100)
-
-.. note::
-   If you are using Postgresql (which supports the ``RETURNING`` clause), then
-   the previously-unsaved model instances will have their new primary key
-   values automatically populated.
-
-In addition, Peewee also offers :meth:`Model.bulk_update`, which can
-efficiently update one or more columns on a list of models. For example:
+Use the ``defaults`` keyword to supply values that are only used during
+creation, not as lookup keys:
 
 .. code-block:: python
 
-   # First, create 3 users with usernames u1, u2, u3.
-   u1, u2, u3 = [User.create(username='u%s' % i) for i in (1, 2, 3)]
-
-   # Now we'll modify the user instances.
-   u1.username = 'u1-x'
-   u2.username = 'u2-y'
-   u3.username = 'u3-z'
-
-   # Update all three users with a single UPDATE query.
-   User.bulk_update([u1, u2, u3], fields=[User.username])
-
-This will result in executing the following SQL:
-
-.. code-block:: sql
-
-   UPDATE "users" SET "username" = CASE "users"."id"
-       WHEN 1 THEN "u1-x"
-       WHEN 2 THEN "u2-y"
-       WHEN 3 THEN "u3-z" END
-   WHERE "users"."id" IN (1, 2, 3);
-
-.. note::
-   For large lists of objects, you should specify a reasonable batch_size and
-   wrap the call to :meth:`~Model.bulk_update` with :meth:`Database.atomic`:
-
-   .. code-block:: python
-
-      with database.atomic():
-          User.bulk_update(list_of_users, fields=['username'], batch_size=50)
-
-.. warning::
-   :meth:`Model.bulk_update` may not be the most efficient method for
-   updating large numbers of records. This functionality is implemented such
-   that we create a "mapping" of primary key to corresponding field values for
-   all rows being updated using a SQL ``CASE`` statement.
-
-Alternatively, you can use the :meth:`Database.batch_commit` helper to
-process chunks of rows inside *batch*-sized transactions. This method also
-provides a workaround for databases besides Postgresql, when the primary-key of
-the newly-created rows must be obtained.
-
-.. code-block:: python
-
-   # List of row data to insert.
-   row_data = [{'username': 'u1'}, {'username': 'u2'}, ...]
-
-   # Assume there are 789 items in row_data. The following code will result in
-   # 8 total transactions (7x100 rows + 1x89 rows).
-   for row in db.batch_commit(row_data, 100):
-       User.create(**row)
-
-Bulk-loading from another table
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-
-If the data you would like to bulk load is stored in another table, you can
-also create *INSERT* queries whose source is a *SELECT* query. Use the
-:meth:`Model.insert_from` method:
-
-.. code-block:: python
-
-   res = (TweetArchive
-          .insert_from(
-              Tweet.select(Tweet.user, Tweet.message),
-              fields=[TweetArchive.user, TweetArchive.message])
-          .execute())
-
-The above query is equivalent to the following SQL:
-
-.. code-block:: sql
-
-   INSERT INTO "tweet_archive" ("user_id", "message")
-   SELECT "user_id", "message" FROM "tweet";
-
-Updating existing records
--------------------------
-
-Once a model instance has a primary key, any subsequent call to
-:meth:`~Model.save` will result in an *UPDATE* rather than another *INSERT*.
-The model's primary key will not change:
-
-.. code-block:: pycon
-
-   >>> user.save()  # save() returns the number of rows modified.
-   1
-   >>> user.id
-   1
-   >>> user.save()
-   >>> user.id
-   1
-   >>> huey.save()
-   1
-   >>> huey.id
-   2
-
-If you want to update multiple records, issue an *UPDATE* query. The following
-example will update all ``Tweet`` objects, marking them as *published*, if they
-were created before today. :meth:`Model.update` accepts keyword arguments
-where the keys correspond to the model's field names:
-
-.. code-block:: pycon
-   :emphasize-lines: 2
-
-   >>> today = datetime.today()
-   >>> query = Tweet.update(is_published=True).where(Tweet.creation_date < today)
-   >>> query.execute()  # Returns the number of rows that were updated.
-   4
-
-For more information, see the documentation on :meth:`Model.update`,
-:class:`Update` and :meth:`Model.bulk_update`.
-
-.. note::
-   If you would like more information on performing atomic updates (such as
-   incrementing the value of a column), check out the :ref:`atomic update <atomic_updates>`
-   recipes.
-
-.. _atomic_updates:
-
-Atomic updates
---------------
-
-Peewee allows you to perform atomic updates. Let's suppose we need to update
-some counters. The naive approach would be to write something like this:
-
-.. code-block:: pycon
-
-   >>> for stat in Stat.select().where(Stat.url == request.url):
-   ...     stat.counter += 1
-   ...     stat.save()
-
-**Do not do this!** Not only is this slow, but it is also vulnerable to race
-conditions if multiple processes are updating the counter at the same time.
-
-Instead, you can update the counters atomically using :meth:`~Model.update`:
-
-.. code-block:: pycon
-
-   >>> query = Stat.update(counter=Stat.counter + 1).where(Stat.url == request.url)
-   >>> query.execute()
-
-You can make these update statements as complex as you like. Let's give all our
-employees a bonus equal to their previous bonus plus 10% of their salary:
-
-.. code-block:: pycon
-
-   >>> query = Employee.update(bonus=(Employee.bonus + (Employee.salary * .1)))
-   >>> query.execute()  # Give everyone a bonus!
-
-We can even use a subquery to update the value of a column. Suppose we had a
-denormalized column on the ``User`` model that stored the number of tweets a
-user had made, and we updated this value periodically. Here is how you might
-write such a query:
-
-.. code-block:: pycon
-
-   >>> subquery = Tweet.select(fn.COUNT(Tweet.id)).where(Tweet.user == User.id)
-   >>> update = User.update(num_tweets=subquery)
-   >>> update.execute()
-
-Upsert
-------
-
-Peewee provides support for varying types of upsert functionality.
-
-* :meth:`Model.replace` - SQLite and MySQL
-* :meth:`Insert.on_conflict_replace` - SQLite and MySQL
-* :meth:`Insert.on_conflict_ignore` - SQLite, MySQL and Postgres
-* :meth:`Insert.on_conflict` - SQLite, MySQL and Postgres. This is the most
-  powerful and most general method.
-
-With SQLite and MySQL, Peewee offers the :meth:`~Model.replace`, which
-allows you to insert a record or, in the event of a constraint violation,
-replace the entire existing record.
-
-Example of using :meth:`~Model.replace` and :meth:`~Insert.on_conflict_replace`:
-
-.. code-block:: python
-
-   class User(Model):
-       username = TextField(unique=True)
-       last_login = DateTimeField(null=True)
-
-   # Insert or update the user. The "last_login" value will be updated
-   # regardless of whether the user existed previously.
-   user_id = (User
-              .replace(username='the-user', last_login=datetime.now())
-              .execute())
-
-   # This query is equivalent:
-   user_id = (User
-              .insert(username='the-user', last_login=datetime.now())
-              .on_conflict_replace()
-              .execute())
-
-.. note::
-   In addition to *replace*, SQLite, MySQL and Postgresql provide an *ignore*
-   action (see: :meth:`~Insert.on_conflict_ignore`) if you simply wish to
-   insert and ignore any potential constraint violation.
-
-**MySQL** supports upsert via the *ON DUPLICATE KEY UPDATE* clause. For
-example:
-
-.. code-block:: python
-   :emphasize-lines: 14, 15, 16
-
-   class User(Model):
-       username = TextField(unique=True)
-       last_login = DateTimeField(null=True)
-       login_count = IntegerField()
-
-   # Insert a new user.
-   User.create(username='huey', login_count=0)
-
-   # Simulate the user logging in. The login count and timestamp will be
-   # either created or updated correctly.
-   now = datetime.now()
-   rowid = (User
-            .insert(username='huey', last_login=now, login_count=1)
-            .on_conflict(
-                preserve=[User.last_login],  # Use the value we would have inserted.
-                update={User.login_count: User.login_count + 1})
-            .execute())
-
-In the above example, we could safely invoke the upsert query as many times as
-we wanted. The login count will be incremented atomically, the last login
-column will be updated, and no duplicate rows will be created.
-
-**Postgresql and SQLite** (3.24.0 and newer) provide a different syntax that
-allows for more granular control over which constraint violation should trigger
-the conflict resolution, and what values should be updated or preserved.
-
-Example of using :meth:`~Insert.on_conflict` to perform an upsert:
-
-.. code-block:: python
-   :emphasize-lines: 14, 15, 16, 17
-
-   class User(Model):
-       username = TextField(unique=True)
-       last_login = DateTimeField(null=True)
-       login_count = IntegerField()
-
-   # Insert a new user.
-   User.create(username='huey', login_count=0)
-
-   # Simulate the user logging in. The login count and timestamp will be
-   # either created or updated correctly.
-   now = datetime.now()
-   rowid = (User
-            .insert(username='huey', last_login=now, login_count=1)
-            .on_conflict(
-                conflict_target=[User.username],  # Which constraint?
-                preserve=[User.last_login],  # Use the value we would have inserted.
-                update={User.login_count: User.login_count + 1})
-            .execute())
-
-In the above example, we could safely invoke the upsert query as many times as
-we wanted. The login count will be incremented atomically, the last login
-column will be updated, and no duplicate rows will be created.
-
-.. note::
-   The main difference between MySQL and Postgresql/SQLite is that Postgresql
-   and SQLite require that you specify a ``conflict_target``.
-
-Here is a more advanced (if contrived) example using the :class:`EXCLUDED`
-namespace. The :class:`EXCLUDED` helper allows us to reference values in the
-conflicting data. For our example, we'll assume a simple table mapping a unique
-key (string) to a value (integer):
-
-.. code-block:: python
-   :emphasize-lines: 15, 16
-
-   class KV(Model):
-       key = CharField(unique=True)
-       value = IntegerField()
-
-   # Create one row.
-   KV.create(key='k1', value=1)
-
-   # Demonstrate usage of EXCLUDED.
-   # Here we will attempt to insert a new value for a given key. If that
-   # key already exists, then we will update its value with the *sum* of its
-   # original value and the value we attempted to insert -- provided that
-   # the new value is larger than the original value.
-   query = (KV.insert(key='k1', value=10)
-            .on_conflict(conflict_target=[KV.key],
-                         update={KV.value: KV.value + EXCLUDED.value},
-                         where=(EXCLUDED.value > KV.value)))
-
-   # Executing the above query will result in the following data being
-   # present in the "kv" table:
-   # (key='k1', value=11)
-   query.execute()
-
-   # If we attempted to execute the query *again*, then nothing would be
-   # updated, as the new value (10) is now less than the value in the
-   # original row (11).
-
-There are several important concepts to understand when using ``ON CONFLICT``:
-
-* ``conflict_target=``: which column(s) have the UNIQUE constraint. For a user
-  table, this might be the user's email.
-* ``preserve=``: if a conflict occurs, this parameter is used to indicate which
-  values from the **new** data we wish to update.
-* ``update=``: if a conflict occurs, this is a mapping of data to apply to the
-  pre-existing row.
-* ``EXCLUDED``: this "magic" namespace allows you to reference the new data
-  that would have been inserted if the constraint hadn't failed.
-
-Full example:
-
-.. code-block:: python
-
-   class User(Model):
-       email = CharField(unique=True)  # Unique identifier for user.
-       last_login = DateTimeField()
-       login_count = IntegerField(default=0)
-       ip_log = TextField(default='')
-
-
-   # Demonstrates the above 4 concepts.
-   def login(email, ip):
-       rowid = (User
-                .insert({User.email: email,
-                         User.last_login: datetime.now(),
-                         User.login_count: 1,
-                         User.ip_log: ip})
-                .on_conflict(
-                    # If the INSERT fails due to a constraint violation on the
-                    # user email, then perform an UPDATE instead.
-                    conflict_target=[User.email],
-
-                    # Set the "last_login" to the value we would have inserted
-                    # (our call to datetime.now()).
-                    preserve=[User.last_login],
-
-                    # Increment the user's login count and prepend the new IP
-                    # to the user's ip history.
-                    update={User.login_count: User.login_count + 1,
-                            User.ip_log: fn.CONCAT(EXCLUDED.ip_log, ',', User.ip_log)})
-                .execute())
-
-       return rowid
-
-   # This will insert the initial row, returning the new row id (1).
-   print(login('test@example.com', '127.1'))
-
-   # Because test@example.com exists, this will trigger the UPSERT. The row id
-   # from above is returned again (1).
-   print(login('test@example.com', '127.2'))
-
-   u = User.get()
-   print(u.login_count, u.ip_log)
-
-   # Prints "2 127.2,127.1"
-
-.. seealso:: :meth:`Insert.on_conflict` and :class:`OnConflict`.
-
-Deleting records
-----------------
-
-To delete a single model instance, you can use the
-:meth:`Model.delete_instance` shortcut. :meth:`~Model.delete_instance`
-will delete the given model instance and can optionally delete any dependent
-objects recursively (by specifying `recursive=True`).
-
-.. code-block:: pycon
-   :emphasize-lines: 2
-
-   >>> user = User.get(User.id == 1)
-   >>> user.delete_instance()  # Returns the number of rows deleted.
-   1
-
-   >>> User.get(User.id == 1)
-   UserDoesNotExist: instance matching query does not exist:
-   SQL: SELECT t1."id", t1."username" FROM "user" AS t1 WHERE t1."id" = ?
-   PARAMS: [1]
-
-To delete an arbitrary set of rows, you can issue a *DELETE* query. The
-following will delete all ``Tweet`` objects that are over one year old:
-
-.. code-block:: pycon
-   :emphasize-lines: 1
-
-   >>> query = Tweet.delete().where(Tweet.creation_date < one_year_ago)
-   >>> query.execute()  # Returns the number of rows deleted.
-   7
-
-For more information, see the documentation on:
-
-* :meth:`Model.delete_instance`
-* :meth:`Model.delete`
-* :class:`DeleteQuery`
-
-Selecting a single record
--------------------------
-
-You can use the :meth:`Model.get` method to retrieve a single instance
-matching the given query. For primary-key lookups, you can also use the
-shortcut method :meth:`Model.get_by_id`.
-
-This method is a shortcut that calls :meth:`Model.select` with the given
-query, but limits the result set to a single row. Additionally, if no model
-matches the given query, a ``DoesNotExist`` exception will be raised.
-
-.. code-block:: pycon
-
-   >>> User.get(User.id == 1)
-   <User: 1>
-
-   >>> User.get_by_id(1)  # Same as above.
-   <User: 1>
-
-   >>> User[1]  # Also same as above.
-   <User: 1>
-
-   >>> User.get(User.id == 1).username
-   'Charlie'
-
-   >>> User.get(User.username == 'Charlie')
-   <User: 1>
-
-   >>> User.get(User.username == 'nobody')
-   UserDoesNotExist: <Model: User> instance matching query does not exist:
-   SQL: SELECT "t1"."id", "t1"."username" FROM "user" AS "t1" WHERE ...
-   Params: ['username', 1, 0]
-
-For more advanced operations, you can use :meth:`SelectBase.get`. The
-following query retrieves the latest tweet from the user named *charlie*:
-
-.. code-block:: pycon
-
-   >>> (Tweet
-   ...  .select()
-   ...  .join(User)
-   ...  .where(User.username == 'charlie')
-   ...  .order_by(Tweet.created_date.desc())
-   ...  .get())
-   <Tweet: 3>
-
-For more information, see the documentation on:
-
-* :meth:`Model.get`
-* :meth:`Model.get_by_id`
-* :meth:`Model.get_or_none` - if no matching row is found, return ``None``.
-* :meth:`Model.select`
-* :meth:`SelectBase.get`
-* :meth:`SelectBase.first` - return first record of result-set or ``None``.
-
-Create or get
--------------
-
-Peewee has one helper method for performing "get/create" type operations:
-:meth:`Model.get_or_create`, which first attempts to retrieve the matching
-row. Failing that, a new row will be created.
-
-For "create or get" type logic, typically one would rely on a *unique*
-constraint or primary key to prevent the creation of duplicate objects. As an
-example, let's say we wish to implement registering a new user account using
-the :ref:`example User model <blog-models>`. The *User* model has a *unique*
-constraint on the username field, so we will rely on the database's integrity
-guarantees to ensure we don't end up with duplicate usernames:
+   user, created = User.get_or_create(
+       username='charlie',
+       defaults={'joined': datetime.date.today()})
+
+When uniqueness is enforced by a database constraint, the recommended pattern
+is to attempt creation first and fall back to retrieval on failure:
 
 .. code-block:: python
 
    try:
        with db.atomic():
            return User.create(username=username)
-   except peewee.IntegrityError:
-       # `username` is a unique column, so this username already exists,
-       # making it safe to call .get().
+   except IntegrityError:
        return User.get(User.username == username)
 
-You can easily encapsulate this type of logic as a ``classmethod`` on your own
-``Model`` classes.
+This avoids a race window between the lookup and the insert.
 
-The above example first attempts at creation, then falls back to retrieval,
-relying on the database to enforce a unique constraint. If you prefer to
-attempt to retrieve the record first, you can use
-:meth:`~Model.get_or_create`. This method is implemented along the same
-lines as the Django function of the same name. You can use the Django-style
-keyword argument filters to specify your ``WHERE`` conditions. The function
-returns a 2-tuple containing the instance and a boolean value indicating if the
-object was created.
+.. _filtering:
 
-Here is how you might implement user account creation using
-:meth:`~Model.get_or_create`:
+Filtering
+---------
+
+:meth:`~Query.where` accepts expressions built from field comparisons. Peewee
+overloads Python's comparison operators to produce SQL expressions:
 
 .. code-block:: python
 
-   user, created = User.get_or_create(username=username)
-
-Suppose we have a different model ``Person`` and would like to get or create a
-person object. The only conditions we care about when retrieving the ``Person``
-are their first and last names, **but** if we end up needing to create a new
-record, we will also specify their date-of-birth and favorite color:
-
-.. code-block:: python
-
-   person, created = Person.get_or_create(
-       first_name=first_name,
-       last_name=last_name,
-       defaults={'dob': dob, 'favorite_color': 'green'})
-
-Any keyword argument passed to :meth:`~Model.get_or_create` will be used in
-the ``get()`` portion of the logic, except for the ``defaults`` dictionary,
-which will be used to populate values on newly-created instances.
-
-For more details read the documentation for :meth:`Model.get_or_create`.
-
-Selecting multiple records
---------------------------
-
-We can use :meth:`Model.select` to retrieve rows from the table. When you
-construct a *SELECT* query, the database will return any rows that correspond
-to your query. Peewee allows you to iterate over these rows, as well as use
-indexing and slicing operations:
-
-.. code-block:: pycon
-
-   >>> query = User.select()
-   >>> [user.username for user in query]
-   ['Charlie', 'Huey', 'Peewee']
-
-   >>> query[1]
-   <User: 1>
-
-   >>> query[1].username
-   'Huey'
-
-   >>> query[:2]
-   [<User: 1>, <User: 2>]
-
-:class:`Select` queries are smart, in that you can iterate, index and slice
-the query multiple times but the query is only executed once.
-
-In the following example, we will simply call :meth:`~Model.select` and
-iterate over the return value, which is an instance of :class:`Select`.
-This will return all the rows in the *User* table:
-
-.. code-block:: pycon
-
-   >>> for user in User.select():
-   ...     print(user.username)
-   ...
-   Charlie
-   Huey
-   Peewee
-
-.. note::
-   Subsequent iterations of the same query will not hit the database as the
-   results are cached. To disable this behavior (to reduce memory usage), call
-   :meth:`Select.iterator` when iterating.
-
-When iterating over a model that contains a foreign key, be careful with the
-way you access values on related models. Accidentally resolving a foreign key
-or iterating over a back-reference can cause :ref:`N+1 query behavior <nplusone>`.
-
-When you create a foreign key, such as ``Tweet.user``, you can use the
-*backref* to create a back-reference (``User.tweets``). Back-references
-are exposed as :class:`Select` instances:
-
-.. code-block:: pycon
-
-   >>> tweet = Tweet.get()
-   >>> tweet.user  # Accessing a foreign key returns the related model.
-   <User: 2>
-
-   >>> user = User.get()
-   >>> user.tweets  # Accessing a back-reference returns a query.
-   <peewee.ModelSelect at 0x7f73db3bafd0>
-
-You can iterate over the ``user.tweets`` back-reference just like any other
-:class:`Select`:
-
-.. code-block:: pycon
-
-    >>> for tweet in user.tweets:
-    ...     print(tweet.message)
-    ...
-    hello world
-    this is fun
-    look at this picture of my food
-
-In addition to returning model instances, :class:`Select` queries can return
-dictionaries, tuples and namedtuples. Depending on your use-case, you may find
-it easier to work with rows as dictionaries, for example:
-
-.. code-block:: pycon
-
-   >>> query = User.select().dicts()
-   >>> for row in query:
-   ...     print(row)
-
-   {'id': 1, 'username': 'Charlie'}
-   {'id': 2, 'username': 'Huey'}
-   {'id': 3, 'username': 'Peewee'}
-
-See :meth:`~BaseQuery.namedtuples`, :meth:`~BaseQuery.tuples`,
-:meth:`~BaseQuery.dicts` for more information.
-
-Iterating over large result-sets
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-
-By default peewee will cache the rows returned when iterating over a
-:class:`Select` query. This is an optimization to allow multiple iterations
-as well as indexing and slicing without causing additional queries. This
-caching can be problematic, however, when you plan to iterate over a large
-number of rows.
-
-To reduce the amount of memory used by peewee when iterating over a query, use
-the :meth:`~BaseQuery.iterator` method. This method allows you to iterate
-without caching each model returned, using much less memory when iterating over
-large result sets.
-
-.. code-block:: python
-   :emphasize-lines: 8
-
-   # Let's assume we've got 10 million stat objects to dump to a csv file.
-   stats = Stat.select()
-
-   # Our imaginary serializer class
-   serializer = CSVSerializer()
-
-   # Loop over all the stats and serialize.
-   for stat in stats.iterator():
-       serializer.serialize_object(stat)
-
-For simple queries you can see further speed improvements by returning rows as
-dictionaries, namedtuples or tuples. The following methods can be used on any
-:class:`Select` query to change the result row type:
-
-* :meth:`~BaseQuery.dicts`
-* :meth:`~BaseQuery.namedtuples`
-* :meth:`~BaseQuery.tuples`
-
-Don't forget to append the :meth:`~BaseQuery.iterator` method call to also
-reduce memory consumption. For example, the above code might look like:
-
-.. code-block:: python
-   :emphasize-lines: 4, 5
-
-   # Let's assume we've got 10 million stat objects to dump to a csv file.
-   stats = (Stat
-            .select()
-            .tuples()
-            .iterator())
-
-   # Our imaginary serializer class
-   serializer = CSVSerializer()
-
-   # Loop over all the stats (rendered as tuples, without caching) and serialize.
-   for stat_tuple in stats:
-       serializer.serialize_tuple(stat_tuple)
-
-When iterating over a large number of rows that contain columns from multiple
-tables, peewee will reconstruct the model graph for each row returned. This
-operation can be slow for complex graphs. For example, if we were selecting a
-list of tweets along with the username and avatar of the tweet's author, Peewee
-would have to create two objects for each row (a tweet and a user). In addition
-to the above row-types, there is a fourth method :meth:`~BaseQuery.objects`
-which will return the rows as model instances, but will not attempt to resolve
-the model graph.
-
-For example:
-
-.. code-block:: python
-   :emphasize-lines: 12
-
-   query = (Tweet
-            .select(Tweet, User)  # Select tweet and user data.
-            .join(User))
-
-   # Note that the user columns are stored in a separate User instance
-   # accessible at tweet.user:
-   for tweet in query:
-       print(tweet.user.username, tweet.content)
-
-   # Using ".objects()" will not create the tweet.user object and assigns all
-   # user attributes to the tweet instance:
-   for tweet in query.objects():
-       print(tweet.username, tweet.content)
-
-For maximum performance, you can execute queries and then iterate over the
-results using the underlying database cursor. :meth:`Database.execute`
-accepts a query object, executes the query, and returns a DB-API 2.0 ``Cursor``
-object. The cursor will return the raw row-tuples:
-
-.. code-block:: python
-   :emphasize-lines: 2
-
-   query = Tweet.select(Tweet.content, User.username).join(User)
-   cursor = database.execute(query)
-   for (content, username) in cursor:
-       print(username, '->', content)
-
-Filtering records
------------------
-
-You can filter for particular records using normal python operators. Peewee
-supports a wide variety of :ref:`query operators <query-operators>`.
-
-.. code-block:: python
-
-   tweets = (Tweet
-             .select(Tweet, User)
-             .join(User)
-             .where((User.username == 'Charlie') &
-                    (Tweet.is_published == True)))
-   for tweet in tweets:
-       print(tweet.user.username, '->', tweet.message)
-
-   # Charlie -> hello world
-   # Charlie -> this is fun
-
-   tweets = (Tweet
-             .select()
-             .where(Tweet.created_date < datetime(2011, 1, 1)))
-   for tweet in tweets:
-       print(tweet.message, tweet.created_date)
-
-   # Really old tweet 2010-01-01 00:00:00
-
-If you want to express a complex query, use parentheses and python's bitwise
-*or* and *and* operators:
-
-.. code-block:: python
-
-   Tweet.select().join(User).where(
-       (User.username == 'Charlie') |
-       (User.username == 'Peewee Herman'))
-
-.. note::
-   Note that Peewee uses **bitwise** operators (``&`` and ``|``) rather than
-   logical operators (``and`` and ``or``). The reason for this is that Python
-   coerces the return value of logical operations to a boolean value. This is
-   also the reason why "IN" queries must be expressed using ``.in_()`` rather
-   than the ``in`` operator.
+   # Equality
+   User.select().where(User.username == 'charlie')
+
+   # Inequality
+   Tweet.select().where(Tweet.is_published != False)
+
+   # Comparison
+   Tweet.select().where(Tweet.timestamp < datetime.datetime(2024, 1, 1))
+
+.. warning::
+   Peewee uses **bitwise** operators (``&`` and ``|``) rather than logical
+   operators (``and`` and ``or``). The reason for this is that Python coerces
+   the logical operations to a boolean value. This is also the reason why "IN"
+   queries must be expressed using ``.in_()`` rather than the ``in`` operator.
 
 .. seealso:: :ref:`Query operations <query-operators>` to see all operators.
 
+Combine conditions with ``&`` (AND) and ``|`` (OR):
+
+.. code-block:: python
+
+   # Published tweets by charlie:
+   query = (Tweet
+            .select()
+            .join(User)
+            .where(
+                (User.username == 'charlie') &
+                (Tweet.is_published == True)))
+
+   # Tweets by charlie OR huey:
+   query = (Tweet
+            .select()
+            .join(User)
+            .where(
+                (User.username == 'charlie') |
+                (User.username == 'huey')))
+
+Negate a condition with ``~``:
+
+.. code-block:: python
+
+   # All users except charlie:
+   User.select().where(~(User.username == 'charlie'))
+
+Calling ``.where()`` multiple times on a query ANDs the conditions:
+
+.. code-block:: python
+
+   # Equivalent to WHERE is_published = 1 AND timestamp > ...
+   query = (Tweet
+            .select()
+            .where(Tweet.is_published == True)
+            .where(Tweet.timestamp > one_week_ago))
+
+Common filtering methods
+^^^^^^^^^^^^^^^^^^^^^^^^
+
+============================================= ====================================
+Method                                        SQL equivalent
+============================================= ====================================
+``User.username == 'charlie'``                ``username = 'charlie'``
+``User.username != 'charlie'``                ``username != 'charlie'``
+``Tweet.timestamp < dt``                      ``timestamp < dt``
+``Tweet.timestamp >= dt``                     ``timestamp >= dt``
+``Tweet.timestamp.between(start, end)``       ``timestamp BETWEEN start AND end``
+``User.username.in_(['a', 'b'])``             ``username IN ('a', 'b')``
+``User.username.not_in(['a', 'b'])``          ``username NOT IN ...``
+``User.username.contains('char')``            ``username LIKE '%char%'``
+``User.username.startswith('ch')``            ``username LIKE 'ch%'``
+``User.username.endswith('ie')``              ``username LIKE '%ie'``
+``User.username.regexp(r'^[a-z]+$')``         ``username REGEXP ...``
+``User.username.is_null()``                   ``username IS NULL``
+``User.username.is_null(False)``              ``username IS NOT NULL``
+============================================= ====================================
+
 .. note::
-
-   A lot of fun things can go in the where clause of a query, such as:
-
-   * A field expression, e.g. ``User.username == 'Charlie'``
-   * A function expression, e.g. ``fn.Lower(fn.Substr(User.username, 1, 1)) == 'a'``
-   * A comparison of one column to another, e.g. ``Employee.salary < (Employee.tenure * 1000) + 40000``
-
-   You can also nest queries, for example tweets by users whose username
-   starts with "a":
-
-   .. code-block:: python
-
-      # get users whose username starts with "a"
-      a_users = User.select().where(fn.Lower(fn.Substr(User.username, 1, 1)) == 'a')
-
-      # the ".in_()" method signifies an "IN" query
-      a_user_tweets = Tweet.select().where(Tweet.user.in_(a_users))
-
-More query examples
-^^^^^^^^^^^^^^^^^^^
+   ``IN`` queries must use ``.in_()`` rather than Python's ``in`` operator,
+   because Python's ``in`` returns a boolean and cannot be overridden.
 
 .. seealso::
-   :ref:`Large collection of Peewee query examples <query_examples>`. Examples
-   based on `Postgresql Exercises <https://pgexercises.com/>`_.
+   :ref:`query-operators` for the full list of supported operators and methods.
 
-Get active users:
+SQL functions
+^^^^^^^^^^^^^
 
-.. code-block:: python
-
-   User.select().where(User.active == True)
-
-Get users who are either staff or superusers:
+The :class:`fn` helper calls any SQL function by name:
 
 .. code-block:: python
 
-   User.select().where(
-       (User.is_staff == True) | (User.is_superuser == True))
+   from peewee import fn
 
-Get tweets by user named "charlie":
+   # Users whose username starts with a vowel (case-insensitive).
+   vowels = ('a', 'e', 'i', 'o', 'u')
+   query = User.select().where(
+       fn.LOWER(fn.SUBSTR(User.username, 1, 1)).in_(vowels))
 
-.. code-block:: python
+   # Tweets whose content is less than 10 characters long.
+   query = Tweet.select().where(
+       fn.LENGTH(Tweet.content) < 10)
 
-   Tweet.select().join(User).where(User.username == 'charlie')
 
-Get tweets by staff or superusers (assumes FK relationship):
+Sorting
+-------
 
-.. code-block:: python
-
-   Tweet.select().join(User).where(
-       (User.is_staff == True) | (User.is_superuser == True))
-
-Get tweets by staff or superusers using a subquery:
-
-.. code-block:: python
-
-   staff_super = (User
-                  .select(User.id)
-                  .where(
-                      (User.is_staff == True) |
-                      (User.is_superuser == True)))
-
-   Tweet.select().where(Tweet.user.in_(staff_super))
-
-Sorting records
----------------
-
-To return rows in order, use the :meth:`~Query.order_by` method:
-
-.. code-block:: pycon
-   :emphasize-lines: 1, 8
-
-   >>> for t in Tweet.select().order_by(Tweet.created_date):
-   ...     print(t.pub_date)
-   ...
-   2010-01-01 00:00:00
-   2011-06-07 14:08:48
-   2011-06-07 14:12:57
-
-   >>> for t in Tweet.select().order_by(Tweet.created_date.desc()):
-   ...     print(t.pub_date)
-   ...
-   2011-06-07 14:12:57
-   2011-06-07 14:08:48
-   2010-01-01 00:00:00
-
-You can also use ``+`` and ``-`` prefix operators to indicate ordering:
+:meth:`~Query.order_by` specifies the column(s) to sort by:
 
 .. code-block:: python
 
-   # The following queries are equivalent:
-   Tweet.select().order_by(Tweet.created_date.desc())
+   # Ascending (default).
+   Tweet.select().order_by(Tweet.timestamp)
 
-   Tweet.select().order_by(-Tweet.created_date)  # Note the "-" prefix.
+   # Descending.
+   Tweet.select().order_by(Tweet.timestamp.desc())
 
-   # Similarly you can use "+" to indicate ascending order, though ascending
-   # is the default when no ordering is otherwise specified.
-   User.select().order_by(+User.username)
+   # Using the + / - prefix operators:
+   Tweet.select().order_by(+Tweet.timestamp)     # Ascending.
+   Tweet.select().order_by(-Tweet.timestamp)     # Descending.
 
-You can also order across joins. Assuming you want to order tweets by the
-username of the author, then by created_date:
+Sort on multiple columns by passing multiple arguments:
 
-.. code-block:: pycon
+.. code-block:: python
 
    query = (Tweet
             .select()
             .join(User)
-            .order_by(User.username, Tweet.created_date.desc()))
+            .order_by(User.username, Tweet.timestamp.desc()))
 
-.. code-block:: sql
+Sorting by a calculated or aliased value
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-   SELECT t1."id", t1."user_id", t1."message", t1."is_published", t1."created_date"
-   FROM "tweet" AS t1
-   INNER JOIN "user" AS t2
-     ON t1."user_id" = t2."id"
-   ORDER BY t2."username", t1."created_date" DESC
-
-Sorting by aggregate value
-^^^^^^^^^^^^^^^^^^^^^^^^^^
-
-When sorting on a calculated value, you can either include the necessary SQL
-expressions, or reference the alias assigned to the value. Here are two
-examples illustrating these methods:
+When ordering by an aggregate or expression that appears in ``select()``,
+reference it by re-using the expression or by wrapping the alias in
+:class:`SQL`:
 
 .. code-block:: python
 
-   # Let's start with our base query. We want to get all usernames and the number of
-   # tweets they've made. We wish to sort this list from users with most tweets to
-   # users with fewest tweets.
-   query = (User
-            .select(User.username, fn.COUNT(Tweet.id).alias('num_tweets'))
-            .join(Tweet, JOIN.LEFT_OUTER)
-            .group_by(User.username))
-
-You can order using the same COUNT expression used in the ``select`` clause. In
-the example below we are ordering by the ``COUNT()`` of tweet ids descending:
-
-.. code-block:: python
+   tweet_count = fn.COUNT(Tweet.id)
 
    query = (User
-            .select(User.username, fn.COUNT(Tweet.id).alias('num_tweets'))
+            .select(User.username, tweet_count.alias('num_tweets'))
             .join(Tweet, JOIN.LEFT_OUTER)
             .group_by(User.username)
-            .order_by(fn.COUNT(Tweet.id).desc()))
+            .order_by(tweet_count.desc()))
 
-Alternatively, you can reference the alias assigned to the calculated value in
-the ``select`` clause. This method has the benefit of being a bit easier to
-read. Note that we are not referring to the named alias directly, but are
-wrapping it using the :class:`SQL` helper:
-
-.. code-block:: python
-
+   # Alternatively, reference the alias string via SQL():
    query = (User
             .select(User.username, fn.COUNT(Tweet.id).alias('num_tweets'))
             .join(Tweet, JOIN.LEFT_OUTER)
             .group_by(User.username)
             .order_by(SQL('num_tweets').desc()))
 
-Or, to do things the "peewee" way:
+Random ordering
+^^^^^^^^^^^^^^^
 
 .. code-block:: python
 
-   ntweets = fn.COUNT(Tweet.id)
-   query = (User
-            .select(User.username, ntweets.alias('num_tweets'))
-            .join(Tweet, JOIN.LEFT_OUTER)
-            .group_by(User.username)
-            .order_by(ntweets.desc())
+   # Postgresql and SQLite:
+   LotteryEntry.select().order_by(fn.RANDOM()).limit(5)
 
-Getting random records
-----------------------
+   # MySQL:
+   LotteryEntry.select().order_by(fn.RAND()).limit(5)
 
-Occasionally you may want to pull a random record from the database. You can
-accomplish this by ordering by the *random* or *rand* function (depending on
-your database):
 
-Postgresql and Sqlite use the *Random* function:
+Pagination, Limiting, and Offsetting
+--------------------------------------
+
+:meth:`~Query.limit` and :meth:`~Query.offset` map directly to SQL:
 
 .. code-block:: python
 
-    # Pick 5 lucky winners:
-    LotteryNumber.select().order_by(fn.Random()).limit(5)
+   # First 10 rows.
+   Tweet.select().order_by(Tweet.id).limit(10)
 
-MySQL uses *Rand*:
+   # Rows 11-20.
+   Tweet.select().order_by(Tweet.id).limit(10).offset(10)
+
+:meth:`~Query.paginate` is a convenience wrapper:
 
 .. code-block:: python
 
-    # Pick 5 lucky winners:
-    LotteryNumber.select().order_by(fn.Rand()).limit(5)
-
-Paginating records
-------------------
-
-The :meth:`~Query.paginate` method makes it easy to grab a *page* or
-records. :meth:`~Query.paginate` takes two parameters,
-``page_number``, and ``items_per_page``.
+   # Page 3, 20 items per page (rows 41-60).
+   Tweet.select().order_by(Tweet.id).paginate(3, 20)
 
 .. attention::
-   Page numbers are 1-based, so the first page of results will be page 1.
+   Page numbers are 1-based. Page 1 returns the first ``items_per_page`` rows.
 
-.. code-block:: pycon
 
-   >>> for tweet in Tweet.select().order_by(Tweet.id).paginate(2, 10):
-   ...     print(tweet.message)
-   ...
-   tweet 10
-   tweet 11
-   tweet 12
-   tweet 13
-   tweet 14
-   tweet 15
-   tweet 16
-   tweet 17
-   tweet 18
-   tweet 19
+Counting
+--------
 
-If you would like more granular control, you can always use
-:meth:`~Query.limit` and :meth:`~Query.offset`.
-
-Counting records
-----------------
-
-You can count the number of rows in any select query:
+:meth:`~SelectBase.count` wraps the query in a ``SELECT COUNT(1) FROM (...)``
+and returns an integer:
 
 .. code-block:: python
 
-   >>> Tweet.select().count()
-   100
-   >>> Tweet.select().where(Tweet.id > 50).count()
-   50
+   total = Tweet.select().count()
+   published = Tweet.select().where(Tweet.is_published == True).count()
 
-Peewee will wrap your query in an outer query that performs a count, which
-results in SQL like:
 
-.. code-block:: sql
+Aggregates and GROUP BY
+------------------------
 
-   SELECT COUNT(1) FROM ( ... your query ... );
-
-Aggregating records
--------------------
-
-Suppose you have some users and want to get a list of them along with the count
-of tweets in each.
+Use :class:`fn` to call aggregate functions and :meth:`~Select.group_by`
+to group:
 
 .. code-block:: python
 
    query = (User
-            .select(User, fn.Count(Tweet.id).alias('count'))
+            .select(User.username, fn.COUNT(Tweet.id).alias('tweet_count'))
             .join(Tweet, JOIN.LEFT_OUTER)
-            .group_by(User))
+            .group_by(User.username)
+            .order_by(SQL('tweet_count').desc()))
 
-The resulting query will return *User* objects with all their normal attributes
-plus an additional attribute *count* which will contain the count of tweets for
-each user. We use a left outer join to include users who have no tweets.
+   for user in query:
+       print(user.username, user.tweet_count)
 
-Let's assume you have a tagging application and want to find tags that have a
-certain number of related objects. For this example we'll use some different
-models in a :ref:`many-to-many <manytomany>` configuration:
+Filter groups with :meth:`~Select.having`:
 
 .. code-block:: python
 
-   class Photo(Model):
-       image = CharField()
+   # Users with more than 5 published tweets.
+   query = (User
+            .select(User.username, fn.COUNT(Tweet.id).alias('n'))
+            .join(Tweet)
+            .where(Tweet.is_published == True)
+            .group_by(User.username)
+            .having(fn.COUNT(Tweet.id) > 5))
 
-   class Tag(Model):
-       name = CharField()
 
-   class PhotoTag(Model):
-       photo = ForeignKeyField(Photo)
-       tag = ForeignKeyField(Tag)
+Scalar Values
+-------------
 
-Now say we want to find tags that have at least 5 photos associated with them:
+:meth:`~SelectBase.scalar` executes a query and returns the first column of the
+first row as a Python value. Use it when a query produces a single number or
+string:
 
 .. code-block:: python
 
-   query = (Tag
+   oldest = Tweet.select(fn.MIN(Tweet.timestamp)).scalar()
+   distinct_users = Tweet.select(fn.COUNT(Tweet.user.distinct())).scalar()
+
+Pass ``as_tuple=True`` to retrieve multiple scalar columns:
+
+.. code-block:: python
+
+   min_ts, max_ts = Tweet.select(
+       fn.MIN(Tweet.timestamp),
+       fn.MAX(Tweet.timestamp)
+   ).scalar(as_tuple=True)
+
+.. _row-types:
+
+Row Types
+---------
+
+By default, SELECT queries return model instances. Four alternative row types
+are available by chaining a method before iteration:
+
+* :meth:`~BaseQuery.dicts`
+* :meth:`~BaseQuery.tuples`
+* :meth:`~BaseQuery.namedtuples`
+* :meth:`~BaseQuery.objects`
+
+Example:
+
+.. code-block:: python
+
+   # Dictionaries.
+   for row in User.select().dicts():
+       print(row)   # {'id': 1, 'username': 'charlie'}
+
+   # Tuples.
+   for row in User.select().tuples():
+       print(row)   # (1, 'charlie')
+
+   # Named tuples.
+   for row in User.select().namedtuples():
+       print(row.username)
+
+   # Flatten any related data and return model instances.
+   for row in User.select().objects():
+       print(row.username)
+
+   # Or pass a constructor callable.
+   for row in User.select().objects(MyUserClass):
+       print(row.my_username)
+
+Using tuples or dicts instead of model instances is faster for queries that
+produce many rows, because Peewee skips constructing model objects.
+
+``objects()`` without an argument returns model instances but does not
+reconstruct the model graph from joined data, assigning all columns directly
+onto the primary model. This avoids the overhead of graph reconstruction when
+you have joined data and don't need nested model instances.
+
+.. _large-results:
+
+Iterating Over Large Result Sets
+----------------------------------
+
+For queries returning many rows, disable result caching with
+:meth:`~BaseQuery.iterator` to keep memory usage flat:
+
+.. code-block:: python
+
+   # Combine iterator() with tuples() for maximum throughput.
+   query = (Stat
             .select()
-            .join(PhotoTag)
-            .join(Photo)
-            .group_by(Tag)
-            .having(fn.Count(Photo.id) > 5))
+            .tuples()
+            .iterator())
 
-This query is equivalent to the following SQL:
+   for stat_tuple in query:
+       write_to_file(stat_tuple)
 
-.. code-block:: sql
-
-   SELECT t1."id", t1."name"
-   FROM "tag" AS t1
-   INNER JOIN "phototag" AS t2 ON t1."id" = t2."tag_id"
-   INNER JOIN "photo" AS t3 ON t2."photo_id" = t3."id"
-   GROUP BY t1."id", t1."name"
-   HAVING Count(t3."id") > 5
-
-Suppose we want to grab the associated count and store it on the tag:
+When iterating over joined queries with ``.iterator()``, use ``.objects()``
+to avoid the overhead of model-graph reconstruction per row:
 
 .. code-block:: python
 
-   query = (Tag
-            .select(Tag, fn.Count(Photo.id).alias('count'))
-            .join(PhotoTag)
-            .join(Photo)
-            .group_by(Tag)
-            .having(fn.Count(Photo.id) > 5))
+   query = (Tweet
+            .select(Tweet.content, User.username)
+            .join(User)
+            .objects()
+            .iterator())
 
-Retrieving Scalar Values
-------------------------
+   for tweet in query:
+       print(tweet.username, tweet.content)
 
-You can retrieve scalar values by calling :meth:`Query.scalar`. For
-instance:
+For maximum performance, execute the query and iterate the cursor directly:
 
 .. code-block:: python
 
-   >>> PageView.select(fn.Count(fn.Distinct(PageView.url))).scalar()
-   100
+   query = Tweet.select(Tweet.content, User.username).join(User)
+   cursor = db.execute(query)
+   for content, username in cursor:
+       print(username, '->', content)
 
-You can retrieve multiple scalar values by passing ``as_tuple=True``:
-
-.. code-block:: python
-
-   >>> Employee.select(
-   ...     fn.Min(Employee.salary), fn.Max(Employee.salary)
-   ... ).scalar(as_tuple=True)
-   (30000, 50000)
 
 .. _window-functions:
 
-Window functions
+Window Functions
 ----------------
 
 A :class:`Window` function refers to an aggregate function that operates on
@@ -1758,144 +961,16 @@ previous group and the current group.
    and the `sqlite docs <https://www.sqlite.org/windowfunctions.html>`_
    contain a lot of good information.
 
-.. _rowtypes:
-
-Retrieving row tuples / dictionaries / namedtuples
---------------------------------------------------
-
-Sometimes you do not need the overhead of creating model instances and simply
-want to iterate over the row data without needing all the APIs provided
-:class:`Model`. To do this, use:
-
-* :meth:`~BaseQuery.dicts`
-* :meth:`~BaseQuery.namedtuples`
-* :meth:`~BaseQuery.tuples`
-* :meth:`~BaseQuery.objects` -- accepts an arbitrary constructor function
-  which is called with the row tuple.
-
-.. code-block:: python
-
-   stats = (Stat
-            .select(Stat.url, fn.Count(Stat.url))
-            .group_by(Stat.url)
-            .tuples())
-
-   # iterate over a list of 2-tuples containing the url and count
-   for stat_url, stat_count in stats:
-       print(stat_url, stat_count)
-
-Similarly, you can return the rows from the cursor as dictionaries using
-:meth:`~BaseQuery.dicts`:
-
-.. code-block:: python
-
-   stats = (Stat
-            .select(Stat.url, fn.Count(Stat.url).alias('ct'))
-            .group_by(Stat.url)
-            .dicts())
-
-   # iterate over a list of 2-tuples containing the url and count
-   for stat in stats:
-       print(stat['url'], stat['ct'])
-
-.. _returning-clause:
-
-Returning Clause
-----------------
-
-:class:`PostgresqlDatabase` supports a ``RETURNING`` clause on ``UPDATE``,
-``INSERT`` and ``DELETE`` queries. Specifying a ``RETURNING`` clause allows you
-to iterate over the rows accessed by the query.
-
-By default, the return values upon execution of the different queries are:
-
-* ``INSERT`` - auto-incrementing primary key value of the newly-inserted row.
-  When not using an auto-incrementing primary key, Postgres will return the new
-  row's primary key, but SQLite and MySQL will not.
-* ``UPDATE`` - number of rows modified
-* ``DELETE`` - number of rows deleted
-
-When a returning clause is used the return value upon executing a query will be
-an iterable cursor object.
-
-Postgresql allows, via the ``RETURNING`` clause, to return data from the rows
-inserted or modified by a query.
-
-For example, let's say you have an :class:`Update` that deactivates all
-user accounts whose registration has expired. After deactivating them, you want
-to send each user an email letting them know their account was deactivated.
-Rather than writing two queries, a ``SELECT`` and an ``UPDATE``, you can do
-this in a single ``UPDATE`` query with a ``RETURNING`` clause:
-
-.. code-block:: python
-
-   query = (User
-            .update(is_active=False)
-            .where(User.registration_expired == True)
-            .returning(User))
-
-   # Send an email to every user that was deactivated.
-   for deactivate_user in query.execute():
-       send_deactivation_email(deactivated_user.email)
-
-The ``RETURNING`` clause is also available on :class:`Insert` and
-:class:`Delete`. When used with ``INSERT``, the newly-created rows will be
-returned. When used with ``DELETE``, the deleted rows will be returned.
-
-The only limitation of the ``RETURNING`` clause is that it can only consist of
-columns from tables listed in the query's ``FROM`` clause. To select all
-columns from a particular table, you can simply pass in the :class:`Model`
-class.
-
-As another example, let's add a user and set their creation-date to the
-server-generated current timestamp. We'll create and retrieve the new user's
-ID, Email and the creation timestamp in a single query:
-
-.. code-block:: python
-
-   query = (User
-            .insert(email='foo@bar.com', created=fn.now())
-            .returning(User))  # Shorthand for all columns on User.
-
-   # When using RETURNING, execute() returns a cursor.
-   cursor = query.execute()
-
-   # Get the user object we just inserted and log the data:
-   user = cursor[0]
-   logger.info('Created user %s (id=%s) at %s', user.email, user.id, user.created)
-
-By default the cursor will return :class:`Model` instances, but you can
-specify a different row type:
-
-.. code-block:: python
-
-   data = [{'name': 'charlie'}, {'name': 'huey'}, {'name': 'mickey'}]
-   query = (User
-            .insert_many(data)
-            .returning(User.id, User.username)
-            .dicts())
-
-   for new_user in query.execute():
-       print('Added user "%s", id=%s' % (new_user['username'], new_user['id']))
-
-Just as with :class:`Select` queries, you can specify various :ref:`result row types <rowtypes>`.
-
 .. _cte:
 
 Common Table Expressions
 ------------------------
 
-Peewee supports the inclusion of common table expressions (CTEs) in all types
-of queries. CTEs may be useful for:
+A CTE factors out a subquery and gives it a name, making complex queries more
+readable and sometimes more efficient. CTEs also support recursion.
 
-* Factoring out a common subquery.
-* Grouping or filtering by a column derived in the CTE's result set.
-* Writing recursive queries.
-
-To declare a :class:`Select` query for use as a CTE, use
-:meth:`~SelectQuery.cte` method, which wraps the query in a :class:`CTE`
-object. To indicate that a :class:`CTE` should be included as part of a
-query, use the :meth:`Query.with_cte` method, passing a list of CTE objects.
+Define a CTE with :meth:`~SelectQuery.cte` and include it with
+:meth:`~Query.with_cte`:
 
 Simple Example
 ^^^^^^^^^^^^^^
@@ -2129,7 +1204,87 @@ For additional examples, refer to the tests in ``models.py`` and ``sql.py``:
 * https://github.com/coleifer/peewee/blob/master/tests/models.py
 * https://github.com/coleifer/peewee/blob/master/tests/sql.py
 
-Foreign Keys and Joins
-----------------------
+.. _returning-clause:
 
-This section has been moved into its own document: :ref:`relationships`.
+Returning Clause
+----------------
+
+:class:`PostgresqlDatabase` and :class:`SqliteDatabase` (3.35.0+) support a
+``RETURNING`` clause on ``UPDATE``, ``INSERT`` and ``DELETE`` queries.
+Specifying a ``RETURNING`` clause allows you to iterate over the rows accessed
+by the query.
+
+By default, the return values upon execution of the different queries are:
+
+* ``INSERT`` - auto-incrementing primary key value of the newly-inserted row.
+  When not using an auto-incrementing primary key, Postgres will return the new
+  row's primary key, but SQLite and MySQL will not.
+* ``UPDATE`` - number of rows modified
+* ``DELETE`` - number of rows deleted
+
+When a returning clause is used the return value upon executing a query will be
+an iterable cursor object, providing access to data that was inserted, updated
+or deleted by the query.
+
+For example, let's say you have an :class:`Update` that deactivates all
+user accounts whose registration has expired. After deactivating them, you want
+to send each user an email letting them know their account was deactivated.
+Rather than writing two queries, a ``SELECT`` and an ``UPDATE``, you can do
+this in a single ``UPDATE`` query with a ``RETURNING`` clause:
+
+.. code-block:: python
+
+   query = (User
+            .update(is_active=False)
+            .where(User.registration_expired == True)
+            .returning(User))
+
+   # Send an email to every user that was deactivated.
+   for deactivate_user in query.execute():
+       send_deactivation_email(deactivated_user.email)
+
+   query = (User
+            .delete()
+            .where(User.is_spam == True)
+            .returning(User.id))
+   for user in query.execute():
+       print(f'Deleted spam user id: {user.id}')
+
+The ``RETURNING`` clause is available on:
+
+* :class:`Insert`
+* :class:`Update`
+* :class:`Delete`
+
+As another example, let's add a user and set their creation-date to the
+server-generated current timestamp. We'll create and retrieve the new user's
+ID, Email and the creation timestamp in a single query:
+
+.. code-block:: python
+
+   query = (User
+            .insert(email='foo@bar.com', created=fn.now())
+            .returning(User))  # Shorthand for all columns on User.
+
+   # When using RETURNING, execute() returns a cursor.
+   cursor = query.execute()
+
+   # Get the user object we just inserted and log the data:
+   user = cursor[0]
+   logger.info('Created user %s (id=%s) at %s', user.email, user.id, user.created)
+
+By default the cursor will return :class:`Model` instances, but you can
+specify a different row type:
+
+.. code-block:: python
+
+   data = [{'name': 'charlie'}, {'name': 'huey'}, {'name': 'mickey'}]
+   query = (User
+            .insert_many(data)
+            .returning(User.id, User.username)
+            .dicts())
+
+   for new_user in query.execute():
+       print('Added user "%s", id=%s' % (new_user['username'], new_user['id']))
+
+Just as with :class:`Select` queries, you can specify various :ref:`result row types <row-types>`.

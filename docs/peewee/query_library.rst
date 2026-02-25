@@ -1,9 +1,9 @@
-.. _query_examples:
+.. _query-library:
 
-Query Examples
+Query Library
 ==============
 
-These query examples are taken from the site `PostgreSQL Exercises
+These query examples are taken from the site `Postgresql Exercises
 <https://pgexercises.com/>`_. A sample data-set can be found on the `getting
 started page <https://pgexercises.com/gettingstarted.html>`_.
 
@@ -79,8 +79,8 @@ to the tables in the diagram.
 Schema Creation
 ---------------
 
-If you downloaded the SQL file from the PostgreSQL Exercises site, then you can
-load the data into a PostgreSQL database using the following commands::
+If you downloaded the SQL file from the Postgresql Exercises site, then you can
+load the data into a Postgresql database using the following commands::
 
     createdb peewee_test
     psql -U postgres -f clubdata.sql -d peewee_test -x -q

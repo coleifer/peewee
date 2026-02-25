@@ -15,7 +15,7 @@ it easy to learn and intuitive to use.
 * flexible query-builder that exposes full power of SQL
 * supports sqlite, mysql, mariadb, postgresql.
 * asyncio support
-* :ref:`tons of extensions <playhouse>`
+* tons of extensions
 * use with :ref:`flask <flask>`, :ref:`fastapi <fastapi>` and :ref:`more <framework-integration>`
 
 Peewee's source code hosted on `GitHub <https://github.com/coleifer/peewee>`_.
@@ -23,7 +23,7 @@ Peewee's source code hosted on `GitHub <https://github.com/coleifer/peewee>`_.
 New to peewee? These may help:
 
 * :ref:`Quickstart <quickstart>`
-* :ref:`Example twitter app <example-app>`
+* :ref:`Example twitter app <tutorial>`
 * :ref:`Using peewee interactively <interactive>`
 * :ref:`Models and fields <models>`
 * :ref:`Querying <querying>`
@@ -35,30 +35,31 @@ Contents:
 
 .. toctree::
    :maxdepth: 2
-   :glob:
 
-   new/installation
-   new/quickstart
-   new/tutorial
-   new/database
-   new/models
-   new/relationships
-   new/querying
-   new/writing
-   new/transactions
-   new/schema
-   new/query_operators
-   new/recipes
-   new/asyncio
-   new/framework_integration
-   new/interactive
-   new/query_builder
-   new/api
-   new/sqlite
-   new/postgres
-   new/mysql
-   new/query_examples
-   new/contributing
+   peewee/installation
+   peewee/quickstart
+   peewee/tutorial
+   peewee/database
+   peewee/models
+   peewee/relationships
+   peewee/querying
+   peewee/writing
+   peewee/transactions
+   peewee/schema
+   peewee/query_operators
+   peewee/asyncio
+   peewee/framework_integration
+   peewee/interactive
+   peewee/query_builder
+   peewee/api
+   peewee/sqlite
+   peewee/postgres
+   peewee/mysql
+   peewee/db_tools
+   peewee/orm_utils
+   peewee/query_library
+   peewee/recipes
+   peewee/contributing
 
 Note
 ----

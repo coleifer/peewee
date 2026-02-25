@@ -40,7 +40,7 @@ conditional on the version not having changed. If another process modified the
 row in the meantime, the update matches zero rows and the conflict is detected
 in application code.
 
-This is a lighter-weight alternative to ``SELECT FOR UPDATE`` (PostgreSQL) or
+This is a lighter-weight alternative to ``SELECT FOR UPDATE`` (Postgresql) or
 ``BEGIN IMMEDIATE`` (SQLite) when lock contention is expected to be low.
 
 A reusable base class:
@@ -190,7 +190,7 @@ columns:
             .group_by(Tweet.user)
             .having(Tweet.created_date == fn.MAX(Tweet.created_date)))
 
-PostgreSQL requires the standard subquery form above.
+Postgresql requires the standard subquery form above.
 
 .. _top-n-per-group:
 
@@ -228,7 +228,7 @@ timestamp (newest first), then filter the outer query to the top N ranks:
             .from_(ranked)
             .where(ranked.c.rnk <= 3))
 
-PostgreSQL - lateral joins
+Postgresql - lateral joins
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 A ``LATERAL`` join executes a correlated subquery once per row of the driving
@@ -472,7 +472,7 @@ Our desired code would look like:
              .join(Schedule)
              .where(now >= next_occurrence))
 
-**PostgreSQL** - multiply a typed interval:
+**Postgresql** - multiply a typed interval:
 
 .. code-block:: python
 

@@ -1,7 +1,7 @@
 .. _api:
 
-API Documentation
-=================
+API Reference
+=============
 
 This document specifies Peewee's APIs.
 
@@ -11,7 +11,7 @@ Database
 .. class:: Database(database, thread_safe=True, field_types=None, operations=None, autoconnect=True, **kwargs)
 
     :param str database: Database name or filename for SQLite (or ``None`` to
-        :ref:`defer initialization <deferring_initialization>`, in which case
+        :ref:`defer initialization <initializing-database>`, in which case
         you must call :meth:`Database.init`, specifying the database name).
     :param bool thread_safe: Whether to store connection state in a
         thread-local.
@@ -34,7 +34,7 @@ Database
         The database can be instantiated with ``None`` as the database name if
         the database is not known until run-time. In this way you can create a
         database instance and then configure it elsewhere when the settings are
-        known. This is called :ref:`deferred* initialization <deferring_initialization>`.
+        known. This is called :ref:`deferred* initialization <initializing-database>`.
 
     Examples:
 
@@ -82,7 +82,7 @@ Database
             database driver when a connection is created, for example
             ``password``, ``host``, etc.
 
-        Initialize a *deferred* database. See :ref:`deferring_initialization`
+        Initialize a *deferred* database. See :ref:`initializing-database`
         for more info.
 
     .. method:: __enter__()
@@ -589,11 +589,12 @@ Database
         this is equivalent to ``fn.random()``, for MySQL ``fn.rand()``.
 
 
-.. class:: SqliteDatabase(database, regexp_function=False, pragmas=None, timeout=5, returning_clause=None,  **kwargs)
+.. class:: SqliteDatabase(database, pragmas=None, regexp_function=False, rank_functions=False, timeout=5, returning_clause=None,  **kwargs)
 
-    :param bool regexp_function: Make the REGEXP function available.
     :param pragmas: Either a dictionary or a list of 2-tuples containing
         pragma key and value to set every time a connection is opened.
+    :param bool regexp_function: Make the REGEXP function available.
+    :param bool rank_functions: Make the full-text search ranking functions available.
     :param timeout: Set the busy-timeout on the SQLite driver (in seconds).
     :param bool returning_clause: Use `RETURNING` clause automatically for bulk
         INSERT queries (requires Sqlite 3.35 or newer).
@@ -4639,7 +4640,7 @@ Model
             sq = Tweet.select().join(User).where(User.is_admin == True)
 
         Example selecting users and joining on a particular foreign key field.
-        See the :ref:`example app <example-app>` for a real-life usage:
+        See the :ref:`tutorial app <tutorial>` for a real-life usage:
 
         .. code-block:: python
 
@@ -4937,7 +4938,27 @@ Constants and Helpers
     Proxy subclass that is suitable to use as a placeholder for a
     :class:`Database` instance.
 
-    See :ref:`dynamic_db` for details on usage.
+    See :ref:`initializing-database` for details.
+
+    Example:
+
+    .. code-block:: python
+
+       db = DatabaseProxy()
+
+       class BaseModel(Model):
+           class Meta:
+               database = db
+
+       # ... some time later ...
+       if app.config['DEBUG']:
+           database = SqliteDatabase('local.db')
+       elif app.config['TESTING']:
+           database = SqliteDatabase(':memory:')
+       else:
+           database = PostgresqlDatabase('production')
+
+       db.initialize(database)
 
 .. function:: chunked(iterable, n)
 
@@ -4962,3 +4983,53 @@ Constants and Helpers
         # 0, 1, 2, 3
         # 4, 5, 6, 7
         # 8, 9
+
+
+Playhouse Reference
+-------------------
+
++---------------------------------------+---------------------------+
+| Module                                | Section                   |
++=======================================+===========================+
+| playhouse.sqlite_ext                  | :ref:`sqlite`             |
++---------------------------------------+---------------------------+
+| playhouse.cysqlite_ext                | :ref:`cysqlite-ext`       |
++---------------------------------------+---------------------------+
+| playhouse.sqliteq                     | :ref:`sqliteq`            |
++---------------------------------------+---------------------------+
+| playhouse.sqlite_udf                  | :ref:`sqlite-udf`         |
++---------------------------------------+---------------------------+
+| playhouse.apsw_ext                    | :ref:`apsw`               |
++---------------------------------------+---------------------------+
+| playhouse.sqlcipher_ext               | :ref:`sqlcipher`          |
++---------------------------------------+---------------------------+
+| playhouse.postgres_ext                | :ref:`postgresql`         |
++---------------------------------------+---------------------------+
+| playhouse.cockroachdb                 | :ref:`crdb`               |
++---------------------------------------+---------------------------+
+| playhouse.mysql_ext                   | :ref:`mysql`              |
++---------------------------------------+---------------------------+
+| playhouse.db_url                      | :ref:`db-url`             |
++---------------------------------------+---------------------------+
+| playhouse.pool                        | :ref:`pool`               |
++---------------------------------------+---------------------------+
+| playhouse.migrate                     | :ref:`migrate`            |
++---------------------------------------+---------------------------+
+| playhouse.reflection                  | :ref:`reflection`         |
++---------------------------------------+---------------------------+
+| playhouse.test_utils                  | :ref:`test-utils`         |
++---------------------------------------+---------------------------+
+| playhouse.fields                      | :ref:`extra-fields`       |
++---------------------------------------+---------------------------+
+| playhouse.shortcuts                   | :ref:`shortcuts`          |
++---------------------------------------+---------------------------+
+| playhouse.hybrid                      | :ref:`hybrid`             |
++---------------------------------------+---------------------------+
+| playhouse.kv                          | :ref:`kv`                 |
++---------------------------------------+---------------------------+
+| playhouse.signals                     | :ref:`signals`            |
++---------------------------------------+---------------------------+
+| playhouse.dataset                     | :ref:`dataset`            |
++---------------------------------------+---------------------------+
+| playhouse.flask_utils                 | :ref:`flask-utils`        |
++---------------------------------------+---------------------------+

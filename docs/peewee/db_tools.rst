@@ -146,7 +146,7 @@ Connection Pooling
 ------------------
 
 The ``playhouse.pool`` module contains a number of :class:`Database` classes
-that provide connection pooling for PostgreSQL, MySQL and SQLite databases. The
+that provide connection pooling for Postgresql, MySQL and SQLite databases. The
 pool works by overriding the methods on the :class:`Database` class that open
 and close connections to the backend.
 
@@ -160,28 +160,24 @@ returns it to the pool rather than actually disconnecting.
 
 .. code-block:: python
 
-   from playhouse.pool import PooledPostgresqlExtDatabase
+   from playhouse.pool import PooledPostgresqlDatabase
 
-   db = PooledPostgresqlExtDatabase(
+   db = PooledPostgresqlDatabase(
        'my_app',
        user='postgres',
        max_connections=32,
        stale_timeout=300)
 
-Commonly-used pool implementations:
+.. tip::
+   Pooled database implementations may be safely used as drop-in replacements
+   for their non-pooled counterparts.
 
-* :class:`PooledPostgresqlDatabase`
-* :class:`PooledMySQLDatabase`
-* :class:`PooledSqliteDatabase`
+.. include:: pool-snippet.rst
 
-Additional implementations:
-
-* ``playhouse.cysqlite_ext`` - :class:`PooledCySqliteDatabase`
-* ``playhouse.mysql_ext`` - :class:`PooledMariaDBConnectorDatabase`
-* ``playhouse.mysql_ext`` - :class:`PooledMySQLConnectorDatabase`
-* ``playhouse.postgres_ext`` - :class:`PooledPostgresqlExtDatabase`
-* ``playhouse.postgres_ext`` - :class:`PooledPsycopg3Database`
-* ``playhouse.cockroachdb`` - :class:`PooledCockroachDatabase`
+.. note::
+   Applications using Peewee's :ref:`asyncio integration <asyncio>` do not need to
+   use a special pooled database - the Async databases use a connection pool by
+   default.
 
 .. class:: PooledDatabase(database, max_connections=20, stale_timeout=None, timeout=None, **kwargs)
 
@@ -197,7 +193,7 @@ Additional implementations:
 
    .. note::
       Connections will not be closed exactly when they exceed their
-      ``stale_timeout`. Instead, stale connections are only closed when a new
+      ``stale_timeout``. Instead, stale connections are only closed when a new
       connection is requested.
 
    .. note::
@@ -225,6 +221,18 @@ Additional implementations:
 
       Close all connections including those currently in use.
       Use with caution.
+
+.. class:: PooledSqliteDatabase(database, max_connections=20, stale_timeout=None, timeout=None, **kwargs)
+
+   Pool implementation for SQLite databases. Extends :class:`SqliteDatabase`.
+
+.. class:: PooledPostgresqlDatabase(database, max_connections=20, stale_timeout=None, timeout=None, **kwargs)
+
+   Pool implementation for Postgresql databases. Extends :class:`PostgresqlDatabase`.
+
+.. class:: PooledMySQLDatabase(database, max_connections=20, stale_timeout=None, timeout=None, **kwargs)
+
+   Pool implementation for MySQL / MariaDB databases. Extends :class:`MySQLDatabase`.
 
 
 .. _migrate:
@@ -670,7 +678,7 @@ ready-to-use Peewee model code. If you have an existing database, running
 
 .. code-block:: shell
 
-   # Introspect a PostgreSQL database and write models to a file:
+   # Introspect a Postgresql database and write models to a file:
    python -m pwiz -e postgresql -u postgres my_db > models.py
 
    # Introspect a SQLite database:

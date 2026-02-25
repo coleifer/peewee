@@ -3,479 +3,202 @@
 Quickstart
 ==========
 
-This document presents a brief, high-level overview of Peewee's primary
-features. This guide will cover:
+This guide walks through defining a schema, writing rows, and reading them
+back. It takes about ten minutes. Every concept introduced here is covered in
+depth in the following documents.
 
-* :ref:`model-definition`
-* :ref:`storing-data`
-* :ref:`retrieving-data`
-
-.. note::
-   If you'd like something a bit more meaty, there is a thorough tutorial on
-   :ref:`creating a "twitter"-style web app <example-app>` using peewee and the
-   Flask framework. In the projects ``examples/`` folder you can find more
-   self-contained Peewee examples, like a `blog app <https://github.com/coleifer/peewee/tree/master/examples/blog>`__.
-
-I **strongly** recommend opening an interactive shell session and running the
-code. That way you can get a feel for typing in queries.
-
-.. _model-definition:
+.. tip::
+   Follow along in an interactive Python session.
 
 Model Definition
 -----------------
 
-Model classes, fields and model instances all map to database concepts:
-
-================= =================================
-Object            Corresponds to...
-================= =================================
-Model class       Database table
-Field instance    Column on a table
-Model instance    Row in a database table
-================= =================================
-
-When starting a project with peewee, it's typically best to begin with your
-data model, by defining one or more :class:`Model` classes:
+A Peewee application starts with a :class:`Database` object and one or more
+:class:`Model` classes. The database object manages connections; model
+classes map to tables.
 
 .. code-block:: python
-   :emphasize-lines: 5
 
+   import datetime
    from peewee import *
 
-   db = SqliteDatabase('people.db')
+   # An in-memory SQLite database. Or use PostgresqlDatabase or MySQLDatabase.
+   db = SqliteDatabase(':memory:')
 
-   class Person(Model):
-       name = CharField()
-       birthday = DateField()
-
+   class BaseModel(Model):
+       """All models inherit this to share the database connection."""
        class Meta:
-           database = db # This model uses the "people.db" database.
+           database = db
 
-.. note::
-   Peewee will automatically infer the database table name from the name of
-   the class. You can override the default name by specifying a ``table_name``
-   attribute in the inner "Meta" class (alongside the ``database`` attribute).
-   To learn more about how Peewee generates table names,
-   refer to the :ref:`table_names` section.
+   class User(BaseModel):
+       username = TextField(unique=True)
 
-   Also note that we named our model ``Person`` instead of ``People``. This is
-   a convention you should follow -- even though the table will contain
-   multiple people, we always name the class using the singular form.
+   class Tweet(BaseModel):
+       user = ForeignKeyField(User, backref='tweets')
+       content = TextField()
+       timestamp = DateTimeField(
+           default=datetime.datetime.now,
+           index=True)
 
-There are lots of :ref:`field types <fields>` suitable for storing various
-types of data. Peewee handles converting between *pythonic* values and those
-used by the database, so you can use Python types in your code without having
-to worry.
+Three things to notice:
 
-Things get interesting when we set up relationships between models using
-:ref:`foreign key relationships <relationships>`:
+* ``BaseModel`` exists only to carry the ``database`` setting. Every subclass
+  inherits it automatically.
+* Peewee adds an auto-incrementing integer ``id`` primary key to any model
+  that does not declare its own.
+* ``ForeignKeyField`` links ``Tweet`` to ``User``. The ``backref='tweets'``
+  parameter means every ``User`` instance gains a ``tweets`` attribute.
 
-.. code-block:: python
-   :emphasize-lines: 2
-
-   class Pet(Model):
-       owner = ForeignKeyField(Person, backref='pets')
-       name = CharField()
-       animal_type = CharField()
-
-       class Meta:
-           database = db # this model uses the "people.db" database
-
-Now that we have our models, let's connect to the database. Although it's not
-necessary to open the connection explicitly, it is good practice since it will
-reveal any errors with your database connection immediately, as opposed to some
-arbitrary time later when the first query is executed. It is also good to close
-the connection when you are done -- for instance, a web app might open a
-connection when it receives a request, and close the connection when it sends
-the response.
+Create the tables
+-----------------
 
 .. code-block:: python
 
    db.connect()
+   db.create_tables([User, Tweet])
 
-We'll begin by creating the tables in the database that will store our data.
-This will create the tables with the appropriate columns, indexes, sequences,
-and foreign key constraints:
+:meth:`~Database.create_tables` generates ``CREATE TABLE`` statements for
+each model. By default ``create_table()`` specifies ``safe=True``, which uses
+``CREATE TABLE IF NOT EXISTS``, making it safe to call on every startup.
 
-.. code-block:: python
-
-   db.create_tables([Person, Pet])
-
-.. _storing-data:
-
-Storing data
+Writing data
 ------------
 
-Let's begin by populating the database with some people. We will use the
-:meth:`~Model.save` and :meth:`~Model.create` methods to add and update
-people's records.
-
-.. code-block:: python
-   :emphasize-lines: 3
-
-   from datetime import date
-   uncle_bob = Person(name='Bob', birthday=date(1960, 1, 15))
-   uncle_bob.save() # bob is now stored in the database
-   # Returns: 1
-
-.. note::
-   When you call :meth:`~Model.save`, the number of rows modified is
-   returned.
-
-You can also add a person by calling the :meth:`~Model.create` method, which
-returns a model instance:
+Create a row with :meth:`~Model.create` (one step) or instantiate a model
+and call :meth:`~Model.save` (two steps):
 
 .. code-block:: python
 
-   grandma = Person.create(name='Grandma', birthday=date(1935, 3, 1))
-   herb = Person.create(name='Herb', birthday=date(1950, 5, 5))
+   # One-step creation - returns the saved instance.
+   charlie = User.create(username='charlie')
+   huey = User.create(username='huey')
 
-To update a row, modify the model instance and call :meth:`~Model.save` to
-persist the changes. Here we will change Grandma's name and then save the
-changes in the database:
+   # Two-step creation.
+   t = Tweet(user=charlie, content='Hello, world!')
+   t.save()
 
-.. code-block:: python
+   Tweet.create(user=charlie, content='My second tweet.')
+   Tweet.create(user=huey, content='meow')
 
-   grandma.name = 'Grandma L.'
-   grandma.save()  # Update grandma's name in the database.
-   # Returns: 1
-
-Now we have stored 3 people in the database. Let's give them some pets. Grandma
-doesn't like animals in the house, so she won't have any, but Herb is an animal
-lover:
+To update an existing row, modify attributes and call ``save()`` again:
 
 .. code-block:: python
 
-   bob_kitty = Pet.create(owner=uncle_bob, name='Kitty', animal_type='cat')
-   herb_fido = Pet.create(owner=herb, name='Fido', animal_type='dog')
-   herb_mittens = Pet.create(owner=herb, name='Mittens', animal_type='cat')
-   herb_mittens_jr = Pet.create(owner=herb, name='Mittens Jr', animal_type='cat')
+   charlie.username = 'charlie_admin'
+   charlie.save()
 
-After a long full life, Mittens sickens and dies. We need to remove him from
-the database:
+To delete a row:
 
 .. code-block:: python
 
-   herb_mittens.delete_instance() # he had a great life
-   # Returns: 1
+   stale_tweet = Tweet.get(Tweet.content == 'My second tweet.')
+   stale_tweet.delete_instance()
 
-.. note::
-   The return value of :meth:`~Model.delete_instance` is the number of rows
-   removed from the database.
+Reading data
+------------
 
-Uncle Bob decides that too many animals have been dying at Herb's house, so he
-adopts Fido:
-
-.. code-block:: python
-
-   herb_fido.owner = uncle_bob
-   herb_fido.save()
-
-.. _retrieving-data:
-
-Retrieving Data
----------------
-
-The real strength of our database is in how it allows us to retrieve data
-through *queries*. Relational databases are excellent for making ad-hoc
-queries.
-
-Getting single records
-^^^^^^^^^^^^^^^^^^^^^^
-
-Let's retrieve Grandma's record from the database. To get a single record from
-the database, use :meth:`Select.get`:
+Retrieve a single row with :meth:`~Model.get`. It raises :exc:`~Model.DoesNotExist`
+if no match is found:
 
 .. code-block:: python
 
-   grandma = Person.select().where(Person.name == 'Grandma L.').get()
+   user = User.get(User.username == 'charlie_admin')
+   print(user.id, user.username)
 
-We can also use the equivalent shorthand :meth:`Model.get`:
-
-.. code-block:: python
-
-   grandma = Person.get(Person.name == 'Grandma L.')
-
-Lists of records
-^^^^^^^^^^^^^^^^
-
-Let's list all the people in the database:
+Retrieve multiple rows with :meth:`~Model.select`. The result is a lazy
+query - rows are fetched only when you iterate:
 
 .. code-block:: python
 
-   for person in Person.select():
-       print(person.name)
+   for tweet in Tweet.select():
+       print(tweet.content)
 
-   # Bob
-   # Grandma L.
-   # Herb
-
-Let's list all the cats and their owner's name:
+Filter with :meth:`~Query.where`:
 
 .. code-block:: python
 
-   query = Pet.select().where(Pet.animal_type == 'cat')
-   for pet in query:
-       print(pet.name, pet.owner.name)
+   for tweet in Tweet.select().where(Tweet.user == charlie):
+       print(tweet.content)
 
-   # Kitty Bob
-   # Mittens Jr Herb
+   for tweet in Tweet.select().where(Tweet.timestamp.year == 2026):
+       print(tweet.content)
 
-.. warning::
-   There is a big problem with the previous query: because we are accessing
-   ``pet.owner.name`` and we did not select this relation in our original
-   query, peewee will have to perform an additional query to retrieve the
-   pet's owner.  This behavior is referred to as :ref:`N+1 <nplusone>` and it
-   should generally be avoided.
-
-   For an in-depth guide to working with relationships and joins, refer to the
-   :ref:`relationships` documentation.
-
-We can avoid the extra queries by selecting both *Pet* and *Person*, and adding
-a :ref:`JOIN <relationships>`.
-
-.. code-block:: python
-   :emphasize-lines: 2, 3
-
-   query = (Pet
-            .select(Pet, Person)
-            .join(Person)
-            .where(Pet.animal_type == 'cat'))
-
-   for pet in query:
-       print(pet.name, pet.owner.name)
-
-   # Kitty Bob
-   # Mittens Jr Herb
-
-Let's get all the pets owned by Bob:
+Sort with :meth:`~Query.order_by`:
 
 .. code-block:: python
 
-   for pet in Pet.select().join(Person).where(Person.name == 'Bob'):
-       print(pet.name)
+   for tweet in Tweet.select().order_by(Tweet.timestamp.desc()):
+       print(tweet.timestamp, tweet.content)
 
-   # Kitty
-   # Fido
-
-We can do another cool thing here to get bob's pets. Since we already have an
-object to represent Bob, we can do this instead:
+Join to combine data from related tables in a single query:
 
 .. code-block:: python
 
-   for pet in Pet.select().where(Pet.owner == uncle_bob):
-       print(pet.name)
+   # Fetch each tweet alongside its author's username.
+   # Without the join, accessing tweet.user.username would issue
+   # an extra query per tweet - see the N+1 section in Relationships.
+   query = (Tweet
+            .select(Tweet, User)
+            .join(User)
+            .order_by(Tweet.timestamp.desc()))
 
-Sorting
-^^^^^^^
+   for tweet in query:
+       print(tweet.user.username, '->', tweet.content)
 
-Let's make sure these are sorted alphabetically by adding an
-:meth:`~Select.order_by` clause:
+Simple aggregates
+-----------------
 
-.. code-block:: python
-
-   for pet in Pet.select().where(Pet.owner == uncle_bob).order_by(Pet.name):
-       print(pet.name)
-
-   # Fido
-   # Kitty
-
-Let's list all the people now, youngest to oldest:
+How many tweets are in the database:
 
 .. code-block:: python
 
-   for person in Person.select().order_by(Person.birthday.desc()):
-       print(person.name, person.birthday)
+   Tweet.select().count()
 
-   # Bob 1960-01-15
-   # Herb 1950-05-05
-   # Grandma L. 1935-03-01
-
-Combining filter expressions
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-
-Peewee supports arbitrarily-nested expressions. Let's get all the people whose
-birthday was either:
-
-* before 1940 (grandma)
-* after 1959 (bob)
-
-.. code-block:: python
-   :emphasize-lines: 5
-
-   d1940 = date(1940, 1, 1)
-   d1960 = date(1960, 1, 1)
-   query = (Person
-            .select()
-            .where((Person.birthday < d1940) | (Person.birthday > d1960)))
-
-   for person in query:
-       print(person.name, person.birthday)
-
-   # Bob 1960-01-15
-   # Grandma L. 1935-03-01
-
-Now let's do the opposite. People whose birthday is between 1940 and 1960
-(inclusive of both years):
+When the most-recent tweet was added:
 
 .. code-block:: python
 
-   query = (Person
-            .select()
-            .where(Person.birthday.between(d1940, d1960)))
+   Tweet.select(fn.MAX(Tweet.timestamp)).scalar()
 
-   for person in query:
-       print(person.name, person.birthday)
+Close the connection
+--------------------
 
-   # Herb 1950-05-05
-
-Aggregates and Prefetch
-^^^^^^^^^^^^^^^^^^^^^^^
-
-Now let's list all the people *and* how many pets they have:
-
-.. code-block:: python
-
-   for person in Person.select():
-       print(person.name, person.pets.count(), 'pets')
-
-   # Bob 2 pets
-   # Grandma L. 0 pets
-   # Herb 1 pets
-
-Once again we've run into a classic example of :ref:`N+1 <nplusone>` query
-behavior. In this case, we're executing an additional query for every
-``Person`` returned by the original ``SELECT``! We can avoid this by performing
-a *JOIN* and using a SQL function to aggregate the results.
-
-.. code-block:: python
-   :emphasize-lines: 2, 3
-
-   query = (Person
-            .select(Person, fn.COUNT(Pet.id).alias('pet_count'))
-            .join(Pet, JOIN.LEFT_OUTER)  # include people without pets.
-            .group_by(Person)
-            .order_by(Person.name))
-
-   for person in query:
-       # "pet_count" becomes an attribute on the returned model instances.
-       print(person.name, person.pet_count, 'pets')
-
-   # Bob 2 pets
-   # Grandma L. 0 pets
-   # Herb 1 pets
-
-.. note::
-   Peewee provides a magical helper :func:`fn`, which can be used to call
-   any SQL function. In the above example, ``fn.COUNT(Pet.id).alias('pet_count')``
-   would be translated into ``COUNT(pet.id) AS pet_count``.
-
-Now let's list all the people and the names of all their pets. As you may have
-guessed, this could easily turn into another :ref:`N+1 <nplusone>` situation if
-we're not careful.
-
-Before diving into the code, consider how this example is different from the
-earlier example where we listed all the pets and their owner's name. A pet can
-only have one owner, so when we performed the join from ``Pet`` to ``Person``,
-there was always going to be a single match. The situation is different when we
-are joining from ``Person`` to ``Pet`` because a person may have zero pets or
-they may have several pets. Because we're using a relational databases, if we
-were to do a join from ``Person`` to ``Pet`` then every person with multiple
-pets would be repeated, once for each pet.
-
-It would look like this:
-
-.. code-block:: python
-
-   query = (Person
-            .select(Person, Pet)
-            .join(Pet, JOIN.LEFT_OUTER)
-            .order_by(Person.name, Pet.name))
-   for person in query:
-       # We need to check if they have a pet instance attached, since not all
-       # people have pets.
-       if hasattr(person, 'pet'):
-           print(person.name, person.pet.name)
-       else:
-           print(person.name, 'no pets')
-
-   # Bob Fido
-   # Bob Kitty
-   # Grandma L. no pets
-   # Herb Mittens Jr
-
-Usually this type of duplication is undesirable. To accommodate the more common
-(and intuitive) workflow of listing a person and attaching **a list** of that
-person's pets, we can use a special method called
-:meth:`~ModelSelect.prefetch`:
-
-.. code-block:: python
-
-   query = (Person
-            .select()
-            .order_by(Person.name)
-            .prefetch(Pet))
-   for person in query:
-       print(person.name)
-       for pet in person.pets:
-           print('  *', pet.name)
-
-   # Bob
-   #   * Kitty
-   #   * Fido
-   # Grandma L.
-   # Herb
-   #   * Mittens Jr
-
-SQL Functions
-^^^^^^^^^^^^^
-
-One last query. This will use a SQL function to find all people whose names
-start with either an upper or lower-case *G*:
-
-.. code-block:: python
-
-   expression = fn.Lower(fn.Substr(Person.name, 1, 1)) == 'g'
-   for person in Person.select().where(expression):
-       print(person.name)
-
-   # Grandma L.
-
-This is just the basics! You can make your queries as complex as you like.
-Check the documentation on :ref:`querying` for more info.
-
-Database
---------
-
-We're done with our database, let's close the connection:
+When done using the database, close the connection:
 
 .. code-block:: python
 
    db.close()
 
-In an actual application, there are some established patterns for how you would
-manage your database connection lifetime. For example, a web application will
-typically open a connection at start of request, and close the connection after
-generating the response. A :ref:`connection pool <connection_pooling>` can help
-eliminate latency associated with startup costs.
-
-To learn about setting up your database, see the :ref:`database` documentation,
-which provides many examples. Peewee also supports :ref:`configuring the database at run-time <deferring_initialization>`
-as well as setting or changing the database at any time.
+In a web application you would open the connection when a request arrives and
+close it when the response is sent. See :ref:`framework-integration` for
+framework-specific patterns.
 
 Working with existing databases
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+-------------------------------
 
-If you already have a database, you can autogenerate peewee models using
-:ref:`pwiz`. For instance, if I have a postgresql database named
-*charles_blog*, I might run:
+If you have an existing database, peewee can generate models using :ref:`pwiz`.
+For example to generate models for a Postgres database named ``blog_db``:
 
 .. code-block:: shell
 
-   python -m pwiz -e postgresql charles_blog > blog_models.py
+   python -m pwiz -e postgresql blog > blog_models.py
 
-What next?
-----------
+Where to go next
+----------------
 
-That's it for the quickstart. If you want to look at a full web-app, check out
-the :ref:`example-app`.
+Each concept introduced above is covered in full detail in the following
+documents:
+
+* :ref:`database` - connection options, multiple backends, run-time
+  configuration, connection pooling.
+* :ref:`models` - field types, field parameters, model Meta options, indexes,
+  primary keys.
+* :ref:`relationships` - how foreign keys work at runtime, joins, the N+1
+  problem, many-to-many relationships.
+* :ref:`querying` - the full SELECT API: filtering, sorting, aggregates,
+  window functions, CTEs.
+* :ref:`writing` - INSERT, UPDATE, DELETE, bulk operations, upsert.
+* :ref:`transactions` - atomic blocks, nesting, savepoints.
+
+For a complete worked example building a small web application, see
+:ref:`tutorial`.

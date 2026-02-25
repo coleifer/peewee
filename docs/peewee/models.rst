@@ -3,24 +3,31 @@
 Models and Fields
 =================
 
+Models and Fields allow Peewee applications to declare the tables and columns
+they will use, and issue queries using Python. This document explains how to
+use Peewee to express database tables and columns.
+
 :class:`Model` classes, :class:`Field` instances and model instances all
 map to database concepts:
 
 ================= =================================
-Object            Corresponds to...
+Python construct  Database concept
 ================= =================================
-Model class       Database table
-Field instance    Column on a table
-Model instance    Row in a database table
+Model class       Table
+Field instance    Column
+Model instance    Row
 ================= =================================
+
+.. tip::
+   If you are connecting Peewee to an existing database rather than defining a
+   schema from scratch, the :ref:`pwiz <pwiz>` tool can generate model
+   definitions automatically by introspecting the database.
 
 The following code shows the typical way you will define your database
 connection and model classes.
 
-.. _blog-models:
-
 .. code-block:: python
-   :emphasize-lines: 4, 6, 10, 13
+   :emphasize-lines: 4, 6, 10
 
    import datetime
    from peewee import *
@@ -36,117 +43,118 @@ connection and model classes.
 
    class Tweet(BaseModel):
        user = ForeignKeyField(User, backref='tweets')
-       message = TextField()
-       created_date = DateTimeField(default=datetime.datetime.now)
+       content = TextField()
+       timestamp = DateTimeField(default=datetime.datetime.now)
        is_published = BooleanField(default=True)
+
+   class Favorite(BaseModel):
+       user = ForeignKeyField(User, backref='favorites')
+       tweet = ForeignKeyField(Tweet, backref='favorites')
+
+Three things to note:
 
 1. Create an instance of a :class:`Database`.
 
-    .. code-block:: python
+   .. code-block:: python
 
-       db = SqliteDatabase('my_app.db')
+      db = SqliteDatabase('my_app.db')
 
-    The ``db`` object will be used to manage the connections to the Sqlite
-    database. In this example we're using :class:`SqliteDatabase`, but you
-    could also use one of the other :ref:`database engines <database>`.
+   The ``db`` object will be used to manage the connections to the Sqlite
+   database. In this example we're using :class:`SqliteDatabase`, but you
+   could also use one of the other :ref:`database engines <database>`.
 
 2. Create a base model class which specifies our database.
 
-    .. code-block:: python
+   .. code-block:: python
 
-       class BaseModel(Model):
-           class Meta:
-               database = db
+      class BaseModel(Model):
+          class Meta:
+              database = db
 
-    It is good practice to define a base model class which establishes the
-    database connection. This makes your code DRY as you will not have to
-    specify the database for subsequent models.
+   **BaseModel** exists only to specify the ``database`` setting in its ``Meta``
+   class. Because ``Meta.database`` is inheritable, every model that extends
+   ``BaseModel`` will automatically use the same database. This pattern avoids
+   repeating the database assignment on every model class.
 
-    Model configuration is kept namespaced in a special class called ``Meta``.
-    This convention is borrowed from Django. :ref:`Meta <model-options>`
-    configuration is passed on to subclasses, so our project's models will all
-    subclass *BaseModel*. There are :ref:`many different attributes
-    <model-options>` you can configure using *Model.Meta*.
+   Model configuration is kept namespaced in a special class called ``Meta``.
+   :ref:`Meta <model-options>` configuration is passed on to subclasses, so
+   our project's models will all subclass *BaseModel*. There are
+   :ref:`many different attributes <model-options>` you can configure using *Model.Meta*.
 
-3. Define a model class.
+3. Declare model classes and fields.
 
-    .. code-block:: python
+   .. code-block:: python
 
-       class User(BaseModel):
-           username = CharField(unique=True)
+      class User(BaseModel):
+          username = CharField(unique=True)
 
-    Model definition uses the declarative style seen in other popular ORMs like
-    SQLAlchemy or Django. Note that we are extending the *BaseModel* class so
-    the *User* model will inherit the database connection.
+   Model definition uses the declarative style seen in other popular ORMs.
+   Note that we are extending the *BaseModel* class so the *User* model will
+   inherit the database connection.
 
-    We have explicitly defined a single *username* column with a unique
-    constraint. Because we have not specified a primary key, peewee will
-    automatically add an auto-incrementing integer primary key field named
-    *id*.
+   We have explicitly defined a single *username* column with a unique
+   constraint. Because we have not specified a primary key, Peewee will
+   automatically add an auto-incrementing integer primary key field named
+   *id*.
 
-.. seealso::
-   If you would like to start using peewee with an existing database, you can
-   use :ref:`pwiz` to **automatically** generate model definitions.
+Model inheritance
+-----------------
+
+Model subclasses inherit the ``Meta`` configuration of their parent as well as
+the parent's fields. Inherited ``Meta`` attributes (such as ``database``) are
+shared; non-inheritable attributes (such as ``table_name``) are re-derived for
+each subclass.
+
+.. code-block:: python
+
+   class BaseModel(Model):
+       class Meta:
+           database = db
+
+   class TimestampedModel(BaseModel):
+       """Adds created/updated timestamps to any subclass."""
+       created = DateTimeField(default=datetime.datetime.now)
+       updated = DateTimeField(default=datetime.datetime.now)
+
+   class Article(TimestampedModel):
+       title = TextField()
+       body = TextField()
+       # Article.created and Article.updated are inherited.
+       # Article._meta.database is inherited from BaseModel.
+
+Peewee uses a separate table for each concrete model class. There is no
+notion of inheritance spanning multiple tables. If you subclass a model,
+both the parent and the child have their own tables.
 
 .. _fields:
 
 Fields
 ------
 
-The :class:`Field` class is used to describe the mapping of
-:class:`Model` attributes to database columns. Each field type has a
-corresponding SQL storage class (i.e. varchar, int), and conversion between
-python data types and underlying storage is handled transparently.
+The :class:`Field` class is used to describe the mapping of :class:`Model`
+attributes to database columns. Each field type has a corresponding SQL storage
+class (varchar, int, etc). Fields handle conversion between python data types
+and underlying storage transparently.
 
-When creating a :class:`Model` class, fields are defined as class
-attributes. This should look familiar to users of the django framework. Here's
-an example:
+When creating a :class:`Model` class, fields are defined as class attributes:
 
 .. code-block:: python
 
-   class User(Model):
-       username = CharField()
-       join_date = DateTimeField()
-       about_me = TextField()
+   class Tweet(BaseModel):
+       user = ForeignKeyField(User, backref='tweets')
+       content = TextField()
+       timestamp = DateTimeField(default=datetime.datetime.now)
+       is_published = BooleanField(default=True)
 
-In the above example, because none of the fields are initialized with
-``primary_key=True``, an auto-incrementing primary key will automatically be
-created and named ``id``. Peewee uses :class:`AutoField` to signify an
-auto-incrementing integer primary key, which implies ``primary_key=True``.
-
-There is one special type of field, :class:`ForeignKeyField`, which allows
-you to represent foreign-key relationships between models in an intuitive way:
-
-.. code-block:: python
-   :emphasize-lines: 2
-
-   class Message(Model):
-       user = ForeignKeyField(User, backref='messages')
-       body = TextField()
-       send_date = DateTimeField(default=datetime.datetime.now)
-
-This allows you to write code like the following:
-
-.. code-block:: pycon
-   :emphasize-lines: 1, 4
-
-   >>> print(some_message.user.username)
-   Some User
-
-   >>> for message in some_user.messages:
-   ...     print(message.body)
-   some message
-   another message
-   yet another message
-
-.. seealso::
-   - :ref:`relationships` in-depth discussion of foreign-keys and joins.
-   - :ref:`Fields API <fields-api>`.
+In the above example, no field specifies ``primary_key=True``. As a result,
+Peewee will create an auto-incrementing integer primary key named ``id``.
+Peewee uses :class:`AutoField` to signify an auto-incrementing integer primary
+key.
 
 .. _field_types_table:
 
-Field types table
-^^^^^^^^^^^^^^^^^
+Field types
+^^^^^^^^^^^
 
 =====================   =================   =================   =================
 Field Type              Sqlite              Postgresql          MySQL
@@ -180,10 +188,10 @@ Field Type              Sqlite              Postgresql          MySQL
 
 .. seealso:: :ref:`custom-fields`
 
-Field initialization arguments
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Common field parameters
+^^^^^^^^^^^^^^^^^^^^^^^
 
-Parameters accepted by all field types and their default values:
+All field types accept the following keyword arguments:
 
 ================ ========= =======================================================================
 Parameter        Default   Description
@@ -206,33 +214,33 @@ Parameter        Default   Description
                            specify a ``'BRIN'`` or ``'GIN'`` index.
 ================ ========= =======================================================================
 
-Some fields take special parameters...
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Special parameters
+^^^^^^^^^^^^^^^^^^
 
-+--------------------------------+------------------------------------------------+
-| Field type                     | Special Parameters                             |
-+================================+================================================+
-| :class:`CharField`          | ``max_length``                                 |
-+--------------------------------+------------------------------------------------+
-| :class:`FixedCharField`     | ``max_length``                                 |
-+--------------------------------+------------------------------------------------+
-| :class:`DateTimeField`      | ``formats``                                    |
-+--------------------------------+------------------------------------------------+
-| :class:`DateField`          | ``formats``                                    |
-+--------------------------------+------------------------------------------------+
-| :class:`TimeField`          | ``formats``                                    |
-+--------------------------------+------------------------------------------------+
-| :class:`TimestampField`     | ``resolution``, ``utc``                        |
-+--------------------------------+------------------------------------------------+
-| :class:`DecimalField`       | ``max_digits``, ``decimal_places``,            |
-|                                | ``auto_round``, ``rounding``                   |
-+--------------------------------+------------------------------------------------+
++-----------------------------+------------------------------------------------+
+| Field type                  | Special Parameters                             |
++=============================+================================================+
 | :class:`ForeignKeyField`    | ``model``, ``field``, ``backref``,             |
-|                                | ``on_delete``, ``on_update``, ``deferrable``   |
-|                                | ``lazy_load``                                  |
-+--------------------------------+------------------------------------------------+
+|                             | ``on_delete``, ``on_update``, ``deferrable``   |
+|                             | ``lazy_load``                                  |
++-----------------------------+------------------------------------------------+
+| :class:`CharField`          | ``max_length``                                 |
++-----------------------------+------------------------------------------------+
+| :class:`FixedCharField`     | ``max_length``                                 |
++-----------------------------+------------------------------------------------+
+| :class:`DateTimeField`      | ``formats``                                    |
++-----------------------------+------------------------------------------------+
+| :class:`DateField`          | ``formats``                                    |
++-----------------------------+------------------------------------------------+
+| :class:`TimeField`          | ``formats``                                    |
++-----------------------------+------------------------------------------------+
+| :class:`TimestampField`     | ``resolution``, ``utc``                        |
++-----------------------------+------------------------------------------------+
+| :class:`DecimalField`       | ``max_digits``, ``decimal_places``,            |
+|                             | ``auto_round``, ``rounding``                   |
++-----------------------------+------------------------------------------------+
 | :class:`BareField`          | ``adapt``                                      |
-+--------------------------------+------------------------------------------------+
++-----------------------------+------------------------------------------------+
 
 .. note::
    Both ``default`` and ``choices`` could be implemented at the database level
@@ -250,6 +258,7 @@ Some fields take special parameters...
           price = DecimalField(max_digits=8, decimal_places=2,
                                constraints=[Check('price >= 0')])
           added = DateTimeField(constraints=[Default('CURRENT_TIMESTAMP')])
+          status = IntegerField(constraints=[Check('status in (0, 1, 2)')])
 
 Default field values
 ^^^^^^^^^^^^^^^^^^^^
@@ -263,104 +272,124 @@ could declare the field with a default value:
    class Message(Model):
        context = TextField()
        read_count = IntegerField(default=0)
+       created = DateTimeField(default=datetime.datetime.now)
 
-In some instances it may make sense for the default value to be dynamic. A
-common scenario is using the current date and time. Peewee allows you to
-specify a function in these cases, whose return value will be used when the
-object is created. Note we only provide the function, we do not actually *call*
-it:
+For ``read_count``, Peewee uses the literal value ``0``. For ``created``,
+Peewee calls ``datetime.datetime.now`` at the moment of instantiation -
+note that the **function itself is passed, not its return value**.
+
+**Mutable defaults require a factory function.** If a default value is a mutable
+object such as a ``list`` or ``dict``, passing it directly means every model
+instance shares *the same object*. Wrap it in a function instead:
 
 .. code-block:: python
 
-   class Message(Model):
-       context = TextField()
-       timestamp = DateTimeField(default=datetime.datetime.now)
+   # Wrong: all instances share one dict.
+   class Config(BaseModel):
+       settings = JSONField(default={})
 
-.. note::
-   If you are using a field that accepts a mutable type (`list`, `dict`, etc),
-   and would like to provide a default, it is a good idea to wrap your default
-   value in a simple function so that multiple model instances are not sharing
-   a reference to the same underlying object:
+   # Correct: each instance gets a fresh dict.
+   def default_settings():
+       return {}
 
-   .. code-block:: python
+   class Config(BaseModel):
+       settings = JSONField(default=default_settings)
 
-      def house_defaults():
-          return {'beds': 0, 'baths': 0}
-
-      class House(Model):
-          number = TextField()
-          street = TextField()
-          attributes = JSONField(default=house_defaults)
-
-The database can also provide the default value for a field. While peewee does
+The database can also provide the default value for a field. While Peewee does
 not explicitly provide an API for setting a server-side default value, you can
 use the ``constraints`` and :func:`Default` to specify the server default:
 
 .. code-block:: python
 
-    class Message(Model):
-        context = TextField()
-        timestamp = DateTimeField(constraints=[Default('CURRENT_TIMESTAMP')])
+   class Message(Model):
+       content = TextField()
+       timestamp = DateTimeField(constraints=[Default('CURRENT_TIMESTAMP')])
 
-.. note::
-   **Remember:** when using the ``default`` parameter, the values are set by
-   Peewee rather than being a part of the actual table and column definition.
+This produces a ``DEFAULT CURRENT_TIMESTAMP`` clause in the ``CREATE TABLE``
+statement. Peewee's own ``default`` parameter produces no DDL; it only operates
+during Python-side model instantiation.
+
+A consequence of using server-generated defaults is that newly-inserted models
+will not automatically retrieve the new value. This requires a separate query
+to read back the defaults added by the server.
 
 ForeignKeyField
-^^^^^^^^^^^^^^^
+---------------
 
-:class:`ForeignKeyField` is a special field type that allows one model to
-reference another. Typically a foreign key will contain the primary key of the
-model it relates to (but you can specify a particular column by specifying a
-``field``).
-
-Foreign keys allow data to be `normalized <http://en.wikipedia.org/wiki/Database_normalization>`_.
-In our example models, there is a foreign key from ``Tweet`` to ``User``. This
-means that all the users are stored in their own table, as are the tweets, and
-the foreign key from tweet to user allows each tweet to *point* to a particular
-user object.
-
-.. seealso::
-   Refer to the :ref:`relationships` document for an in-depth discussion of
-   foreign keys, joins and relationships between models.
-
-In peewee, accessing the value of a :class:`ForeignKeyField` will return the
-entire related object, e.g.:
+:class:`ForeignKeyField` links a model to another model. It stores the
+related row's primary key as an integer column and provides a Python-level
+descriptor that resolves it to a full model instance on access.
 
 .. code-block:: python
-   :emphasize-lines: 2, 6
+
+   class Tweet(BaseModel):
+       user = ForeignKeyField(User, backref='tweets')
+       content = TextField()
+
+The ``backref`` parameter creates a reverse accessor on the target model.
+With ``backref='tweets'``, every ``User`` instance gains a ``tweets``
+attribute that returns a pre-filtered :class:`Select` query of that user's
+tweets.
+
+:class:`ForeignKeyField` accepts referential action parameters:
+
+- ``on_delete`` - action to take when the referenced row is deleted.
+  Common values: ``'CASCADE'``, ``'SET NULL'``, ``'RESTRICT'``.
+- ``on_update`` - action to take when the referenced row's primary key changes.
+- ``deferrable`` - defers constraint checking to transaction commit
+  (Postgresql and SQLite only).
+
+.. warning::
+   SQLite does not enforce foreign key constraints by default. Enable
+   enforcement by setting the ``foreign_keys`` pragma on connection:
+
+   .. code-block:: python
+
+      db = SqliteDatabase('my_app.db', pragmas={'foreign_keys': 1})
+
+.. seealso::
+   :ref:`relationships` covers how foreign keys behave at runtime, including
+   lazy loading, back-references, and avoiding N+1 query problems.
+
+Typically a foreign key will reference the primary key of the related model,
+but you can specify a particular column by specifying ``field=``.
+
+In Peewee, accessing the value of a :class:`ForeignKeyField` will return the
+entire related object:
+
+.. code-block:: python
 
    tweets = (Tweet
              .select(Tweet, User)
              .join(User)
              .order_by(Tweet.created_date.desc()))
+
    for tweet in tweets:
        print(tweet.user.username, tweet.message)
 
-.. seealso::
-   In the example above the ``User`` data was selected efficiently.
-   For more information, see the :ref:`Avoiding N+1 <nplusone>` document.
-
-If we did not select the ``User``, then an **additional query** would be
-needed to fetch the associated ``User`` data:
+In the example above the ``User`` data was selected efficiently. If we did not
+select the ``User``, then an **additional query** would be needed to fetch the
+associated ``User`` data:
 
 .. code-block:: python
 
-    tweets = Tweet.select().order_by(Tweet.created_date.desc())
+    tweets = (Tweet
+              .select()
+              .order_by(Tweet.created_date.desc())
+
     for tweet in tweets:
         # WARNING: an additional query will be issued for EACH tweet
         # to fetch the associated User data.
         print(tweet.user.username, tweet.message)
 
 Sometimes you only need the associated primary key value from the foreign key
-column. In this case, Peewee follows the convention established by Django, of
-allowing you to access the raw foreign key value by appending ``"_id"`` to the
-foreign key field's name:
+column. Peewee allows you to access the raw foreign key value by appending
+``"_id"`` to the foreign key field's name:
 
 .. code-block:: python
-   :emphasize-lines: 5
 
    tweets = Tweet.select()
+
    for tweet in tweets:
        # Instead of "tweet.user", we will just get the raw ID value stored
        # in the column.
@@ -368,20 +397,19 @@ foreign key field's name:
 
 To prevent accidentally resolving a foreign-key and triggering an additional
 query, :class:`ForeignKeyField` supports an initialization paramater
-``lazy_load`` which, when disabled, behaves like the ``"_id"`` attribute. For
-example:
+``lazy_load`` which, when disabled, behaves like the ``"_id"`` attribute:
 
 .. code-block:: python
 
    class Tweet(Model):
-       # ... same fields, except we declare the user FK to have
        # lazy-load disabled:
        user = ForeignKeyField(User, backref='tweets', lazy_load=False)
+       ...
 
    for tweet in Tweet.select():
        print(tweet.user, tweet.message)
 
-   # With lazy-load disabled, accessing tweet.user will not perform an extra
+   # With lazy-load disabled, accessing tweet.user will NOT perform an extra
    # query and the user ID value is returned instead.
    # e.g.:
    # 1  tweet from user1
@@ -400,10 +428,10 @@ example:
 ForeignKeyField Back-references
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-:class:`ForeignKeyField` allows for a backreferencing property to be bound
-to the target model. Implicitly, this property will be named ``<classname>_set``,
-where ``classname`` is the lowercase name of the class, but can be overridden
-using the parameter ``backref``:
+:class:`ForeignKeyField` allows for a back-reference property to be bound to
+the target model. This property will be named ``<classname>_set`` by default,
+where ``classname`` is the lowercase name of the model class. This name can be
+overridden by specifying ``backref=``:
 
 .. code-block:: python
 
@@ -416,44 +444,95 @@ using the parameter ``backref``:
        # We are iterating over all Messages whose from_user is some_user.
        print(message)
 
-   for message in some_user.inbox:
-       # We are iterating over all Messages whose to_user is some_user
-       print(message)
-
-
-DateTimeField, DateField and TimeField
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-
-The three fields devoted to working with dates and times have special properties
-which allow access to things like the year, month, hour, etc.
-
-:class:`DateField` has properties for:
-
-* ``year``
-* ``month``
-* ``day``
-
-:class:`TimeField` has properties for:
-
-* ``hour``
-* ``minute``
-* ``second``
-
-:class:`DateTimeField` has all of the above.
-
-These properties can be used just like any other expression. Let's say we have
-an events calendar and want to highlight all the days in the current month that
-have an event attached:
+Back-references are just pre-filtered select queries, so we can add
+additional behavior like ``order_by()``:
 
 .. code-block:: python
 
-    # Get the current time.
-    now = datetime.datetime.now()
+   for message in some_user.inbox.order_by(Message.id):
+       # Iterate over all Messages whose to_user is some_user.
+       print(message)
+
+Self-referential foreign keys
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+When creating a hierarchical structure it is necessary to create a
+self-referential foreign key which links a child object to its parent. Because
+the model class is not defined at the time you instantiate the self-referential
+foreign key, use the special string ``'self'`` to indicate a self-referential
+foreign key:
+
+.. code-block:: python
+
+   class Category(Model):
+       name = CharField()
+       parent = ForeignKeyField('self', null=True, backref='children')
+
+The foreign key points **upward** to the parent object and the back-reference
+is named **children**.
+
+.. attention:: Self-referential foreign-keys should always be ``null=True``.
+
+When querying against a model that contains a self-referential foreign key you
+may sometimes need to perform a self-join. In those cases you can use
+:meth:`Model.alias` to create a table reference. Here is how you might query
+the category and parent model using a self-join:
+
+.. code-block:: python
+
+   Parent = Category.alias()
+   GrandParent = Category.alias()
+   query = (Category
+            .select(Category, Parent)
+            .join(Parent, on=(Category.parent == Parent.id))
+            .join(GrandParent, on=(Parent.parent == GrandParent.id))
+            .where(GrandParent.name == 'some category')
+            .order_by(Category.name))
+
+For deeply nested hierarchies, recursive CTEs are more efficient than
+repeated self-joins. See :ref:`cte`.
+
+.. seealso:: :ref:`relationships`
+
+Date and Time Fields
+--------------------
+
+The three fields devoted to working with dates and times have properties to
+access date attributes like year, month, hour, etc.
+
+:class:`DateField`
+   Properties for: ``year``, ``month``, ``day``
+
+:class:`TimeField`
+   Properties for: ``hour``, ``minute``, ``second``
+
+:class:`DateTimeField`:
+   Properties for: ``year``, ``month``, ``day``, ``hour``, ``minute``, ``second``
+
+These properties can be used as an expression in a query. Let's say we have
+an events table and want to list all the days in the current month which have
+at least one event:
+
+.. code-block:: python
+
+    # Get the current date.
+    today = datetime.date.today()
 
     # Get days that have events for the current month.
-    Event.select(Event.event_date.day.alias('day')).where(
-        (Event.event_date.year == now.year) &
-        (Event.event_date.month == now.month))
+    query = (Event
+             .select(Event.event_date.day.alias('day'))
+             .where(
+                 (Event.event_date.year == today.year) &
+                 (Event.event_date.month == today.month))
+             .distinct())
+
+   # Group activity by hour of day.
+   query = (PageView
+            .select(
+                PageView.timestamp.hour.alias('hour'),
+                fn.COUNT(PageView.id).alias('n'))
+            .group_by(PageView.timestamp.hour)
+            .order_by(PageView.timestamp.hour))
 
 .. note::
    SQLite does not have a native date type, so dates are stored in formatted
@@ -461,8 +540,12 @@ have an event attached:
    be formatted so they are sorted lexicographically. That is why they are
    stored, by default, as ``YYYY-MM-DD HH:MM:SS``.
 
+:class:`TimestampField` stores a datetime as a Unix timestamp integer.
+The ``resolution`` parameter controls sub-second precision (default: seconds);
+``utc=True`` instructs Peewee to treat stored values as UTC.
+
 BitField and BigBitField
-^^^^^^^^^^^^^^^^^^^^^^^^
+------------------------
 
 The :class:`BitField` and :class:`BigBitField` are suitable for storing
 bitmap data. :class:`BitField` provides a subclass of :class:`IntegerField`
@@ -577,173 +660,13 @@ Example usage:
    assert list(b.data) == [1, 1, 0, 0, 0, 0, 0, 0]
    assert len(b.data) == 1
 
-BareField
-^^^^^^^^^
-
-The :class:`BareField` class is intended to be used only with SQLite. Since
-SQLite uses dynamic typing and data-types are not enforced, it can be perfectly
-fine to declare fields without *any* data-type. In those cases you can use
-:class:`BareField`. It is also common for SQLite virtual tables to use
-meta-columns or untyped columns, so for those cases as well you may wish to use
-an untyped field (although for full-text search, you should use
-:class:`SearchField` instead!).
-
-:class:`BareField` accepts a special parameter ``adapt``. This parameter is
-a function that takes a value coming from the database and converts it into the
-appropriate Python type. For instance, if you have a virtual table with an
-un-typed column but you know that it will return ``int`` objects, you can
-specify ``adapt=int``.
-
-Example:
-
-.. code-block:: python
-
-   db = SqliteDatabase(':memory:')
-
-   class Junk(Model):
-       anything = BareField()
-
-       class Meta:
-           database = db
-
-   # Store multiple data-types in the Junk.anything column:
-   Junk.create(anything='a string')
-   Junk.create(anything=12345)
-   Junk.create(anything=3.14159)
-
-.. _custom-fields:
-
-Creating a custom field
-^^^^^^^^^^^^^^^^^^^^^^^
-
-It is easy to add support for custom field types in peewee. In this example we
-will create a UUID field for postgresql (which has a native UUID column type).
-
-.. note::
-   Peewee provides a :class:`UUIDField`, the following code is intended
-   only as an **example**.
-
-To add a custom field type you need to first identify what type of column the
-field data will be stored in. If you just want to add python behavior atop,
-say, a decimal field (for instance to make a currency field) you would just
-subclass :class:`DecimalField`. On the other hand, if the database offers a
-custom column type you will need to let peewee know. This is controlled by the
-:attr:`Field.field_type` attribute.
-
-Let's start by defining our UUID field:
-
-.. code-block:: python
-
-   class UUIDField(Field):
-       field_type = 'uuid'
-
-We will store the UUIDs in a native UUID column. Conversion may be needed in
-two places:
-
-* ``database driver -> python (python_value())``
-* ``python -> database driver (db_value())``
-
-.. code-block:: python
-
-   import uuid
-
-   class UUIDField(Field):
-       field_type = 'uuid'
-
-       def db_value(self, value):
-           if value is not None:
-               return value.hex  # convert UUID to hex string.
-
-       def python_value(self, value):
-           if value is not None:
-               return uuid.UUID(value) # convert hex string to UUID
-
-**This step is optional:** by default, the ``field_type`` value will be used
-for the column's data-type in the database schema. If you need to support
-multiple databases which use different data-types for your field-data, we need
-to let the database know how to map this *uuid* label to an actual *uuid*
-column type in the database. Specify the overrides in the :class:`Database` constructor:
-
-  .. code-block:: python
-
-    # Postgres, we use UUID data-type.
-    db = PostgresqlDatabase('my_db', field_types={'uuid': 'uuid'})
-
-    # Sqlite doesn't have a UUID type, so we use text type.
-    db = SqliteDatabase('my_db', field_types={'uuid': 'text'})
-
-That is it! Some fields may support exotic operations, like the Postgresql
-JSON field, which has custom operators for things like *contains* and *update*.
-You can specify :ref:`custom operations <custom-operators>` as well. For
-example code, check out the JSONField in `postgres_ext <https://github.com/coleifer/peewee/blob/master/playhouse/postgres_ext.py>`_.
-
-Field-naming conflicts
-^^^^^^^^^^^^^^^^^^^^^^
-
-:class:`Model` classes implement a number of class- and instance-methods,
-for example :meth:`Model.save` or :meth:`Model.create`. If you declare a
-field whose name coincides with a model method, it could cause problems.
-Consider:
-
-.. code-block:: python
-
-   class LogEntry(Model):
-       event = TextField()
-       create = TimestampField()  # Uh-oh.
-       update = TimestampField()  # Uh-oh.
-
-To avoid this problem while still using the desired column name in the database
-schema, explicitly specify the ``column_name`` while providing an alternative
-name for the field attribute:
-
-.. code-block:: python
-   :emphasize-lines: 3, 4
-
-   class LogEntry(Model):
-       event = TextField()
-       create_ = TimestampField(column_name='create')
-       update_ = TimestampField(column_name='update')
-
-
-Creating model tables
----------------------
-
-In order to start using our models, its necessary to open a connection to the
-database and create the tables first. Peewee will run the necessary *CREATE
-TABLE* queries, additionally creating any constraints and indexes.
-
-.. code-block:: python
-
-   # Connect to our database.
-   db.connect()
-
-   # Create the tables.
-   db.create_tables([User, Tweet])
-
-.. note::
-   Calling :meth:`~Database.connect` is not strictly required but is good
-   practice - errors will surface immediately rather than at query time.
-
-.. note::
-   By default, Peewee adds ``IF NOT EXISTS`` when creating tables. Specify
-   ``safe=False`` to disable this.
-
-After you have created your tables, if you choose to modify your database
-schema (by adding, removing or otherwise changing the columns) you will need to
-either:
-
-* Drop the table and re-create it.
-* Run one or more *ALTER TABLE* queries.
-* Script the migration using the :ref:`schema migration library <migrate>`.
-
 .. _model-options:
 
-Model options and table metadata
---------------------------------
+Model settings
+--------------
 
-In order not to pollute the model namespace, model-specific configuration is
-placed in a special class called *Meta* (a convention borrowed from the django
-framework):
+Model-specific configuration is placed in a special :class:`Metadata` class
+called ``Meta``:
 
 .. code-block:: python
    :emphasize-lines: 8, 9
@@ -758,16 +681,10 @@ framework):
        class Meta:
            database = contacts_db
 
-This instructs peewee that whenever a query is executed on *Person* to use the
+This instructs Peewee that whenever a query is executed on *Person* to use the
 contacts database.
 
-.. note::
-   Take a look at :ref:`the sample models <blog-models>` - you will notice
-   that we created a ``BaseModel`` that defined the database, and then
-   extended. This is the preferred way to define a database and create models.
-
-Once the class is defined, you should not access ``ModelClass.Meta``, but
-instead use ``ModelClass._meta``:
+Once the class is defined metadata settings are accessible at ``ModelClass._meta``:
 
 .. code-block:: pycon
 
@@ -779,47 +696,47 @@ instead use ``ModelClass._meta``:
    >>> Person._meta
    <peewee.Metadata object at 0x7f51a2f03790>
 
-The :class:`Metadata` class implements several methods which may be of
-use for retrieving model metadata (such as lists of fields, foreign key
-relationships, and more).
+The :class:`Metadata` class implements several methods which may be of use for
+retrieving model metadata (such as lists of fields, foreign key relationships,
+and more).
 
 .. code-block:: pycon
 
-   >>> Person._meta.fields
+   >>> User._meta.fields
    {'id': <peewee.AutoField object at 0x7f51a2e92750>,
-    'name': <peewee.CharField object at 0x7f51a2f0a510>}
+    'username': <peewee.CharField object at 0x7f51a2f0a510>}
 
-   >>> Person._meta.primary_key
+   >>> User._meta.primary_key
    <peewee.AutoField object at 0x7f51a2e92750>
 
-   >>> Person._meta.database
+   >>> User._meta.database
    <peewee.SqliteDatabase object at 0x7f519bff6dd0>
 
 There are several options you can specify as ``Meta`` attributes. While most
 options are inheritable, some are table-specific and will not be inherited by
 subclasses.
 
-======================  ====================================================== ====================
-Option                  Meaning                                                Inheritable?
-======================  ====================================================== ====================
-``database``            database for model                                     yes
-``table_name``          name of the table to store data                        no
-``table_function``      function to generate table name dynamically            yes
-``indexes``             a list of fields to index                              yes
-``primary_key``         a :class:`CompositeKey` instance                    yes
-``constraints``         a list of table constraints                            yes
-``schema``              the database schema for the model                      yes
-``only_save_dirty``     when calling model.save(), only save dirty fields      yes
-``options``             dictionary of options for create table extensions      yes
-``table_settings``      list of setting strings to go after close parentheses  yes
-``temporary``           indicate temporary table                               yes
-``legacy_table_names``  use legacy table name generation (enabled by default)  yes
-``depends_on``          indicate this table depends on another for creation    no
-``without_rowid``       indicate table should not have rowid (SQLite only)     no
-``strict_tables``       indicate strict data-types (SQLite only, 3.37+)        yes
-======================  ====================================================== ====================
+=========================  ======================================================  ============
+Option                     Purpose                                                 Inheritable
+=========================  ======================================================  ============
+``database``               Database instance for this model.                       Yes
+``table_name``             Explicit table name.                                    No
+``table_function``         Callable that returns a table name from the class.      Yes
+``indexes``                Tuple of multi-column index definitions.                Yes
+``primary_key``            :class:`CompositeKey` or ``False``.                     Yes
+``constraints``            List of table-level constraint expressions.             Yes
+``schema``                 Database schema name.                                   Yes
+``only_save_dirty``        Only emit changed fields on ``save()``.                 Yes
+``options``                Extra options for ``CREATE TABLE`` extensions.          Yes
+``table_settings``         Strings appended after the closing parenthesis in DDL.  Yes
+``temporary``              Mark as a temporary table.                              Yes
+``legacy_table_names``     Use legacy (non-snake-case) table name generation.      Yes
+``depends_on``             Declare a dependency on another table for ordering.     No
+``without_rowid``          SQLite ``WITHOUT ROWID`` tables.                        No
+``strict_tables``          SQLite strict typing (3.37+).                           Yes
+=========================  ======================================================  ============
 
-Here is an example showing inheritable versus non-inheritable attributes:
+Example of inheritable vs non-inheritable settings:
 
 .. code-block:: pycon
 
@@ -837,95 +754,57 @@ Here is an example showing inheritable versus non-inheritable attributes:
    >>> ModelOne._meta.table_name == ModelTwo._meta.table_name
    False
 
-Meta.primary_key
-^^^^^^^^^^^^^^^^
+.. _table-names:
 
-The ``Meta.primary_key`` attribute is used to specify either a
-:class:`CompositeKey` or to indicate that the model has *no* primary key.
-Composite primary keys are discussed in more detail here: :ref:`composite-key`.
+Table naming
+^^^^^^^^^^^^
 
-To indicate that a model should have NO primary key, then set ``primary_key = False``.
+By default Peewee derives the table name from the model class name. The exact
+transformation depends on ``Meta.legacy_table_names``:
 
-Examples:
+=================== =========================  ==============================
+Model class name    legacy (default)           non-legacy
+=================== =========================  ==============================
+``User``            ``user``                   ``user``
+``UserProfile``     ``userprofile``            ``user_profile``
+``APIResponse``     ``apiresponse``            ``api_response``
+``WebHTTPRequest``  ``webhttprequest``          ``web_http_request``
+=================== =========================  ==============================
 
-.. code-block:: python
-   :emphasize-lines: 7, 13
-
-   class BlogToTag(Model):
-       """A simple "through" table for many-to-many relationship."""
-       blog = ForeignKeyField(Blog)
-       tag = ForeignKeyField(Tag)
-
-       class Meta:
-           primary_key = CompositeKey('blog', 'tag')
-
-   class NoPrimaryKey(Model):
-       data = IntegerField()
-
-       class Meta:
-           primary_key = False
-
-.. _table_names:
-
-Table Names
-^^^^^^^^^^^
-
-By default Peewee will automatically generate a table name based on the name of
-your model class. The way the table-name is generated depends on the value of
-``Meta.legacy_table_names``. By default, ``legacy_table_names=True`` so as to
-avoid breaking backwards-compatibility. However, if you wish to use the new and
-improved table-name generation, you can specify ``legacy_table_names=False``.
-
-This table shows the differences in how a model name is converted to a SQL
-table name, depending on the value of ``legacy_table_names``:
-
-=================== ========================= ==============================
-Model name          legacy_table_names=True   legacy_table_names=False (new)
-=================== ========================= ==============================
-User                user                      user
-UserProfile         userprofile               user_profile
-APIResponse         apiresponse               api_response
-WebHTTPRequest      webhttprequest            web_http_request
-mixedCamelCase      mixedcamelcase            mixed_camel_case
-Name2Numbers3XYZ    name2numbers3xyz          name2_numbers3_xyz
-=================== ========================= ==============================
-
-.. note::
-   To preserve backwards-compatibility, the current release (Peewee 3 and 4)
-   specify ``legacy_table_names=True`` by default. I don't want to make a big,
-   disruptive change for everyone so I'm not sure when this will change.
-
-To explicitly specify the table name for a model class, use the ``table_name``
-Meta option. This feature can be useful for dealing with pre-existing database
-schemas that may have used awkward naming conventions:
+New projects should opt into non-legacy naming by setting
+``legacy_table_names = False`` on ``BaseModel``. The legacy default exists
+only for backwards compatibility with existing deployments.
 
 .. code-block:: python
-
-   class UserProfile(Model):
-       class Meta:
-           table_name = 'user_profile_tbl'
-
-If you wish to implement your own naming convention, you can specify the
-``table_function`` Meta option. This function will be called with your model
-class and should return the desired table name as a string. Suppose our company
-specifies that table names should be lower-cased and end with "_tbl", we can
-implement this as a table function:
-
-.. code-block:: python
-
-   def make_table_name(model_class):
-       model_name = model_class.__name__
-       return model_name.lower() + '_tbl'
 
    class BaseModel(Model):
        class Meta:
-           table_function = make_table_name
+           database = db
+           legacy_table_names = False   # Recommended for new projects.
 
-   class User(BaseModel):
-       # table_name will be "user_tbl".
+To override the table name entirely, use ``table_name``:
+
+.. code-block:: python
 
    class UserProfile(BaseModel):
-       # table_name will be "userprofile_tbl".
+       class Meta:
+           table_name = 'acct_user_profile'   # Maps to pre-existing table.
+
+To apply a naming convention programmatically across all models, use
+``table_function``:
+
+.. code-block:: python
+
+   def prefixed_table_name(model_class):
+       return 'myapp_' + model_class.__name__.lower()
+
+   class BaseModel(Model):
+       class Meta:
+           database = db
+           table_function = prefixed_table_name
+
+   class User(BaseModel):
+       pass   # Table name: "myapp_user"
 
 .. _model_indexes:
 
@@ -939,9 +818,10 @@ models and fields.
 Single-column indexes and constraints
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Single column indexes are defined using field initialization parameters. The
-following example adds a unique index on the *username* field, and a normal
-index on the *email* field:
+Single column indexes are defined by specifying ``index=True`` or
+``unique=True`` when declaring the Field.
+
+Add a unique index on *username* and a normal b-tree index on *email*:
 
 .. code-block:: python
 
@@ -949,7 +829,7 @@ index on the *email* field:
        username = CharField(unique=True)
        email = CharField(index=True)
 
-To add a user-defined constraint on a column, you can pass it in using the
+To add a user-defined constraint on a column, you can specify it using the
 ``constraints`` parameter. You may wish to specify a default value as part of
 the schema, or add a ``CHECK`` constraint, for example:
 
@@ -995,25 +875,18 @@ should be unique.
               (('first_name', 'last_name'), True),  # Note the trailing comma!
           )
 
-Advanced Index Creation
-^^^^^^^^^^^^^^^^^^^^^^^
+Partial and expression indexes
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Peewee supports a more structured API for declaring indexes on a model using
-the :meth:`Model.add_index` method or by directly using the
-:class:`ModelIndex` helper class.
-
-Examples:
+Partial indexes, indexes with expressions, and more complex indexes can use the
+:meth:`Model.add_index` API:
 
 .. code-block:: python
 
-   class Article(Model):
+   class Article(BaseModel):
        name = TextField()
        timestamp = TimestampField()
        status = IntegerField()
-       flags = IntegerField()
-
-   # Add an index on "name" and "timestamp" columns.
-   Article.add_index(Article.name, Article.timestamp)
 
    # Add a partial index on name and timestamp where status = 1.
    Article.add_index(Article.name, Article.timestamp,
@@ -1026,37 +899,137 @@ Examples:
        unique=True)
    Article.add_index(idx)
 
-.. warning::
-   SQLite does not support parameterized ``CREATE INDEX`` queries. This means
-   that when using SQLite to create an index that involves an expression or
-   scalar value, you will need to declare the index using the :class:`SQL`
-   helper:
+.. note::
+   SQLite does not support parameterized ``CREATE INDEX`` queries. Partial
+   indexes and expression indexes on SQLite must be written using
+   :class:`SQL`:
 
    .. code-block:: python
 
-       # SQLite does not support parameterized CREATE INDEX queries, so
-       # we declare it manually.
-       Article.add_index(SQL('CREATE INDEX ...'))
+      Article.add_index(SQL('CREATE INDEX ... WHERE status = 1'))
 
-   See :meth:`~Model.add_index` for details.
+If the above is cumbersome, you can also pass a :class:`SQL` instance to
+``Meta.indexes``:
 
-For more information, see:
+.. code-block:: python
 
-* :meth:`Model.add_index`
-* :meth:`Model.index`
-* :class:`ModelIndex`
-* :class:`Index`
+   class Article(BaseModel):
+       name = TextField()
+       timestamp = TimestampField()
+       status = IntegerField()
+
+       class Meta:
+           indexes = [
+               SQL('CREATE INDEX article_published_lookup ON '
+                   'article (name, timestamp) WHERE status = 1'),
+           ]
+
+Primary Keys
+------------
+
+Auto-incrementing integer primary key
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+If a model declares no primary key, Peewee automatically adds an
+auto-incrementing integer field named ``id``:
+
+.. code-block:: python
+
+   class Article(BaseModel):
+       title = TextField()
+       # Peewee implicitly adds: id = AutoField()
+
+To use a different name for the auto-incrementing primary key, declare an
+:class:`AutoField` explicitly:
+
+.. code-block:: python
+
+   class Article(BaseModel):
+       article_id = AutoField()
+       title = TextField()
+
+.. warning::
+   A common mistake is writing ``id = IntegerField(primary_key=True)`` when
+   intending an auto-incrementing primary key. This declares a plain integer
+   column whose value the application must supply - the database will not
+   generate it. Use :class:`AutoField` for auto-increment behavior.
+
+Non-integer primary keys
+^^^^^^^^^^^^^^^^^^^^^^^^
+
+Any field can serve as the primary key by passing ``primary_key=True``:
+
+.. code-block:: python
+
+   class Country(BaseModel):
+       code = CharField(max_length=2, primary_key=True)   # e.g. 'US', 'DE'
+       name = TextField()
+
+When using a non-auto-incrementing primary key, Peewee cannot distinguish
+between a new row (needs ``INSERT``) and an existing row (needs ``UPDATE``)
+by checking whether the primary key is ``None``. On the first save, pass
+``force_insert=True`` explicitly:
+
+.. code-block:: python
+
+   country = Country(code='DE', name='Germany')
+   country.save(force_insert=True)   # First save: must force INSERT.
+   country.name = 'Deutschland'
+   country.save()                    # Subsequent saves: UPDATE as normal.
+
+:meth:`Model.create` handles this automatically, so it is the simpler
+option for one-step creation:
+
+.. code-block:: python
+
+   country = Country.create(code='DE', name='Germany')
+
+Composite primary keys
+^^^^^^^^^^^^^^^^^^^^^^
+
+Use :class:`CompositeKey` in ``Meta.primary_key`` to designate two or more
+columns as a composite primary key:
+
+.. code-block:: python
+
+   class TweetTag(BaseModel):
+       tweet = ForeignKeyField(Tweet)
+       tag = TextField()
+
+       class Meta:
+           primary_key = CompositeKey('tweet', 'tag')
+
+Composite primary keys are most appropriate for junction tables in many-to-many
+relationships. Peewee has limited support for foreign keys *to* models with
+composite primary keys; avoid them in models that other models will reference.
+
+Models without a primary key
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+To create a table with no primary key, set ``primary_key = False``:
+
+.. code-block:: python
+
+   class LogEntry(BaseModel):
+       timestamp = DateTimeField()
+       event = TextField()
+
+       class Meta:
+           primary_key = False
+
+Note that :meth:`Model.save` and :meth:`Model.delete_instance` do not
+work on keyless models, since both require a primary key to target a specific
+row. Use :meth:`Model.insert`, :meth:`Model.update`, and :meth:`Model.delete`
+(the class-level query methods) instead.
 
 Table constraints
-^^^^^^^^^^^^^^^^^
+-----------------
 
-Peewee allows you to add arbitrary constraints to your :class:`Model`, that
-will be part of the table definition when the schema is created.
+Peewee allows arbitrary constraints to :class:`Model` classes.
 
-For instance, suppose you have a *people* table with a composite primary key of
-two columns, the person's first and last name. You wish to have another table
-relate to the *people* table, and to do this, you will need to define a foreign
-key constraint:
+Suppose you have a *people* table with a composite primary key of two columns:
+the person's first and last name. You wish to have another table relate to the
+*people* table. To do this define a multi-column foreign key constraint:
 
 .. code-block:: python
 
@@ -1076,7 +1049,7 @@ key constraint:
            constraints = [SQL('FOREIGN KEY(owner_first, owner_last) '
                               'REFERENCES person(first, last)')]
 
-You can also implement ``CHECK`` constraints at the table level:
+``CHECK`` constraints can be specified at the table level:
 
 .. code-block:: python
 
@@ -1087,269 +1060,45 @@ You can also implement ``CHECK`` constraints at the table level:
        class Meta:
            constraints = [Check('price < 10000')]
 
-.. _non_integer_primary_keys:
+Creating Tables
+---------------
 
-Primary Keys, Composite Keys and other Tricks
----------------------------------------------
-
-The :class:`AutoField` is used to identify an auto-incrementing integer
-primary key. If you do not specify a primary key, Peewee will automatically
-create an auto-incrementing primary key named "id".
-
-To specify an auto-incrementing ID using a different field name, you can write:
+Once models are defined, create their corresponding tables with
+:meth:`Database.create_tables`:
 
 .. code-block:: python
 
-   class Event(Model):
-       event_id = AutoField()  # Event.event_id will be auto-incrementing PK.
-       name = CharField()
-       timestamp = DateTimeField(default=datetime.datetime.now)
-       metadata = BlobField()
+   db.create_tables([User, Tweet, Favorite])
 
-You can identify a different field as the primary key, in which case an "id"
-column will not be created. In this example we will use a person's email
-address as the primary key:
+To create a single table, use :meth:`Model.create_table`:
 
 .. code-block:: python
 
-   class Person(Model):
-       email = CharField(primary_key=True)
-       name = TextField()
-       dob = DateField()
+   Tweet.create_table()
 
-.. warning::
-   I frequently see people write the following, expecting an auto-incrementing
-   integer primary key:
+.. seealso::
+   :ref:`schema` for documentation on table creation and other schema
+   management tasks.
 
-   .. code-block:: python
+.. _advanced-model-topics:
 
-      class MyModel(Model):
-          id = IntegerField(primary_key=True)
+Advanced Topics
+---------------
 
-   Peewee understands the above model declaration as a model with an integer
-   primary key, but the value of that ID is determined by the application. To
-   create an auto-incrementing integer primary key, you would instead write:
-
-   .. code-block:: python
-
-      class MyModel(Model):
-          id = AutoField()  # primary_key=True is implied.
-
-Composite primary keys can be declared using :class:`CompositeKey`. Note
-that doing this may cause issues with :class:`ForeignKeyField`, as Peewee
-does not support the concept of a "composite foreign-key". As such, I've found
-it only advisable to use composite primary keys in a handful of situations,
-such as trivial many-to-many junction tables:
-
-.. code-block:: python
-   :emphasize-lines: 13
-
-   class Image(Model):
-       filename = TextField()
-       mimetype = CharField()
-
-   class Tag(Model):
-       label = CharField()
-
-   class ImageTag(Model):  # Many-to-many relationship.
-       image = ForeignKeyField(Image)
-       tag = ForeignKeyField(Tag)
-
-       class Meta:
-           primary_key = CompositeKey('image', 'tag')
-
-In the extremely rare case you wish to declare a model with *no* primary key,
-you can specify ``primary_key = False`` in the model ``Meta`` options.
-
-Non-integer primary keys
-^^^^^^^^^^^^^^^^^^^^^^^^
-
-If you would like use a non-integer primary key (which I generally don't
-recommend), you can specify ``primary_key=True`` when creating a field. When
-you wish to create a new instance for a model using a non-autoincrementing
-primary key, you need to be sure you :meth:`~Model.save` specifying
-``force_insert=True``.
-
-.. code-block:: python
-
-   from peewee import *
-
-   class UUIDModel(Model):
-       id = UUIDField(primary_key=True)
-
-Auto-incrementing IDs are, as their name says, automatically generated for you
-when you insert a new row into the database. When you call
-:meth:`~Model.save`, peewee determines whether to do an *INSERT* versus an
-*UPDATE* based on the presence of a primary key value. Since, with our uuid
-example, the database driver won't generate a new ID, we need to specify it
-manually. When we call save() for the first time, pass in ``force_insert = True``:
-
-.. code-block:: python
-
-   # This works because .create() will specify `force_insert=True`.
-   obj1 = UUIDModel.create(id=uuid.uuid4())
-
-   # This will not work, however. Peewee will attempt to do an update:
-   obj2 = UUIDModel(id=uuid.uuid4())
-   obj2.save() # WRONG
-
-   obj2.save(force_insert=True) # CORRECT
-
-   # Once the object has been created, you can call save() normally.
-   obj2.save()
-
-.. note::
-   Any foreign keys to a model with a non-integer primary key will
-   automatically use the same underlying storage type as the primary key they
-   relate to.
-
-.. _composite-key:
-
-Composite primary keys
-^^^^^^^^^^^^^^^^^^^^^^
-
-Peewee has very basic support for composite keys.  In order to use a composite
-key, you must set the ``primary_key`` attribute of the model options to a
-:class:`CompositeKey` instance:
-
-.. code-block:: python
-
-   class BlogToTag(Model):
-       """A simple "through" table for many-to-many relationship."""
-       blog = ForeignKeyField(Blog)
-       tag = ForeignKeyField(Tag)
-
-       class Meta:
-           primary_key = CompositeKey('blog', 'tag')
-
-.. warning::
-   Peewee does not support foreign-keys to models that define a
-   :class:`CompositeKey` primary key. If you wish to add a foreign-key to a
-   model that has a composite primary key, replicate the columns on the
-   related model and add a custom accessor (e.g. a property).
-
-Manually specifying primary keys
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-
-Sometimes you do not want the database to automatically generate a value for
-the primary key, for instance when bulk loading relational data. To handle this
-on a *one-off* basis, you can simply tell peewee to turn off ``auto_increment``
-during the import:
-
-.. code-block:: python
-
-   data = load_user_csv() # load up a bunch of data
-
-   User._meta.auto_increment = False # turn off auto incrementing IDs
-   with db.atomic():
-       for row in data:
-           u = User(id=row[0], username=row[1])
-           u.save(force_insert=True) # <-- force peewee to insert row
-
-   User._meta.auto_increment = True
-
-Although a better way to accomplish the above, without resorting to hacks, is
-to use the :meth:`Model.insert_many` API:
-
-.. code-block:: python
-
-   data = load_user_csv()
-   fields = [User.id, User.username]
-   with db.atomic():
-       User.insert_many(data, fields=fields).execute()
-
-If you *always* want to have control over the primary key, simply do not use
-the :class:`AutoField` field type, but use a normal :class:`IntegerField` (or other column type):
-
-.. code-block:: python
-
-   class User(BaseModel):
-       id = IntegerField(primary_key=True)
-       username = CharField()
-
-   >>> u = User.create(id=999, username='somebody')
-   >>> u.id
-   999
-   >>> User.get(User.username == 'somebody').id
-   999
-
-Models without a Primary Key
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-
-If you wish to create a model with no primary key, you can specify
-``primary_key = False`` in the inner ``Meta`` class:
-
-.. code-block:: python
-
-   class MyData(BaseModel):
-       timestamp = DateTimeField()
-       value = IntegerField()
-
-       class Meta:
-           primary_key = False
-
-This will yield the following DDL:
-
-.. code-block:: sql
-
-   CREATE TABLE "mydata" (
-     "timestamp" DATETIME NOT NULL,
-     "value" INTEGER NOT NULL
-   )
-
-.. warning::
-   Some model APIs may not work correctly for models without a primary key,
-   for instance :meth:`~Model.save` and :meth:`~Model.delete_instance`
-   (you can instead use :meth:`~Model.insert`, :meth:`~Model.update` and
-   :meth:`~Model.delete`).
-
-Self-referential foreign keys
------------------------------
-
-When creating a hierarchical structure it is necessary to create a
-self-referential foreign key which links a child object to its parent.  Because
-the model class is not defined at the time you instantiate the self-referential
-foreign key, use the special string ``'self'`` to indicate a self-referential
-foreign key:
-
-.. code-block:: python
-
-   class Category(Model):
-       name = CharField()
-       parent = ForeignKeyField('self', null=True, backref='children')
-
-As you can see, the foreign key points *upward* to the parent object and the
-back-reference is named *children*.
-
-.. attention:: Self-referential foreign-keys should always be ``null=True``.
-
-When querying against a model that contains a self-referential foreign key you
-may sometimes need to perform a self-join. In those cases you can use
-:meth:`Model.alias` to create a table reference. Here is how you might query
-the category and parent model using a self-join:
-
-.. code-block:: python
-
-   Parent = Category.alias()
-   GrandParent = Category.alias()
-   query = (Category
-            .select(Category, Parent)
-            .join(Parent, on=(Category.parent == Parent.id))
-            .join(GrandParent, on=(Parent.parent == GrandParent.id))
-            .where(GrandParent.name == 'some category')
-            .order_by(Category.name))
+The following sections cover scenarios that arise less frequently. New users
+can skip this section and return to it when the need arises.
 
 .. _circular-fks:
 
 Circular foreign key dependencies
----------------------------------
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 Sometimes it happens that you will create a circular dependency between two
 tables.
 
 .. note::
-   My personal opinion is that circular foreign keys should be refactored (by
-   adding an intermediary table, for instance).
+   Circular foreign keys should be refactored (by adding an intermediary table,
+   for instance).
 
 Adding circular foreign keys with peewee is a bit tricky because at the time
 you are defining either foreign key, the model it points to will not have been
@@ -1379,38 +1128,126 @@ use a foreign key field:
 
 .. code-block:: python
 
-   class User(Model):
-       username = CharField()
-       # Tweet has not been defined yet so use the deferred reference.
+   class User(BaseModel):
+       username = TextField()
        favorite_tweet = DeferredForeignKey('Tweet', null=True)
 
-   class Tweet(Model):
-       message = TextField()
+   class Tweet(BaseModel):
        user = ForeignKeyField(User, backref='tweets')
+       content = TextField()
 
-   # Now that Tweet is defined, "favorite_tweet" has been converted into
-   # a ForeignKeyField.
-   print(User.favorite_tweet)
-   # <ForeignKeyField: "user"."favorite_tweet">
-
-There is one more quirk to watch out for, though. When you call
-:class:`~Model.create_table` we will again encounter the same issue. For
-this reason peewee will not automatically create a foreign key constraint for
-any *deferred* foreign keys.
-
-To create the tables *and* the foreign-key constraint, you can use the
-:meth:`SchemaManager.create_foreign_key` method to create the constraint
-after creating the tables:
-
-.. code-block:: python
-
-   # Will create the User and Tweet tables, but does *not* create a
-   # foreign-key constraint on User.favorite_tweet.
    db.create_tables([User, Tweet])
 
-   # Create the foreign-key constraint:
+   # Add the constraint that could not be created at table-creation time.
    User._schema.create_foreign_key(User.favorite_tweet)
 
 .. note::
    Because SQLite has limited support for altering tables, foreign-key
    constraints cannot be added to a table after it has been created.
+
+Field naming conflicts
+^^^^^^^^^^^^^^^^^^^^^^
+
+Several names are reserved by :class:`Model` for built-in methods and
+attributes (for example ``save``, ``create``, ``delete``, ``update``,
+``get``). Declaring a field with one of these names overwrites the method.
+
+When the desired column name conflicts with a model method, supply an
+alternative attribute name and set ``column_name`` explicitly:
+
+.. code-block:: python
+
+   class LogEntry(BaseModel):
+       timestamp = DateTimeField()
+       # "create" and "update" would conflict with Model.create / Model.update.
+       created_at = DateTimeField(column_name='create')
+       updated_at = DateTimeField(column_name='update')
+
+The database column is still named ``create`` and ``update``; the Python
+attributes are ``created_at`` and ``updated_at``.
+
+.. _barefield:
+
+BareField (SQLite only)
+^^^^^^^^^^^^^^^^^^^^^^^
+
+:class:`BareField` declares a column with no type affinity. It is only
+meaningful with SQLite, which permits untyped columns and virtual table
+columns.
+
+.. code-block:: python
+
+   class FTSEntry(BaseModel):
+       content = BareField()
+
+The optional ``adapt`` parameter specifies a callable that converts values
+coming from the database into a Python type:
+
+.. code-block:: python
+
+   class RawData(BaseModel):
+       value = BareField(adapt=float)
+
+For full-text search virtual tables, use :class:`SearchField` rather
+than :class:`BareField`. See :ref:`sqlite-fts`.
+
+.. _custom-fields:
+
+Custom fields
+^^^^^^^^^^^^^
+
+A custom field is a subclass of an existing field that overrides the
+Python-to-database and database-to-Python conversion methods. This is most
+useful when a database offers a column type that has no built-in Peewee
+equivalent, or when a standard column type should carry application-specific
+Python behavior.
+
+The two conversion hooks are:
+
+- ``db_value(self, value)`` - converts a Python value to the format the
+  database driver expects.
+- ``python_value(self, value)`` - converts a value from the database driver
+  into the desired Python type.
+
+The following example implements a field that stores a ``pathlib.Path``
+value as a ``TEXT`` column:
+
+.. code-block:: python
+
+   from pathlib import Path
+
+   class PathField(TextField):
+       def db_value(self, value):
+           return str(value) if value is not None else None
+
+       def python_value(self, value):
+           return Path(value) if value is not None else None
+
+   class Document(BaseModel):
+       path = PathField()
+
+   doc = Document.create(path=Path('/var/data/report.pdf'))
+   assert isinstance(doc.path, Path)
+
+When the database requires a completely new storage type (not a variant of an
+existing one), set ``field_type`` to the type label and register the label
+with each database that will use it:
+
+.. code-block:: python
+
+   class PointField(Field):
+       field_type = 'point'   # Custom type label.
+
+       def db_value(self, value):
+           if value is not None:
+               return f'{value[0]},{value[1]}'
+
+       def python_value(self, value):
+           if value is not None:
+               x, y = value.split(',')
+               return (float(x), float(y))
+
+   # Tell Peewee what DDL type to emit for each database.
+   sq_db  = SqliteDatabase('mydb', field_types={'point': 'text'})
+
+.. seealso:: :class:`Field` API reference.

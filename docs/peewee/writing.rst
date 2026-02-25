@@ -120,8 +120,8 @@ Calling :meth:`Model.create` or :meth:`Model.save` in a loop should be avoided:
 
 The above is slow:
 
-1. **Does not wrap the loop in a transaction.** Result is each :meth:`~Model.create`
-   happens in its own transaction.
+1. **Does not wrap the loop in a transaction.** Result is each
+   :meth:`~Model.create` happens in its own :ref:`transaction <transactions>`.
 2. **Python interpreter** is getting in the way, and each :class:`InsertQuery`
    must be generated and parsed into SQL.
 3. **Large amount of data** (in terms of raw bytes of SQL) may be sent to the
@@ -169,7 +169,7 @@ up into chunks. SQLite in particular may have a `limit of 32766 <https://www.sql
 variables-per-query (batch size would then be 32766 // row length).
 
 You can write a loop to batch your data into chunks. It is **strongly recommended**
-you use a transaction:
+you use a :ref:`transaction <transactions>`:
 
 .. code-block:: python
 
@@ -275,7 +275,7 @@ Atomic updates
 ^^^^^^^^^^^^^^
 
 Use column expressions in ``update()`` to modify values without a read-modify-write
-cycle. This is race-condition-safe:
+cycle. Performing updates atomically prevents race-conditions:
 
 .. code-block:: python
 
@@ -356,8 +356,10 @@ event of a conflict:
    User.replace(username='huey', last_login=datetime.datetime.now()).execute()
 
    # Equivalent using insert():
-   User.insert(username='huey', last_login=datetime.datetime.now()
-               ).on_conflict_replace().execute()
+   (User
+    .insert(username='huey', last_login=datetime.datetime.now())
+    .on_conflict_replace()
+    .execute())
 
 .. warning::
    ``replace`` deletes and re-inserts, which changes the primary key. Use
@@ -381,7 +383,7 @@ The :meth:`~Insert.on_conflict` method is much more powerful.
    (User
     .insert(username='huey', last_login=now, login_count=1)
     .on_conflict(
-        # PostgreSQL and SQLite require identifying the conflicting constraint.
+        # Postgresql and SQLite require identifying the conflicting constraint.
         # MySQL does not need this.
         conflict_target=[User.username],
 
@@ -495,7 +497,7 @@ Insert the row, and silently do nothing if a constraint would be violated:
    # Insert if username does not exist; ignore if it does.
    User.insert(username='huey').on_conflict_ignore().execute()
 
-Supported by SQLite, MySQL, and PostgreSQL.
+Supported by SQLite, MySQL, and Postgresql.
 
 Deleting Records
 ----------------
@@ -513,14 +515,15 @@ reference it via foreign key), pass ``recursive=True``:
 .. code-block:: python
 
    # Deletes the user and all their tweets, favorites, etc.
-   user.delete_instance(recursive=True)
+   with db.atomic():
+       user.delete_instance(recursive=True)
 
 .. warning::
    ``recursive=True`` works by querying for dependent rows and deleting them
-   first in Python-orchestrated batches - it does not rely on ``ON DELETE
-   CASCADE``. For large graphs of related data, this can be slow and may not be
-   atomic. Consider using database-level cascade constraints on the foreign keys
-   for production use cases.
+   first - it does not rely on ``ON DELETE CASCADE``. For large graphs of
+   related data, this can be slow. Be sure to wrap calls in a
+   :ref:`transaction <transactions>` and consider using database-level cascade
+   constraints on the foreign keys.
 
 To delete an arbitrary set of rows without fetching them:
 

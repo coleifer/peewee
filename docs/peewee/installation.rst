@@ -3,25 +3,22 @@
 Installing and Testing
 ======================
 
-Most users will want to simply install the latest version, hosted on PyPI:
+Install the latest release from PyPI:
 
 .. code-block:: shell
-   :emphasize-lines: 1
 
    pip install peewee
 
-Peewee has an optional Sqlite C extension which is not bundled as part of the
-wheel. If you wish to use this, you can install Peewee via source distribution:
+Peewee has an optional Sqlite C extension which is not bundled in the default
+wheel. It provides user-defined ranking functions for use with Sqlite FTS4 and
+functions for fuzzy string matching. To build from source:
 
 .. code-block:: shell
 
    pip install peewee --no-binary :all:
 
-Installing with git
--------------------
-
-The project is hosted at https://github.com/coleifer/peewee and can be installed
-using git:
+Installing from source
+----------------------
 
 .. code-block:: shell
 
@@ -32,56 +29,53 @@ using git:
 Running tests
 -------------
 
-You can test your installation by running the test suite.
-
 .. code-block:: shell
 
    python runtests.py
+   python runtests.py --help  # Show options.
 
-You can test specific features or specific database drivers using the
-``runtests.py`` script. To view the available test runner options, use:
+To run tests against Postgres or MySQL create a database named ``peewee_test``.
+For the Postgres extension tests, enable hstore:
 
-.. code-block:: shell
+.. code-block:: sql
 
-   python runtests.py --help
+   CREATE EXTENSION hstore;
 
-.. note::
-   To run tests against Postgres or MySQL you need to create a database named
-   "peewee_test". To test the Postgres extension module, you will also want to
-   install the HStore extension in the postgres test database:
+Supported Drivers
+-----------------
 
-   .. code-block:: sql
-
-      -- install the hstore extension on the peewee_test postgres db.
-      CREATE EXTENSION hstore;
-
-Driver support
---------------
+Peewee works with any database for which a DB-API 2.0 driver exists. The
+following drivers are supported out of the box:
 
 +-----------------------+------------------------+--------------------------------------------+
 | Database              | Driver                 | Implementation                             |
 +=======================+========================+============================================+
-| **Sqlite**            | ``sqlite3``            | :class:`SqliteDatabase`                 |
+| **Sqlite**            | ``sqlite3``            | :class:`SqliteDatabase`                    |
 +-----------------------+------------------------+--------------------------------------------+
-| **Postgres**          | ``psycopg2``           | :class:`PostgresqlDatabase`             |
+| **Postgres**          | ``psycopg3``           | :class:`PostgresqlDatabase`                |
 +-----------------------+------------------------+--------------------------------------------+
-| **Postgres**          | ``psycopg3``           | :class:`PostgresqlDatabase`             |
+| **Postgres**          | ``psycopg2``           | :class:`PostgresqlDatabase`                |
 +-----------------------+------------------------+--------------------------------------------+
-| **MySQL**             | ``pymysql``            | :class:`MySQLDatabase`                  |
+| **MySQL**             | ``pymysql``            | :class:`MySQLDatabase`                     |
 +-----------------------+------------------------+--------------------------------------------+
-| Sqlite (async)        | ``aiosqlite``          | :class:`AsyncSqliteDatabase`            |
+| Sqlite (async)        | ``aiosqlite``          | :class:`AsyncSqliteDatabase`               |
 +-----------------------+------------------------+--------------------------------------------+
-| Postgres (async)      | ``asyncpg``            | :class:`AsyncPostgresqlDatabase`        |
+| Postgres (async)      | ``asyncpg``            | :class:`AsyncPostgresqlDatabase`           |
 +-----------------------+------------------------+--------------------------------------------+
-| MySQL (async)         | ``aiomysql``           | :class:`AsyncMySQLDatabase`             |
+| MySQL (async)         | ``aiomysql``           | :class:`AsyncMySQLDatabase`                |
 +-----------------------+------------------------+--------------------------------------------+
-| Sqlite (alternate)    | ``cysqlite``           | :class:`CySqliteDatabase`               |
+| Sqlite (alternate)    | ``cysqlite``           | :class:`CySqliteDatabase`                  |
 +-----------------------+------------------------+--------------------------------------------+
-| Sqlite (alternate)    | ``apsw``               | :class:`APSWDatabase`                   |
+| Sqlite (alternate)    | ``apsw``               | :class:`APSWDatabase`                      |
 +-----------------------+------------------------+--------------------------------------------+
-| SqlCipher             | ``sqlcipher3``         | :class:`SqlCipherDatabase`              |
+| SqlCipher             | ``sqlcipher3``         | :class:`SqlCipherDatabase`                 |
 +-----------------------+------------------------+--------------------------------------------+
-| MySQL (alternate)     | ``mysql-connector``    | :class:`MySQLConnectorDatabase`         |
+| MySQL (alternate)     | ``mysql-connector``    | :class:`MySQLConnectorDatabase`            |
 +-----------------------+------------------------+--------------------------------------------+
-| MariaDB (alternate)   | ``mariadb-connector``  | :class:`MariaDBConnectorDatabase`       |
+| MariaDB (alternate)   | ``mariadb-connector``  | :class:`MariaDBConnectorDatabase`          |
 +-----------------------+------------------------+--------------------------------------------+
+| CockroachDB           | ``psycopg`` (2 or 3)   | :class:`CockroachDatabase`                 |
++-----------------------+------------------------+--------------------------------------------+
+
+The three bolded rows cover the majority of deployments. All others are
+optional; install their drivers when needed.

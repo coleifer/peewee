@@ -309,7 +309,7 @@ from aggregate queries:
         wrapped = Select(from_list=[query], columns=[fn.COUNT(SQL('1'))])
         return wrapped.scalar(db)
 
-The :ref:`query_examples` document has a more complex example, in which we
+The :ref:`query-library` document has a more complex example, in which we
 write a query for a facility with the highest number of available slots booked:
 
 The SQL we wish to express is:

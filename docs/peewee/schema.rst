@@ -46,7 +46,7 @@ Dropping Tables
 
 .. code-block:: python
 
-   db.drop_tables([User, Tweet, Favorite])   # Dependents first.
+   db.drop_tables([User, Tweet, Favorite])
 
 By default Peewee uses ``DROP TABLE IF EXISTS``, making it safe to call
 multiple times. To disable this, pass ``safe=False``.
@@ -55,7 +55,7 @@ multiple times. To disable this, pass ``safe=False``.
 
    db.drop_tables([User, Tweet, Favorite], safe=False)
 
-Pass ``cascade=True`` (PostgreSQL and MySQL) to let the database handle
+Pass ``cascade=True`` (Postgresql and MySQL) to let the database handle
 dependency ordering:
 
 .. code-block:: python
@@ -102,7 +102,7 @@ Truncating a table:
 .. code-block:: python
 
    User._schema.truncate_table()       # No cascade.
-   User._schema.truncate_table(cascade=True)   # PostgreSQL only.
+   User._schema.truncate_table(cascade=True)   # Postgresql only.
 
 .. seealso::
    :class:`SchemaManager` API reference.
@@ -120,17 +120,15 @@ Playhouse migrate module
 ^^^^^^^^^^^^^^^^^^^^^^^^^
 
 The :ref:`migrate <migrate>` module in playhouse provides a set of helper
-functions for common schema changes, applied through a :class:`Migrator`:
+functions for common schema changes, applied through a :class:`SchemaMigrator`:
 
 .. code-block:: python
 
    from playhouse.migrate import *
 
-   # For SQLite:
-   migrator = SqliteMigrator(db)
+   db = SqliteDatabase(...)
 
-   # For PostgreSQL:
-   # migrator = PostgresqlMigrator(db)
+   migrator = SchemaMigrator.from_database(db)
 
    first_name = TextField(default='')
    last_name  = TextField(default='')
@@ -142,168 +140,17 @@ functions for common schema changes, applied through a :class:`Migrator`:
            migrator.drop_column('person', 'name'),
        )
 
-Add new field(s) to an existing model:
+Supported operations:
 
-.. code-block:: python
-
-    # Create your field instances. For non-null fields you must specify a
-    # default value.
-    pubdate_field = DateTimeField(null=True)
-    comment_field = TextField(default='')
-
-    # Run the migration, specifying the database table, field name and field.
-    migrate(
-        migrator.add_column('comment_tbl', 'pub_date', pubdate_field),
-        migrator.add_column('comment_tbl', 'comment', comment_field),
-    )
-
-.. note::
-    Peewee appends ``_id`` to the column name for a given :class:`ForeignKeyField`
-    by default. When adding a foreign-key, you will want to ensure you give it
-    the proper column name. For example, to add a ``user`` foreign-key to a
-    ``Tweet`` model:
-
-    .. code-block:: python
-
-        # Our desired model will look like this:
-        class Tweet(BaseModel):
-            user = ForeignKeyField(User)  # Add this field.
-            # ... other fields ...
-
-        # Migration code:
-        user = ForeignKeyField(User, field=User.id, null=True)
-        migrate(
-            # Note that the column name given is "user_id".
-            migrator.add_column(Tweet._meta.table_name, 'user_id', user),
-        )
-
-Renaming a field:
-
-.. code-block:: python
-
-    # Specify the table, original name of the column, and its new name.
-    migrate(
-        migrator.rename_column('story', 'pub_date', 'publish_date'),
-        migrator.rename_column('story', 'mod_date', 'modified_date'),
-    )
-
-Dropping a field:
-
-.. code-block:: python
-
-    migrate(
-        migrator.drop_column('story', 'some_old_field'),
-    )
-
-Making a field nullable or not nullable:
-
-.. code-block:: python
-
-    # Note that when making a field not null that field must not have any
-    # NULL values present.
-    migrate(
-        # Make `pub_date` allow NULL values.
-        migrator.drop_not_null('story', 'pub_date'),
-
-        # Prevent `modified_date` from containing NULL values.
-        migrator.add_not_null('story', 'modified_date'),
-    )
-
-Altering a field's data-type:
-
-.. code-block:: python
-
-    # Change a VARCHAR(50) field to a TEXT field.
-    migrate(
-        migrator.alter_column_type('person', 'email', TextField())
-    )
-
-Renaming a table:
-
-.. code-block:: python
-
-    migrate(
-        migrator.rename_table('story', 'stories_tbl'),
-    )
-
-Adding an index:
-
-.. code-block:: python
-
-    # Specify the table, column names, and whether the index should be
-    # UNIQUE or not.
-    migrate(
-        # Create an index on the `pub_date` column.
-        migrator.add_index('story', ('pub_date',), False),
-
-        # Create a multi-column index on the `pub_date` and `status` fields.
-        migrator.add_index('story', ('pub_date', 'status'), False),
-
-        # Create a unique index on the category and title fields.
-        migrator.add_index('story', ('category_id', 'title'), True),
-    )
-
-Dropping an index:
-
-.. code-block:: python
-
-    # Specify the index name.
-    migrate(migrator.drop_index('story', 'story_pub_date_status'))
-
-Adding or dropping table constraints:
-
-.. code-block:: python
-
-    # Add a CHECK() constraint to enforce the price cannot be negative.
-    migrate(migrator.add_constraint(
-        'products',
-        'price_check',
-        Check('price >= 0')))
-
-    # Remove the price check constraint.
-    migrate(migrator.drop_constraint('products', 'price_check'))
-
-    # Add a UNIQUE constraint on the first and last names.
-    migrate(migrator.add_unique('person', 'first_name', 'last_name'))
-
-Adding or dropping a database-level default value for a column:
-
-.. code-block:: python
-
-    # Add a default value for a status column.
-    migrate(migrator.add_column_default(
-        'entries',
-        'status',
-        'draft'))
-
-    # Remove the default.
-    migrate(migrator.drop_column_default('entries', 'status'))
-
-    # Use a function for the default value (does not work with Sqlite):
-    migrate(migrator.add_column_default(
-        'entries',
-        'timestamp',
-        fn.now()))
-
-    # Or alternatively (works with Sqlite):
-    migrate(migrator.add_column_default(
-        'entries',
-        'timestamp',
-        'now()'))
-
-.. note::
-    Postgres users may need to set the search-path when using a non-standard
-    schema. This can be done as follows:
-
-    .. code-block:: python
-
-        new_field = TextField(default='', null=False)
-        migrator = PostgresqlMigrator(db)
-        migrate(migrator.set_search_path('my_schema_name'),
-                migrator.add_column('table', 'field_name', new_field))
+- Add, rename, or drop columns.
+- Make columns nullable or not nullable.
+- Change a column's type.
+- Rename a table.
+- Add or drop indexes and constraints.
+- Add or drop column default values.
 
 .. seealso::
-   :ref:`migrate` in the playhouse documentation for the full API.
+   :ref:`migrate` for in-depth examples and API reference.
 
 Raw SQL migrations
 ^^^^^^^^^^^^^^^^^^^

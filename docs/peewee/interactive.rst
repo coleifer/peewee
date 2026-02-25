@@ -94,8 +94,7 @@ can run some queries on the generated ``event`` model:
    60
 
 For more information about these APIs and other similar reflection utilities,
-see the :ref:`reflection` section of the :ref:`playhouse extensions <playhouse>`
-document.
+see the :ref:`reflection` documentation.
 
 To generate an actual Python module containing model definitions for an
 existing database, you can use the command-line :ref:`pwiz <pwiz>` tool. Here

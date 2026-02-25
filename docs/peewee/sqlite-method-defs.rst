@@ -259,8 +259,12 @@
 
     .. code-block:: python
 
-        db = SqliteExtDatabase('my_app.db')
+        db = SqliteDatabase('my_app.db')
         db.load_extension('closure')
+
+.. method:: unload_extension(extension_module):
+
+    Unregister extension from being automatically loaded on new connections.
 
 .. method:: attach(filename, name)
 

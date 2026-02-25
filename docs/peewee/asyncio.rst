@@ -1,327 +1,203 @@
 .. _asyncio:
 
-Asyncio Support
-===============
+Async Support
+=============
 
-Peewee provides a thin asyncio compatibility layer that allows existing APIs to
-be used safely with the asyncio event loop. Unlike other peewee async projects,
-this implementation uses ``greenlet`` to execute Peewee's internally synchronous
-code while allowing async database operations to run on the event loop.
+Peewee is a synchronous library by design. Its core query execution path uses
+blocking DB-API 2.0 calls. The async support described here bridges that
+synchronous core to an asyncio event loop using ``greenlet``.
 
-When database I/O is required, execution is suspended and control is returned
-to the event loop. Once the awaitable completes, execution resumes exactly
-where it left off.
+When database I/O occurs inside a greenlet, control is yielded to the event
+loop until the driver completes the operation. From the perspective of your
+application code, queries look synchronous; from the event loop's perspective,
+they yield during I/O.
 
-The Peewee asyncio implementation can be found in ``playhouse.pwasyncio``:
+This means existing Peewee code - queries, transactions, ORM methods - runs
+unchanged inside async contexts. No query-by-query API changes are required.
 
-.. code-block:: python
-
-    from playhouse.pwasyncio import AsyncPostgresqlDatabase
-    from playhouse.pwasyncio import AsyncMySQLDatabase
-    from playhouse.pwasyncio import AsyncSqliteDatabase
-
-The :meth:`~AsyncDatabaseMixin.run` method is the primary entry point for
-async execution. It accepts a synchronous callable and arbitrary arguments.
-When the underlying database driver would block, control is yielded back to the
-asyncio event-loop.
-
-.. code-block:: python
-
-    await db.run(User.create, name='Alice')
-
-If you prefer a more ``async``-native approach, a number of helper methods are
-available on the async ``Database`` classes:
-
-.. code-block:: python
-
-    import asyncio
-    from peewee import *
-    from playhouse.pwasyncio import AsyncSqliteDatabase
-
-    db = AsyncSqliteDatabase('example.db')
-
-    class User(db.Model):
-        name = TextField()
-
-    async def demo():
-        async with db:
-            # Asynchronously create table(s).
-            await db.acreate_tables([User])
-
-            # Create a new user.
-            user = await db.run(User.create, name='Charlie')
-
-            # Retrieve new user from the database.
-            user_db = await db.get(User.select().where(User.name == 'Charlie'))
-            assert user.name == user_db.name == 'Charlie'
-
-            # Atomicity with async context managers.
-            async with db.atomic():
-                # Construct a normal Peewee INSERT query.
-                iq = (User
-                      .insert_many([{'name': 'Alice'}, {'name': 'Bob'}])
-                      .returning(User))
-
-                # Execute the query asynchronously, retrieving results.
-                users = await db.aexecute(iq)
-                print('Added users: %s' % list(users))
-
-            # Retrieve list of users from database.
-            for user in await db.list(User.select().order_by(User.name)):
-                print(user.name)
-
-        # Close the pool - the connection was released, but it still remains inside
-        # the pool, so this ensures we are ready to shutdown completely.
-        await db.close_pool()
-
-    asyncio.run(demo())
-
-Here is the same example as above demonstrating how :meth:`~AsyncDatabaseMixin.run`
-can be used to wrap synchronous ORM operations to be async:
-
-.. code-block:: python
-
-    import asyncio
-    from peewee import *
-    from playhouse.pwasyncio import AsyncSqliteDatabase
-
-    db = AsyncSqliteDatabase('example.db')
-
-    class User(db.Model):
-        name = TextField()
-
-    async def demo():
-        async with db:
-            # Asynchronously create table(s).
-            await db.run(db.create_tables, [User])
-
-            # Create a new user.
-            user = await db.run(User.create, name='Charlie')
-
-            # Retrieve new user from the database using a callable.
-            def get_user():
-                return User.select().where(User.name == 'Charlie').get()
-
-            user_db = await db.run(get_user)
-            assert user.name == user_db.name == 'Charlie'
-
-            # Atomicity with a normal context manager.
-            def bulk_insert():
-                with db.atomic():
-                    iq = (User
-                          .insert_many([{'name': 'Alice'}, {'name': 'Bob'}])
-                          .returning(User))
-                    users = iq.execute()
-                    print('Added users: %s' % list(users))
-
-            await db.run(bulk_insert)
-
-            # Retrieve list of users from database.
-            users = await db.run(list, User.select().order_by(User.name))
-            for user in users:
-                print(user.name)
-
-        # Close the pool - the connection was released, but it still remains inside
-        # the pool, so this ensures we are ready to shutdown completely.
-        await db.close_pool()
-
-    asyncio.run(demo())
-
-When running Peewee ORM code, you can choose between the two execution patterns
-depending on how explicit you want to be. See :ref:`async-helpers` for details
-on the available ``async``-friendly helper methods.
+.. note::
+   For applications that use Peewee with a purely synchronous framework
+   (Flask, Django, Bottle, etc.), no async setup is needed. See
+   :ref:`framework-integration` for examples of using Peewee with various sync
+   and async frameworks.
 
 Installation
 ------------
 
-This module requires Python 3.8 or newer and depends on Peewee and greenlet,
-along with whatever async-compatible driver you intend to use.
+Requires Python 3.8 or newer, plus ``greenlet`` and an async-compatible
+database driver:
 
 .. code-block:: shell
 
-    pip install peewee greenlet
-    pip install asyncpg  # Postgresql.
-    pip install aiomysql  # MySQL.
-    pip install aiosqlite  # Sqlite.
+   pip install peewee greenlet
 
-Supported Backends
-------------------
+   pip install aiosqlite     # SQLite
+   pip install asyncpg       # Postgresql
+   pip install aiomysql      # MySQL / MariaDB
 
-================  ============  ===================================
-Database          Driver        Database Class
-================  ============  ===================================
+Supported backends:
+
+================  ============  ====================================
+Database          Driver        Peewee class
+================  ============  ====================================
 SQLite            aiosqlite     :class:`AsyncSqliteDatabase`
+Postgresql        asyncpg       :class:`AsyncPostgresqlDatabase`
 MySQL / MariaDB   aiomysql      :class:`AsyncMySQLDatabase`
-PostgreSQL        asyncpg       :class:`AsyncPostgresqlDatabase`
-================  ============  ===================================
-
-Overview
---------
-
-Async database classes mirror Peewee's standard database classes and can
-generally be used as drop-in replacements.
-
-.. code-block:: python
-
-    from playhouse.pwasyncio import AsyncSqliteDatabase
-
-    db = AsyncSqliteDatabase('example.db', pragmas={'journal_mode': 'wal'})
+================  ============  ====================================
 
 
-Models are defined as expected:
+Basic Usage
+-----------
+
+Import from ``playhouse.pwasyncio`` and use the async database class in place
+of the standard one. Models are defined identically:
 
 .. code-block:: python
 
-    class User(db.Model):
-        name = CharField()
+   import asyncio
+   from peewee import *
+   from playhouse.pwasyncio import AsyncSqliteDatabase
 
-Executing Queries
+   db = AsyncSqliteDatabase('my_app.db')
+
+   class User(db.Model):
+       name = TextField()
+
+All queries must be executed through one of the async execution methods
+described below. The database context (``async with db``) acquires a
+connection from the pool and releases it on exit:
+
+.. code-block:: python
+
+   async def main():
+       async with db:
+           await db.acreate_tables([User])
+
+           user = await db.run(User.create, name='Charlie')
+
+           charlie = await db.get(User.select().where(User.name == 'Charlie'))
+           assert charlie.name == user.name
+
+           for user in await db.list(User.select().order_by(User.name)):
+               print(user.name)
+
+       await db.close_pool()
+
+   asyncio.run(main())
+
+Execution Methods
 -----------------
 
-Peewee queries must be executed using the database :meth:`~AsyncDatabaseMixin.run` method.
+``db.run()`` - general-purpose entry point
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+:meth:`~AsyncDatabaseMixin.run` accepts any callable and runs it inside a
+greenlet bridge. The callable can contain arbitrary synchronous Peewee code,
+including transactions:
 
 .. code-block:: python
 
-    from peewee import *
-    from playhouse.pwasyncio import AsyncSqliteDatabase
+   # Single operation:
+   user = await db.run(User.create, name='Alice')
 
-    db = AsyncSqliteDatabase('example.db')
+   # Multi-step function:
+   def register(username, bio):
+       with db.atomic():
+           user = User.create(name=username)
+           Profile.create(user=user, bio=bio)
+           return user
 
-    class User(db.Model):
-        name = CharField()
+   user = await db.run(register, 'alice', 'Python developer')
 
-    async def main():
-        await db.acreate_tables([User])
+Use ``db.run()`` when:
 
-        # Use the db.run() helper with a synchronous callable.
-        await db.run(User.create, name='Alice')
+* You have existing synchronous code you want to call from async.
+* A single operation involves multiple queries (e.g. a transaction).
+* You need to pass results between queries without async overhead.
 
-        # OR use an awaitable helper method.
-        user = await db.get(User.select().where(User.name == 'Alice'))
+Async helper methods
+^^^^^^^^^^^^^^^^^^^^^
 
-        def add_users():
-            with db.atomic():
-                User.create(name='Bob')
-                User.create(name='Charlie')
-
-            with db.atomic():
-                alice = User.get(User.name == 'Alice')
-                alice.name = 'Alyce'  # She spells it fancy now.
-                alice.save()
-
-            return list(User.select().order_by(User.name))
-
-        users = await db.run(add_users)
-        print([u.name for u in users])
-
-        await db.adrop_tables([User])
-        await db.close_pool()
-
-    asyncio.run(main())
-
-The :meth:`~AsyncDatabaseMixin.run` method ensures synchronous Peewee code
-is executed safely inside the event loop. Any arbitrary code can be wrapped in
-a function and sent to the :meth:`~AsyncDatabaseMixin.run` method.
-
-.. _async-helpers:
-
-Helper Methods
---------------
-
-The :class:`AsyncDatabaseMixin` provides a number of async/await-friendly
-helpers for common operations.
-
-The most general-purpose helper is the :meth:`AsyncDatabaseMixin.run`
-method, which accepts a callable and arbitrary arguments, and runs it in an
-asynchronous context.
-
-Database connection can be opened and closed asynchronously using the
-following helpers:
-
-* :meth:`~AsyncDatabaseMixin.aconnect` - acquire a connection from the pool for the current task.
-* :meth:`~AsyncDatabaseMixin.aclose` - release the connection back to the pool.
-* :meth:`~AsyncDatabaseMixin.close_pool` - close the connection pool.
-
-Several common query patterns are exposed as async helpers:
-
-* :meth:`~AsyncDatabaseMixin.atomic` - can be used as an async context manager for created arbitrarily nested transactions.
-* :meth:`~AsyncDatabaseMixin.get` - get a single model instance or result.
-* :meth:`~AsyncDatabaseMixin.list` - get the results of a query (0...many).
-* :meth:`~AsyncDatabaseMixin.scalar` - get a single, scalar value from a query.
-* :meth:`~AsyncDatabaseMixin.aexecute` - execute a Query object.
-* :meth:`~AsyncDatabaseMixin.aexecute_sql` - execute a SQL query.
-* :meth:`~AsyncDatabaseMixin.acreate_tables` - create one or more tables.
-* :meth:`~AsyncDatabaseMixin.adrop_tables` - drop one or more tables.
+For single-query operations, the async helpers are more direct:
 
 .. code-block:: python
 
-    import asyncio
-    from peewee import *
-    from playhouse.pwasyncio import AsyncSqliteDatabase
+   # Execute any query and get its natural return type.
+   cursor = await db.aexecute(query)
 
-    db = AsyncSqliteDatabase('example.db')
+   # SELECT and return one model instance (raises DoesNotExist if none).
+   user = await db.get(User.select().where(User.name == 'Alice'))
 
-    class User(db.Model):
-        name = CharField()
+   # SELECT and return a list.
+   users = await db.list(User.select().order_by(User.name))
 
-    async def main():
-        async with db:
-            await db.acreate_tables([User])
+   # SELECT and return a scalar value.
+   count = await db.scalar(User.select(fn.COUNT('*')))
 
-            insert = (User
-                      .insert_many([(f'user-{i}',) for i in range(10)])
-                      .returning(User))
-            for new_user in await db.aexecute(insert):
-                print(f'Added user {new_user.name}')
+   # CREATE TABLE / DROP TABLE:
+   await db.acreate_tables([User, Tweet])
+   await db.adrop_tables([User, Tweet])
 
-            user = await db.get(User.select().where(User.id == 1))
+   # Raw SQL:
+   cursor = await db.aexecute_sql('SELECT 1')
+   print(cursor.fetchall())   # [(1,)]
 
-            users = await db.list(User.select())
-            print(f'Found {len(users)} users via select')
+Transactions
+^^^^^^^^^^^^^
 
-            async with db.atomic():
-                user = await db.run(User.create, name='Charlie')
-                print(f'Added new user with id={user.id}')
-
-            count = await db.scalar(User.select(fn.COUNT(User.id)))
-            print(f'COUNT returns {count} users')
-
-            await db.adrop_tables([User])
-
-        # Close all connections and exit cleanly.
-        await db.close_pool()
-
-    asyncio.run(main())
-
-Connections and Pooling
------------------------
-
-Like non-async Peewee, which uses a connection-per-thread, each asyncio task
-maintains its own connection state. This avoids sharing connections across
-concurrent tasks. Internally, we try to use the driver-provided pools where
-possible.
-
-Connections can be acquired and released from the pool using the following
-helpers:
-
-* :meth:`~AsyncDatabaseMixin.aconnect`
-* :meth:`~AsyncDatabaseMixin.aclose`
-* :meth:`~AsyncDatabaseMixin.close_pool` - close the pool and exit cleanly.
-
-Alternatively, you can use the database class as a context manager:
+Use ``async with db.atomic()`` for async-aware transactions:
 
 .. code-block:: python
 
-    db = AsyncSqliteDatabase('example.db')
+   async with db.atomic():
+       await db.run(User.create, name='Alice')
+       await db.run(User.create, name='Bob')
+   # Both committed when the block exits.
 
-    await db.aconnect()
-    # Do some database work.
-    await db.aclose()
+Or wrap transactional code in ``db.run()``:
 
-    # Or use the context manager:
-    async with db:
-        # Do some database work.
-        ...
+.. code-block:: python
+
+   def create_users():
+       with db.atomic():
+           User.create(name='Alice')
+           User.create(name='Bob')
+
+   await db.run(create_users)
+
+Both approaches produce the same result. The ``db.run()`` form is often simpler
+when the transactional logic involves many inter-dependent queries.
+
+
+Connection Management
+---------------------
+
+The database context manager (``async with db``) is the recommended way to
+manage connections. It acquires a connection on entry and releases it on exit:
+
+.. code-block:: python
+
+   async with db:
+       # Connection is available here.
+       pass
+   # Connection released.
+
+Explicit control is also available:
+
+.. code-block:: python
+
+   await db.aconnect()    # Acquire connection for the current task.
+   # ... queries ...
+   await db.aclose()      # Release connection back to pool.
+
+Each asyncio task gets its own connection from the pool. **Connections are not
+shared between tasks**.
+
+To shut down completely (e.g. during application teardown):
+
+.. code-block:: python
+
+   await db.close_pool()
 
 SQLite
 ^^^^^^
@@ -335,16 +211,16 @@ writers. Furthermore, SQLite does not do any network I/O.
 
 The SQLite implementation is provided mostly for testing and local development.
 
-MySQL and PostgreSQL
+MySQL and Postgresql
 ^^^^^^^^^^^^^^^^^^^^
 
-MySQL and PostgreSQL use the driver's native connection pool.
+MySQL and Postgresql use the driver's native connection pool.
 
 Pool configuration options include:
 
-* ``pool_size`` – Maximum number of connections
-* ``pool_min_size`` – Minimum pool size
-* ``acquire_timeout`` – Timeout when acquiring a connection
+* ``pool_size`` - Maximum number of connections
+* ``pool_min_size`` - Minimum pool size
+* ``acquire_timeout`` - Timeout when acquiring a connection
 
 .. code-block:: python
 
@@ -356,318 +232,236 @@ Pool configuration options include:
         pool_min_size=1,
         acquire_timeout=10)
 
-Transactions
-------------
-
-Transactions and savepoints are managed using async context managers.
-
-.. code-block:: python
-
-    async with db.atomic():
-        await db.run(User.create, name='Alice')
-
-        async with db.atomic():
-            await db.run(User.create, name='Bob')
-
-Nested atomic blocks behave the same as in synchronous Peewee code.
-
-Implementation Notes
---------------------
-
-Synchronous ORM code runs inside a greenlet, and async I/O is bridged
-explicitly by Peewee using two helpers, ``greenlet_spawn()`` and ``await_()``.
-The ``greenlet_spawn()`` helper runs synchronous code, but can be suspended and
-resumed in order to yield to the asyncio event loop. Yielding is done by the
-``await_()`` helper, which suspends the greenlet and passes control to the
-asyncio coroutine.
-
-Peewee wraps all this up in a general-purpose :meth:`AsyncDatabaseMixin.run`
-method, which is the entrypoint for pretty much all async operations:
-
-.. code-block:: python
-
-    from playhouse.pwasyncio import *
-
-    async def demo():
-        db = AsyncSqliteDatabase(':memory:')
-        def work():
-            print(db.execute_sql('select 1').fetchall())
-        await db.run(work)
-
-    asyncio.run(demo())  # prints [(1,)]
-
-The basic flow goes something like this:
-
-1. The above code eventually hits the ``db.run()`` method. This method calls
-   the ``greenlet_spawn()`` function, creating a resumable coroutine wrapping our synchronous code.
-2. The greenlet begins executing the synchronous Peewee code.
-3. We call ``db.execute_sql('select 1')``
-4. The async database implementation calls our special ``await_()`` helper,
-   which switches control back to the event loop.
-5. The event-loop awaits the coroutine, e.g. ``await conn.execute(...)``,
-   awaiting the results from the cursor before handing them back.
-6. The result cursor is sent back to the greenlet, and the greenlet resumes.
-7. ``db.execute_sql()`` returns and the rest of the code continues normally.
-8. We call ``fetchall()`` on the result cursor, which returns all the rows
-   loaded during (5).
-
-If we try to run :meth:`~AsyncDatabaseMixin.execute_sql()` outside of the
-greenlet helper, Peewee will raise a :class:`MissingGreenletBridge` exception:
-
-.. code-block:: python
-
-    async def demo():
-        db = AsyncSqliteDatabase(':memory:')
-        print(db.execute_sql('select 1').fetchall())
-
-    # MissingGreenletBridge: Attempted query select 1 (None) outside greenlet runner.
-    asyncio.run(demo())
-
-Peewee provides a number of async-ready helper methods for common operations,
-so the ``run()`` helper can be avoided:
-
-.. code-block:: python
-
-    from playhouse.pwasyncio import *
-
-    async def demo():
-        db = AsyncSqliteDatabase(':memory:')
-        curs = await db.aexecute_sql('select 1')
-        print(curs.fetchall())
-
-    asyncio.run(demo())  # prints [(1,)]
-
-.. note::
-    Obtaining the results from the cursor does not happen asynchronously (e.g.
-    we do not call ``print(await curs.fetchall())``). Internally Peewee **does**
-    await fetching the results from the cursor, but the rows are all loaded
-    before the cursor is returned to the caller. This ensures consistency with
-    existing behavior, though in future versions we may add support for
-    streaming cursor results (via Postgres server-side cursors).
 
 Sharp Corners
 -------------
 
-There are limitations to what can be achieved with the approach described above.
-The main one I foresee causing problems is lazy foreign-key resolution. Consider this example:
+Lazy foreign key access outside ``db.run()``
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Accessing a lazy foreign key attribute triggers a synchronous query. Outside a
+greenlet context, this raises ``MissingGreenletBridge``:
 
 .. code-block:: python
 
-    tweet = await db.get(Tweet.select())
-    print(tweet.user.name)  # Fails.
-    # MissingGreenletBridge: Attempted query SELECT ...outside greenlet runner.
+   tweet = await db.get(Tweet.select())
 
-This fails because the relationship ``tweet.user`` was not explicitly fetched,
-so Peewee attempts to issue a ``SELECT`` query to get the related user. This
-fails because we are not operating inside the greenlet-bridged environment.
+   # FAILS: triggers a SELECT outside the greenlet bridge.
+   print(tweet.user.name)
+   # MissingGreenletBridge: Attempted query outside greenlet runner.
 
-One solution is to resolve foreign keys inside :meth:`~AsyncDatabaseMixin.run`:
+Fix by selecting the related model in the original query:
 
 .. code-block:: python
 
-    print(await db.run(lambda: tweet.user.name))
+   query = Tweet.select(Tweet, User).join(User)
+   tweet = await db.get(query)
+   print(tweet.user.name)   # OK - no extra query.
 
-Even better is to select the related object explicitly:
-
-.. code-block:: python
-
-    query = Tweet.select(Tweet, User).join(User)
-    tweet = await db.get(query)
-    print(tweet.user.name)  # OK, no extra SELECT required.
-
-In a similar way, iterating the related objects requires a query:
+Or by wrapping the access in ``db.run()``:
 
 .. code-block:: python
 
-    for tweet in user.tweet_set:
-        print(tweet.message)
-    # MissingGreenletBridge: Attempted query SELECT ... outside greenlet runner.
+   name = await db.run(lambda: tweet.user.name)
 
-Like above, there are a few ways you can accomplish this:
+To prevent errors from occurring at run-time you can disable lazy-loading on
+your foreign-key fields:
 
 .. code-block:: python
 
-    # Use the db.run() helper:
-    tweets = await db.run(list, user.tweet_set)
-    for tweet in tweets:
-        print(tweet.message)
+   class Tweet(db.Model):
+       user = ForeignKeyField(User, backref='tweets', lazy_load=False)
+       ...
 
-    # Use the db.list() helper:
-    for tweet in await db.list(user.tweet_set):
-        print(tweet.message)
 
-    # Use prefetch (not a great fit, but just to demonstrate):
-    user_query = User.select().where(User.id == user.id)
-    tweet_query = Tweet.select()
-    user, = await db.run(prefetch, user_query, tweet_query)
-    for tweet in user.tweet_set:
-        print(tweet.message)
+Iterating back-references outside ``db.run()``
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Overall these are the main issues I see arising, but as things come up I may
-expand this section or work to find other solutions to the problems.
+For the same reason, iterating a back-reference outside a greenlet context
+also fails:
 
-API
----
+.. code-block:: python
 
-.. class:: AsyncDatabaseMixin(database, pool_size=10, pool_min_size=1, acquire_timeout=10, validate_conn_timeout=2, **kwargs)
+   # FAILS:
+   for tweet in user.tweets:
+       print(tweet.content)
 
-    :param str database: Database name or filename for SQLite.
-    :param int pool_size: Maximum size of the driver-managed connection pool
-        (no-op for SQLite).
-    :param int pool_min_size: Minimum size of the driver-managed connection pool
-        (no-op for SQLite).
-    :param float acquire_timeout: Time (in seconds) to wait for a free
-        connection when acquiring from the pool.
-    :param kwargs: Arbitrary keyword arguments passed to the underlying database
-        driver when creating connections (e.g., ``user``, ``password``,
-        ``host``).
+Solutions:
 
-    This mixin provides asyncio execution support for Peewee database classes.
-    It is not intended to be used directly, but instead forms the base for the
-    concrete ``AsyncDatabase`` implementations.
+.. code-block:: python
 
-    Each asyncio task maintains its own connection state. Connections are
-    acquired and released back to the pool when the task completes or the
-    database context exits.
+   # Using db.list():
+   for tweet in await db.list(user.tweets):
+       print(tweet.content)
 
-    .. method:: run(fn, *args, **kwargs)
-        :async:
+   # Using db.run() with list():
+   tweets = await db.run(list, user.tweets)
 
-        :param fn: A synchronous callable.
-        :returns: The return value of ``fn``.
+   # Using prefetch inside db.run():
+   def get_user_with_tweets(user_id):
+       user_q = User.select().where(User.id == user_id)
+       return prefetch(user_q, Tweet.select())[0]
 
-        Execute a synchronous callable inside a greenlet and return the result
-        asynchronously.
+   user = await db.run(get_user_with_tweets, user_id)
+   for tweet in user.tweets:   # Prefetched - no extra query.
+       print(tweet.content)
 
-        This method is the primary entry point for executing Peewee ORM
-        operations in an asyncio context.
+The general rule is: any code that triggers a database query must execute
+inside a greenlet context, which means inside ``db.run()`` or an async helper
+call.
 
-    .. method:: aconnect()
-        :async:
 
-        :returns: A wrapped async connection.
+API Reference
+-------------
 
-        Establish a connection to the database for the currently-running asyncio
-        task, if one is not already open.
+.. class:: AsyncDatabaseMixin(database, pool_size=10, pool_min_size=1, acquire_timeout=10, **kwargs)
 
-    .. method:: aclose()
-        :async:
+   :param str database: Database name or filename for SQLite.
+   :param int pool_size: Maximum size of the driver-managed connection pool
+       (no-op for SQLite).
+   :param int pool_min_size: Minimum size of the driver-managed connection pool
+       (no-op for SQLite).
+   :param float acquire_timeout: Time (in seconds) to wait for a free
+       connection when acquiring from the pool.
+   :param kwargs: Arbitrary keyword arguments passed to the underlying database
+       driver when creating connections (e.g., ``user``, ``password``,
+       ``host``).
 
-        Close and release the connection associated with the current asyncio
-        task.
+   Mixin class providing asyncio execution support. Not used directly -
+   instantiate :class:`AsyncSqliteDatabase`,
+   :class:`AsyncPostgresqlDatabase`, or :class:`AsyncMySQLDatabase`.
 
-    .. method:: close_pool()
-        :async:
+   Each asyncio task maintains its own connection state. Connections are
+   acquired and released back to the pool when the task completes or the
+   database context exits.
 
-        Close the underlying connection pool and release all active connections.
+   .. method:: run(fn, *args, **kwargs)
+      :async:
 
-        This method should be called during application shutdown.
+      :param fn: A synchronous callable.
+      :returns: The return value of ``fn``.
 
-    .. method:: __aenter__()
-        :async:
+      Execute a synchronous callable inside a greenlet and return the result.
+      This is the primary entry point for executing Peewee ORM code in an
+      async context.
 
-        Enter an async database context, acquiring a connection.
+   .. method:: aconnect()
+      :async:
 
-    .. method:: __aexit__(exc_type, exc, tb)
-        :async:
+      :return: A wrapped async connection.
 
-        Exit the async database context, releasing the connection.
+      Acquire a connection from the pool for the current task.
 
-    .. method:: aexecute(query)
-        :async:
+   .. method:: aclose()
+      :async:
 
-        :param Query query: a Select, Insert, Update or Delete query.
-        :return: the normal return-value for the query type.
+      Release the current task's connection back to the pool.
 
-        Execute a query asynchronously.
+   .. method:: close_pool()
+      :async:
 
-    .. method:: get(query)
-        :async:
+      Close the underlying connection pool and release all active connections.
 
-        :param Query query: a Select query.
+      This method should be called during application shutdown.
 
-        Execute a query and return a single model instance.
+   .. method:: __aenter__()
+      :async:
 
-    .. method:: list(query)
-        :async:
+      Enter an async database context, acquiring a connection.
 
-        :param Query query: a Select query, or an Insert, Update or Delete
-            query that utilizes RETURNING.
+   .. method:: __aexit__(exc_type, exc, tb)
+      :async:
 
-        Execute a query and return a list of results.
+      Exit the async database context, releasing the connection.
 
-    .. method:: scalar(query)
-        :async:
+   .. method:: aexecute(query)
+      :async:
 
-        :param Query query: a Select query.
+      :param Query query: a Select, Insert, Update or Delete query.
+      :return: the normal return-value for the query type.
 
-        Execute a query and return a scalar value.
+      Execute any Peewee query object and return its natural result.
 
-    .. method:: atomic()
+   .. method:: get(query)
+      :async:
 
-        :returns: An :class:`async_atomic` instance.
+      :param Query query: a Select query.
 
-        Return an asyncio-aware atomic transaction context manager.
-        Supports use as a synchronous or async context manager.
+      Execute a SELECT query and return a single model instance.
+      Raises :exc:`~Model.DoesNotExist` if no row matches.
 
-    .. method:: acreate_tables(models, **options)
-        :async:
+   .. method:: list(query)
+      :async:
 
-        Asynchronously create database tables.
+      :param Query query: a Select query, or an Insert, Update or Delete
+          query that utilizes RETURNING.
 
-    .. method:: adrop_tables(models, **options)
-        :async:
+      Execute a SELECT (or INSERT/UPDATE/DELETE with RETURNING) and return
+      a list of results.
 
-        Asynchronously drop database tables.
+   .. method:: scalar(query)
+      :async:
 
-    .. method:: aexecute_sql(sql, params=None)
-        :async:
+      :param Query query: a Select query.
 
-        :param str sql: SQL query to execute.
-        :param tuple params: Optional query parameters.
-        :returns: A :class:`CursorAdapter` instance.
+      Execute a SELECT and return the first column of the first row.
 
-        Execute a SQL query asynchronously using the underlying async driver.
+   .. method:: atomic()
 
-    .. method:: execute_sql(sql, params=None)
+      Return an async-aware atomic context manager. Supports both
+      ``async with`` and ``with``.
 
-        Synchronous wrapper around :meth:`aexecute_sql`.
+   .. method:: acreate_tables(models, **options)
+      :async:
 
-        This method may only be called from code executing inside
-        :meth:`~AsyncDatabaseMixin.run`.
+      Create tables asynchronously.
+
+   .. method:: adrop_tables(models, **options)
+      :async:
+
+      Drop tables asynchronously.
+
+   .. method:: aexecute_sql(sql, params=None)
+      :async:
+
+      :param str sql: SQL query to execute.
+      :param tuple params: Optional query parameters.
+      :returns: A :class:`CursorAdapter` instance.
+
+      Execute raw SQL asynchronously. Returns a cursor-like object whose
+      rows are already fetched (call ``.fetchall()`` synchronously).
 
 
 .. class:: AsyncSqliteDatabase(database, **kwargs)
 
-    Async SQLite database implementation.
+   Async SQLite database implementation.
 
-    Uses ``aiosqlite`` and maintains a single shared connection. Pool-related
-    configuration options are ignored.
+   Uses ``aiosqlite`` and maintains a single shared connection. Pool-related
+   configuration options are ignored.
 
-    Inherits from :class:`AsyncDatabaseMixin` and
-    :class:`peewee.SqliteDatabase`.
-
-.. class:: AsyncMySQLDatabase(database, **kwargs)
-
-    Async MySQL / MariaDB database implementation.
-
-    Uses ``aiomysql`` and the driver's native connection pool.
-
-    Inherits from :class:`AsyncDatabaseMixin` and
-    :class:`peewee.MySQLDatabase`.
+   Inherits from :class:`AsyncDatabaseMixin` and
+   :class:`peewee.SqliteDatabase`.
 
 .. class:: AsyncPostgresqlDatabase(database, **kwargs)
 
-    Async PostgreSQL database implementation.
+   Async Postgresql database implementation.
 
-    Uses ``asyncpg`` and the driver's native connection pool.
+   Uses ``asyncpg`` and the driver's native connection pool.
 
-    Inherits from :class:`AsyncDatabaseMixin` and
-    :class:`peewee.PostgresqlDatabase`.
+   Inherits from :class:`AsyncDatabaseMixin` and
+   :class:`peewee.PostgresqlDatabase`.
+
+.. class:: AsyncMySQLDatabase(database, **kwargs)
+
+   Async MySQL / MariaDB database implementation.
+
+   Uses ``aiomysql`` and the driver's native connection pool.
+
+   Inherits from :class:`AsyncDatabaseMixin` and
+   :class:`peewee.MySQLDatabase`.
 
 .. class:: MissingGreenletBridge(RuntimeError)
 
-    Exception that is raised when Peewee attempts to run a blocking operation
-    like ``execute_sql()`` outside a greenlet-spawn context. Generally
-    indicates that you have attempted to execute a query outside of
-    ``db.run()`` or without using one of the async helper methods.
+   Raised when Peewee attempts to execute a query outside a greenlet context.
+   This indicates that a query was triggered outside of ``db.run()`` or an
+   async helper call.

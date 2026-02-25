@@ -14,9 +14,6 @@ fields are specific to SQLite, these features are provided by ``playhouse.sqlite
 Implementations
 ---------------
 
-There are also additional database classes that work with alternative SQLite
-drivers:
-
 :class:`SqliteDatabase`
    Core SQLite implementation. Provides:
 
@@ -37,6 +34,7 @@ drivers:
    * Commit / Rollback / Update / Progress / Trace hooks
    * BLOB I/O
    * Online backups
+   * Can be built `with encryption <https://cysqlite.readthedocs.io/en/latest/installation.html#sqlcipher>`__.
 
 :class:`APSWDatabase` (``playhouse.apsw_ext``)
    Extends :class:`SqliteDatabase`, uses `apsw <https://github.com/rogerbinns/apsw/>`__ driver.
@@ -83,10 +81,10 @@ method or the special properties exposed on the :class:`SqliteDatabase` object:
 .. code-block:: python
 
    # Set cache size to 64MB for *current connection*.
-   db.pragma('cache_size', -1024 * 64)
+   db.pragma('cache_size', -64000)
 
    # Same as above.
-   db.cache_size = -1024 * 64
+   db.cache_size = -64000
 
    # Read the value of several pragmas:
    print('cache_size:', db.cache_size)
@@ -148,6 +146,12 @@ Table Functions
 
    * :meth:`CySqliteDatabase.register_table_function`
    * :meth:`CySqliteDatabase.table_function` - decorator.
+
+Shared Libraries
+   Load an extension from a shared library.
+
+   * :meth:`SqliteDatabase.load_extension`
+   * :meth:`SqliteDatabase.unload_extension`
 
 Function example
 ^^^^^^^^^^^^^^^^
@@ -310,6 +314,21 @@ for full details on ``TableFunction``).
    # 2
    # 4
 
+Shared Libraries
+^^^^^^^^^^^^^^^^
+
+Example:
+
+   .. code-block:: python
+
+      # Load `closure.so` shared library in the current directory.
+      db = SqliteDatabase('my_app.db')
+      db.load_extension('closure')
+
+.. note::
+   To support shared libraries, your SQLite3 will need to have been compiled with
+   support for run-time loadable extensions.
+
 .. _sqlite-locking:
 
 Locking mode for transactions
@@ -322,9 +341,9 @@ SQLite transactions can be opened in three different modes:
   and the first write creates a `reserved lock <https://sqlite.org/lockingv3.html#locking>`_.
   Because the acquisition of the lock is deferred until actually needed, it is
   possible that another thread or process could create a separate transaction
-  and write to the database after the BEGIN on the current thread has executed.
+  and write to the database.
 * *Immediate* - a `reserved lock <https://sqlite.org/lockingv3.html#locking>`_
-  is acquired immediately. In this mode, no other database may write to the
+  is acquired immediately. In this mode, no other connection may write to the
   database or open an *immediate* or *exclusive* transaction. Other processes
   can continue to read from the database, however.
 * *Exclusive* - opens an `exclusive lock <https://sqlite.org/lockingv3.html#locking>`_
@@ -380,7 +399,7 @@ Usage:
    from playhouse.cysqlite_ext import CySqliteDatabase
 
    db = CySqliteDatabase('my_app.db', pragmas={
-       'cache_size': -1024 * 64,
+       'cache_size': -64000,
        'journal_mode': 'wal',
        'foreign_keys': 1,
    })
@@ -456,236 +475,236 @@ Usage:
 
    .. method:: unregister_table_function(name)
 
-       :param name: Name of the user-defined table function.
-       :returns: True or False, depending on whether the function was removed.
+      :param name: Name of the user-defined table function.
+      :returns: True or False, depending on whether the function was removed.
 
-       Unregister the user-defined scalar function.
+      Unregister the user-defined scalar function.
 
-    .. method:: on_commit(fn)
+   .. method:: on_commit(fn)
 
-       :param fn: callable or ``None`` to clear the current hook.
+      :param fn: callable or ``None`` to clear the current hook.
 
-       Register a callback to be executed whenever a transaction is committed
-       on the current connection. The callback accepts no parameters and the
-       return value is ignored.
+      Register a callback to be executed whenever a transaction is committed
+      on the current connection. The callback accepts no parameters and the
+      return value is ignored.
 
-       However, if the callback raises a :class:`ValueError`, the
-       transaction will be aborted and rolled-back.
+      However, if the callback raises a :class:`ValueError`, the
+      transaction will be aborted and rolled-back.
 
-       Example:
+      Example:
 
-       .. code-block:: python
+      .. code-block:: python
 
-          db = CySqliteDatabase(':memory:')
+         db = CySqliteDatabase(':memory:')
 
-          @db.on_commit
-          def on_commit():
-              logger.info('COMMITing changes')
+         @db.on_commit
+         def on_commit():
+             logger.info('COMMITing changes')
 
-    .. method:: on_rollback(fn)
+   .. method:: on_rollback(fn)
 
-       :param fn: callable or ``None`` to clear the current hook.
+      :param fn: callable or ``None`` to clear the current hook.
 
-       Register a callback to be executed whenever a transaction is rolled
-       back on the current connection. The callback accepts no parameters and
-       the return value is ignored.
+      Register a callback to be executed whenever a transaction is rolled
+      back on the current connection. The callback accepts no parameters and
+      the return value is ignored.
 
-       Example:
+      Example:
 
-       .. code-block:: python
+      .. code-block:: python
 
-          @db.on_rollback
-          def on_rollback():
-              logger.info('Rolling back changes')
+         @db.on_rollback
+         def on_rollback():
+             logger.info('Rolling back changes')
 
-    .. method:: on_update(fn)
+   .. method:: on_update(fn)
 
-       :param fn: callable or ``None`` to clear the current hook.
+      :param fn: callable or ``None`` to clear the current hook.
 
-       Register a callback to be executed whenever the database is written to
-       (via an *UPDATE*, *INSERT* or *DELETE* query). The callback should
-       accept the following parameters:
+      Register a callback to be executed whenever the database is written to
+      (via an *UPDATE*, *INSERT* or *DELETE* query). The callback should
+      accept the following parameters:
 
-       * ``query`` - the type of query, either *INSERT*, *UPDATE* or *DELETE*.
-       * database name - the default database is named *main*.
-       * table name - name of table being modified.
-       * rowid - the rowid of the row being modified.
+      * ``query`` - the type of query, either *INSERT*, *UPDATE* or *DELETE*.
+      * database name - the default database is named *main*.
+      * table name - name of table being modified.
+      * rowid - the rowid of the row being modified.
 
-       The callback's return value is ignored.
+      The callback's return value is ignored.
 
-       Example:
+      Example:
 
-       .. code-block:: python
+      .. code-block:: python
 
-          db = CySqliteDatabase(':memory:')
+         db = CySqliteDatabase(':memory:')
 
-          @db.on_update
-          def on_update(query_type, db, table, rowid):
-              # e.g. INSERT row 3 into table users.
-              logger.info('%s row %s into table %s', query_type, rowid, table)
+         @db.on_update
+         def on_update(query_type, db, table, rowid):
+             # e.g. INSERT row 3 into table users.
+             logger.info('%s row %s into table %s', query_type, rowid, table)
 
-    .. method:: authorizer(fn)
+   .. method:: authorizer(fn)
 
-       :param fn: callable or ``None`` to clear the current authorizer.
+      :param fn: callable or ``None`` to clear the current authorizer.
 
-       Register an authorizer callback. Authorizer callbacks must accept 5
-       parameters, which vary depending on the operation being checked.
+      Register an authorizer callback. Authorizer callbacks must accept 5
+      parameters, which vary depending on the operation being checked.
 
-       * op: operation code, e.g. ``cysqlite.SQLITE_INSERT``.
-       * p1: operation-specific value, e.g. table name for ``SQLITE_INSERT``.
-       * p2: operation-specific value.
-       * p3: database name, e.g. ``"main"``.
-       * p4: inner-most trigger or view responsible for the access attempt if
-         applicable, else ``None``.
+      * op: operation code, e.g. ``cysqlite.SQLITE_INSERT``.
+      * p1: operation-specific value, e.g. table name for ``SQLITE_INSERT``.
+      * p2: operation-specific value.
+      * p3: database name, e.g. ``"main"``.
+      * p4: inner-most trigger or view responsible for the access attempt if
+        applicable, else ``None``.
 
-       See `sqlite authorizer documentation <https://www.sqlite.org/c3ref/c_alter_table.html>`_
-       for description of authorizer codes and values for parameters p1 and p2.
+      See `sqlite authorizer documentation <https://www.sqlite.org/c3ref/c_alter_table.html>`_
+      for description of authorizer codes and values for parameters p1 and p2.
 
-       The authorizer callback must return one of:
+      The authorizer callback must return one of:
 
-       * ``cysqlite.SQLITE_OK``: allow operation.
-       * ``cysqlite.SQLITE_IGNORE``: allow statement compilation but prevent
-         the operation from occuring.
-       * ``cysqlite.SQLITE_DENY``: prevent statement compilation.
+      * ``cysqlite.SQLITE_OK``: allow operation.
+      * ``cysqlite.SQLITE_IGNORE``: allow statement compilation but prevent
+        the operation from occuring.
+      * ``cysqlite.SQLITE_DENY``: prevent statement compilation.
 
-       More details can be found in the `cysqlite docs <https://cysqlite.readthedocs.io/en/latest/api.html#Connection.authorizer>`_.
+      More details can be found in the `cysqlite docs <https://cysqlite.readthedocs.io/en/latest/api.html#Connection.authorizer>`_.
 
-    .. method:: trace(fn, mask=2):
+   .. method:: trace(fn, mask=2):
 
-       :param fn: callable or ``None`` to clear the current trace hook.
-       :param int mask: mask of what types of events to trace. Default value
-           corresponds to ``SQLITE_TRACE_PROFILE``.
+      :param fn: callable or ``None`` to clear the current trace hook.
+      :param int mask: mask of what types of events to trace. Default value
+          corresponds to ``SQLITE_TRACE_PROFILE``.
 
-       Register a trace hook (``sqlite3_trace_v2``). Trace callback must
-       accept 4 parameters, which vary depending on the operation being
-       traced.
+      Register a trace hook (``sqlite3_trace_v2``). Trace callback must
+      accept 4 parameters, which vary depending on the operation being
+      traced.
 
-       * event: type of event, e.g. ``SQLITE_TRACE_PROFILE``.
-       * sid: memory address of statement (only ``SQLITE_TRACE_CLOSE``), else -1.
-       * sql: SQL string (only ``SQLITE_TRACE_STMT``), else None.
-       * ns: estimated number of nanoseconds the statement took to run (only
-         ``SQLITE_TRACE_PROFILE``), else -1.
+      * event: type of event, e.g. ``SQLITE_TRACE_PROFILE``.
+      * sid: memory address of statement (only ``SQLITE_TRACE_CLOSE``), else -1.
+      * sql: SQL string (only ``SQLITE_TRACE_STMT``), else None.
+      * ns: estimated number of nanoseconds the statement took to run (only
+        ``SQLITE_TRACE_PROFILE``), else -1.
 
-       Any return value from callback is ignored.
+      Any return value from callback is ignored.
 
-       More details can be found in the `cysqlite docs <https://cysqlite.readthedocs.io/en/latest/api.html#Connection.trace>`_.
+      More details can be found in the `cysqlite docs <https://cysqlite.readthedocs.io/en/latest/api.html#Connection.trace>`_.
 
-    .. method:: progress(fn, n=1)
+   .. method:: progress(fn, n=1)
 
-       :param fn: callable or ``None`` to clear the current progress handler.
-       :param int n: approximate number of VM instructions to execute between
-         calls to the progress handler.
+      :param fn: callable or ``None`` to clear the current progress handler.
+      :param int n: approximate number of VM instructions to execute between
+        calls to the progress handler.
 
-       Register a progress handler (``sqlite3_progress_handler``). Callback
-       takes no arguments and returns 0 to allow progress to continue or any
-       non-zero value to interrupt progress.
+      Register a progress handler (``sqlite3_progress_handler``). Callback
+      takes no arguments and returns 0 to allow progress to continue or any
+      non-zero value to interrupt progress.
 
-       More details can be found in the `cysqlite docs <https://cysqlite.readthedocs.io/en/latest/api.html#Connection.progress>`_.
+      More details can be found in the `cysqlite docs <https://cysqlite.readthedocs.io/en/latest/api.html#Connection.progress>`_.
 
-    .. attribute:: autocommit
+   .. attribute:: autocommit
 
-       Property which returns a boolean indicating if autocommit is enabled.
-       By default, this value will be ``True`` except when inside a
-       transaction (or :meth:`~Database.atomic` block).
+      Property which returns a boolean indicating if autocommit is enabled.
+      By default, this value will be ``True`` except when inside a
+      transaction (or :meth:`~Database.atomic` block).
 
-       Example:
+      Example:
 
-       .. code-block:: pycon
+      .. code-block:: pycon
 
-          >>> db = CySqliteDatabase(':memory:')
-          >>> db.autocommit
-          True
-          >>> with db.atomic():
-          ...     print(db.autocommit)
-          ...
-          False
-          >>> db.autocommit
-          True
+         >>> db = CySqliteDatabase(':memory:')
+         >>> db.autocommit
+         True
+         >>> with db.atomic():
+         ...     print(db.autocommit)
+         ...
+         False
+         >>> db.autocommit
+         True
 
-    .. method:: backup(destination, pages=None, name=None, progress=None)
+   .. method:: backup(destination, pages=None, name=None, progress=None)
 
-       :param CySqliteDatabase destination: Database object to serve as
-           destination for the backup.
-       :param int pages: Number of pages per iteration. Default value of -1
-           indicates all pages should be backed-up in a single step.
-       :param str name: Name of source database (may differ if you used ATTACH
-           DATABASE to load multiple databases). Defaults to "main".
-       :param progress: Progress callback, called with three parameters: the
-           number of pages remaining, the total page count, and whether the
-           backup is complete.
+      :param CySqliteDatabase destination: Database object to serve as
+          destination for the backup.
+      :param int pages: Number of pages per iteration. Default value of -1
+          indicates all pages should be backed-up in a single step.
+      :param str name: Name of source database (may differ if you used ATTACH
+          DATABASE to load multiple databases). Defaults to "main".
+      :param progress: Progress callback, called with three parameters: the
+          number of pages remaining, the total page count, and whether the
+          backup is complete.
 
-       Example:
+      Example:
 
-       .. code-block:: python
+      .. code-block:: python
 
-          master = CySqliteDatabase('master.db')
-          replica = CySqliteDatabase('replica.db')
+         master = CySqliteDatabase('master.db')
+         replica = CySqliteDatabase('replica.db')
 
-          # Backup the contents of master to replica.
-          master.backup(replica)
+         # Backup the contents of master to replica.
+         master.backup(replica)
 
-    .. method:: backup_to_file(filename, pages, name, progress)
+   .. method:: backup_to_file(filename, pages, name, progress)
 
-       :param filename: Filename to store the database backup.
-       :param int pages: Number of pages per iteration. Default value of -1
-           indicates all pages should be backed-up in a single step.
-       :param str name: Name of source database (may differ if you used ATTACH
-           DATABASE to load multiple databases). Defaults to "main".
-       :param progress: Progress callback, called with three parameters: the
-           number of pages remaining, the total page count, and whether the
-           backup is complete.
+      :param filename: Filename to store the database backup.
+      :param int pages: Number of pages per iteration. Default value of -1
+          indicates all pages should be backed-up in a single step.
+      :param str name: Name of source database (may differ if you used ATTACH
+          DATABASE to load multiple databases). Defaults to "main".
+      :param progress: Progress callback, called with three parameters: the
+          number of pages remaining, the total page count, and whether the
+          backup is complete.
 
-       Backup the current database to a file. The backed-up data is not a
-       database dump, but an actual SQLite database file.
+      Backup the current database to a file. The backed-up data is not a
+      database dump, but an actual SQLite database file.
 
-       Example:
+      Example:
 
-       .. code-block:: python
+      .. code-block:: python
 
-          db = CySqliteDatabase('app.db')
+         db = CySqliteDatabase('app.db')
 
-          def nightly_backup():
-              filename = 'backup-%s.db' % (datetime.date.today())
-              db.backup_to_file(filename)
+         def nightly_backup():
+             filename = 'backup-%s.db' % (datetime.date.today())
+             db.backup_to_file(filename)
 
-    .. method:: blob_open(table, column, rowid, read_only=False)
+   .. method:: blob_open(table, column, rowid, read_only=False)
 
-       :param str table: Name of table containing data.
-       :param str column: Name of column containing data.
-       :param int rowid: ID of row to retrieve.
-       :param bool read_only: Open the blob for reading only.
-       :param str dbname: Database name (e.g. if multiple databases attached).
-       :returns: ``cysqlite.Blob`` instance which provides efficient access to
-           the underlying binary data.
-       :rtype: cysqlite.Blob
+      :param str table: Name of table containing data.
+      :param str column: Name of column containing data.
+      :param int rowid: ID of row to retrieve.
+      :param bool read_only: Open the blob for reading only.
+      :param str dbname: Database name (e.g. if multiple databases attached).
+      :returns: ``cysqlite.Blob`` instance which provides efficient access to
+          the underlying binary data.
+      :rtype: cysqlite.Blob
 
-       See `cysqlite documentation <https://cysqlite.readthedocs.io/en/latest/api.html#blob>`_ for
-       more details.
+      See `cysqlite documentation <https://cysqlite.readthedocs.io/en/latest/api.html#blob>`_ for
+      more details.
 
-       Example:
+      Example:
 
-       .. code-block:: python
+      .. code-block:: python
 
-           class Image(Model):
-               filename = TextField()
-               data = BlobField()
+          class Image(Model):
+              filename = TextField()
+              data = BlobField()
 
-           buf_size = 1024 * 1024 * 8  # Allocate 8MB for storing file.
-           rowid = Image.insert({
-               Image.filename: 'thefile.jpg',
-               Image.data: fn.zeroblob(buf_size),
-           }).execute()
+          buf_size = 1024 * 1024 * 8  # Allocate 8MB for storing file.
+          rowid = Image.insert({
+              Image.filename: 'thefile.jpg',
+              Image.data: fn.zeroblob(buf_size),
+          }).execute()
 
-           # Open the blob, returning a file-like object.
-           blob = db.blob_open('image', 'data', rowid)
+          # Open the blob, returning a file-like object.
+          blob = db.blob_open('image', 'data', rowid)
 
-           # Write some data to the blob.
-           blob.write(image_data)
-           img_size = blob.tell()
+          # Write some data to the blob.
+          blob.write(image_data)
+          img_size = blob.tell()
 
-           # Read the data back out of the blob.
-           blob.seek(0)
-           image_data = blob.read(img_size)
+          # Read the data back out of the blob.
+          blob.seek(0)
+          image_data = blob.read(img_size)
 
 
 .. class:: PooledCySqliteDatabase(database, **kwargs)
@@ -1084,7 +1103,7 @@ the `SQLite json functions <https://sqlite.org/json1.html>`_.
                    Config.data['statuses'].length())
                .tuples())
 
-      # [('[1,99,1,1]', 4), ('[1,1]', 2)]
+      # [([1, 99, 1, 1], 4), ([1, 1], 2)]
 
    Let's add a nested value and then see how to iterate through it's contents
    recursively using the :meth:`~JSONField.tree` method:
@@ -1175,7 +1194,8 @@ the `SQLite json functions <https://sqlite.org/json1.html>`_.
           default, lists and dictionaries are treated as JSON to be
           serialized, while strings and integers are passed as-is.
 
-      Replace the existing value stored in a :class:`JSONField`.
+      Replace the existing value stored in a :class:`JSONField`. Will not
+      create if does not exist.
 
       Uses the `json_replace() <http://sqlite.org/json1.html#jset>`_ function
       from the json1 extension.
@@ -1188,7 +1208,7 @@ the `SQLite json functions <https://sqlite.org/json1.html>`_.
           default, lists and dictionaries are treated as JSON to be
           serialized, while strings and integers are passed as-is.
 
-      Insert value into :class:`JSONField`.
+      Insert value into :class:`JSONField`. Will not overwrite existing.
 
       Uses the `json_insert() <http://sqlite.org/json1.html#jset>`_ function
       from the json1 extension.

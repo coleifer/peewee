@@ -40,7 +40,7 @@ PostgresqlExtDatabase
    * :class:`JSONField` / :class:`BinaryJSONField`
    * :class:`HStoreField`
    * :class:`TSVectorField`
-   * :ref:`server_side_cursors`
+   * :ref:`postgres-server-side-cursors`
 
    :param str database: Name of database to connect to.
    :param bool server_side_cursors: Whether ``SELECT`` queries should utilize
@@ -68,7 +68,7 @@ PostgresqlExtDatabase
 JSON Support
 ------------
 
-Peewee provides two JSON field types for PostgreSQL:
+Peewee provides two JSON field types for Postgresql:
 
 - :class:`JSONField` - stores JSON as text, supports key access and comparison.
 - :class:`BinaryJSONField` - stores JSON in the efficient binary ``jsonb``
@@ -267,7 +267,7 @@ JSONField and BinaryJSONField
 HStore
 ------
 
-PostgreSQL's `hstore <https://www.postgresql.org/docs/current/hstore.html>`_
+Postgresql's `hstore <https://www.postgresql.org/docs/current/hstore.html>`_
 extension stores arbitrary key/value pairs in a single column. Enable it by
 passing ``register_hstore=True`` when initializing the database:
 
@@ -489,7 +489,7 @@ Arrays
 
 .. class:: ArrayField(field_class=IntegerField, field_kwargs=None, dimensions=1, convert_values=False)
 
-   Stores a PostgreSQL array of the given field type.
+   Stores a Postgresql array of the given field type.
 
    :param field_class: a subclass of :class:`Field`, e.g. :class:`IntegerField`.
    :param dict field_kwargs: arguments to initialize ``field_class``.
@@ -553,7 +553,7 @@ Interval
 
 .. class:: IntervalField(**kwargs)
 
-   Stores Python ``datetime.timedelta`` instances using PostgreSQL's native
+   Stores Python ``datetime.timedelta`` instances using Postgresql's native
    ``INTERVAL`` type.
 
    .. code-block:: python
@@ -576,7 +576,7 @@ DateTimeTZ Field
 
 .. class:: DateTimeTZField(**kwargs)
 
-   Timezone-aware datetime field using PostgreSQL's ``TIMESTAMP WITH TIME ZONE``
+   Timezone-aware datetime field using Postgresql's ``TIMESTAMP WITH TIME ZONE``
    type.
 
    .. code-block:: python
@@ -597,7 +597,7 @@ DateTimeTZ Field
 Full-Text Search
 ----------------
 
-PostgreSQL full-text search uses the ``tsvector`` and ``tsquery`` types.
+Postgresql full-text search uses the ``tsvector`` and ``tsquery`` types.
 Peewee offers two approaches: the simple :func:`Match` function (no schema
 changes required) and the :class:`TSVectorField` for dedicated search columns
 (better performance).
@@ -755,7 +755,7 @@ CockroachDB
 -----------
 
 `CockroachDB <https://www.cockroachlabs.com>`_ (CRDB) is compatible with
-PostgreSQL's wire protocol and is well-supported by Peewee. Use the dedicated
+Postgresql's wire protocol and is well-supported by Peewee. Use the dedicated
 :class:`CockroachDatabase` class rather than :class:`PostgresqlDatabase`
 to get CRDB-specific handling.
 
@@ -788,7 +788,7 @@ SSL configuration:
                           '?sslmode=verify-full&sslrootcert=/path/to/root.crt'
                           '&options=--cluster=my-cluster-xyz')
 
-Key differences from PostgreSQL
+Key differences from Postgresql
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 * **No nested transactions.** CRDB does not support savepoints, so calling

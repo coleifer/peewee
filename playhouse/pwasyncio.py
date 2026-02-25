@@ -368,6 +368,8 @@ class AsyncSQLiteConnection(AsyncConnectionWrapper):
 
 class AsyncSqliteDatabase(AsyncDatabaseMixin, SqliteDatabase):
     async def _create_pool_async(self):
+        if aiosqlite is None:
+            raise ImproperlyConfigured('aiosqlite is not installed')
         # SQLite: single shared connection.
         conn = await aiosqlite.connect(self.database, isolation_level=None)
         conn.row_factory = lambda cursor, row: tuple(row)
@@ -419,6 +421,8 @@ class AsyncMySQLConnection(AsyncConnectionWrapper):
 
 class AsyncMySQLDatabase(AsyncDatabaseMixin, MySQLDatabase):
     async def _create_pool_async(self):
+        if aiomysql is None:
+            raise ImproperlyConfigured('aiomysql is not installed')
         return await aiomysql.create_pool(
             db=self.database,
             autocommit=True,
@@ -458,6 +462,8 @@ class AsyncPostgresqlConnection(AsyncConnectionWrapper):
 
 class AsyncPostgresqlDatabase(AsyncDatabaseMixin, PostgresqlDatabase):
     async def _create_pool_async(self):
+        if asyncpg is None:
+            raise ImproperlyConfigured('asyncpg is not installed')
         return await asyncpg.create_pool(
             database=self.database,
             min_size=self._pool_min_size,
