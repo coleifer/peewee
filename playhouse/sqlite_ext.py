@@ -80,6 +80,9 @@ class JSONPath(ColumnBase):
         self._field = field
         self._path = path or ()
 
+    def _converter(self, value):
+        return self._field.python_value(value)
+
     @property
     def path(self):
         return Value('$%s' % ''.join(self._path))

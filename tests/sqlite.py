@@ -279,6 +279,32 @@ class TestJSONField(ModelTestCase):
         self.assertEqual(query.count(), 1)
         self.assertEqual(query.get().key, 'k3')
 
+    def test_select_json_value(self):
+        data = (
+            ('k1', {'a': {'b': 'c', 'd': [2, 1, 0]}}),
+        )
+        KeyData.insert_many(data).execute()
+
+        kd = (KeyData
+              .select(KeyData.data['a'].alias('a'))
+              .get())
+        self.assertEqual(kd.a, {'b': 'c', 'd': [2, 1, 0]})
+
+        kd = (KeyData
+              .select(KeyData.data['a']['b'].alias('b'))
+              .get())
+        self.assertEqual(kd.b, 'c')
+
+        kd = (KeyData
+              .select(KeyData.data['a']['d'].alias('d'))
+              .get())
+        self.assertEqual(kd.d, [2, 1, 0])
+
+        kd = (KeyData
+              .select(KeyData.data['a']['d'][0].alias('d0'))
+              .get())
+        self.assertEqual(kd.d0, 2)
+
 
 @skip_unless(json_installed(), 'requires sqlite json1')
 class TestJSONFieldFunctions(ModelTestCase):
