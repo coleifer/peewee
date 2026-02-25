@@ -34,7 +34,7 @@ Database
         The database can be instantiated with ``None`` as the database name if
         the database is not known until run-time. In this way you can create a
         database instance and then configure it elsewhere when the settings are
-        known. This is called :ref:`deferred* initialization <initializing-database>`.
+        known. This is called :ref:`deferred initialization <initializing-database>`.
 
     Examples:
 
@@ -109,7 +109,9 @@ Database
         Create a context-manager that will hold open a connection for the
         duration of the wrapped block.
 
-        Example::
+        Example:
+
+        .. code-block:: python
 
             def on_app_startup():
                 # When app starts up, create the database tables, being sure
@@ -128,6 +130,13 @@ Database
 
         Open a connection to the database.
 
+        .. code-block:: python
+
+            db.connect()
+
+            # Or:
+            db.connect(reuse_if_open=True)
+
     .. method:: close()
 
         :returns: Whether a connection was closed. If the database was already
@@ -135,6 +144,11 @@ Database
         :rtype: bool
 
         Close the connection to the database.
+
+        .. code-block:: python
+
+            if not db.is_closed():
+                db.close()
 
     .. method:: is_closed()
 
@@ -163,6 +177,20 @@ Database
 
         Execute a SQL query and return a cursor over the results.
 
+        .. code-block:: python
+
+            db = SqliteDatabase('my_app.db')
+            db.connect()
+
+            # Example of executing a simple query and ignoring the results.
+            db.execute_sql("ATTACH DATABASE ':memory:' AS cache;")
+
+            # Example of iterating over the results of a query using the cursor.
+            cursor = db.execute_sql('SELECT * FROM users WHERE status = ?', (ACTIVE,))
+            for row in cursor.fetchall():
+                # Do something with row, which is a tuple containing column data.
+                pass
+
     .. method:: execute(query, **context_options)
 
         :param query: A :class:`Query` instance.
@@ -171,6 +199,11 @@ Database
 
         Execute a SQL query by compiling a ``Query`` instance and executing the
         resulting SQL.
+
+        .. code-block:: python
+
+            query = User.insert({'username': 'Huey'})
+            db.execute(query)
 
     .. method:: last_insert_id(cursor, query_type=None)
 
@@ -217,7 +250,9 @@ Database
         within the wrapped block. If this occurs, a new transaction or
         savepoint is begun after the commit/rollback.
 
-        Example::
+        Example:
+
+        .. code-block:: python
 
             with db.atomic() as txn:
                 User.create(username='mickey')
@@ -238,7 +273,9 @@ Database
         Create a context-manager which disables all transaction management for
         the duration of the wrapped block.
 
-        Example::
+        Example:
+
+        .. code-block:: python
 
             with db.manual_commit():
                 db.begin()  # Begin transaction explicitly.
@@ -306,18 +343,49 @@ Database
         :param str isolation_level: Isolation strategy: SERIALIZABLE, READ COMMITTED, REPEATABLE READ, READ UNCOMMITTED
         :param str lock_type: Locking strategy: DEFERRED, IMMEDIATE, EXCLUSIVE.
 
+        .. code-block:: python
+
+            with db.transaction() as txn:
+                User.create(username='mickey')
+                txn.commit()         # Commit now; a new transaction begins.
+                User.create(username='huey')
+                txn.rollback()       # Roll back huey; a new transaction begins.
+                User.create(username='zaizee')
+            # zaizee is committed when the block exits.
+
+        .. note::
+            If you manually commit or roll back a transaction, a new
+            transaction will automatically begin.
+
         .. warning::
-            Calls to ``transaction`` cannot be nested. Only the top-most call
-            will take effect. Rolling-back or committing a nested transaction
-            context-manager has undefined behavior.
+            If you attempt to nest transactions with peewee using the
+            :meth:`~Database.transaction` context manager, only the outer-most
+            transaction will be used.
+
+            As this may lead to unpredictable behavior, it is recommended that
+            you use :meth:`~Database.atomic`.
 
     .. method:: savepoint()
 
         Create a context-manager that runs all queries in the wrapped block in
         a savepoint. Savepoints can be nested arbitrarily.
 
-        .. warning::
-            Calls to ``savepoint`` must occur inside of a transaction.
+        .. code-block:: python
+
+            with db.transaction() as txn:
+                with db.savepoint() as sp:
+                    User.create(username='mickey')
+
+                with db.savepoint() as sp2:
+                    User.create(username='zaizee')
+                    sp2.rollback()  # "zaizee" is not saved.
+                    User.create(username='huey')
+
+            # mickey and huey were created.
+
+        .. note::
+            If you manually commit or roll back a savepoint, a new savepoint will
+            automatically begin.
 
     .. method:: begin()
 
@@ -366,11 +434,14 @@ Database
             # there are 789 items in the list, then there will be a total of
             # 8 transactions (7x100 and 1x89).
             for row in db.batch_commit(row_data, 100):
-                User.create(**row)
+                user = User.create(**row)
 
-        An alternative that may be more efficient is to batch the data into a
-        multi-value ``INSERT`` statement (for example, using
-        :meth:`Model.insert_many`):
+                # Now let's suppose we need to do something w/the user.
+                user.call_method()
+
+        A more efficient option is to batch the data into a multi-value ``INSERT``
+        statement (for example, using :meth:`Model.insert_many`). Use this
+        approach instead wherever possible:
 
         .. code-block:: python
 
@@ -398,7 +469,9 @@ Database
 
         Return a list of :class:`IndexMetadata` tuples.
 
-        Example::
+        Example:
+
+        .. code-block:: python
 
             print(db.get_indexes('entry'))
             [IndexMetadata(
@@ -421,7 +494,9 @@ Database
 
         Return a list of :class:`ColumnMetadata` tuples.
 
-        Example::
+        Example:
+
+        .. code-block:: python
 
             print(db.get_columns('entry'))
             [ColumnMetadata(
@@ -445,7 +520,9 @@ Database
 
         Return a list of column names that comprise the primary key.
 
-        Example::
+        Example:
+
+        .. code-block:: python
 
             print(db.get_primary_keys('entry'))
             ['id']
@@ -458,7 +535,9 @@ Database
         Return a list of :class:`ForeignKeyMetadata` tuples for keys present
         on the table.
 
-        Example::
+        Example:
+
+        .. code-block:: python
 
             print(db.get_foreign_keys('entrytag'))
             [ForeignKeyMetadata(
@@ -475,7 +554,9 @@ Database
         Return a list of :class:`ViewMetadata` tuples for VIEWs present in
         the database.
 
-        Example::
+        Example:
+
+        .. code-block:: python
 
             print(db.get_views())
             [ViewMetadata(
@@ -488,6 +569,11 @@ Database
         :param str seq: Name of sequence.
         :returns: Whether sequence exists.
         :rtype: bool
+
+        .. code-block:: python
+
+            if db.sequence_exists('user_id_seq'):
+                print('Sequence found.')
 
     .. method:: create_tables(models, **options)
 
@@ -688,1858 +774,1117 @@ Database
         Create a transaction context-manager, optionally using the specified
         isolation level (if unspecified, the server default will be used).
 
+.. _model-api:
 
-.. _query-builder-api:
+Model
+-----
 
-Query-builder
--------------
+.. class:: Metadata(model, database=None, table_name=None, indexes=None, primary_key=None, constraints=None, schema=None, only_save_dirty=False, depends_on=None, options=None, without_rowid=False, strict_tables=False, **kwargs)
 
-.. class:: Node()
+    :param Model model: Model class.
+    :param Database database: database model is bound to.
+    :param str table_name: Specify table name for model.
+    :param list indexes: List of :class:`ModelIndex` objects.
+    :param primary_key: Primary key for model (only specified if this is a
+        :class:`CompositeKey` or ``False`` for no primary key.
+    :param list constraints: List of table constraints.
+    :param str schema: Schema table exists in.
+    :param bool only_save_dirty: When :meth:`~Model.save` is called, only
+        save the fields which have been modified.
+    :param dict options: Arbitrary options for the model.
+    :param bool without_rowid: Specify WITHOUT ROWID (sqlite only).
+    :param bool strict_tables: Specify STRICT (sqlite only, requires 3.37+).
+    :param kwargs: Arbitrary setting attributes and values.
 
-    Base-class for all components which make up the AST for a SQL query.
+    Store metadata for a :class:`Model`.
 
-    .. staticmethod:: copy(method)
+    This class should not be instantiated directly, but is instantiated using
+    the attributes of a :class:`Model` class' inner ``Meta`` class. Metadata
+    attributes are then available on ``Model._meta``.
 
-        Decorator to use with Node methods that mutate the node's state.
-        This allows method-chaining, e.g.:
+    .. seealso:: :ref:`model-options` for usage.
 
-        .. code-block:: python
+    .. attribute:: table
 
-            query = MyModel.select()
-            new_query = query.where(MyModel.field == 'value')
+        Return a reference to the underlying :class:`Table` object.
 
-    .. method:: unwrap()
+    .. method:: model_graph(refs=True, backrefs=True, depth_first=True)
 
-        API for recursively unwrapping "wrapped" nodes. Base case is to
-        return self.
+        :param bool refs: Follow foreign-key references.
+        :param bool backrefs: Follow foreign-key back-references.
+        :param bool depth_first: Do a depth-first search (``False`` for
+            breadth-first).
 
-    .. method:: is_alias()
+        Traverse the model graph and return a list of 3-tuples, consisting of
+        ``(foreign key field, model class, is_backref)``.
 
-        API for determining if a node, at any point, has been explicitly
-        aliased by the user.
+    .. method:: set_database(database)
 
+        :param Database database: database object to bind Model to.
 
-.. class:: Source(alias=None)
+        Bind the model class to the given :class:`Database` instance.
 
-    A source of row tuples, for example a table, join, or select query. By
-    default provides a "magic" attribute named "c" that is a factory for
-    column/attribute lookups, for example:
+        .. warning::
+            This API should not need to be used. Instead, to change a
+            :class:`Model` database at run-time, use one of the following:
 
-    .. code-block:: python
+            * :meth:`Model.bind`
+            * :meth:`Model.bind_ctx` (bind for scope of a context manager).
+            * :meth:`Database.bind`
+            * :meth:`Database.bind_ctx`
 
-        User = Table('users')
-        query = (User
-                 .select(User.c.username)
-                 .where(User.c.active == True)
-                 .order_by(User.c.username))
+    .. method:: set_table_name(table_name)
 
-    .. method:: alias(name)
+        :param str table_name: table name to bind Model to.
 
-        Returns a copy of the object with the given alias applied.
+        Bind the model class to the given table name at run-time.
 
-    .. method:: select(*columns)
 
-        :param columns: :class:`Column` instances, expressions, functions,
-            sub-queries, or anything else that you would like to select.
+.. class:: SubclassAwareMetadata
 
-        Create a :class:`Select` query on the table. If the table explicitly
-        declares columns and no columns are provided, then by default all the
-        table's defined columns will be selected.
-
-    .. method:: join(dest, join_type='INNER', on=None)
-
-        :param Source dest: Join the table with the given destination.
-        :param str join_type: Join type.
-        :param on: Expression to use as join predicate.
-        :returns: a :class:`Join` instance.
-
-        Join type may be one of:
-
-        * ``JOIN.INNER``
-        * ``JOIN.LEFT_OUTER``
-        * ``JOIN.RIGHT_OUTER``
-        * ``JOIN.FULL``
-        * ``JOIN.FULL_OUTER``
-        * ``JOIN.CROSS``
-
-    .. method:: left_outer_join(dest, on=None)
-
-        :param Source dest: Join the table with the given destination.
-        :param on: Expression to use as join predicate.
-        :returns: a :class:`Join` instance.
-
-        Convenience method for calling :meth:`~Source.join` using a LEFT
-        OUTER join.
-
-
-.. class:: BaseTable()
-
-    Base class for table-like objects, which support JOINs via operator
-    overloading.
-
-    .. method:: __and__(dest)
-
-        Perform an INNER join on ``dest``.
-
-    .. method:: __add__(dest)
-
-        Perform a LEFT OUTER join on ``dest``.
-
-    .. method:: __sub__(dest)
-
-        Perform a RIGHT OUTER join on ``dest``.
-
-    .. method:: __or__(dest)
-
-        Perform a FULL OUTER join on ``dest``.
-
-    .. method:: __mul__(dest)
-
-        Perform a CROSS join on ``dest``.
-
-
-.. class:: Table(name, columns=None, primary_key=None, schema=None, alias=None)
-
-    Represents a table in the database (or a table-like object such as a view).
-
-    :param str name: Database table name
-    :param tuple columns: List of column names (optional).
-    :param str primary_key: Name of primary key column.
-    :param str schema: Schema name used to access table (if necessary).
-    :param str alias: Alias to use for table in SQL queries.
-
-    .. note::
-        If columns are specified, the magic "c" attribute will be disabled.
-
-    When columns are not explicitly defined, tables have a special attribute
-    "c" which is a factory that provides access to table columns dynamically.
-
-    Example::
-
-        User = Table('users')
-        query = (User
-                 .select(User.c.id, User.c.username)
-                 .order_by(User.c.username))
-
-    Equivalent example when columns **are** specified::
-
-        User = Table('users', ('id', 'username'))
-        query = (User
-                 .select(User.id, User.username)
-                 .order_by(User.username))
-
-    .. method:: bind(database=None)
-
-        :param database: :class:`Database` object.
-
-        Bind this table to the given database (or unbind by leaving empty).
-
-        When a table is *bound* to a database, queries may be executed against
-        it without the need to specify the database in the query's execute
-        method.
-
-    .. method:: bind_ctx(database=None)
-
-        :param database: :class:`Database` object.
-
-        Return a context manager that will bind the table to the given database
-        for the duration of the wrapped block.
-
-    .. method:: select(*columns)
-
-        :param columns: :class:`Column` instances, expressions, functions,
-            sub-queries, or anything else that you would like to select.
-
-        Create a :class:`Select` query on the table. If the table explicitly
-        declares columns and no columns are provided, then by default all the
-        table's defined columns will be selected.
-
-        Example::
-
-            User = Table('users', ('id', 'username'))
-
-            # Because columns were defined on the Table, we will default to
-            # selecting both of the User table's columns.
-            # Evaluates to SELECT id, username FROM users
-            query = User.select()
-
-            Note = Table('notes')
-            query = (Note
-                     .select(Note.c.content, Note.c.timestamp, User.username)
-                     .join(User, on=(Note.c.user_id == User.id))
-                     .where(Note.c.is_published == True)
-                     .order_by(Note.c.timestamp.desc()))
-
-            # Using a function to select users and the number of notes they
-            # have authored.
-            query = (User
-                     .select(
-                        User.username,
-                        fn.COUNT(Note.c.id).alias('n_notes'))
-                     .join(
-                        Note,
-                        JOIN.LEFT_OUTER,
-                        on=(User.id == Note.c.user_id))
-                     .order_by(fn.COUNT(Note.c.id).desc()))
-
-    .. method:: insert(insert=None, columns=None, **kwargs)
-
-        :param insert: A dictionary mapping column to value, an iterable that
-            yields dictionaries (i.e. list), or a :class:`Select` query.
-        :param list columns: The list of columns to insert into when the
-            data being inserted is not a dictionary.
-        :param kwargs: Mapping of column-name to value.
-
-        Create a :class:`Insert` query into the table.
-
-    .. method:: replace(insert=None, columns=None, **kwargs)
-
-        :param insert: A dictionary mapping column to value, an iterable that
-            yields dictionaries (i.e. list), or a :class:`Select` query.
-        :param list columns: The list of columns to insert into when the
-            data being inserted is not a dictionary.
-        :param kwargs: Mapping of column-name to value.
-
-        Create a :class:`Insert` query into the table whose conflict
-        resolution method is to replace.
-
-    .. method:: update(update=None, **kwargs)
-
-        :param update: A dictionary mapping column to value.
-        :param kwargs: Mapping of column-name to value.
-
-        Create a :class:`Update` query for the table.
-
-    .. method:: delete()
-
-        Create a :class:`Delete` query for the table.
-
-
-.. class:: Join(lhs, rhs, join_type=JOIN.INNER, on=None, alias=None)
-
-    Represent a JOIN between to table-like objects.
-
-    :param lhs: Left-hand side of the join.
-    :param rhs: Right-hand side of the join.
-    :param join_type: Type of join. e.g. JOIN.INNER, JOIN.LEFT_OUTER, etc.
-    :param on: Expression describing the join predicate.
-    :param str alias: Alias to apply to joined data.
-
-    .. method:: on(predicate)
-
-        :param Expression predicate: join predicate.
-
-        Specify the predicate expression used for this join.
-
-
-.. class:: ValuesList(values, columns=None, alias=None)
-
-    Represent a values list that can be used like a table.
-
-    :param values: a list-of-lists containing the row data to represent.
-    :param list columns: the names to give to the columns in each row.
-    :param str alias: alias to use for values-list.
+    Metadata subclass that tracks :class:`Model` subclasses. Useful for
+    when you need to track all models in a project.
 
     Example:
 
     .. code-block:: python
 
-        data = [(1, 'first'), (2, 'second')]
-        vl = ValuesList(data, columns=('idx', 'name'))
+        from peewee import SubclassAwareMetadata
 
-        query = (vl
-                 .select(vl.c.idx, vl.c.name)
-                 .order_by(vl.c.idx))
-        # Yields:
-        # SELECT t1.idx, t1.name
-        # FROM (VALUES (1, 'first'), (2, 'second')) AS t1(idx, name)
-        # ORDER BY t1.idx
+        class Base(Model):
+            class Meta:
+                database = db
+                model_metadata_class = SubclassAwareMetadata
 
-    .. method:: columns(*names)
+        # Create 3 model classes that inherit from Base.
+        class A(Base): pass
+        class B(Base): pass
+        class C(Base): pass
 
-        :param names: names to apply to the columns of data.
+        # Now let's make a helper for changing the `schema` for each Model.
+        def change_schema(schema):
+            def _update(model):
+                model._meta.schema = schema
+            return _update
+
+        # Set all models to use "schema1", e.g. "schema1.a", "schema1.b", etc.
+        # Will apply the function to every subclass of Base.
+        Base._meta.map_models(change_schema('schema1'))
+
+        # Set all models to use "schema2", e.g. "schema2.a", "schema2.b", etc.
+        Base._meta.map_models(change_schema('schema2'))
+
+    .. method:: map_models(fn)
+
+        Apply a function to all subclasses.
+
+
+.. class:: Model(**kwargs)
+
+    :param kwargs: Mapping of field-name to value to initialize model with.
+
+    Model class provides a high-level abstraction for working with database
+    tables. Models are a one-to-one mapping with a database table (or a
+    table-like object, such as a view). Subclasses of ``Model`` declare any
+    number of :class:`Field` instances as class attributes. These fields
+    correspond to columns on the table.
+
+    Table-level operations, such as :meth:`~Model.select`,
+    :meth:`~Model.update`, :meth:`~Model.insert` and
+    :meth:`~Model.delete` are implemented as classmethods. Row-level
+    operations, such as :meth:`~Model.save` and
+    :meth:`~Model.delete_instance` are implemented as instancemethods.
+
+    Example:
+
+    .. code-block:: python
+
+        db = SqliteDatabase(':memory:')
+
+        class User(Model):
+            username = TextField()
+            join_date = DateTimeField(default=datetime.datetime.now)
+            is_admin = BooleanField(default=False)
+
+        admin = User(username='admin', is_admin=True)
+        admin.save()
+
+    .. classmethod:: alias([alias=None])
+
+        :param str alias: Optional name for alias.
+        :returns: :class:`ModelAlias` instance.
+
+        Create an alias to the model-class. Model aliases allow you to
+        reference the same :class:`Model` multiple times in a query, for
+        example when doing a self-join or sub-query.
 
         Example:
 
         .. code-block:: python
 
-            vl = ValuesList([(1, 'first'), (2, 'second')])
-            vl = vl.columns('idx', 'name').alias('v')
-
-            query = vl.select(vl.c.idx, vl.c.name)
-            # Yields:
-            # SELECT v.idx, v.name
-            # FROM (VALUES (1, 'first'), (2, 'second')) AS v(idx, name)
-
-
-.. class:: CTE(name, query, recursive=False, columns=None)
-
-    Represent a common-table-expression. For example queries, see :ref:`cte`.
-
-    :param name: Name for the CTE.
-    :param query: :class:`Select` query describing CTE.
-    :param bool recursive: Whether the CTE is recursive.
-    :param list columns: Explicit list of columns produced by CTE (optional).
-
-    .. method:: select_from(*columns)
-
-        Create a SELECT query that utilizes the given common table expression
-        as the source for a new query.
-
-        :param columns: One or more columns to select from the CTE.
-        :return: :class:`Select` query utilizing the common table expression
-
-    .. method:: union_all(other)
-
-        Used on the base-case CTE to construct the recursive term of the CTE.
-
-        :param other: recursive term, generally a :class:`Select` query.
-        :return: a recursive :class:`CTE` with the given recursive term.
-
-
-.. class:: ColumnBase()
-
-    Base-class for column-like objects, attributes or expressions.
-
-    Column-like objects can be composed using various operators and special
-    methods.
-
-    * ``&``: Logical AND
-    * ``|``: Logical OR
-    * ``+``: Addition
-    * ``-``: Subtraction
-    * ``*``: Multiplication
-    * ``/``: Division
-    * ``^``: Exclusive-OR
-    * ``==``: Equality
-    * ``!=``: Inequality
-    * ``>``: Greater-than
-    * ``<``: Less-than
-    * ``>=``: Greater-than or equal
-    * ``<=``: Less-than or equal
-    * ``<<``: ``IN``
-    * ``>>``: ``IS`` (i.e. ``IS NULL``)
-    * ``%``: ``LIKE``
-    * ``**``: ``ILIKE``
-    * ``bin_and()``: Binary AND
-    * ``bin_or()``: Binary OR
-    * ``in_()``: ``IN``
-    * ``not_in()``: ``NOT IN``
-    * ``regexp()``: ``REGEXP``
-    * ``is_null(True/False)``: ``IS NULL`` or ``IS NOT NULL``
-    * ``contains(s)``: ``LIKE %s%``
-    * ``startswith(s)``: ``LIKE s%``
-    * ``endswith(s)``: ``LIKE %s``
-    * ``between(low, high)``: ``BETWEEN low AND high``
-    * ``concat()``: ``||``
-
-    .. method:: alias(alias)
-
-        :param str alias: Alias for the given column-like object.
-        :returns: a :class:`Alias` object.
-
-        Indicate the alias that should be given to the specified column-like
-        object.
-
-    .. method:: cast(as_type)
-
-        :param str as_type: Type name to cast to.
-        :returns: a :class:`Cast` object.
-
-        Create a ``CAST`` expression.
-
-    .. method:: asc(collation=None, nulls=None)
-
-        :param str collation: Collation name to use for sorting.
-        :param str nulls: Sort nulls (FIRST or LAST).
-        :returns: an ascending :class:`Ordering` object for the column.
-
-    .. method:: desc(collation=None, nulls=None)
-
-        :param str collation: Collation name to use for sorting.
-        :param str nulls: Sort nulls (FIRST or LAST).
-        :returns: an descending :class:`Ordering` object for the column.
-
-    .. method:: __invert__()
-
-        :returns: a :class:`Negated` wrapper for the column.
-
-
-.. class:: Column(source, name)
-
-    :param Source source: Source for column.
-    :param str name: Column name.
-
-    Column on a table or a column returned by a sub-query.
-
-
-.. class:: Alias(node, alias)
-
-    :param Node node: a column-like object.
-    :param str alias: alias to assign to column.
-
-    Create a named alias for the given column-like object.
-
-    .. method:: alias(alias=None)
-
-        :param str alias: new name (or None) for aliased column.
-
-        Create a new :class:`Alias` for the aliased column-like object. If
-        the new alias is ``None``, then the original column-like object is
-        returned.
-
-
-.. class:: Negated(node)
-
-    Represents a negated column-like object.
-
-
-.. class:: Value(value, converterNone, unpack=True)
-
-    :param value: Python object or scalar value.
-    :param converter: Function used to convert value into type the database
-        understands.
-    :param bool unpack: Whether lists or tuples should be unpacked into a list
-        of values or treated as-is.
-
-    Value to be used in a parameterized query. It is the responsibility of the
-    caller to ensure that the value passed in can be adapted to a type the
-    database driver understands.
-
-
-.. function:: AsIs(value, converter=None)
-
-    Represents a :class:`Value` that is treated as-is, and passed directly
-    back to the database driver. This may be useful if you are using database
-    extensions that accept native Python data-types and you do not wish Peewee
-    to impose any handling of the values.
-
-    In the event a converter is in scope for this value, the converter will be
-    applied unless ``converter=False`` (in which case no conversion is applied
-    by Peewee and the value is pased directly to the driver). The Postgres JSON
-    extensions make use of this to pass ``dict`` and ``list`` to the driver,
-    which then handles the JSON serialization more efficiently, for example.
-
-
-.. class:: Cast(node, cast)
-
-    :param node: A column-like object.
-    :param str cast: Type to cast to.
-
-    Represents a ``CAST(<node> AS <cast>)`` expression.
-
-
-.. class:: Ordering(node, direction, collation=None, nulls=None)
-
-    :param node: A column-like object.
-    :param str direction: ASC or DESC
-    :param str collation: Collation name to use for sorting.
-    :param str nulls: Sort nulls (FIRST or LAST).
-
-    Represent ordering by a column-like object.
-
-    Postgresql supports a non-standard clause ("NULLS FIRST/LAST"). Peewee will
-    automatically use an equivalent ``CASE`` statement for databases that do
-    not support this (Sqlite / MySQL).
-
-    .. method:: collate(collation=None)
-
-        :param str collation: Collation name to use for sorting.
-
-
-.. function:: Asc(node, collation=None, nulls=None)
-
-    Short-hand for instantiating an ascending :class:`Ordering` object.
-
-
-.. function:: Desc(node, collation=None, nulls=None)
-
-    Short-hand for instantiating an descending :class:`Ordering` object.
-
-
-.. class:: Expression(lhs, op, rhs, flat=True)
-
-    :param lhs: Left-hand side.
-    :param op: Operation.
-    :param rhs: Right-hand side.
-    :param bool flat: Whether to wrap expression in parentheses.
-
-    Represent a binary expression of the form (lhs op rhs), e.g. (foo + 1).
-
-
-.. class:: Entity(*path)
-
-    :param path: Components that make up the dotted-path of the entity name.
-
-    Represent a quoted entity in a query, such as a table, column, alias. The
-    name may consist of multiple components, e.g. "a_table"."column_name".
-
-    .. method:: __getattr__(self, attr)
-
-        Factory method for creating sub-entities.
-
-
-.. class:: SQL(sql, params=None)
-
-    :param str sql: SQL query string.
-    :param tuple params: Parameters for query (optional).
-
-    Represent a parameterized SQL query or query-fragment.
-
-
-.. function:: Check(constraint, name=None)
-
-    :param str constraint: Constraint SQL.
-    :param str name: constraint name.
-
-    Represent a CHECK constraint.
-
-    .. warning::
-         MySQL may not support a ``name`` parameter when inlining the
-         constraint along with the column definition. The solution is to just
-         put the named ``Check`` constraint in the model's ``Meta.constraints``
-         list instead of in the field instances ``constraints=[...]`` list.
-
-
-.. function:: Default(value)
-
-    :param value: default value (literal).
-
-    Represent a DEFAULT constraint. It is important to note that this
-    constraint does not accept a parameterized value, so the value literal must
-    be given. If a string value is intended, it must be quoted.
-
-    Examples:
-
-    .. code-block:: python
-
-       # "added" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP.
-       added = DateTimeField(constraints=[Default('CURRENT_TIMESTAMP')])
-
-       # "label" TEXT NOT NULL DEFAULT 'string literal'
-       label = TextField(constraints=[Default("'string literal'")])
-
-       # "status" INTEGER NOT NULL DEFAULT 0
-       status = IntegerField(constraints=[Default(0)])
-
-
-.. class:: Function(name, arguments, coerce=True, python_value=None)
-
-    :param str name: Function name.
-    :param tuple arguments: Arguments to function.
-    :param bool coerce: Whether to coerce the function result to a particular
-        data-type when reading function return values from the cursor.
-    :param callable python_value: Function to use for converting the return
-        value from the cursor.
-
-    Represent an arbitrary SQL function call.
-
-    .. note::
-        Rather than instantiating this class directly, it is recommended to use
-        the ``fn`` helper.
-
-    Example of using ``fn`` to call an arbitrary SQL function::
-
-        # Query users and count of tweets authored.
-        query = (User
-                 .select(User.username, fn.COUNT(Tweet.id).alias('ct'))
-                 .join(Tweet, JOIN.LEFT_OUTER, on=(User.id == Tweet.user_id))
-                 .group_by(User.username)
-                 .order_by(fn.COUNT(Tweet.id).desc()))
-
-    .. method:: over(partition_by=None, order_by=None, start=None, end=None, window=None, exclude=None)
-
-        :param list partition_by: List of columns to partition by.
-        :param list order_by: List of columns / expressions to order window by.
-        :param start: A :class:`SQL` instance or a string expressing the
-            start of the window range.
-        :param end: A :class:`SQL` instance or a string expressing the
-            end of the window range.
-        :param str frame_type: ``Window.RANGE``, ``Window.ROWS`` or
-            ``Window.GROUPS``.
-        :param Window window: A :class:`Window` instance.
-        :param exclude: Frame exclusion, one of ``Window.CURRENT_ROW``,
-            ``Window.GROUP``, ``Window.TIES`` or ``Window.NO_OTHERS``.
-
-        .. note::
-            For an in-depth guide to using window functions with Peewee,
-            see the :ref:`window-functions` section.
-
-        Examples::
-
-            # Using a simple partition on a single column.
-            query = (Sample
-                     .select(
-                        Sample.counter,
-                        Sample.value,
-                        fn.AVG(Sample.value).over([Sample.counter]))
-                     .order_by(Sample.counter))
-
-            # Equivalent example Using a Window() instance instead.
-            window = Window(partition_by=[Sample.counter])
-            query = (Sample
-                     .select(
-                        Sample.counter,
-                        Sample.value,
-                        fn.AVG(Sample.value).over(window))
-                     .window(window)  # Note call to ".window()"
-                     .order_by(Sample.counter))
-
-            # Example using bounded window.
-            query = (Sample
-                     .select(Sample.value,
-                             fn.SUM(Sample.value).over(
-                                partition_by=[Sample.counter],
-                                start=Window.CURRENT_ROW,  # current row
-                                end=Window.following()))  # unbounded following
-                     .order_by(Sample.id))
-
-    .. method:: filter(where)
-
-        :param where: Expression for filtering aggregate.
-
-        Add a ``FILTER (WHERE...)`` clause to an aggregate function. The where
-        expression is evaluated to determine which rows are fed to the
-        aggregate function. This SQL feature is supported for Postgres and
-        SQLite.
-
-    .. method:: coerce(coerce=True)
-
-        :param bool coerce: Whether to attempt to coerce function-call result
-            to a Python data-type.
-
-        When coerce is ``True``, the target data-type is inferred using several
-        heuristics. Read the source for ``BaseModelCursorWrapper._initialize_columns``
-        method to see how this works.
-
-    .. method:: python_value(func=None)
-
-        :param callable python_value: Function to use for converting the return
-            value from the cursor.
-
-        Specify a particular function to use when converting values returned by
-        the database cursor. For example:
+            Parent = Category.alias()
+            sq = (Category
+                  .select(Category, Parent)
+                  .join(Parent, on=(Category.parent == Parent.id))
+                  .where(Parent.name == 'parent category'))
+
+    .. classmethod:: select(*fields)
+
+        :param fields: A list of model classes, field instances, functions or
+            expressions. If no arguments are provided, all columns for the
+            given model will be selected by default.
+        :returns: :class:`ModelSelect` query.
+
+        Create a SELECT query. If no fields are explicitly provided, the query
+        will by default SELECT all the fields defined on the model, unless you
+        are using the query as a sub-query, in which case only the primary key
+        will be selected by default.
+
+        Example of selecting all columns:
 
         .. code-block:: python
 
-            # Get user and a list of their tweet IDs. The tweet IDs are
-            # returned as a comma-separated string by the db, so we'll split
-            # the result string and convert the values to python ints.
-            convert_ids = lambda s: [int(i) for i in (s or '').split(',') if i]
-            tweet_ids = (fn
-                         .GROUP_CONCAT(Tweet.id)
-                         .python_value(convert_ids))
-
-            query = (User
-                     .select(User.username, tweet_ids.alias('tweet_ids'))
-                     .join(Tweet)
-                     .group_by(User.username))
-
-            for user in query:
-                print(user.username, user.tweet_ids)
-
-            # e.g.,
-            # huey [1, 4, 5, 7]
-            # mickey [2, 3, 6]
-            # zaizee []
-
-.. function:: fn()
-
-    The :func:`fn` helper is actually an instance of :class:`Function`
-    that implements a ``__getattr__`` hook to provide a nice API for calling
-    SQL functions.
-
-    To create a node representative of a SQL function call, use the function
-    name as an attribute on ``fn`` and then provide the arguments as you would
-    if calling a Python function:
-
-    .. code-block:: python
-
-        # List users and the number of tweets they have authored,
-        # from highest-to-lowest:
-        sql_count = fn.COUNT(Tweet.id)
-        query = (User
-                 .select(User, sql_count.alias('count'))
-                 .join(Tweet, JOIN.LEFT_OUTER)
-                 .group_by(User)
-                 .order_by(sql_count.desc()))
-
-        # Get the timestamp of the most recent tweet:
-        query = Tweet.select(fn.MAX(Tweet.timestamp))
-        max_timestamp = query.scalar()  # Retrieve scalar result from query.
-
-    Function calls can, like anything else, be composed and nested:
-
-    .. code-block:: python
-
-        # Get users whose username begins with "A" or "a":
-        a_users = User.select().where(fn.LOWER(fn.SUBSTR(User.username, 1, 1)) == 'a')
-
-.. class:: Window(partition_by=None, order_by=None, start=None, end=None, frame_type=None, extends=None, exclude=None, alias=None)
-
-    :param list partition_by: List of columns to partition by.
-    :param list order_by: List of columns to order by.
-    :param start: A :class:`SQL` instance or a string expressing the start
-        of the window range.
-    :param end: A :class:`SQL` instance or a string expressing the end of
-        the window range.
-    :param str frame_type: ``Window.RANGE``, ``Window.ROWS`` or
-        ``Window.GROUPS``.
-    :param extends: A :class:`Window` definition to extend. Alternately, you
-        may specify the window's alias instead.
-    :param exclude: Frame exclusion, one of ``Window.CURRENT_ROW``,
-        ``Window.GROUP``, ``Window.TIES`` or ``Window.NO_OTHERS``.
-    :param str alias: Alias for the window.
-
-    Represent a WINDOW clause.
-
-    .. note::
-        For an in-depth guide to using window functions with Peewee,
-        see the :ref:`window-functions` section.
-
-    .. attribute:: RANGE
-    .. attribute:: ROWS
-    .. attribute:: GROUPS
-
-        Specify the window ``frame_type``. See :ref:`window-frame-types`.
-
-    .. attribute:: CURRENT_ROW
-
-        Reference to current row for use in start/end clause or the frame
-        exclusion parameter.
-
-    .. attribute:: NO_OTHERS
-    .. attribute:: GROUP
-    .. attribute:: TIES
-
-        Specify the window frame exclusion parameter.
-
-    .. staticmethod:: preceding(value=None)
-
-        :param value: Number of rows preceding. If ``None`` is UNBOUNDED.
-
-        Convenience method for generating SQL suitable for passing in as the
-        ``start`` parameter for a window range.
-
-    .. staticmethod:: following(value=None)
-
-        :param value: Number of rows following. If ``None`` is UNBOUNDED.
-
-        Convenience method for generating SQL suitable for passing in as the
-        ``end`` parameter for a window range.
-
-    .. method:: as_rows()
-    .. method:: as_range()
-    .. method:: as_groups()
-
-        Specify the frame type.
-
-    .. method:: extends(window=None)
-
-        :param Window window: A :class:`Window` definition to extend.
-            Alternately, you may specify the window's alias instead.
-
-    .. method:: exclude(frame_exclusion=None)
-
-        :param frame_exclusion: Frame exclusion, one of ``Window.CURRENT_ROW``,
-            ``Window.GROUP``, ``Window.TIES`` or ``Window.NO_OTHERS``.
-
-    .. method:: alias(alias=None)
-
-        :param str alias: Alias to use for window.
-
-
-.. function:: Case(predicate, expression_tuples, default=None)
-
-    :param predicate: Predicate for CASE query (optional).
-    :param expression_tuples: One or more cases to evaluate.
-    :param default: Default value (optional).
-    :returns: Representation of CASE statement.
-
-    Examples::
-
-        Number = Table('numbers', ('val',))
-
-        num_as_str = Case(Number.val, (
-            (1, 'one'),
-            (2, 'two'),
-            (3, 'three')), 'a lot')
-
-        query = Number.select(Number.val, num_as_str.alias('num_str'))
-
-        # The above is equivalent to:
-        # SELECT "val",
-        #   CASE "val"
-        #       WHEN 1 THEN 'one'
-        #       WHEN 2 THEN 'two'
-        #       WHEN 3 THEN 'three'
-        #       ELSE 'a lot' END AS "num_str"
-        # FROM "numbers"
-
-        num_as_str = Case(None, (
-            (Number.val == 1, 'one'),
-            (Number.val == 2, 'two'),
-            (Number.val == 3, 'three')), 'a lot')
-        query = Number.select(Number.val, num_as_str.alias('num_str'))
-
-        # The above is equivalent to:
-        # SELECT "val",
-        #   CASE
-        #       WHEN "val" = 1 THEN 'one'
-        #       WHEN "val" = 2 THEN 'two'
-        #       WHEN "val" = 3 THEN 'three'
-        #       ELSE 'a lot' END AS "num_str"
-        # FROM "numbers"
-
-
-.. class:: NodeList(nodes, glue=' ', parens=False)
-
-    :param list nodes: Zero or more nodes.
-    :param str glue: How to join the nodes when converting to SQL.
-    :param bool parens: Whether to wrap the resulting SQL in parentheses.
-
-    Represent a list of nodes, a multi-part clause, a list of parameters, etc.
-
-
-.. function:: CommaNodeList(nodes)
-
-    :param list nodes: Zero or more nodes.
-    :returns: a :class:`NodeList`
-
-    Represent a list of nodes joined by commas.
-
-
-.. function:: EnclosedNodeList(nodes)
-
-    :param list nodes: Zero or more nodes.
-    :returns: a :class:`NodeList`
-
-    Represent a list of nodes joined by commas and wrapped in parentheses.
-
-
-.. class:: DQ(**query)
-
-    :param query: Arbitrary filter expressions using Django-style lookups.
-
-    Represent a composable Django-style filter expression suitable for use with
-    the :meth:`Model.filter` or :meth:`ModelSelect.filter` methods.
-
-
-.. class:: Tuple(*args)
-
-    Represent a SQL `row value <https://www.sqlite.org/rowvalue.html>`_.
-    Row-values are supported by most databases.
-
-
-.. class:: OnConflict(action=None, update=None, preserve=None, where=None, conflict_target=None, conflict_where=None, conflict_constraint=None)
-
-    :param str action: Action to take when resolving conflict.
-    :param update: A dictionary mapping column to new value.
-    :param preserve: A list of columns whose values should be preserved from the original INSERT. See also :class:`EXCLUDED`.
-    :param where: Expression to restrict the conflict resolution.
-    :param conflict_target: Column(s) that comprise the constraint.
-    :param conflict_where: Expressions needed to match the constraint target if it is a partial index (index with a WHERE clause).
-    :param str conflict_constraint: Name of constraint to use for conflict
-        resolution. Currently only supported by Postgres.
-
-    Represent a conflict resolution clause for a data-modification query.
-
-    Depending on the database-driver being used, one or more of the above
-    parameters may be required.
-
-    .. method:: preserve(*columns)
-
-        :param columns: Columns whose values should be preserved.
-
-    .. method:: update(_data=None, **kwargs)
-
-        :param dict _data: Dictionary mapping column to new value.
-        :param kwargs: Dictionary mapping column name to new value.
-
-        The ``update()`` method supports being called with either a dictionary
-        of column-to-value, **or** keyword arguments representing the same.
-
-    .. method:: where(*expressions)
-
-        :param expressions: Expressions that restrict the action of the
-            conflict resolution clause.
-
-    .. method:: conflict_target(*constraints)
-
-        :param constraints: Column(s) to use as target for conflict resolution.
-
-    .. method:: conflict_where(*expressions)
-
-        :param expressions: Expressions that match the conflict target index,
-            in the case the conflict target is a partial index.
-
-    .. method:: conflict_constraint(constraint)
-
-        :param str constraint: Name of constraints to use as target for
-            conflict resolution. Currently only supported by Postgres.
-
-
-.. class:: EXCLUDED
-
-    Helper object that exposes the ``EXCLUDED`` namespace that is used with
-    ``INSERT ... ON CONFLICT`` to reference values in the conflicting data.
-    This is a "magic" helper, such that one uses it by accessing attributes on
-    it that correspond to a particular column.
-
-    Example:
-
-    .. code-block:: python
-
-        class KV(Model):
-            key = CharField(unique=True)
-            value = IntegerField()
-
-        # Create one row.
-        KV.create(key='k1', value=1)
-
-        # Demonstrate usage of EXCLUDED.
-        # Here we will attempt to insert a new value for a given key. If that
-        # key already exists, then we will update its value with the *sum* of its
-        # original value and the value we attempted to insert -- provided that
-        # the new value is larger than the original value.
-        query = (KV.insert(key='k1', value=10)
-                 .on_conflict(conflict_target=[KV.key],
-                              update={KV.value: KV.value + EXCLUDED.value},
-                              where=(EXCLUDED.value > KV.value)))
-
-        # Executing the above query will result in the following data being
-        # present in the "kv" table:
-        # (key='k1', value=11)
-        query.execute()
-
-        # If we attempted to execute the query *again*, then nothing would be
-        # updated, as the new value (10) is now less than the value in the
-        # original row (11).
-
-
-.. class:: BaseQuery()
-
-    The parent class from which all other query classes are derived. While you
-    will not deal with :class:`BaseQuery` directly in your code, it
-    implements some methods that are common across all query types.
-
-    .. attribute:: default_row_type = ROW.DICT
-
-    .. method:: bind(database=None)
-
-        :param Database database: Database to execute query against.
-
-        Bind the query to the given database for execution.
-
-    .. method:: dicts(as_dict=True)
-
-        :param bool as_dict: Specify whether to return rows as dictionaries.
-
-        Return rows as dictionaries.
-
-    .. method:: tuples(as_tuples=True)
-
-        :param bool as_tuple: Specify whether to return rows as tuples.
-
-        Return rows as tuples.
-
-    .. method:: namedtuples(as_namedtuple=True)
-
-        :param bool as_namedtuple: Specify whether to return rows as named
-            tuples.
-
-        Return rows as named tuples.
-
-    .. method:: objects(constructor=None)
-
-        :param constructor: Function that accepts row dict and returns an
-            arbitrary object.
-
-        Return rows as arbitrary objects using the given constructor.
-
-    .. method:: sql()
-
-        :returns: A 2-tuple consisting of the query's SQL and parameters.
-
-    .. method:: execute(database)
-
-        :param Database database: Database to execute query against. Not
-            required if query was previously bound to a database.
-
-        Execute the query and return result (depends on type of query being
-        executed). For example, select queries the return result will be an
-        iterator over the query results.
-
-    .. method:: iterator(database=None)
-
-        :param Database database: Database to execute query against. Not
-            required if query was previously bound to a database.
-
-        Execute the query and return an iterator over the result-set. For large
-        result-sets this method is preferable as rows are not cached in-memory
-        during iteration.
-
-        .. note::
-            Because rows are not cached, the query may only be iterated over
-            once. Subsequent iterations will return empty result-sets as the
-            cursor will have been consumed.
-
-         Example:
-
-         .. code-block:: python
-
-              query = StatTbl.select().order_by(StatTbl.timestamp).tuples()
-              for row in query.iterator(db):
-                  process_row(row)
-
-    .. method:: __iter__()
-
-        Execute the query and return an iterator over the result-set.
-
-        Unlike :meth:`~BaseQuery.iterator`, this method will cause rows to
-        be cached in order to allow efficient iteration, indexing and slicing.
-
-    .. method:: __getitem__(value)
-
-        :param value: Either an integer index or a slice.
-
-        Retrieve a row or range of rows from the result-set.
-
-    .. method:: __len__()
-
-        Return the number of rows in the result-set.
-
-        .. warning::
-            This does not issue a ``COUNT()`` query. Instead, the result-set
-            is loaded as it would be during normal iteration, and the length
-            is determined from the size of the result set.
-
-
-.. class:: RawQuery(sql=None, params=None, **kwargs)
-
-    :param str sql: SQL query.
-    :param tuple params: Parameters (optional).
-
-    Create a query by directly specifying the SQL to execute.
-
-
-.. class:: Query(where=None, order_by=None, limit=None, offset=None, **kwargs)
-
-    :param where: Representation of WHERE clause.
-    :param tuple order_by: Columns or values to order by.
-    :param int limit: Value of LIMIT clause.
-    :param int offset: Value of OFFSET clause.
-
-    Base-class for queries that support method-chaining APIs.
-
-    .. method:: with_cte(*cte_list)
-
-        :param cte_list: zero or more :class:`CTE` objects.
-
-        Include the given common-table expressions in the query. Any previously
-        specified CTEs will be overwritten. For examples of common-table
-        expressions, see :ref:`cte`.
-
-    .. method:: cte(name, recursive=False, columns=None)
-
-        :param str name: Alias for common table expression.
-        :param bool recursive: Will this be a recursive CTE?
-        :param list columns: List of column names (as strings).
-
-        Indicate that a query will be used as a common table expression. For
-        example, if we are modelling a category tree and are using a
-        parent-link foreign key, we can retrieve all categories and their
-        absolute depths using a recursive CTE:
+            query = User.select().where(User.active == True).order_by(User.username)
+
+        Example of selecting all columns on *Tweet* and the parent model,
+        *User*. When the ``user`` foreign key is accessed on a *Tweet*
+        instance no additional query will be needed (see :ref:`N+1 <nplusone>`
+        for more details):
 
         .. code-block:: python
 
-            class Category(Model):
-                name = TextField()
-                parent = ForeignKeyField('self', backref='children', null=True)
+            query = (Tweet
+                     .select(Tweet, User)
+                     .join(User)
+                     .order_by(Tweet.created_date.desc()))
 
-            # The base case of our recursive CTE will be categories that are at
-            # the root level -- in other words, categories without parents.
-            roots = (Category
-                     .select(Category.name, Value(0).alias('level'))
-                     .where(Category.parent.is_null())
-                     .cte(name='roots', recursive=True))
+            for tweet in query:
+                print(tweet.user.username, '->', tweet.content)
 
-            # The recursive term will select the category name and increment
-            # the depth, joining on the base term so that the recursive term
-            # consists of all children of the base category.
-            RTerm = Category.alias()
-            recursive = (RTerm
-                         .select(RTerm.name, (roots.c.level + 1).alias('level'))
-                         .join(roots, on=(RTerm.parent == roots.c.id)))
-
-            # Express <base term> UNION ALL <recursive term>.
-            cte = roots.union_all(recursive)
-
-            # Select name and level from the recursive CTE.
-            query = (cte
-                     .select_from(cte.c.name, cte.c.level)
-                     .order_by(cte.c.name))
-
-            for category in query:
-                print(category.name, category.level)
-
-        For more examples of CTEs, see :ref:`cte`.
-
-    .. method:: where(*expressions)
-
-        :param expressions: zero or more expressions to include in the WHERE
-            clause.
-
-        Include the given expressions in the WHERE clause of the query. The
-        expressions will be AND-ed together with any previously-specified
-        WHERE expressions.
-
-        Example selection users where the username is equal to 'somebody':
-
-        .. code-block:: python
-
-            sq = User.select().where(User.username == 'somebody')
-
-        Example selecting tweets made by users who are either editors or
-        administrators:
-
-        .. code-block:: python
-
-            sq = Tweet.select().join(User).where(
-                (User.is_editor == True) |
-                (User.is_admin == True))
-
-        Example of deleting tweets by users who are no longer active:
+        Example of subquery only selecting the primary key:
 
         .. code-block:: python
 
             inactive_users = User.select().where(User.active == False)
-            dq = (Tweet
-                  .delete()
-                  .where(Tweet.user.in_(inactive_users)))
-            dq.execute()  # Return number of tweets deleted.
+
+            # Here, instead of defaulting to all columns, Peewee will default
+            # to only selecting the primary key.
+            Tweet.delete().where(Tweet.user.in_(inactive_users)).execute()
+
+    .. classmethod:: update(__data=None, **update)
+
+        :param dict __data: ``dict`` of fields to values.
+        :param update: Field-name to value mapping.
+
+        Create an UPDATE query.
+
+        Example showing users being marked inactive if their registration has
+        expired:
+
+        .. code-block:: python
+
+            q = (User
+                 .update({User.active: False})
+                 .where(User.registration_expired == True))
+            q.execute()  # Execute the query, returning number of rows updated.
+
+        Example showing an atomic update:
+
+        .. code-block:: python
+
+            q = (PageView
+                 .update({PageView.count: PageView.count + 1})
+                 .where(PageView.url == url))
+            q.execute()  # Execute the query.
 
         .. note::
+            When an update query is executed, the number of rows modified will
+            be returned.
 
-            :meth:`~Query.where` calls are chainable.  Multiple calls will
-            be "AND"-ed together.
+    .. classmethod:: insert(__data=None, **insert)
 
-    .. method:: orwhere(*expressions)
+        :param dict __data: ``dict`` of fields to values to insert.
+        :param insert: Field-name to value mapping.
 
-        :param expressions: zero or more expressions to include in the WHERE
-            clause.
+        Create an INSERT query.
 
-        Include the given expressions in the WHERE clause of the query. This
-        method is the same as the :meth:`Query.where` method, except that
-        the expressions will be OR-ed together with any previously-specified
-        WHERE expressions.
+        Insert a new row into the database. If any fields on the model have
+        default values, these values will be used if the fields are not
+        explicitly set in the ``insert`` dictionary.
 
-    .. method:: order_by(*values)
+        Example showing creation of a new user:
 
-        :param values: zero or more Column-like objects to order by.
+        .. code-block:: python
 
-        Define the ORDER BY clause. Any previously-specified values will be
-        overwritten.
+            q = User.insert(username='admin', active=True, registration_expired=False)
+            q.execute()  # perform the insert.
 
-    .. method:: order_by_extend(*values)
+        You can also use :class:`Field` objects as the keys:
 
-        :param values: zero or more Column-like objects to order by.
+        .. code-block:: python
 
-        Extend any previously-specified ORDER BY clause with the given values.
+            new_id = User.insert({User.username: 'admin'}).execute()
 
-    .. method:: limit(value=None)
+        If you have a model with a default value on one of the fields, and
+        that field is not specified in the ``insert`` parameter, the default
+        will be used:
 
-        :param int value: specify value for LIMIT clause.
+        .. code-block:: python
 
-    .. method:: offset(value=None)
+            class User(Model):
+                username = CharField()
+                active = BooleanField(default=True)
 
-        :param int value: specify value for OFFSET clause.
+            # This INSERT query will automatically specify `active=True`:
+            User.insert(username='charlie')
 
-    .. method:: paginate(page, paginate_by=20)
+        .. note::
+            When an insert query is executed on a table with an
+            auto-incrementing primary key, the primary key of the new row will
+            be returned.
 
-        :param int page: Page number of results (starting from 1).
-        :param int paginate_by: Rows-per-page.
+    .. classmethod:: insert_many(rows, fields=None)
 
-        Convenience method for specifying the LIMIT and OFFSET in a more
-        intuitive way.
+        :param rows: An iterable that yields rows to insert.
+        :param list fields: List of fields being inserted.
+        :return: number of rows modified (see note).
 
-        This feature is designed with web-site pagination in mind, so the first
-        page starts with ``page=1``.
+        INSERT multiple rows of data.
 
+        The ``rows`` parameter must be an iterable that yields dictionaries or
+        tuples, where the ordering of the tuple values corresponds to the
+        fields specified in the ``fields`` argument. As with
+        :meth:`~Model.insert`, fields that are not specified in the
+        dictionary will use their default value, if one exists.
 
-.. class:: SelectQuery()
+        .. note::
+            Due to the nature of bulk inserts, each row must contain the same
+            fields. The following will not work:
 
-    Select query helper-class that implements operator-overloads for creating
-    compound queries.
+            .. code-block:: python
 
-    .. method:: select_from(*columns)
+                Person.insert_many([
+                    {'first_name': 'Peewee', 'last_name': 'Herman'},
+                    {'first_name': 'Huey'},  # Missing "last_name"!
+                ]).execute()
 
-        :param columns: one or more columns to select from the inner query.
-        :return: a new query that wraps the calling query.
+        Example of inserting multiple Users:
 
-        Create a new query that wraps the current (calling) query. For example,
-        suppose you have a simple ``UNION`` query, and need to apply an
-        aggregation on the union result-set. To do this, you need to write
-        something like:
+        .. code-block:: python
+
+            data = [
+                ('charlie', True),
+                ('huey', False),
+                ('zaizee', False)]
+            query = User.insert_many(data, fields=[User.username, User.is_admin])
+            query.execute()
+
+        Equivalent example using dictionaries:
+
+        .. code-block:: python
+
+            data = [
+                {'username': 'charlie', 'is_admin': True},
+                {'username': 'huey', 'is_admin': False},
+                {'username': 'zaizee', 'is_admin': False}]
+
+            # Insert new rows.
+            User.insert_many(data).execute()
+
+        Because the ``rows`` parameter can be an arbitrary iterable, you can
+        also use a generator:
+
+        .. code-block:: python
+
+            def get_usernames():
+                for username in ['charlie', 'huey', 'peewee']:
+                    yield {'username': username}
+            User.insert_many(get_usernames()).execute()
+
+        .. warning::
+            If you are using SQLite, your SQLite library must be version 3.7.11
+            or newer to take advantage of bulk inserts.
+
+        .. note::
+            SQLite has a default limit of bound variables per statement. This
+            limit can be modified at compile-time or at run-time, **but** if
+            modifying at run-time, you can only specify a *lower* value than
+            the default limit.
+
+            For more information, check out the following SQLite documents:
+
+            * `Max variable number limit <https://www.sqlite.org/limits.html#max_variable_number>`_
+            * `Changing run-time limits <https://www.sqlite.org/c3ref/limit.html>`_
+            * `SQLite compile-time flags <https://www.sqlite.org/compile.html>`_
+
+        .. note::
+            The default return value is the number of rows modified. However,
+            when using Postgres, Peewee will return a cursor by default that
+            yields the primary-keys of the inserted rows. To disable this
+            functionality with Postgres, use ``as_rowcount()``.
+
+    .. classmethod:: insert_from(query, fields)
+
+        :param Select query: SELECT query to use as source of data.
+        :param fields: Fields to insert data into.
+        :return: number of rows modified (see note).
+
+        INSERT data using a SELECT query as the source. This API should be used
+        for queries of the form *INSERT INTO ... SELECT FROM ...*.
+
+        Example of inserting data across tables for denormalization purposes:
+
+        .. code-block:: python
+
+            source = (User
+                      .select(User.username, fn.COUNT(Tweet.id))
+                      .join(Tweet, JOIN.LEFT_OUTER)
+                      .group_by(User.username))
+
+            UserTweetDenorm.insert_from(
+                source,
+                [UserTweetDenorm.username, UserTweetDenorm.num_tweets]).execute()
+
+        .. note::
+            The default return value is the number of rows modified. However,
+            when using Postgres, Peewee will return a cursor by default that
+            yields the primary-keys of the inserted rows. To disable this
+            functionality with Postgres, use ``as_rowcount()``.
+
+    .. classmethod:: replace(__data=None, **insert)
+
+        :param dict __data: ``dict`` of fields to values to insert.
+        :param insert: Field-name to value mapping.
+
+        Create an INSERT query that uses REPLACE for conflict-resolution.
+
+        See :meth:`Model.insert` for examples.
+
+    .. classmethod:: replace_many(rows, fields=None)
+
+        :param rows: An iterable that yields rows to insert.
+        :param list fields: List of fields being inserted.
+
+        INSERT multiple rows of data using REPLACE for conflict-resolution.
+
+        See :meth:`Model.insert_many` for examples.
+
+    .. classmethod:: raw(sql, *params)
+
+        :param str sql: SQL query to execute.
+        :param params: Parameters for query.
+
+        Execute a SQL query directly.
+
+        Example selecting rows from the User table:
+
+        .. code-block:: python
+
+            q = User.raw('select id, username from users')
+            for user in q:
+                print(user.id, user.username)
+
+        .. note::
+            Generally the use of ``raw`` is reserved for those cases where you
+            can significantly optimize a select query. It is useful for select
+            queries since it will return instances of the model.
+
+    .. classmethod:: delete()
+
+        Create a DELETE query.
+
+        Example showing the deletion of all inactive users:
+
+        .. code-block:: python
+
+            q = User.delete().where(User.active == False)
+            q.execute()  # Remove the rows, return number of rows removed.
+
+        .. warning::
+            This method performs a delete on the *entire table*. To delete a
+            single instance, see :meth:`Model.delete_instance`.
+
+    .. classmethod:: create(**query)
+
+        :param query: Mapping of field-name to value.
+
+        INSERT new row into table and return corresponding model instance.
+
+        Example showing the creation of a user (a row will be added to the
+        database):
+
+        .. code-block:: python
+
+            user = User.create(username='admin', password='test')
+
+        .. note::
+            The create() method is a shorthand for instantiate-then-save.
+
+    .. classmethod:: bulk_create(model_list, batch_size=None)
+
+        :param iterable model_list: a list or other iterable of unsaved
+            :class:`Model` instances.
+        :param int batch_size: number of rows to batch per insert. If
+            unspecified, all models will be inserted in a single query.
+        :returns: no return value.
+
+        Efficiently INSERT multiple unsaved model instances into the database.
+        Unlike :meth:`~Model.insert_many`, which accepts row data as a list
+        of either dictionaries or lists, this method accepts a list of unsaved
+        model instances.
+
+        Example:
+
+        .. code-block:: python
+
+            # List of 10 unsaved users.
+            user_list = [User(username='u%s' % i) for i in range(10)]
+
+            # All 10 users are inserted in a single query.
+            User.bulk_create(user_list)
+
+        Batches:
+
+        .. code-block:: python
+
+            user_list = [User(username='u%s' % i) for i in range(10)]
+
+            with database.atomic():
+                # Will execute 4 INSERT queries (3 batches of 3, 1 batch of 1).
+                User.bulk_create(user_list, batch_size=3)
+
+        .. warning::
+
+            * The primary-key value for the newly-created models will only be
+              set if you are using Postgresql (which supports the ``RETURNING``
+              clause).
+            * SQLite generally has a limit of bound parameters for a query,
+              so the maximum batch size should be param-limit / number-of-fields.
+              This limit is typically 999 for Sqlite < 3.32.0, and 32766 for
+              newer versions.
+            * When a batch-size is provided it is **strongly recommended** that
+              you wrap the call in a transaction or savepoint using
+              :meth:`Database.atomic`. Otherwise an error in a batch mid-way
+              through could leave the database in an inconsistent state.
+
+    .. classmethod:: bulk_update(model_list, fields, batch_size=None)
+
+        :param iterable model_list: a list or other iterable of
+            :class:`Model` instances.
+        :param list fields: list of fields to update.
+        :param int batch_size: number of rows to batch per insert. If
+            unspecified, all models will be inserted in a single query.
+        :returns: total number of rows updated.
+
+        Efficiently UPDATE multiple model instances.
+
+        Example:
+
+        .. code-block:: python
+
+            # First, create 3 users.
+            u1, u2, u3 = [User.create(username='u%s' % i) for i in (1, 2, 3)]
+
+            # Now let's modify their usernames.
+            u1.username = 'u1-x'
+            u2.username = 'u2-y'
+            u3.username = 'u3-z'
+
+            # Update all three rows using a single UPDATE query.
+            User.bulk_update([u1, u2, u3], fields=[User.username])
+
+        This will result in executing the following SQL:
 
         .. code-block:: sql
 
-            SELECT "u"."owner", COUNT("u"."id") AS "ct"
-            FROM (
-                SELECT "id", "owner", ... FROM "cars"
-                UNION
-                SELECT "id", "owner", ... FROM "motorcycles"
-                UNION
-                SELECT "id", "owner", ... FROM "boats") AS "u"
-            GROUP BY "u"."owner"
+            UPDATE "users" SET "username" = CASE "users"."id"
+                WHEN 1 THEN "u1-x"
+                WHEN 2 THEN "u2-y"
+                WHEN 3 THEN "u3-z" END
+            WHERE "users"."id" IN (1, 2, 3);
 
-        The :meth:`~SelectQuery.select_from` method is designed to simplify
-        constructing this type of query.
-
-        Example peewee code:
+        If you have a large number of objects to update, it is strongly
+        recommended that you specify a ``batch_size`` and wrap the operation in
+        a transaction:
 
         .. code-block:: python
 
-              class Car(Model):
-                  owner = ForeignKeyField(Owner, backref='cars')
-                  # ... car-specific fields, etc ...
+            with database.atomic():
+                User.bulk_update(user_list, fields=['username'], batch_size=50)
 
-              class Motorcycle(Model):
-                  owner = ForeignKeyField(Owner, backref='motorcycles')
-                  # ... motorcycle-specific fields, etc ...
+        .. warning::
 
-              class Boat(Model):
-                  owner = ForeignKeyField(Owner, backref='boats')
-                  # ... boat-specific fields, etc ...
+            * SQLite generally has a limit of bound parameters for a query.
+              This limit is typically 999 for Sqlite < 3.32.0, and 32766 for
+              newer versions.
+            * When a batch-size is provided it is **strongly recommended** that
+              you wrap the call in a transaction or savepoint using
+              :meth:`Database.atomic`. Otherwise an error in a batch mid-way
+              through could leave the database in an inconsistent state.
 
-              cars = Car.select(Car.owner)
-              motorcycles = Motorcycle.select(Motorcycle.owner)
-              boats = Boat.select(Boat.owner)
+    .. classmethod:: get(*query, **filters)
 
-              union = cars | motorcycles | boats
+        :param query: Zero or more :class:`Expression` objects.
+        :param filters: Mapping of field-name to value for Django-style filter.
+        :raises: :class:`DoesNotExist`
+        :returns: Model instance matching the specified filters.
 
-              query = (union
-                       .select_from(union.c.owner, fn.COUNT(union.c.id))
-                       .group_by(union.c.owner))
+        Retrieve a single model instance matching the given filters. If no
+        model is returned, a :class:`DoesNotExist` is raised.
 
-    .. method:: union_all(dest)
+        .. code-block:: python
 
-        Create a UNION ALL query with ``dest``.
+            user = User.get(User.username == username, User.active == True)
 
-    .. method:: __add__(dest)
+        This method is also exposed via the :class:`SelectQuery`, though it
+        takes no parameters:
 
-        Create a UNION ALL query with ``dest``.
+        .. code-block:: python
 
-    .. method:: union(dest)
+            active = User.select().where(User.active == True)
+            try:
+                user = (active
+                        .where(
+                            (User.username == username) &
+                            (User.active == True))
+                        .get())
+            except User.DoesNotExist:
+                user = None
 
-        Create a UNION query with ``dest``.
+        .. note::
+            The :meth:`~Model.get` method is shorthand for selecting with a
+            limit of 1. It has the added behavior of raising an exception when
+            no matching row is found. If more than one row is found, the first
+            row returned by the database cursor will be used.
 
-    .. method:: __or__(dest)
+    .. classmethod:: get_or_none(*query, **filters)
 
-        Create a UNION query with ``dest``.
+        Identical to :meth:`Model.get` but returns ``None`` if no model
+        matches the given filters.
 
-    .. method:: intersect(dest)
+        .. code-block:: python
 
-        Create an INTERSECT query with ``dest``.
+            active = User.select().where(User.active == True)
+            user = (active
+                    .where(
+                        (User.username == username) &
+                        (User.active == True))
+                    .get_or_none())
 
-    .. method:: __and__(dest)
+    .. classmethod:: get_by_id(pk)
 
-        Create an INTERSECT query with ``dest``.
+        :param pk: Primary-key value.
 
-    .. method:: except_(dest)
-
-        Create an EXCEPT query with ``dest``. Note that the method name has a
-        trailing "_" character since ``except`` is a Python reserved word.
-
-    .. method:: __sub__(dest)
-
-        Create an EXCEPT query with ``dest``.
-
-
-.. class:: SelectBase()
-
-    Base-class for :class:`Select` and :class:`CompoundSelect` queries.
-
-    .. method:: peek(database, n=1)
-
-        :param Database database: database to execute query against.
-        :param int n: Number of rows to return.
-        :returns: A single row if n = 1, else a list of rows.
-
-        Execute the query and return the given number of rows from the start
-        of the cursor. This function may be called multiple times safely, and
-        will always return the first N rows of results.
-
-    .. method:: first(database, n=1)
-
-        :param Database database: database to execute query against.
-        :param int n: Number of rows to return.
-        :returns: A single row if n = 1, else a list of rows.
-
-        Like the :meth:`~SelectBase.peek` method, except a ``LIMIT`` is
-        applied to the query to ensure that only ``n`` rows are returned.
-        Multiple calls for the same value of ``n`` will not result in multiple
-        executions.
-
-        The query is altered in-place so it is not possible to call
-        :meth:`~SelectBase.first` and then later iterate over the full
-        result-set using the same query object. Again, this is done to ensure
-        that multiple calls to ``first()`` will not result in multiple query
-        executions.
-
-    .. method:: scalar(database, as_tuple=False, as_dict=False)
-
-        :param Database database: database to execute query against.
-        :param bool as_tuple: Return the result as a tuple?
-        :param bool as_dict: Return the result as a dict?
-        :returns: Single scalar value. If ``as_tuple = True``, a row tuple is
-            returned. If ``as_dict = True``, a row dict is returned.
-
-        Return a scalar value from the first row of results. If multiple
-        scalar values are anticipated (e.g. multiple aggregations in a single
-        query) then you may specify ``as_tuple=True`` to get the row tuple.
-
-        Example::
-
-            query = Note.select(fn.MAX(Note.timestamp))
-            max_ts = query.scalar(db)
-
-            query = Note.select(fn.MAX(Note.timestamp), fn.COUNT(Note.id))
-            max_ts, n_notes = query.scalar(db, as_tuple=True)
-
-            query = Note.select(fn.COUNT(Note.id).alias('count'))
-            assert query.scalar(db, as_dict=True) == {'count': 123}
-
-    .. method:: count(database, clear_limit=False)
-
-        :param Database database: database to execute query against.
-        :param bool clear_limit: Clear any LIMIT clause when counting.
-        :return: Number of rows in the query result-set.
-
-        Return number of rows in the query result-set.
-
-        Implemented by running SELECT COUNT(1) FROM (<current query>).
-
-    .. method:: exists(database)
-
-        :param Database database: database to execute query against.
-        :return: Whether any results exist for the current query.
-
-        Return a boolean indicating whether the current query has any results.
-
-    .. method:: get(database)
-
-        :param Database database: database to execute query against.
-        :return: A single row from the database or ``None``.
-
-        Execute the query and return the first row, if it exists. Multiple
-        calls will result in multiple queries being executed.
-
-
-.. class:: CompoundSelectQuery(lhs, op, rhs)
-
-    :param SelectBase lhs: A Select or CompoundSelect query.
-    :param str op: Operation (e.g. UNION, INTERSECT, EXCEPT).
-    :param SelectBase rhs: A Select or CompoundSelect query.
-
-    Class representing a compound SELECT query.
-
-
-.. class:: Select(from_list=None, columns=None, group_by=None, having=None, distinct=None, windows=None, for_update=None, for_update_of=None, for_update_nowait=None, **kwargs)
-
-    :param list from_list: List of sources for FROM clause.
-    :param list columns: Columns or values to select.
-    :param list group_by: List of columns or values to group by.
-    :param Expression having: Expression for HAVING clause.
-    :param distinct: Either a boolean or a list of column-like objects.
-    :param list windows: List of :class:`Window` clauses.
-    :param for_update: Boolean or str indicating if SELECT...FOR UPDATE.
-    :param for_update_of: One or more tables for FOR UPDATE OF clause.
-    :param bool for_update_nowait: Specify NOWAIT locking.
-
-    Class representing a SELECT query.
-
-    .. note::
-        Rather than instantiating this directly, most-commonly you will use a
-        factory method like :meth:`Table.select` or :meth:`Model.select`.
-
-    Methods on the select query can be chained together.
-
-    Example selecting some user instances from the database.  Only the ``id``
-    and ``username`` columns are selected.  When iterated, will return instances
-    of the ``User`` model:
-
-    .. code-block:: python
-
-        query = User.select(User.id, User.username)
-        for user in query:
-            print(user.username)
-
-    Example selecting users and additionally the number of tweets made by the
-    user.  The ``User`` instances returned will have an additional attribute,
-    'count', that corresponds to the number of tweets made:
-
-    .. code-block:: python
-
-        query = (User
-                 .select(User, fn.COUNT(Tweet.id).alias('count'))
-                 .join(Tweet, JOIN.LEFT_OUTER)
-                 .group_by(User))
-        for user in query:
-            print(user.username, 'has tweeted', user.count, 'times')
-
-    .. note::
-        While it is possible to instantiate :class:`Select` directly, more
-        commonly you will build the query using the method-chaining APIs.
-
-    .. method:: columns(*columns)
-
-        :param columns: Zero or more column-like objects to SELECT.
-
-        Specify which columns or column-like values to SELECT.
-
-    .. method:: select(*columns)
-
-        :param columns: Zero or more column-like objects to SELECT.
-
-        Same as :meth:`Select.columns`, provided for
-        backwards-compatibility.
-
-    .. method:: select_extend(*columns)
-
-        :param columns: Zero or more column-like objects to SELECT.
-
-        Extend the current selection with the given columns.
+        Short-hand for calling :meth:`Model.get` specifying a lookup by
+        primary key. Raises a :class:`DoesNotExist` if instance with the
+        given primary key value does not exist.
 
         Example:
 
         .. code-block:: python
 
-            def get_users(with_count=False):
-                query = User.select()
-                if with_count:
-                    query = (query
-                             .select_extend(fn.COUNT(Tweet.id).alias('count'))
-                             .join(Tweet, JOIN.LEFT_OUTER)
-                             .group_by(User))
-                return query
+            user = User.get_by_id(1)  # Returns user with id = 1.
 
-    .. method:: from_(*sources)
+    .. classmethod:: set_by_id(key, value)
 
-        :param sources: Zero or more sources for the FROM clause.
+        :param key: Primary-key value.
+        :param dict value: Mapping of field to value to update.
 
-        Specify which table-like objects should be used in the FROM clause.
-
-        .. code-block:: python
-
-            User = Table('users')
-            Tweet = Table('tweets')
-            query = (User
-                     .select(User.c.username, Tweet.c.content)
-                     .from_(User, Tweet)
-                     .where(User.c.id == Tweet.c.user_id))
-            for row in query.execute(db):
-                print(row['username'], '->', row['content'])
-
-    .. method:: join(dest, join_type='INNER', on=None)
-
-        :param dest: A table or table-like object.
-        :param str join_type: Type of JOIN, default is "INNER".
-        :param Expression on: Join predicate.
-
-        Join type may be one of:
-
-        * ``JOIN.INNER``
-        * ``JOIN.LEFT_OUTER``
-        * ``JOIN.RIGHT_OUTER``
-        * ``JOIN.FULL``
-        * ``JOIN.FULL_OUTER``
-        * ``JOIN.CROSS``
-
-        Express a JOIN::
-
-            User = Table('users', ('id', 'username'))
-            Note = Table('notes', ('id', 'user_id', 'content'))
-
-            query = (Note
-                     .select(Note.content, User.username)
-                     .join(User, on=(Note.user_id == User.id)))
-
-    .. method:: group_by(*columns)
-
-        :param values: zero or more Column-like objects to group by.
-
-        Define the GROUP BY clause. Any previously-specified values will be
-        overwritten.
-
-        Additionally, to specify all columns on a given table, you can pass the
-        table/model object in place of the individual columns.
+        Short-hand for updating the data with the given primary-key. If no row
+        exists with the given primary key, no exception will be raised.
 
         Example:
 
         .. code-block:: python
 
-            query = (User
-                     .select(User, fn.Count(Tweet.id).alias('count'))
-                     .join(Tweet)
-                     .group_by(User))
+            # Set "is_admin" to True on user with id=3.
+            User.set_by_id(3, {'is_admin': True})
 
-    .. method:: group_by_extend(*columns)
+    .. classmethod:: delete_by_id(pk)
 
-        :param values: zero or more Column-like objects to group by.
+        :param pk: Primary-key value.
 
-        Extend the GROUP BY clause with the given columns.
+        Short-hand for deleting the row with the given primary-key. If no row
+        exists with the given primary key, no exception will be raised.
 
-    .. method:: having(*expressions)
+    .. classmethod:: get_or_create(**kwargs)
 
-        :param expressions: zero or more expressions to include in the HAVING
-            clause.
+        :param kwargs: Mapping of field-name to value.
+        :param defaults: Default values to use if creating a new row.
+        :returns: Tuple of :class:`Model` instance and boolean indicating
+            if a new object was created.
 
-        Include the given expressions in the HAVING clause of the query. The
-        expressions will be AND-ed together with any previously-specified
-        HAVING expressions.
+        Attempt to get the row matching the given filters. If no matching row
+        is found, create a new row.
 
-    .. method:: distinct(*columns)
+        .. warning:: Race-conditions are possible when using this method.
 
-        :param columns: Zero or more column-like objects.
+        Example **without** ``get_or_create``:
 
-        Indicate whether this query should use a DISTINCT clause. By specifying
-        a single value of ``True`` the query will use a simple SELECT DISTINCT.
-        Specifying one or more columns will result in a SELECT DISTINCT ON.
+        .. code-block:: python
 
-    .. method:: window(*windows)
+            # Without `get_or_create`, we might write:
+            try:
+                person = Person.get(
+                    (Person.first_name == 'John') &
+                    (Person.last_name == 'Lennon'))
+            except Person.DoesNotExist:
+                person = Person.create(
+                    first_name='John',
+                    last_name='Lennon',
+                    birthday=datetime.date(1940, 10, 9))
 
-        :param windows: zero or more :class:`Window` objects.
+        Equivalent code using ``get_or_create``:
 
-        Define the WINDOW clause. Any previously-specified values will be
-        overwritten.
+        .. code-block:: python
+
+            person, created = Person.get_or_create(
+                first_name='John',
+                last_name='Lennon',
+                defaults={'birthday': datetime.date(1940, 10, 9)})
+
+    .. classmethod:: filter(*dq_nodes, **filters)
+
+        :param dq_nodes: Zero or more :class:`DQ` objects.
+        :param filters: Django-style filters.
+        :returns: :class:`ModelSelect` query.
+
+    .. method:: get_id()
+
+        :returns: The primary-key of the model instance.
+
+    .. method:: save(force_insert=False, only=None)
+
+        :param bool force_insert: Force INSERT query.
+        :param list only: Only save the given :class:`Field` instances.
+        :returns: Number of rows modified.
+
+        Save the data in the model instance. By default, the presence of a
+        primary-key value will cause an UPDATE query to be executed.
+
+        Example showing saving a model instance:
+
+        .. code-block:: python
+
+            user = User()
+            user.username = 'some-user'  # does not touch the database
+            user.save()  # change is persisted to the db
+
+    .. attribute:: dirty_fields
+
+        Return list of fields that have been modified.
+
+        :rtype: list
+
+        .. note::
+            If you just want to persist modified fields, you can call
+            ``model.save(only=model.dirty_fields)``.
+
+            If you **always** want to only save a model's dirty fields, you can use the Meta
+            option ``only_save_dirty = True``. Then, any time you call :meth:`Model.save()`,
+            by default only the dirty fields will be saved, e.g.
+
+            .. code-block:: python
+
+                class Person(Model):
+                    first_name = CharField()
+                    last_name = CharField()
+                    dob = DateField()
+
+                    class Meta:
+                        database = db
+                        only_save_dirty = True
+
+        .. warning::
+            Peewee determines whether a field is "dirty" by observing when the
+            field attribute is set on a model instance. If the field contains a
+            value that is mutable, such as a dictionary instance, and that
+            dictionary is then modified, Peewee will not notice the change.
+
+        .. warning::
+            Do not do membership tests on this list, e.g. ``f in dirty_fields``
+            because if there is one or more fields in the dirty fields list,
+            the field equality override will return a truthy Expression object.
+            If you want to test if a field is dirty, instead
+            check ``f.name in model.dirty_field_names``.
+
+    .. attribute:: dirty_field_names
+
+        Return list of field names that have been modified.
+
+        :rtype: list
+
+    .. method:: is_dirty()
+
+        Return boolean indicating whether any fields were manually set.
+
+    .. method:: delete_instance(recursive=False, delete_nullable=False)
+
+        :param bool recursive: Delete related models.
+        :param bool delete_nullable: Delete related models that have a null
+            foreign key. If ``False`` nullable relations will be set to NULL.
+
+        Delete the given instance.  Any foreign keys set to cascade on
+        delete will be deleted automatically.  For more programmatic control,
+        you can specify ``recursive=True``, which will delete any non-nullable
+        related models (those that *are* nullable will be set to NULL).  If you
+        wish to delete all dependencies regardless of whether they are nullable,
+        set ``delete_nullable=True``.
 
         Example:
 
         .. code-block:: python
 
-            # Equivalent example Using a Window() instance instead.
-            window = Window(partition_by=[Sample.counter])
-            query = (Sample
-                     .select(
-                        Sample.counter,
-                        Sample.value,
-                        fn.AVG(Sample.value).over(window))
-                     .window(window)  # Note call to ".window()"
-                     .order_by(Sample.counter))
+            some_obj.delete_instance()  # it is gone forever
 
-    .. method:: for_update(for_update=True, of=None, nowait=None)
+    .. classmethod:: bind(database, bind_refs=True, bind_backrefs=True)
 
-        :param for_update: Either a boolean or a string indicating the
-            desired expression, e.g. "FOR SHARE".
-        :param of: One or more models to restrict locking to.
-        :param bool nowait: Specify NOWAIT option when locking.
+        :param Database database: database to bind to.
+        :param bool bind_refs: Bind related models.
+        :param bool bind_backrefs: Bind back-reference related models.
 
+        Bind the model (and specified relations) to the given database.
 
-.. class:: _WriteQuery(table, returning=None, **kwargs)
+        See also: :meth:`Database.bind`.
 
-    :param Table table: Table to write to.
-    :param list returning: List of columns for RETURNING clause.
+    .. classmethod:: bind_ctx(database, bind_refs=True, bind_backrefs=True)
 
-    Base-class for write queries.
+        Like :meth:`~Model.bind`, but returns a context manager that only
+        binds the models for the duration of the wrapped block.
 
-    .. method:: returning(*returning)
+        See also: :meth:`Database.bind_ctx`.
 
-        :param returning: Zero or more column-like objects for RETURNING clause
+    .. classmethod:: table_exists()
 
-        Specify the RETURNING clause of query (if supported by your database).
+        :returns: boolean indicating whether the table exists.
 
-        .. code-block:: python
+    .. classmethod:: create_table(safe=True, **options)
 
-            query = (User
-                     .insert_many([{'username': 'foo'},
-                                   {'username': 'bar'},
-                                   {'username': 'baz'}])
-                     .returning(User.id, User.username)
-                     .namedtuples())
-            data = query.execute()
-            for row in data:
-                print('added:', row.username, 'with id=', row.id)
+        :param bool safe: If set to ``True``, the create table query will
+            include an ``IF NOT EXISTS`` clause.
 
-.. class:: Update(table, update=None, **kwargs)
-
-    :param Table table: Table to update.
-    :param dict update: Data to update.
-
-    Class representing an UPDATE query.
-
-    Example:
-
-    .. code-block:: python
-
-        PageView = Table('page_views')
-        query = (PageView
-                 .update({PageView.c.page_views: PageView.c.page_views + 1})
-                 .where(PageView.c.url == url))
-        query.execute(database)
-
-    .. method:: from_(*sources)
-
-        :param Source sources: one or more :class:`Table`,
-            :class:`Model`, query, or :class:`ValuesList` to join with.
-
-        Specify additional tables to join with using the UPDATE ... FROM
-        syntax, which is supported by Postgres. The `Postgres documentation <https://www.postgresql.org/docs/10/static/sql-update.html#id-1.9.3.176.8>`_
-        provides additional detail, but to summarize:
-
-            When a ``FROM`` clause is present, what essentially happens is that
-            the target table is joined to the tables mentioned in the
-            from_list, and each output row of the join represents an update
-            operation for the target table. When using ``FROM`` you should
-            ensure that the join produces at most one output row for each row
-            to be modified.
+        Create the model table, indexes, constraints and sequences.
 
         Example:
 
         .. code-block:: python
 
-            # Update multiple users in a single query.
-            data = [('huey', True),
-                    ('mickey', False),
-                    ('zaizee', True)]
-            vl = ValuesList(data, columns=('username', 'is_admin'), alias='vl')
+            with database:
+                SomeModel.create_table()  # Execute the create table query.
 
-            # Here we'll update the "is_admin" status of the above users,
-            # "joining" the VALUES() on the "username" column.
-            query = (User
-                     .update(is_admin=vl.c.is_admin)
-                     .from_(vl)
-                     .where(User.username == vl.c.username))
+    .. classmethod:: drop_table(safe=True, **options)
 
-        The above query produces the following SQL:
+        :param bool safe: If set to ``True``, the drop table query will
+            include an ``IF EXISTS`` clause.
 
-        .. code-block:: sql
+        Drop the model table.
 
-            UPDATE "users" SET "is_admin" = "vl"."is_admin"
-            FROM (
-                VALUES ('huey', t), ('mickey', f), ('zaizee', t))
-                AS "vl"("username", "is_admin")
-            WHERE ("users"."username" = "vl"."username")
+    .. method:: truncate_table(restart_identity=False, cascade=False)
 
+        :param bool restart_identity: Restart the id sequence (postgres-only).
+        :param bool cascade: Truncate related tables as well (postgres-only).
 
-.. class:: Insert(table, insert=None, columns=None, on_conflict=None, **kwargs)
+        Truncate (delete all rows) for the model.
 
-    :param Table table: Table to INSERT data into.
-    :param insert: Either a dict, a list, or a query.
-    :param list columns: List of columns when ``insert`` is a list or query.
-    :param on_conflict: Conflict resolution strategy.
+    .. classmethod:: index(*fields, unique=False, safe=True, where=None, using=None, name=None)
 
-    Class representing an INSERT query.
+        :param fields: Fields to index.
+        :param bool unique: Whether index is UNIQUE.
+        :param bool safe: Whether to add IF NOT EXISTS clause.
+        :param Expression where: Optional WHERE clause for index.
+        :param str using: Index algorithm.
+        :param str name: Optional index name.
 
-    .. method:: as_rowcount(as_rowcount=True)
-
-        :param bool as_rowcount: Whether to return the modified row count (as
-            opposed to the last-inserted row id).
-
-        By default, on databases that do *not* use RETURNING automatically
-        (currently Sqlite and MySQL), Peewee versions 3.12 through 3.14.10
-        would return the modified row-count when executing a bulk insert. This
-        change has been reverted so that bulk-inserts will, by default, return
-        the value of ``cursor.lastrowid``.
-
-        If you prefer to receive the inserted row-count, then specify
-        ``as_rowcount()``:
-
-        .. code-block:: python
-
-            db = MySQLDatabase(...)
-
-            query = User.insert_many([...])
-            # By default, the last rowid is returned:
-            #last_id = query.execute()
-
-            # To get the modified row-count:
-            rowcount = query.as_rowcount().execute()
-
-    .. method:: on_conflict_ignore(ignore=True)
-
-        :param bool ignore: Whether to add ON CONFLICT IGNORE clause.
-
-        Specify IGNORE conflict resolution strategy.
-
-    .. method:: on_conflict_replace(replace=True)
-
-        :param bool replace: Whether to add ON CONFLICT REPLACE clause.
-
-        Specify REPLACE conflict resolution strategy.
-
-    .. method:: on_conflict(action=None, update=None, preserve=None, where=None, conflict_target=None, conflict_where=None, conflict_constraint=None)
-
-        :param str action: Action to take when resolving conflict. If blank,
-            action is assumed to be "update".
-        :param update: A dictionary mapping column to new value.
-        :param preserve: A list of columns whose values should be preserved from the original INSERT.
-        :param where: Expression to restrict the conflict resolution.
-        :param conflict_target: Column(s) that comprise the constraint.
-        :param conflict_where: Expressions needed to match the constraint target if it is a partial index (index with a WHERE clause).
-        :param str conflict_constraint: Name of constraint to use for conflict
-            resolution. Currently only supported by Postgres.
-
-        Specify the parameters for an :class:`OnConflict` clause to use for
-        conflict resolution.
+        Expressive method for declaring an index on a model. Wraps the
+        declaration of a :class:`ModelIndex` instance.
 
         Examples:
 
         .. code-block:: python
 
-            class User(Model):
-                username = TextField(unique=True)
-                last_login = DateTimeField(null=True)
-                login_count = IntegerField()
+            class Article(Model):
+                name = TextField()
+                timestamp = TimestampField()
+                status = IntegerField()
+                flags = BitField()
 
-            def log_user_in(username):
-                now = datetime.datetime.now()
+                is_sticky = flags.flag(1)
+                is_favorite = flags.flag(2)
 
-                # INSERT a new row for the user with the current timestamp and
-                # login count set to 1. If the user already exists, then we
-                # will preserve the last_login value from the "insert()" clause
-                # and atomically increment the login-count.
-                userid = (User
-                          .insert(username=username, last_login=now, login_count=1)
-                          .on_conflict(
-                              conflict_target=[User.username],
-                              preserve=[User.last_login],
-                              update={User.login_count: User.login_count + 1})
-                          .execute())
-                return userid
+            # CREATE INDEX ... ON "article" ("name", "timestamp" DESC)
+            idx = Article.index(Article.name, Article.timestamp.desc())
 
-        Example using the special :class:`EXCLUDED` namespace:
+            # Be sure to add the index to the model:
+            Article.add_index(idx)
+
+            # CREATE UNIQUE INDEX ... ON "article" ("timestamp" DESC, "flags" & 2)
+            # WHERE ("status" = 1)
+            idx = (Article
+                   .index(Article.timestamp.desc(),
+                          Article.flags.bin_and(2),
+                          unique=True)
+                   .where(Article.status == 1))
+
+            # Add index to model:
+            Article.add_index(idx)
+
+    .. classmethod:: add_index(*args, **kwargs)
+
+        :param args: a :class:`ModelIndex` instance, Field(s) to index,
+            or a :class:`SQL` instance that contains the SQL for creating
+            the index.
+        :param kwargs: Keyword arguments passed to :class:`ModelIndex`
+            constructor.
+
+        Add an index to the model's definition.
+
+        .. note::
+            This method does not actually create the index in the database.
+            Rather, it adds the index definition to the model's metadata, so
+            that a subsequent call to :meth:`~Model.create_table` will
+            create the new index (along with the table).
+
+        Examples:
 
         .. code-block:: python
 
-            class KV(Model):
-                key = CharField(unique=True)
-                value = IntegerField()
+            class Article(Model):
+                name = TextField()
+                timestamp = TimestampField()
+                status = IntegerField()
+                flags = BitField()
 
-            # Create one row.
-            KV.create(key='k1', value=1)
+                is_sticky = flags.flag(1)
+                is_favorite = flags.flag(2)
 
-            # Demonstrate usage of EXCLUDED.
-            # Here we will attempt to insert a new value for a given key. If that
-            # key already exists, then we will update its value with the *sum* of its
-            # original value and the value we attempted to insert -- provided that
-            # the new value is larger than the original value.
-            query = (KV.insert(key='k1', value=10)
-                     .on_conflict(conflict_target=[KV.key],
-                                  update={KV.value: KV.value + EXCLUDED.value},
-                                  where=(EXCLUDED.value > KV.value)))
+            # CREATE INDEX ... ON "article" ("name", "timestamp") WHERE "status" = 1
+            idx = Article.index(Article.name, Article.timestamp).where(Article.status == 1)
+            Article.add_index(idx)
 
-            # Executing the above query will result in the following data being
-            # present in the "kv" table:
-            # (key='k1', value=11)
-            query.execute()
+            # CREATE UNIQUE INDEX ... ON "article" ("timestamp" DESC, "flags" & 2)
+            ts_flags_idx = Article.index(
+                Article.timestamp.desc(),
+                Article.flags.bin_and(2),
+                unique=True)
+            Article.add_index(ts_flags_idx)
 
-            # If we attempted to execute the query *again*, then nothing would be
-            # updated, as the new value (10) is now less than the value in the
-            # original row (11).
+            # You can also specify a list of fields and use the same keyword
+            # arguments that the ModelIndex constructor accepts:
+            Article.add_index(
+                Article.name,
+                Article.timestamp.desc(),
+                where=(Article.status == 1))
+
+            # Or even specify a SQL query directly:
+            Article.add_index(SQL('CREATE INDEX ...'))
+
+    .. method:: dependencies(search_nullable=False)
+
+        :param bool search_nullable: Search models related via a nullable
+            foreign key
+        :rtype: Generator expression yielding queries and foreign key fields.
+
+        Generate a list of queries of dependent models. Yields a 2-tuple
+        containing the query and corresponding foreign key field.  Useful for
+        searching dependencies of a model, i.e. things that would be orphaned
+        in the event of a delete.
+
+    .. method:: __iter__()
+
+        :returns: a :class:`ModelSelect` for the given class.
+
+        Convenience function for iterating over all instances of a model.
+
+        Example:
+
+        .. code-block:: python
+
+            Setting.insert_many([
+                {'key': 'host', 'value': '192.168.1.2'},
+                {'key': 'port': 'value': '1337'},
+                {'key': 'user': 'value': 'nuggie'}]).execute()
+
+            # Load settings from db into dict.
+            settings = {setting.key: setting.value for setting in Setting}
+
+    .. method:: __len__()
+
+        :returns: Count of rows in table.
+
+        Example:
+
+        .. code-block:: python
+
+            n_accounts = len(Account)
+
+            # Is equivalent to:
+            n_accounts = Account.select().count()
 
 
-.. class:: Delete()
+.. class:: ModelAlias(model, alias=None)
 
-    Class representing a DELETE query.
+    :param Model model: Model class to reference.
+    :param str alias: (optional) name for alias.
 
-
-.. class:: Index(name, table, expressions, unique=False, safe=False, where=None, using=None, nulls_distinct=None)
-
-    :param str name: Index name.
-    :param Table table: Table to create index on.
-    :param expressions: List of columns to index on (or expressions).
-    :param bool unique: Whether index is UNIQUE.
-    :param bool safe: Whether to add IF NOT EXISTS clause.
-    :param Expression where: Optional WHERE clause for index.
-    :param str using: Index algorithm.
-    :param bool nulls_distinct: Postgres-only - specify True (NULLS DISTINCT)
-        or False (NULLS NOT DISTINCT) - controls handling of NULL in unique
-        indexes.
-
-    .. method:: safe(_safe=True)
-
-        :param bool _safe: Whether to add IF NOT EXISTS clause.
-
-    .. method:: where(*expressions)
-
-        :param expressions: zero or more expressions to include in the WHERE
-            clause.
-
-        Include the given expressions in the WHERE clause of the index. The
-        expressions will be AND-ed together with any previously-specified
-        WHERE expressions.
-
-    .. method:: using(_using=None)
-
-        :param str _using: Specify index algorithm for USING clause.
-
-    .. method:: nulls_distinct(nulls_distinct=None)
-
-        :param bool nulls_distinct: specify True (NULLS DISTINCT) or False
-            for (NULLS NOT DISTINCT).
-
-        Requires Postgres 15 or newer.
-
-        Control handling of NULL values in unique indexes.
+    Provide a separate reference to a model in a query.
 
 
-.. class:: ModelIndex(model, fields, unique=False, safe=True, where=None, using=None, name=None, nulls_distinct=None)
+.. class:: ModelSelect(model, fields_or_models)
 
-    :param Model model: Model class to create index on.
-    :param list fields: Fields to index.
-    :param bool unique: Whether index is UNIQUE.
-    :param bool safe: Whether to add IF NOT EXISTS clause.
-    :param Expression where: Optional WHERE clause for index.
-    :param str using: Index algorithm or type, e.g. 'BRIN', 'GiST' or 'GIN'.
-    :param str name: Optional index name.
-    :param bool nulls_distinct: Postgres-only - specify True (NULLS DISTINCT)
-        or False (NULLS NOT DISTINCT) - controls handling of NULL in unique
-        indexes.
+    :param Model model: Model class to select.
+    :param fields_or_models: List of fields or model classes to select.
 
-    Expressive method for declaring an index on a model.
+    Model-specific implementation of SELECT query.
 
-    Examples:
+    .. method:: switch(ctx=None)
 
-    .. code-block:: python
+        :param ctx: A :class:`Model`, :class:`ModelAlias`, subquery, or
+            other object that was joined-on.
 
-        class Article(Model):
-            name = TextField()
-            timestamp = TimestampField()
-            status = IntegerField()
-            flags = BitField()
+        Switch the *join context* - the source which subsequent calls to
+        :meth:`~ModelSelect.join` will be joined against. Used for
+        specifying multiple joins against a single table.
 
-            is_sticky = flags.flag(1)
-            is_favorite = flags.flag(2)
+        If the ``ctx`` is not given, then the query's model will be used.
 
-        # CREATE INDEX ... ON "article" ("name", "timestamp")
-        idx = ModelIndex(Article, (Article.name, Article.timestamp))
+        The following example selects from tweet and joins on both user and
+        tweet-flag:
 
-        # CREATE INDEX ... ON "article" ("name", "timestamp") WHERE "status" = 1
-        idx = idx.where(Article.status == 1)
+        .. code-block:: python
 
-        # CREATE UNIQUE INDEX ... ON "article" ("timestamp" DESC, "flags" & 2) WHERE "status" = 1
-        idx = ModelIndex(
-            Article,
-            (Article.timestamp.desc(), Article.flags.bin_and(2)),
-            unique = True).where(Article.status == 1)
+            sq = Tweet.select().join(User).switch(Tweet).join(TweetFlag)
 
-    You can also use :meth:`Model.index`:
+            # Equivalent (since Tweet is the query's model)
+            sq = Tweet.select().join(User).switch().join(TweetFlag)
 
-    .. code-block:: python
+    .. method:: objects(constructor=None)
 
-        idx = Article.index(Article.name, Article.timestamp).where(Article.status == 1)
+        :param constructor: Constructor (defaults to returning model instances)
 
-    To add an index to a model definition use :meth:`Model.add_index`:
+        Return result rows as objects created using the given constructor. The
+        default behavior is to create model instances.
 
-    .. code-block:: python
+        .. note::
+            This method can be used, when selecting field data from multiple
+            sources/models, to make all data available as attributes on the
+            model being queried (as opposed to constructing the graph of joined
+            model instances). For very complex queries this can have a positive
+            performance impact, especially iterating large result sets.
 
-        idx = Article.index(Article.name, Article.timestamp).where(Article.status == 1)
+            Similarly, you can use :meth:`~BaseQuery.dicts`,
+            :meth:`~BaseQuery.tuples` or :meth:`~BaseQuery.namedtuples`
+            to achieve even more performance.
 
-        # Add above index definition to the model definition. When you call
-        # Article.create_table() (or database.create_tables([Article])), the
-        # index will be created.
-        Article.add_index(idx)
+    .. method:: join(dest, join_type='INNER', on=None, src=None, attr=None)
+
+        :param dest: A :class:`Model`, :class:`ModelAlias`,
+            :class:`Select` query, or other object to join to.
+        :param str join_type: Join type, defaults to INNER.
+        :param on: Join predicate or a :class:`ForeignKeyField` to join on.
+        :param src: Explicitly specify the source of the join. If not specified
+            then the current *join context* will be used.
+        :param str attr: Attribute to use when projecting columns from the
+            joined model.
+
+        Join with another table-like object.
+
+        Join type may be one of:
+
+        * ``JOIN.INNER``
+        * ``JOIN.LEFT_OUTER``
+        * ``JOIN.RIGHT_OUTER``
+        * ``JOIN.FULL``
+        * ``JOIN.FULL_OUTER``
+        * ``JOIN.CROSS``
+
+        Example selecting tweets and joining on user in order to restrict to
+        only those tweets made by "admin" users:
+
+        .. code-block:: python
+
+            sq = Tweet.select().join(User).where(User.is_admin == True)
+
+        Example selecting users and joining on a particular foreign key field.
+        See the :ref:`example app <example>` for a real-life usage:
+
+        .. code-block:: python
+
+            sq = User.select().join(Relationship, on=Relationship.to_user)
+
+        For an in-depth discussion of foreign-keys, joins and relationships
+        between models, refer to :ref:`relationships`.
+
+    .. method:: join_from(src, dest, join_type='INNER', on=None, attr=None)
+
+        :param src: Source for join.
+        :param dest: Table to join to.
+
+        Use same parameter order as the non-model-specific
+        :meth:`~ModelSelect.join`. Bypasses the *join context* by requiring
+        the join source to be specified.
+
+    .. method:: filter(*args, **kwargs)
+
+        :param args: Zero or more :class:`DQ` objects.
+        :param kwargs: Django-style keyword-argument filters.
+
+        Use Django-style filters to express a WHERE clause. Joins can be
+        followed by chaining foreign-key fields. The supported operations are:
+
+        * ``eq`` - equals
+        * ``ne`` - not equals
+        * ``lt``, ``lte`` - less-than, less-than or equal-to
+        * ``gt``, ``gte`` - greater-than, greater-than or equal-to
+        * ``in`` - IN set of values
+        * ``is`` - IS (e.g. IS NULL).
+        * ``like``, ``ilike`` - LIKE and ILIKE (case-insensitive)
+        * ``regexp`` - regular expression match
+
+        Examples:
+
+        .. code-block:: python
+
+            # Get all tweets by user with username="peewee".
+            q = Tweet.filter(user__username='peewee')
+
+            # Get all posts that are draft or published, and written after 2023.
+            q = Post.filter(
+                (DQ(status='draft') | DQ(status='published')),
+                timestamp__gte=datetime.date(2023, 1, 1))
+
+    .. method:: prefetch(*subqueries, prefetch_type=PREFETCH_TYPE.WHERE)
+
+        :param subqueries: A list of :class:`Model` classes or select
+            queries to prefetch.
+        :param prefetch_type: Query type to use for the subqueries.
+        :returns: a list of models with selected relations prefetched.
+
+        Execute the query, prefetching the given additional resources.
+
+        Prefetch type may be one of:
+
+        * ``PREFETCH_TYPE.WHERE``
+        * ``PREFETCH_TYPE.JOIN``
+
+        See also :func:`prefetch` standalone function.
+
+        Example:
+
+        .. code-block:: python
+
+            # Fetch all Users and prefetch their associated tweets.
+            query = User.select().prefetch(Tweet)
+            for user in query:
+                print(user.username)
+                for tweet in user.tweets:
+                    print('  *', tweet.content)
+
+        .. note::
+            Because ``prefetch`` must reconstruct a graph of models, it is
+            necessary to be sure that the foreign-key/primary-key of any
+            related models are selected, so that the related objects can be
+            mapped correctly.
+
 
 .. _fields-api:
 
@@ -3451,7 +2796,7 @@ Fields
         ``through_model`` is not specified, one will automatically be created.
 
         When creating tables for an application that uses
-        :class:`ManyToManyField`, **you must create the through table expicitly**.
+        :class:`ManyToManyField`, **you must explicitly create the through table**.
 
         .. code-block:: python
 
@@ -3511,13 +2856,15 @@ Fields
                 primary_key = CompositeKey('blog', 'tag')
 
 
+.. _schema-manager-api:
+
 Schema Manager
 --------------
 
 .. class:: SchemaManager(model, database=None, **context_options)
 
     :param Model model: Model class.
-    :param Database database: If unspecified defaults to model._meta.database.
+    :param Database database: if ``None`` defaults to model._meta.database.
 
     Provides methods for managing the creation and deletion of tables and
     indexes for the given model.
@@ -3623,1005 +2970,167 @@ Schema Manager
         Drop table for the model and associated indexes.
 
 
-Model
------
+.. class:: Index(name, table, expressions, unique=False, safe=False, where=None, using=None, nulls_distinct=None)
 
-.. class:: Metadata(model, database=None, table_name=None, indexes=None, primary_key=None, constraints=None, schema=None, only_save_dirty=False, depends_on=None, options=None, without_rowid=False, strict_tables=False, **kwargs)
+    :param str name: Index name.
+    :param Table table: Table to create index on.
+    :param expressions: List of columns to index on (or expressions).
+    :param bool unique: Whether index is UNIQUE.
+    :param bool safe: Whether to add IF NOT EXISTS clause.
+    :param Expression where: Optional WHERE clause for index.
+    :param str using: Index algorithm.
+    :param bool nulls_distinct: Postgres-only - specify True (NULLS DISTINCT)
+        or False (NULLS NOT DISTINCT) - controls handling of NULL in unique
+        indexes.
 
-    :param Model model: Model class.
-    :param Database database: database model is bound to.
-    :param str table_name: Specify table name for model.
-    :param list indexes: List of :class:`ModelIndex` objects.
-    :param primary_key: Primary key for model (only specified if this is a
-        :class:`CompositeKey` or ``False`` for no primary key.
-    :param list constraints: List of table constraints.
-    :param str schema: Schema table exists in.
-    :param bool only_save_dirty: When :meth:`~Model.save` is called, only
-        save the fields which have been modified.
-    :param dict options: Arbitrary options for the model.
-    :param bool without_rowid: Specify WITHOUT ROWID (sqlite only).
-    :param bool strict_tables: Specify STRICT (sqlite only, requires 3.37+).
-    :param kwargs: Arbitrary setting attributes and values.
+    .. method:: safe(_safe=True)
 
-    Store metadata for a :class:`Model`.
+        :param bool _safe: Whether to add IF NOT EXISTS clause.
 
-    This class should not be instantiated directly, but is instantiated using
-    the attributes of a :class:`Model` class' inner ``Meta`` class. Metadata
-    attributes are then available on ``Model._meta``.
+    .. method:: where(*expressions)
 
-    .. attribute:: table
+        :param expressions: zero or more expressions to include in the WHERE
+            clause.
 
-        Return a reference to the underlying :class:`Table` object.
+        Include the given expressions in the WHERE clause of the index. The
+        expressions will be AND-ed together with any previously-specified
+        WHERE expressions.
 
-    .. method:: model_graph(refs=True, backrefs=True, depth_first=True)
+    .. method:: using(_using=None)
 
-        :param bool refs: Follow foreign-key references.
-        :param bool backrefs: Follow foreign-key back-references.
-        :param bool depth_first: Do a depth-first search (``False`` for
-            breadth-first).
+        :param str _using: Specify index algorithm for USING clause.
 
-        Traverse the model graph and return a list of 3-tuples, consisting of
-        ``(foreign key field, model class, is_backref)``.
+    .. method:: nulls_distinct(nulls_distinct=None)
 
-    .. method:: set_database(database)
+        :param bool nulls_distinct: specify True (NULLS DISTINCT) or False
+            for (NULLS NOT DISTINCT).
 
-        :param Database database: database object to bind Model to.
+        Requires Postgres 15 or newer.
 
-        Bind the model class to the given :class:`Database` instance.
-
-        .. warning::
-            This API should not need to be used. Instead, to change a
-            :class:`Model` database at run-time, use one of the following:
-
-            * :meth:`Model.bind`
-            * :meth:`Model.bind_ctx` (bind for scope of a context manager).
-            * :meth:`Database.bind`
-            * :meth:`Database.bind_ctx`
-
-    .. method:: set_table_name(table_name)
-
-        :param str table_name: table name to bind Model to.
-
-        Bind the model class to the given table name at run-time.
+        Control handling of NULL values in unique indexes.
 
 
-.. class:: SubclassAwareMetadata
+.. class:: ModelIndex(model, fields, unique=False, safe=True, where=None, using=None, name=None, nulls_distinct=None)
 
-    Metadata subclass that tracks :class:`Model` subclasses. Useful for
-    when you need to track all models in a project.
+    :param Model model: Model class to create index on.
+    :param list fields: Fields to index.
+    :param bool unique: Whether index is UNIQUE.
+    :param bool safe: Whether to add IF NOT EXISTS clause.
+    :param Expression where: Optional WHERE clause for index.
+    :param str using: Index algorithm or type, e.g. 'BRIN', 'GiST' or 'GIN'.
+    :param str name: Optional index name.
+    :param bool nulls_distinct: Postgres-only - specify True (NULLS DISTINCT)
+        or False (NULLS NOT DISTINCT) - controls handling of NULL in unique
+        indexes.
 
-    Example:
+    Expressive method for declaring an index on a model.
+
+    Examples:
 
     .. code-block:: python
 
-        from peewee import SubclassAwareMetadata
+        class Article(Model):
+            name = TextField()
+            timestamp = TimestampField()
+            status = IntegerField()
+            flags = BitField()
 
-        class Base(Model):
-            class Meta:
-                database = db
-                model_metadata_class = SubclassAwareMetadata
+            is_sticky = flags.flag(1)
+            is_favorite = flags.flag(2)
 
-        # Create 3 model classes that inherit from Base.
-        class A(Base): pass
-        class B(Base): pass
-        class C(Base): pass
+        # CREATE INDEX ... ON "article" ("name", "timestamp")
+        idx = ModelIndex(Article, (Article.name, Article.timestamp))
 
-        # Now let's make a helper for changing the `schema` for each Model.
-        def change_schema(schema):
-            def _update(model):
-                model._meta.schema = schema
-            return _update
+        # CREATE INDEX ... ON "article" ("name", "timestamp") WHERE "status" = 1
+        idx = idx.where(Article.status == 1)
 
-        # Set all models to use "schema1", e.g. "schema1.a", "schema1.b", etc.
-        # Will apply the function to every subclass of Base.
-        Base._meta.map_models(change_schema('schema1'))
+        # CREATE UNIQUE INDEX ... ON "article" ("timestamp" DESC, "flags" & 2) WHERE "status" = 1
+        idx = ModelIndex(
+            Article,
+            (Article.timestamp.desc(), Article.flags.bin_and(2)),
+            unique = True).where(Article.status == 1)
 
-        # Set all models to use "schema2", e.g. "schema2.a", "schema2.b", etc.
-        Base._meta.map_models(change_schema('schema2'))
-
-    .. method:: map_models(fn)
-
-        Apply a function to all subclasses.
-
-
-.. class:: Model(**kwargs)
-
-    :param kwargs: Mapping of field-name to value to initialize model with.
-
-    Model class provides a high-level abstraction for working with database
-    tables. Models are a one-to-one mapping with a database table (or a
-    table-like object, such as a view). Subclasses of ``Model`` declare any
-    number of :class:`Field` instances as class attributes. These fields
-    correspond to columns on the table.
-
-    Table-level operations, such as :meth:`~Model.select`,
-    :meth:`~Model.update`, :meth:`~Model.insert` and
-    :meth:`~Model.delete` are implemented as classmethods. Row-level
-    operations, such as :meth:`~Model.save` and
-    :meth:`~Model.delete_instance` are implemented as instancemethods.
-
-    Example:
+    You can also use :meth:`Model.index`:
 
     .. code-block:: python
 
-        db = SqliteDatabase(':memory:')
+        idx = Article.index(Article.name, Article.timestamp).where(Article.status == 1)
 
-        class User(Model):
-            username = TextField()
-            join_date = DateTimeField(default=datetime.datetime.now)
-            is_admin = BooleanField(default=False)
+    To add an index to a model definition use :meth:`Model.add_index`:
 
-        admin = User(username='admin', is_admin=True)
-        admin.save()
+    .. code-block:: python
 
-    .. classmethod:: alias([alias=None])
+        idx = Article.index(Article.name, Article.timestamp).where(Article.status == 1)
 
-        :param str alias: Optional name for alias.
-        :returns: :class:`ModelAlias` instance.
+        # Add above index definition to the model definition. When you call
+        # Article.create_table() (or database.create_tables([Article])), the
+        # index will be created.
+        Article.add_index(idx)
 
-        Create an alias to the model-class. Model aliases allow you to
-        reference the same :class:`Model` multiple times in a query, for
-        example when doing a self-join or sub-query.
 
-        Example:
+.. _query-builder-api:
 
-        .. code-block:: python
+Query-builder
+-------------
 
-            Parent = Category.alias()
-            sq = (Category
-                  .select(Category, Parent)
-                  .join(Parent, on=(Category.parent == Parent.id))
-                  .where(Parent.name == 'parent category'))
+.. class:: Node()
 
-    .. classmethod:: select(*fields)
+    Base-class for all components which make up the AST for a SQL query.
 
-        :param fields: A list of model classes, field instances, functions or
-            expressions. If no arguments are provided, all columns for the
-            given model will be selected by default.
-        :returns: :class:`ModelSelect` query.
+    .. staticmethod:: copy(method)
 
-        Create a SELECT query. If no fields are explicitly provided, the query
-        will by default SELECT all the fields defined on the model, unless you
-        are using the query as a sub-query, in which case only the primary key
-        will be selected by default.
-
-        Example of selecting all columns:
+        Decorator to use with Node methods that mutate the node's state.
+        This allows method-chaining, e.g.:
 
         .. code-block:: python
 
-            query = User.select().where(User.active == True).order_by(User.username)
+            query = MyModel.select()
+            new_query = query.where(MyModel.field == 'value')
 
-        Example of selecting all columns on *Tweet* and the parent model,
-        *User*. When the ``user`` foreign key is accessed on a *Tweet*
-        instance no additional query will be needed (see :ref:`N+1 <nplusone>`
-        for more details):
+    .. method:: unwrap()
 
-        .. code-block:: python
+        API for recursively unwrapping "wrapped" nodes. Base case is to
+        return self.
 
-            query = (Tweet
-                     .select(Tweet, User)
-                     .join(User)
-                     .order_by(Tweet.created_date.desc()))
+    .. method:: is_alias()
 
-            for tweet in query:
-                print(tweet.user.username, '->', tweet.content)
+        API for determining if a node, at any point, has been explicitly
+        aliased by the user.
 
-        Example of subquery only selecting the primary key:
 
-        .. code-block:: python
+.. class:: Source(alias=None)
 
-            inactive_users = User.select().where(User.active == False)
+    A source of row tuples, for example a table, join, or select query. By
+    default provides a "magic" attribute named "c" that is a factory for
+    column/attribute lookups, for example:
 
-            # Here, instead of defaulting to all columns, Peewee will default
-            # to only selecting the primary key.
-            Tweet.delete().where(Tweet.user.in_(inactive_users)).execute()
+    .. code-block:: python
 
-    .. classmethod:: update(__data=None, **update)
+        User = Table('users')
+        query = (User
+                 .select(User.c.username)
+                 .where(User.c.active == True)
+                 .order_by(User.c.username))
 
-        :param dict __data: ``dict`` of fields to values.
-        :param update: Field-name to value mapping.
+    .. method:: alias(name)
 
-        Create an UPDATE query.
+        Returns a copy of the object with the given alias applied.
 
-        Example showing users being marked inactive if their registration has
-        expired:
+    .. method:: select(*columns)
 
-        .. code-block:: python
+        :param columns: :class:`Column` instances, expressions, functions,
+            sub-queries, or anything else that you would like to select.
 
-            q = (User
-                 .update({User.active: False})
-                 .where(User.registration_expired == True))
-            q.execute()  # Execute the query, returning number of rows updated.
+        Create a :class:`Select` query on the table. If the table explicitly
+        declares columns and no columns are provided, then by default all the
+        table's defined columns will be selected.
 
-        Example showing an atomic update:
+    .. method:: join(dest, join_type='INNER', on=None)
 
-        .. code-block:: python
-
-            q = (PageView
-                 .update({PageView.count: PageView.count + 1})
-                 .where(PageView.url == url))
-            q.execute()  # Execute the query.
-
-        .. note::
-            When an update query is executed, the number of rows modified will
-            be returned.
-
-    .. classmethod:: insert(__data=None, **insert)
-
-        :param dict __data: ``dict`` of fields to values to insert.
-        :param insert: Field-name to value mapping.
-
-        Create an INSERT query.
-
-        Insert a new row into the database. If any fields on the model have
-        default values, these values will be used if the fields are not
-        explicitly set in the ``insert`` dictionary.
-
-        Example showing creation of a new user:
-
-        .. code-block:: python
-
-            q = User.insert(username='admin', active=True, registration_expired=False)
-            q.execute()  # perform the insert.
-
-        You can also use :class:`Field` objects as the keys:
-
-        .. code-block:: python
-
-            new_id = User.insert({User.username: 'admin'}).execute()
-
-        If you have a model with a default value on one of the fields, and
-        that field is not specified in the ``insert`` parameter, the default
-        will be used:
-
-        .. code-block:: python
-
-            class User(Model):
-                username = CharField()
-                active = BooleanField(default=True)
-
-            # This INSERT query will automatically specify `active=True`:
-            User.insert(username='charlie')
-
-        .. note::
-            When an insert query is executed on a table with an
-            auto-incrementing primary key, the primary key of the new row will
-            be returned.
-
-    .. classmethod:: insert_many(rows, fields=None)
-
-        :param rows: An iterable that yields rows to insert.
-        :param list fields: List of fields being inserted.
-        :return: number of rows modified (see note).
-
-        INSERT multiple rows of data.
-
-        The ``rows`` parameter must be an iterable that yields dictionaries or
-        tuples, where the ordering of the tuple values corresponds to the
-        fields specified in the ``fields`` argument. As with
-        :meth:`~Model.insert`, fields that are not specified in the
-        dictionary will use their default value, if one exists.
-
-        .. note::
-            Due to the nature of bulk inserts, each row must contain the same
-            fields. The following will not work:
-
-            .. code-block:: python
-
-                Person.insert_many([
-                    {'first_name': 'Peewee', 'last_name': 'Herman'},
-                    {'first_name': 'Huey'},  # Missing "last_name"!
-                ]).execute()
-
-        Example of inserting multiple Users:
-
-        .. code-block:: python
-
-            data = [
-                ('charlie', True),
-                ('huey', False),
-                ('zaizee', False)]
-            query = User.insert_many(data, fields=[User.username, User.is_admin])
-            query.execute()
-
-        Equivalent example using dictionaries:
-
-        .. code-block:: python
-
-            data = [
-                {'username': 'charlie', 'is_admin': True},
-                {'username': 'huey', 'is_admin': False},
-                {'username': 'zaizee', 'is_admin': False}]
-
-            # Insert new rows.
-            User.insert_many(data).execute()
-
-        Because the ``rows`` parameter can be an arbitrary iterable, you can
-        also use a generator:
-
-        .. code-block:: python
-
-            def get_usernames():
-                for username in ['charlie', 'huey', 'peewee']:
-                    yield {'username': username}
-            User.insert_many(get_usernames()).execute()
-
-        .. warning::
-            If you are using SQLite, your SQLite library must be version 3.7.11
-            or newer to take advantage of bulk inserts.
-
-        .. note::
-            SQLite has a default limit of bound variables per statement. This
-            limit can be modified at compile-time or at run-time, **but** if
-            modifying at run-time, you can only specify a *lower* value than
-            the default limit.
-
-            For more information, check out the following SQLite documents:
-
-            * `Max variable number limit <https://www.sqlite.org/limits.html#max_variable_number>`_
-            * `Changing run-time limits <https://www.sqlite.org/c3ref/limit.html>`_
-            * `SQLite compile-time flags <https://www.sqlite.org/compile.html>`_
-
-        .. note::
-            The default return value is the number of rows modified. However,
-            when using Postgres, Peewee will return a cursor by default that
-            yields the primary-keys of the inserted rows. To disable this
-            functionality with Postgres, use ``as_rowcount()``.
-
-    .. classmethod:: insert_from(query, fields)
-
-        :param Select query: SELECT query to use as source of data.
-        :param fields: Fields to insert data into.
-        :return: number of rows modified (see note).
-
-        INSERT data using a SELECT query as the source. This API should be used
-        for queries of the form *INSERT INTO ... SELECT FROM ...*.
-
-        Example of inserting data across tables for denormalization purposes:
-
-        .. code-block:: python
-
-            source = (User
-                      .select(User.username, fn.COUNT(Tweet.id))
-                      .join(Tweet, JOIN.LEFT_OUTER)
-                      .group_by(User.username))
-
-            UserTweetDenorm.insert_from(
-                source,
-                [UserTweetDenorm.username, UserTweetDenorm.num_tweets]).execute()
-
-        .. note::
-            The default return value is the number of rows modified. However,
-            when using Postgres, Peewee will return a cursor by default that
-            yields the primary-keys of the inserted rows. To disable this
-            functionality with Postgres, use ``as_rowcount()``.
-
-    .. classmethod:: replace(__data=None, **insert)
-
-        :param dict __data: ``dict`` of fields to values to insert.
-        :param insert: Field-name to value mapping.
-
-        Create an INSERT query that uses REPLACE for conflict-resolution.
-
-        See :meth:`Model.insert` for examples.
-
-    .. classmethod:: replace_many(rows, fields=None)
-
-        :param rows: An iterable that yields rows to insert.
-        :param list fields: List of fields being inserted.
-
-        INSERT multiple rows of data using REPLACE for conflict-resolution.
-
-        See :meth:`Model.insert_many` for examples.
-
-    .. classmethod:: raw(sql, *params)
-
-        :param str sql: SQL query to execute.
-        :param params: Parameters for query.
-
-        Execute a SQL query directly.
-
-        Example selecting rows from the User table:
-
-        .. code-block:: python
-
-            q = User.raw('select id, username from users')
-            for user in q:
-                print(user.id, user.username)
-
-        .. note::
-            Generally the use of ``raw`` is reserved for those cases where you
-            can significantly optimize a select query. It is useful for select
-            queries since it will return instances of the model.
-
-    .. classmethod:: delete()
-
-        Create a DELETE query.
-
-        Example showing the deletion of all inactive users:
-
-        .. code-block:: python
-
-            q = User.delete().where(User.active == False)
-            q.execute()  # Remove the rows, return number of rows removed.
-
-        .. warning::
-            This method performs a delete on the *entire table*. To delete a
-            single instance, see :meth:`Model.delete_instance`.
-
-    .. classmethod:: create(**query)
-
-        :param query: Mapping of field-name to value.
-
-        INSERT new row into table and return corresponding model instance.
-
-        Example showing the creation of a user (a row will be added to the
-        database):
-
-        .. code-block:: python
-
-            user = User.create(username='admin', password='test')
-
-        .. note::
-            The create() method is a shorthand for instantiate-then-save.
-
-    .. classmethod:: bulk_create(model_list, batch_size=None)
-
-        :param iterable model_list: a list or other iterable of unsaved
-            :class:`Model` instances.
-        :param int batch_size: number of rows to batch per insert. If
-            unspecified, all models will be inserted in a single query.
-        :returns: no return value.
-
-        Efficiently INSERT multiple unsaved model instances into the database.
-        Unlike :meth:`~Model.insert_many`, which accepts row data as a list
-        of either dictionaries or lists, this method accepts a list of unsaved
-        model instances.
-
-        Example:
-
-        .. code-block:: python
-
-            # List of 10 unsaved users.
-            user_list = [User(username='u%s' % i) for i in range(10)]
-
-            # All 10 users are inserted in a single query.
-            User.bulk_create(user_list)
-
-        Batches:
-
-        .. code-block:: python
-
-            user_list = [User(username='u%s' % i) for i in range(10)]
-
-            with database.atomic():
-                # Will execute 4 INSERT queries (3 batches of 3, 1 batch of 1).
-                User.bulk_create(user_list, batch_size=3)
-
-        .. warning::
-
-            * The primary-key value for the newly-created models will only be
-              set if you are using Postgresql (which supports the ``RETURNING``
-              clause).
-            * SQLite generally has a limit of bound parameters for a query,
-              so the maximum batch size should be param-limit / number-of-fields.
-              This limit is typically 999 for Sqlite < 3.32.0, and 32766 for
-              newer versions.
-            * When a batch-size is provided it is **strongly recommended** that
-              you wrap the call in a transaction or savepoint using
-              :meth:`Database.atomic`. Otherwise an error in a batch mid-way
-              through could leave the database in an inconsistent state.
-
-    .. classmethod:: bulk_update(model_list, fields, batch_size=None)
-
-        :param iterable model_list: a list or other iterable of
-            :class:`Model` instances.
-        :param list fields: list of fields to update.
-        :param int batch_size: number of rows to batch per insert. If
-            unspecified, all models will be inserted in a single query.
-        :returns: total number of rows updated.
-
-        Efficiently UPDATE multiple model instances.
-
-        Example:
-
-        .. code-block:: python
-
-            # First, create 3 users.
-            u1, u2, u3 = [User.create(username='u%s' % i) for i in (1, 2, 3)]
-
-            # Now let's modify their usernames.
-            u1.username = 'u1-x'
-            u2.username = 'u2-y'
-            u3.username = 'u3-z'
-
-            # Update all three rows using a single UPDATE query.
-            User.bulk_update([u1, u2, u3], fields=[User.username])
-
-        This will result in executing the following SQL:
-
-        .. code-block:: sql
-
-            UPDATE "users" SET "username" = CASE "users"."id"
-                WHEN 1 THEN "u1-x"
-                WHEN 2 THEN "u2-y"
-                WHEN 3 THEN "u3-z" END
-            WHERE "users"."id" IN (1, 2, 3);
-
-        If you have a large number of objects to update, it is strongly
-        recommended that you specify a ``batch_size`` and wrap the operation in
-        a transaction:
-
-        .. code-block:: python
-
-            with database.atomic():
-                User.bulk_update(user_list, fields=['username'], batch_size=50)
-
-        .. warning::
-
-            * SQLite generally has a limit of bound parameters for a query.
-              This limit is typically 999 for Sqlite < 3.32.0, and 32766 for
-              newer versions.
-            * When a batch-size is provided it is **strongly recommended** that
-              you wrap the call in a transaction or savepoint using
-              :meth:`Database.atomic`. Otherwise an error in a batch mid-way
-              through could leave the database in an inconsistent state.
-
-    .. classmethod:: get(*query, **filters)
-
-        :param query: Zero or more :class:`Expression` objects.
-        :param filters: Mapping of field-name to value for Django-style filter.
-        :raises: :class:`DoesNotExist`
-        :returns: Model instance matching the specified filters.
-
-        Retrieve a single model instance matching the given filters. If no
-        model is returned, a :class:`DoesNotExist` is raised.
-
-        .. code-block:: python
-
-            user = User.get(User.username == username, User.active == True)
-
-        This method is also exposed via the :class:`SelectQuery`, though it
-        takes no parameters:
-
-        .. code-block:: python
-
-            active = User.select().where(User.active == True)
-            try:
-                user = active.where(
-                    (User.username == username) &
-                    (User.active == True)
-                ).get()
-            except User.DoesNotExist:
-                user = None
-
-        .. note::
-            The :meth:`~Model.get` method is shorthand for selecting with a
-            limit of 1. It has the added behavior of raising an exception when
-            no matching row is found. If more than one row is found, the first
-            row returned by the database cursor will be used.
-
-    .. classmethod:: get_or_none(*query, **filters)
-
-        Identical to :meth:`Model.get` but returns ``None`` if no model
-        matches the given filters.
-
-    .. classmethod:: get_by_id(pk)
-
-        :param pk: Primary-key value.
-
-        Short-hand for calling :meth:`Model.get` specifying a lookup by
-        primary key. Raises a :class:`DoesNotExist` if instance with the
-        given primary key value does not exist.
-
-        Example:
-
-        .. code-block:: python
-
-            user = User.get_by_id(1)  # Returns user with id = 1.
-
-    .. classmethod:: set_by_id(key, value)
-
-        :param key: Primary-key value.
-        :param dict value: Mapping of field to value to update.
-
-        Short-hand for updating the data with the given primary-key. If no row
-        exists with the given primary key, no exception will be raised.
-
-        Example:
-
-        .. code-block:: python
-
-            # Set "is_admin" to True on user with id=3.
-            User.set_by_id(3, {'is_admin': True})
-
-    .. classmethod:: delete_by_id(pk)
-
-        :param pk: Primary-key value.
-
-        Short-hand for deleting the row with the given primary-key. If no row
-        exists with the given primary key, no exception will be raised.
-
-    .. classmethod:: get_or_create(**kwargs)
-
-        :param kwargs: Mapping of field-name to value.
-        :param defaults: Default values to use if creating a new row.
-        :returns: Tuple of :class:`Model` instance and boolean indicating
-            if a new object was created.
-
-        Attempt to get the row matching the given filters. If no matching row
-        is found, create a new row.
-
-        .. warning:: Race-conditions are possible when using this method.
-
-        Example **without** ``get_or_create``:
-
-        .. code-block:: python
-
-            # Without `get_or_create`, we might write:
-            try:
-                person = Person.get(
-                    (Person.first_name == 'John') &
-                    (Person.last_name == 'Lennon'))
-            except Person.DoesNotExist:
-                person = Person.create(
-                    first_name='John',
-                    last_name='Lennon',
-                    birthday=datetime.date(1940, 10, 9))
-
-        Equivalent code using ``get_or_create``:
-
-        .. code-block:: python
-
-            person, created = Person.get_or_create(
-                first_name='John',
-                last_name='Lennon',
-                defaults={'birthday': datetime.date(1940, 10, 9)})
-
-    .. classmethod:: filter(*dq_nodes, **filters)
-
-        :param dq_nodes: Zero or more :class:`DQ` objects.
-        :param filters: Django-style filters.
-        :returns: :class:`ModelSelect` query.
-
-    .. method:: get_id()
-
-        :returns: The primary-key of the model instance.
-
-    .. method:: save(force_insert=False, only=None)
-
-        :param bool force_insert: Force INSERT query.
-        :param list only: Only save the given :class:`Field` instances.
-        :returns: Number of rows modified.
-
-        Save the data in the model instance. By default, the presence of a
-        primary-key value will cause an UPDATE query to be executed.
-
-        Example showing saving a model instance:
-
-        .. code-block:: python
-
-            user = User()
-            user.username = 'some-user'  # does not touch the database
-            user.save()  # change is persisted to the db
-
-    .. attribute:: dirty_fields
-
-        Return list of fields that have been modified.
-
-        :rtype: list
-
-        .. note::
-            If you just want to persist modified fields, you can call
-            ``model.save(only=model.dirty_fields)``.
-
-            If you **always** want to only save a model's dirty fields, you can use the Meta
-            option ``only_save_dirty = True``. Then, any time you call :meth:`Model.save()`,
-            by default only the dirty fields will be saved, e.g.
-
-            .. code-block:: python
-
-                class Person(Model):
-                    first_name = CharField()
-                    last_name = CharField()
-                    dob = DateField()
-
-                    class Meta:
-                        database = db
-                        only_save_dirty = True
-
-        .. warning::
-            Peewee determines whether a field is "dirty" by observing when the
-            field attribute is set on a model instance. If the field contains a
-            value that is mutable, such as a dictionary instance, and that
-            dictionary is then modified, Peewee will not notice the change.
-
-        .. warning::
-            Do not do membership tests on this list, e.g. ``f in dirty_fields``
-            because if there is one or more fields in the dirty fields list,
-            the field equality override will return a truthy Expression object.
-            If you want to test if a field is dirty, instead
-            check ``f.name in model.dirty_field_names``.
-
-    .. attribute:: dirty_field_names
-
-        Return list of field names that have been modified.
-
-        :rtype: list
-
-    .. method:: is_dirty()
-
-        Return boolean indicating whether any fields were manually set.
-
-    .. method:: delete_instance(recursive=False, delete_nullable=False)
-
-        :param bool recursive: Delete related models.
-        :param bool delete_nullable: Delete related models that have a null
-            foreign key. If ``False`` nullable relations will be set to NULL.
-
-        Delete the given instance.  Any foreign keys set to cascade on
-        delete will be deleted automatically.  For more programmatic control,
-        you can specify ``recursive=True``, which will delete any non-nullable
-        related models (those that *are* nullable will be set to NULL).  If you
-        wish to delete all dependencies regardless of whether they are nullable,
-        set ``delete_nullable=True``.
-
-        example:
-
-        .. code-block:: python
-
-            some_obj.delete_instance()  # it is gone forever
-
-    .. classmethod:: bind(database, bind_refs=True, bind_backrefs=True)
-
-        :param Database database: database to bind to.
-        :param bool bind_refs: Bind related models.
-        :param bool bind_backrefs: Bind back-reference related models.
-
-        Bind the model (and specified relations) to the given database.
-
-        See also: :meth:`Database.bind`.
-
-    .. classmethod:: bind_ctx(database, bind_refs=True, bind_backrefs=True)
-
-        Like :meth:`~Model.bind`, but returns a context manager that only
-        binds the models for the duration of the wrapped block.
-
-        See also: :meth:`Database.bind_ctx`.
-
-    .. classmethod:: table_exists()
-
-        :returns: boolean indicating whether the table exists.
-
-    .. classmethod:: create_table(safe=True, **options)
-
-        :param bool safe: If set to ``True``, the create table query will
-            include an ``IF NOT EXISTS`` clause.
-
-        Create the model table, indexes, constraints and sequences.
-
-        Example:
-
-        .. code-block:: python
-
-            with database:
-                SomeModel.create_table()  # Execute the create table query.
-
-    .. classmethod:: drop_table(safe=True, **options)
-
-        :param bool safe: If set to ``True``, the drop table query will
-            include an ``IF EXISTS`` clause.
-
-        Drop the model table.
-
-    .. method:: truncate_table(restart_identity=False, cascade=False)
-
-        :param bool restart_identity: Restart the id sequence (postgres-only).
-        :param bool cascade: Truncate related tables as well (postgres-only).
-
-        Truncate (delete all rows) for the model.
-
-    .. classmethod:: index(*fields, unique=False, safe=True, where=None, using=None, name=None)
-
-        :param fields: Fields to index.
-        :param bool unique: Whether index is UNIQUE.
-        :param bool safe: Whether to add IF NOT EXISTS clause.
-        :param Expression where: Optional WHERE clause for index.
-        :param str using: Index algorithm.
-        :param str name: Optional index name.
-
-        Expressive method for declaring an index on a model. Wraps the
-        declaration of a :class:`ModelIndex` instance.
-
-        Examples:
-
-        .. code-block:: python
-
-            class Article(Model):
-                name = TextField()
-                timestamp = TimestampField()
-                status = IntegerField()
-                flags = BitField()
-
-                is_sticky = flags.flag(1)
-                is_favorite = flags.flag(2)
-
-            # CREATE INDEX ... ON "article" ("name", "timestamp" DESC)
-            idx = Article.index(Article.name, Article.timestamp.desc())
-
-            # Be sure to add the index to the model:
-            Article.add_index(idx)
-
-            # CREATE UNIQUE INDEX ... ON "article" ("timestamp" DESC, "flags" & 2)
-            # WHERE ("status" = 1)
-            idx = (Article
-                   .index(Article.timestamp.desc(),
-                          Article.flags.bin_and(2),
-                          unique=True)
-                   .where(Article.status == 1))
-
-            # Add index to model:
-            Article.add_index(idx)
-
-    .. classmethod:: add_index(*args, **kwargs)
-
-        :param args: a :class:`ModelIndex` instance, Field(s) to index,
-            or a :class:`SQL` instance that contains the SQL for creating
-            the index.
-        :param kwargs: Keyword arguments passed to :class:`ModelIndex`
-            constructor.
-
-        Add an index to the model's definition.
-
-        .. note::
-            This method does not actually create the index in the database.
-            Rather, it adds the index definition to the model's metadata, so
-            that a subsequent call to :meth:`~Model.create_table` will
-            create the new index (along with the table).
-
-        Examples:
-
-        .. code-block:: python
-
-            class Article(Model):
-                name = TextField()
-                timestamp = TimestampField()
-                status = IntegerField()
-                flags = BitField()
-
-                is_sticky = flags.flag(1)
-                is_favorite = flags.flag(2)
-
-            # CREATE INDEX ... ON "article" ("name", "timestamp") WHERE "status" = 1
-            idx = Article.index(Article.name, Article.timestamp).where(Article.status == 1)
-            Article.add_index(idx)
-
-            # CREATE UNIQUE INDEX ... ON "article" ("timestamp" DESC, "flags" & 2)
-            ts_flags_idx = Article.index(
-                Article.timestamp.desc(),
-                Article.flags.bin_and(2),
-                unique=True)
-            Article.add_index(ts_flags_idx)
-
-            # You can also specify a list of fields and use the same keyword
-            # arguments that the ModelIndex constructor accepts:
-            Article.add_index(
-                Article.name,
-                Article.timestamp.desc(),
-                where=(Article.status == 1))
-
-            # Or even specify a SQL query directly:
-            Article.add_index(SQL('CREATE INDEX ...'))
-
-    .. method:: dependencies(search_nullable=False)
-
-        :param bool search_nullable: Search models related via a nullable
-            foreign key
-        :rtype: Generator expression yielding queries and foreign key fields.
-
-        Generate a list of queries of dependent models. Yields a 2-tuple
-        containing the query and corresponding foreign key field.  Useful for
-        searching dependencies of a model, i.e. things that would be orphaned
-        in the event of a delete.
-
-    .. method:: __iter__()
-
-        :returns: a :class:`ModelSelect` for the given class.
-
-        Convenience function for iterating over all instances of a model.
-
-        Example:
-
-        .. code-block:: python
-
-            Setting.insert_many([
-                {'key': 'host', 'value': '192.168.1.2'},
-                {'key': 'port': 'value': '1337'},
-                {'key': 'user': 'value': 'nuggie'}]).execute()
-
-            # Load settings from db into dict.
-            settings = {setting.key: setting.value for setting in Setting}
-
-    .. method:: __len__()
-
-        :returns: Count of rows in table.
-
-        Example:
-
-        .. code-block:: python
-
-            n_accounts = len(Account)
-
-            # Is equivalent to:
-            n_accounts = Account.select().count()
-
-
-.. class:: ModelAlias(model, alias=None)
-
-    :param Model model: Model class to reference.
-    :param str alias: (optional) name for alias.
-
-    Provide a separate reference to a model in a query.
-
-
-.. class:: ModelSelect(model, fields_or_models)
-
-    :param Model model: Model class to select.
-    :param fields_or_models: List of fields or model classes to select.
-
-    Model-specific implementation of SELECT query.
-
-    .. method:: switch(ctx=None)
-
-        :param ctx: A :class:`Model`, :class:`ModelAlias`, subquery, or
-            other object that was joined-on.
-
-        Switch the *join context* - the source which subsequent calls to
-        :meth:`~ModelSelect.join` will be joined against. Used for
-        specifying multiple joins against a single table.
-
-        If the ``ctx`` is not given, then the query's model will be used.
-
-        The following example selects from tweet and joins on both user and
-        tweet-flag:
-
-        .. code-block:: python
-
-            sq = Tweet.select().join(User).switch(Tweet).join(TweetFlag)
-
-            # Equivalent (since Tweet is the query's model)
-            sq = Tweet.select().join(User).switch().join(TweetFlag)
-
-    .. method:: objects(constructor=None)
-
-        :param constructor: Constructor (defaults to returning model instances)
-
-        Return result rows as objects created using the given constructor. The
-        default behavior is to create model instances.
-
-        .. note::
-            This method can be used, when selecting field data from multiple
-            sources/models, to make all data available as attributes on the
-            model being queried (as opposed to constructing the graph of joined
-            model instances). For very complex queries this can have a positive
-            performance impact, especially iterating large result sets.
-
-            Similarly, you can use :meth:`~BaseQuery.dicts`,
-            :meth:`~BaseQuery.tuples` or :meth:`~BaseQuery.namedtuples`
-            to achieve even more performance.
-
-    .. method:: join(dest, join_type='INNER', on=None, src=None, attr=None)
-
-        :param dest: A :class:`Model`, :class:`ModelAlias`,
-            :class:`Select` query, or other object to join to.
-        :param str join_type: Join type, defaults to INNER.
-        :param on: Join predicate or a :class:`ForeignKeyField` to join on.
-        :param src: Explicitly specify the source of the join. If not specified
-            then the current *join context* will be used.
-        :param str attr: Attribute to use when projecting columns from the
-            joined model.
-
-        Join with another table-like object.
+        :param Source dest: Join the table with the given destination.
+        :param str join_type: Join type.
+        :param on: Expression to use as join predicate.
+        :returns: a :class:`Join` instance.
 
         Join type may be one of:
 
@@ -4632,93 +3141,1670 @@ Model
         * ``JOIN.FULL_OUTER``
         * ``JOIN.CROSS``
 
-        Example selecting tweets and joining on user in order to restrict to
-        only those tweets made by "admin" users:
+    .. method:: left_outer_join(dest, on=None)
 
-        .. code-block:: python
+        :param Source dest: Join the table with the given destination.
+        :param on: Expression to use as join predicate.
+        :returns: a :class:`Join` instance.
 
-            sq = Tweet.select().join(User).where(User.is_admin == True)
+        Convenience method for calling :meth:`~Source.join` using a LEFT
+        OUTER join.
 
-        Example selecting users and joining on a particular foreign key field.
-        See the :ref:`example app <example>` for a real-life usage:
 
-        .. code-block:: python
+.. class:: BaseTable()
 
-            sq = User.select().join(Relationship, on=Relationship.to_user)
+    Base class for table-like objects, which support JOINs via operator
+    overloading.
 
-        For an in-depth discussion of foreign-keys, joins and relationships
-        between models, refer to :ref:`relationships`.
+    .. method:: __and__(dest)
 
-    .. method:: join_from(src, dest, join_type='INNER', on=None, attr=None)
+        Perform an INNER join on ``dest``.
 
-        :param src: Source for join.
-        :param dest: Table to join to.
+    .. method:: __add__(dest)
 
-        Use same parameter order as the non-model-specific
-        :meth:`~ModelSelect.join`. Bypasses the *join context* by requiring
-        the join source to be specified.
+        Perform a LEFT OUTER join on ``dest``.
 
-    .. method:: filter(*args, **kwargs)
+    .. method:: __sub__(dest)
 
-        :param args: Zero or more :class:`DQ` objects.
-        :param kwargs: Django-style keyword-argument filters.
+        Perform a RIGHT OUTER join on ``dest``.
 
-        Use Django-style filters to express a WHERE clause. Joins can be
-        followed by chaining foreign-key fields. The supported operations are:
+    .. method:: __or__(dest)
 
-        * ``eq`` - equals
-        * ``ne`` - not equals
-        * ``lt``, ``lte`` - less-than, less-than or equal-to
-        * ``gt``, ``gte`` - greater-than, greater-than or equal-to
-        * ``in`` - IN set of values
-        * ``is`` - IS (e.g. IS NULL).
-        * ``like``, ``ilike`` - LIKE and ILIKE (case-insensitive)
-        * ``regexp`` - regular expression match
+        Perform a FULL OUTER join on ``dest``.
+
+    .. method:: __mul__(dest)
+
+        Perform a CROSS join on ``dest``.
+
+
+.. class:: Table(name, columns=None, primary_key=None, schema=None, alias=None)
+
+    Represents a table in the database (or a table-like object such as a view).
+
+    :param str name: Database table name
+    :param tuple columns: List of column names (optional).
+    :param str primary_key: Name of primary key column.
+    :param str schema: Schema name used to access table (if necessary).
+    :param str alias: Alias to use for table in SQL queries.
+
+    .. note::
+        If columns are specified, the magic "c" attribute will be disabled.
+
+    When columns are not explicitly defined, tables have a special attribute
+    "c" which is a factory that provides access to table columns dynamically.
+
+    Example:
+
+    .. code-block:: python
+
+        User = Table('users')
+        query = (User
+                 .select(User.c.id, User.c.username)
+                 .order_by(User.c.username))
+
+    Equivalent example when columns **are** specified::
+
+        User = Table('users', ('id', 'username'))
+        query = (User
+                 .select(User.id, User.username)
+                 .order_by(User.username))
+
+    .. method:: bind(database=None)
+
+        :param database: :class:`Database` object.
+
+        Bind this table to the given database (or unbind by leaving empty).
+
+        When a table is *bound* to a database, queries may be executed against
+        it without the need to specify the database in the query's execute
+        method.
+
+    .. method:: bind_ctx(database=None)
+
+        :param database: :class:`Database` object.
+
+        Return a context manager that will bind the table to the given database
+        for the duration of the wrapped block.
+
+    .. method:: select(*columns)
+
+        :param columns: :class:`Column` instances, expressions, functions,
+            sub-queries, or anything else that you would like to select.
+
+        Create a :class:`Select` query on the table. If the table explicitly
+        declares columns and no columns are provided, then by default all the
+        table's defined columns will be selected.
 
         Examples:
 
         .. code-block:: python
 
-            # Get all tweets by user with username="peewee".
-            q = Tweet.filter(user__username='peewee')
+            User = Table('users', ('id', 'username'))
 
-            # Get all posts that are draft or published, and written after 2023.
-            q = Post.filter(
-                (DQ(status='draft') | DQ(status='published')),
-                timestamp__gte=datetime.date(2023, 1, 1))
+            # Because columns were defined on the Table, we will default to
+            # selecting both of the User table's columns.
+            # Evaluates to SELECT id, username FROM users
+            query = User.select()
 
-    .. method:: prefetch(*subqueries, prefetch_type=PREFETCH_TYPE.WHERE)
+            Note = Table('notes')
+            query = (Note
+                     .select(Note.c.content, Note.c.timestamp, User.username)
+                     .join(User, on=(Note.c.user_id == User.id))
+                     .where(Note.c.is_published == True)
+                     .order_by(Note.c.timestamp.desc()))
 
-        :param subqueries: A list of :class:`Model` classes or select
-            queries to prefetch.
-        :param prefetch_type: Query type to use for the subqueries.
-        :returns: a list of models with selected relations prefetched.
+            # Using a function to select users and the number of notes they
+            # have authored.
+            query = (User
+                     .select(
+                        User.username,
+                        fn.COUNT(Note.c.id).alias('n_notes'))
+                     .join(
+                        Note,
+                        JOIN.LEFT_OUTER,
+                        on=(User.id == Note.c.user_id))
+                     .order_by(fn.COUNT(Note.c.id).desc()))
 
-        Execute the query, prefetching the given additional resources.
+    .. method:: insert(insert=None, columns=None, **kwargs)
 
-        Prefetch type may be one of:
+        :param insert: A dictionary mapping column to value, an iterable that
+            yields dictionaries (i.e. list), or a :class:`Select` query.
+        :param list columns: The list of columns to insert into when the
+            data being inserted is not a dictionary.
+        :param kwargs: Mapping of column-name to value.
 
-        * ``PREFETCH_TYPE.WHERE``
-        * ``PREFETCH_TYPE.JOIN``
+        Create a :class:`Insert` query into the table.
 
-        See also :func:`prefetch` standalone function.
+    .. method:: replace(insert=None, columns=None, **kwargs)
+
+        :param insert: A dictionary mapping column to value, an iterable that
+            yields dictionaries (i.e. list), or a :class:`Select` query.
+        :param list columns: The list of columns to insert into when the
+            data being inserted is not a dictionary.
+        :param kwargs: Mapping of column-name to value.
+
+        Create a :class:`Insert` query into the table whose conflict
+        resolution method is to replace.
+
+    .. method:: update(update=None, **kwargs)
+
+        :param update: A dictionary mapping column to value.
+        :param kwargs: Mapping of column-name to value.
+
+        Create a :class:`Update` query for the table.
+
+    .. method:: delete()
+
+        Create a :class:`Delete` query for the table.
+
+
+.. class:: Join(lhs, rhs, join_type=JOIN.INNER, on=None, alias=None)
+
+    Represent a JOIN between two table-like objects.
+
+    :param lhs: Left-hand side of the join.
+    :param rhs: Right-hand side of the join.
+    :param join_type: Type of join. e.g. JOIN.INNER, JOIN.LEFT_OUTER, etc.
+    :param on: Expression describing the join predicate.
+    :param str alias: Alias to apply to joined data.
+
+    .. method:: on(predicate)
+
+        :param Expression predicate: join predicate.
+
+        Specify the predicate expression used for this join.
+
+
+.. class:: ValuesList(values, columns=None, alias=None)
+
+    Represent a values list that can be used like a table.
+
+    :param values: a list-of-lists containing the row data to represent.
+    :param list columns: the names to give to the columns in each row.
+    :param str alias: alias to use for values-list.
+
+    Example:
+
+    .. code-block:: python
+
+        data = [(1, 'first'), (2, 'second')]
+        vl = ValuesList(data, columns=('idx', 'name'))
+
+        query = (vl
+                 .select(vl.c.idx, vl.c.name)
+                 .order_by(vl.c.idx))
+        # Yields:
+        # SELECT t1.idx, t1.name
+        # FROM (VALUES (1, 'first'), (2, 'second')) AS t1(idx, name)
+        # ORDER BY t1.idx
+
+    .. method:: columns(*names)
+
+        :param names: names to apply to the columns of data.
 
         Example:
 
         .. code-block:: python
 
-            # Fetch all Users and prefetch their associated tweets.
-            query = User.select().prefetch(Tweet)
-            for user in query:
-                print(user.username)
-                for tweet in user.tweets:
-                    print('  *', tweet.content)
+            vl = ValuesList([(1, 'first'), (2, 'second')])
+            vl = vl.columns('idx', 'name').alias('v')
+
+            query = vl.select(vl.c.idx, vl.c.name)
+            # Yields:
+            # SELECT v.idx, v.name
+            # FROM (VALUES (1, 'first'), (2, 'second')) AS v(idx, name)
+
+
+.. class:: CTE(name, query, recursive=False, columns=None)
+
+    Represent a common-table-expression. For example queries, see :ref:`cte`.
+
+    :param name: Name for the CTE.
+    :param query: :class:`Select` query describing CTE.
+    :param bool recursive: Whether the CTE is recursive.
+    :param list columns: Explicit list of columns produced by CTE (optional).
+
+    .. method:: select_from(*columns)
+
+        Create a SELECT query that utilizes the given common table expression
+        as the source for a new query.
+
+        :param columns: One or more columns to select from the CTE.
+        :return: :class:`Select` query utilizing the common table expression
+
+    .. method:: union_all(other)
+
+        Used on the base-case CTE to construct the recursive term of the CTE.
+
+        :param other: recursive term, generally a :class:`Select` query.
+        :return: a recursive :class:`CTE` with the given recursive term.
+
+
+.. class:: ColumnBase()
+
+    Base-class for column-like objects, attributes or expressions.
+
+    Column-like objects can be composed using various operators and special
+    methods.
+
+    * ``&``: Logical AND
+    * ``|``: Logical OR
+    * ``+``: Addition
+    * ``-``: Subtraction
+    * ``*``: Multiplication
+    * ``/``: Division
+    * ``^``: Exclusive-OR
+    * ``==``: Equality
+    * ``!=``: Inequality
+    * ``>``: Greater-than
+    * ``<``: Less-than
+    * ``>=``: Greater-than or equal
+    * ``<=``: Less-than or equal
+    * ``<<``: ``IN``
+    * ``>>``: ``IS`` (i.e. ``IS NULL``)
+    * ``%``: ``LIKE``
+    * ``**``: ``ILIKE``
+    * ``bin_and()``: Binary AND
+    * ``bin_or()``: Binary OR
+    * ``in_()``: ``IN``
+    * ``not_in()``: ``NOT IN``
+    * ``regexp()``: ``REGEXP``
+    * ``is_null(True/False)``: ``IS NULL`` or ``IS NOT NULL``
+    * ``contains(s)``: ``LIKE %s%``
+    * ``startswith(s)``: ``LIKE s%``
+    * ``endswith(s)``: ``LIKE %s``
+    * ``between(low, high)``: ``BETWEEN low AND high``
+    * ``concat()``: ``||``
+
+    .. method:: alias(alias)
+
+        :param str alias: Alias for the given column-like object.
+        :returns: a :class:`Alias` object.
+
+        Indicate the alias that should be given to the specified column-like
+        object.
+
+    .. method:: cast(as_type)
+
+        :param str as_type: Type name to cast to.
+        :returns: a :class:`Cast` object.
+
+        Create a ``CAST`` expression.
+
+    .. method:: asc(collation=None, nulls=None)
+
+        :param str collation: Collation name to use for sorting.
+        :param str nulls: Sort nulls (FIRST or LAST).
+        :returns: an ascending :class:`Ordering` object for the column.
+
+    .. method:: desc(collation=None, nulls=None)
+
+        :param str collation: Collation name to use for sorting.
+        :param str nulls: Sort nulls (FIRST or LAST).
+        :returns: an descending :class:`Ordering` object for the column.
+
+    .. method:: __invert__()
+
+        :returns: a :class:`Negated` wrapper for the column.
+
+
+.. class:: Column(source, name)
+
+    :param Source source: Source for column.
+    :param str name: Column name.
+
+    Column on a table or a column returned by a sub-query.
+
+
+.. class:: Alias(node, alias)
+
+    :param Node node: a column-like object.
+    :param str alias: alias to assign to column.
+
+    Create a named alias for the given column-like object.
+
+    .. method:: alias(alias=None)
+
+        :param str alias: new name (or None) for aliased column.
+
+        Create a new :class:`Alias` for the aliased column-like object. If
+        the new alias is ``None``, then the original column-like object is
+        returned.
+
+
+.. class:: Negated(node)
+
+    Represents a negated column-like object.
+
+
+.. class:: Value(value, converter=None, unpack=True)
+
+    :param value: Python object or scalar value.
+    :param converter: Function used to convert value into type the database
+        understands.
+    :param bool unpack: Whether lists or tuples should be unpacked into a list
+        of values or treated as-is.
+
+    Value to be used in a parameterized query. It is the responsibility of the
+    caller to ensure that the value passed in can be adapted to a type the
+    database driver understands.
+
+
+.. function:: AsIs(value, converter=None)
+
+    Represents a :class:`Value` that is treated as-is, and passed directly
+    back to the database driver. This may be useful if you are using database
+    extensions that accept native Python data-types and you do not wish Peewee
+    to impose any handling of the values.
+
+    In the event a converter is in scope for this value, the converter will be
+    applied unless ``converter=False`` (in which case no conversion is applied
+    by Peewee and the value is passed directly to the driver). The Postgres JSON
+    extensions make use of this to pass ``dict`` and ``list`` to the driver,
+    which then handles the JSON serialization more efficiently, for example.
+
+
+.. class:: Cast(node, cast)
+
+    :param node: A column-like object.
+    :param str cast: Type to cast to.
+
+    Represents a ``CAST(<node> AS <cast>)`` expression.
+
+
+.. class:: Ordering(node, direction, collation=None, nulls=None)
+
+    :param node: A column-like object.
+    :param str direction: ASC or DESC
+    :param str collation: Collation name to use for sorting.
+    :param str nulls: Sort nulls (FIRST or LAST).
+
+    Represent ordering by a column-like object.
+
+    Postgresql supports a non-standard clause ("NULLS FIRST/LAST"). Peewee will
+    automatically use an equivalent ``CASE`` statement for databases that do
+    not support this (Sqlite / MySQL).
+
+    .. method:: collate(collation=None)
+
+        :param str collation: Collation name to use for sorting.
+
+
+.. function:: Asc(node, collation=None, nulls=None)
+
+    Short-hand for instantiating an ascending :class:`Ordering` object.
+
+
+.. function:: Desc(node, collation=None, nulls=None)
+
+    Short-hand for instantiating an descending :class:`Ordering` object.
+
+
+.. class:: Expression(lhs, op, rhs, flat=True)
+
+    :param lhs: Left-hand side.
+    :param op: Operation.
+    :param rhs: Right-hand side.
+    :param bool flat: Whether to wrap expression in parentheses.
+
+    Represent a binary expression of the form (lhs op rhs), e.g. (foo + 1).
+
+
+.. class:: Entity(*path)
+
+    :param path: Components that make up the dotted-path of the entity name.
+
+    Represent a quoted entity in a query, such as a table, column, alias. The
+    name may consist of multiple components, e.g. "a_table"."column_name".
+
+    .. method:: __getattr__(self, attr)
+
+        Factory method for creating sub-entities.
+
+
+.. class:: SQL(sql, params=None)
+
+    :param str sql: SQL query string.
+    :param tuple params: Parameters for query (optional).
+
+    Represent a parameterized SQL query or query-fragment.
+
+
+.. function:: Check(constraint, name=None)
+
+    :param str constraint: Constraint SQL.
+    :param str name: constraint name.
+
+    Represent a CHECK constraint.
+
+    .. warning::
+         MySQL may not support a ``name`` parameter when inlining the
+         constraint along with the column definition. The solution is to just
+         put the named ``Check`` constraint in the model's ``Meta.constraints``
+         list instead of in the field instances ``constraints=[...]`` list.
+
+
+.. function:: Default(value)
+
+    :param value: default value (literal).
+
+    Represent a DEFAULT constraint. It is important to note that this
+    constraint does not accept a parameterized value, so the value literal must
+    be given. If a string value is intended, it must be quoted.
+
+    Examples:
+
+    .. code-block:: python
+
+       # "added" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP.
+       added = DateTimeField(constraints=[Default('CURRENT_TIMESTAMP')])
+
+       # "label" TEXT NOT NULL DEFAULT 'string literal'
+       label = TextField(constraints=[Default("'string literal'")])
+
+       # "status" INTEGER NOT NULL DEFAULT 0
+       status = IntegerField(constraints=[Default(0)])
+
+
+.. class:: Function(name, arguments, coerce=True, python_value=None)
+
+    :param str name: Function name.
+    :param tuple arguments: Arguments to function.
+    :param bool coerce: Whether to coerce the function result to a particular
+        data-type when reading function return values from the cursor.
+    :param callable python_value: Function to use for converting the return
+        value from the cursor.
+
+    Represent an arbitrary SQL function call.
+
+    .. note::
+        Rather than instantiating this class directly, it is recommended to use
+        the ``fn`` helper.
+
+    Example of using ``fn`` to call an arbitrary SQL function::
+
+        # Query users and count of tweets authored.
+        query = (User
+                 .select(User.username, fn.COUNT(Tweet.id).alias('ct'))
+                 .join(Tweet, JOIN.LEFT_OUTER, on=(User.id == Tweet.user_id))
+                 .group_by(User.username)
+                 .order_by(fn.COUNT(Tweet.id).desc()))
+
+    .. method:: over(partition_by=None, order_by=None, start=None, end=None, window=None, exclude=None)
+
+        :param list partition_by: List of columns to partition by.
+        :param list order_by: List of columns / expressions to order window by.
+        :param start: A :class:`SQL` instance or a string expressing the
+            start of the window range.
+        :param end: A :class:`SQL` instance or a string expressing the
+            end of the window range.
+        :param str frame_type: ``Window.RANGE``, ``Window.ROWS`` or
+            ``Window.GROUPS``.
+        :param Window window: A :class:`Window` instance.
+        :param exclude: Frame exclusion, one of ``Window.CURRENT_ROW``,
+            ``Window.GROUP``, ``Window.TIES`` or ``Window.NO_OTHERS``.
 
         .. note::
-            Because ``prefetch`` must reconstruct a graph of models, it is
-            necessary to be sure that the foreign-key/primary-key of any
-            related models are selected, so that the related objects can be
-            mapped correctly.
+            For an in-depth guide to using window functions with Peewee,
+            see the :ref:`window-functions` section.
+
+        Examples::
+
+            # Using a simple partition on a single column.
+            query = (Sample
+                     .select(
+                        Sample.counter,
+                        Sample.value,
+                        fn.AVG(Sample.value).over([Sample.counter]))
+                     .order_by(Sample.counter))
+
+            # Equivalent example Using a Window() instance instead.
+            window = Window(partition_by=[Sample.counter])
+            query = (Sample
+                     .select(
+                        Sample.counter,
+                        Sample.value,
+                        fn.AVG(Sample.value).over(window))
+                     .window(window)  # Note call to ".window()"
+                     .order_by(Sample.counter))
+
+            # Example using bounded window.
+            query = (Sample
+                     .select(Sample.value,
+                             fn.SUM(Sample.value).over(
+                                partition_by=[Sample.counter],
+                                start=Window.CURRENT_ROW,  # current row
+                                end=Window.following()))  # unbounded following
+                     .order_by(Sample.id))
+
+    .. method:: filter(where)
+
+        :param where: Expression for filtering aggregate.
+
+        Add a ``FILTER (WHERE...)`` clause to an aggregate function. The where
+        expression is evaluated to determine which rows are fed to the
+        aggregate function. This SQL feature is supported for Postgres and
+        SQLite.
+
+    .. method:: coerce(coerce=True)
+
+        :param bool coerce: Whether to attempt to coerce function-call result
+            to a Python data-type.
+
+        When coerce is ``True``, the target data-type is inferred using several
+        heuristics. Read the source for ``BaseModelCursorWrapper._initialize_columns``
+        method to see how this works.
+
+    .. method:: python_value(func=None)
+
+        :param callable python_value: Function to use for converting the return
+            value from the cursor.
+
+        Specify a particular function to use when converting values returned by
+        the database cursor. For example:
+
+        .. code-block:: python
+
+            # Get user and a list of their tweet IDs. The tweet IDs are
+            # returned as a comma-separated string by the db, so we'll split
+            # the result string and convert the values to python ints.
+            convert_ids = lambda s: [int(i) for i in (s or '').split(',') if i]
+            tweet_ids = (fn
+                         .GROUP_CONCAT(Tweet.id)
+                         .python_value(convert_ids))
+
+            query = (User
+                     .select(User.username, tweet_ids.alias('tweet_ids'))
+                     .join(Tweet)
+                     .group_by(User.username))
+
+            for user in query:
+                print(user.username, user.tweet_ids)
+
+            # e.g.,
+            # huey [1, 4, 5, 7]
+            # mickey [2, 3, 6]
+            # zaizee []
+
+.. function:: fn()
+
+    The :func:`fn` helper is actually an instance of :class:`Function`
+    that implements a ``__getattr__`` hook to provide a nice API for calling
+    SQL functions.
+
+    To create a node representative of a SQL function call, use the function
+    name as an attribute on ``fn`` and then provide the arguments as you would
+    if calling a Python function:
+
+    .. code-block:: python
+
+        # List users and the number of tweets they have authored,
+        # from highest-to-lowest:
+        sql_count = fn.COUNT(Tweet.id)
+        query = (User
+                 .select(User, sql_count.alias('count'))
+                 .join(Tweet, JOIN.LEFT_OUTER)
+                 .group_by(User)
+                 .order_by(sql_count.desc()))
+
+        # Get the timestamp of the most recent tweet:
+        query = Tweet.select(fn.MAX(Tweet.timestamp))
+        max_timestamp = query.scalar()  # Retrieve scalar result from query.
+
+    Function calls can, like anything else, be composed and nested:
+
+    .. code-block:: python
+
+        # Get users whose username begins with "A" or "a":
+        a_users = User.select().where(fn.LOWER(fn.SUBSTR(User.username, 1, 1)) == 'a')
+
+
+.. class:: Window(partition_by=None, order_by=None, start=None, end=None, frame_type=None, extends=None, exclude=None, alias=None)
+
+    :param list partition_by: List of columns to partition by.
+    :param list order_by: List of columns to order by.
+    :param start: A :class:`SQL` instance or a string expressing the start
+        of the window range.
+    :param end: A :class:`SQL` instance or a string expressing the end of
+        the window range.
+    :param str frame_type: ``Window.RANGE``, ``Window.ROWS`` or
+        ``Window.GROUPS``.
+    :param extends: A :class:`Window` definition to extend. Alternately, you
+        may specify the window's alias instead.
+    :param exclude: Frame exclusion, one of ``Window.CURRENT_ROW``,
+        ``Window.GROUP``, ``Window.TIES`` or ``Window.NO_OTHERS``.
+    :param str alias: Alias for the window.
+
+    Represent a WINDOW clause.
+
+    .. note::
+        For an in-depth guide to using window functions with Peewee,
+        see the :ref:`window-functions` section.
+
+    .. attribute:: RANGE
+    .. attribute:: ROWS
+    .. attribute:: GROUPS
+
+        Specify the window ``frame_type``. See :ref:`window-frame-types`.
+
+    .. attribute:: CURRENT_ROW
+
+        Reference to current row for use in start/end clause or the frame
+        exclusion parameter.
+
+    .. attribute:: NO_OTHERS
+    .. attribute:: GROUP
+    .. attribute:: TIES
+
+        Specify the window frame exclusion parameter.
+
+    .. staticmethod:: preceding(value=None)
+
+        :param value: Number of rows preceding. If ``None`` is UNBOUNDED.
+
+        Convenience method for generating SQL suitable for passing in as the
+        ``start`` parameter for a window range.
+
+    .. staticmethod:: following(value=None)
+
+        :param value: Number of rows following. If ``None`` is UNBOUNDED.
+
+        Convenience method for generating SQL suitable for passing in as the
+        ``end`` parameter for a window range.
+
+    .. method:: as_rows()
+    .. method:: as_range()
+    .. method:: as_groups()
+
+        Specify the frame type.
+
+    .. method:: extends(window=None)
+
+        :param Window window: A :class:`Window` definition to extend.
+            Alternately, you may specify the window's alias instead.
+
+    .. method:: exclude(frame_exclusion=None)
+
+        :param frame_exclusion: Frame exclusion, one of ``Window.CURRENT_ROW``,
+            ``Window.GROUP``, ``Window.TIES`` or ``Window.NO_OTHERS``.
+
+    .. method:: alias(alias=None)
+
+        :param str alias: Alias to use for window.
+
+
+.. function:: Case(predicate, expression_tuples, default=None)
+
+    :param predicate: Predicate for CASE query (optional).
+    :param expression_tuples: One or more cases to evaluate.
+    :param default: Default value (optional).
+    :returns: Representation of CASE statement.
+
+    Examples::
+
+        Number = Table('numbers', ('val',))
+
+        num_as_str = Case(Number.val, (
+            (1, 'one'),
+            (2, 'two'),
+            (3, 'three')), 'a lot')
+
+        query = Number.select(Number.val, num_as_str.alias('num_str'))
+
+        # The above is equivalent to:
+        # SELECT "val",
+        #   CASE "val"
+        #       WHEN 1 THEN 'one'
+        #       WHEN 2 THEN 'two'
+        #       WHEN 3 THEN 'three'
+        #       ELSE 'a lot' END AS "num_str"
+        # FROM "numbers"
+
+        num_as_str = Case(None, (
+            (Number.val == 1, 'one'),
+            (Number.val == 2, 'two'),
+            (Number.val == 3, 'three')), 'a lot')
+        query = Number.select(Number.val, num_as_str.alias('num_str'))
+
+        # The above is equivalent to:
+        # SELECT "val",
+        #   CASE
+        #       WHEN "val" = 1 THEN 'one'
+        #       WHEN "val" = 2 THEN 'two'
+        #       WHEN "val" = 3 THEN 'three'
+        #       ELSE 'a lot' END AS "num_str"
+        # FROM "numbers"
+
+
+.. class:: NodeList(nodes, glue=' ', parens=False)
+
+    :param list nodes: Zero or more nodes.
+    :param str glue: How to join the nodes when converting to SQL.
+    :param bool parens: Whether to wrap the resulting SQL in parentheses.
+
+    Represent a list of nodes, a multi-part clause, a list of parameters, etc.
+
+
+.. function:: CommaNodeList(nodes)
+
+    :param list nodes: Zero or more nodes.
+    :returns: a :class:`NodeList`
+
+    Represent a list of nodes joined by commas.
+
+
+.. function:: EnclosedNodeList(nodes)
+
+    :param list nodes: Zero or more nodes.
+    :returns: a :class:`NodeList`
+
+    Represent a list of nodes joined by commas and wrapped in parentheses.
+
+
+.. class:: DQ(**query)
+
+    :param query: Arbitrary filter expressions using Django-style lookups.
+
+    Represent a composable Django-style filter expression suitable for use with
+    the :meth:`Model.filter` or :meth:`ModelSelect.filter` methods.
+
+
+.. class:: Tuple(*args)
+
+    Represent a SQL `row value <https://www.sqlite.org/rowvalue.html>`_.
+    Row-values are supported by most databases.
+
+
+.. class:: OnConflict(action=None, update=None, preserve=None, where=None, conflict_target=None, conflict_where=None, conflict_constraint=None)
+
+    :param str action: Action to take when resolving conflict.
+    :param update: A dictionary mapping column to new value.
+    :param preserve: A list of columns whose values should be preserved from the original INSERT. See also :class:`EXCLUDED`.
+    :param where: Expression to restrict the conflict resolution.
+    :param conflict_target: Column(s) that comprise the constraint.
+    :param conflict_where: Expressions needed to match the constraint target if it is a partial index (index with a WHERE clause).
+    :param str conflict_constraint: Name of constraint to use for conflict
+        resolution. Currently only supported by Postgres.
+
+    Represent a conflict resolution clause for a data-modification query.
+
+    Depending on the database-driver being used, one or more of the above
+    parameters may be required.
+
+    .. method:: preserve(*columns)
+
+        :param columns: Columns whose values should be preserved.
+
+    .. method:: update(_data=None, **kwargs)
+
+        :param dict _data: Dictionary mapping column to new value.
+        :param kwargs: Dictionary mapping column name to new value.
+
+        The ``update()`` method supports being called with either a dictionary
+        of column-to-value, **or** keyword arguments representing the same.
+
+    .. method:: where(*expressions)
+
+        :param expressions: Expressions that restrict the action of the
+            conflict resolution clause.
+
+    .. method:: conflict_target(*constraints)
+
+        :param constraints: Column(s) to use as target for conflict resolution.
+
+    .. method:: conflict_where(*expressions)
+
+        :param expressions: Expressions that match the conflict target index,
+            in the case the conflict target is a partial index.
+
+    .. method:: conflict_constraint(constraint)
+
+        :param str constraint: Name of constraints to use as target for
+            conflict resolution. Currently only supported by Postgres.
+
+
+.. class:: EXCLUDED
+
+    Helper object that exposes the ``EXCLUDED`` namespace that is used with
+    ``INSERT ... ON CONFLICT`` to reference values in the conflicting data.
+    This is a "magic" helper, such that one uses it by accessing attributes on
+    it that correspond to a particular column.
+
+    See :meth:`Insert.on_conflict` for example usage.
+
+
+Queries
+-------
+
+
+.. class:: BaseQuery()
+
+    The parent class from which all other query classes are derived. While you
+    will not deal with :class:`BaseQuery` directly in your code, it
+    implements some methods that are common across all query types.
+
+    .. attribute:: default_row_type = ROW.DICT
+
+    .. method:: bind(database=None)
+
+        :param Database database: Database to execute query against.
+
+        Bind the query to the given database for execution.
+
+    .. method:: dicts(as_dict=True)
+
+        :param bool as_dict: Specify whether to return rows as dictionaries.
+
+        Return rows as dictionaries.
+
+    .. method:: tuples(as_tuples=True)
+
+        :param bool as_tuples: Specify whether to return rows as tuples.
+
+        Return rows as tuples.
+
+    .. method:: namedtuples(as_namedtuple=True)
+
+        :param bool as_namedtuple: Specify whether to return rows as named
+            tuples.
+
+        Return rows as named tuples.
+
+    .. method:: objects(constructor=None)
+
+        :param constructor: Function that accepts row dict and returns an
+            arbitrary object.
+
+        Return rows as arbitrary objects using the given constructor.
+
+    .. method:: sql()
+
+        :returns: A 2-tuple consisting of the query's SQL and parameters.
+
+    .. method:: execute(database)
+
+        :param Database database: Database to execute query against. Not
+            required if query was previously bound to a database.
+
+        Execute the query and return result (depends on type of query being
+        executed). For example, select queries the return result will be an
+        iterator over the query results.
+
+    .. method:: iterator(database=None)
+
+        :param Database database: Database to execute query against. Not
+            required if query was previously bound to a database.
+
+        Execute the query and return an iterator over the result-set. For large
+        result-sets this method is preferable as rows are not cached in-memory
+        during iteration.
+
+        .. note::
+            Because rows are not cached, the query may only be iterated over
+            once. Subsequent iterations will return empty result-sets as the
+            cursor will have been consumed.
+
+         Example:
+
+         .. code-block:: python
+
+              query = StatTbl.select().order_by(StatTbl.timestamp).tuples()
+              for row in query.iterator(db):
+                  process_row(row)
+
+    .. method:: __iter__()
+
+        Execute the query and return an iterator over the result-set.
+
+        Unlike :meth:`~BaseQuery.iterator`, this method will cause rows to
+        be cached in order to allow efficient iteration, indexing and slicing.
+
+    .. method:: __getitem__(value)
+
+        :param value: Either an integer index or a slice.
+
+        Retrieve a row or range of rows from the result-set.
+
+    .. method:: __len__()
+
+        Return the number of rows in the result-set.
+
+        .. warning::
+            This does not issue a ``COUNT()`` query. Instead, the result-set
+            is loaded as it would be during normal iteration, and the length
+            is determined from the size of the result set.
+
+
+.. class:: RawQuery(sql=None, params=None, **kwargs)
+
+    :param str sql: SQL query.
+    :param tuple params: Parameters (optional).
+
+    Create a query by directly specifying the SQL to execute.
+
+
+.. class:: Query(where=None, order_by=None, limit=None, offset=None, **kwargs)
+
+    :param where: Representation of WHERE clause.
+    :param tuple order_by: Columns or values to order by.
+    :param int limit: Value of LIMIT clause.
+    :param int offset: Value of OFFSET clause.
+
+    Base-class for queries that support method-chaining APIs.
+
+    .. method:: with_cte(*cte_list)
+
+        :param cte_list: zero or more :class:`CTE` objects.
+
+        Include the given common-table expressions in the query. Any previously
+        specified CTEs will be overwritten. For examples of common-table
+        expressions, see :ref:`cte`.
+
+    .. method:: cte(name, recursive=False, columns=None)
+
+        :param str name: Alias for common table expression.
+        :param bool recursive: Will this be a recursive CTE?
+        :param list columns: List of column names (as strings).
+
+        Indicate that a query will be used as a common table expression. For
+        example, if we are modelling a category tree and are using a
+        parent-link foreign key, we can retrieve all categories and their
+        absolute depths using a recursive CTE:
+
+        .. code-block:: python
+
+            class Category(Model):
+                name = TextField()
+                parent = ForeignKeyField('self', backref='children', null=True)
+
+            # The base case of our recursive CTE will be categories that are at
+            # the root level -- in other words, categories without parents.
+            roots = (Category
+                     .select(Category.name, Value(0).alias('level'))
+                     .where(Category.parent.is_null())
+                     .cte(name='roots', recursive=True))
+
+            # The recursive term will select the category name and increment
+            # the depth, joining on the base term so that the recursive term
+            # consists of all children of the base category.
+            RTerm = Category.alias()
+            recursive = (RTerm
+                         .select(RTerm.name, (roots.c.level + 1).alias('level'))
+                         .join(roots, on=(RTerm.parent == roots.c.id)))
+
+            # Express <base term> UNION ALL <recursive term>.
+            cte = roots.union_all(recursive)
+
+            # Select name and level from the recursive CTE.
+            query = (cte
+                     .select_from(cte.c.name, cte.c.level)
+                     .order_by(cte.c.name))
+
+            for category in query:
+                print(category.name, category.level)
+
+        For more examples of CTEs, see :ref:`cte`.
+
+    .. method:: where(*expressions)
+
+        :param expressions: zero or more expressions to include in the WHERE
+            clause.
+
+        Include the given expressions in the WHERE clause of the query. The
+        expressions will be AND-ed together with any previously-specified
+        WHERE expressions.
+
+        Example selection users where the username is equal to 'somebody':
+
+        .. code-block:: python
+
+            sq = User.select().where(User.username == 'somebody')
+
+        Example selecting tweets made by users who are either editors or
+        administrators:
+
+        .. code-block:: python
+
+            sq = Tweet.select().join(User).where(
+                (User.is_editor == True) |
+                (User.is_admin == True))
+
+        Example of deleting tweets by users who are no longer active:
+
+        .. code-block:: python
+
+            inactive_users = User.select().where(User.active == False)
+            dq = (Tweet
+                  .delete()
+                  .where(Tweet.user.in_(inactive_users)))
+            dq.execute()  # Return number of tweets deleted.
+
+        .. note::
+
+            :meth:`~Query.where` calls are chainable.  Multiple calls will
+            be "AND"-ed together.
+
+    .. method:: orwhere(*expressions)
+
+        :param expressions: zero or more expressions to include in the WHERE
+            clause.
+
+        Include the given expressions in the WHERE clause of the query. This
+        method is the same as the :meth:`Query.where` method, except that
+        the expressions will be OR-ed together with any previously-specified
+        WHERE expressions.
+
+    .. method:: order_by(*values)
+
+        :param values: zero or more Column-like objects to order by.
+
+        Define the ORDER BY clause. Any previously-specified values will be
+        overwritten.
+
+    .. method:: order_by_extend(*values)
+
+        :param values: zero or more Column-like objects to order by.
+
+        Extend any previously-specified ORDER BY clause with the given values.
+
+    .. method:: limit(value=None)
+
+        :param int value: specify value for LIMIT clause.
+
+    .. method:: offset(value=None)
+
+        :param int value: specify value for OFFSET clause.
+
+    .. method:: paginate(page, paginate_by=20)
+
+        :param int page: Page number of results (starting from 1).
+        :param int paginate_by: Rows-per-page.
+
+        Convenience method for specifying the LIMIT and OFFSET in a more
+        intuitive way.
+
+        This feature is designed with web-site pagination in mind, so the first
+        page starts with ``page=1``.
+
+
+.. class:: SelectQuery()
+
+    Select query helper-class that implements operator-overloads for creating
+    compound queries.
+
+    .. method:: select_from(*columns)
+
+        :param columns: one or more columns to select from the inner query.
+        :return: a new query that wraps the calling query.
+
+        Create a new query that wraps the current (calling) query. For example,
+        suppose you have a simple ``UNION`` query, and need to apply an
+        aggregation on the union result-set. To do this, you need to write
+        something like:
+
+        .. code-block:: sql
+
+            SELECT "u"."owner", COUNT("u"."id") AS "ct"
+            FROM (
+                SELECT "id", "owner", ... FROM "cars"
+                UNION
+                SELECT "id", "owner", ... FROM "motorcycles"
+                UNION
+                SELECT "id", "owner", ... FROM "boats") AS "u"
+            GROUP BY "u"."owner"
+
+        The :meth:`~SelectQuery.select_from` method is designed to simplify
+        constructing this type of query.
+
+        Example peewee code:
+
+        .. code-block:: python
+
+              class Car(Model):
+                  owner = ForeignKeyField(Owner, backref='cars')
+                  # ... car-specific fields, etc ...
+
+              class Motorcycle(Model):
+                  owner = ForeignKeyField(Owner, backref='motorcycles')
+                  # ... motorcycle-specific fields, etc ...
+
+              class Boat(Model):
+                  owner = ForeignKeyField(Owner, backref='boats')
+                  # ... boat-specific fields, etc ...
+
+              cars = Car.select(Car.owner)
+              motorcycles = Motorcycle.select(Motorcycle.owner)
+              boats = Boat.select(Boat.owner)
+
+              union = cars | motorcycles | boats
+
+              query = (union
+                       .select_from(union.c.owner, fn.COUNT(union.c.id))
+                       .group_by(union.c.owner))
+
+    .. method:: union_all(dest)
+
+        Create a UNION ALL query with ``dest``.
+
+    .. method:: __add__(dest)
+
+        Create a UNION ALL query with ``dest``.
+
+    .. method:: union(dest)
+
+        Create a UNION query with ``dest``.
+
+    .. method:: __or__(dest)
+
+        Create a UNION query with ``dest``.
+
+    .. method:: intersect(dest)
+
+        Create an INTERSECT query with ``dest``.
+
+    .. method:: __and__(dest)
+
+        Create an INTERSECT query with ``dest``.
+
+    .. method:: except_(dest)
+
+        Create an EXCEPT query with ``dest``. Note that the method name has a
+        trailing "_" character since ``except`` is a Python reserved word.
+
+    .. method:: __sub__(dest)
+
+        Create an EXCEPT query with ``dest``.
+
+
+.. class:: SelectBase()
+
+    Base-class for :class:`Select` and :class:`CompoundSelect` queries.
+
+    .. method:: peek(database, n=1)
+
+        :param Database database: database to execute query against.
+        :param int n: Number of rows to return.
+        :returns: A single row if n = 1, else a list of rows.
+
+        Execute the query and return the given number of rows from the start
+        of the cursor. This function may be called multiple times safely, and
+        will always return the first N rows of results.
+
+    .. method:: first(database, n=1)
+
+        :param Database database: database to execute query against.
+        :param int n: Number of rows to return.
+        :returns: A single row if n = 1, else a list of rows.
+
+        Like the :meth:`~SelectBase.peek` method, except a ``LIMIT`` is
+        applied to the query to ensure that only ``n`` rows are returned.
+        Multiple calls for the same value of ``n`` will not result in multiple
+        executions.
+
+        The query is altered in-place so it is not possible to call
+        :meth:`~SelectBase.first` and then later iterate over the full
+        result-set using the same query object. Again, this is done to ensure
+        that multiple calls to ``first()`` will not result in multiple query
+        executions.
+
+    .. method:: scalar(database, as_tuple=False, as_dict=False)
+
+        :param Database database: database to execute query against.
+        :param bool as_tuple: Return the result as a tuple?
+        :param bool as_dict: Return the result as a dict?
+        :returns: Single scalar value. If ``as_tuple = True``, a row tuple is
+            returned. If ``as_dict = True``, a row dict is returned.
+
+        Return a scalar value from the first row of results. If multiple
+        scalar values are anticipated (e.g. multiple aggregations in a single
+        query) then you may specify ``as_tuple=True`` to get the row tuple.
+
+        Example:
+
+        .. code-block:: python
+
+            query = Note.select(fn.MAX(Note.timestamp))
+            max_ts = query.scalar(db)
+
+            query = Note.select(fn.MAX(Note.timestamp), fn.COUNT(Note.id))
+            max_ts, n_notes = query.scalar(db, as_tuple=True)
+
+            query = Note.select(fn.COUNT(Note.id).alias('count'))
+            assert query.scalar(db, as_dict=True) == {'count': 123}
+
+    .. method:: count(database, clear_limit=False)
+
+        :param Database database: database to execute query against.
+        :param bool clear_limit: Clear any LIMIT clause when counting.
+        :return: Number of rows in the query result-set.
+
+        Return number of rows in the query result-set.
+
+        Implemented by running SELECT COUNT(1) FROM (<current query>).
+
+    .. method:: exists(database)
+
+        :param Database database: database to execute query against.
+        :return: Whether any results exist for the current query.
+
+        Return a boolean indicating whether the current query has any results.
+
+    .. method:: get(database)
+
+        :param Database database: database to execute query against.
+        :return: A single row from the database or ``None``.
+
+        Execute the query and return the first row, if it exists. Multiple
+        calls will result in multiple queries being executed.
+
+
+.. class:: CompoundSelectQuery(lhs, op, rhs)
+
+    :param SelectBase lhs: A Select or CompoundSelect query.
+    :param str op: Operation (e.g. UNION, INTERSECT, EXCEPT).
+    :param SelectBase rhs: A Select or CompoundSelect query.
+
+    Class representing a compound SELECT query.
+
+
+.. class:: Select(from_list=None, columns=None, group_by=None, having=None, distinct=None, windows=None, for_update=None, for_update_of=None, for_update_nowait=None, **kwargs)
+
+    :param list from_list: List of sources for FROM clause.
+    :param list columns: Columns or values to select.
+    :param list group_by: List of columns or values to group by.
+    :param Expression having: Expression for HAVING clause.
+    :param distinct: Either a boolean or a list of column-like objects.
+    :param list windows: List of :class:`Window` clauses.
+    :param for_update: Boolean or str indicating if SELECT...FOR UPDATE.
+    :param for_update_of: One or more tables for FOR UPDATE OF clause.
+    :param bool for_update_nowait: Specify NOWAIT locking.
+
+    Class representing a SELECT query.
+
+    .. note::
+        Rather than instantiating this directly, most-commonly you will use a
+        factory method like :meth:`Table.select` or :meth:`Model.select`.
+
+    Methods on the select query can be chained together.
+
+    Example selecting some user instances from the database.  Only the ``id``
+    and ``username`` columns are selected.  When iterated, will return instances
+    of the ``User`` model:
+
+    .. code-block:: python
+
+        query = User.select(User.id, User.username)
+        for user in query:
+            print(user.username)
+
+    Example selecting users and additionally the number of tweets made by the
+    user.  The ``User`` instances returned will have an additional attribute,
+    'count', that corresponds to the number of tweets made:
+
+    .. code-block:: python
+
+        query = (User
+                 .select(User, fn.COUNT(Tweet.id).alias('count'))
+                 .join(Tweet, JOIN.LEFT_OUTER)
+                 .group_by(User))
+        for user in query:
+            print(user.username, 'has tweeted', user.count, 'times')
+
+    .. note::
+        While it is possible to instantiate :class:`Select` directly, more
+        commonly you will build the query using the method-chaining APIs.
+
+    .. method:: columns(*columns)
+
+        :param columns: Zero or more column-like objects to SELECT.
+
+        Specify which columns or column-like values to SELECT.
+
+    .. method:: select(*columns)
+
+        :param columns: Zero or more column-like objects to SELECT.
+
+        Same as :meth:`Select.columns`, provided for
+        backwards-compatibility.
+
+    .. method:: select_extend(*columns)
+
+        :param columns: Zero or more column-like objects to SELECT.
+
+        Extend the current selection with the given columns.
+
+        Example:
+
+        .. code-block:: python
+
+            def get_users(with_count=False):
+                query = User.select()
+                if with_count:
+                    query = (query
+                             .select_extend(fn.COUNT(Tweet.id).alias('count'))
+                             .join(Tweet, JOIN.LEFT_OUTER)
+                             .group_by(User))
+                return query
+
+    .. method:: from_(*sources)
+
+        :param sources: Zero or more sources for the FROM clause.
+
+        Specify which table-like objects should be used in the FROM clause.
+
+        .. code-block:: python
+
+            User = Table('users')
+            Tweet = Table('tweets')
+            query = (User
+                     .select(User.c.username, Tweet.c.content)
+                     .from_(User, Tweet)
+                     .where(User.c.id == Tweet.c.user_id))
+            for row in query.execute(db):
+                print(row['username'], '->', row['content'])
+
+    .. method:: join(dest, join_type='INNER', on=None)
+
+        :param dest: A table or table-like object.
+        :param str join_type: Type of JOIN, default is "INNER".
+        :param Expression on: Join predicate.
+
+        Join type may be one of:
+
+        * ``JOIN.INNER``
+        * ``JOIN.LEFT_OUTER``
+        * ``JOIN.RIGHT_OUTER``
+        * ``JOIN.FULL``
+        * ``JOIN.FULL_OUTER``
+        * ``JOIN.CROSS``
+
+        Express a JOIN::
+
+            User = Table('users', ('id', 'username'))
+            Note = Table('notes', ('id', 'user_id', 'content'))
+
+            query = (Note
+                     .select(Note.content, User.username)
+                     .join(User, on=(Note.user_id == User.id)))
+
+    .. method:: group_by(*columns)
+
+        :param values: zero or more Column-like objects to group by.
+
+        Define the GROUP BY clause. Any previously-specified values will be
+        overwritten.
+
+        Additionally, to specify all columns on a given table, you can pass the
+        table/model object in place of the individual columns.
+
+        Example:
+
+        .. code-block:: python
+
+            query = (User
+                     .select(User, fn.Count(Tweet.id).alias('count'))
+                     .join(Tweet)
+                     .group_by(User))
+
+    .. method:: group_by_extend(*columns)
+
+        :param values: zero or more Column-like objects to group by.
+
+        Extend the GROUP BY clause with the given columns.
+
+    .. method:: having(*expressions)
+
+        :param expressions: zero or more expressions to include in the HAVING
+            clause.
+
+        Include the given expressions in the HAVING clause of the query. The
+        expressions will be AND-ed together with any previously-specified
+        HAVING expressions.
+
+    .. method:: distinct(*columns)
+
+        :param columns: Zero or more column-like objects.
+
+        Indicate whether this query should use a DISTINCT clause. By specifying
+        a single value of ``True`` the query will use a simple SELECT DISTINCT.
+        Specifying one or more columns will result in a SELECT DISTINCT ON.
+
+    .. method:: window(*windows)
+
+        :param windows: zero or more :class:`Window` objects.
+
+        Define the WINDOW clause. Any previously-specified values will be
+        overwritten.
+
+        Example:
+
+        .. code-block:: python
+
+            # Equivalent example Using a Window() instance instead.
+            window = Window(partition_by=[Sample.counter])
+            query = (Sample
+                     .select(
+                        Sample.counter,
+                        Sample.value,
+                        fn.AVG(Sample.value).over(window))
+                     .window(window)  # Note call to ".window()"
+                     .order_by(Sample.counter))
+
+    .. method:: for_update(for_update=True, of=None, nowait=None)
+
+        :param for_update: Either a boolean or a string indicating the
+            desired expression, e.g. "FOR SHARE".
+        :param of: One or more models to restrict locking to.
+        :param bool nowait: Specify NOWAIT option when locking.
+
+
+.. class:: _WriteQuery(table, returning=None, **kwargs)
+
+    :param Table table: Table to write to.
+    :param list returning: List of columns for RETURNING clause.
+
+    Base-class for write queries.
+
+    .. method:: returning(*returning)
+
+        :param returning: Zero or more column-like objects for RETURNING clause
+
+        Specify the RETURNING clause of query (if supported by your database).
+
+        .. code-block:: python
+
+            query = (User
+                     .insert_many([{'username': 'foo'},
+                                   {'username': 'bar'},
+                                   {'username': 'baz'}])
+                     .returning(User.id, User.username)
+                     .namedtuples())
+            data = query.execute()
+            for row in data:
+                print('added:', row.username, 'with id=', row.id)
+
+
+.. class:: Update(table, update=None, **kwargs)
+
+    :param Table table: Table to update.
+    :param dict update: Data to update.
+
+    Class representing an UPDATE query.
+
+    Example:
+
+    .. code-block:: python
+
+        PageView = Table('page_views')
+        query = (PageView
+                 .update({PageView.c.page_views: PageView.c.page_views + 1})
+                 .where(PageView.c.url == url))
+        query.execute(database)
+
+    .. method:: from_(*sources)
+
+        :param Source sources: one or more :class:`Table`,
+            :class:`Model`, query, or :class:`ValuesList` to join with.
+
+        Specify additional tables to join with using the UPDATE ... FROM
+        syntax, which is supported by Postgres. The `Postgres documentation <https://www.postgresql.org/docs/10/static/sql-update.html#id-1.9.3.176.8>`_
+        provides additional detail, but to summarize:
+
+            When a ``FROM`` clause is present, what essentially happens is that
+            the target table is joined to the tables mentioned in the
+            from_list, and each output row of the join represents an update
+            operation for the target table. When using ``FROM`` you should
+            ensure that the join produces at most one output row for each row
+            to be modified.
+
+        Example:
+
+        .. code-block:: python
+
+            # Update multiple users in a single query.
+            data = [('huey', True),
+                    ('mickey', False),
+                    ('zaizee', True)]
+            vl = ValuesList(data, columns=('username', 'is_admin'), alias='vl')
+
+            # Here we'll update the "is_admin" status of the above users,
+            # "joining" the VALUES() on the "username" column.
+            query = (User
+                     .update(is_admin=vl.c.is_admin)
+                     .from_(vl)
+                     .where(User.username == vl.c.username))
+
+        The above query produces the following SQL:
+
+        .. code-block:: sql
+
+            UPDATE "users" SET "is_admin" = "vl"."is_admin"
+            FROM (
+                VALUES ('huey', t), ('mickey', f), ('zaizee', t))
+                AS "vl"("username", "is_admin")
+            WHERE ("users"."username" = "vl"."username")
+
+
+.. class:: Insert(table, insert=None, columns=None, on_conflict=None, **kwargs)
+
+    :param Table table: Table to INSERT data into.
+    :param insert: Either a dict, a list, or a query.
+    :param list columns: List of columns when ``insert`` is a list or query.
+    :param on_conflict: Conflict resolution strategy.
+
+    Class representing an INSERT query.
+
+    .. method:: as_rowcount(as_rowcount=True)
+
+        :param bool as_rowcount: Whether to return the modified row count (as
+            opposed to the last-inserted row id).
+
+        By default, on databases that do *not* use RETURNING automatically
+        (currently Sqlite and MySQL), Peewee versions 3.12 through 3.14.10
+        would return the modified row-count when executing a bulk insert. This
+        change has been reverted so that bulk-inserts will, by default, return
+        the value of ``cursor.lastrowid``.
+
+        If you prefer to receive the inserted row-count, then specify
+        ``as_rowcount()``:
+
+        .. code-block:: python
+
+            db = MySQLDatabase(...)
+
+            query = User.insert_many([...])
+            # By default, the last rowid is returned:
+            #last_id = query.execute()
+
+            # To get the modified row-count:
+            rowcount = query.as_rowcount().execute()
+
+    .. method:: on_conflict_ignore(ignore=True)
+
+        :param bool ignore: Whether to add ON CONFLICT IGNORE clause.
+
+        Specify IGNORE conflict resolution strategy.
+
+    .. method:: on_conflict_replace(replace=True)
+
+        :param bool replace: Whether to add ON CONFLICT REPLACE clause.
+
+        Specify REPLACE conflict resolution strategy.
+
+    .. method:: on_conflict(action=None, update=None, preserve=None, where=None, conflict_target=None, conflict_where=None, conflict_constraint=None)
+
+        :param str action: Action to take when resolving conflict. If blank,
+            action is assumed to be "update".
+        :param update: A dictionary mapping column to new value.
+        :param preserve: A list of columns whose values should be preserved from the original INSERT.
+        :param where: Expression to restrict the conflict resolution.
+        :param conflict_target: Column(s) that comprise the constraint.
+        :param conflict_where: Expressions needed to match the constraint target if it is a partial index (index with a WHERE clause).
+        :param str conflict_constraint: Name of constraint to use for conflict
+            resolution. Currently only supported by Postgres.
+
+        Specify the parameters for an :class:`OnConflict` clause to use for
+        conflict resolution.
+
+        Examples:
+
+        .. code-block:: python
+
+            class User(Model):
+                username = TextField(unique=True)
+                last_login = DateTimeField(null=True)
+                login_count = IntegerField()
+
+            def log_user_in(username):
+                now = datetime.datetime.now()
+
+                # INSERT a new row for the user with the current timestamp and
+                # login count set to 1. If the user already exists, then we
+                # will preserve the last_login value from the "insert()" clause
+                # and atomically increment the login-count.
+                userid = (User
+                          .insert(username=username, last_login=now, login_count=1)
+                          .on_conflict(
+                              conflict_target=[User.username],
+                              preserve=[User.last_login],
+                              update={User.login_count: User.login_count + 1})
+                          .execute())
+                return userid
+
+        Example using the special :class:`EXCLUDED` namespace:
+
+        .. code-block:: python
+
+            class KV(Model):
+                key = CharField(unique=True)
+                value = IntegerField()
+
+            # Create one row.
+            KV.create(key='k1', value=1)
+
+            # Demonstrate usage of EXCLUDED.
+            # Here we will attempt to insert a new value for a given key. If that
+            # key already exists, then we will update its value with the *sum* of its
+            # original value and the value we attempted to insert -- provided that
+            # the new value is larger than the original value.
+            query = (KV.insert(key='k1', value=10)
+                     .on_conflict(conflict_target=[KV.key],
+                                  update={KV.value: KV.value + EXCLUDED.value},
+                                  where=(EXCLUDED.value > KV.value)))
+
+            # Executing the above query will result in the following data being
+            # present in the "kv" table:
+            # (key='k1', value=11)
+            query.execute()
+
+            # If we attempted to execute the query *again*, then nothing would be
+            # updated, as the new value (10) is now less than the value in the
+            # original row (11).
+
+
+.. class:: Delete()
+
+    Class representing a DELETE query.
 
 
 .. function:: prefetch(sq, *subqueries, prefetch_type=PREFETCH_TYPE.WHERE)
@@ -4731,7 +4817,7 @@ Model
 
     Eagerly fetch related objects, allowing efficient querying of multiple
     tables when a 1-to-many relationship exists. The prefetch type changes how
-    the subqueries are constructed which may be desirable dependending on the
+    the subqueries are constructed which may be desirable depending on the
     database engine in use.
 
         Prefetch type may be one of:
@@ -4876,7 +4962,7 @@ Query-builder Internals
     .. method:: scope_column(**kwargs)
 
         Scope used when generating SQL for a column. Ensures that the column is
-        rendered with it's correct alias. Was needed because when referencing
+        rendered with its correct alias. Was needed because when referencing
         the inner projection of a sub-select, Peewee would render the full
         SELECT query as the "source" of the column (instead of the query's
         alias + . + column).  This scope allows us to avoid rendering the full
