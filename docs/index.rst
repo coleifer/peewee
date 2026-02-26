@@ -28,6 +28,7 @@ New to peewee? These may help:
 * :ref:`Models and fields <models>`
 * :ref:`Querying <querying>`
 * :ref:`Relationships and joins <relationships>`
+* :ref:`Extensive library of SQL / Peewee examples <query-library>`
 * :ref:`Flask setup <flask>` or :ref:`FastAPI setup <fastapi>`
 
 Contents:

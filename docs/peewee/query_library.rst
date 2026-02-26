@@ -5,7 +5,9 @@ Query Library
 
 These query examples are taken from the site `Postgresql Exercises
 <https://pgexercises.com/>`_. A sample data-set can be found on the `getting
-started page <https://pgexercises.com/gettingstarted.html>`_.
+started page <https://pgexercises.com/gettingstarted.html>`__.
+
+Direct download: `clubdata.sql <https://raw.githubusercontent.com/coleifer/peewee/refs/heads/master/docs/clubdata.sql>`__
 
 .. contents:: On this page
    :local:

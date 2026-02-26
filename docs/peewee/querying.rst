@@ -30,6 +30,8 @@ All examples use the following models (see :ref:`models`):
        is_published = BooleanField(default=True)
 
 
+.. seealso:: :ref:`Extensive library of SQL / Peewee examples <query-library>`
+
 Selecting Records
 -----------------
 
