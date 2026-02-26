@@ -738,7 +738,8 @@ Database
    :param pragmas: Either a dictionary or a list of 2-tuples containing
        pragma key and value to set every time a connection is opened.
    :param bool regexp_function: Make the REGEXP function available.
-   :param bool rank_functions: Make the full-text search ranking functions available.
+   :param bool rank_functions: Make the full-text search ranking functions
+      available (recommended only if using FTS4).
    :param timeout: Set the busy-timeout on the SQLite driver (in seconds).
    :param bool returning_clause: Use `RETURNING` clause automatically for bulk
        INSERT queries (requires Sqlite 3.35 or newer).
@@ -3616,6 +3617,8 @@ Schema Manager
 Query-builder
 -------------
 
+.. seealso: :ref:`query-builder`
+
 .. class:: Node()
 
    Base-class for all components which make up the AST for a SQL query.
@@ -4535,7 +4538,6 @@ Query-builder
 
 Queries
 -------
-
 
 .. class:: BaseQuery()
 

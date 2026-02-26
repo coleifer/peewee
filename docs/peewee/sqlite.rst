@@ -410,6 +410,7 @@ Usage:
        set every time a connection is opened.
    :param timeout: Set the busy-timeout on the SQLite driver (in seconds).
    :param bool rank_functions: Make search result ranking functions available.
+       Recommended only when using FTS4.
    :param bool regexp_function: Make the REGEXP function available.
 
    .. seealso::
