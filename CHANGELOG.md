@@ -9,6 +9,10 @@ https://github.com/coleifer/peewee/releases
 
 * Ensure `gr_context` is set on greenlet in `greenlet_spawn` so that
   contextvars will be operable in sync handlers.
+* Removed `SqliteExtDatabase` (it basically served no purpose in 4.0). Use
+  `SqliteDatabase` instead.
+* Moved driver and extension-specific pooled implementations into the
+  corresponding extension module rather than putting all into `playhouse.pool`.
 
 [View commits](https://github.com/coleifer/peewee/compare/4.0.0...master)
 
