@@ -5,6 +5,10 @@ API Reference
 
 This document specifies Peewee's APIs.
 
+.. contents:: On this page
+   :local:
+   :depth: 1
+
 Database
 --------
 
