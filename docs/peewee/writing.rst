@@ -161,6 +161,17 @@ Optionally wrap the bulk insert in a transaction:
    with db.atomic():
        User.insert_many(data, fields=fields).execute()
 
+Insert queries support :meth:`~WriteQuery.returning` with Postgresql and SQLite
+to obtain the inserted rows:
+
+.. code-block:: python
+
+   query = (User
+            .insert_many([{'username': 'alice'}, {'username': 'bob'}])
+            .returning(User))
+   for user in query:
+       print(f'Added {user.username} with id = {user.id}')
+
 Batching large data sets
 ^^^^^^^^^^^^^^^^^^^^^^^^
 
@@ -270,6 +281,31 @@ matching the WHERE clause:
             .execute())
 
 The return value is the number of rows affected.
+
+Update queries support :meth:`~WriteQuery.returning` with Postgresql and SQLite
+to obtain the updated rows:
+
+.. code-block:: python
+
+   query = (User
+            .update(spam=True)
+            .where(User.username.contains('billing'))
+            .returning(User))
+   for user in query:
+       print(f'Marked {user.username} as spam')
+
+Because UPDATE queries do not support joins, we can use subqueries to update
+rows based on values in related tables. For example, unpublish all tweets by
+users with ``'billing'`` in their username:
+
+.. code-block:: python
+
+   spammers = User.select().where(User.username.contains('billing'))
+
+   (Tweet
+    .update(is_published=False)
+    .where(Tweet.user.in_(spammers))
+    .execute())
 
 Atomic updates
 ^^^^^^^^^^^^^^
@@ -537,6 +573,31 @@ To delete an arbitrary set of rows without fetching them:
                 (Tweet.is_published == False) &
                 (Tweet.timestamp < cutoff))
             .execute())
+
+Delete queries support :meth:`~WriteQuery.returning` with Postgresql and SQLite
+to obtain the deleted rows:
+
+.. code-block:: python
+
+   query = (User
+            .delete()
+            .where(User.username.contains('billing'))
+            .returning(User))
+   for user in query:
+       print(f'Deleted: {user.username}')
+
+Because DELETE queries do not support joins, we can use subqueries to delete
+rows based on values in related tables. For example, delete all tweets by users
+with ``'billing'`` in their username:
+
+.. code-block:: python
+
+   spammers = User.select().where(User.username.contains('billing'))
+
+   (Tweet
+    .delete()
+    .where(Tweet.user.in_(spammers))
+    .execute())
 
 .. seealso::
    * :meth:`Model.delete_instance`

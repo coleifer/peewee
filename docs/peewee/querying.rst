@@ -313,13 +313,13 @@ reference it by re-using the expression or by wrapping the alias in
 Random ordering
 ^^^^^^^^^^^^^^^
 
+:meth:`Database.random` provides a database-specific implementation of the
+random function, which can be used for ordering:
+
 .. code-block:: python
 
-   # Postgresql and SQLite:
-   LotteryEntry.select().order_by(fn.RANDOM()).limit(5)
-
-   # MySQL:
-   LotteryEntry.select().order_by(fn.RAND()).limit(5)
+   # Select 5 random winners.
+   LotteryEntry.select().order_by(db.random()).limit(5)
 
 
 Pagination, Limiting, and Offsetting

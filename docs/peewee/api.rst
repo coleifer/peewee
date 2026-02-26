@@ -10,1014 +10,1062 @@ Database
 
 .. class:: Database(database, thread_safe=True, field_types=None, operations=None, autoconnect=True, **kwargs)
 
-    :param str database: Database name or filename for SQLite (or ``None`` to
-        :ref:`defer initialization <initializing-database>`, in which case
-        you must call :meth:`Database.init`, specifying the database name).
-    :param bool thread_safe: Whether to store connection state in a
-        thread-local.
-    :param dict field_types: A mapping of additional field types to support.
-    :param dict operations: A mapping of additional operations to support.
-    :param bool autoconnect: Automatically connect to database if attempting to
-        execute a query on a closed database.
-    :param kwargs: Arbitrary keyword arguments that will be passed to the
-        database driver when a connection is created, for example ``password``,
-        ``host``, etc.
+   :param str database: Database name or filename for SQLite (or ``None`` to
+       :ref:`defer initialization <initializing-database>`, in which case
+       you must call :meth:`Database.init`, specifying the database name).
+   :param bool thread_safe: Whether to store connection state in a
+       thread-local.
+   :param dict field_types: A mapping of additional field types to support.
+   :param dict operations: A mapping of additional operations to support.
+   :param bool autoconnect: Automatically connect to database if attempting to
+       execute a query on a closed database.
+   :param kwargs: Arbitrary keyword arguments that will be passed to the
+       database driver when a connection is created, for example ``password``,
+       ``host``, etc.
 
-    The :class:`Database` is responsible for:
+   The :class:`Database` is responsible for:
 
-    * Executing queries
-    * Managing connections
-    * Transactions
-    * Introspection
+   * Executing queries
+   * Managing connections
+   * Transactions
+   * Introspection
 
-    .. note::
-        The database can be instantiated with ``None`` as the database name if
-        the database is not known until run-time. In this way you can create a
-        database instance and then configure it elsewhere when the settings are
-        known. This is called :ref:`deferred initialization <initializing-database>`.
+   .. note::
+      The database can be instantiated with ``None`` as the database name if
+      the database is not known until run-time. In this way you can create a
+      database instance and then configure it elsewhere when the settings are
+      known. This is called :ref:`deferred initialization <initializing-database>`.
 
-    Examples:
+   Examples:
 
-    .. code-block:: python
+   .. code-block:: python
 
-        # Sqlite database using WAL-mode and 32MB page-cache.
-        db = SqliteDatabase('app.db', pragmas={
-            'journal_mode': 'wal',
-            'cache_size': -32 * 1000})
+      # Sqlite database using WAL-mode and 64MB page-cache.
+      db = SqliteDatabase('app.db', pragmas={
+          'journal_mode': 'wal',
+          'cache_size': -64000})
 
-        # Postgresql database on remote host.
-        db = PostgresqlDatabase('my_app', user='postgres', host='10.1.0.3',
-                                password='secret')
+      # Postgresql database on remote host.
+      db = PostgresqlDatabase(
+          'my_app',
+          user='postgres',
+          host='10.1.0.3',
+          password='secret')
 
-    Deferred initialization example:
+   Deferred initialization example:
 
-    .. code-block:: python
+   .. code-block:: python
 
-        db = PostgresqlDatabase(None)
+      db = PostgresqlDatabase(None)
 
-        class BaseModel(Model):
-            class Meta:
-                database = db
+      class BaseModel(Model):
+          class Meta:
+              database = db
 
-        # Read database connection info from env, for example:
-        db_name = os.environ['DATABASE']
-        db_host = os.environ['PGHOST']
+      # Read database connection info from env, for example:
+      db_name = os.environ['DATABASE']
+      db_host = os.environ['PGHOST']
 
-        # Initialize database.
-        db.init(db_name, host=db_host, user='postgres')
+      # Initialize database.
+      db.init(db_name, host=db_host, user='postgres')
 
-    .. attribute:: param = '?'
+   .. attribute:: param = '?'
 
-        String used as parameter placeholder in SQL queries.
+      String used as parameter placeholder in SQL queries.
 
-    .. attribute:: quote = '"'
+   .. attribute:: quote = '"'
 
-        Type of quotation-mark to use to denote entities such as tables or
-        columns.
+      Type of quotation-mark to use to denote entities such as tables or
+      columns.
 
-    .. method:: init(database, **kwargs)
+   .. method:: init(database, **kwargs)
 
-        :param str database: Database name or filename for SQLite.
-        :param kwargs: Arbitrary keyword arguments that will be passed to the
-            database driver when a connection is created, for example
-            ``password``, ``host``, etc.
+      :param str database: Database name or filename for SQLite.
+      :param kwargs: Arbitrary keyword arguments that will be passed to the
+          database driver when a connection is created, for example
+          ``password``, ``host``, etc.
 
-        Initialize a *deferred* database. See :ref:`initializing-database`
-        for more info.
+      Initialize a *deferred* database. See :ref:`initializing-database`
+      for more info.
 
-    .. method:: connect(reuse_if_open=False)
+   .. method:: connect(reuse_if_open=False)
 
-        :param bool reuse_if_open: Do not raise an exception if a connection is
-            already opened.
-        :returns: whether a new connection was opened.
-        :rtype: bool
-        :raises: ``OperationalError`` if connection already open and
-            ``reuse_if_open`` is not set to ``True``.
+      :param bool reuse_if_open: Do not raise an exception if a connection is
+          already opened.
+      :return: whether a new connection was opened.
+      :rtype: bool
+      :raises: ``OperationalError`` if connection already open and
+          ``reuse_if_open`` is not set to ``True``.
 
-        Open a connection to the database.
+      Open a connection to the database.
 
-        .. code-block:: python
+      .. code-block:: python
 
-            db.connect()
+         db.connect()
 
-            # Or:
-            db.connect(reuse_if_open=True)
+         # Or:
+         db.connect(reuse_if_open=True)
 
-    .. method:: close()
+   .. method:: close()
 
-        :returns: Whether a connection was closed. If the database was already
-            closed, this returns ``False``.
-        :rtype: bool
+      :return: Whether the connection was closed. If the database was already
+          closed, this returns ``False``.
+      :rtype: bool
 
-        Close the connection to the database.
+      Close the connection to the database.
 
-        .. code-block:: python
+      .. code-block:: python
 
-            if not db.is_closed():
-                db.close()
+         if not db.is_closed():
+             db.close()
 
-    .. method:: is_closed()
+   .. method:: is_closed()
 
-        :returns: return ``True`` if database is closed, ``False`` if open.
-        :rtype: bool
+      :return: return ``True`` if database is closed, ``False`` if open.
+      :rtype: bool
 
-    .. method:: connection()
+   .. method:: connection()
 
-        Return the open connection. If a connection is not open, one will be
-        opened. The connection will be whatever the underlying database-driver
-        uses to encapsulate a database connection.
+      Return the DB-API driver connection. If a connection is not open, one
+      will be opened.
 
-    .. method:: __enter__()
-    .. method:: __exit__(exc_type, exc_val, exc_tb)
+      .. code-block:: python
 
-        The :class:`Database` instance can be used as a context-manager, in
-        which case a connection will be held open and a transaction run for the
-        duration of the wrapped block.
+         db = SqliteDatabase(':memory:')
 
-        If an unhandled exception occurs, the transaction is rolled-back.
+         # Get the sqlite3.Connection() instance.
+         conn = db.connection()
 
-        .. code-block:: python
+   .. method:: __enter__()
+   .. method:: __exit__(exc_type, exc_val, exc_tb)
+   .. method:: __call__()
 
-            db = SqliteDatabase('app.db')
+      The database object can be used as a context manager.
 
-            with db:
-                # Connection is open and transaction is active.
-                pass
+      1. Connection opens when context manager is entered.
+      2. Peewee begins a transaction.
+      3. Control is passed to user for duration of block.
+      4. Peewee commits transaction if block exits cleanly, otherwise issues a
+         rollback.
+      5. Peewee closes the connection.
+      6. Any unhandled exception is raised.
 
-            # Transaction commits and connection is closed.
+      .. code-block:: python
 
-    .. method:: connection_context()
+         with db:
+             User.create(username='charlie')
+             # Transaction is committed when the block exits normally,
+             # rolled back if an exception is raised.
 
-        Create a context-manager that will hold open a connection for the
-        duration of the wrapped block.
+      Decorator:
 
-        Example:
+      .. code-block:: python
 
-        .. code-block:: python
+         @db
+         def demo():
+             print('closed?', db.is_closed())
 
-            def on_app_startup():
-                # When app starts up, create the database tables, being sure
-                # the connection is closed upon completion.
-                with database.connection_context():
-                    database.create_tables(APP_MODELS)
+         demo()  # "closed? False"
+         db.is_closed()  # True
 
-    .. method:: cursor(named_cursor=None)
+   .. method:: connection_context()
 
-        :param named_cursor: For internal use.
+      Create a context-manager or decorator that will hold open a connection
+      for the duration of the wrapped block.
 
-        Return a ``cursor`` object on the current connection. If a connection
-        is not open, one will be opened. The cursor will be whatever the
-        underlying database-driver uses to encapsulate a database cursor.
+      Example:
 
-    .. method:: execute_sql(sql, params=None)
+      .. code-block:: python
 
-        :param str sql: SQL string to execute.
-        :param tuple params: Parameters for query.
-        :returns: cursor object.
+         with db.connection_context():
+             # Connection is open; no implicit transaction.
+             results = User.select()
 
-        Execute a SQL query and return a cursor over the results.
+      Decorator:
 
-        .. code-block:: python
+      .. code-block:: python
 
-            db = SqliteDatabase('my_app.db')
-            db.connect()
+         @db.connection_context()
+         def load_fixtures():
+             db.create_tables([User, Tweet])
+             import_data()
+                        database.create_tables(APP_MODELS)
 
-            # Example of executing a simple query and ignoring the results.
-            db.execute_sql("ATTACH DATABASE ':memory:' AS cache;")
+   .. method:: cursor(named_cursor=None)
 
-            # Example of iterating over the results of a query using the cursor.
-            cursor = db.execute_sql('SELECT * FROM users WHERE status = ?', (ACTIVE,))
-            for row in cursor.fetchall():
-                # Do something with row, which is a tuple containing column data.
-                pass
+      :param named_cursor: Reserved for internal use.
 
-    .. method:: execute(query, **context_options)
+      Return a DB-API ``cursor`` object on the current connection. If a
+      connection is not open, one will be opened.
 
-        :param query: A :class:`Query` instance.
-        :param context_options: Arbitrary options to pass to the SQL generator.
-        :returns: cursor object.
+   .. method:: execute_sql(sql, params=None)
 
-        Execute a SQL query by compiling a ``Query`` instance and executing the
-        resulting SQL.
+      :param str sql: SQL string to execute.
+      :param tuple params: Parameters for query.
+      :return: cursor object.
 
-        .. code-block:: python
+      Execute a SQL query and return a cursor over the results.
 
-            query = User.insert({'username': 'Huey'})
-            db.execute(query)
+      .. code-block:: python
 
-    .. method:: last_insert_id(cursor, query_type=None)
+         db = SqliteDatabase('my_app.db')
+         db.connect()
 
-        :param cursor: cursor object.
-        :returns: primary key of last-inserted row.
+         # Example of executing a simple query and ignoring the results.
+         db.execute_sql("ATTACH DATABASE ':memory:' AS cache;")
 
-    .. method:: rows_affected(cursor)
+         # Example of iterating over the results of a query using the cursor.
+         cursor = db.execute_sql('SELECT * FROM users WHERE status = ?', (ACTIVE,))
+         for row in cursor.fetchall():
+             # Do something with row, which is a tuple containing column data.
+             pass
 
-        :param cursor: cursor object.
-        :returns: number of rows modified by query.
+   .. method:: execute(query, **context_options)
 
-    .. method:: atomic(...)
+      :param query: A :class:`Query` instance.
+      :param context_options: Arbitrary options to pass to the SQL generator.
+      :return: cursor object.
 
-        Create a context-manager which runs any queries in the wrapped block in
-        a transaction (or save-point if blocks are nested).
+      Execute a SQL query by compiling a ``Query`` instance and executing the
+      resulting SQL.
 
-        Calls to :meth:`~Database.atomic` can be nested.
+      .. code-block:: python
 
-        :meth:`~Database.atomic` can also be used as a decorator.
+         query = User.insert({'username': 'Huey'})
+         db.execute(query)  # Equivalent to query.execute()
 
-        Database-specific parameters:
+   .. method:: last_insert_id(cursor, query_type=None)
 
-        :class:`PostgresqlDatabase` and :class:`MySQLDatabase` accept an
-        ``isolation_level`` parameter. :class:`SqliteDatabase` accepts a
-        ``lock_type`` parameter.
+      :param cursor: cursor object.
+      :return: primary key of last-inserted row.
 
-        :param str isolation_level: Isolation strategy: SERIALIZABLE, READ COMMITTED, REPEATABLE READ, READ UNCOMMITTED
-        :param str lock_type: Locking strategy: DEFERRED, IMMEDIATE, EXCLUSIVE.
+   .. method:: rows_affected(cursor)
 
-        Example code::
+      :param cursor: cursor object.
+      :return: number of rows modified by query.
 
-            with db.atomic() as txn:
-                perform_operation()
+   .. method:: atomic(...)
 
-                with db.atomic() as nested_txn:
-                    perform_another_operation()
+      Create a context-manager or decorator which wraps a block of code in a
+      transaction (or savepoint).
 
-        Transactions and save-points can be explicitly committed or rolled-back
-        within the wrapped block. If this occurs, a new transaction or
-        savepoint is begun after the commit/rollback.
+      Calls to :meth:`~Database.atomic` can be nested.
 
-        Example:
+      Database-specific parameters:
 
-        .. code-block:: python
+      :class:`PostgresqlDatabase` and :class:`MySQLDatabase` accept an
+      ``isolation_level`` parameter. :class:`SqliteDatabase` accepts a
+      ``lock_type`` parameter. Refer to :ref:`sqlite-locking` and :ref:`postgres-isolation`
+      for discussion.
 
-            with db.atomic() as txn:
-                User.create(username='mickey')
-                txn.commit()  # Changes are saved and a new transaction begins.
+      :param str isolation_level: Isolation strategy: READ UNCOMMITTED, READ COMMITTED, REPEATABLE READ, SERIALIZABLE
+      :param str lock_type: Locking strategy: DEFERRED, IMMEDIATE, EXCLUSIVE.
 
-                User.create(username='huey')
-                txn.rollback()  # "huey" will not be saved.
+      Example code::
 
-                User.create(username='zaizee')
+         with db.atomic() as txn:
+             user = User.create(username='charlie')
+             with db.atomic():
+                 tweet = Tweet.create(user=user, content='Hello')
 
-            # Print the usernames of all users.
-            print([u.username for u in User.select()])
+         # Both rows are committed when block exits normally.
 
-            # Prints ["mickey", "zaizee"]
+      As a decorator:
 
-    .. method:: transaction(...)
+      .. code-block:: python
 
-        Create a context-manager that runs all queries in the wrapped block in
-        a transaction.
+         @db.atomic()
+         def create_user_with_tweet(username, content):
+             user = User.create(username=username)
+             Tweet.create(user=user, content=content)
+             return user
 
-        Database-specific parameters:
+      Transactions (and save-points) can be committed or rolled-back within the
+      wrapped block. If this occurs, a new transaction or savepoint is begun:
 
-        :class:`PostgresqlDatabase` and :class:`MySQLDatabase` accept an
-        ``isolation_level`` parameter. :class:`SqliteDatabase` accepts a
-        ``lock_type`` parameter.
+      Example:
 
-        :param str isolation_level: Isolation strategy: SERIALIZABLE, READ COMMITTED, REPEATABLE READ, READ UNCOMMITTED
-        :param str lock_type: Locking strategy: DEFERRED, IMMEDIATE, EXCLUSIVE.
+      .. code-block:: python
 
-        .. code-block:: python
+          with db.atomic() as txn:
+              User.create(username='mickey')
+              txn.commit()  # Changes are saved and a new transaction begins.
 
-            with db.transaction() as txn:
-                User.create(username='mickey')
-                txn.commit()         # Commit now; a new transaction begins.
-                User.create(username='huey')
-                txn.rollback()       # Roll back huey; a new transaction begins.
-                User.create(username='zaizee')
-            # zaizee is committed when the block exits.
+              User.create(username='huey')
+              txn.rollback()  # "huey" will not be saved.
 
-        .. note::
-            If you manually commit or roll back a transaction, a new
-            transaction will automatically begin.
+              User.create(username='zaizee')
 
-        .. warning::
-            If you attempt to nest transactions with peewee using the
-            :meth:`~Database.transaction` context manager, only the outer-most
-            transaction will be used.
+          # Print the usernames of all users.
+          print([u.username for u in User.select()])
 
-            As this may lead to unpredictable behavior, it is recommended that
-            you use :meth:`~Database.atomic`.
+          # Prints ["mickey", "zaizee"]
 
-    .. method:: savepoint()
+      If an unhandled exception occurs in the block, the block is rolled-back
+      and the exception propagates.
 
-        Create a context-manager that runs all queries in the wrapped block in
-        a savepoint. Savepoints can be nested arbitrarily.
+   .. method:: transaction(...)
 
-        .. code-block:: python
+      Create a context-manager or decorator that runs all queries in the
+      wrapped block in a transaction.
 
-            with db.transaction() as txn:
-                with db.savepoint() as sp:
-                    User.create(username='mickey')
+      Database-specific parameters:
 
-                with db.savepoint() as sp2:
-                    User.create(username='zaizee')
-                    sp2.rollback()  # "zaizee" is not saved.
-                    User.create(username='huey')
+      :class:`PostgresqlDatabase` and :class:`MySQLDatabase` accept an
+      ``isolation_level`` parameter. :class:`SqliteDatabase` accepts a
+      ``lock_type`` parameter. Refer to :ref:`sqlite-locking` and :ref:`postgres-isolation`
+      for discussion.
 
-            # mickey and huey were created.
+      :param str isolation_level: Isolation strategy: READ UNCOMMITTED, READ COMMITTED, REPEATABLE READ, SERIALIZABLE
+      :param str lock_type: Locking strategy: DEFERRED, IMMEDIATE, EXCLUSIVE.
 
-        .. note::
-            If you manually commit or roll back a savepoint, a new savepoint will
-            automatically begin.
+      .. code-block:: python
 
-    .. method:: manual_commit()
+         with db.transaction() as txn:
+             User.create(username='mickey')
+             txn.commit()         # Commit now; a new transaction begins.
+             User.create(username='huey')
+             txn.rollback()       # Roll back huey; a new transaction begins.
+             User.create(username='zaizee')
+         # zaizee is committed when the block exits.
 
-        Create a context-manager which disables all transaction management for
-        the duration of the wrapped block.
+      .. note::
+         Transactions can be committed or rolled-back within the wrapped block.
+         If this occurs, a new transaction is begun.
 
-        Example:
+      .. warning::
+         If you attempt to nest transactions with peewee using the
+         :meth:`~Database.transaction` context manager, only the outer-most
+         transaction will be used.
 
-        .. code-block:: python
+         As this may lead to unpredictable behavior, it is recommended that
+         you use :meth:`~Database.atomic`.
 
-            with db.manual_commit():
-                db.begin()  # Begin transaction explicitly.
-                try:
-                    user.delete_instance(recursive=True)
-                except:
-                    db.rollback()  # Rollback -- an error occurred.
-                    raise
-                else:
-                    try:
-                        db.commit()  # Attempt to commit changes.
-                    except:
-                        db.rollback()  # Error committing, rollback.
-                        raise
+   .. method:: savepoint()
 
-        The above code is equivalent to the following::
+      Create a context-manager or decorator that runs all queries in the
+      wrapped block in a savepoint. Savepoints can be nested arbitrarily, but
+      must occur within a transaction.
 
-            with db.atomic():
-                user.delete_instance(recursive=True)
+      .. code-block:: python
 
-    .. method:: session_start()
+         with db.transaction() as txn:
+             with db.savepoint() as sp:
+                 User.create(username='mickey')
 
-        Begin a new transaction (without using a context-manager or decorator).
-        This method is useful if you intend to execute a sequence of operations
-        inside a transaction, but using a decorator or context-manager would
-        not be appropriate.
+             with db.savepoint() as sp2:
+                 User.create(username='zaizee')
+                 sp2.rollback()  # "zaizee" is not saved.
+                 User.create(username='huey')
 
-        .. note::
-            It is strongly advised that you use the :meth:`Database.atomic`
-            method whenever possible for managing transactions/savepoints. The
-            ``atomic`` method correctly manages nesting, uses the appropriate
-            construction (e.g., transaction-vs-savepoint), and always cleans up
-            after itself.
+         # mickey and huey were created.
 
-            The :meth:`~Database.session_start` method should only be used
-            if the sequence of operations does not easily lend itself to
-            wrapping using either a context-manager or decorator.
+      .. note::
+         Savepoints can be committed or rolled-back within the wrapped block.
+         If this occurs, a new savepoint is begun.
 
-        .. warning::
-            You must *always* call either :meth:`~Database.session_commit`
-            or :meth:`~Database.session_rollback` after calling the
-            ``session_start`` method.
+   .. method:: manual_commit()
 
-    .. method:: session_commit()
+      Create a context-manager or decorator which disables Peewee's transaction
+      management for the wrapped block.
 
-        Commit any changes made during a transaction begun with
-        :meth:`~Database.session_start`.
+      Example:
 
-    .. method:: session_rollback()
+      .. code-block:: python
 
-        Roll back any changes made during a transaction begun with
-        :meth:`~Database.session_start`.
+         with db.manual_commit():
+             db.begin()  # Begin transaction explicitly.
+             try:
+                 user.delete_instance(recursive=True)
+             except:
+                 db.rollback()  # Rollback -- an error occurred.
+                 raise
+             else:
+                 try:
+                     db.commit()  # Attempt to commit changes.
+                 except:
+                     db.rollback()  # Error committing, rollback.
+                     raise
 
-    .. method:: begin()
+      The above code is equivalent to the following:
 
-        Begin a transaction when using manual-commit mode.
+      .. code-block:: python
 
-        .. note::
-            This method should only be used in conjunction with the
-            :meth:`~Database.manual_commit` context manager.
+         with db.atomic():
+             user.delete_instance(recursive=True)
 
-    .. method:: commit()
+   .. method:: session_start()
 
-        Manually commit the currently-active transaction.
+      Begin a new transaction (without using a context-manager or decorator).
+      This method is useful if you intend to execute a sequence of operations
+      inside a transaction, but using a decorator or context-manager would
+      not be appropriate.
 
-        .. note::
-            This method should only be used in conjunction with the
-            :meth:`~Database.manual_commit` context manager.
+      .. note::
+         It is strongly advised that you use the :meth:`Database.atomic`
+         method whenever possible for managing transactions/savepoints. The
+         ``atomic`` method correctly manages nesting, uses the appropriate
+         construction (e.g., transaction-vs-savepoint), and always cleans up
+         after itself.
 
-    .. method:: rollback()
+         The :meth:`~Database.session_start` method should only be used
+         if the sequence of operations does not easily lend itself to
+         wrapping using either a context-manager or decorator.
 
-        Manually roll-back the currently-active transaction.
+      .. warning::
+         You must *always* call either :meth:`~Database.session_commit`
+         or :meth:`~Database.session_rollback` after calling the
+         ``session_start`` method.
 
-        .. note::
-            This method should only be used in conjunction with the
-            :meth:`~Database.manual_commit` context manager.
+   .. method:: session_commit()
 
-    .. method:: in_transaction()
+      Commit any changes made during a transaction begun with
+      :meth:`~Database.session_start`.
 
-        :returns: whether or not a transaction is currently open.
-        :rtype: bool
+   .. method:: session_rollback()
 
-        .. code-block:: python
+      Roll back any changes made during a transaction begun with
+      :meth:`~Database.session_start`.
 
-            with db.atomic() as tx:
-                assert db.in_transaction()
+   .. method:: begin()
 
-            assert not db.in_transaction()  # No longer in transaction.
+      Begin a transaction when using manual-commit mode.
 
-    .. method:: batch_commit(it, n)
+      .. note::
+         This method should only be used in conjunction with the
+         :meth:`~Database.manual_commit` context manager.
 
-        :param iterable it: an iterable whose items will be yielded.
-        :param int n: commit every *n* items.
-        :return: an equivalent iterable to the one provided, with the addition
-            that groups of *n* items will be yielded in a transaction.
+   .. method:: commit()
 
-        The purpose of this method is to simplify batching large operations,
-        such as inserts, updates, etc. You pass in an iterable and the number
-        of items-per-batch, and the items will be returned by an equivalent
-        iterator that wraps each batch in a transaction.
+      Manually commit the currently-active transaction.
 
-        Example:
+      .. note::
+         This method should only be used in conjunction with the
+         :meth:`~Database.manual_commit` context manager.
 
-        .. code-block:: python
+   .. method:: rollback()
 
-            # Some list or iterable containing data to insert.
-            row_data = [{'username': 'u1'}, {'username': 'u2'}, ...]
+      Manually roll-back the currently-active transaction.
 
-            # Insert all data, committing every 100 rows. If, for example,
-            # there are 789 items in the list, then there will be a total of
-            # 8 transactions (7x100 and 1x89).
-            for row in db.batch_commit(row_data, 100):
-                user = User.create(**row)
+      .. note::
+          This method should only be used in conjunction with the
+         :meth:`~Database.manual_commit` context manager.
 
-                # Now let's suppose we need to do something w/the user.
-                user.call_method()
+   .. method:: in_transaction()
 
-        A more efficient option is to batch the data into a multi-value ``INSERT``
-        statement (for example, using :meth:`Model.insert_many`). Use this
-        approach instead wherever possible:
+      :return: whether or not a transaction is currently open.
+      :rtype: bool
 
-        .. code-block:: python
+      .. code-block:: python
 
-            with db.atomic():
-                for idx in range(0, len(row_data), 100):
-                    # Insert 100 rows at a time.
-                    rows = row_data[idx:idx + 100]
-                    User.insert_many(rows).execute()
+         with db.atomic() as tx:
+             assert db.in_transaction()
 
-    .. method:: table_exists(table, schema=None)
+         assert not db.in_transaction()  # No longer in transaction.
 
-        :param str table: Table name.
-        :param str schema: Schema name (optional).
-        :returns: ``bool`` indicating whether table exists.
+   .. method:: batch_commit(it, n)
 
-    .. method:: get_tables(schema=None)
+      :param iterable it: an iterable whose items will be yielded.
+      :param int n: commit every *n* items.
+      :return: an equivalent iterable to the one provided, with the addition
+          that groups of *n* items will be yielded in a transaction.
 
-        :param str schema: Schema name (optional).
-        :returns: a list of table names in the database.
+      Simplify batching large operations, such as inserts, updates, etc. Pass
+      in an iterable and the number of items-per-batch, and the items will be
+      returned by an equivalent iterator that wraps each batch in a
+      transaction.
 
-    .. method:: get_indexes(table, schema=None)
+      Example:
 
-        :param str table: Table name.
-        :param str schema: Schema name (optional).
+      .. code-block:: python
 
-        Return a list of :class:`IndexMetadata` tuples.
+         # Some list or iterable containing data to insert.
+         row_data = [{'username': 'u1'}, {'username': 'u2'}, ...]
 
-        Example:
+         # Insert all data, committing every 100 rows. If, for example,
+         # there are 789 items in the list, then there will be a total of
+         # 8 transactions (7x100 and 1x89).
+         for row in db.batch_commit(row_data, 100):
+             user = User.create(**row)
 
-        .. code-block:: python
+             # Now let's suppose we need to do something w/the user.
+             user.call_method()
 
-            print(db.get_indexes('entry'))
-            [IndexMetadata(
-                 name='entry_public_list',
-                 sql='CREATE INDEX "entry_public_list" ...',
-                 columns=['timestamp'],
-                 unique=False,
-                 table='entry'),
-             IndexMetadata(
-                 name='entry_slug',
-                 sql='CREATE UNIQUE INDEX "entry_slug" ON "entry" ("slug")',
-                 columns=['slug'],
-                 unique=True,
-                 table='entry')]
+      A more efficient option is to batch the data into a multi-value ``INSERT``
+      statement (for example, using :meth:`Model.insert_many`). Use this
+      approach instead wherever possible:
 
-    .. method:: get_columns(table, schema=None)
+      .. code-block:: python
 
-        :param str table: Table name.
-        :param str schema: Schema name (optional).
+         with db.atomic():
+             for idx in range(0, len(row_data), 100):
+                 # Insert 100 rows at a time.
+                 rows = row_data[idx:idx + 100]
+                 User.insert_many(rows).execute()
 
-        Return a list of :class:`ColumnMetadata` tuples.
+   .. method:: table_exists(table, schema=None)
 
-        Example:
+      :param str table: Table name.
+      :param str schema: Schema name (optional).
+      :return: ``bool`` indicating whether table exists.
 
-        .. code-block:: python
+   .. method:: get_tables(schema=None)
 
-            print(db.get_columns('entry'))
-            [ColumnMetadata(
-                 name='id',
-                 data_type='INTEGER',
-                 null=False,
-                 primary_key=True,
-                 table='entry'),
-             ColumnMetadata(
-                 name='title',
-                 data_type='TEXT',
-                 null=False,
-                 primary_key=False,
-                 table='entry'),
-             ...]
+      :param str schema: Schema name (optional).
+      :return: a list of table names in the database.
 
-    .. method:: get_primary_keys(table, schema=None)
+   .. method:: get_indexes(table, schema=None)
 
-        :param str table: Table name.
-        :param str schema: Schema name (optional).
+      :param str table: Table name.
+      :param str schema: Schema name (optional).
 
-        Return a list of column names that comprise the primary key.
+      Return a list of :class:`IndexMetadata` tuples.
 
-        Example:
+      Example:
 
-        .. code-block:: python
+      .. code-block:: python
 
-            print(db.get_primary_keys('entry'))
-            ['id']
+         print(db.get_indexes('entry'))
+         [IndexMetadata(
+              name='entry_public_list',
+              sql='CREATE INDEX "entry_public_list" ...',
+              columns=['timestamp'],
+              unique=False,
+              table='entry'),
+          IndexMetadata(
+              name='entry_slug',
+              sql='CREATE UNIQUE INDEX "entry_slug" ON "entry" ("slug")',
+              columns=['slug'],
+              unique=True,
+              table='entry')]
 
-    .. method:: get_foreign_keys(table, schema=None)
+   .. method:: get_columns(table, schema=None)
 
-        :param str table: Table name.
-        :param str schema: Schema name (optional).
+      :param str table: Table name.
+      :param str schema: Schema name (optional).
 
-        Return a list of :class:`ForeignKeyMetadata` tuples for keys present
-        on the table.
+      Return a list of :class:`ColumnMetadata` tuples.
 
-        Example:
+      Example:
 
-        .. code-block:: python
+      .. code-block:: python
 
-            print(db.get_foreign_keys('entrytag'))
-            [ForeignKeyMetadata(
-                 column='entry_id',
-                 dest_table='entry',
-                 dest_column='id',
-                 table='entrytag'),
-             ...]
+         print(db.get_columns('entry'))
+         [ColumnMetadata(
+              name='id',
+              data_type='INTEGER',
+              null=False,
+              primary_key=True,
+              table='entry'),
+          ColumnMetadata(
+              name='title',
+              data_type='TEXT',
+              null=False,
+              primary_key=False,
+              table='entry'),
+          ...]
 
-    .. method:: get_views(schema=None)
+   .. method:: get_primary_keys(table, schema=None)
 
-        :param str schema: Schema name (optional).
+      :param str table: Table name.
+      :param str schema: Schema name (optional).
 
-        Return a list of :class:`ViewMetadata` tuples for VIEWs present in
-        the database.
+      Return a list of column names that comprise the primary key.
 
-        Example:
+      Example:
 
-        .. code-block:: python
+      .. code-block:: python
 
-            print(db.get_views())
-            [ViewMetadata(
-                 name='entries_public',
-                 sql='CREATE VIEW entries_public AS SELECT ... '),
-             ...]
+         print(db.get_primary_keys('entry'))
+         ['id']
 
-    .. method:: sequence_exists(seq)
+   .. method:: get_foreign_keys(table, schema=None)
 
-        :param str seq: Name of sequence.
-        :returns: Whether sequence exists.
-        :rtype: bool
+      :param str table: Table name.
+      :param str schema: Schema name (optional).
 
-        .. code-block:: python
+      Return a list of :class:`ForeignKeyMetadata` tuples for keys present
+      on the table.
 
-            if db.sequence_exists('user_id_seq'):
-                print('Sequence found.')
+      Example:
 
-    .. method:: create_tables(models, **options)
+      .. code-block:: python
 
-        :param list models: A list of :class:`Model` classes.
-        :param options: Options to specify when calling
-            :meth:`Model.create_table`.
+         print(db.get_foreign_keys('entrytag'))
+         [ForeignKeyMetadata(
+              column='entry_id',
+              dest_table='entry',
+              dest_column='id',
+              table='entrytag'),
+          ...]
 
-        Create tables, indexes and associated metadata for the given list of
-        models.
+   .. method:: get_views(schema=None)
 
-        Dependencies are resolved so that tables are created in the appropriate
-        order.
+      :param str schema: Schema name (optional).
 
-    .. method:: drop_tables(models, **options)
+      Return a list of :class:`ViewMetadata` tuples for VIEWs present in
+      the database.
 
-        :param list models: A list of :class:`Model` classes.
-        :param kwargs: Options to specify when calling
-            :meth:`Model.drop_table`.
+      Example:
 
-        Drop tables, indexes and associated metadata for the given list of
-        models.
+      .. code-block:: python
 
-        Dependencies are resolved so that tables are dropped in the appropriate
-        order.
+         print(db.get_views())
+         [ViewMetadata(
+              name='entries_public',
+              sql='CREATE VIEW entries_public AS SELECT ... '),
+          ...]
 
-    .. method:: bind(models, bind_refs=True, bind_backrefs=True)
+   .. method:: sequence_exists(seq)
 
-        :param list models: One or more :class:`Model` classes to bind.
-        :param bool bind_refs: Bind related models.
-        :param bool bind_backrefs: Bind back-reference related models.
+      :param str seq: Name of sequence.
+      :return: Whether sequence exists.
+      :rtype: bool
 
-        Bind the given list of models, and specified relations, to the
-        database.
+      .. code-block:: python
 
-    .. method:: bind_ctx(models, bind_refs=True, bind_backrefs=True)
+         if db.sequence_exists('user_id_seq'):
+             print('Sequence found.')
 
-        :param list models: List of models to bind to the database.
-        :param bool bind_refs: Bind models that are referenced using
-            foreign-keys.
-        :param bool bind_backrefs: Bind models that reference the given model
-            with a foreign-key.
+   .. method:: create_tables(models, **options)
 
-        Create a context-manager that binds (associates) the given models with
-        the current database for the duration of the wrapped block.
+      :param list models: A list of :class:`Model` classes.
+      :param options: Options to specify when calling
+          :meth:`Model.create_table`.
 
-        Example:
+      Create tables, indexes and associated constraints for the given list of
+      models.
 
-        .. code-block:: python
+      Dependencies are resolved so that tables are created in the appropriate
+      order.
 
-            MODELS = (User, Account, Note)
+   .. method:: drop_tables(models, **options)
 
-            # Bind the given models to the db for the duration of wrapped block.
-            def use_test_database(fn):
-                @wraps(fn)
-                def inner(self):
-                    with test_db.bind_ctx(MODELS):
-                        test_db.create_tables(MODELS)
-                        try:
-                            fn(self)
-                        finally:
-                            test_db.drop_tables(MODELS)
-                return inner
+      :param list models: A list of :class:`Model` classes.
+      :param kwargs: Options to specify when calling
+          :meth:`Model.drop_table`.
 
+      Drop tables, indexes and constraints for the given list of models.
 
-            class TestSomething(TestCase):
-                @use_test_database
-                def test_something(self):
-                    # ... models are bound to test database ...
-                    pass
+      Dependencies are resolved so that tables are dropped in the appropriate
+      order.
 
-    .. method:: extract_date(date_part, date_field)
+   .. method:: bind(models, bind_refs=True, bind_backrefs=True)
 
-        :param str date_part: date part to extract, e.g. 'year'.
-        :param Node date_field: a SQL node containing a date/time, for example
-            a :class:`DateTimeField`.
-        :returns: a SQL node representing a function call that will return the
-            provided date part.
+      :param list models: One or more :class:`Model` classes to bind.
+      :param bool bind_refs: Bind related models.
+      :param bool bind_backrefs: Bind back-reference related models.
 
-        Provides a compatible interface for extracting a portion of a datetime.
+      Bind the given list of models, and specified relations, to the
+      database.
 
-    .. method:: truncate_date(date_part, date_field)
+      .. code-block:: python
 
-        :param str date_part: date part to truncate to, e.g. 'day'.
-        :param Node date_field: a SQL node containing a date/time, for example
-            a :class:`DateTimeField`.
-        :returns: a SQL node representing a function call that will return the
-            truncated date part.
+         def setup_tests():
+             # Bind models to an in-memory SQLite database.
+             test_db = SqliteDatabase(':memory:')
+             test_db.bind([User, Tweet])
 
-        Provides a compatible interface for truncating a datetime to the given
-        resolution.
+   .. method:: bind_ctx(models, bind_refs=True, bind_backrefs=True)
 
-    .. method:: random()
+       :param list models: List of models to bind to the database.
+       :param bool bind_refs: Bind models that are referenced using
+           foreign-keys.
+       :param bool bind_backrefs: Bind models that reference the given model
+           with a foreign-key.
 
-        :returns: a SQL node representing a function call that returns a random
-            value.
+       Create a context-manager that binds (associates) the given models with
+       the current database for the duration of the wrapped block.
 
-        A compatible interface for calling the appropriate random number
-        generation function provided by the database. For Postgres and Sqlite,
-        this is equivalent to ``fn.random()``, for MySQL ``fn.rand()``.
+       Example:
+
+       .. code-block:: python
+
+           MODELS = [User, Tweet, Favorite]
+
+           # Bind the given models to the db for the duration of wrapped block.
+           def use_test_database(fn):
+               @wraps(fn)
+               def inner(self):
+                   with test_db.bind_ctx(MODELS):
+                       test_db.create_tables(MODELS)
+                       try:
+                           fn(self)
+                       finally:
+                           test_db.drop_tables(MODELS)
+               return inner
+
+
+           class TestSomething(TestCase):
+               @use_test_database
+               def test_something(self):
+                   # ... models are bound to test database ...
+                   pass
+
+   .. method:: extract_date(date_part, date_field)
+
+      :param str date_part: date part to extract, e.g. 'year'.
+      :param Node date_field: a SQL node containing a date/time, for example
+          a :class:`DateTimeField`.
+      :return: a SQL node representing a function call that will return the
+          provided date part.
+
+      Provides a compatible interface for extracting a portion of a datetime.
+
+   .. method:: truncate_date(date_part, date_field)
+
+      :param str date_part: date part to truncate to, e.g. 'day'.
+      :param Node date_field: a SQL node containing a date/time, for example
+          a :class:`DateTimeField`.
+      :return: a SQL node representing a function call that will return the
+          truncated date part.
+
+      Provides a compatible interface for truncating a datetime to the given
+      resolution.
+
+   .. method:: random()
+
+      :return: a SQL node representing a function call that returns a random
+          value.
+
+      A compatible interface for calling the appropriate random number
+      generation function provided by the database. For Postgres and Sqlite,
+      this is equivalent to ``fn.random()``, for MySQL ``fn.rand()``.
 
 
 .. class:: SqliteDatabase(database, pragmas=None, regexp_function=False, rank_functions=False, timeout=5, returning_clause=None,  **kwargs)
 
-    :param pragmas: Either a dictionary or a list of 2-tuples containing
-        pragma key and value to set every time a connection is opened.
-    :param bool regexp_function: Make the REGEXP function available.
-    :param bool rank_functions: Make the full-text search ranking functions available.
-    :param timeout: Set the busy-timeout on the SQLite driver (in seconds).
-    :param bool returning_clause: Use `RETURNING` clause automatically for bulk
-        INSERT queries (requires Sqlite 3.35 or newer).
+   :param pragmas: Either a dictionary or a list of 2-tuples containing
+       pragma key and value to set every time a connection is opened.
+   :param bool regexp_function: Make the REGEXP function available.
+   :param bool rank_functions: Make the full-text search ranking functions available.
+   :param timeout: Set the busy-timeout on the SQLite driver (in seconds).
+   :param bool returning_clause: Use `RETURNING` clause automatically for bulk
+       INSERT queries (requires Sqlite 3.35 or newer).
 
-    Sqlite database implementation. :class:`SqliteDatabase` that provides
-    some advanced features only offered by Sqlite.
+   Sqlite database implementation. :class:`SqliteDatabase` that provides
+   some advanced features only offered by Sqlite.
 
-    * Register custom aggregates, collations and functions
-    * Load C extensions
-    * Advanced transactions (specify lock type)
-    * For even more features, see :class:`CySqliteDatabase`.
+   * Register user-defined functions, aggregates, window functions, collations
+   * Load extension modules distributed as shared libraries
+   * Advanced transactions (specify lock type)
+   * For additional features see :class:`CySqliteDatabase`.
 
-    Example of initializing a database and configuring some PRAGMAs:
+   Example of initializing a database and configuring some PRAGMAs:
 
-    .. code-block:: python
+   .. code-block:: python
 
-        db = SqliteDatabase('my_app.db', pragmas=(
-            ('cache_size', -16000),  # 16MB
-            ('journal_mode', 'wal'),  # Use write-ahead-log journal mode.
-        ))
+      db = SqliteDatabase('my_app.db', pragmas=(
+          ('cache_size', -16000),  # 16MB
+          ('journal_mode', 'wal'),  # Use write-ahead-log journal mode.
+      ))
 
-        # Alternatively, pragmas can be specified using a dictionary.
-        db = SqliteDatabase('my_app.db', pragmas={'journal_mode': 'wal'})
+      # Alternatively, pragmas can be specified using a dictionary.
+      db = SqliteDatabase('my_app.db', pragmas={'journal_mode': 'wal'})
 
-    .. method:: pragma(key, value=SENTINEL, permanent=False)
+   .. method:: pragma(key, value=SENTINEL, permanent=False)
 
-        :param key: Setting name.
-        :param value: New value for the setting (optional).
-        :param permanent: Apply this pragma whenever a connection is opened.
+      :param key: Setting name.
+      :param value: New value for the setting (optional).
+      :param permanent: Apply this pragma whenever a connection is opened.
 
-        Execute a PRAGMA query once on the active connection. If a value is not
-        specified, then the current value will be returned.
+      Execute a PRAGMA query once on the active connection. If a value is not
+      specified, then the current value will be returned.
 
-        If ``permanent`` is specified, then the PRAGMA query will also be
-        executed whenever a new connection is opened, ensuring it is always
-        in-effect.
+      If ``permanent`` is specified, then the PRAGMA query will also be
+      executed whenever a new connection is opened, ensuring it is always
+      in-effect.
 
-        .. note::
-            By default this only affects the current connection. If the PRAGMA
-            being executed is not persistent, then you must specify
-            ``permanent=True`` to ensure the pragma is set on subsequent
-            connections.
+   .. attribute:: cache_size
 
-    .. attribute:: cache_size
+      Get or set the cache_size pragma for the current connection.
 
-        Get or set the cache_size pragma for the current connection.
+   .. attribute:: foreign_keys
 
-    .. attribute:: foreign_keys
+      Get or set the foreign_keys pragma for the current connection.
 
-        Get or set the foreign_keys pragma for the current connection.
+   .. attribute:: journal_mode
 
-    .. attribute:: journal_mode
+      Get or set the journal_mode pragma.
 
-        Get or set the journal_mode pragma.
+   .. attribute:: journal_size_limit
 
-    .. attribute:: journal_size_limit
+      Get or set the journal_size_limit pragma.
 
-        Get or set the journal_size_limit pragma.
+   .. attribute:: mmap_size
 
-    .. attribute:: mmap_size
+      Get or set the mmap_size pragma for the current connection.
 
-        Get or set the mmap_size pragma for the current connection.
+   .. attribute:: page_size
 
-    .. attribute:: page_size
+      Get or set the page_size pragma.
 
-        Get or set the page_size pragma.
+   .. attribute:: read_uncommitted
 
-    .. attribute:: read_uncommitted
+      Get or set the read_uncommitted pragma for the current connection.
 
-        Get or set the read_uncommitted pragma for the current connection.
+   .. attribute:: synchronous
 
-    .. attribute:: synchronous
+      Get or set the synchronous pragma for the current connection.
 
-        Get or set the synchronous pragma for the current connection.
+   .. attribute:: wal_autocheckpoint
 
-    .. attribute:: wal_autocheckpoint
+      Get or set the wal_autocheckpoint pragma for the current connection.
 
-        Get or set the wal_autocheckpoint pragma for the current connection.
+   .. attribute:: timeout
 
-    .. attribute:: timeout
+      Get or set the busy timeout (seconds).
 
-        Get or set the busy timeout (seconds).
+   .. method:: func(name=None, num_params=-1, deterministic=None)
 
-    .. method:: register_aggregate(klass, name=None, num_params=-1)
+      :param str name: Name of the function (defaults to function name).
+      :param int num_params: Number of parameters the function accepts,
+          or -1 for any number.
+      :param bool deterministic: Whether the function is deterministic for a
+          given input (this is required to use the function in an index).
+          Requires Sqlite 3.20 or newer, and ``sqlite3`` driver support
+          (added to stdlib in Python 3.8).
 
-        :param klass: Class implementing aggregate API.
-        :param str name: Aggregate function name (defaults to name of class).
-        :param int num_params: Number of parameters the aggregate accepts, or
-            -1 for any number.
+      Decorator to register a user-defined scalar function.
 
-        Register a user-defined aggregate function.
+      Example:
 
-        The function will be registered each time a new connection is opened.
-        Additionally, if a connection is already open, the aggregate will be
-        registered with the open connection.
+      .. code-block:: python
 
-    .. method:: aggregate(name=None, num_params=-1)
+         @db.func('title_case')
+         def title_case(s):
+             return s.title() if s else ''
 
-        :param str name: Name of the aggregate (defaults to class name).
-        :param int num_params: Number of parameters the aggregate accepts,
-            or -1 for any number.
+         Book.select(fn.title_case(Book.title))
 
-        Class decorator to register a user-defined aggregate function.
+   .. method:: register_function(fn, name=None, num_params=-1, deterministic=None)
 
-        Example:
+      :param fn: The user-defined scalar function.
+      :param str name: Name of function (defaults to function name)
+      :param int num_params: Number of arguments the function accepts, or
+          -1 for any number.
+      :param bool deterministic: Whether the function is deterministic for a
+          given input (this is required to use the function in an index).
+          Requires Sqlite 3.20 or newer, and ``sqlite3`` driver support
+          (added to stdlib in Python 3.8).
 
-        .. code-block:: python
+      Register a user-defined scalar function. The function will be
+      registered each time a new connection is opened.  Additionally, if a
+      connection is already open, the function will be registered with the
+      open connection.
 
-            @db.aggregate('md5')
-            class MD5(object):
-                def initialize(self):
-                    self.md5 = hashlib.md5()
+   .. method:: aggregate(name=None, num_params=-1)
 
-                def step(self, value):
-                    self.md5.update(value)
+      :param str name: Name of the aggregate (defaults to class name).
+      :param int num_params: Number of parameters the aggregate accepts,
+          or -1 for any number.
 
-                def finalize(self):
-                    return self.md5.hexdigest()
+      Class decorator to register a user-defined aggregate function.
 
+      Example:
 
-            @db.aggregate()
-            class Product(object):
-                '''Like SUM() except calculates cumulative product.'''
-                def __init__(self):
-                    self.product = 1
+      .. code-block:: python
 
-                def step(self, value):
-                    self.product *= value
+         @db.aggregate('md5')
+         class MD5(object):
+             def initialize(self):
+                 self.md5 = hashlib.md5()
 
-                def finalize(self):
-                    return self.product
+             def step(self, value):
+                 self.md5.update(value)
 
-    .. method:: register_collation(fn, name=None)
+             def finalize(self):
+                 return self.md5.hexdigest()
 
-        :param fn: The collation function.
-        :param str name: Name of collation (defaults to function name)
 
-        Register a user-defined collation. The collation will be registered
-        each time a new connection is opened.  Additionally, if a connection is
-        already open, the collation will be registered with the open
-        connection.
+         @db.aggregate()
+         class Product(object):
+             '''Like SUM() except calculates cumulative product.'''
+             def __init__(self):
+                 self.product = 1
 
-    .. method:: collation(name=None)
+             def step(self, value):
+                 self.product *= value
 
-        :param str name: Name of collation (defaults to function name)
+             def finalize(self):
+                 return self.product
 
-        Decorator to register a user-defined collation.
+   .. method:: register_aggregate(klass, name=None, num_params=-1)
 
-        Example:
+      :param klass: Class implementing aggregate API.
+      :param str name: Aggregate function name (defaults to name of class).
+      :param int num_params: Number of parameters the aggregate accepts, or
+          -1 for any number.
 
-        .. code-block:: python
+      Register a user-defined aggregate function.
 
-            @db.collation('reverse')
-            def collate_reverse(s1, s2):
-                return -cmp(s1, s2)
+      The function will be registered each time a new connection is opened.
+      Additionally, if a connection is already open, the aggregate will be
+      registered with the open connection.
 
-            # Usage:
-            Book.select().order_by(collate_reverse.collation(Book.title))
+   .. method:: window_function(name=None, num_params=-1)
 
-            # Equivalent:
-            Book.select().order_by(Book.title.asc(collation='reverse'))
+      :param str name: Name of the window function (defaults to class name).
+      :param int num_params: Number of parameters the function accepts, or -1
+          for any number.
 
-        As you might have noticed, the original ``collate_reverse`` function
-        has a special attribute called ``collation`` attached to it.  This
-        extra attribute provides a shorthand way to generate the SQL necessary
-        to use our custom collation.
+      Class decorator to register a user-defined window function. Window
+      functions must define the following methods:
 
-    .. method:: register_function(fn, name=None, num_params=-1, deterministic=None)
+      * ``step(<params>)`` - receive values from a row and update state.
+      * ``inverse(<params>)`` - inverse of ``step()`` for the given values.
+      * ``value()`` - return the current value of the window function.
+      * ``finalize()`` - return the final value of the window function.
 
-        :param fn: The user-defined scalar function.
-        :param str name: Name of function (defaults to function name)
-        :param int num_params: Number of arguments the function accepts, or
-            -1 for any number.
-        :param bool deterministic: Whether the function is deterministic for a
-            given input (this is required to use the function in an index).
-            Requires Sqlite 3.20 or newer, and ``sqlite3`` driver support
-            (added to stdlib in Python 3.8).
+      Example:
 
-        Register a user-defined scalar function. The function will be
-        registered each time a new connection is opened.  Additionally, if a
-        connection is already open, the function will be registered with the
-        open connection.
+      .. code-block:: python
 
-    .. method:: func(name=None, num_params=-1, deterministic=None)
+         @db.window_function('my_sum')
+         class MySum(object):
+             def __init__(self):
+                 self._value = 0
 
-        :param str name: Name of the function (defaults to function name).
-        :param int num_params: Number of parameters the function accepts,
-            or -1 for any number.
-        :param bool deterministic: Whether the function is deterministic for a
-            given input (this is required to use the function in an index).
-            Requires Sqlite 3.20 or newer, and ``sqlite3`` driver support
-            (added to stdlib in Python 3.8).
+             def step(self, value):
+                 self._value += value
 
-        Decorator to register a user-defined scalar function.
+             def inverse(self, value):
+                 self._value -= value
 
-        Example:
+             def value(self):
+                 return self._value
 
-        .. code-block:: python
+             def finalize(self):
+                 return self._value
 
-            @db.func('title_case')
-            def title_case(s):
-                return s.title() if s else ''
+   .. method:: register_window_function(klass, name=None, num_params=-1)
 
-            # Usage:
-            title_case_books = Book.select(fn.title_case(Book.title))
+      :param klass: Class implementing window function API.
+      :param str name: Window function name (defaults to name of class).
+      :param int num_params: Number of parameters the function accepts, or
+          -1 for any number.
 
-    .. method:: register_window_function(klass, name=None, num_params=-1)
+      Register a user-defined window function, requires SQLite >= 3.25.0.
 
-        :param klass: Class implementing window function API.
-        :param str name: Window function name (defaults to name of class).
-        :param int num_params: Number of parameters the function accepts, or
-            -1 for any number.
+      The window function will be registered each time a new connection is
+      opened. Additionally, if a connection is already open, the window
+      function will be registered with the open connection.
 
-        Register a user-defined window function.
+   .. method:: collation(name=None)
 
-        .. attention:: This feature requires SQLite >= 3.25.0.
+      :param str name: Name of collation (defaults to function name)
 
-        The window function will be registered each time a new connection is
-        opened. Additionally, if a connection is already open, the window
-        function will be registered with the open connection.
+      Decorator to register a user-defined collation.
 
-    .. method:: window_function(name=None, num_params=-1)
+      Example:
 
-        :param str name: Name of the window function (defaults to class name).
-        :param int num_params: Number of parameters the function accepts, or -1
-            for any number.
+      .. code-block:: python
 
-        Class decorator to register a user-defined window function. Window
-        functions must define the following methods:
+          @db.collation('reverse')
+          def collate_reverse(s1, s2):
+              return -cmp(s1, s2)
 
-        * ``step(<params>)`` - receive values from a row and update state.
-        * ``inverse(<params>)`` - inverse of ``step()`` for the given values.
-        * ``value()`` - return the current value of the window function.
-        * ``finalize()`` - return the final value of the window function.
+          # Usage:
+          Book.select().order_by(collate_reverse.collation(Book.title))
 
-        Example:
+          # Equivalent:
+          Book.select().order_by(Book.title.asc(collation='reverse'))
 
-        .. code-block:: python
+      As you might have noticed, the original ``collate_reverse`` function
+      has a special attribute called ``collation`` attached to it.  This
+      extra attribute provides a shorthand way to generate the SQL necessary
+      to use our custom collation.
 
-            @db.window_function('my_sum')
-            class MySum(object):
-                def __init__(self):
-                    self._value = 0
+   .. method:: register_collation(fn, name=None)
 
-                def step(self, value):
-                    self._value += value
+      :param fn: The collation function.
+      :param str name: Name of collation (defaults to function name)
 
-                def inverse(self, value):
-                    self._value -= value
+      Register a user-defined collation. The collation will be registered
+      each time a new connection is opened.  Additionally, if a connection is
+      already open, the collation will be registered with the open
+      connection.
 
-                def value(self):
-                    return self._value
+   .. method:: unregister_function(name)
 
-                def finalize(self):
-                    return self._value
+       :param name: Name of the user-defined scalar function.
 
-    .. method:: unregister_aggregate(name)
+       Unregister the user-defined scalar function.
 
-        :param name: Name of the user-defined aggregate function.
+   .. method:: unregister_aggregate(name)
 
-        Unregister the user-defined aggregate function.
+       :param name: Name of the user-defined aggregate.
 
-    .. method:: unregister_collation(name)
+       Unregister the user-defined aggregate.
 
-        :param name: Name of the user-defined collation.
+   .. method:: unregister_window_function(name)
 
-        Unregister the user-defined collation.
+       :param name: Name of the user-defined window function.
 
-    .. method:: unregister_function(name)
+       Unregister the user-defined window function.
 
-        :param name: Name of the user-defined scalar function.
+   .. method:: unregister_collation(name)
 
-        Unregister the user-defined scalar function.
+       :param name: Name of the user-defined collation.
 
-    .. method:: load_extension(extension_module)
+       Unregister the user-defined collation.
 
-        Load the given C extension. If a connection is currently open in the
-        calling thread, then the extension will be loaded for that connection
-        as well as all subsequent connections.
+   .. method:: load_extension(extension_module)
 
-        For example, if you've compiled the closure table extension and wish to
-        use it in your application, you might write:
+      Load the given extension shared library. Extension will be loaded for the
+      current connection as well as all subsequent connections.
 
-        .. code-block:: python
+      .. code-block:: python
 
-            db = SqliteDatabase('my_app.db')
-            db.load_extension('closure')
+          db = SqliteDatabase('my_app.db')
 
-    .. method:: unload_extension(extension_module):
+          # Load extension in closure.so shared library.
+          db.load_extension('closure')
 
-        Unregister extension from being automatically loaded on new connections.
+   .. method:: unload_extension(extension_module):
 
-    .. method:: attach(filename, name)
+      Unregister extension from being automatically loaded on new connections.
 
-        :param str filename: Database to attach (or ``:memory:`` for in-memory)
-        :param str name: Schema name for attached database.
-        :return: boolean indicating success
+   .. method:: attach(filename, name)
 
-        Register another database file that will be attached to every database
-        connection. If the main database is currently connected, the new
-        database will be attached on the open connection.
+      :param str filename: Database to attach (or ``:memory:`` for in-memory)
+      :param str name: Schema name for attached database.
+      :return: boolean indicating success
 
-        .. note::
-            Databases that are attached using this method will be attached
-            every time a database connection is opened.
+      Register another database file that will be attached to every database
+      connection. If the main database is currently connected, the new
+      database will be attached on the open connection.
 
-    .. method:: detach(name)
+      .. note::
+         Databases that are attached using this method will be attached
+         every time a database connection is opened.
 
-        :param str name: Schema name for attached database.
-        :return: boolean indicating success
+   .. method:: detach(name)
 
-        Unregister another database file that was attached previously with a
-        call to ``attach()``. If the main database is currently connected, the
-        attached database will be detached from the open connection.
+      :param str name: Schema name for attached database.
+      :return: boolean indicating success
 
-    .. method:: atomic(lock_type=None)
+      Unregister another database file that was attached previously with a
+      call to ``attach()``. If the main database is currently connected, the
+      attached database will be detached from the open connection.
 
-        :param str lock_type: Locking strategy: DEFERRED, IMMEDIATE, EXCLUSIVE.
+   .. method:: atomic(lock_type=None)
 
-        Create an atomic context-manager, optionally using the specified
-        locking strategy (if unspecified, DEFERRED is used).
+      :param str lock_type: Locking strategy: DEFERRED, IMMEDIATE, EXCLUSIVE.
 
-        .. note:: Lock type only applies to the outermost ``atomic()`` block.
+      Create an atomic context-manager / decorator, optionally using the
+      specified locking strategy (default DEFERRED).
 
-    .. method:: transaction(lock_type=None)
+      Lock type only applies to the outermost ``atomic()`` block.
 
-        :param str lock_type: Locking strategy: DEFERRED, IMMEDIATE, EXCLUSIVE.
+      .. seealso:: :ref:`sqlite-locking`
 
-        Create a transaction context-manager using the specified locking
-        strategy (defaults to DEFERRED).
+   .. method:: transaction(lock_type=None)
+
+      :param str lock_type: Locking strategy: DEFERRED, IMMEDIATE, EXCLUSIVE.
+
+      Create a transaction context-manager / decorator, optionally using the
+      specified locking strategy (default DEFERRED).
 
 
 .. class:: PostgresqlDatabase(database, register_unicode=True, encoding=None, isolation_level=None, prefer_psycopg3=False)
@@ -1036,7 +1084,7 @@ Database
     .. method:: set_time_zone(timezone)
 
         :param str timezone: timezone name, e.g. "US/Central".
-        :returns: no return value.
+        :return: no return value.
 
         Set the timezone on the current connection. If no connection is open,
         then one will be opened.
@@ -1224,7 +1272,7 @@ Model
     .. classmethod:: alias([alias=None])
 
         :param str alias: Optional name for alias.
-        :returns: :class:`ModelAlias` instance.
+        :return: :class:`ModelAlias` instance.
 
         Create an alias to the model-class. Model aliases allow you to
         reference the same :class:`Model` multiple times in a query, for
@@ -1245,7 +1293,7 @@ Model
         :param fields: A list of model classes, field instances, functions or
             expressions. If no arguments are provided, all columns for the
             given model will be selected by default.
-        :returns: :class:`ModelSelect` query.
+        :return: :class:`ModelSelect` query.
 
         Create a SELECT query. If no fields are explicitly provided, the query
         will by default SELECT all the fields defined on the model, unless you
@@ -1538,7 +1586,7 @@ Model
             :class:`Model` instances.
         :param int batch_size: number of rows to batch per insert. If
             unspecified, all models will be inserted in a single query.
-        :returns: no return value.
+        :return: no return value.
 
         Efficiently INSERT multiple unsaved model instances into the database.
         Unlike :meth:`~Model.insert_many`, which accepts row data as a list
@@ -1586,7 +1634,7 @@ Model
         :param list fields: list of fields to update.
         :param int batch_size: number of rows to batch per insert. If
             unspecified, all models will be inserted in a single query.
-        :returns: total number of rows updated.
+        :return: total number of rows updated.
 
         Efficiently UPDATE multiple model instances.
 
@@ -1639,7 +1687,7 @@ Model
         :param query: Zero or more :class:`Expression` objects.
         :param filters: Mapping of field-name to value for Django-style filter.
         :raises: :class:`DoesNotExist`
-        :returns: Model instance matching the specified filters.
+        :return: Model instance matching the specified filters.
 
         Retrieve a single model instance matching the given filters. If no
         model is returned, a :class:`DoesNotExist` is raised.
@@ -1723,7 +1771,7 @@ Model
 
         :param kwargs: Mapping of field-name to value.
         :param defaults: Default values to use if creating a new row.
-        :returns: Tuple of :class:`Model` instance and boolean indicating
+        :return: Tuple of :class:`Model` instance and boolean indicating
             if a new object was created.
 
         Attempt to get the row matching the given filters. If no matching row
@@ -1759,17 +1807,17 @@ Model
 
         :param dq_nodes: Zero or more :class:`DQ` objects.
         :param filters: Django-style filters.
-        :returns: :class:`ModelSelect` query.
+        :return: :class:`ModelSelect` query.
 
     .. method:: get_id()
 
-        :returns: The primary-key of the model instance.
+        :return: The primary-key of the model instance.
 
     .. method:: save(force_insert=False, only=None)
 
         :param bool force_insert: Force INSERT query.
         :param list only: Only save the given :class:`Field` instances.
-        :returns: Number of rows modified.
+        :return: Number of rows modified.
 
         Save the data in the model instance. By default, the presence of a
         primary-key value will cause an UPDATE query to be executed.
@@ -1868,7 +1916,7 @@ Model
 
     .. classmethod:: table_exists()
 
-        :returns: boolean indicating whether the table exists.
+        :return: boolean indicating whether the table exists.
 
     .. classmethod:: create_table(safe=True, **options)
 
@@ -2003,7 +2051,7 @@ Model
 
     .. method:: __iter__()
 
-        :returns: a :class:`ModelSelect` for the given class.
+        :return: a :class:`ModelSelect` for the given class.
 
         Convenience function for iterating over all instances of a model.
 
@@ -2021,7 +2069,7 @@ Model
 
     .. method:: __len__()
 
-        :returns: Count of rows in table.
+        :return: Count of rows in table.
 
         Example:
 
@@ -2181,7 +2229,7 @@ Model
         :param subqueries: A list of :class:`Model` classes or select
             queries to prefetch.
         :param prefetch_type: Query type to use for the subqueries.
-        :returns: a list of models with selected relations prefetched.
+        :return: a list of models with selected relations prefetched.
 
         Execute the query, prefetching the given additional resources.
 
@@ -2512,7 +2560,7 @@ Fields
     .. method:: toggle_bit(idx)
 
         :param int idx: Bit to toggle, indexed starting from zero.
-        :returns: Whether the bit is set or not.
+        :return: Whether the bit is set or not.
 
         Toggles the *idx*-th bit in the bitmap and returns whether the bit is
         set or not.
@@ -2530,7 +2578,7 @@ Fields
     .. method:: is_set(idx)
 
         :param int idx: Bit index, indexed starting from zero.
-        :returns: Whether the bit is set or not.
+        :return: Whether the bit is set or not.
 
         Returns boolean indicating whether the *idx*-th bit is set or not.
 
@@ -2558,19 +2606,19 @@ Fields
 
         :param other: Either :class:`BigBitField`, ``bytes``, ``bytearray``
             or ``memoryview`` object.
-        :returns: bitwise ``and`` of two bitmaps.
+        :return: bitwise ``and`` of two bitmaps.
 
     .. method:: __or__(other)
 
         :param other: Either :class:`BigBitField`, ``bytes``, ``bytearray``
             or ``memoryview`` object.
-        :returns: bitwise ``or`` of two bitmaps.
+        :return: bitwise ``or`` of two bitmaps.
 
     .. method:: __xor__(other)
 
         :param other: Either :class:`BigBitField`, ``bytes``, ``bytearray``
             or ``memoryview`` object.
-        :returns: bitwise ``xor`` of two bitmaps.
+        :return: bitwise ``xor`` of two bitmaps.
 
 
 .. class:: UUIDField
@@ -2656,7 +2704,7 @@ Fields
     .. method:: truncate(date_part)
 
         :param str date_part: year, month, day, hour, minute or second.
-        :returns: expression node to truncate date/time to given resolution.
+        :return: expression node to truncate date/time to given resolution.
 
         Truncates the value in the column to the given part. This method is
         useful for finding all rows within a given month, for instance.
@@ -3469,7 +3517,7 @@ Query-builder
         :param Source dest: Join the table with the given destination.
         :param str join_type: Join type.
         :param on: Expression to use as join predicate.
-        :returns: a :class:`Join` instance.
+        :return: a :class:`Join` instance.
 
         Join type may be one of:
 
@@ -3484,7 +3532,7 @@ Query-builder
 
         :param Source dest: Join the table with the given destination.
         :param on: Expression to use as join predicate.
-        :returns: a :class:`Join` instance.
+        :return: a :class:`Join` instance.
 
         Convenience method for calling :meth:`~Source.join` using a LEFT
         OUTER join.
@@ -3758,7 +3806,7 @@ Query-builder
     .. method:: alias(alias)
 
         :param str alias: Alias for the given column-like object.
-        :returns: a :class:`Alias` object.
+        :return: a :class:`Alias` object.
 
         Indicate the alias that should be given to the specified column-like
         object.
@@ -3766,7 +3814,7 @@ Query-builder
     .. method:: cast(as_type)
 
         :param str as_type: Type name to cast to.
-        :returns: a :class:`Cast` object.
+        :return: a :class:`Cast` object.
 
         Create a ``CAST`` expression.
 
@@ -3774,17 +3822,17 @@ Query-builder
 
         :param str collation: Collation name to use for sorting.
         :param str nulls: Sort nulls (FIRST or LAST).
-        :returns: an ascending :class:`Ordering` object for the column.
+        :return: an ascending :class:`Ordering` object for the column.
 
     .. method:: desc(collation=None, nulls=None)
 
         :param str collation: Collation name to use for sorting.
         :param str nulls: Sort nulls (FIRST or LAST).
-        :returns: an descending :class:`Ordering` object for the column.
+        :return: an descending :class:`Ordering` object for the column.
 
     .. method:: __invert__()
 
-        :returns: a :class:`Negated` wrapper for the column.
+        :return: a :class:`Negated` wrapper for the column.
 
 
 .. class:: Column(source, name)
@@ -4177,7 +4225,7 @@ Query-builder
     :param predicate: Predicate for CASE query (optional).
     :param expression_tuples: One or more cases to evaluate.
     :param default: Default value (optional).
-    :returns: Representation of CASE statement.
+    :return: Representation of CASE statement.
 
     Examples::
 
@@ -4227,7 +4275,7 @@ Query-builder
 .. function:: CommaNodeList(nodes)
 
     :param list nodes: Zero or more nodes.
-    :returns: a :class:`NodeList`
+    :return: a :class:`NodeList`
 
     Represent a list of nodes joined by commas.
 
@@ -4235,7 +4283,7 @@ Query-builder
 .. function:: EnclosedNodeList(nodes)
 
     :param list nodes: Zero or more nodes.
-    :returns: a :class:`NodeList`
+    :return: a :class:`NodeList`
 
     Represent a list of nodes joined by commas and wrapped in parentheses.
 
@@ -4358,7 +4406,7 @@ Queries
 
     .. method:: sql()
 
-        :returns: A 2-tuple consisting of the query's SQL and parameters.
+        :return: A 2-tuple consisting of the query's SQL and parameters.
 
     .. method:: execute(database)
 
@@ -4663,7 +4711,7 @@ Queries
 
         :param Database database: database to execute query against.
         :param int n: Number of rows to return.
-        :returns: A single row if n = 1, else a list of rows.
+        :return: A single row if n = 1, else a list of rows.
 
         Execute the query and return the given number of rows from the start
         of the cursor. This function may be called multiple times safely, and
@@ -4673,7 +4721,7 @@ Queries
 
         :param Database database: database to execute query against.
         :param int n: Number of rows to return.
-        :returns: A single row if n = 1, else a list of rows.
+        :return: A single row if n = 1, else a list of rows.
 
         Like the :meth:`~SelectBase.peek` method, except a ``LIMIT`` is
         applied to the query to ensure that only ``n`` rows are returned.
@@ -4691,7 +4739,7 @@ Queries
         :param Database database: database to execute query against.
         :param bool as_tuple: Return the result as a tuple?
         :param bool as_dict: Return the result as a dict?
-        :returns: Single scalar value. If ``as_tuple = True``, a row tuple is
+        :return: Single scalar value. If ``as_tuple = True``, a row tuple is
             returned. If ``as_dict = True``, a row dict is returned.
 
         Return a scalar value from the first row of results. If multiple
@@ -5152,7 +5200,7 @@ Queries
     :param subqueries: One or more models or :class:`ModelSelect` queries
         to eagerly fetch.
     :param prefetch_type: Query type to use for the subqueries.
-    :returns: a list of models with selected relations prefetched.
+    :return: a list of models with selected relations prefetched.
 
     Eagerly fetch related objects, allowing efficient querying of multiple
     tables when a 1-to-many relationship exists. The prefetch type changes how
@@ -5214,7 +5262,7 @@ Query-builder Internals
         does not have an alias, it will be given the next available alias.
 
         :param Source source: The source whose alias should be retrieved.
-        :returns: The alias already assigned to the source, or the next
+        :return: The alias already assigned to the source, or the next
             available alias.
         :rtype: str
 
@@ -5313,25 +5361,25 @@ Query-builder Internals
         query AST. Python values, such as integers, strings, floats, etc. are
         treated as parameterized values.
 
-        :returns: The updated Context object.
+        :return: The updated Context object.
 
     .. method:: literal(keyword)
 
         Append a string-literal to the current query AST.
 
-        :returns: The updated Context object.
+        :return: The updated Context object.
 
     .. method:: parse(node)
 
         :param Node node: Instance of a Node subclass.
-        :returns: a 2-tuple consisting of (sql, parameters).
+        :return: a 2-tuple consisting of (sql, parameters).
 
         Convert the given node to a SQL AST and return a 2-tuple consisting
         of the SQL query and the parameters.
 
     .. method:: query()
 
-        :returns: a 2-tuple consisting of (sql, parameters) for the context.
+        :return: a 2-tuple consisting of (sql, parameters) for the context.
 
 
 Constants and Helpers
@@ -5354,7 +5402,7 @@ Constants and Helpers
 
         :param callback: A function that accepts a single parameter, the bound
             object.
-        :returns: self
+        :return: self
 
         Add a callback to be executed when the proxy is initialized.
 
@@ -5389,7 +5437,7 @@ Constants and Helpers
 
     :param iterable: an iterable that is the source of the data to be chunked.
     :param int n: chunk size
-    :returns: a new iterable that yields *n*-length chunks of the source data.
+    :return: a new iterable that yields *n*-length chunks of the source data.
 
     Efficient implementation for breaking up large lists of data into
     smaller-sized chunks.

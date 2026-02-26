@@ -486,7 +486,7 @@ See :ref:`framework-integration` for framework-specific examples.
 Context managers
 ^^^^^^^^^^^^^^^^
 
-The database object can be used as a context manager.
+The database object can be used as a context manager or decorator.
 
 1. Connection opens when context manager is entered.
 2. Peewee begins a transaction.
@@ -502,6 +502,17 @@ The database object can be used as a context manager.
        User.create(username='charlie')
        # Transaction is committed when the block exits normally,
        # rolled back if an exception is raised.
+
+Decorator:
+
+.. code-block:: python
+
+   @db
+   def demo():
+       print('closed?', db.is_closed())
+
+   demo()  # "closed? False"
+   db.is_closed()  # True
 
 To manage the connection lifetime without an implicit transaction, use
 :meth:`~Database.connection_context`:

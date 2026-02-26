@@ -201,6 +201,8 @@ In rare cases where you need to take direct control of ``BEGIN``/``COMMIT``/
 of the block. ``atomic()`` and ``transaction()`` have no effect inside it.
 This should rarely be needed in application code.
 
+.. _sqlite-locking:
+
 SQLite Transaction Locking Modes
 ----------------------------------
 
@@ -230,6 +232,8 @@ The three modes:
 .. seealso::
    `SQLite locking documentation
    <https://sqlite.org/lockingv3.html>`_.
+
+.. _postgres-isolation:
 
 Postgresql Isolation Notes
 --------------------------
