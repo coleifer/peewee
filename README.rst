@@ -9,19 +9,20 @@ Peewee is a simple and small ORM. It has few (but expressive) concepts, making i
 * flexible query-builder that exposes full power of SQL
 * supports sqlite, mysql, mariadb, postgresql
 * asyncio support
-* tons of `extensions <http://docs.peewee-orm.com/en/latest/peewee/playhouse.html>`_
-* use with `flask <https://docs.peewee-orm.com/en/latest/peewee/database.html#flask>`_,
-  `fastapi <https://docs.peewee-orm.com/en/latest/peewee/database.html#fastapi>`_ and
-  `more <https://docs.peewee-orm.com/en/latest/peewee/database.html#framework-integration>`_.
+* tons of extensions
+* use with `flask <https://docs.peewee-orm.com/en/latest/peewee/framework_integration.html#flask>`_
+  `fastapi <https://docs.peewee-orm.com/en/latest/peewee/framework_integration.html#fastapi>`_ and
+  `more <https://docs.peewee-orm.com/en/latest/peewee/framework_integration.html>`_.
 
 New to peewee? These may help:
 
-* `Quickstart <http://docs.peewee-orm.com/en/latest/peewee/quickstart.html#quickstart>`_
-* `Example twitter app <http://docs.peewee-orm.com/en/latest/peewee/example.html>`_
-* `Using peewee interactively <http://docs.peewee-orm.com/en/latest/peewee/interactive.html>`_
+* `Quickstart <https://docs.peewee-orm.com/en/latest/peewee/quickstart.html#quickstart>`_
+* `Example twitter app <https://docs.peewee-orm.com/en/latest/peewee/example.html#example>`_
+* `Using peewee interactively <https://docs.peewee-orm.com/en/latest/peewee/interactive.html#interactive>`_
 * `Models and fields <http://docs.peewee-orm.com/en/latest/peewee/models.html>`_
 * `Querying <http://docs.peewee-orm.com/en/latest/peewee/querying.html>`_
 * `Relationships and joins <http://docs.peewee-orm.com/en/latest/peewee/relationships.html>`_
+* `Extensive library of SQL / Peewee examples <https://docs.peewee-orm.com/en/latest/peewee/query_library.html#query-library>`_
 * `Flask setup <https://docs.peewee-orm.com/en/latest/peewee/database.html#flask>`_
   or `FastAPI setup <https://docs.peewee-orm.com/en/latest/peewee/database.html#fastapi>`_
 
@@ -158,4 +159,3 @@ I've written a number of blog posts about building applications and web-services
 * `Building a pastebin, wiki and a bookmarking service using Flask and Peewee <https://charlesleifer.com/blog/dont-sweat-small-stuff-use-flask-blueprints/>`_.
 * `Encrypted databases with Python and SQLCipher <https://charlesleifer.com/blog/encrypted-sqlite-databases-with-python-and-sqlcipher/>`_.
 * `Dear Diary: An Encrypted, Command-Line Diary with Peewee <https://charlesleifer.com/blog/dear-diary-an-encrypted-command-line-diary-with-python/>`_.
-* `Query Tree Structures in SQLite using Peewee and the Transitive Closure Extension <https://charlesleifer.com/blog/querying-tree-structures-in-sqlite-using-python-and-the-transitive-closure-extension/>`_.

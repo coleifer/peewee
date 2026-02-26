@@ -8,7 +8,7 @@ from peewee import *
 from playhouse.sqlite_ext import *
 
 
-db = SqliteExtDatabase(':memory:')
+db = SqliteDatabase(':memory:', rank_functions=True)
 
 class SearchIndex(FTSModel):
     content = SearchField()
