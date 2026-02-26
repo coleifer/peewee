@@ -235,11 +235,21 @@ Consider printing every tweet alongside its author's username:
    for tweet in Tweet.select():
        print(tweet.user.username, '->', tweet.content)
 
-Each access to ``tweet.user`` triggers a ``SELECT`` on the ``user`` table.
-With five tweets, this produces six queries. With five thousand tweets, it
-produces five thousand and one.
+   # Good: only one query is needed.
+   query = (Tweet
+            .select(Tweet, User)
+            .join(User))
 
-The same problem appears when iterating over back-references:
+   for tweet in query:
+       # tweet.user is a User instance populated from the joined data.
+       # No additional query is issued.
+       print(tweet.user.username, '->', tweet.content)
+
+Without joining and selecting the related User, each access to ``tweet.user``
+triggers a ``SELECT`` on the ``user`` table. With five tweets, this produces
+six queries. With five thousand tweets, it produces five thousand and one.
+
+The same problem can occur when iterating over back-references:
 
 .. code-block:: python
 
@@ -247,6 +257,12 @@ The same problem appears when iterating over back-references:
    for user in User.select():
        print(user.username)
        for tweet in user.tweets:  # A new query for each user.
+           print('  ', tweet.content)
+
+   # Better:
+   for user in User.select().prefetch(Tweet):
+       print(user.username)
+       for tweet in user.tweets:  # Pre-fetched, no additional query.
            print('  ', tweet.content)
 
 Peewee provides two complementary tools for avoiding N+1 queries:
