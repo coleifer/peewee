@@ -649,7 +649,8 @@ initialoutlay: 5000, monthlymaintenance: 80.
 
 .. code-block:: sql
 
-    -- see above --
+    INSERT INTO "facilities" (...)
+    VALUES (9, ...), (10, ...);
 
 .. code-block:: python
 
