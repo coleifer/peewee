@@ -45,20 +45,20 @@ Contents:
    peewee/relationships
    peewee/querying
    peewee/writing
+   peewee/query_operators
    peewee/transactions
    peewee/schema
-   peewee/query_operators
    peewee/asyncio
    peewee/framework_integration
    peewee/interactive
    peewee/query_builder
+   peewee/query_library
    peewee/api
    peewee/sqlite
    peewee/postgres
    peewee/mysql
    peewee/db_tools
    peewee/orm_utils
-   peewee/query_library
    peewee/recipes
    peewee/contributing
 
