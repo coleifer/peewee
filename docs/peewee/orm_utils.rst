@@ -119,9 +119,10 @@ Thread-Safe Database Swapping
 
 .. class:: ThreadSafeDatabaseMetadata()
 
-   Model :class:`Metadata` implementation that protects the ``database``
-   attribute with a read/write lock. Use this when your application may swap
-   the active database (e.g. primary / read replica) at runtime across threads:
+   Model :class:`Metadata` implementation that enables the ``database``
+   attribute to safely changed in a multi-threaded application. Use this when
+   your application may swap the active database (e.g. primary / read replica)
+   at runtime across threads:
 
    .. code-block:: python
 

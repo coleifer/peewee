@@ -133,15 +133,16 @@ The isolation level can be set at initialization time:
 
 .. code-block:: python
 
+   # psycopg2 or psycopg3
+   db = PostgresqlDatabase('app', isolation_level='SERIALIZABLE')
+
    # psycopg2
    from psycopg2.extensions import ISOLATION_LEVEL_SERIALIZABLE
-   db = PostgresqlDatabase('my_app', user='postgres',
-                           isolation_level=ISOLATION_LEVEL_SERIALIZABLE)
+   db = PostgresqlDatabase('app', isolation_level=ISOLATION_LEVEL_SERIALIZABLE)
 
    # psycopg3
    from psycopg import IsolationLevel
-   db = PostgresqlDatabase('my_app', user='postgres',
-                           isolation_level=IsolationLevel.SERIALIZABLE)
+   db = PostgresqlDatabase('app', isolation_level=IsolationLevel.SERIALIZABLE)
 
 .. seealso::
    For Postgresql-specific functionality and extensions (arrays, JSONB,

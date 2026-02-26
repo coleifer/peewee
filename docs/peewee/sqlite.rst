@@ -329,7 +329,7 @@ Example:
    To support shared libraries, your SQLite3 will need to have been compiled with
    support for run-time loadable extensions.
 
-.. _sqlite-locking:
+.. _sqlite-locking-mode:
 
 Locking Mode for Transactions
 -----------------------------

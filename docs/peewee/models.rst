@@ -984,6 +984,8 @@ option for one-step creation:
 
    country = Country.create(code='DE', name='Germany')
 
+.. _composite-keys:
+
 Composite primary keys
 ^^^^^^^^^^^^^^^^^^^^^^
 

@@ -47,6 +47,8 @@ Methods which will be discussed:
 |                 | * :meth:`Model.delete`                                    |
 +-----------------+-----------------------------------------------------------+
 
+.. _inserting-records:
+
 Inserting Records
 -----------------
 
@@ -230,6 +232,8 @@ The above query is equivalent to the following SQL:
 
    INSERT INTO "tweet_archive" ("user_id", "message")
    SELECT "user_id", "message" FROM "tweet";
+
+.. _updating-records:
 
 Updating Records
 ----------------
@@ -534,6 +538,8 @@ Insert the row, and silently do nothing if a constraint would be violated:
    User.insert(username='huey').on_conflict_ignore().execute()
 
 Supported by SQLite, MySQL, and Postgresql.
+
+.. _deleting-records:
 
 Deleting Records
 ----------------
