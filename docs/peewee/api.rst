@@ -85,40 +85,6 @@ Database
         Initialize a *deferred* database. See :ref:`initializing-database`
         for more info.
 
-    .. method:: __enter__()
-    .. method:: __exit__(exc_type, exc_val, exc_tb)
-
-        The :class:`Database` instance can be used as a context-manager, in
-        which case a connection will be held open and a transaction run for the
-        duration of the wrapped block.
-
-        If an unhandled exception occurs, the transaction is rolled-back.
-
-        .. code-block:: python
-
-            db = SqliteDatabase('app.db')
-
-            with db:
-                # Connection is open and transaction is active.
-                pass
-
-            # Transaction commits and connection is closed.
-
-    .. method:: connection_context()
-
-        Create a context-manager that will hold open a connection for the
-        duration of the wrapped block.
-
-        Example:
-
-        .. code-block:: python
-
-            def on_app_startup():
-                # When app starts up, create the database tables, being sure
-                # the connection is closed upon completion.
-                with database.connection_context():
-                    database.create_tables(APP_MODELS)
-
     .. method:: connect(reuse_if_open=False)
 
         :param bool reuse_if_open: Do not raise an exception if a connection is
@@ -160,6 +126,40 @@ Database
         Return the open connection. If a connection is not open, one will be
         opened. The connection will be whatever the underlying database-driver
         uses to encapsulate a database connection.
+
+    .. method:: __enter__()
+    .. method:: __exit__(exc_type, exc_val, exc_tb)
+
+        The :class:`Database` instance can be used as a context-manager, in
+        which case a connection will be held open and a transaction run for the
+        duration of the wrapped block.
+
+        If an unhandled exception occurs, the transaction is rolled-back.
+
+        .. code-block:: python
+
+            db = SqliteDatabase('app.db')
+
+            with db:
+                # Connection is open and transaction is active.
+                pass
+
+            # Transaction commits and connection is closed.
+
+    .. method:: connection_context()
+
+        Create a context-manager that will hold open a connection for the
+        duration of the wrapped block.
+
+        Example:
+
+        .. code-block:: python
+
+            def on_app_startup():
+                # When app starts up, create the database tables, being sure
+                # the connection is closed upon completion.
+                with database.connection_context():
+                    database.create_tables(APP_MODELS)
 
     .. method:: cursor(named_cursor=None)
 
@@ -215,11 +215,6 @@ Database
         :param cursor: cursor object.
         :returns: number of rows modified by query.
 
-    .. method:: in_transaction()
-
-        :returns: whether or not a transaction is currently open.
-        :rtype: bool
-
     .. method:: atomic(...)
 
         Create a context-manager which runs any queries in the wrapped block in
@@ -267,6 +262,64 @@ Database
             print([u.username for u in User.select()])
 
             # Prints ["mickey", "zaizee"]
+
+    .. method:: transaction(...)
+
+        Create a context-manager that runs all queries in the wrapped block in
+        a transaction.
+
+        Database-specific parameters:
+
+        :class:`PostgresqlDatabase` and :class:`MySQLDatabase` accept an
+        ``isolation_level`` parameter. :class:`SqliteDatabase` accepts a
+        ``lock_type`` parameter.
+
+        :param str isolation_level: Isolation strategy: SERIALIZABLE, READ COMMITTED, REPEATABLE READ, READ UNCOMMITTED
+        :param str lock_type: Locking strategy: DEFERRED, IMMEDIATE, EXCLUSIVE.
+
+        .. code-block:: python
+
+            with db.transaction() as txn:
+                User.create(username='mickey')
+                txn.commit()         # Commit now; a new transaction begins.
+                User.create(username='huey')
+                txn.rollback()       # Roll back huey; a new transaction begins.
+                User.create(username='zaizee')
+            # zaizee is committed when the block exits.
+
+        .. note::
+            If you manually commit or roll back a transaction, a new
+            transaction will automatically begin.
+
+        .. warning::
+            If you attempt to nest transactions with peewee using the
+            :meth:`~Database.transaction` context manager, only the outer-most
+            transaction will be used.
+
+            As this may lead to unpredictable behavior, it is recommended that
+            you use :meth:`~Database.atomic`.
+
+    .. method:: savepoint()
+
+        Create a context-manager that runs all queries in the wrapped block in
+        a savepoint. Savepoints can be nested arbitrarily.
+
+        .. code-block:: python
+
+            with db.transaction() as txn:
+                with db.savepoint() as sp:
+                    User.create(username='mickey')
+
+                with db.savepoint() as sp2:
+                    User.create(username='zaizee')
+                    sp2.rollback()  # "zaizee" is not saved.
+                    User.create(username='huey')
+
+            # mickey and huey were created.
+
+        .. note::
+            If you manually commit or roll back a savepoint, a new savepoint will
+            automatically begin.
 
     .. method:: manual_commit()
 
@@ -329,64 +382,6 @@ Database
         Roll back any changes made during a transaction begun with
         :meth:`~Database.session_start`.
 
-    .. method:: transaction(...)
-
-        Create a context-manager that runs all queries in the wrapped block in
-        a transaction.
-
-        Database-specific parameters:
-
-        :class:`PostgresqlDatabase` and :class:`MySQLDatabase` accept an
-        ``isolation_level`` parameter. :class:`SqliteDatabase` accepts a
-        ``lock_type`` parameter.
-
-        :param str isolation_level: Isolation strategy: SERIALIZABLE, READ COMMITTED, REPEATABLE READ, READ UNCOMMITTED
-        :param str lock_type: Locking strategy: DEFERRED, IMMEDIATE, EXCLUSIVE.
-
-        .. code-block:: python
-
-            with db.transaction() as txn:
-                User.create(username='mickey')
-                txn.commit()         # Commit now; a new transaction begins.
-                User.create(username='huey')
-                txn.rollback()       # Roll back huey; a new transaction begins.
-                User.create(username='zaizee')
-            # zaizee is committed when the block exits.
-
-        .. note::
-            If you manually commit or roll back a transaction, a new
-            transaction will automatically begin.
-
-        .. warning::
-            If you attempt to nest transactions with peewee using the
-            :meth:`~Database.transaction` context manager, only the outer-most
-            transaction will be used.
-
-            As this may lead to unpredictable behavior, it is recommended that
-            you use :meth:`~Database.atomic`.
-
-    .. method:: savepoint()
-
-        Create a context-manager that runs all queries in the wrapped block in
-        a savepoint. Savepoints can be nested arbitrarily.
-
-        .. code-block:: python
-
-            with db.transaction() as txn:
-                with db.savepoint() as sp:
-                    User.create(username='mickey')
-
-                with db.savepoint() as sp2:
-                    User.create(username='zaizee')
-                    sp2.rollback()  # "zaizee" is not saved.
-                    User.create(username='huey')
-
-            # mickey and huey were created.
-
-        .. note::
-            If you manually commit or roll back a savepoint, a new savepoint will
-            automatically begin.
-
     .. method:: begin()
 
         Begin a transaction when using manual-commit mode.
@@ -410,6 +405,18 @@ Database
         .. note::
             This method should only be used in conjunction with the
             :meth:`~Database.manual_commit` context manager.
+
+    .. method:: in_transaction()
+
+        :returns: whether or not a transaction is currently open.
+        :rtype: bool
+
+        .. code-block:: python
+
+            with db.atomic() as tx:
+                assert db.in_transaction()
+
+            assert not db.in_transaction()  # No longer in transaction.
 
     .. method:: batch_commit(it, n)
 
@@ -705,7 +712,312 @@ Database
         # Alternatively, pragmas can be specified using a dictionary.
         db = SqliteDatabase('my_app.db', pragmas={'journal_mode': 'wal'})
 
-    .. include:: sqlite-method-defs.rst
+    .. method:: pragma(key, value=SENTINEL, permanent=False)
+
+        :param key: Setting name.
+        :param value: New value for the setting (optional).
+        :param permanent: Apply this pragma whenever a connection is opened.
+
+        Execute a PRAGMA query once on the active connection. If a value is not
+        specified, then the current value will be returned.
+
+        If ``permanent`` is specified, then the PRAGMA query will also be
+        executed whenever a new connection is opened, ensuring it is always
+        in-effect.
+
+        .. note::
+            By default this only affects the current connection. If the PRAGMA
+            being executed is not persistent, then you must specify
+            ``permanent=True`` to ensure the pragma is set on subsequent
+            connections.
+
+    .. attribute:: cache_size
+
+        Get or set the cache_size pragma for the current connection.
+
+    .. attribute:: foreign_keys
+
+        Get or set the foreign_keys pragma for the current connection.
+
+    .. attribute:: journal_mode
+
+        Get or set the journal_mode pragma.
+
+    .. attribute:: journal_size_limit
+
+        Get or set the journal_size_limit pragma.
+
+    .. attribute:: mmap_size
+
+        Get or set the mmap_size pragma for the current connection.
+
+    .. attribute:: page_size
+
+        Get or set the page_size pragma.
+
+    .. attribute:: read_uncommitted
+
+        Get or set the read_uncommitted pragma for the current connection.
+
+    .. attribute:: synchronous
+
+        Get or set the synchronous pragma for the current connection.
+
+    .. attribute:: wal_autocheckpoint
+
+        Get or set the wal_autocheckpoint pragma for the current connection.
+
+    .. attribute:: timeout
+
+        Get or set the busy timeout (seconds).
+
+    .. method:: register_aggregate(klass, name=None, num_params=-1)
+
+        :param klass: Class implementing aggregate API.
+        :param str name: Aggregate function name (defaults to name of class).
+        :param int num_params: Number of parameters the aggregate accepts, or
+            -1 for any number.
+
+        Register a user-defined aggregate function.
+
+        The function will be registered each time a new connection is opened.
+        Additionally, if a connection is already open, the aggregate will be
+        registered with the open connection.
+
+    .. method:: aggregate(name=None, num_params=-1)
+
+        :param str name: Name of the aggregate (defaults to class name).
+        :param int num_params: Number of parameters the aggregate accepts,
+            or -1 for any number.
+
+        Class decorator to register a user-defined aggregate function.
+
+        Example:
+
+        .. code-block:: python
+
+            @db.aggregate('md5')
+            class MD5(object):
+                def initialize(self):
+                    self.md5 = hashlib.md5()
+
+                def step(self, value):
+                    self.md5.update(value)
+
+                def finalize(self):
+                    return self.md5.hexdigest()
+
+
+            @db.aggregate()
+            class Product(object):
+                '''Like SUM() except calculates cumulative product.'''
+                def __init__(self):
+                    self.product = 1
+
+                def step(self, value):
+                    self.product *= value
+
+                def finalize(self):
+                    return self.product
+
+    .. method:: register_collation(fn, name=None)
+
+        :param fn: The collation function.
+        :param str name: Name of collation (defaults to function name)
+
+        Register a user-defined collation. The collation will be registered
+        each time a new connection is opened.  Additionally, if a connection is
+        already open, the collation will be registered with the open
+        connection.
+
+    .. method:: collation(name=None)
+
+        :param str name: Name of collation (defaults to function name)
+
+        Decorator to register a user-defined collation.
+
+        Example:
+
+        .. code-block:: python
+
+            @db.collation('reverse')
+            def collate_reverse(s1, s2):
+                return -cmp(s1, s2)
+
+            # Usage:
+            Book.select().order_by(collate_reverse.collation(Book.title))
+
+            # Equivalent:
+            Book.select().order_by(Book.title.asc(collation='reverse'))
+
+        As you might have noticed, the original ``collate_reverse`` function
+        has a special attribute called ``collation`` attached to it.  This
+        extra attribute provides a shorthand way to generate the SQL necessary
+        to use our custom collation.
+
+    .. method:: register_function(fn, name=None, num_params=-1, deterministic=None)
+
+        :param fn: The user-defined scalar function.
+        :param str name: Name of function (defaults to function name)
+        :param int num_params: Number of arguments the function accepts, or
+            -1 for any number.
+        :param bool deterministic: Whether the function is deterministic for a
+            given input (this is required to use the function in an index).
+            Requires Sqlite 3.20 or newer, and ``sqlite3`` driver support
+            (added to stdlib in Python 3.8).
+
+        Register a user-defined scalar function. The function will be
+        registered each time a new connection is opened.  Additionally, if a
+        connection is already open, the function will be registered with the
+        open connection.
+
+    .. method:: func(name=None, num_params=-1, deterministic=None)
+
+        :param str name: Name of the function (defaults to function name).
+        :param int num_params: Number of parameters the function accepts,
+            or -1 for any number.
+        :param bool deterministic: Whether the function is deterministic for a
+            given input (this is required to use the function in an index).
+            Requires Sqlite 3.20 or newer, and ``sqlite3`` driver support
+            (added to stdlib in Python 3.8).
+
+        Decorator to register a user-defined scalar function.
+
+        Example:
+
+        .. code-block:: python
+
+            @db.func('title_case')
+            def title_case(s):
+                return s.title() if s else ''
+
+            # Usage:
+            title_case_books = Book.select(fn.title_case(Book.title))
+
+    .. method:: register_window_function(klass, name=None, num_params=-1)
+
+        :param klass: Class implementing window function API.
+        :param str name: Window function name (defaults to name of class).
+        :param int num_params: Number of parameters the function accepts, or
+            -1 for any number.
+
+        Register a user-defined window function.
+
+        .. attention:: This feature requires SQLite >= 3.25.0.
+
+        The window function will be registered each time a new connection is
+        opened. Additionally, if a connection is already open, the window
+        function will be registered with the open connection.
+
+    .. method:: window_function(name=None, num_params=-1)
+
+        :param str name: Name of the window function (defaults to class name).
+        :param int num_params: Number of parameters the function accepts, or -1
+            for any number.
+
+        Class decorator to register a user-defined window function. Window
+        functions must define the following methods:
+
+        * ``step(<params>)`` - receive values from a row and update state.
+        * ``inverse(<params>)`` - inverse of ``step()`` for the given values.
+        * ``value()`` - return the current value of the window function.
+        * ``finalize()`` - return the final value of the window function.
+
+        Example:
+
+        .. code-block:: python
+
+            @db.window_function('my_sum')
+            class MySum(object):
+                def __init__(self):
+                    self._value = 0
+
+                def step(self, value):
+                    self._value += value
+
+                def inverse(self, value):
+                    self._value -= value
+
+                def value(self):
+                    return self._value
+
+                def finalize(self):
+                    return self._value
+
+    .. method:: unregister_aggregate(name)
+
+        :param name: Name of the user-defined aggregate function.
+
+        Unregister the user-defined aggregate function.
+
+    .. method:: unregister_collation(name)
+
+        :param name: Name of the user-defined collation.
+
+        Unregister the user-defined collation.
+
+    .. method:: unregister_function(name)
+
+        :param name: Name of the user-defined scalar function.
+
+        Unregister the user-defined scalar function.
+
+    .. method:: load_extension(extension_module)
+
+        Load the given C extension. If a connection is currently open in the
+        calling thread, then the extension will be loaded for that connection
+        as well as all subsequent connections.
+
+        For example, if you've compiled the closure table extension and wish to
+        use it in your application, you might write:
+
+        .. code-block:: python
+
+            db = SqliteDatabase('my_app.db')
+            db.load_extension('closure')
+
+    .. method:: unload_extension(extension_module):
+
+        Unregister extension from being automatically loaded on new connections.
+
+    .. method:: attach(filename, name)
+
+        :param str filename: Database to attach (or ``:memory:`` for in-memory)
+        :param str name: Schema name for attached database.
+        :return: boolean indicating success
+
+        Register another database file that will be attached to every database
+        connection. If the main database is currently connected, the new
+        database will be attached on the open connection.
+
+        .. note::
+            Databases that are attached using this method will be attached
+            every time a database connection is opened.
+
+    .. method:: detach(name)
+
+        :param str name: Schema name for attached database.
+        :return: boolean indicating success
+
+        Unregister another database file that was attached previously with a
+        call to ``attach()``. If the main database is currently connected, the
+        attached database will be detached from the open connection.
+
+    .. method:: atomic(lock_type=None)
+
+        :param str lock_type: Locking strategy: DEFERRED, IMMEDIATE, EXCLUSIVE.
+
+        Create an atomic context-manager, optionally using the specified
+        locking strategy (if unspecified, DEFERRED is used).
+
+        .. note:: Lock type only applies to the outermost ``atomic()`` block.
+
+    .. method:: transaction(lock_type=None)
+
+        :param str lock_type: Locking strategy: DEFERRED, IMMEDIATE, EXCLUSIVE.
+
+        Create a transaction context-manager using the specified locking
+        strategy (defaults to DEFERRED).
 
 
 .. class:: PostgresqlDatabase(database, register_unicode=True, encoding=None, isolation_level=None, prefer_psycopg3=False)
@@ -1728,6 +2040,18 @@ Model
 
     Provide a separate reference to a model in a query.
 
+    With Peewee, we use :meth:`Model.alias` to alias a model class so it can be
+    referenced twice in a single query:
+
+    .. code-block:: python
+
+        Owner = User.alias()
+        query = (Favorite
+                 .select(Favorite, Tweet.content, User.username, Owner.username)
+                 .join_from(Favorite, Owner)  # Determine owner of favorite.
+                 .join_from(Favorite, Tweet)  # Join favorite -> tweet.
+                 .join_from(Tweet, User))     # Join tweet -> user.
+
 
 .. class:: ModelSelect(model, fields_or_models)
 
@@ -1884,6 +2208,21 @@ Model
             necessary to be sure that the foreign-key/primary-key of any
             related models are selected, so that the related objects can be
             mapped correctly.
+
+
+.. class:: DoesNotExist(Exception)
+
+    Base exception class raised when a call to :meth:`Model.get` (or other
+    ``.get()`` method) fails to return a matching result. Model classes have a
+    model-specific subclass as a top-level attribute:
+
+    .. code-block:: python
+
+        def get_user(email):
+            try:
+                return User.get(fn.LOWER(User.email) == email.lower())
+            except User.DoesNotExist:
+                return None
 
 
 .. _fields-api:
