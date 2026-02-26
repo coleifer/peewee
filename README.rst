@@ -23,8 +23,8 @@ New to peewee? These may help:
 * `Querying <http://docs.peewee-orm.com/en/latest/peewee/querying.html>`_
 * `Relationships and joins <http://docs.peewee-orm.com/en/latest/peewee/relationships.html>`_
 * `Extensive library of SQL / Peewee examples <https://docs.peewee-orm.com/en/latest/peewee/query_library.html#query-library>`_
-* `Flask setup <https://docs.peewee-orm.com/en/latest/peewee/database.html#flask>`_
-  or `FastAPI setup <https://docs.peewee-orm.com/en/latest/peewee/database.html#fastapi>`_
+* `Flask setup <https://docs.peewee-orm.com/en/latest/peewee/framework_integration.html#flask>`_
+  or `FastAPI setup <https://docs.peewee-orm.com/en/latest/peewee/framework_integration.html#fastapi>`_
 
 Installation:
 
