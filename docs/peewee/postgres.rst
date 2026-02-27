@@ -763,7 +763,7 @@ to get CRDB-specific handling.
 
    from playhouse.cockroachdb import CockroachDatabase
 
-   db = CockroachDatabase('my_app', user='root', host='10.1.0.8')
+   db = CockroachDatabase('my_app', user='root', host='10.8.0.1')
 
 If you are using `Cockroach Cloud <https://cockroachlabs.cloud/>`_, you may
 find it easier to specify the connection parameters using a connection-string:
@@ -779,7 +779,7 @@ SSL configuration:
    db = CockroachDatabase(
        'my_app',
        user='root',
-       host='10.1.0.8',
+       host='10.8.0.1',
        sslmode='verify-full',
        sslrootcert='/path/to/root.crt')
 

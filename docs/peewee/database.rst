@@ -33,7 +33,7 @@ Peewee supports:
          'my_app',
          user='postgres',
          password='secret',
-         host='10.1.0.9',
+         host='10.8.0.9',
          port=5432)
 
 * MySQL and MariaDB - :class:`MySQLDatabase` using ``pymysql``.
@@ -44,7 +44,7 @@ Peewee supports:
          'my_app',
          user='app',
          password='db_password',
-         host='10.1.0.8',
+         host='10.8.0.8',
          port=3306)
 
 

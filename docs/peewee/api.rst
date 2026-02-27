@@ -53,7 +53,7 @@ Database
       db = PostgresqlDatabase(
           'my_app',
           user='postgres',
-          host='10.1.0.3',
+          host='10.8.0.3',
           password='secret')
 
    Deferred initialization example:
