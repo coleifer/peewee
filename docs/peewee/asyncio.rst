@@ -113,7 +113,6 @@ Use ``db.run()`` when:
 
 * You have existing synchronous code you want to call from async.
 * A single operation involves multiple queries (e.g. a transaction).
-* You need to pass results between queries without async overhead.
 
 Async Helper Methods
 ^^^^^^^^^^^^^^^^^^^^^
@@ -124,6 +123,10 @@ For single-query operations, the async helpers are more direct:
 
    # Execute any query and get its natural return type.
    cursor = await db.aexecute(query)
+
+   # Use a transaction:
+   async with db.atomic() as tx:
+       await db.run(User.create, name='Bob')
 
    # SELECT and return one model instance (raises DoesNotExist if none).
    user = await db.get(User.select().where(User.name == 'Alice'))
