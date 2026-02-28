@@ -135,7 +135,7 @@ For single-query operations, the async helpers are more direct:
    users = await db.list(User.select().order_by(User.name))
 
    # SELECT and return a scalar value.
-   count = await db.scalar(User.select(fn.COUNT('*')))
+   count = await db.scalar(User.select(fn.COUNT(User.id)))
 
    # CREATE TABLE / DROP TABLE:
    await db.acreate_tables([User, Tweet])
