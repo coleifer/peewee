@@ -321,6 +321,10 @@ class JSONField(FieldDatabaseHook, Field):
     field_type = 'JSON'
     _json_datatype = 'json'
 
+    def __init__(self, dumps=None, **kwargs):
+        self._dumps = dumps
+        super(JSONField, self).__init__(**kwargs)
+
     def _db_hook(self, database):
         if database is None or not hasattr(database, '_adapter'):
             self.json_type = Json
@@ -328,6 +332,13 @@ class JSONField(FieldDatabaseHook, Field):
         else:
             self.json_type = database._adapter.json_type
             self.cast_json_case = database._adapter.cast_json_case
+
+        if self._dumps:
+            dumps = self._dumps
+            class _Json(self.json_type):
+                def __init__(self, value):
+                    super(_Json, self).__init__(value, dumps=dumps)
+            self.json_type = _Json
 
     def db_value(self, value):
         if value is None or isinstance(value, (Node, self.json_type)):
@@ -365,6 +376,13 @@ class BinaryJSONField(IndexedFieldMixin, JSONField):
         else:
             self.json_type = database._adapter.jsonb_type
             self.cast_json_case = database._adapter.cast_json_case
+
+        if self._dumps:
+            dumps = self._dumps
+            class _Json(self.json_type):
+                def __init__(self, value):
+                    super(_Json, self).__init__(value, dumps=dumps)
+            self.json_type = _Json
 
     def contains(self, other):
         if not isinstance(other, Node):

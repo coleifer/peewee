@@ -121,7 +121,9 @@ In general always use :class:`BinaryJSONField`.
 JSONField and BinaryJSONField
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-.. class:: JSONField(*args, **kwargs)
+.. class:: JSONField(dumps=None, *args, **kwargs)
+
+   :param dumps: custom implementation of ``json.dumps``
 
    Field that stores and retrieves JSON data. Supports ``__getitem__`` key
    access for filtering and sub-object retrieval.
@@ -149,7 +151,9 @@ JSONField and BinaryJSONField
           .execute())
 
 
-.. class:: BinaryJSONField()
+.. class:: BinaryJSONField(dumps=None, *args, **kwargs)
+
+   :param dumps: custom implementation of ``json.dumps``
 
    Extends :class:`JSONField` for the ``jsonb`` type.
 

@@ -1,6 +1,7 @@
 #coding:utf-8
 import datetime
 import functools
+import json
 import os
 import uuid
 from decimal import Decimal as Dc
@@ -72,6 +73,21 @@ class BJson(TestModel):
 class JData(TestModel):
     d1 = BinaryJSONField()
     d2 = BinaryJSONField(index=False)
+
+
+class UUIDEncoder(json.JSONEncoder):
+    def default(self, obj):
+        if isinstance(obj, uuid.UUID):
+            return str(obj)
+        return super(UUIDEncoder, self).default(obj)
+
+def dumps(obj):
+    return json.dumps(obj, cls=UUIDEncoder)
+
+
+class CustomJSONDumps(TestModel):
+    jf = JSONField(dumps=dumps)
+    jbf = BinaryJSONField(dumps=dumps)
 
 
 class Normal(TestModel):
@@ -651,6 +667,28 @@ class TestJsonFieldRegressions(ModelTestCase):
         self.assertTrue(JD.d1.index)
         self.assertEqual(JD.d1.index_type, 'GIN')
         self.assertFalse(JD.d2.index)
+
+
+class TestJSONFieldCustomDumps(ModelTestCase):
+    database = db
+    requires = [CustomJSONDumps]
+
+    def test_custom_dumps(self):
+        u1 = uuid.uuid4()
+        u2 = uuid.uuid4()
+
+        data = {'u1': u1, 'u2': u2, 'u3': [u1, u2]}
+        c = CustomJSONDumps.create(jf=data, jbf=data)
+        c_db = CustomJSONDumps.get_by_id(c.id)
+
+        self.assertEqual(c_db.jf, {
+            'u1': str(u1),
+            'u2': str(u2),
+            'u3': [str(u1), str(u2)]})
+        self.assertEqual(c_db.jbf, {
+            'u1': str(u1),
+            'u2': str(u2),
+            'u3': [str(u1), str(u2)]})
 
 
 class TestIntervalField(ModelTestCase):
