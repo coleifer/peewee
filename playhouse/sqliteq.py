@@ -56,7 +56,7 @@ class AsyncCursor(object):
 
     def _wait(self, timeout=None):
         timeout = timeout if timeout is not None else self.timeout
-        if not self._event.wait(timeout=timeout) and timeout:
+        if not self._event.wait(timeout=timeout) and timeout is not None:
             raise ResultTimeout('results not ready, timed out.')
         if self._exc is not None:
             raise self._exc
@@ -95,10 +95,14 @@ class AsyncCursor(object):
 
     @property
     def description(self):
+        if not self._ready:
+            self._wait()
         return self._cursor.description
 
     def close(self):
-        self._cursor.close()
+        if self._cursor is not None:
+            self._cursor.close()
+            self._cursor = None
 
     def fetchall(self):
         return list(self)  # Iterating implies waiting until populated.
@@ -280,17 +284,19 @@ class SqliteQueueDatabase(SqliteDatabase):
                 return False
 
             self._write_queue.put((SHUTDOWN, None))
-            self._writer.join()
-
-            # Empty queue of any remaining tasks.
-            while not self._write_queue.empty():
-                op, obj = self._write_queue.get()
-                if op == PAUSE or op == UNPAUSE:
-                    obj.set()
-                elif op == QUERY:
-                    obj.set_result(None, ShutdownException())
-
+            writer = self._writer
             self._is_stopped = True
+
+        writer.join()
+
+        # Empty queue of any remaining tasks.
+        while not self._write_queue.empty():
+            op, obj = self._write_queue.get()
+            if op is PAUSE or op is UNPAUSE:
+                obj.set()
+            elif op is QUERY:
+                obj.set_result(None, ShutdownException())
+
             return True
 
     def is_stopped(self):
