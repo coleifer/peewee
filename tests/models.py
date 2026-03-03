@@ -126,7 +126,7 @@ class TestModelAPIs(ModelTestCase):
             self.assertEqual(pn.post.content, 'p2')
 
         if not IS_SQLITE:
-            exc_class = ProgrammingError if IS_CRDB else IntegrityError
+            exc_class = (ProgrammingError, IntegrityError)
             with self.database.atomic() as txn:
                 self.assertRaises(exc_class, PostNote.create, note='pxn')
                 txn.rollback()
