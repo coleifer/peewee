@@ -4319,6 +4319,9 @@ class PostgresqlDatabase(Database):
     def truncate_date(self, date_part, date_field):
         return fn.DATE_TRUNC(date_part, date_field)
 
+    def interval(self, val):
+        return NodeList((SQL('interval'), val))
+
     def to_timestamp(self, date_field):
         return self.extract_date('EPOCH', date_field)
 

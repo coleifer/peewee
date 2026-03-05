@@ -1100,6 +1100,11 @@ Database
           password=os.environ['PGPASSWORD'],
           isolation_level='SERIALIZABLE')
 
+   .. method:: interval(val)
+
+      :param str val: Time interval, e.g. ``'30 minutes'``
+      :return: expression representing the interval.
+
    .. method:: set_time_zone(timezone)
 
       :param str timezone: timezone name, e.g. "US/Central".

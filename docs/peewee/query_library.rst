@@ -1465,6 +1465,243 @@ into a CTE to make it a little more clear.
         .order_by(Facility.name)
         .with_cte(monthdata))
 
+Dates and Times
+---------------
+
+Work out the end time of bookings
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Return a list of the start and end time of the last 10 bookings (ordered by
+the time at which they end, followed by the time at which they start) in the
+system.
+
+.. code-block:: sql
+
+   SELECT starttime, starttime + slots*(interval '30 minutes') AS endtime
+	FROM bookings
+	ORDER BY endtime DESC, starttime DESC
+	LIMIT 10
+
+.. code-block:: python
+
+   endtime = Booking.starttime + (Booking.slots * db.interval('30 minutes'))
+   query = (Booking
+            .select(Booking.starttime, endtime.alias('endtime'))
+            .order_by(endtime.desc(), Booking.starttime.desc())
+            .limit(10))
+
+Return a count of bookings for each month
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Return a count of bookings for each month, sorted by month.
+
+.. code-block:: sql
+
+   SELECT date_trunc('month', starttime) as month, COUNT(*)
+	FROM bookings
+	GROUP BY month
+	ORDER BY month
+
+.. code-block:: python
+
+   month = db.truncate_date('month', Booking.starttime)
+   query = (Booking
+            .select(
+                month.alias('month'),
+                fn.COUNT(Booking.bookid).alias('count'))
+            .group_by(month)
+            .order_by(month))
+
+Work out the utilisation percentage for each facility by month
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Work out the utilisation percentage for each facility by month, sorted by name
+and month, rounded to 1 decimal place. Opening time is 8am, closing time is
+8.30pm. You can treat every month as a full month, regardless of if there were
+some dates the club was not open.
+
+.. code-block:: sql
+
+   SELECT name, month,
+      round((100*slots)/
+         cast(
+            25*(cast((month + interval '1 month') as date)
+            - cast (month as date)) as numeric),1) as utilisation
+   FROM (
+      SELECT facs.name as name, date_trunc('month', starttime) as month, sum(slots) as slots
+      FROM bookings bks
+      INNER JOIN facilities AS facs
+         ON bks.facid = facs.facid
+      GROUP BY facs.facid, month
+   ) as _
+   ORDER BY name, month
+
+.. code-block:: python
+
+   # Create the inner query first.
+   month = db.truncate_date('month', Booking.starttime)
+   subq = (Booking
+           .select(
+               Facility.name,
+               month.alias('month'),
+               fn.SUM(Booking.slots).alias('slots'))
+           .join(Facility)
+           .group_by(Facility.facid, month))
+
+   # Expression representing the utilization.
+   utilization = fn.ROUND(
+       (100 * subq.c.slots) /
+       Cast(25 * (
+           Cast(subq.c.month + db.interval('1 month'), 'date') -
+           Cast(subq.c.month, 'date')), 'numeric'), 1)
+
+   query = (subq
+            .select_from(
+               subq.c.name,
+               subq.c.month,
+               utilization.alias('utilization'))
+            .order_by(subq.c.name, subq.c.month))
+
+String
+------
+
+Format the names of members
+^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Output the names of all members, formatted as 'Surname, Firstname'
+
+.. code-block:: sql
+
+   SELECT surname || ', ' || firstname as name FROM members
+
+.. code-block:: python
+
+   query = Member.select(
+       (Member.surname + ', ' + Member.firstname).alias('name'))
+
+Find facilities by a name prefix
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Find all facilities whose name begins with 'Tennis'. Retrieve all columns.
+
+.. code-block:: sql
+
+   SELECT * FROM facilities WHERE name LIKE 'Tennis%';
+
+.. code-block:: python
+
+   # `startswith()` uses ILIKE (case-insensitive):
+   query = Facility.select().where(Facility.name.startswith('Tennis'))
+
+   # For case-sensitive search use LIKE explicitly:
+   query = Facility.select().where(Facility.name.like('Tennis%'))
+
+Perform a case-insensitive search
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Perform a case-insensitive search to find all facilities whose name begins with
+'tennis'. Retrieve all columns.
+
+.. code-block:: sql
+
+   SELECT * FROM facilities WHERE name ILIKE 'tennis%';
+
+   -- OR --
+   SELECT * FROM facilities WHERE UPPER(name) LIKE 'TENNIS%';
+
+.. code-block:: python
+
+   # `startswith()` uses ILIKE (case-insensitive):
+   query = Facility.select().where(Facility.name.startswith('tennis'))
+
+   # For case-sensitive search use ILIKE explicitly:
+   query = Facility.select().where(Facility.name.ilike('tennis%'))
+
+   # Or convert to upper:
+   query = Facility.select().where(
+      fn.upper(Facility.name).like('TENNIS%'))
+
+Find telephone numbers with parentheses
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+You've noticed that the club's member table has telephone numbers with very
+inconsistent formatting. You'd like to find all the telephone numbers that
+contain parentheses, returning the member ID and telephone number sorted by
+member ID.
+
+.. code-block:: sql
+
+   SELECT memid, telephone FROM members WHERE telephone ~ '[()]';
+
+.. code-block:: python
+
+   query = (Member
+            .select(Member.memid, Member.telephone)
+            .where(Member.telephone.regexp('[()]')))
+
+Pad zip codes with leading zeroes
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+The zip codes in our example dataset have had leading zeroes removed from them
+by virtue of being stored as a numeric type. Retrieve all zip codes from the
+members table, padding any zip codes less than 5 characters long with leading
+zeroes. Order by the new zip code.
+
+.. code-block:: sql
+
+   SELECT lpad(cast(zipcode as char(5)),5,'0') AS zip
+   FROM members
+   ORDER BY zip
+
+.. code-block:: python
+
+   # Because we're wrapping an integer field, Peewee will still want to try and
+   # coerce the LPAD() output to an integer, so we need to inform Peewee to
+   # leave the LPAD result as-is.
+   zipcode = fn.lpad(Cast(Member.zipcode, 'char(5)'), 5, '0', coerce=False)
+   query = Member.select(zipcode.alias('zipcode')).order_by(zipcode)
+
+Aggregate by last name first initial
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+You'd like to produce a count of how many members you have whose surname starts
+with each letter of the alphabet. Sort by the letter, and don't worry about
+printing out a letter if the count is 0.
+
+.. code-block:: sql
+
+   SELECT substr(surname, 1, 1) as letter, count(*) as count
+   FROM members
+   GROUP BY letter
+   ORDER BY letter
+
+.. code-block:: python
+
+   initial = fn.SUBSTR(Member.surname, 1, 1)
+   q = (Member
+        .select(initial, fn.COUNT(Member.memid))
+        .group_by(initial)
+        .order_by(initial))
+
+Clean up telephone numbers
+^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+The telephone numbers in the database are very inconsistently formatted. You'd
+like to print a list of member ids and numbers that have had '-','(',')', and
+'' characters removed. Order by member id.
+
+.. code-block:: sql
+
+   SELECT memid, translate(telephone, '-() ', '') as telephone
+   FROM members
+   ORDER BY memid;
+
+.. code-block:: python
+
+   clean = fn.translate(Member.telephone, '-() ', '')
+   q = (Member
+        .select(Member.memid, clean.alias('telephone'))
+        .order_by(Member.memid))
+
 Recursion
 ---------
 
@@ -1518,3 +1755,104 @@ Return member ID, first name, and surname. Order by descending member id.
              .select_from(cte.c.recommender, Member.firstname, Member.surname)
              .join(Member, on=(cte.c.recommender == Member.memid))
              .order_by(Member.memid.desc()))
+
+Find the downward recommendation chain for member ID 1
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Find the downward recommendation chain for member ID 1: that is, the members
+they recommended, the members those members recommended, and so on. Return
+member ID and name, and order by ascending member id.
+
+.. code-block:: sql
+
+   WITH RECURSIVE recommendeds(memid) AS (
+      SELECT memid FROM members WHERE recommendedby = 1
+      UNION ALL
+      SELECT mems.memid
+      FROM recommendeds recs
+      INNER JOIN members mems ON mems.recommendedby = recs.memid
+   )
+   SELECT recs.memid, mems.firstname, mems.surname
+   FROM recommendeds recs
+   INNER JOIN members mems
+      ON recs.memid = mems.memid
+   ORDER BY memid
+
+.. code-block:: python
+
+   # Base-case of recursive CTE. Get members recommended by memid=1.
+   base = (Member
+          .select(Member.memid)
+          .where(Member.recommendedby == 1)
+          .cte('recommenders', recursive=True, columns=('memid',)))
+
+   # Recursive term of CTE. Get recommended by previous recommender.
+   MA = Member.alias()
+   recursive = (MA
+               .select(MA.memid)
+               .join(base, on=(MA.recommendedby == base.c.memid)))
+
+   # Combine the base-case with the recursive term.
+   cte = base.union_all(recursive)
+
+   # Select from the recursive CTE, joining on member to get name info.
+   query = (cte
+           .select_from(cte.c.memid, Member.firstname, Member.surname)
+           .join(Member, on=(cte.c.memid == Member.memid))
+           .order_by(Member.memid))
+   for row in query:
+       print(row.memid, row.firstname, row.surname)
+
+Produce a upward recommendation chain for any member
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Produce a CTE that can return the upward recommendation chain for any member.
+You should be able to select recommender from recommenders where member=x.
+Demonstrate it by getting the chains for members 12 and 22. Results table
+should have member and recommender, ordered by member ascending, recommender
+descending.
+
+.. code-block:: sql
+
+   WITH RECURSIVE recommenders(recommender, member) AS (
+      SELECT recommendedby, memid
+      FROM members
+      UNION ALL
+      SELECT mems.recommendedby, recs.member
+      FROM recommenders recs
+      INNER JOIN members mems
+      ON mems.memid = recs.recommender
+   )
+   SELECT recs.member member, recs.recommender, mems.firstname, mems.surname
+   FROM recommenders recs
+   INNER JOIN members mems
+      ON recs.recommender = mems.memid
+   WHERE recs.member = 22 or recs.member = 12
+   ORDER BY recs.member ASC, recs.recommender DESC
+
+.. code-block:: python
+
+   # Base-case of recursive CTE. Get member recommender where memid=27.
+   base = (Member
+          .select(Member.recommendedby, Member.memid)
+          .cte('recommenders', recursive=True, columns=('recommender', 'member')))
+
+   # Recursive term of CTE. Get recommender of previous recommender.
+   MA = Member.alias()
+   recursive = (MA
+               .select(MA.recommendedby, base.c.member)
+               .join(base, on=(MA.memid == base.c.recommender)))
+
+   # Combine the base-case with the recursive term.
+   cte = base.union_all(recursive)
+
+   # Select from the recursive CTE, joining on member to get name info.
+   query = (cte
+           .select_from(
+               cte.c.member,
+               cte.c.recommender,
+               Member.firstname,
+               Member.surname)
+           .join(Member, on=(cte.c.recommender == Member.memid))
+           .where((cte.c.member == 22) | (cte.c.member == 12))
+           .order_by(cte.c.member, cte.c.recommender.desc()))
