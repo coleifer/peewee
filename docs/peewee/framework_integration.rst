@@ -68,7 +68,7 @@ For a complete Flask + Peewee application example, see :ref:`example`.
 FastAPI
 -------
 
-FastAPI is an async framework and can be used with Peewee's :ref:`asyncio`
+FastAPI is an async framework and can be used with Peewee's :ref:`pwasyncio`
 integration.
 
 The following example demonstrates how to:
@@ -119,7 +119,7 @@ Example demonstrating executing an async query:
        user = await db.run(User.create, name=name)
        return {'id': user.id, 'name': user.name}
 
-.. seealso:: :ref:`asyncio`
+.. seealso:: :ref:`pwasyncio`
 
 Django
 ------
@@ -226,7 +226,7 @@ Set up a custom ``Request`` factory:
 Sanic
 -----
 
-Sanic is an async framework and can be used with Peewee's :ref:`asyncio`
+Sanic is an async framework and can be used with Peewee's :ref:`pwasyncio`
 integration.
 
 .. code-block:: python
@@ -269,7 +269,7 @@ Example demonstrating executing an async query:
        message = await db.get(Message.select().order_by(Message.id.desc()))
        return json({'content': message.content, 'id': message.id})
 
-.. seealso:: :ref:`asyncio`
+.. seealso:: :ref:`pwasyncio`
 
 CherryPy
 --------

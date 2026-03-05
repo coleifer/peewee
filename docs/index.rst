@@ -13,8 +13,8 @@ it easy to learn and intuitive to use.
 
 * a small, expressive ORM
 * flexible query-builder that exposes full power of SQL
-* supports sqlite, mysql, mariadb, postgresql.
-* asyncio support
+* supports :ref:`sqlite, mysql, mariadb, postgresql <database>`.
+* :ref:`asyncio support <pwasyncio>`
 * tons of extensions
 * use with :ref:`flask <flask>`, :ref:`fastapi <fastapi>` and :ref:`more <framework-integration>`
 

@@ -1,4 +1,4 @@
-.. _asyncio:
+.. _pwasyncio:
 
 .. module:: playhouse.pwasyncio
 
