@@ -1,7 +1,7 @@
 .. _query-library:
 
-Query Library
-==============
+Query Examples Library
+======================
 
 These query examples are taken from the site `Postgresql Exercises
 <https://pgexercises.com/>`_. A sample data-set can be found on the `getting
@@ -531,7 +531,7 @@ formatted as a column and ordered.
 
     SELECT DISTINCT m.firstname || ' ' || m.surname AS member,
        (SELECT r.firstname || ' ' || r.surname
-        FROM cd.members AS r
+        FROM members AS r
         WHERE m.recommendedby = r.memid) AS recommended
     FROM members AS m ORDER BY member;
 
@@ -785,7 +785,7 @@ the bookings table.
     nrows = Booking.delete().execute()
 
 
-Delete a member from the cd.members table
+Delete a member from the members table
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 We want to remove member 37, who has never made a booking, from our database.
@@ -1339,6 +1339,131 @@ Postgres ONLY (as written).
              .from_(subq)
              .order_by(subq.c.klass, subq.c.name)
              .bind(db))
+
+Calculate the payback time for each facility
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Based on the 3 complete months of data so far, calculate the amount of time
+each facility will take to repay its cost of ownership. Remember to take into
+account ongoing monthly maintenance. Output facility name and payback time in
+months, order by facility name. Don't worry about differences in month
+lengths, we're only looking for a rough value here!
+
+.. code-block:: sql
+
+   SELECT f.name,
+          f.initialoutlay / ((SUM(CASE
+              WHEN b.memid = 0 THEN b.slots * f.guestcost
+              ELSE b.slots * f.membercost END) / 3) - f.monthlymaintenance)
+              AS months
+   FROM facilities AS f
+   INNER JOIN bookings AS b on (b.facid = f.facid)
+   GROUP BY f.facid
+   ORDER BY f.name
+
+.. code-block:: python
+
+   # How much money has this facility produced from its bookings?
+   revenue = fn.SUM(Case(None, (
+       (Booking.member == 0, Booking.slots * Facility.guestcost),
+   ), (Booking.slots * Facility.membercost)))
+
+   # Subtract monthly maintenance from average monthly revenue.
+   revenue_less_maintenance = (revenue / 3) - Facility.monthlymaintenance
+
+   # Determine how many months needed to pay off initial outlay.
+   payback_time = Facility.initialoutlay / revenue_less_maintenance
+
+   query = (Facility
+            .select(Facility.name,
+                    payback_time.alias('months'))
+            .join(Booking)
+            .group_by(Facility.facid)
+            .order_by(Facility.name))
+
+But, I hear you ask, what would an automatic version of this look like? One
+that didn't need to have a hard-coded number of months in it? That's a little
+more complicated, and involves some date arithmetic. I've factored that out
+into a CTE to make it a little more clear.
+
+.. code-block:: sql
+
+   with monthdata as (
+      select mincompletemonth,
+             maxcompletemonth,
+             ((extract(year from maxcompletemonth)*12) +
+              extract(month from maxcompletemonth) -
+              (extract(year from mincompletemonth)*12) -
+              extract(month from mincompletemonth)) as nummonths
+      from (
+         select
+            date_trunc('month',
+               (select max(starttime) from bookings)) as maxcompletemonth,
+            date_trunc('month',
+               (select min(starttime) from bookings)) as mincompletemonth
+      ) as subq)
+   select name,
+      initialoutlay / (monthlyrevenue - monthlymaintenance) as repaytime
+      from
+         (select f.name as name,
+            f.initialoutlay as initialoutlay,
+            f.monthlymaintenance as monthlymaintenance,
+            sum(case
+               when memid = 0 then slots * f.guestcost
+               else slots * membercost
+            end)/(select nummonths from monthdata) as monthlyrevenue
+
+            from bookings as b
+            inner join facilities as f
+               on b.facid = f.facid
+            where b.starttime < (select maxcompletemonth from monthdata)
+            group by f.facid
+         ) as subq
+   order by name;
+
+.. code-block:: python
+
+   # First calculate the min and max ranges of bookings.
+   BA = Booking.alias()
+   bounds = BA.select(
+       fn.date_trunc('month', fn.MIN(BA.starttime)).alias('minmonth'),
+       fn.date_trunc('month', fn.MAX(BA.starttime)).alias('maxmonth')
+   ).alias('bounds')
+
+   # Calculate how many months the range of bookings covers.
+   extract = db.extract_date  # Helper for generating EXTRACT .. FROM.
+   q = bounds.select_from(
+       bounds.c.minmonth,
+       bounds.c.maxmonth,
+       ((extract('year', bounds.c.maxmonth) * 12) +
+        extract('month', bounds.c.maxmonth) -
+        (extract('year', bounds.c.minmonth) * 12) -
+        extract('month', bounds.c.minmonth)).alias('nmonths'))
+
+   # Indicate that we will be using this as a CTE.
+   monthdata = q.cte('monthdata')
+
+   # Subqueries to retrieve total & max month data from the CTE.
+   nmonths = Select((monthdata,), (monthdata.c.nmonths,))
+   maxmonth = Select((monthdata,), (monthdata.c.maxmonth,))
+
+   # Our familiar revenue calculation.
+   revenue = fn.SUM(Case(None, (
+       (Booking.member == 0, Booking.slots * Facility.guestcost),
+   ), (Booking.slots * Facility.membercost)))
+   revenue_less_maintenance = (revenue / nmonths) - Facility.monthlymaintenance
+
+   payback_time = Facility.initialoutlay / revenue_less_maintenance
+
+   q = (Facility
+        .select(
+            Facility.name,
+            payback_time.alias('payback_time'))
+        .join(Booking)
+        .where(Booking.starttime < maxmonth)
+        .group_by(Facility.facid)
+        .order_by(Facility.name)
+        .with_cte(monthdata))
 
 Recursion
 ---------

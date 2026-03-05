@@ -1,9 +1,9 @@
 --
 -- PostgreSQL database dump
 --
-CREATE DATABASE exercises;
-\c exercises
-CREATE SCHEMA cd;
+--CREATE DATABASE exercises;
+--\c exercises
+--CREATE SCHEMA cd;
 
 
 
@@ -15,17 +15,6 @@ SET client_encoding = 'UTF8';
 SET standard_conforming_strings = on;
 SET check_function_bodies = false;
 SET client_min_messages = warning;
-
---
--- TOC entry 7 (class 2615 OID 32769)
--- Name: cd; Type: SCHEMA; Schema: -; Owner: -
---
-
-SET search_path = cd, pg_catalog;
-
-SET default_tablespace = '';
-
-SET default_with_oids = false;
 
 --
 -- TOC entry 171 (class 1259 OID 32818)
@@ -4245,37 +4234,37 @@ ALTER TABLE ONLY members
 --
 
 CREATE INDEX "bookings.memid_facid"
-  ON cd.bookings
+  ON bookings
   USING btree
   (memid, facid);
 
 CREATE INDEX "bookings.facid_memid"
-  ON cd.bookings
+  ON bookings
   USING btree
   (facid, memid);
 
 CREATE INDEX "bookings.facid_starttime"
-  ON cd.bookings
+  ON bookings
   USING btree
   (facid, starttime);
 
 CREATE INDEX "bookings.memid_starttime"
-  ON cd.bookings
+  ON bookings
   USING btree
   (memid, starttime);
 
 CREATE INDEX "bookings.starttime"
-  ON cd.bookings
+  ON bookings
   USING btree
   (starttime);
 
 CREATE INDEX "members.joindate"
-  ON cd.members
+  ON members
   USING btree
   (joindate);
 
 CREATE INDEX "members.recommendedby"
-  ON cd.members
+  ON members
   USING btree
   (recommendedby);
 
