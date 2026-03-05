@@ -246,7 +246,7 @@ Flask provides connection setup/teardown hooks via decorators:
    Peewee uses thread local storage to manage connection state, so this
    pattern can be used with multi-threaded or gevent WSGI servers.
 
-   Peewee's :ref:`asyncio integration <asyncio>` stores connection state in
+   Peewee's :ref:`asyncio integration <pwasyncio>` stores connection state in
    task-local storage, so the same pattern applies.
 
 Making Queries
