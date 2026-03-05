@@ -1,9 +1,9 @@
 .. _pwasyncio:
 
-.. module:: playhouse.pwasyncio
-
 Async Support
 =============
+
+.. module:: playhouse.pwasyncio
 
 Peewee is a synchronous library by design. Its core query execution path uses
 blocking DB-API 2.0 calls. The async support described here bridges that
