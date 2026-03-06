@@ -34,11 +34,10 @@ Database
    * Transactions
    * Introspection
 
-   .. note::
-      The database can be instantiated with ``None`` as the database name if
-      the database is not known until run-time. In this way you can create a
-      database instance and then configure it elsewhere when the settings are
-      known. This is called :ref:`deferred initialization <initializing-database>`.
+   The database can be instantiated with ``None`` as the database name if
+   the database is not known until run-time. In this way you can create a
+   database instance and then configure it elsewhere when the settings are
+   known. This is called :ref:`deferred initialization <initializing-database>`.
 
    Examples:
 
@@ -333,9 +332,8 @@ Database
              User.create(username='zaizee')
          # zaizee is committed when the block exits.
 
-      .. note::
-         Transactions can be committed or rolled-back within the wrapped block.
-         If this occurs, a new transaction is begun.
+      Transactions can be committed or rolled-back within the wrapped block.
+      If this occurs, a new transaction is begun.
 
       .. warning::
          If you attempt to nest transactions with peewee using the
@@ -364,9 +362,8 @@ Database
 
          # mickey and huey were created.
 
-      .. note::
-         Savepoints can be committed or rolled-back within the wrapped block.
-         If this occurs, a new savepoint is begun.
+      Savepoints can be committed or rolled-back within the wrapped block.
+      If this occurs, a new savepoint is begun.
 
    .. method:: manual_commit()
 
@@ -405,21 +402,19 @@ Database
       inside a transaction, but using a decorator or context-manager would
       not be appropriate.
 
-      .. note::
-         It is strongly advised that you use the :meth:`Database.atomic`
-         method whenever possible for managing transactions/savepoints. The
-         ``atomic`` method correctly manages nesting, uses the appropriate
-         construction (e.g., transaction-vs-savepoint), and always cleans up
-         after itself.
+      It is strongly advised that you use the :meth:`Database.atomic`
+      method whenever possible for managing transactions/savepoints. The
+      ``atomic`` method correctly manages nesting, uses the appropriate
+      construction (e.g., transaction-vs-savepoint), and always cleans up
+      after itself.
 
-         The :meth:`~Database.session_start` method should only be used
-         if the sequence of operations does not easily lend itself to
-         wrapping using either a context-manager or decorator.
+      The :meth:`~Database.session_start` method should only be used
+      if the sequence of operations does not easily lend itself to
+      wrapping using either a context-manager or decorator.
 
-      .. warning::
-         You must *always* call either :meth:`~Database.session_commit`
-         or :meth:`~Database.session_rollback` after calling the
-         ``session_start`` method.
+      You must *always* call either :meth:`~Database.session_commit`
+      or :meth:`~Database.session_rollback` after calling the
+      ``session_start`` method.
 
    .. method:: session_commit()
 
@@ -435,25 +430,22 @@ Database
 
       Begin a transaction when using manual-commit mode.
 
-      .. note::
-         This method should only be used in conjunction with the
-         :meth:`~Database.manual_commit` context manager.
+      This method should only be used in conjunction with the
+      :meth:`~Database.manual_commit` context manager.
 
    .. method:: commit()
 
       Manually commit the currently-active transaction.
 
-      .. note::
-         This method should only be used in conjunction with the
-         :meth:`~Database.manual_commit` context manager.
+      This method should only be used in conjunction with the
+      :meth:`~Database.manual_commit` context manager.
 
    .. method:: rollback()
 
       Manually roll-back the currently-active transaction.
 
-      .. note::
-         This method should only be used in conjunction with the
-         :meth:`~Database.manual_commit` context manager.
+      This method should only be used in conjunction with the
+      :meth:`~Database.manual_commit` context manager.
 
    .. method:: in_transaction()
 
@@ -1041,9 +1033,8 @@ Database
       connection. If the main database is currently connected, the new
       database will be attached on the open connection.
 
-      .. note::
-         Databases that are attached using this method will be attached
-         every time a database connection is opened.
+      Databases that are attached using this method will be attached
+      every time a database connection is opened.
 
    .. method:: detach(name)
 
@@ -1334,9 +1325,8 @@ Model
 
       See :ref:`updating-records` for additional discussion.
 
-      .. note::
-         When an update query is executed, the number of rows modified will
-         be returned.
+      When an update query is executed, the number of rows modified will
+      be returned.
 
    .. classmethod:: insert(__data=None, **insert)
 
@@ -1386,10 +1376,9 @@ Model
                    .execute())
          print(f'Added {alice.username} with id = {alice.id}')
 
-      .. note::
-         When an insert query is executed on a table with an
-         auto-incrementing primary key, the primary key of the new row will
-         be returned.
+      When an insert query is executed on a table with an
+      auto-incrementing primary key, the primary key of the new row will
+      be returned.
 
    .. classmethod:: insert_many(rows, fields=None)
 
@@ -1405,16 +1394,15 @@ Model
       :meth:`~Model.insert`, fields that are not specified in the
       dictionary will use their default value, if one exists.
 
-      .. note::
-         Due to the nature of bulk inserts, each row must contain the same
-         fields. The following will not work:
+      Due to the nature of bulk inserts, each row must contain the same
+      fields. The following will not work:
 
-         .. code-block:: python
+      .. code-block:: python
 
-             Person.insert_many([
-                 {'first_name': 'Peewee', 'last_name': 'Herman'},
-                 {'first_name': 'Huey'},  # Missing "last_name"!
-             ]).execute()
+          Person.insert_many([
+              {'first_name': 'Peewee', 'last_name': 'Herman'},
+              {'first_name': 'Huey'},  # Missing "last_name"!
+          ]).execute()
 
       Example of inserting multiple Users:
 
@@ -1462,20 +1450,18 @@ Model
 
       See :ref:`bulk-inserts` for additional discussion.
 
-      .. note::
-         SQLite has a default limit of bound variables per statement.
-         Additional discussion: :ref:`bulk-inserts`.
+      SQLite has a default limit of bound variables per statement.
+      Additional discussion: :ref:`bulk-inserts`.
 
-         SQLite documentation:
+      SQLite documentation:
 
-         * `Max variable number limit <https://www.sqlite.org/limits.html#max_variable_number>`_
-         * `SQLite compile-time flags <https://www.sqlite.org/compile.html>`_
+      * `Max variable number limit <https://www.sqlite.org/limits.html#max_variable_number>`_
+      * `SQLite compile-time flags <https://www.sqlite.org/compile.html>`_
 
-      .. note::
-         The default return value is the number of rows modified. However,
-         when using Postgresql, Peewee will return a cursor that yields the
-         primary-keys of the inserted rows. To disable this functionality with
-         Postgresql, append ``as_rowcount()`` to your insert.
+      The default return value is the number of rows modified. However,
+      when using Postgresql, Peewee will return a cursor that yields the
+      primary-keys of the inserted rows. To disable this functionality with
+      Postgresql, append ``as_rowcount()`` to your insert.
 
    .. classmethod:: insert_from(query, fields)
 
@@ -1496,11 +1482,10 @@ Model
 
       See :ref:`bulk-inserts` for additional discussion.
 
-      .. note::
-         The default return value is the number of rows modified. However,
-         when using Postgresql, Peewee will return a cursor that yields the
-         primary-keys of the inserted rows. To disable this functionality with
-         Postgresql, append ``as_rowcount()`` to your insert.
+      The default return value is the number of rows modified. However,
+      when using Postgresql, Peewee will return a cursor that yields the
+      primary-keys of the inserted rows. To disable this functionality with
+      Postgresql, append ``as_rowcount()`` to your insert.
 
    .. classmethod:: replace(__data=None, **insert)
 
@@ -1527,10 +1512,9 @@ Model
 
       See :ref:`upsert` for additional discussion.
 
-      .. warning::
-         ``replace`` deletes and re-inserts, which changes the primary key.
-         Use :meth:`Insert.on_conflict` when the primary key must be preserved,
-         or when only some columns should be updated.
+      ``replace`` deletes and re-inserts, which changes the primary key.
+      Use :meth:`Insert.on_conflict` when the primary key must be preserved,
+      or when only some columns should be updated.
 
    .. classmethod:: replace_many(rows, fields=None)
 
@@ -1543,10 +1527,9 @@ Model
          * :meth:`Model.insert_many` for syntax and examples.
          * :ref:`upsert` for additional discussion.
 
-      .. warning::
-         ``replace_many`` may delete and re-insert rows, which changes the
-         primary key. Use :meth:`Insert.on_conflict` when the primary key must
-         be preserved, or when only some columns should be updated.
+      ``replace_many`` may delete and re-insert rows, which changes the
+      primary key. Use :meth:`Insert.on_conflict` when the primary key must
+      be preserved, or when only some columns should be updated.
 
    .. classmethod:: raw(sql, *params)
 
@@ -1563,9 +1546,8 @@ Model
          for user in q:
              print(user.id, user.username)
 
-      .. note::
-         Generally the use of ``raw`` is reserved for those cases where you
-         can significantly optimize a select query.
+      Generally the use of ``raw`` is reserved for those cases where you
+      can significantly optimize a select query.
 
    .. classmethod:: delete()
 
@@ -1643,15 +1625,14 @@ Model
               # Will execute 4 INSERT queries (3 batches of 3, 1 batch of 1).
               User.bulk_create(user_list, batch_size=3)
 
-      .. note::
-         * The primary-key value for the newly-created models will only be
-           set if you are using Postgresql (which supports the ``RETURNING``
-           clause).
-         * SQLite has a limit of bound parameters for a query, typically 999
-           for Sqlite < 3.32.0, and 32766 for newer versions.
-         * **Strongly recommended** that you wrap the call in a transaction
-           using :meth:`Database.atomic`. Otherwise an error in a batch mid-way
-           through could leave the database in an inconsistent state.
+      * The primary-key value for the newly-created models will only be
+        set if you are using Postgresql (which supports the ``RETURNING``
+        clause).
+      * SQLite has a limit of bound parameters for a query, typically 999
+        for Sqlite < 3.32.0, and 32766 for newer versions.
+      * **Strongly recommended** that you wrap the call in a transaction
+        using :meth:`Database.atomic`. Otherwise an error in a batch mid-way
+        through could leave the database in an inconsistent state.
 
    .. classmethod:: bulk_update(model_list, fields, batch_size=None)
 
@@ -1699,11 +1680,10 @@ Model
          with database.atomic():
              User.bulk_update(user_list, fields=['username'], batch_size=50)
 
-      .. note::
-         ``bulk_update`` may be slower than a direct UPDATE query when the list is
-         very large, because the generated ``CASE`` expression grows proportionally.
-         For updates that can be expressed as a single WHERE clause, the direct
-         :meth:`~Model.update` approach is faster.
+      ``bulk_update`` may be slower than a direct UPDATE query when the list is
+      very large, because the generated ``CASE`` expression grows proportionally.
+      For updates that can be expressed as a single WHERE clause, the direct
+      :meth:`~Model.update` approach is faster.
 
    .. classmethod:: get(*query, **filters)
 
@@ -1734,11 +1714,10 @@ Model
          except User.DoesNotExist:
              user = None
 
-      .. note::
-         The :meth:`~Model.get` method is shorthand for selecting with a
-         limit of 1. It has the added behavior of raising an exception when
-         no matching row is found. If more than one row is found, the first
-         row returned by the database cursor will be used.
+      The :meth:`~Model.get` method is shorthand for selecting with a
+      limit of 1. It has the added behavior of raising an exception when
+      no matching row is found. If more than one row is found, the first
+      row returned by the database cursor will be used.
 
    .. classmethod:: get_or_none(*query, **filters)
 
@@ -1874,30 +1853,28 @@ Model
 
       :rtype: list
 
-      .. note::
-         If you just want to persist modified fields, you can call
-         ``model.save(only=model.dirty_fields)``.
+      If you just want to persist modified fields, you can call
+      ``model.save(only=model.dirty_fields)``.
 
-         To **always** save a model's dirty fields, use the Meta option
-         ``only_save_dirty = True``. Any calls to :meth:`Model.save()` will
-         only save the dirty fields by default:
+      To **always** save a model's dirty fields, use the Meta option
+      ``only_save_dirty = True``. Any calls to :meth:`Model.save()` will
+      only save the dirty fields by default:
 
-         .. code-block:: python
+      .. code-block:: python
 
-            class Person(Model):
-                first_name = CharField()
-                last_name = CharField()
-                dob = DateField()
+         class Person(Model):
+             first_name = CharField()
+             last_name = CharField()
+             dob = DateField()
 
-                class Meta:
-                    database = db
-                    only_save_dirty = True
+             class Meta:
+                 database = db
+                 only_save_dirty = True
 
-      .. warning::
-         Peewee determines whether a field is "dirty" by observing when the
-         field attribute is set on a model instance. If the field contains a
-         value that is mutable, such as a dictionary instance, and that
-         dictionary is then modified, Peewee will not notice the change.
+      Peewee determines whether a field is "dirty" by observing when the
+      field attribute is set on a model instance. If the field contains a
+      value that is mutable, such as a dictionary instance, and that
+      dictionary is then modified, Peewee will not notice the change.
 
       .. warning::
          Do not do membership tests on this list, e.g. ``f in dirty_fields``
@@ -2038,11 +2015,10 @@ Model
 
       Add an index to the model's definition.
 
-      .. note::
-         This method does not actually create the index in the database.
-         Rather, it adds the index definition to the model's metadata, so
-         that a subsequent call to :meth:`~Model.create_table` will
-         create the new index (along with the table).
+      This method does not actually create the index in the database.
+      Rather, it adds the index definition to the model's metadata, so
+      that a subsequent call to :meth:`~Model.create_table` will
+      create the new index (along with the table).
 
       Examples:
 
@@ -2300,16 +2276,15 @@ Model
       Return result rows as objects created using the given constructor. The
       default behavior is to create model instances.
 
-      .. note::
-         This method can be used, when selecting field data from multiple
-         sources/models, to make all data available as attributes on the
-         model being queried (as opposed to constructing the graph of joined
-         model instances). For very complex queries this can have a positive
-         performance impact, especially iterating large result sets.
+      This method can be used, when selecting field data from multiple
+      sources/models, to make all data available as attributes on the
+      model being queried (as opposed to constructing the graph of joined
+      model instances). For very complex queries this can have a positive
+      performance impact, especially iterating large result sets.
 
-         Similarly, you can use :meth:`~BaseQuery.dicts`,
-         :meth:`~BaseQuery.tuples` or :meth:`~BaseQuery.namedtuples`
-         to achieve even more performance.
+      Similarly, you can use :meth:`~BaseQuery.dicts`,
+      :meth:`~BaseQuery.tuples` or :meth:`~BaseQuery.namedtuples`
+      to achieve even more performance.
 
    .. method:: join(dest, join_type='INNER', on=None, src=None, attr=None)
 
@@ -2415,11 +2390,10 @@ Model
              for tweet in user.tweets:
                  print('  *', tweet.content)
 
-      .. note::
-         Because ``prefetch`` must reconstruct a graph of models, it is
-         necessary to be sure that the foreign-key/primary-key of any
-         related models are selected, so that the related objects can be
-         mapped correctly.
+      Because ``prefetch`` must reconstruct a graph of models, it is
+      necessary to be sure that the foreign-key/primary-key of any
+      related models are selected, so that the related objects can be
+      mapped correctly.
 
 
 .. class:: DoesNotExist
@@ -2538,16 +2512,15 @@ Fields
 
    Field class for storing auto-incrementing primary keys.
 
-   .. note::
-      In SQLite, for performance reasons, the default primary key type simply
-      uses the max existing value + 1 for new values, as opposed to the max
-      ever value + 1. This means deleted records can have their primary keys
-      reused. In conjunction with SQLite having foreign keys disabled by
-      default (meaning ON DELETE is ignored, even if you specify it
-      explicitly), this can lead to surprising and dangerous behaviour. To
-      avoid this, you may want to use one or both of
-      :class:`AutoIncrementField` and ``pragmas=[('foreign_keys', 'on')]``
-      when you instantiate :class:`SqliteDatabase`.
+   In SQLite, for performance reasons, the default primary key type simply
+   uses the max existing value + 1 for new values, as opposed to the max
+   ever value + 1. This means deleted records can have their primary keys
+   reused. In conjunction with SQLite having foreign keys disabled by
+   default (meaning ON DELETE is ignored, even if you specify it
+   explicitly), this can lead to surprising and dangerous behaviour. To
+   avoid this, you may want to use one or both of
+   :class:`AutoIncrementField` and ``pragmas=[('foreign_keys', 'on')]``
+   when you instantiate :class:`SqliteDatabase`.
 
 .. class:: BigAutoField
 
@@ -2593,13 +2566,13 @@ Fields
 
    Field class for storing strings.
 
-   .. note:: Values that exceed length are NOT truncated automatically.
+   Values that exceed length are NOT truncated automatically.
 
 .. class:: FixedCharField
 
    Field class for storing fixed-length strings.
 
-   .. note:: Values that exceed length are not truncated automatically.
+   Values that exceed length are not truncated automatically.
 
 .. class:: TextField
 
@@ -2835,11 +2808,10 @@ Fields
       '%Y-%m-%d %H:%M:%S' # year-month-day hour-minute-second
       '%Y-%m-%d' # year-month-day
 
-   .. note::
-      SQLite does not have a native datetime data-type, so datetimes are
-      stored as strings. This is handled transparently by Peewee, but if you
-      have pre-existing data you should ensure it is stored as
-      ``YYYY-mm-dd HH:MM:SS`` or one of the other supported formats.
+   SQLite does not have a native datetime data-type, so datetimes are
+   stored as strings. This is handled transparently by Peewee, but if you
+   have pre-existing data you should ensure it is stored as
+   ``YYYY-mm-dd HH:MM:SS`` or one of the other supported formats.
 
    .. attribute:: year
 
@@ -3072,14 +3044,12 @@ Fields
    For an in-depth discussion of foreign-keys, joins and relationships between
    models, refer to :ref:`relationships`.
 
-   .. note::
-      Foreign keys do not have a particular ``field_type`` as they will take
-      their field type depending on the type of primary key on the model they
-      are related to.
+   Foreign keys do not have a particular ``field_type`` as they will take
+   their field type depending on the type of primary key on the model they
+   are related to.
 
-   .. note::
-      If you manually specify a ``field``, that field must be either a
-      primary key or have a unique constraint.
+   If you manually specify a ``field``, that field must be either a
+   primary key or have a unique constraint.
 
    .. note::
       Take care with foreign keys in SQLite. By default, ON DELETE has no
@@ -3112,32 +3082,31 @@ Fields
    ``Husband.wife`` is automatically resolved and turned into a regular
    :class:`ForeignKeyField`.
 
-   .. warning::
-      :class:`DeferredForeignKey` references are resolved when model
-      classes are declared and created. This means that if you declare a
-      :class:`DeferredForeignKey` to a model class that has already been
-      imported and created, the deferred foreign key instance will never be
-      resolved. For example:
+   :class:`DeferredForeignKey` references are resolved when model
+   classes are declared and created. This means that if you declare a
+   :class:`DeferredForeignKey` to a model class that has already been
+   imported and created, the deferred foreign key instance will never be
+   resolved. For example:
 
-      .. code-block:: python
+   .. code-block:: python
 
-         class User(Model):
-             username = TextField()
+      class User(Model):
+          username = TextField()
 
-         class Tweet(Model):
-             # This will never actually be resolved, because the User
-             # model has already been declared.
-             user = DeferredForeignKey('user', backref='tweets')
-             content = TextField()
+      class Tweet(Model):
+          # This will never actually be resolved, because the User
+          # model has already been declared.
+          user = DeferredForeignKey('user', backref='tweets')
+          content = TextField()
 
-      In cases like these you should use the regular
-      :class:`ForeignKeyField` *or* you can manually resolve deferred
-      foreign keys like so:
+   In cases like these you should use the regular
+   :class:`ForeignKeyField` *or* you can manually resolve deferred
+   foreign keys like so:
 
-      .. code-block:: python
+   .. code-block:: python
 
-         # Tweet.user will be resolved into a ForeignKeyField:
-         DeferredForeignKey.resolve(User)
+      # Tweet.user will be resolved into a ForeignKeyField:
+      DeferredForeignKey.resolve(User)
 
 .. class:: ManyToManyField(model, backref=None, through_model=None, on_delete=None, on_update=None)
 
@@ -3207,12 +3176,11 @@ Fields
           name = CharField()
           students = ManyToManyField(Student, backref='courses')
 
-   .. note::
-      It does not matter from Peewee's perspective which model the
-      :class:`ManyToManyField` goes on, since the back-reference is just
-      the mirror image. In order to write valid Python, though, you will need
-      to add the ``ManyToManyField`` on the second model so that the name of
-      the first model is in the scope.
+   It does not matter from Peewee's perspective which model the
+   :class:`ManyToManyField` goes on, since the back-reference is just
+   the mirror image. In order to write valid Python, though, you will need
+   to add the ``ManyToManyField`` on the second model so that the name of
+   the first model is in the scope.
 
    We still need a junction table to store the relationships between students
    and courses. This model can be accessed by calling the
@@ -3284,11 +3252,10 @@ Fields
       >>> engl_101 = Course.get(Course.name == 'English 101')
       >>> engl_101.students.clear()
 
-   .. note::
-      For an overview of implementing many-to-many relationships using
-      standard Peewee APIs, check out the :ref:`manytomany` section. For all
-      but the most simple cases, you will be better off implementing
-      many-to-many using the standard APIs.
+   For an overview of implementing many-to-many relationships using
+   standard Peewee APIs, check out the :ref:`manytomany` section. For all
+   but the most simple cases, you will be better off implementing
+   many-to-many using the standard APIs.
 
    .. attribute:: through_model
 
@@ -3523,10 +3490,9 @@ Schema Manager
 
       For more information, see documentation on :ref:`circular-fks`.
 
-      .. warning::
-         Because SQLite has limited support for altering existing tables, it
-         is not possible to add a foreign-key constraint to an existing
-         SQLite table.
+      Because SQLite has limited support for altering existing tables, it
+      is not possible to add a foreign-key constraint to an existing
+      SQLite table.
 
    .. method:: create_all(safe=True, **table_options)
 
@@ -3763,8 +3729,7 @@ Query-builder
    :param str schema: Schema name used to access table (if necessary).
    :param str alias: Alias to use for table in SQL queries.
 
-   .. note::
-      If columns are specified, the magic "c" attribute will be disabled.
+   If columns are specified, the magic "c" attribute will be disabled.
 
    When columns are not explicitly defined, tables have a special attribute
    "c" which is a factory that provides access to table columns dynamically.
@@ -4155,11 +4120,10 @@ Query-builder
 
    Represent a CHECK constraint.
 
-   .. warning::
-      MySQL may not support a ``name`` parameter when inlining the
-      constraint along with the column definition. The solution is to just
-      put the named ``Check`` constraint in the model's ``Meta.constraints``
-      list instead of in the field instances ``constraints=[...]`` list.
+   MySQL may not support a ``name`` parameter when inlining the
+   constraint along with the column definition. The solution is to just
+   put the named ``Check`` constraint in the model's ``Meta.constraints``
+   list instead of in the field instances ``constraints=[...]`` list.
 
 
 .. function:: Default(value)
@@ -4195,9 +4159,8 @@ Query-builder
 
    Represent an arbitrary SQL function call.
 
-   .. note::
-      Rather than instantiating this class directly, it is recommended to use
-      the ``fn`` helper.
+   Rather than instantiating this class directly, it is recommended to use
+   the ``fn`` helper.
 
    Example of using ``fn`` to call an arbitrary SQL function:
 
@@ -4224,9 +4187,8 @@ Query-builder
       :param exclude: Frame exclusion, one of ``Window.CURRENT_ROW``,
           ``Window.GROUP``, ``Window.TIES`` or ``Window.NO_OTHERS``.
 
-      .. note::
-          For an in-depth guide to using window functions with Peewee,
-          see the :ref:`window-functions` section.
+      For an in-depth guide to using window functions with Peewee,
+      see the :ref:`window-functions` section.
 
       Examples:
 
@@ -4359,9 +4321,8 @@ Query-builder
 
    Represent a WINDOW clause.
 
-   .. note::
-      For an in-depth guide to using window functions with Peewee,
-      see the :ref:`window-functions` section.
+   For an in-depth guide to using window functions with Peewee,
+   see the :ref:`window-functions` section.
 
    .. attribute:: RANGE
                   ROWS
@@ -4631,18 +4592,17 @@ Queries
       result-sets this method is preferable as rows are not cached in-memory
       during iteration.
 
-      .. note::
-         Because rows are not cached, the query may only be iterated over
-         once. Subsequent iterations will return empty result-sets as the
-         cursor will have been consumed.
+      Because rows are not cached, the query may only be iterated over
+      once. Subsequent iterations will return empty result-sets as the
+      cursor will have been consumed.
 
-       Example:
+      Example:
 
-       .. code-block:: python
+      .. code-block:: python
 
-          query = StatTbl.select().order_by(StatTbl.timestamp).tuples()
-          for row in query.iterator(db):
-              process_row(row)
+         query = StatTbl.select().order_by(StatTbl.timestamp).tuples()
+         for row in query.iterator(db):
+             process_row(row)
 
    .. method:: __iter__()
 
@@ -4661,10 +4621,9 @@ Queries
 
       Return the number of rows in the result-set.
 
-      .. warning::
-         This does not issue a ``COUNT()`` query. Instead, the result-set
-         is loaded as it would be during normal iteration, and the length
-         is determined from the size of the result set.
+      This does not issue a ``COUNT()`` query. Instead, the result-set
+      is loaded as it would be during normal iteration, and the length
+      is determined from the size of the result set.
 
 
 .. class:: RawQuery(sql=None, params=None, **kwargs)
@@ -4771,10 +4730,8 @@ Queries
                .where(Tweet.user.in_(inactive_users)))
          dq.execute()  # Return number of tweets deleted.
 
-      .. note::
-
-         :meth:`~Query.where` calls are chainable.  Multiple calls will
-         be "AND"-ed together.
+      :meth:`~Query.where` calls are chainable.  Multiple calls will
+      be "AND"-ed together.
 
    .. method:: orwhere(*expressions)
 
@@ -5013,9 +4970,8 @@ Queries
 
    Class representing a SELECT query.
 
-   .. note::
-      Rather than instantiating this directly, most-commonly you will use a
-      factory method like :meth:`Table.select` or :meth:`Model.select`.
+   Rather than instantiating this directly, most-commonly you will use a
+   factory method like :meth:`Table.select` or :meth:`Model.select`.
 
    Methods on the select query can be chained together.
 
@@ -5042,9 +4998,8 @@ Queries
       for user in query:
           print(user.username, 'has tweeted', user.count, 'times')
 
-   .. note::
-      While it is possible to instantiate :class:`Select` directly, more
-      commonly you will build the query using the method-chaining APIs.
+   While it is possible to instantiate :class:`Select` directly, more
+   commonly you will build the query using the method-chaining APIs.
 
    .. method:: columns(*columns)
 
@@ -5475,11 +5430,10 @@ Queries
           for tweet in user.tweets:  # Does not require additional query.
               print('    ', tweet.content)
 
-   .. note::
-      Because ``prefetch`` must reconstruct a graph of models, it is
-      necessary to be sure that the foreign-key/primary-key of any
-      related models are selected, so that the related objects can be
-      mapped correctly.
+   Because ``prefetch`` must reconstruct a graph of models, it is
+   necessary to be sure that the foreign-key/primary-key of any
+   related models are selected, so that the related objects can be
+   mapped correctly.
 
 
 Query-builder Internals
