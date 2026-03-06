@@ -362,23 +362,22 @@ for binding a given model class:
    # User is back to being bound to the sqlite_db.
    assert User._meta.database is sqlite_db
 
-.. note::
-   Peewee database connections are thread-safe. However, if you plan to **bind**
-   the database at run-time in a multi-threaded application, storing the model's
-   database in a thread-local is necessary. This can be accomplished with
-   the :class:`~playhouse.shortcuts.ThreadSafeDatabaseMetadata`.
+Peewee database connections are thread-safe. However, if you plan to **bind**
+the database at run-time in a multi-threaded application, storing the model's
+database in a thread-local is necessary. This can be accomplished with
+the :class:`~playhouse.shortcuts.ThreadSafeDatabaseMetadata`.
 
-   .. code-block:: python
+.. code-block:: python
 
-      from peewee import *
-      from playhouse.shortcuts import ThreadSafeDatabaseMetadata
+   from peewee import *
+   from playhouse.shortcuts import ThreadSafeDatabaseMetadata
 
-      class BaseModel(Model):
-          class Meta:
-              model_metadata_class = ThreadSafeDatabaseMetadata
+   class BaseModel(Model):
+       class Meta:
+           model_metadata_class = ThreadSafeDatabaseMetadata
 
-   The database can now be swapped safely while running in a multi-threaded
-   environment using the :meth:`Database.bind` or :meth:`Database.bind_ctx`.
+The database can now be swapped safely while running in a multi-threaded
+environment using the :meth:`Database.bind` or :meth:`Database.bind_ctx`.
 
 Connecting via URL
 ------------------
@@ -650,7 +649,7 @@ from peewee:
 * :class:`OperationalError`
 * :class:`ProgrammingError`
 
-.. note:: All of these error classes extend :class:`PeeweeException`.
+All of these error classes extend :class:`PeeweeException`.
 
 Logging Queries
 ---------------

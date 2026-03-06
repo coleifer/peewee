@@ -170,11 +170,10 @@ overloads Python's comparison operators to produce SQL expressions:
    # Comparison
    Tweet.select().where(Tweet.timestamp < datetime.datetime(2024, 1, 1))
 
-.. warning::
-   Peewee uses **bitwise** operators (``&`` and ``|``) rather than logical
-   operators (``and`` and ``or``). The reason for this is that Python coerces
-   the logical operations to a boolean value. This is also the reason why "IN"
-   queries must be expressed using ``.in_()`` rather than the ``in`` operator.
+Peewee uses **bitwise** operators (``&`` and ``|``) rather than logical
+operators (``and`` and ``or``). The reason for this is that Python coerces
+the logical operations to a boolean value. This is also the reason why "IN"
+queries must be expressed using ``.in_()`` rather than the ``in`` operator.
 
 .. seealso:: :ref:`Query operations <query-operators>` to see all operators.
 
@@ -672,9 +671,8 @@ running total of the current row and it's two preceding rows:
    # 2     3.    24.  -- (3 + 1 + 20)
    # 3   100    104.  -- (100 + 3 + 1)
 
-.. note::
-   Technically we did not need to specify the ``end=Window.CURRENT`` because
-   that is the default. It was shown in the example for demonstration.
+Technically we did not need to specify the ``end=Window.CURRENT`` because
+that is the default. It was shown in the example for demonstration.
 
 Let's look at another example. In this example we will calculate the "opposite"
 of a running total, in which the total sum of all values is decreased by the
@@ -725,9 +723,8 @@ respect to the ``id``, but we will filter-out any samples whose ``counter=2``.
    # 2     3.    30.
    # 3   100    130.
 
-.. note::
-   The call to :meth:`~Function.filter` must precede the call to
-   :meth:`~Function.over`.
+The call to :meth:`~Function.filter` must precede the call to
+:meth:`~Function.over`.
 
 Reusing Window Definitions
 ^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -950,18 +947,17 @@ As you can hopefully infer, the window is grouped by its ordering term, which
 is ``(counter, value)``. We are looking at a window that extends between one
 previous group and the current group.
 
-.. note::
-   For information about the window function APIs, see:
+For information about the window function APIs, see:
 
-   * :meth:`Function.over`
-   * :meth:`Function.filter`
-   * :class:`Window`
+* :meth:`Function.over`
+* :meth:`Function.filter`
+* :class:`Window`
 
-   For general information on window functions, read the postgres `window functions tutorial <https://www.postgresql.org/docs/current/tutorial-window.html>`_
+For general information on window functions, read the postgres `window functions tutorial <https://www.postgresql.org/docs/current/tutorial-window.html>`_
 
-   Additionally, the `postgres docs <https://www.postgresql.org/docs/current/sql-select.html#SQL-WINDOW>`_
-   and the `sqlite docs <https://www.sqlite.org/windowfunctions.html>`_
-   contain a lot of good information.
+Additionally, the `postgres docs <https://www.postgresql.org/docs/current/sql-select.html#SQL-WINDOW>`_
+and the `sqlite docs <https://www.sqlite.org/windowfunctions.html>`_
+contain a lot of good information.
 
 .. _cte:
 

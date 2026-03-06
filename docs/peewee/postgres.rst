@@ -130,9 +130,8 @@ JSONField and BinaryJSONField
    Field that stores and retrieves JSON data. Supports ``__getitem__`` key
    access for filtering and sub-object retrieval.
 
-   .. note::
-      Consider using the :class:`BinaryJSONField` instead as it
-      offers better performance and more powerful querying options.
+   Consider using the :class:`BinaryJSONField` instead as it
+   offers better performance and more powerful querying options.
 
    .. method:: as_json()
 
@@ -159,9 +158,8 @@ JSONField and BinaryJSONField
 
    Extends :class:`JSONField` for the ``jsonb`` type.
 
-   .. note::
-       By default BinaryJSONField will use a GiST index. To disable this,
-       initialize the field with ``index=False``.
+   By default BinaryJSONField will use a GiST index. To disable this,
+   initialize the field with ``index=False``.
 
    .. method:: as_json()
 
@@ -362,9 +360,8 @@ HStoreField API
 
 .. class:: HStoreField()
 
-   .. note::
-      By default ``HStoreField`` will use a *GiST* index. To disable this,
-      initialize the field with ``index=False``.
+   By default ``HStoreField`` will use a *GiST* index. To disable this,
+   initialize the field with ``index=False``.
 
    .. method:: __getitem__(key)
 
@@ -503,9 +500,8 @@ Arrays
    :param bool convert_values: Apply ``field_class`` value conversion to
        retrieved data.
 
-   .. note::
-      By default ArrayField will use a GIN index. To disable this, initialize
-      the field with ``index=False``.
+   By default ArrayField will use a GIN index. To disable this, initialize
+   the field with ``index=False``.
 
    Example:
 
@@ -660,9 +656,8 @@ For more information, see the `Postgres full-text search docs <https://www.postg
    Field type for storing pre-computed ``tsvector`` data. Automatically
    created with a GIN index (use ``index=False`` to disable).
 
-   .. note::
-      Data must be explicitly converted to ``tsvector`` on write using
-      ``fn.to_tsvector()``.
+   Data must be explicitly converted to ``tsvector`` on write using
+   ``fn.to_tsvector()``.
 
    Example:
 
@@ -701,7 +696,7 @@ Refer to your driver documentation for details:
 * `psycopg2 server-side cursors <https://www.psycopg.org/docs/usage.html#server-side-cursors>`__
 * `psycopg3 server-side cursors <https://www.psycopg.org/psycopg3/docs/advanced/cursors.html#server-side-cursors>`__
 
-.. note:: To use server-side (or named) cursors, you must be using :class:`PostgresqlExtDatabase`.
+To use server-side (or named) cursors, you must be using :class:`PostgresqlExtDatabase`.
 
 Wrap any SELECT query with :func:`ServerSide`:
 
@@ -916,9 +911,8 @@ CRDB API
     Run SQL in a transaction with automatic client-side retries. See
     :meth:`CockroachDatabase.run_transaction` for details.
 
-    .. note::
-        This function is equivalent to the identically-named method on
-        the :class:`CockroachDatabase` class.
+    This function is equivalent to the identically-named method on
+    the :class:`CockroachDatabase` class.
 
 
 CRDB-specific field types:

@@ -208,10 +208,9 @@ inserts them efficiently. Pass ``batch_size`` to avoid hitting database limits:
    with db.atomic():
        User.bulk_create(users, batch_size=100)
 
-.. note::
-   If you are using Postgresql (which supports the ``RETURNING`` clause), then
-   the previously-unsaved model instances will have their new primary key
-   values automatically populated. Other backends will not.
+If you are using Postgresql (which supports the ``RETURNING`` clause), then
+the previously-unsaved model instances will have their new primary key
+values automatically populated. Other backends will not.
 
 Loading from another table
 ^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -261,12 +260,11 @@ you want to update:
    charlie.username = 'charlie_v2'
    charlie.save(only=[User.username])
 
-.. note::
-   If a model instance does not have a primary key, the first call to
-   :meth:`~Model.save` will perform an INSERT query.
+If a model instance does not have a primary key, the first call to
+:meth:`~Model.save` will perform an INSERT query.
 
-   Once a model instance has a primary key, subsequent calls to :meth:`~Model.save`
-   result in an *UPDATE*.
+Once a model instance has a primary key, subsequent calls to :meth:`~Model.save`
+result in an *UPDATE*.
 
 Updating multiple rows
 ^^^^^^^^^^^^^^^^^^^^^^
@@ -366,11 +364,10 @@ specify a ``batch_size`` and wrap in a transaction:
    with db.atomic():
        User.bulk_update(users, fields=[User.username], batch_size=50)
 
-.. note::
-   ``bulk_update`` may be slower than a direct UPDATE query when the list is
-   very large, because the generated ``CASE`` expression grows proportionally.
-   For updates that can be expressed as a single WHERE clause, the direct
-   :meth:`~Model.update` approach is faster.
+``bulk_update`` may be slower than a direct UPDATE query when the list is
+very large, because the generated ``CASE`` expression grows proportionally.
+For updates that can be expressed as a single WHERE clause, the direct
+:meth:`~Model.update` approach is faster.
 
 .. _upsert:
 
@@ -403,10 +400,9 @@ event of a conflict:
     .on_conflict_replace()
     .execute())
 
-.. warning::
-   ``replace`` deletes and re-inserts, which changes the primary key. Use
-   ``on_conflict`` (below) when the primary key must be preserved, or when
-   only some columns should be updated.
+``replace`` deletes and re-inserts, which changes the primary key. Use
+``on_conflict`` (below) when the primary key must be preserved, or when
+only some columns should be updated.
 
 ``on_conflict`` - all backends
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -562,12 +558,11 @@ reference it via foreign key), pass ``recursive=True``:
    with db.atomic():
        user.delete_instance(recursive=True)
 
-.. warning::
-   ``recursive=True`` works by querying for dependent rows and deleting them
-   first - it does not rely on ``ON DELETE CASCADE``. For large graphs of
-   related data, this can be slow. Be sure to wrap calls in a
-   :ref:`transaction <transactions>` and consider using database-level cascade
-   constraints on the foreign keys.
+``recursive=True`` works by querying for dependent rows and deleting them
+first - it does not rely on ``ON DELETE CASCADE``. For large graphs of
+related data, this can be slow. Be sure to wrap calls in a
+:ref:`transaction <transactions>` and consider using database-level cascade
+constraints on the foreign keys.
 
 To delete an arbitrary set of rows without fetching them:
 

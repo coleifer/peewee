@@ -111,9 +111,8 @@ Savepoints can be nested arbitrarily deep:
                inner.rollback()   # Only the innermost work is lost.
            do_something_safe()
 
-.. note::
-   ``atomic()`` tracks the nesting depth internally. You do not need to
-   manage savepoint names or transaction state manually.
+``atomic()`` tracks the nesting depth internally. You do not need to
+manage savepoint names or transaction state manually.
 
 Explicit Transaction
 --------------------
@@ -138,13 +137,12 @@ Otherwise the statements will be committed at the end of the wrapped block.
        User.create(username='zaizee')
    # zaizee is committed when the block exits.
 
-.. warning::
-   If you attempt to nest transactions with peewee using the
-   :meth:`~Database.transaction` context manager, only the outer-most
-   transaction will be used.
+If you attempt to nest transactions with peewee using the
+:meth:`~Database.transaction` context manager, only the outer-most
+transaction will be used.
 
-   As this may lead to unpredictable behavior, it is recommended that
-   you use :meth:`~Database.atomic`.
+As this may lead to unpredictable behavior, it is recommended that
+you use :meth:`~Database.atomic`.
 
 Explicit Savepoints
 -------------------
@@ -165,9 +163,8 @@ Savepoints must occur within a transaction, but can be nested arbitrarily deep.
 
    # mickey and huey were created.
 
-.. note::
-   If you manually commit or roll back a savepoint, a new savepoint will
-   automatically begin.
+If you manually commit or roll back a savepoint, a new savepoint will
+automatically begin.
 
 Autocommit Mode
 ---------------
@@ -281,5 +278,4 @@ setting to the outer-most ``atomic()`` block:
    with db.atomic('SERIALIZABLE') as txn:
        ...
 
-.. note::
-   Isolation level cannot be specified for nested ``atomic()`` blocks.
+Isolation level cannot be specified for nested ``atomic()`` blocks.
