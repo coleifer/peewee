@@ -325,9 +325,8 @@ Example:
       db = SqliteDatabase('my_app.db')
       db.load_extension('closure')
 
-.. note::
-   To support shared libraries, your SQLite3 will need to have been compiled with
-   support for run-time loadable extensions.
+To support shared libraries, your SQLite3 will need to have been compiled with
+support for run-time loadable extensions.
 
 .. _sqlite-locking-mode:
 
@@ -757,10 +756,9 @@ Usage:
        class Meta:
            database = db
 
-.. warning::
-   Use the ``Field`` subclasses from ``playhouse.apsw_ext`` rather than those
-   from ``peewee`` to ensure correct type adaptation. For example, use
-   ``playhouse.apsw_ext.DateTimeField`` instead of ``peewee.DateTimeField``.
+Use the ``Field`` subclasses from ``playhouse.apsw_ext`` rather than those
+from ``peewee`` to ensure correct type adaptation. For example, use
+``playhouse.apsw_ext.DateTimeField`` instead of ``peewee.DateTimeField``.
 
 
 .. class:: APSWDatabase(database, **connect_kwargs)
@@ -842,9 +840,8 @@ Pragma configuration (e.g. increasing PBKDF2 iterations):
                           passphrase='s3cr3t',
                           pragmas={'kdf_iter': 1_000_000})
 
-.. note::
-   SQLCipher can be configured using a number of extension PRAGMAs. The list
-   of PRAGMAs and their descriptions can be found in the `SQLCipher documentation <https://www.zetetic.net/sqlcipher/sqlcipher-api/>`__.
+SQLCipher can be configured using a number of extension PRAGMAs. The list
+of PRAGMAs and their descriptions can be found in the `SQLCipher documentation <https://www.zetetic.net/sqlcipher/sqlcipher-api/>`__.
 
 .. class:: SqlCipherDatabase(database, passphrase, **kwargs)
 
@@ -911,16 +908,15 @@ Stop the writer thread on application shutdown (waits for pending writes):
 Read queries work as normal. Open and close the connection per-request as you
 would with any other database. Only writes are funneled through the queue.
 
-.. warning::
-   **Transactions are not supported.** Because writes from different threads
-   are interleaved, there is no way to guarantee that the statements in a
-   transaction from one thread execute atomically without statements from
-   another thread appearing between them. The ``atomic()`` and
-   ``transaction()`` methods raise a ``ValueError`` if called.
+**Transactions are not supported.** Because writes from different threads
+are interleaved, there is no way to guarantee that the statements in a
+transaction from one thread execute atomically without statements from
+another thread appearing between them. The ``atomic()`` and
+``transaction()`` methods raise a ``ValueError`` if called.
 
-   If you need to temporarily bypass the queue and write directly (for
-   example, during a batch import), use :meth:`~SqliteQueueDatabase.pause`
-   and :meth:`~SqliteQueueDatabase.unpause`.
+If you need to temporarily bypass the queue and write directly (for
+example, during a batch import), use :meth:`~SqliteQueueDatabase.pause`
+and :meth:`~SqliteQueueDatabase.unpause`.
 
 .. class:: SqliteQueueDatabase(database, use_gevent=False, autostart=True, queue_max_size=None, results_timeout=None, **kwargs)
 
@@ -1654,26 +1650,25 @@ Store data by inserting it into the FTS table:
    for r in results:
        print(r.title, r.relevance)
 
-.. tip::
-   An important method of searching relies on the ``rowid`` of the indexed
-   data matching the document's canonical id. Using this technique we can
-   apply additional filters and retrieve the matching ``Document`` objects
-   efficiently:
+An important method of searching relies on the ``rowid`` of the indexed
+data matching the document's canonical id. Using this technique we can
+apply additional filters and retrieve the matching ``Document`` objects
+efficiently:
 
-   .. code-block:: python
+.. code-block:: python
 
-      # Search and ensure we only retrieve articles from the last 30 days.
-      cutoff = datetime.datetime.now() - datetime.timedelta(days=30)
+   # Search and ensure we only retrieve articles from the last 30 days.
+   cutoff = datetime.datetime.now() - datetime.timedelta(days=30)
 
-      query = (Document
-               .select()
-               .join(
-                   DocumentIndex,
-                   on=(Document.id == DocumentIndex.rowid))
-               .where(
-                   (Document.timestamp >= cutoff) &
-                   DocumentIndex.match('python sqlite'))
-               .order_by(DocumentIndex.bm25()))
+   query = (Document
+            .select()
+            .join(
+                DocumentIndex,
+                on=(Document.id == DocumentIndex.rowid))
+            .where(
+                (Document.timestamp >= cutoff) &
+                DocumentIndex.match('python sqlite'))
+            .order_by(DocumentIndex.bm25()))
 
 .. warning::
    All SQL queries on ``FTSModel`` classes will be full-table scans
@@ -1794,10 +1789,9 @@ Store data by inserting it into the FTS table:
       Shorthand way of searching for a term and sorting results by the
       quality of the match.
 
-      .. note::
-         This method uses a simplified algorithm for determining the
-         relevance rank of results. For more sophisticated result ranking,
-         use the :meth:`~FTSModel.search_bm25` method.
+      This method uses a simplified algorithm for determining the
+      relevance rank of results. For more sophisticated result ranking,
+      use the :meth:`~FTSModel.search_bm25` method.
 
       .. code-block:: python
 
@@ -1859,13 +1853,12 @@ Store data by inserting it into the FTS table:
       specify weights for the various columns. If no weights are specified,
       all columns are considered of equal importance.
 
-      .. note::
-         The algorithm used by :meth:`~FTSModel.rank` is simple and
-         relatively quick. For more sophisticated result ranking, use:
+      The algorithm used by :meth:`~FTSModel.rank` is simple and
+      relatively quick. For more sophisticated result ranking, use:
 
-         * :meth:`~FTSModel.bm25`
-         * :meth:`~FTSModel.bm25f`
-         * :meth:`~FTSModel.lucene`
+      * :meth:`~FTSModel.bm25`
+      * :meth:`~FTSModel.bm25f`
+      * :meth:`~FTSModel.lucene`
 
       .. code-block:: python
 
@@ -1893,9 +1886,8 @@ Store data by inserting it into the FTS table:
       If no weights are specified, all columns are considered of equal
       importance.
 
-      .. attention::
-         The BM25 result ranking algorithm requires FTS4. If you are using
-         FTS3, use :meth:`~FTSModel.rank` instead.
+      The BM25 result ranking algorithm requires FTS4. If you are using
+      FTS3, use :meth:`~FTSModel.rank` instead.
 
       .. code-block:: python
 
@@ -1909,9 +1901,8 @@ Store data by inserting it into the FTS table:
          for search_result in query:
              print(search_result.title, search_result.score)
 
-      .. note::
-         The above code example is equivalent to calling the
-         :meth:`~FTSModel.search_bm25` method:
+      The above code example is equivalent to calling the
+      :meth:`~FTSModel.search_bm25` method:
 
           .. code-block:: python
 
@@ -2184,15 +2175,14 @@ has more information.
           for search_result in query:
               print(search_result.title, search_result.score)
 
-      .. note::
-          The above code example is equivalent to calling the
-          :meth:`~FTS5Model.search` method:
+       The above code example is equivalent to calling the
+       :meth:`~FTS5Model.search` method:
 
-          .. code-block:: python
+       .. code-block:: python
 
-              query = DocumentIndex.search('search phrase', with_score=True)
-              for search_result in query:
-                  print(search_result.title, search_result.score)
+           query = DocumentIndex.search('search phrase', with_score=True)
+           for search_result in query:
+               print(search_result.title, search_result.score)
 
    .. classmethod:: bm25(col1_weight, col2_weight...coln_weight)
 
