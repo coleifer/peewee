@@ -180,15 +180,28 @@ class CySqliteDatabase(SqliteDatabase):
             self.connection().authorizer(fn)
         return fn
 
-    def trace(self, fn, mask=2):
+    def trace(self, fn, mask=2, expand_sql=True):
         if fn is None:
             self._trace = None
         else:
-            self._trace = (fn, mask)
+            self._trace = (fn, mask, expand_sql)
         if not self.is_closed():
             args = (None,) if fn is None else self._trace
             self.connection().trace(*args)
         return fn
+
+    def slow_query_log(self, threshold_ms=50, logger=None,
+                       level=logging.WARNING, expand_sql=True):
+        log = logging.getLogger(logger or 'peewee.cysqlite_ext')
+        def _trace(event, sid, sql, ns):
+            if not sql:
+                return
+            ms = ns / 1000000
+            if ms >= threshold_ms:
+                log.log(level, 'Slow query %0.1fms: %s', ms, sql)
+
+        self.trace(_trace, cysqlite.SQLITE_TRACE_PROFILE, expand_sql=expand_sql)
+        return True
 
     def progress(self, fn, n=1):
         if fn is None:

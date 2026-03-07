@@ -585,11 +585,13 @@ Usage:
 
       More details can be found in the `cysqlite docs <https://cysqlite.readthedocs.io/en/latest/api.html#Connection.authorizer>`__.
 
-   .. method:: trace(fn, mask=2):
+   .. method:: trace(fn, mask=2, expand_sql=True):
 
       :param fn: callable or ``None`` to clear the current trace hook.
       :param int mask: mask of what types of events to trace. Default value
           corresponds to ``SQLITE_TRACE_PROFILE``.
+      :param bool expand_sql: Pass callback the ``sqlite3_expanded_sql()``
+          from ``sqlite3_stmt`` (expands bound parameters)
 
       Register a trace hook (``sqlite3_trace_v2``). Trace callback must
       accept 4 parameters, which vary depending on the operation being
@@ -597,13 +599,25 @@ Usage:
 
       * event: type of event, e.g. ``SQLITE_TRACE_PROFILE``.
       * sid: memory address of statement (only ``SQLITE_TRACE_CLOSE``), else -1.
-      * sql: SQL string (only ``SQLITE_TRACE_STMT``), else None.
+      * sql: SQL string. If ``expand_sql`` then bound parameters will be
+        expanded (for ``SQLITE_TRACE_CLOSE``, ``sql=None``).
       * ns: estimated number of nanoseconds the statement took to run (only
         ``SQLITE_TRACE_PROFILE``), else -1.
 
       Any return value from callback is ignored.
 
       More details can be found in the `cysqlite docs <https://cysqlite.readthedocs.io/en/latest/api.html#Connection.trace>`__.
+
+   .. method:: slow_query_log(threshold_ms=50, logger=None, level=logging.WARNING, expand_sql=True)
+
+      :param threshold_ms: estimated millisecond threshold to log slow queries.
+      :param logger: logging namespace, defaults to ``'peewee.cysqlite_ext'``.
+      :param int level: level for slow query log.
+      :param bool expand_sql: expand bound parameters in SQL query.
+
+      Register a ``sqlite3_trace_v2`` callback that will log slow queries to
+      the given logger. Overrides previously-registered :py:meth:`~CySqliteDatabase.trace`
+      callback. Automatically re-registered when new connection is opened.
 
    .. method:: progress(fn, n=1)
 
