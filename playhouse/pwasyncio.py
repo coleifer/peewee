@@ -41,8 +41,6 @@ async def greenlet_spawn(fn, *args, **kwargs):
             result = fn(*args, **kwargs)
         except BaseException as exc:
             error = exc
-        finally:
-            pass
 
     # Run the sync code in a greenlet - the sync code must use await_()
     # whenever blocking would occur. await_() transfers a coroutine and control
@@ -78,10 +76,16 @@ class _State(object):
         self.transactions = []
         self.ctx = []
 
+
 class TaskLocal(object):
+    # Interval (in number of _current() calls) between automatic cleanups of
+    # dead-task state. Set to 0 to disable periodic cleanup.
+    _CLEANUP_INTERVAL = 100
+
     def __init__(self):
-        self._state_storage = {}  # Keyed by (task_id).
+        self._state_storage = {}  # Keyed by task id.
         self._task_refs = weakref.WeakSet()
+        self._access_count = 0
 
     def _get_storage_key(self):
         try:
@@ -100,13 +104,20 @@ class TaskLocal(object):
         if key not in self._state_storage:
             self._state_storage[key] = _State()
 
+        # Periodically clean up state for dead tasks to prevent memory leaks.
+        if self._CLEANUP_INTERVAL > 0:
+            self._access_count += 1
+            if self._access_count >= self._CLEANUP_INTERVAL:
+                self._access_count = 0
+                self.cleanup_dead_tasks()
+
         return self._state_storage[key]
 
     def __getattr__(self, name):
         return getattr(self._current(), name)
 
     def __setattr__(self, name, value):
-        if name in ('_state_storage', '_task_refs'):
+        if name in ('_state_storage', '_task_refs', '_access_count'):
             super(TaskLocal, self).__setattr__(name, value)
         else:
             setattr(self._current(), name, value)
@@ -136,16 +147,11 @@ class TaskLocal(object):
         self.closed = False
 
     def cleanup_dead_tasks(self):
-        # Get all currently tracked task IDs
         live_task_ids = {id(task) for task in self._task_refs}
-
-        # Find dead task keys (keys where the task_id part is not in live set)
-        dead_keys = [key for key in self._state_storage.keys()
+        dead_keys = [key for key in self._state_storage
                      if key not in live_task_ids]
-
         for key in dead_keys:
             del self._state_storage[key]
-
         return len(dead_keys)
 
 
@@ -162,6 +168,7 @@ class _async_transaction_helper(object):
     async def arollback(self):
         return await self.db.run(self.rollback)
 
+
 class async_atomic(_async_transaction_helper, _atomic): pass
 class async_transaction(_async_transaction_helper, _transaction): pass
 class async_savepoint(_async_transaction_helper, _savepoint): pass
@@ -177,6 +184,7 @@ class AsyncDatabaseMixin(object):
         self._state = TaskLocal()
         self._pool = None
         self._pool_lock = asyncio.Lock()
+        self._closing = False  # Guard against use during shutdown.
 
     def execute_sql(self, sql, params=None):
         try:
@@ -195,12 +203,14 @@ class AsyncDatabaseMixin(object):
         return await_(self.aconnect())
 
     async def aconnect(self):
+        if self._closing:
+            raise InterfaceError('Database pool is shutting down.')
+
         conn = self._state.conn
-        if conn is None:
-            conn = await self._acquire_conn_async()
-            self._state.set_connection(conn)
-        elif conn.conn is None:
-            await self._pool_release(conn)
+        if conn is None or conn.conn is None:
+            if conn is not None:
+                # Previous connection was invalidated; release it.
+                await self._pool_release(conn)
             conn = await self._acquire_conn_async()
             self._state.set_connection(conn)
         return conn
@@ -234,25 +244,33 @@ class AsyncDatabaseMixin(object):
         raise NotImplementedError('Subclasses must implement.')
 
     async def close_pool(self):
-        if self._pool:
-            # Close active connections first.
-            active = list(self._state._state_storage.values())
-            for state in active:
-                if state.conn and not state.closed:
-                    logger.debug('Closing active connection for task %s',
-                                 id(state.conn))
-                    await self._pool_release(state.conn)
-                    state.conn = None
-                    state.closed = True
-                    state.transactions = []
+        self._closing = True
+        try:
+            if self._pool:
+                # Snapshot active connections and release them.
+                active = list(self._state._state_storage.values())
+                for state in active:
+                    if state.conn and not state.closed:
+                        logger.debug('Closing active connection for task %s',
+                                     id(state.conn))
+                        try:
+                            await self._pool_release(state.conn)
+                        except Exception:
+                            logger.warning(
+                                'Error releasing connection during pool close',
+                                exc_info=True)
+                        state.conn = None
+                        state.closed = True
+                        state.transactions = []
 
-            await self._pool_close()
-            self._pool = None
+                await self._pool_close()
+                self._pool = None
 
-        # Cleanup dead task state
-        cleaned = self._state.cleanup_dead_tasks()
-        if cleaned > 0:
-            logger.debug('Cleaned up %d dead task states', cleaned)
+            cleaned = self._state.cleanup_dead_tasks()
+            if cleaned > 0:
+                logger.debug('Cleaned up %d dead task states', cleaned)
+        finally:
+            self._closing = False
 
     async def _pool_close(self):
         raise NotImplementedError('Subclasses must implement.')
@@ -269,6 +287,7 @@ class AsyncDatabaseMixin(object):
 
     def transaction(self):
         return async_transaction(self)
+
     def savepoint(self):
         return async_savepoint(self)
 
@@ -291,17 +310,29 @@ class AsyncDatabaseMixin(object):
     async def scalar(self, query):
         return await self.run(query.scalar)
 
+    async def count(self, query):
+        return await self.run(query.count)
+
+    async def exists(self, query):
+        return await self.run(query.exists)
+
     async def run(self, fn, *args, **kwargs):
-        # Main entry-point for async functions.
         return await greenlet_spawn(fn, *args, **kwargs)
+
+    def is_closed(self):
+        """Check if the current task's connection is closed."""
+        try:
+            return self._state.closed
+        except RuntimeError:
+            return True
 
 
 class CursorAdapter(object):
-    def __init__(self, rows, lastrowid=None, description=None):
+    def __init__(self, rows, lastrowid=None, rowcount=None, description=None):
         self._rows = rows
         self._idx = 0
         self.lastrowid = lastrowid
-        self.rowcount = len(rows)
+        self.rowcount = rowcount if rowcount is not None else len(rows)
         self.description = description or []
 
     def fetchone(self):
@@ -322,8 +353,6 @@ class CursorAdapter(object):
 
 
 class DummyCursor(object):
-    # Rather than expose a cursor from the driver, we'll just run everything
-    # through the driver wrapper execute(), which uses a cursor internally.
     def __init__(self, conn):
         self.conn = conn
 
@@ -361,16 +390,17 @@ class AsyncSQLiteConnection(AsyncConnectionWrapper):
         cursor = await self.conn.execute(sql, params)
         rows = await cursor.fetchall()
         lastrowid = cursor.lastrowid
+        rowcount = cursor.rowcount
         description = cursor.description
         await cursor.close()
-        return CursorAdapter(rows, lastrowid=lastrowid, description=description)
+        return CursorAdapter(rows, lastrowid=lastrowid, rowcount=rowcount,
+                             description=description)
 
 
 class AsyncSqliteDatabase(AsyncDatabaseMixin, SqliteDatabase):
     async def _create_pool_async(self):
         if aiosqlite is None:
             raise ImproperlyConfigured('aiosqlite is not installed')
-        # SQLite: single shared connection.
         conn = await aiosqlite.connect(self.database, isolation_level=None)
         conn.row_factory = lambda cursor, row: tuple(row)
         await self._add_conn_hooks(conn)
@@ -392,15 +422,17 @@ class AsyncSqliteDatabase(AsyncDatabaseMixin, SqliteDatabase):
             await conn.create_function(name, n_params, fn, **kwargs)
 
     async def _pool_acquire(self):
-        # Return the single connection
-        if self._pool is None or self._pool.conn is None:
-            async with self._pool_lock:
+        # SQLite uses a single shared connection. Re-create if lost.
+        async with self._pool_lock:
+            if self._pool is None or self._pool.conn is None:
                 self._pool = await self._create_pool_async()
         return self._pool
 
     async def _pool_release(self, conn):
-        if conn is None:
-            self._pool = None
+        # For SQLite we don't actually release the shared connection — we only
+        # disassociate it from the current task's state.  The connection stays
+        # open until close_pool().
+        pass
 
     async def _pool_close(self):
         if self._pool:
@@ -411,12 +443,16 @@ class AsyncMySQLConnection(AsyncConnectionWrapper):
     async def _execute(self, sql, params=None):
         params = params or ()
         cursor = await self.conn.cursor()
-        await cursor.execute(sql, params)
-        rows = await cursor.fetchall()
-        lastrowid = cursor.lastrowid
-        description = cursor.description
-        await cursor.close()
-        return CursorAdapter(rows, lastrowid=lastrowid, description=description)
+        try:
+            await cursor.execute(sql, params)
+            rows = await cursor.fetchall()
+            lastrowid = cursor.lastrowid
+            rowcount = cursor.rowcount
+            description = cursor.description
+        finally:
+            await cursor.close()
+        return CursorAdapter(rows, lastrowid=lastrowid, rowcount=rowcount,
+                             description=description)
 
 
 class AsyncMySQLDatabase(AsyncDatabaseMixin, MySQLDatabase):
@@ -446,18 +482,30 @@ class AsyncMySQLDatabase(AsyncDatabaseMixin, MySQLDatabase):
 
 
 class AsyncPostgresqlConnection(AsyncConnectionWrapper):
-    async def _execute(self, sql, params):
-        if '%s' in sql:
-            parts = sql.split('%s')
-            accum = [parts[0]]
-            for i, part in enumerate(parts[1:], 1):
-                accum.append('$%d' % i)
-                accum.append(part)
-            sql = ''.join(accum)
+    async def _execute(self, sql, params=None):
+        # asyncpg uses $1, $2 positional params instead of %s.
+        if params:
+            sql = self._translate_placeholders(sql)
 
         records = await self.conn.fetch(sql, *(params or ()))
-        description = [(k,) for k in records[0].keys()] if records else []
-        return CursorAdapter(records, None, description)
+        if records:
+            description = [(k,) for k in records[0].keys()]
+            rows = records
+        else:
+            description = []
+            rows = []
+
+        return CursorAdapter(rows, description=description)
+
+    def _translate_placeholders(self, sql):
+        parts = sql.split('%s')
+        if len(parts) == 1:
+            return sql
+        accum = [parts[0]]
+        for i, part in enumerate(parts[1:], 1):
+            accum.append('$%d' % i)
+            accum.append(part)
+        return ''.join(accum)
 
 
 class AsyncPostgresqlDatabase(AsyncDatabaseMixin, PostgresqlDatabase):
