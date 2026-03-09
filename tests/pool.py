@@ -95,11 +95,11 @@ class TestPooledDatabase(BaseTestCase):
 
     def test_concurrent_connections(self):
         db = FakePooledDatabase('testing')
-        signal = threading.Event()
+        barrier = threading.Barrier(6)  # 5 workers + main thread.
 
         def open_conn():
             db.connect()
-            signal.wait()
+            barrier.wait(timeout=2)
             db.close()
 
         # Simulate 5 concurrent connections.
@@ -107,12 +107,8 @@ class TestPooledDatabase(BaseTestCase):
         for thread in threads:
             thread.start()
 
-        # Wait for all connections to be opened.
-        while db.counter < 5:
-            time.sleep(.01)
-
-        # Signal threads to close connections and join threads.
-        signal.set()
+        # Wait for all connections to be opened, then release to run.
+        barrier.wait(timeout=2)
         for t in threads: t.join()
 
         self.assertEqual(db.counter, 5)
@@ -149,19 +145,20 @@ class TestPooledDatabase(BaseTestCase):
 
     def test_stale_on_checkout(self):
         # Create a test database with a very short stale timeout.
-        db = FakePooledDatabase('testing', stale_timeout=.005)
+        db = FakePooledDatabase('testing', stale_timeout=1)
         self.assertEqual(db.connection(), 1)
         self.assertTrue(1 in db._in_use)
 
         # When we close, the conn should not be stale so it won't return to
         # the pool.
         db.close()
-        assert len(db._connections) == 1, 'Test runner too slow!'
 
         # Sleep long enough for the connection to be considered stale.
-        time.sleep(.005)
         self.assertEqual(db._in_use, {})
         self.assertEqual(len(db._connections), 1)
+
+        _, hc, conn = db._connections[0]
+        db._connections[0] = (time.time() - 2, hc, conn)
 
         # A new connection will be returned, as the original one is stale.
         # The stale connection (1) will be removed.
@@ -307,18 +304,15 @@ class TestPooledDatabase(BaseTestCase):
         self.assertEqual(len(self.db._in_use), 0)
 
     def test_db_context_threads(self):
-        signal = threading.Event()
+        barrier = threading.Barrier(6)  # 5 workers + main thread.
         def create_context():
             with self.db:
-                signal.wait()
+                barrier.wait(timeout=2)
 
         threads = [threading.Thread(target=create_context) for i in range(5)]
         for thread in threads: thread.start()
 
-        while len(self.db.transaction_history) < 5:
-            time.sleep(.001)
-
-        signal.set()
+        barrier.wait(timeout=2)
         for thread in threads: thread.join()
 
         self.assertEqual(self.db.counter, 5)
@@ -557,7 +551,8 @@ class TestPooledDatabase(BaseTestCase):
             try:
                 db._state.closed = True
                 db.connect()
-                barrier.wait(timeout=2)
+                barrier.wait(timeout=2)  # Let all workers connect.
+                barrier.wait(timeout=2)  # Let main() finish w/timestamps.
                 # Small stagger so close_stale and close() overlap.
                 time.sleep(0.001 * (n % 3))
                 db.close()
@@ -570,8 +565,7 @@ class TestPooledDatabase(BaseTestCase):
         for t in threads: t.start()
 
         # Wait until all threads hold a connection.
-        while len(db._in_use) < 10:
-            time.sleep(.005)
+        barrier.wait(timeout=2)
 
         # Artificially back-date half the checked_out times so that
         # close_stale will try to close them while threads are returning.
@@ -741,12 +735,12 @@ class TestPooledDatabaseIntegration(ModelTestCase):
         self.assertTrue(self.database.is_closed())
         self.assertConnections(1)
 
-        signal = threading.Event()
+        barrier = threading.Barrier(5)  # 4 workers + main thread.
         def connect():
             self.assertTrue(self.database.is_closed())
             self.assertTrue(self.database.connect())
             self.assertFalse(self.database.is_closed())
-            signal.wait()
+            barrier.wait(timeout=2)
             self.assertTrue(self.database.close())
             self.assertTrue(self.database.is_closed())
 
@@ -754,11 +748,8 @@ class TestPooledDatabaseIntegration(ModelTestCase):
         threads = [threading.Thread(target=connect) for _ in range(4)]
         for t in threads: t.start()
 
-        while len(self.database._in_use) < 4:
-            time.sleep(.005)
-
         # Close connections in all 4 threads.
-        signal.set()
+        barrier.wait(timeout=2)
         for t in threads: t.join()
 
         # Verify that there are 4 connections available in the pool.
@@ -782,13 +773,13 @@ class TestPooledDatabaseIntegration(ModelTestCase):
 
     def test_pool_with_models(self):
         self.database.close()
-        signal = threading.Event()
+        barrier = threading.Barrier(5)  # 4 workers + main thread.
 
         def create_obj(i):
             with self.database.connection_context():
                 with self.database.atomic():
                     Register.create(value=i)
-                signal.wait()
+                barrier.wait(timeout=2)
 
         # Create 4 objects, one in each thread. The INSERT will be wrapped in a
         # transaction, and after COMMIT (but while the conn is still open), we
@@ -798,14 +789,9 @@ class TestPooledDatabaseIntegration(ModelTestCase):
                    for i in range(4)]
         for t in threads: t.start()
 
-        # Explicitly connect, as the connection is required to verify that all
-        # the objects are present (and that its safe to set the signal).
-        self.assertTrue(self.database.connect())
-        while Register.select().count() != 4:
-            time.sleep(0.005)
-
         # Signal threads that they can exit now and ensure all exited.
-        signal.set()
+        self.database.connect()
+        barrier.wait(timeout=2)
         for t in threads: t.join()
 
         # Close connection from main thread as well.
