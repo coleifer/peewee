@@ -8,6 +8,7 @@ from unittest.mock import Mock, AsyncMock
 
 from peewee import *
 from playhouse.pwasyncio import *
+from playhouse.pwasyncio import _State
 from .base import MYSQL_PARAMS
 from .base import PSQL_PARAMS
 
@@ -146,14 +147,12 @@ class TestTaskLocal(unittest.IsolatedAsyncioTestCase):
         task_local.conn = 'test_conn'
         task_local.closed = False
         task_local.transactions = [1, 2]
-        task_local.ctx = [9]
 
         task_local.reset()
 
         self.assertIsNone(task_local.conn)
         self.assertTrue(task_local.closed)
         self.assertEqual(task_local.transactions, [])
-        self.assertEqual(task_local.ctx, [])
 
     async def test_set_connection(self):
         task_local = TaskLocal()
@@ -177,6 +176,21 @@ class TestTaskLocal(unittest.IsolatedAsyncioTestCase):
 
         self.assertGreaterEqual(cleaned, 1)
         self.assertNotIn(dead_key, task_local._state_storage)
+
+    async def test_periodic_cleanup(self):
+        task_local = TaskLocal()
+        super(TaskLocal, task_local).__setattr__('_CLEANUP_INTERVAL', 5)
+        #task_local._CLEANUP_INTERVAL = 5
+
+        # Inject a dead key.
+        task_local._state_storage[888888] = _State()
+
+        # Access enough times to trigger periodic cleanup.
+        for _ in range(5):
+            self.assertIn(888888, task_local._state_storage)
+            task_local._current()
+
+        self.assertNotIn(888888, task_local._state_storage)
 
 
 class TestCursorAdapter(unittest.TestCase):
@@ -241,8 +255,6 @@ class TestTaskLifecycle(unittest.IsolatedAsyncioTestCase):
         async with db:
             await db.acreate_tables([TestModel])
 
-            task_states = []
-
             async def capture_state(task_id):
                 async with db:
                     state_before = id(db._state.get())
@@ -265,6 +277,7 @@ class TestAsyncSQLiteConnection(unittest.IsolatedAsyncioTestCase):
         mock_cursor = AsyncMock()
         mock_cursor.fetchall.return_value = [(1, 'test')]
         mock_cursor.lastrowid = 1
+        mock_cursor.rowcount = 1
         mock_cursor.description = [('id',), ('name',)]
         mock_conn.execute.return_value = mock_cursor
 
@@ -274,6 +287,8 @@ class TestAsyncSQLiteConnection(unittest.IsolatedAsyncioTestCase):
         self.assertIsInstance(result, CursorAdapter)
         self.assertEqual(result.fetchall(), [(1, 'test')])
         self.assertEqual(result.lastrowid, 1)
+        self.assertEqual(result.rowcount, 1)
+        mock_cursor.close.assert_awaited_once()
 
 
 class TestAsyncMySQLConnection(unittest.IsolatedAsyncioTestCase):
@@ -282,6 +297,7 @@ class TestAsyncMySQLConnection(unittest.IsolatedAsyncioTestCase):
         mock_cursor = AsyncMock()
         mock_cursor.fetchall.return_value = [(1, 'test')]
         mock_cursor.lastrowid = 1
+        mock_cursor.rowcount = 1
         mock_cursor.description = [('id',), ('name',)]
         mock_conn.cursor.return_value = mock_cursor
 
@@ -290,6 +306,22 @@ class TestAsyncMySQLConnection(unittest.IsolatedAsyncioTestCase):
 
         self.assertIsInstance(result, CursorAdapter)
         self.assertEqual(result.fetchall(), [(1, 'test')])
+        self.assertEqual(result.lastrowid, 1)
+        self.assertEqual(result.rowcount, 1)
+        mock_cursor.close.assert_awaited_once()
+
+    async def test_cursor_closed_on_error(self):
+        mock_conn = AsyncMock()
+        mock_cursor = AsyncMock()
+        mock_cursor.execute.side_effect = RuntimeError('db error')
+        mock_conn.cursor.return_value = mock_cursor
+
+        conn = AsyncMySQLConnection(mock_conn)
+        with self.assertRaises(RuntimeError):
+            await conn.execute('BAD SQL')
+
+        # Cursor must be closed even when execute raises.
+        mock_cursor.close.assert_awaited_once()
 
     async def test_concurrent_access_serialized(self):
         mock_conn = AsyncMock()
@@ -366,6 +398,27 @@ class TestAsyncPostgresqlConnection(unittest.IsolatedAsyncioTestCase):
 
         mock_conn.fetch.assert_called_once_with('SELECT * FROM test')
 
+    async def test_empty_results(self):
+        mock_conn = AsyncMock()
+        mock_conn.fetch.return_value = []
+
+        conn = AsyncPostgresqlConnection(mock_conn)
+        result = await conn.execute('SELECT * FROM empty_table')
+
+        self.assertEqual(result.fetchall(), [])
+        self.assertEqual(result.description, [])
+
+    def test_translate_placeholders(self):
+        f = AsyncPostgresqlConnection._translate_placeholders
+        self.assertEqual(f('SELECT 1'), 'SELECT 1')
+        self.assertEqual(
+            f('SELECT * FROM t WHERE a = %s AND b = %s'),
+            'SELECT * FROM t WHERE a = $1 AND b = $2')
+        self.assertEqual(
+            f('INSERT INTO t VALUES (%s, %s, %s)'),
+            'INSERT INTO t VALUES ($1, $2, $3)')
+
+
 
 class BaseDatabaseTestCase(unittest.IsolatedAsyncioTestCase):
     def setUp(self):
@@ -408,14 +461,6 @@ class TestConnectionValidation(BaseDatabaseTestCase):
         # Should have new connection
         self.assertIsNot(self.db._state.conn, conn)
         self.assertEqual(await self.count_records(), 1)
-
-    async def test_validation_timeout(self):
-        db = AsyncSqliteDatabase(':memory:', validate_conn_timeout=0.001)
-        await db.aconnect()
-
-        # This should work even with very short timeout on valid conn
-        await db.aclose()
-        await db.close_pool()
 
 
 class TestAsyncSqliteDatabase(BaseDatabaseTestCase):
@@ -494,6 +539,11 @@ class TestAsyncSqliteDatabase(BaseDatabaseTestCase):
             self.assertEqual(result.fetchone(), ('Test Foo',))
 
         await db.close_pool()
+
+    async def test_is_closed(self):
+        self.assertFalse(self.db.is_closed())
+        await self.db.aclose()
+        self.assertTrue(self.db.is_closed())
 
 
 class TestAsyncAtomic(BaseDatabaseTestCase):
@@ -638,6 +688,15 @@ class TestAsyncAtomic(BaseDatabaseTestCase):
 
         self.assertEqual(await self.count_records(), 3)
 
+    async def test_acommit_arollback(self):
+        async with self.db.atomic() as txn:
+            await self.create_record('committed', 1)
+            await txn.acommit()
+            await self.create_record('not-committed', 2)
+            await txn.arollback()
+
+        self.assertEqual(await self.count_records(), 1)
+
 
 class TestDatabaseHelpers(BaseDatabaseTestCase):
     async def test_aexecute(self):
@@ -729,6 +788,18 @@ class TestDatabaseHelpers(BaseDatabaseTestCase):
         state.append(var.get())
 
         self.assertEqual(state, ['y', 'y', 'y'])
+
+    async def test_count(self):
+        for i in range(5):
+            await self.create_record(f'item{i}', i)
+        self.assertEqual(await self.db.count(TestModel.select()), 5)
+
+    async def test_exists_empty(self):
+        self.assertFalse(await self.db.exists(TestModel.select()))
+
+    async def test_exists_nonempty(self):
+        await self.create_record('x', 1)
+        self.assertTrue(await self.db.exists(TestModel.select()))
 
 
 class TestModelOperations(BaseDatabaseTestCase):
@@ -937,6 +1008,20 @@ class TestConnectionPool(BaseDatabaseTestCase):
         self.assertIs(first_conn, second_conn)
         self.assertIs(second_conn, third_conn)
 
+    async def test_closing_flag_prevents_connect(self):
+        self.db._closing = True
+        try:
+            with self.assertRaises(InterfaceError):
+                await self.db.aconnect()
+        finally:
+            self.db._closing = False
+
+    async def test_double_close_pool(self):
+        await self.db.aclose()
+        await self.db.close_pool()
+        await self.db.close_pool()  # Should not error.
+
+
 
 class TestErrorHandling(BaseDatabaseTestCase):
     async def test_syntax_error_recovery(self):
@@ -1097,7 +1182,7 @@ class TestIntegration(unittest.IsolatedAsyncioTestCase):
         # Prefetch allows us to do it in one go:
         users = User.select().order_by(User.username)
         tweets = Tweet.select().order_by(Tweet.message)
-        user_tweets = await self.db.run(prefetch, users, tweets)
+        user_tweets = await self.db.aprefetch(users, tweets)
         accum = [('u0', ['u0-0', 'u0-1']),
                  ('u1', ['u1-0', 'u1-1']),
                  ('u2', ['u2-0', 'u2-1'])]

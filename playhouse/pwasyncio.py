@@ -69,12 +69,11 @@ def await_(awaitable):
 
 
 class _State(object):
-    __slots__ = ('conn', 'closed', 'transactions', 'ctx')
+    __slots__ = ('conn', 'closed', 'transactions')
     def __init__(self):
         self.conn = None
         self.closed = True
         self.transactions = []
-        self.ctx = []
 
 
 class TaskLocal(object):
@@ -140,7 +139,6 @@ class TaskLocal(object):
             state.conn = None
             state.closed = True
             state.transactions = []
-            state.ctx = []
 
     def set_connection(self, conn):
         self.conn = conn
@@ -315,6 +313,9 @@ class AsyncDatabaseMixin(object):
 
     async def exists(self, query):
         return await self.run(query.exists)
+
+    async def aprefetch(self, query, *subqueries):
+        return await self.run(prefetch, query, *subqueries)
 
     async def run(self, fn, *args, **kwargs):
         return await greenlet_spawn(fn, *args, **kwargs)
@@ -497,7 +498,8 @@ class AsyncPostgresqlConnection(AsyncConnectionWrapper):
 
         return CursorAdapter(rows, description=description)
 
-    def _translate_placeholders(self, sql):
+    @staticmethod
+    def _translate_placeholders(sql):
         parts = sql.split('%s')
         if len(parts) == 1:
             return sql
