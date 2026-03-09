@@ -20,9 +20,6 @@ try:
 except ImportError:  # psycopg2 not installed, ignore.
     ArrayField = BinaryJSONField = IntervalField = JSONField = None
 
-if sys.version_info[0] > 2:
-    basestring = str
-
 
 NESTED_TX_MIN_VERSION = 200100
 
@@ -119,7 +116,7 @@ class CockroachDatabase(PostgresqlDatabase):
             parts = [SQL('ON CONFLICT')]
             if oc._conflict_target:
                 parts.append(EnclosedNodeList([
-                    Entity(col) if isinstance(col, basestring) else col
+                    Entity(col) if isinstance(col, str) else col
                     for col in oc._conflict_target]))
             parts.append(SQL('DO NOTHING'))
             return NodeList(parts)

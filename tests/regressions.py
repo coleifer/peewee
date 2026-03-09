@@ -1,7 +1,6 @@
 import datetime
 import json
 import random
-import sys
 import threading
 import time
 import uuid
@@ -1267,7 +1266,6 @@ class CharPKKV(TestModel):
 
 
 class TestBulkUpdateNonIntegerPK(ModelTestCase):
-    @skip_if(sys.version_info[0] == 2)
     @requires_models(UUIDReg)
     def test_bulk_update_uuid_pk(self):
         r1 = UUIDReg.create(key='k1')

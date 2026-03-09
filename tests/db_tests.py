@@ -1,8 +1,5 @@
 from itertools import permutations
-try:
-    from Queue import Queue
-except ImportError:
-    from queue import Queue
+from queue import Queue
 import platform
 import re
 import threading

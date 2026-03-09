@@ -3,12 +3,8 @@ import datetime
 import json
 import operator
 import os
-import sys
 import tempfile
-try:
-    from StringIO import StringIO
-except ImportError:
-    from io import StringIO
+from io import StringIO
 
 from peewee import *
 from playhouse.dataset import DataSet
@@ -402,7 +398,6 @@ class TestDataSet(ModelTestCase):
             'charlie',
             'huey'])
 
-    @skip_if(sys.version_info[0] < 3, 'requires python 3.x')
     def test_freeze_thaw_csv_utf8(self):
         self._test_freeze_thaw_utf8('csv')
 

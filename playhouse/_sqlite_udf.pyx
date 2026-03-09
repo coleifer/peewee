@@ -2,12 +2,9 @@
 from libc.stdlib cimport free, malloc
 from libc.math cimport log, sqrt
 
-import sys
 from difflib import SequenceMatcher
 from random import randint
 
-
-IS_PY3K = sys.version_info[0] == 3
 
 # FTS ranking functions.
 
@@ -249,10 +246,7 @@ def damerau_levenshtein_dist(s1, s2):
         list one_ago, two_ago, current_row
         list zeroes = [0] * (s2_len + 1)
 
-    if IS_PY3K:
-        current_row = list(range(1, s2_len + 2))
-    else:
-        current_row = range(1, s2_len + 2)
+    current_row = list(range(1, s2_len + 2))
 
     current_row[-1] = 0
     one_ago = None
@@ -290,10 +284,7 @@ def levenshtein_dist(a, b):
 
     zeroes = [0] * (m + 1)
 
-    if IS_PY3K:
-        current = list(range(n + 1))
-    else:
-        current = range(n + 1)
+    current = list(range(n + 1))
 
     for i in range(1, m + 1):
         previous = current

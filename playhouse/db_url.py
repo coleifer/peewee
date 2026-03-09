@@ -1,7 +1,4 @@
-try:
-    from urlparse import parse_qsl, unquote, urlparse
-except ImportError:
-    from urllib.parse import parse_qsl, unquote, urlparse
+from urllib.parse import parse_qsl, unquote, urlparse
 
 from peewee import *
 from playhouse.pool import PooledMySQLDatabase

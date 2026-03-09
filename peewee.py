@@ -1,7 +1,10 @@
 from bisect import bisect_left
 from bisect import bisect_right
+from collections.abc import Callable
+from collections.abc import Mapping
 from contextlib import contextmanager
 from copy import deepcopy
+from functools import reduce
 from functools import wraps
 from inspect import isclass
 import calendar
@@ -20,18 +23,11 @@ import threading
 import time
 import uuid
 import warnings
-try:
-    from collections.abc import Mapping
-except ImportError:
-    from collections import Mapping
 
 try:
     from pysqlite3 import dbapi2 as pysq3
 except ImportError:
-    try:
-        from pysqlite2 import dbapi2 as pysq3
-    except ImportError:
-        pysq3 = None
+    pysq3 = None
 try:
     import sqlite3
 except ImportError:
@@ -154,48 +150,17 @@ __all__ = [
     'Window',
 ]
 
-try:  # Python 2.7+
-    from logging import NullHandler
-except ImportError:
-    class NullHandler(logging.Handler):
-        def emit(self, record):
-            pass
-
 logger = logging.getLogger('peewee')
-logger.addHandler(NullHandler())
+logger.addHandler(logging.NullHandler())
 
 
-if sys.version_info[0] == 2:
-    text_type = unicode
-    bytes_type = str
-    buffer_type = buffer
-    izip_longest = itertools.izip_longest
-    callable_ = callable
-    multi_types = (list, tuple, frozenset, set)
-    exec('def reraise(tp, value, tb=None): raise tp, value, tb')
-    def print_(s):
-        sys.stdout.write(s)
-        sys.stdout.write('\n')
-else:
-    import builtins
-    try:
-        from collections.abc import Callable
-    except ImportError:
-        from collections import Callable
-    from functools import reduce
-    callable_ = lambda c: isinstance(c, Callable)
-    text_type = str
-    bytes_type = bytes
-    buffer_type = memoryview
-    basestring = str
-    long = int
-    multi_types = (list, tuple, frozenset, set, range)
-    print_ = getattr(builtins, 'print')
-    izip_longest = itertools.zip_longest
-    def reraise(tp, value, tb=None):
-        if value.__traceback__ is not tb:
-            raise value.with_traceback(tb)
-        raise value
+callable_ = lambda c: isinstance(c, Callable)
+multi_types = (list, tuple, frozenset, set, range)
+
+def reraise(tp, value, tb=None):
+    if value.__traceback__ is not tb:
+        raise value.with_traceback(tb)
+    raise value
 
 # Other compat issues.
 if sys.version_info < (3, 12):
@@ -444,8 +409,8 @@ def make_snake_case(s):
 
 def chunked(it, n):
     marker = object()
-    for group in (list(g) for g in izip_longest(*[iter(it)] * n,
-                                                fillvalue=marker)):
+    groups = itertools.zip_longest(*[iter(it)] * n, fillvalue=marker)
+    for group in (list(g) for g in groups):
         if group[-1] is marker:
             del group[group.index(marker):]
         yield group
@@ -735,10 +700,10 @@ def query_to_string(query):
 
 def _query_val_transform(v):
     # Interpolate parameters.
-    if isinstance(v, (text_type, datetime.datetime, datetime.date,
+    if isinstance(v, (str, datetime.datetime, datetime.date,
                       datetime.time)):
         v = "'%s'" % v
-    elif isinstance(v, bytes_type):
+    elif isinstance(v, bytes):
         try:
             v = v.decode('utf8')
         except UnicodeDecodeError:
@@ -1133,7 +1098,7 @@ class CTE(_HashableSource, Source):
         self._recursive = recursive
         self._materialized = materialized
         if columns is not None:
-            columns = [Entity(c) if isinstance(c, basestring) else c
+            columns = [Entity(c) if isinstance(c, str) else c
                        for c in columns]
         self._columns = columns
         query._cte_list = ()
@@ -1769,7 +1734,7 @@ class Window(Node):
 
     @Node.copy
     def exclude(self, frame_exclusion=None):
-        if isinstance(frame_exclusion, basestring):
+        if isinstance(frame_exclusion, str):
             frame_exclusion = SQL(frame_exclusion)
         self._exclude = frame_exclusion
 
@@ -1796,7 +1761,7 @@ class Window(Node):
                 ext = self._extends
                 if isinstance(ext, Window):
                     ext = SQL(ext._alias)
-                elif isinstance(ext, basestring):
+                elif isinstance(ext, str):
                     ext = SQL(ext)
                 parts.append(ext)
             if self.partition_by:
@@ -2778,7 +2743,7 @@ class Insert(_WriteQuery):
                 # Infer column names from the dict of data being inserted.
                 accum = []
                 for column in row:
-                    if isinstance(column, basestring):
+                    if isinstance(column, str):
                         column = getattr(self.table, column)
                     accum.append(column)
 
@@ -2794,7 +2759,7 @@ class Insert(_WriteQuery):
             clean_columns = []
             seen = set()
             for column in columns:
-                if isinstance(column, basestring):
+                if isinstance(column, str):
                     column_obj = getattr(self.table, column)
                 else:
                     column_obj = column
@@ -3010,7 +2975,7 @@ class Index(Node):
                 ctx.literal('USING %s ' % self._using)  # Postgres/default.
 
             ctx.sql(EnclosedNodeList([
-                SQL(expr) if isinstance(expr, basestring) else expr
+                SQL(expr) if isinstance(expr, str) else expr
                 for expr in self._expressions]))
             if self._where is not None:
                 ctx.literal(' WHERE ').sql(self._where)
@@ -3045,7 +3010,7 @@ class ModelIndex(Index):
     def _generate_name_from_fields(self, model, fields):
         accum = []
         for field in fields:
-            if isinstance(field, basestring):
+            if isinstance(field, str):
                 accum.append(field.split()[0])
             else:
                 if isinstance(field, Node) and not isinstance(field, Field):
@@ -3378,7 +3343,7 @@ class Database(_callable_context_manager):
         if on_conflict._conflict_target:
             stmt = SQL('ON CONFLICT')
             target = EnclosedNodeList([
-                Entity(col) if isinstance(col, basestring) else col
+                Entity(col) if isinstance(col, str) else col
                 for col in on_conflict._conflict_target])
             if on_conflict._conflict_where is not None:
                 target = NodeList([target, SQL('WHERE'),
@@ -3386,7 +3351,7 @@ class Database(_callable_context_manager):
         else:
             stmt = SQL('ON CONFLICT ON CONSTRAINT')
             target = on_conflict._conflict_constraint
-            if isinstance(target, basestring):
+            if isinstance(target, str):
                 target = Entity(target)
 
         updates = []
@@ -3403,7 +3368,7 @@ class Database(_callable_context_manager):
                 if not isinstance(v, Node):
                     # Attempt to resolve string field-names to their respective
                     # field object, to apply data-type conversions.
-                    if isinstance(k, basestring):
+                    if isinstance(k, str):
                         k = getattr(query.table, k)
                     if isinstance(k, Field):
                         v = k.to_value(v)
@@ -4294,7 +4259,7 @@ class PostgresqlDatabase(Database):
             parts = [SQL('ON CONFLICT')]
             if oc._conflict_target:
                 parts.append(EnclosedNodeList([
-                    Entity(col) if isinstance(col, basestring) else col
+                    Entity(col) if isinstance(col, str) else col
                     for col in oc._conflict_target]))
             parts.append(SQL('DO NOTHING'))
             return NodeList(parts)
@@ -4534,7 +4499,7 @@ class MySQLDatabase(Database):
                 if not isinstance(v, Node):
                     # Attempt to resolve string field-names to their respective
                     # field object, to apply data-type conversions.
-                    if isinstance(k, basestring):
+                    if isinstance(k, str):
                         k = getattr(query.table, k)
                     if isinstance(k, Field):
                         v = k.to_value(v)
@@ -5137,7 +5102,7 @@ class DecimalField(Field):
         if not value:
             return value if value is None else D(0)
         if self.auto_round:
-            decimal_value = D(text_type(value))
+            decimal_value = D(str(value))
             return decimal_value.quantize(self._exp, rounding=self.rounding)
         return value
 
@@ -5145,16 +5110,16 @@ class DecimalField(Field):
         if value is not None:
             if isinstance(value, decimal.Decimal):
                 return value
-            return decimal.Decimal(text_type(value))
+            return decimal.Decimal(str(value))
 
 
 class _StringField(Field):
     def adapt(self, value):
-        if isinstance(value, text_type):
+        if isinstance(value, str):
             return value
-        elif isinstance(value, bytes_type):
+        elif isinstance(value, bytes):
             return value.decode('utf-8')
-        return text_type(value)
+        return str(value)
 
     def __add__(self, other): return StringExpression(self, OP.CONCAT, other)
     def __radd__(self, other): return StringExpression(other, OP.CONCAT, self)
@@ -5216,9 +5181,9 @@ class BlobField(FieldDatabaseHook, Field):
             self._constructor = database.get_binary_type()
 
     def db_value(self, value):
-        if isinstance(value, text_type):
+        if isinstance(value, str):
             value = value.encode('raw_unicode_escape')
-        if isinstance(value, bytes_type):
+        if isinstance(value, bytes):
             return self._constructor(value)
         return value
 
@@ -5353,10 +5318,10 @@ class BigBitFieldData(object):
         return repr(self._buffer)
     if sys.version_info[0] < 3:
         def __str__(self):
-            return bytes_type(self._buffer)
+            return bytes(self._buffer)
     else:
         def __bytes__(self):
-            return bytes_type(self._buffer)
+            return bytes(self._buffer)
 
 
 class BigBitFieldAccessor(FieldAccessor):
@@ -5367,15 +5332,13 @@ class BigBitFieldAccessor(FieldAccessor):
     def __set__(self, instance, value):
         if isinstance(value, memoryview):
             value = value.tobytes()
-        elif isinstance(value, buffer_type):
-            value = bytes(value)
         elif isinstance(value, bytearray):
-            value = bytes_type(value)
+            value = bytes(value)
         elif isinstance(value, BigBitFieldData):
-            value = bytes_type(value._buffer)
-        elif isinstance(value, text_type):
+            value = bytes(value._buffer)
+        elif isinstance(value, str):
             value = value.encode('utf-8')
-        elif not isinstance(value, bytes_type):
+        elif not isinstance(value, bytes):
             raise ValueError('Value must be either a bytes, memoryview or '
                              'BigBitFieldData instance.')
         super(BigBitFieldAccessor, self).__set__(instance, value)
@@ -5385,18 +5348,18 @@ class BigBitField(BlobField):
     accessor_class = BigBitFieldAccessor
 
     def __init__(self, *args, **kwargs):
-        kwargs.setdefault('default', bytes_type)
+        kwargs.setdefault('default', bytes)
         super(BigBitField, self).__init__(*args, **kwargs)
 
     def db_value(self, value):
-        return bytes_type(value) if value is not None else value
+        return bytes(value) if value is not None else value
 
 
 class UUIDField(Field):
     field_type = 'UUID'
 
     def db_value(self, value):
-        if isinstance(value, basestring) and len(value) == 32:
+        if isinstance(value, str) and len(value) == 32:
             # Hex string. No transformation is necessary.
             return value
         elif isinstance(value, bytes) and len(value) == 16:
@@ -5422,7 +5385,7 @@ class BinaryUUIDField(BlobField):
         if isinstance(value, bytes) and len(value) == 16:
             # Raw binary value. No transformation is necessary.
             return self._constructor(value)
-        elif isinstance(value, basestring) and len(value) == 32:
+        elif isinstance(value, str) and len(value) == 32:
             # Allow hex string representation.
             value = uuid.UUID(hex=value)
         if isinstance(value, uuid.UUID):
@@ -5482,7 +5445,7 @@ class DateTimeField(_BaseFormattedField):
     ]
 
     def adapt(self, value):
-        if value and isinstance(value, basestring):
+        if value and isinstance(value, str):
             return format_date_time(value, self.formats)
         return value
 
@@ -5509,7 +5472,7 @@ class DateField(_BaseFormattedField):
     ]
 
     def adapt(self, value):
-        if value and isinstance(value, basestring):
+        if value and isinstance(value, str):
             pp = lambda x: x.date()
             return format_date_time(value, self.formats, pp)
         elif value and isinstance(value, datetime.datetime):
@@ -5539,7 +5502,7 @@ class TimeField(_BaseFormattedField):
 
     def adapt(self, value):
         if value:
-            if isinstance(value, basestring):
+            if isinstance(value, str):
                 pp = lambda x: x.time()
                 return format_date_time(value, self.formats, pp)
             elif isinstance(value, datetime.datetime):
@@ -5623,7 +5586,7 @@ class TimestampField(BigIntegerField):
         return int(round(timestamp))
 
     def python_value(self, value):
-        if value is not None and isinstance(value, (int, float, long)):
+        if value is not None and isinstance(value, (int, float)):
             if self.resolution > 1:
                 value, ticks = divmod(value, self.resolution)
                 microseconds = int(ticks * self.ticks_to_microsecond)
@@ -5762,7 +5725,7 @@ class ForeignKeyField(Field):
                              'name.' % (model._meta.name, name))
         if self._is_self_reference:
             self.rel_model = model
-        if isinstance(self.rel_field, basestring):
+        if isinstance(self.rel_field, str):
             self.rel_field = getattr(self.rel_model, self.rel_field)
         elif self.rel_field is None:
             self.rel_field = self.rel_model._meta.primary_key
@@ -6168,7 +6131,7 @@ class SchemaManager(object):
         if meta.table_settings is not None:
             table_settings = ensure_tuple(meta.table_settings)
             for setting in table_settings:
-                if not isinstance(setting, basestring):
+                if not isinstance(setting, str):
                     raise ValueError('table_settings must be strings')
                 ctx.literal(' ').literal(setting)
 
@@ -6619,7 +6582,7 @@ class Metadata(object):
                 index_parts, unique = index_obj
                 fields = []
                 for part in index_parts:
-                    if isinstance(part, basestring):
+                    if isinstance(part, str):
                         fields.append(self.combined[part])
                     elif isinstance(part, Node):
                         fields.append(part)
@@ -6884,7 +6847,7 @@ class Model(with_metaclass(ModelBase, Node)):
 
     @classmethod
     def insert_from(cls, query, fields):
-        columns = [getattr(cls, field) if isinstance(field, basestring)
+        columns = [getattr(cls, field) if isinstance(field, str)
                    else field for field in fields]
         return ModelInsert(cls, insert=query, columns=columns)
 
@@ -6954,7 +6917,7 @@ class Model(with_metaclass(ModelBase, Node)):
                              'a composite primary key.')
 
         # First normalize list of fields so all are field instances.
-        fields = [cls._meta.fields[f] if isinstance(f, basestring) else f
+        fields = [cls._meta.fields[f] if isinstance(f, str) else f
                   for f in fields]
         # Now collect list of attribute names to use for values.
         attrs = [field.object_id_name if isinstance(field, ForeignKeyField)
@@ -7071,7 +7034,7 @@ class Model(with_metaclass(ModelBase, Node)):
     def _prune_fields(self, field_dict, only):
         new_data = {}
         for field in only:
-            if isinstance(field, basestring):
+            if isinstance(field, str):
                 field = self._meta.combined[field]
             if field.name in field_dict:
                 new_data[field.name] = field_dict[field.name]

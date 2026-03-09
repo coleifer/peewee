@@ -1,11 +1,8 @@
-try:
-    from collections import OrderedDict
-except ImportError:
-    OrderedDict = dict
-from collections import namedtuple
-from inspect import isclass
 import re
 import warnings
+from collections import OrderedDict
+from collections import namedtuple
+from inspect import isclass
 
 from peewee import *
 from peewee import _StringField
@@ -13,7 +10,6 @@ from peewee import _query_val_transform
 from peewee import CommaNodeList
 from peewee import SCOPE_VALUES
 from peewee import make_snake_case
-from peewee import text_type
 try:
     from pymysql.constants import FIELD_TYPE
 except ImportError:
@@ -207,7 +203,7 @@ class Metadata(object):
            default.lower() == 'null':
             return
         if issubclass(field_class, _StringField) and \
-           isinstance(default, text_type) and not default.startswith("'"):
+           isinstance(default, str) and not default.startswith("'"):
             default = "'%s'" % default
         return default or "''"
 

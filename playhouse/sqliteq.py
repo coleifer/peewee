@@ -1,13 +1,10 @@
 import logging
 import weakref
+from queue import Queue
 from threading import local as thread_local
 from threading import Event
 from threading import Lock
 from threading import Thread
-try:
-    from Queue import Queue
-except ImportError:
-    from queue import Queue
 
 try:
     import gevent

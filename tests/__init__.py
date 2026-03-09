@@ -80,8 +80,7 @@ except (ImportError, SyntaxError):
 
 
 if __name__ == '__main__':
-    from peewee import print_
-    print_(r"""\x1b[1;31m
+    print(r"""\x1b[1;31m
      ______   ______     ______     __     __     ______     ______
     /\  == \ /\  ___\   /\  ___\   /\ \  _ \ \   /\  ___\   /\  ___\\
     \ \  _-/ \ \  __\   \ \  __\   \ \ \/ ".\ \  \ \  __\   \ \  __\\

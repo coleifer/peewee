@@ -20,9 +20,6 @@ from playhouse.sqlite_udf import RANK
 from playhouse.sqlite_udf import register_udf_groups
 
 
-if sys.version_info[0] == 3:
-    basestring = str
-
 
 FTS3_MATCHINFO = 'pcx'
 FTS4_MATCHINFO = 'pcnalx'
@@ -389,7 +386,7 @@ class BaseFTSModel(VirtualModel):
         tokenize = options.get('tokenize')
         content_rowid = options.get('content_rowid')
 
-        if isinstance(content, basestring) and content == '':
+        if isinstance(content, str) and content == '':
             # Special-case content-less full-text search tables.
             options['content'] = "''"
         elif isinstance(content, Field):

@@ -1,3 +1,4 @@
+import pickle
 try:
     import bz2
 except ImportError:
@@ -6,13 +7,8 @@ try:
     import zlib
 except ImportError:
     zlib = None
-try:
-    import cPickle as pickle
-except ImportError:
-    import pickle
 
 from peewee import BlobField
-from peewee import buffer_type
 
 
 class CompressedField(BlobField):
@@ -50,8 +46,6 @@ class CompressedField(BlobField):
 class PickleField(BlobField):
     def python_value(self, value):
         if value is not None:
-            if isinstance(value, buffer_type):
-                value = bytes(value)
             return pickle.loads(value)
 
     def db_value(self, value):

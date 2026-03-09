@@ -49,13 +49,10 @@ import decimal
 import sys
 
 from peewee import *
-if sys.version_info[0] != 3:
-    from pysqlcipher import dbapi2 as sqlcipher
-else:
-    try:
-        from sqlcipher3 import dbapi2 as sqlcipher
-    except ImportError:
-        from pysqlcipher3 import dbapi2 as sqlcipher
+try:
+    from sqlcipher3 import dbapi2 as sqlcipher
+except ImportError:
+    from pysqlcipher3 import dbapi2 as sqlcipher
 
 sqlcipher.register_adapter(decimal.Decimal, str)
 sqlcipher.register_adapter(datetime.date, str)

@@ -7,6 +7,8 @@ https://github.com/coleifer/peewee/releases
 
 ## master
 
+* Remove all Python 2.x compatibility code.
+
 [View commits](https://github.com/coleifer/peewee/compare/4.0.1...master)
 
 ## 4.0.1

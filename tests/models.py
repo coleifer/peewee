@@ -1,8 +1,8 @@
 import datetime
-import sys
 import threading
 import time
 import unittest
+from unittest import mock
 
 from peewee import *
 from peewee import Entity
@@ -12,7 +12,6 @@ from peewee import sort_models
 
 from .base import db
 from .base import get_in_memory_db
-from .base import mock
 from .base import new_connection
 from .base import requires_models
 from .base import requires_mysql
@@ -36,10 +35,6 @@ from .base import IS_SQLITE_9
 from .base import ModelTestCase
 from .base import TestModel
 from .base_models import *
-
-
-if sys.version_info[0] >= 3:
-    long = int
 
 
 class Color(TestModel):
@@ -195,7 +190,7 @@ class TestModelAPIs(ModelTestCase):
         with self.assertQueryCount(1):
             huey = self.add_user('huey')
             self.assertEqual(huey.username, 'huey')
-            self.assertTrue(isinstance(huey.id, (int, long)))
+            self.assertTrue(isinstance(huey.id, int))
             self.assertTrue(huey.id > 0)
 
         with self.assertQueryCount(1):

@@ -1647,7 +1647,6 @@ class TestCollatedFieldDefinitions(ModelTestCase):
 class TestReadOnly(ModelTestCase):
     database = get_sqlite_db()
 
-    @skip_if(sys.version_info < (3, 4, 0), 'requres python >= 3.4.0')
     @requires_models(User)
     def test_read_only(self):
         User.create(username='foo')

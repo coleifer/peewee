@@ -5,10 +5,6 @@ import logging
 import os
 import re
 import unittest
-try:
-    from unittest import mock
-except ImportError:
-    from .libs import mock
 
 from peewee import *
 from peewee import sqlite3

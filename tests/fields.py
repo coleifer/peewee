@@ -6,7 +6,6 @@ import uuid
 from decimal import Decimal as D
 from decimal import ROUND_UP
 
-from peewee import bytes_type
 from peewee import NodeList
 from peewee import *
 
@@ -666,10 +665,10 @@ class TestBitFields(ModelTestCase):
         for i in range(128):
             b.data.clear_bit(i)
 
-        buf = bytes_type(b.data._buffer)
+        buf = bytes(b.data._buffer)
         self.assertEqual(len(buf), 16)
 
-        self.assertEqual(bytes_type(buf), b'\x00' * 16)
+        self.assertEqual(bytes(buf), b'\x00' * 16)
 
     def test_bigbit_zero_idx(self):
         b = Bits()

@@ -1,11 +1,9 @@
 import datetime
 import os
-try:
-    from StringIO import StringIO
-except ImportError:
-    from io import StringIO
 import textwrap
 import sys
+from io import StringIO
+from unittest import mock
 
 from peewee import *
 from pwiz import *
@@ -13,7 +11,6 @@ from pwiz import *
 from .base import ModelTestCase
 from .base import TestModel
 from .base import db_loader
-from .base import mock
 from .base import skip_if
 
 

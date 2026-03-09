@@ -174,24 +174,15 @@ def file_read(filename):
     except:
         pass
 
-if sys.version_info[0] == 2:
-    @udf(HELPER)
-    def gzip(data, compression=9):
-        return buffer(zlib.compress(data, compression))
+@udf(HELPER)
+def gzip(data, compression=9):
+    if isinstance(data, str):
+        data = bytes(data.encode('raw_unicode_escape'))
+    return zlib.compress(data, compression)
 
-    @udf(HELPER)
-    def gunzip(data):
-        return zlib.decompress(data)
-else:
-    @udf(HELPER)
-    def gzip(data, compression=9):
-        if isinstance(data, str):
-            data = bytes(data.encode('raw_unicode_escape'))
-        return zlib.compress(data, compression)
-
-    @udf(HELPER)
-    def gunzip(data):
-        return zlib.decompress(data)
+@udf(HELPER)
+def gunzip(data):
+    return zlib.decompress(data)
 
 @udf(HELPER)
 def hostname(url):
@@ -319,14 +310,6 @@ class _datetime_heap_agg(_heap_agg):
     def process(self, value):
         return format_date_time_sqlite(value)
 
-if sys.version_info[:2] == (2, 6):
-    def total_seconds(td):
-        return (td.seconds +
-                (td.days * 86400) +
-                (td.microseconds / (10.**6)))
-else:
-    total_seconds = lambda td: td.total_seconds()
-
 @aggregate(DATE)
 class mintdiff(_datetime_heap_agg):
     def finalize(self):
@@ -342,7 +325,7 @@ class mintdiff(_datetime_heap_agg):
                 min_diff = diff
             dtp = dt
         if min_diff is not None:
-            return total_seconds(min_diff)
+            return min_diff.total_seconds()
 
 @aggregate(DATE)
 class avgtdiff(_datetime_heap_agg):
@@ -363,7 +346,7 @@ class avgtdiff(_datetime_heap_agg):
             dt = heapq.heappop(self.heap)
             diff = dt - dtp
             ct += 1
-            total += total_seconds(diff)
+            total += diff.total_seconds()
             dtp = dt
 
         return float(total) / ct
@@ -383,7 +366,7 @@ class duration(object):
     def finalize(self):
         if self._min and self._max:
             td = (self._max - self._min)
-            return total_seconds(td)
+            return td.total_seconds()
         return None
 
 @aggregate(MATH)

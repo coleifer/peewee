@@ -1,30 +1,18 @@
 import base64
 import csv
 import datetime
-from decimal import Decimal
 import json
 import operator
-try:
-    from urlparse import urlparse
-except ImportError:
-    from urllib.parse import urlparse
-import sys
 import uuid
+from decimal import Decimal
+from functools import reduce
+from urllib.parse import urlparse
 
 from peewee import *
 from playhouse.db_url import connect
 from playhouse.migrate import migrate
 from playhouse.migrate import SchemaMigrator
 from playhouse.reflection import Introspector
-
-if sys.version_info[0] == 3:
-    basestring = str
-    from functools import reduce
-    def open_file(f, mode, encoding='utf8'):
-        return open(f, mode, encoding=encoding)
-else:
-    def open_file(f, mode, encoding='utf8'):
-        return open(f, mode)
 
 
 class DataSet(object):
@@ -164,7 +152,7 @@ class DataSet(object):
                encoding='utf8', **kwargs):
         self._check_arguments(filename, file_obj, format, self._export_formats)
         if filename:
-            file_obj = open_file(filename, 'w', encoding)
+            file_obj = open(filename, 'w', encoding=encoding)
 
         exporter = self._export_formats[format](query)
         exporter.export(file_obj, **kwargs)
@@ -176,7 +164,7 @@ class DataSet(object):
              strict=False, encoding='utf8', **kwargs):
         self._check_arguments(filename, file_obj, format, self._export_formats)
         if filename:
-            file_obj = open_file(filename, 'r', encoding)
+            file_obj = open(filename, 'r', encoding=encoding)
 
         importer = self._import_formats[format](self[table], strict)
         count = importer.load(file_obj, **kwargs)
@@ -223,7 +211,7 @@ class Table(object):
         self.dataset._database.execute(index)
 
     def _guess_field_type(self, value):
-        if isinstance(value, basestring):
+        if isinstance(value, str):
             return TextField
         if isinstance(value, (datetime.date, datetime.datetime)):
             return DateTimeField
