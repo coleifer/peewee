@@ -12,6 +12,8 @@ from playhouse.pwasyncio import *
 from playhouse.pwasyncio import _State, _lazy_cursor_iter
 from .base import MYSQL_PARAMS
 from .base import PSQL_PARAMS
+from .base import IS_MYSQL
+from .base import IS_POSTGRESQL
 
 try:
     import asyncpg
@@ -1435,6 +1437,7 @@ class TestSqliteIntegration(IntegrationTests, unittest.IsolatedAsyncioTestCase):
             'INSERT INTO ut (v) VALUES (?)', ('y',))
 
 
+@unittest.skipIf(not IS_POSTGRESQL, 'skipping postgres test')
 @unittest.skipUnless(asyncpg, 'asyncpg not installed')
 class TestPostgresqlIntegration(IntegrationTests, unittest.IsolatedAsyncioTestCase):
     def get_database(self):
@@ -1458,6 +1461,7 @@ class TestPostgresqlIntegration(IntegrationTests, unittest.IsolatedAsyncioTestCa
         self.assertEqual(row['value'], 999)
 
 
+@unittest.skipIf(not IS_MYSQL, 'skipping mysql test')
 @unittest.skipUnless(aiomysql, 'aiomysql not installed')
 class TestMySQLIntegration(IntegrationTests, unittest.IsolatedAsyncioTestCase):
     def get_database(self):
