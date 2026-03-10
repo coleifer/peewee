@@ -1,14 +1,15 @@
 import asyncio
+import collections
 import contextvars
+import itertools
 import tempfile
 import os
-import sys
 import unittest
-from unittest.mock import Mock, AsyncMock
+from unittest.mock import Mock, AsyncMock, MagicMock, patch
 
 from peewee import *
 from playhouse.pwasyncio import *
-from playhouse.pwasyncio import _State
+from playhouse.pwasyncio import _State, _lazy_cursor_iter
 from .base import MYSQL_PARAMS
 from .base import PSQL_PARAMS
 
@@ -27,7 +28,6 @@ import aiosqlite
 SQLITE_RETURNING = aiosqlite.sqlite_version_info >= (3, 35, 0)
 
 
-# Test Models
 class TestModel(Model):
     name = CharField()
     value = IntegerField(default=0)
@@ -49,364 +49,428 @@ class TestGreenletSpawn(unittest.IsolatedAsyncioTestCase):
         async def async_helper():
             await asyncio.sleep(0.01)
             return 2
-
-        def func_with_await():
+        def func():
             return await_(async_helper()) * 2
-
-        self.assertEqual(await greenlet_spawn(func_with_await), 4)
+        self.assertEqual(await greenlet_spawn(func), 4)
 
     async def test_multiple_awaits(self):
         async def fetch_value(val):
             await asyncio.sleep(0.01)
             return val
-
-        def multi_await():
+        def multi():
             return sum([await_(fetch_value(i)) for i in [10, 20, 30]])
-
-        self.assertEqual(await greenlet_spawn(multi_await), 60)
+        self.assertEqual(await greenlet_spawn(multi), 60)
 
     async def test_exception_propagation(self):
-        def failing_func():
-            raise ValueError('Test error')
-
         with self.assertRaises(ValueError):
-            await greenlet_spawn(failing_func)
+            await greenlet_spawn(lambda: (_ for _ in ()).throw(ValueError('x')))
 
     async def test_exception_in_awaitable(self):
-        async def failing_async():
-            await asyncio.sleep(0.01)
-            raise RuntimeError('Async error')
-
+        async def fail():
+            raise RuntimeError('async error')
         with self.assertRaises(RuntimeError):
-            await greenlet_spawn(lambda: await_(failing_async()))
+            await greenlet_spawn(lambda: await_(fail()))
 
     def test_await_outside_greenlet(self):
         with self.assertRaises(MissingGreenletBridge):
             await_(Mock())
 
-    async def test_contextvars_handling(self):
-        state = []
+    async def test_contextvars(self):
         var = contextvars.ContextVar('data', default='x')
-
+        state = []
         def get_var():
-            nonlocal state
             state.append(var.get())
-
         async def aget_var():
             await greenlet_spawn(get_var)
 
         var.set('y')
-
         await aget_var()
         await greenlet_spawn(lambda: await_(aget_var()))
         await aget_var()
-
         self.assertEqual(state, ['y', 'y', 'y'])
 
 
 class TestTaskLocal(unittest.IsolatedAsyncioTestCase):
     async def test_task_isolation(self):
-        task_local = TaskLocal()
-
-        async def task_worker(task_id):
-            state = task_local._current()
-            state.conn = task_id
+        tl = TaskLocal()
+        async def worker(tid):
+            tl._current().conn = tid
             await asyncio.sleep(0.01)
-            return task_local._current().conn
-
-        results = await asyncio.gather(*[task_worker(i) for i in range(5)])
+            return tl._current().conn
+        results = await asyncio.gather(*[worker(i) for i in range(5)])
         self.assertEqual(results, [0, 1, 2, 3, 4])
 
     async def test_state_attributes(self):
-        task_local = TaskLocal()
-        task_local.conn = 'test_conn'
-        task_local.closed = False
-        task_local.transactions = [1, 2, 3]
+        tl = TaskLocal()
+        tl.conn = 'c'
+        tl.closed = False
+        tl.transactions = [1]
+        self.assertEqual(tl.conn, 'c')
+        self.assertFalse(tl.closed)
+        self.assertEqual(tl.transactions, [1])
 
-        self.assertEqual(task_local.conn, 'test_conn')
-        self.assertFalse(task_local.closed)
-        self.assertEqual(task_local.transactions, [1, 2, 3])
+    async def test_get_returns_fresh_state(self):
+        s = TaskLocal().get()
+        self.assertIsNone(s.conn)
+        self.assertTrue(s.closed)
+        self.assertEqual(s.transactions, [])
 
-    async def test_get_returns_state(self):
-        state = TaskLocal().get()
-        self.assertTrue(hasattr(state, 'transactions'))
-        self.assertTrue(hasattr(state, 'conn'))
-        self.assertEqual(state.transactions, [])
-        self.assertTrue(state.closed)
+    async def test_clear(self):
+        tl = TaskLocal()
+        tl.conn = 'x'
+        key = tl._get_storage_key()
+        tl.clear()
+        self.assertNotIn(key, tl._state_storage)
 
-    async def test_clear_removes_state(self):
-        task_local = TaskLocal()
-        task_local.conn = 'test'
-        initial_key = task_local._get_storage_key()
-
-        task_local.clear()
-        self.assertNotIn(initial_key, task_local._state_storage)
-
-    async def test_reset_clears_connection_state(self):
-        task_local = TaskLocal()
-        task_local.conn = 'test_conn'
-        task_local.closed = False
-        task_local.transactions = [1, 2]
-
-        task_local.reset()
-
-        self.assertIsNone(task_local.conn)
-        self.assertTrue(task_local.closed)
-        self.assertEqual(task_local.transactions, [])
+    async def test_reset(self):
+        tl = TaskLocal()
+        tl.conn = 'x'
+        tl.closed = False
+        tl.transactions = [1, 2]
+        tl.reset()
+        self.assertIsNone(tl.conn)
+        self.assertTrue(tl.closed)
+        self.assertEqual(tl.transactions, [])
 
     async def test_set_connection(self):
-        task_local = TaskLocal()
-        mock_conn = Mock()
-
-        task_local.set_connection(mock_conn)
-
-        self.assertIs(task_local.conn, mock_conn)
-        self.assertFalse(task_local.closed)
+        tl = TaskLocal()
+        m = Mock()
+        tl.set_connection(m)
+        self.assertIs(tl.conn, m)
+        self.assertFalse(tl.closed)
 
     async def test_cleanup_dead_tasks(self):
-        task_local = TaskLocal()
-        state = task_local._current()
-        state.conn = 1
-
-        # Add fake dead task
-        dead_key = 999999
-        task_local._state_storage[dead_key] = Mock()
-
-        cleaned = task_local.cleanup_dead_tasks()
-
+        tl = TaskLocal()
+        tl._current().conn = 1
+        tl._state_storage[999999] = Mock()
+        cleaned = tl.cleanup_dead_tasks()
         self.assertGreaterEqual(cleaned, 1)
-        self.assertNotIn(dead_key, task_local._state_storage)
+        self.assertNotIn(999999, tl._state_storage)
 
     async def test_periodic_cleanup(self):
-        task_local = TaskLocal()
-        super(TaskLocal, task_local).__setattr__('_CLEANUP_INTERVAL', 5)
-        #task_local._CLEANUP_INTERVAL = 5
-
-        # Inject a dead key.
-        task_local._state_storage[888888] = _State()
-
-        # Access enough times to trigger periodic cleanup.
+        tl = TaskLocal()
+        super(TaskLocal, tl).__setattr__('_CLEANUP_INTERVAL', 5)
+        tl._state_storage[888888] = _State()
         for _ in range(5):
-            self.assertIn(888888, task_local._state_storage)
-            task_local._current()
-
-        self.assertNotIn(888888, task_local._state_storage)
-
-
-class TestCursorAdapter(unittest.TestCase):
-    def setUp(self):
-        self.rows = [(1, 'a'), (2, 'b'), (3, 'c')]
-
-    def test_fetchone(self):
-        cursor = CursorAdapter(self.rows)
-        self.assertEqual(cursor.fetchone(), (1, 'a'))
-        self.assertEqual(cursor.fetchone(), (2, 'b'))
-        self.assertEqual(cursor.fetchone(), (3, 'c'))
-        self.assertIsNone(cursor.fetchone())
-
-    def test_fetchall(self):
-        cursor = CursorAdapter(self.rows)
-        self.assertEqual(cursor.fetchall(), self.rows)
-
-    def test_iteration(self):
-        cursor = CursorAdapter(self.rows)
-        self.assertEqual(list(cursor), self.rows)
-
-    def test_rowcount(self):
-        cursor = CursorAdapter(self.rows)
-        self.assertEqual(cursor.rowcount, 3)
-
-    def test_lastrowid(self):
-        cursor = CursorAdapter(self.rows, lastrowid=1)
-        self.assertEqual(cursor.lastrowid, 1)
-
-    def test_description(self):
-        desc = [('id',), ('name',)]
-        cursor = CursorAdapter(self.rows, description=desc)
-        self.assertEqual(cursor.description, desc)
+            self.assertIn(888888, tl._state_storage)
+            tl._current()
+        self.assertNotIn(888888, tl._state_storage)
 
 
-class TestTaskLifecycle(unittest.IsolatedAsyncioTestCase):
-    async def test_task_state_cleanup_after_completion(self):
-        db = AsyncSqliteDatabase(':memory:')
-        TestModel._meta.set_database(db)
+def _make_lazy_cursor(rows, batch_size=2):
+    it = iter(rows)
+    fetch_counts = []
+    cleanup_called = []
 
-        async with db:
-            await db.acreate_tables([TestModel])
+    async def fetch_many(count):
+        fetch_counts.append(count)
+        return list(itertools.islice(it, count))
 
-            async def task_with_state():
-                async with db:
-                    await db.run(TestModel.create, name='test', value=1)
-                # State should be in storage
-                key = db._state._get_storage_key()
-                return key
+    async def cleanup():
+        cleanup_called.append(True)
 
-            task_key = await task_with_state()
-
-            # Task completed, manually trigger cleanup
-            cleaned = db._state.cleanup_dead_tasks()
-
-        await db.close_pool()
-
-    async def test_concurrent_task_state_isolation(self):
-        db = AsyncSqliteDatabase(':memory:')
-        TestModel._meta.set_database(db)
-
-        async with db:
-            await db.acreate_tables([TestModel])
-
-            async def capture_state(task_id):
-                async with db:
-                    state_before = id(db._state.get())
-                    await db.run(TestModel.create, name=f't{task_id}', value=task_id)
-                    state_after = id(db._state.get())
-                    return (state_before, state_after, state_before == state_after)
-
-            results = await asyncio.gather(*[capture_state(i) for i in range(5)])
-
-            # Each task should use same state throughout.
-            for before, after, same in results:
-                self.assertTrue(same)
-
-        await db.close_pool()
+    cursor = CursorAdapter(
+        description=[('id',), ('name',)],
+        fetch_many=fetch_many,
+        cleanup=cleanup,
+        buffer_size=batch_size)
+    return cursor, fetch_counts, cleanup_called
 
 
-class TestAsyncSQLiteConnection(unittest.IsolatedAsyncioTestCase):
-    async def test_execute_returns_cursor_adapter(self):
-        mock_conn = AsyncMock()
+class TestCursorAdapter(unittest.IsolatedAsyncioTestCase):
+    def test_eager_fetchone(self):
+        c = CursorAdapter([(1, 'a'), (2, 'b'), (3, 'c')])
+        self.assertEqual(c.fetchone(), (1, 'a'))
+        self.assertEqual(c.fetchone(), (2, 'b'))
+        self.assertEqual(c.fetchone(), (3, 'c'))
+        self.assertIsNone(c.fetchone())
+
+    def test_eager_fetchall(self):
+        rows = [(1,), (2,)]
+        c = CursorAdapter(rows)
+        self.assertIs(c.fetchall(), rows)
+
+    def test_eager_iter(self):
+        rows = [(1,), (2,), (3,)]
+        self.assertEqual(list(CursorAdapter(rows)), rows)
+        self.assertEqual(CursorAdapter(rows).rowcount, 3)
+
+    def test_eager_metadata(self):
+        c = CursorAdapter()
+        self.assertEqual(c._rows, [])
+        self.assertEqual(c.rowcount, 0)
+        self.assertEqual(c.description, [])
+        self.assertIsNone(c.fetchone())
+        self.assertEqual(list(c), [])
+
+        c = CursorAdapter([(1,)], lastrowid=5, rowcount=1,
+                          description=[('id',)])
+        self.assertEqual(c.lastrowid, 5)
+        self.assertEqual(c.rowcount, 1)
+        self.assertEqual(c.description, [('id',)])
+
+    async def test_lazy_fetchone_batches(self):
+        rows = [(i,) for i in range(5)]
+        cursor, counts, _ = _make_lazy_cursor(rows, batch_size=2)
+
+        collected = []
+        def drain():
+            while True:
+                r = cursor.fetchone()
+                if r is None:
+                    break
+                collected.append(r)
+        await greenlet_spawn(drain)
+
+        self.assertEqual(collected, rows)
+        # 2 + 2 + 1 + 0(empty) = 4 calls, each requesting 2
+        self.assertEqual(len(counts), 4)
+        self.assertTrue(all(c == 2 for c in counts))
+
+    async def test_lazy_fetchone_empty(self):
+        cursor, _, _ = _make_lazy_cursor([], batch_size=2)
+        self.assertIsNone(await greenlet_spawn(cursor.fetchone))
+        # Already exhausted, still returns None.
+        self.assertIsNone(await greenlet_spawn(cursor.fetchone))
+
+    async def test_lazy_iter(self):
+        rows = [(i,) for i in range(7)]
+        cursor, counts, _ = _make_lazy_cursor(rows, batch_size=3)
+        self.assertEqual(await greenlet_spawn(list, cursor), rows)
+        # 3 + 3 + 1 + 0 = 4 calls
+        self.assertEqual(len(counts), 4)
+
+    async def test_lazy_fetchall(self):
+        rows = [(1,), (2,), (3,)]
+        cursor, _, _ = _make_lazy_cursor(rows, batch_size=10)
+        self.assertEqual(await greenlet_spawn(cursor.fetchall), rows)
+
+    async def test_lazy_buffer_reuse(self):
+        rows = [(i,) for i in range(3)]
+        cursor, counts, _ = _make_lazy_cursor(rows, batch_size=10)
+        await greenlet_spawn(cursor.fetchone)
+        self.assertEqual(len(counts), 1)
+        await greenlet_spawn(cursor.fetchone)
+        await greenlet_spawn(cursor.fetchone)
+        self.assertEqual(len(counts), 1)  # still 1
+        await greenlet_spawn(cursor.fetchone)  # second fetch (empty).
+        self.assertEqual(len(counts), 2)
+
+    async def test_lazy_description(self):
+        cursor, _, _ = _make_lazy_cursor([], batch_size=2)
+        self.assertEqual(cursor.description, [('id',), ('name',)])
+
+    async def test_lazy_buffer_size_override(self):
+        rows = [(i,) for i in range(10)]
+        cursor, counts, _ = _make_lazy_cursor(rows, batch_size=5)
+        cursor._buffer_size = 3
+        await greenlet_spawn(list, cursor)
+        self.assertTrue(all(c == 3 for c in counts))
+
+    async def test_aclose_cleanup(self):
+        cursor, _, cleanup = _make_lazy_cursor([], batch_size=2)
+        await cursor.aclose()
+        self.assertEqual(cleanup, [True])
+        self.assertIsNone(cursor._fetch_many)
+        self.assertIsNone(cursor._cleanup)
+
+    async def test_aclose_idempotent(self):
+        call_count = []
+        async def cleanup():
+            call_count.append(1)
+        cursor, _, _ = _make_lazy_cursor([], batch_size=2)
+        cursor._cleanup = cleanup
+        await cursor.aclose()
+        await cursor.aclose()
+        self.assertEqual(len(call_count), 1)
+
+    async def test_aclose_noop_for_eager(self):
+        await CursorAdapter([(1,)]).aclose()  # must not raise
+
+    async def test_lazy_cursor_iter(self):
+        rows = [(1,), (2,), (3,)]
+        cursor, _, _ = _make_lazy_cursor(rows, batch_size=10)
+        result = await greenlet_spawn(list, _lazy_cursor_iter(cursor))
+        self.assertEqual(result, rows)
+
+    async def test_lazy_cursor_iter_empty(self):
+        cursor, _, _ = _make_lazy_cursor([], batch_size=2)
+        result = await greenlet_spawn(list, _lazy_cursor_iter(cursor))
+        self.assertEqual(result, [])
+
+
+class TestConnectionWrappers(unittest.IsolatedAsyncioTestCase):
+    async def test_sqlite_execute(self):
         mock_cursor = AsyncMock()
         mock_cursor.fetchall.return_value = [(1, 'test')]
         mock_cursor.lastrowid = 1
         mock_cursor.rowcount = 1
         mock_cursor.description = [('id',), ('name',)]
+        mock_conn = AsyncMock()
+        mock_conn.execute.return_value = mock_cursor
+
+        result = await AsyncSQLiteConnection(mock_conn).execute(
+            'SELECT * FROM test')
+        self.assertIsInstance(result, CursorAdapter)
+        self.assertEqual(result.fetchall(), [(1, 'test')])
+        self.assertEqual(result.lastrowid, 1)
+        mock_cursor.close.assert_awaited_once()
+
+    async def test_sqlite_execute_iter_returns_lazy(self):
+        mock_cursor = AsyncMock()
+        mock_cursor.description = [('a',), ('b',)]
+        mock_conn = AsyncMock()
         mock_conn.execute.return_value = mock_cursor
 
         conn = AsyncSQLiteConnection(mock_conn)
-        result = await conn.execute('SELECT * FROM test')
+        cursor = await conn.execute_iter('SELECT a, b FROM t')
+        self.assertIsInstance(cursor, CursorAdapter)
+        self.assertIsNotNone(cursor._fetch_many)
+        self.assertEqual(cursor.description, [('a',), ('b',)])
+        await cursor.aclose()
 
-        self.assertIsInstance(result, CursorAdapter)
-        self.assertEqual(result.fetchall(), [(1, 'test')])
-        self.assertEqual(result.lastrowid, 1)
-        self.assertEqual(result.rowcount, 1)
+    async def test_sqlite_execute_iter_lock_lifecycle(self):
+        mock_cursor = AsyncMock()
+        mock_cursor.description = []
+        mock_conn = AsyncMock()
+        mock_conn.execute.return_value = mock_cursor
+
+        conn = AsyncSQLiteConnection(mock_conn)
+        cursor = await conn.execute_iter('SELECT 1')
+        self.assertTrue(conn._lock.locked())
+        await cursor.aclose()
+        self.assertFalse(conn._lock.locked())
         mock_cursor.close.assert_awaited_once()
 
-
-class TestAsyncMySQLConnection(unittest.IsolatedAsyncioTestCase):
-    async def test_execute_returns_cursor_adapter(self):
+    async def test_sqlite_execute_iter_lock_on_failure(self):
         mock_conn = AsyncMock()
+        mock_conn.execute.side_effect = RuntimeError('fail')
+        conn = AsyncSQLiteConnection(mock_conn)
+        with self.assertRaises(RuntimeError):
+            await conn.execute_iter('invalid')
+        self.assertFalse(conn._lock.locked())
+
+    async def test_mysql_execute(self):
         mock_cursor = AsyncMock()
         mock_cursor.fetchall.return_value = [(1, 'test')]
         mock_cursor.lastrowid = 1
         mock_cursor.rowcount = 1
         mock_cursor.description = [('id',), ('name',)]
+        mock_conn = AsyncMock()
         mock_conn.cursor.return_value = mock_cursor
 
-        conn = AsyncMySQLConnection(mock_conn)
-        result = await conn.execute('SELECT * FROM test')
-
+        result = await AsyncMySQLConnection(mock_conn).execute(
+            'SELECT * FROM test')
         self.assertIsInstance(result, CursorAdapter)
         self.assertEqual(result.fetchall(), [(1, 'test')])
-        self.assertEqual(result.lastrowid, 1)
-        self.assertEqual(result.rowcount, 1)
         mock_cursor.close.assert_awaited_once()
 
-    async def test_cursor_closed_on_error(self):
-        mock_conn = AsyncMock()
+    async def test_mysql_cursor_closed_on_error(self):
         mock_cursor = AsyncMock()
-        mock_cursor.execute.side_effect = RuntimeError('db error')
+        mock_cursor.execute.side_effect = RuntimeError('fail')
+        mock_conn = AsyncMock()
         mock_conn.cursor.return_value = mock_cursor
 
-        conn = AsyncMySQLConnection(mock_conn)
         with self.assertRaises(RuntimeError):
-            await conn.execute('BAD SQL')
-
-        # Cursor must be closed even when execute raises.
+            await AsyncMySQLConnection(mock_conn).execute('invalid')
         mock_cursor.close.assert_awaited_once()
 
-    async def test_concurrent_access_serialized(self):
-        mock_conn = AsyncMock()
-        execution_order = []
-
-        async def tracked_execute(sql, params):
-            execution_order.append(f'start-{sql}')
+    async def test_mysql_concurrent_serialized(self):
+        order = []
+        async def tracked(sql, params):
+            order.append(f'start-{sql}')
             await asyncio.sleep(0.05)
-            execution_order.append(f'end-{sql}')
+            order.append(f'end-{sql}')
             return []
-
         mock_cursor = AsyncMock()
-        mock_cursor.execute = tracked_execute
+        mock_cursor.execute = tracked
+        mock_conn = AsyncMock()
         mock_conn.cursor.return_value = mock_cursor
 
         conn = AsyncMySQLConnection(mock_conn)
-        await asyncio.gather(conn.execute('Q1', None), conn.execute('Q2', None))
+        await asyncio.gather(conn.execute('Q1', None),
+                             conn.execute('Q2', None))
+        idx = {e: i for i, e in enumerate(order)}
+        self.assertTrue(idx['end-Q1'] < idx['start-Q2']
+                        or idx['end-Q2'] < idx['start-Q1'])
 
-        # One query should complete before the other starts
-        q1_end = execution_order.index('end-Q1')
-        q2_start = execution_order.index('start-Q2')
-        q2_end = execution_order.index('end-Q2')
-        q1_start = execution_order.index('start-Q1')
-
-        self.assertTrue((q1_end < q2_start) or (q2_end < q1_start))
-
-
-class TestAsyncPostgresqlConnection(unittest.IsolatedAsyncioTestCase):
-    async def test_parameter_conversion(self):
+    async def test_mysql_execute_iter_uses_ss_cursor(self):
+        import playhouse.pwasyncio as mod
+        mock_cursor = AsyncMock()
+        mock_cursor.description = [('x',)]
+        mock_cursor.execute = AsyncMock()
         mock_conn = AsyncMock()
+        mock_conn.cursor.return_value = mock_cursor
+
+        sentinel = object()
+        with patch.object(mod, 'aiomysql') as m:
+            m.SSCursor = sentinel
+            cursor = await AsyncMySQLConnection(mock_conn).execute_iter(
+                'SELECT 1')
+        mock_conn.cursor.assert_awaited_once_with(sentinel)
+        self.assertIsNotNone(cursor._fetch_many)
+        await cursor.aclose()
+
+    async def test_mysql_execute_iter_lock_lifecycle(self):
+        import playhouse.pwasyncio as mod
+        mock_cursor = AsyncMock()
+        mock_cursor.description = [('x',)]
+        mock_cursor.execute = AsyncMock()
+        mock_cursor.close = AsyncMock()
+        mock_conn = AsyncMock()
+        mock_conn.cursor.return_value = mock_cursor
+
+        conn = AsyncMySQLConnection(mock_conn)
+        with patch.object(mod, 'aiomysql', create=True) as m:
+            m.SSCursor = object()
+            cursor = await conn.execute_iter('SELECT 1')
+        self.assertTrue(conn._lock.locked())
+        await cursor.aclose()
+        self.assertFalse(conn._lock.locked())
+        mock_cursor.close.assert_awaited_once()
+
+    async def test_pg_parameter_conversion(self):
         mock_record = Mock()
         mock_record.keys.return_value = ['id', 'name']
+        mock_conn = AsyncMock()
         mock_conn.fetch.return_value = [mock_record]
 
-        conn = AsyncPostgresqlConnection(mock_conn)
-        await conn.execute('SELECT * FROM test WHERE id = %s AND name = %s',
-                           (1, 'test'))
+        await AsyncPostgresqlConnection(mock_conn).execute(
+            'SELECT * FROM t WHERE id = %s AND name = %s', (1, 'x'))
+        sql = mock_conn.fetch.call_args[0][0]
+        self.assertEqual(sql, 'SELECT * FROM t WHERE id = $1 AND name = $2')
 
-        # Verify conversion happened
-        call_args = mock_conn.fetch.call_args
-        self.assertIn('$1', call_args[0][0])
-        self.assertIn('$2', call_args[0][0])
-        self.assertNotIn('%s', call_args[0][0])
-
-    async def test_concurrent_access_serialized(self):
-        mock_conn = AsyncMock()
-        execution_order = []
-
-        async def tracked_fetch(sql, params=None):
-            execution_order.append(f'start-{sql}')
+    async def test_pg_concurrent_serialized(self):
+        order = []
+        async def tracked(sql, params=None):
+            order.append(f'start-{sql}')
             await asyncio.sleep(0.05)
-            execution_order.append(f'end-{sql}')
+            order.append(f'end-{sql}')
             return []
-
-        mock_conn.fetch = tracked_fetch
+        mock_conn = AsyncMock()
+        mock_conn.fetch = tracked
 
         conn = AsyncPostgresqlConnection(mock_conn)
-        await asyncio.gather(conn.execute('Q1', None), conn.execute('Q2', None))
+        await asyncio.gather(conn.execute('Q1', None),
+                             conn.execute('Q2', None))
+        idx = {e: i for i, e in enumerate(order)}
+        self.assertTrue(idx['end-Q1'] < idx['start-Q2']
+                        or idx['end-Q2'] < idx['start-Q1'])
 
-        # One query should complete before the other starts
-        q1_end = execution_order.index('end-Q1')
-        q2_start = execution_order.index('start-Q2')
-        q2_end = execution_order.index('end-Q2')
-        q1_start = execution_order.index('start-Q1')
-
-        self.assertTrue((q1_end < q2_start) or (q2_end < q1_start))
-
-    async def test_execute_without_params(self):
+    async def test_pg_no_params(self):
         mock_conn = AsyncMock()
         mock_conn.fetch.return_value = []
+        await AsyncPostgresqlConnection(mock_conn).execute(
+            'SELECT * FROM t', None)
+        mock_conn.fetch.assert_called_once_with('SELECT * FROM t')
 
-        conn = AsyncPostgresqlConnection(mock_conn)
-        result = await conn.execute('SELECT * FROM test', None)
-
-        mock_conn.fetch.assert_called_once_with('SELECT * FROM test')
-
-    async def test_empty_results(self):
+    async def test_pg_empty_results(self):
         mock_conn = AsyncMock()
         mock_conn.fetch.return_value = []
-
-        conn = AsyncPostgresqlConnection(mock_conn)
-        result = await conn.execute('SELECT * FROM empty_table')
-
-        self.assertEqual(result.fetchall(), [])
-        self.assertEqual(result.description, [])
+        r = await AsyncPostgresqlConnection(mock_conn).execute(
+            'SELECT * FROM empty')
+        self.assertEqual(r.fetchall(), [])
+        self.assertEqual(r.description, [])
 
     def test_translate_placeholders(self):
         f = AsyncPostgresqlConnection._translate_placeholders
@@ -418,679 +482,124 @@ class TestAsyncPostgresqlConnection(unittest.IsolatedAsyncioTestCase):
             f('INSERT INTO t VALUES (%s, %s, %s)'),
             'INSERT INTO t VALUES ($1, $2, $3)')
 
+    def _pg_mocks(self, rows=None):
+        rows = rows or []
+        attr = MagicMock(); attr.name = 'col1'
+        it = iter(rows)
+        mock_cursor = AsyncMock()
+        async def _fetch(count):
+            return list(itertools.islice(it, count))
+        mock_cursor.fetch = _fetch
+
+        mock_stmt = AsyncMock()
+        mock_stmt.cursor.return_value = mock_cursor
+        mock_stmt.get_attributes = MagicMock(return_value=[attr])
+
+        mock_tr = AsyncMock()
+        mock_conn = MagicMock()
+        mock_conn.transaction.return_value = mock_tr
+        mock_conn.prepare = AsyncMock(return_value=mock_stmt)
+        return mock_conn, mock_tr, mock_stmt, mock_cursor
+
+    async def test_pg_execute_iter_description(self):
+        mock_conn, _, mock_stmt, _ = self._pg_mocks()
+        a1, a2 = MagicMock(), MagicMock()
+        a1.name = 'id'; a2.name = 'username'
+        mock_stmt.get_attributes.return_value = [a1, a2]
+
+        conn = AsyncPostgresqlConnection(mock_conn)
+        cursor = await conn.execute_iter('SELECT id, username FROM users')
+        self.assertEqual(cursor.description, [('id',), ('username',)])
+        await cursor.aclose()
+
+    async def test_pg_execute_iter_starts_transaction(self):
+        mock_conn, mock_tr, _, _ = self._pg_mocks()
+        conn = AsyncPostgresqlConnection(mock_conn)
+        cursor = await conn.execute_iter('SELECT 1')
+        mock_conn.transaction.assert_called_once()
+        mock_tr.start.assert_awaited_once()
+        await cursor.aclose()
+
+    async def test_pg_execute_iter_cleanup_rolls_back(self):
+        mock_conn, mock_tr, _, _ = self._pg_mocks()
+        conn = AsyncPostgresqlConnection(mock_conn)
+        cursor = await conn.execute_iter('SELECT 1')
+        self.assertTrue(conn._lock.locked())
+        await cursor.aclose()
+        mock_tr.rollback.assert_awaited_once()
+        self.assertFalse(conn._lock.locked())
+
+    async def test_pg_execute_iter_translates_placeholders(self):
+        mock_conn, _, _, _ = self._pg_mocks()
+        conn = AsyncPostgresqlConnection(mock_conn)
+        cursor = await conn.execute_iter(
+            'SELECT * FROM t WHERE a = %s AND b = %s', params=(1, 2))
+        sql = mock_conn.prepare.call_args[0][0]
+        self.assertIn('$1', sql)
+        self.assertNotIn('%s', sql)
+        await cursor.aclose()
+
+    async def test_pg_execute_iter_lock_on_failure(self):
+        mock_conn, _, _, _ = self._pg_mocks()
+        mock_conn.prepare = AsyncMock(side_effect=RuntimeError('fail'))
+        conn = AsyncPostgresqlConnection(mock_conn)
+        with self.assertRaises(RuntimeError):
+            await conn.execute_iter('invalid')
+        self.assertFalse(conn._lock.locked())
 
 
-class BaseDatabaseTestCase(unittest.IsolatedAsyncioTestCase):
-    def setUp(self):
-        self.db_file = tempfile.NamedTemporaryFile(delete=False)
-        self.db_path = self.db_file.name
-        self.db_file.close()
-        self.db = AsyncSqliteDatabase(self.db_path)
-        TestModel._meta.set_database(self.db)
-
-    def tearDown(self):
-        if os.path.exists(self.db_path):
-            os.unlink(self.db_path)
-
-    async def asyncSetUp(self):
-        await self.db.aconnect()
-        await self.db.acreate_tables([TestModel])
-
-    async def asyncTearDown(self):
-        await self.db.aclose()
-        await self.db.close_pool()
-
-    async def create_record(self, name='test', value=1):
-        return await self.db.run(TestModel.create, name=name, value=value)
-
-    async def count_records(self):
-        return await self.db.run(TestModel.select().count)
-
-
-class TestConnectionValidation(BaseDatabaseTestCase):
-    async def test_validation_detects_dead_connection(self):
-        await self.db.aconnect()
-        conn = self.db._state.conn
-
-        # Simulate dead connection
-        await conn.close()
-
-        # Next operation should detect and replace
-        await self.create_record('test', 1)
-
-        # Should have new connection
-        self.assertIsNot(self.db._state.conn, conn)
-        self.assertEqual(await self.count_records(), 1)
-
-
-class TestAsyncSqliteDatabase(BaseDatabaseTestCase):
-    async def test_connect_creates_pool(self):
-        await self.db.aclose()
-        await self.db.close_pool()
-        self.assertIsNone(self.db._pool)
-
-        await self.db.aconnect()
-
-        self.assertIsNotNone(self.db._pool)
-        self.assertIsNotNone(self.db._state.conn)
-
-        await self.db.aclose()
-        self.assertIsNone(self.db._state.conn)
-
-    async def test_execute_sql(self):
-        await self.db.aexecute_sql(
-            'CREATE TABLE test (id INTEGER PRIMARY KEY, name TEXT)')
-        await self.db.aexecute_sql(
-            'INSERT INTO test (name) VALUES (?)', ('test_name',))
-
-        result = await self.db.aexecute_sql('SELECT * FROM test')
-        rows = result.fetchall()
-
-        self.assertEqual(len(rows), 1)
-        self.assertEqual(rows[0][1], 'test_name')
-
-        await self.db.aclose()
-
-    async def test_context_manager(self):
-        async with self.db:
-            self.assertIsNotNone(self.db._state.conn)
-            self.assertFalse(self.db._state.closed)
-
-        self.assertIsNone(self.db._state.conn)
-        self.assertTrue(self.db._state.closed)
-
-    async def test_multiple_tasks_isolation(self):
-        await self.db.aconnect()
-        await self.db.aexecute_sql(
-            'CREATE TABLE test (id INTEGER PRIMARY KEY, value INTEGER)')
-
-        async def task_worker(task_id):
-            await self.db.aconnect()
-            await self.db.aexecute_sql(
-                'INSERT INTO test (value) VALUES (?)', (task_id,))
-            result = await self.db.aexecute_sql(
-                'SELECT value FROM test WHERE value = ?', (task_id,))
-            rows = result.fetchall()
-            await self.db.aclose()
-            return rows
-
-        results = await asyncio.gather(*[task_worker(i) for i in range(3)])
-
-        self.assertEqual(sorted(results), [[(0,)], [(1,)], [(2,)]])
-        await self.db.aclose()
-
-    async def test_pragmas(self):
-        db = AsyncSqliteDatabase(':memory:', pragmas={'user_version': '99'})
-        conn = await db.aconnect()
-        result = await conn.execute('PRAGMA user_version')
-        self.assertEqual(result.fetchone(), (99,))
-        await db.close_pool()
-
-    async def test_custom_functions(self):
+class TestTaskLifecycle(unittest.IsolatedAsyncioTestCase):
+    async def test_concurrent_task_state_isolation(self):
         db = AsyncSqliteDatabase(':memory:')
-
-        @db.func()
-        def title_case(s):
-            return s.title()
-
+        TestModel._meta.set_database(db)
         async with db:
-            result = await db.aexecute_sql('SELECT title_case(?)',
-                                                ('test foo',))
-            self.assertEqual(result.fetchone(), ('Test Foo',))
-
+            await db.acreate_tables([TestModel])
+            async def capture(tid):
+                async with db:
+                    before = id(db._state.get())
+                    await db.run(TestModel.create, name=f't{tid}', value=tid)
+                    after = id(db._state.get())
+                    return before == after
+            results = await asyncio.gather(*[capture(i) for i in range(5)])
+            self.assertTrue(all(results))
         await db.close_pool()
 
-    async def test_is_closed(self):
-        await self.db.aconnect()
-        self.assertFalse(self.db.is_closed())
-        await self.db.aclose()
-        self.assertTrue(self.db.is_closed())
-
-
-class TestAsyncAtomic(BaseDatabaseTestCase):
-    async def test_atomic_context_manager(self):
-        async with self.db.atomic():
-            await self.create_record('atomic_test', 123)
-
-        self.assertEqual(await self.count_records(), 1)
-
-        async with self.db.atomic() as txn:
-            await self.create_record('atomic_test', 123)
-            self.assertEqual(await self.count_records(), 2)
-            await txn.arollback()
-            self.assertEqual(await self.count_records(), 1)
-
-        self.assertEqual(await self.count_records(), 1)
-
-    async def test_transaction_commit(self):
-        def create_in_transaction():
-            with self.db.atomic():
-                TestModel.create(name='tx1')
-                TestModel.create(name='tx2')
-
-        await self.db.run(create_in_transaction)
-        self.assertEqual(await self.count_records(), 2)
-
-    async def test_transaction_rollback(self):
-        def failing_transaction():
-            with self.db.atomic():
-                TestModel.create(name='tx1')
-                raise ValueError('fail')
-
-        with self.assertRaises(ValueError):
-            await self.db.run(failing_transaction)
-
-        self.assertEqual(await self.count_records(), 0)
-
-        async with self.db.atomic() as txn:
-            await self.create_record('tx2')
-            await txn.arollback()
-
-        self.assertEqual(await self.count_records(), 0)
-
-    async def test_nested_transactions(self):
-        def nested_transactions():
-            with self.db.atomic():
-                TestModel.create(name='outer1', value=1)
-                with self.db.atomic():
-                    TestModel.create(name='inner1', value=2)
-                    TestModel.create(name='inner2', value=3)
-                TestModel.create(name='outer2', value=4)
-
-        await self.db.run(nested_transactions)
-        self.assertEqual(await self.count_records(), 4)
-
-    async def test_nested_implicit_rollback(self):
-        def nested_with_inner_rollback():
-            with self.db.atomic():
-                TestModel.create(name='outer1', value=1)
-                try:
-                    with self.db.atomic():
-                        TestModel.create(name='inner1', value=2)
-                        raise ValueError('fail')
-                except ValueError:
-                    pass
-                TestModel.create(name='outer2', value=3)
-
-        await self.db.run(nested_with_inner_rollback)
-        self.assertEqual(await self.count_records(), 2)
-
-    async def test_nested_explicit_rollback(self):
-        def nested_with_inner_rollback():
-            with self.db.atomic():
-                TestModel.create(name='outer1')
-                with self.db.atomic() as sp:
-                    TestModel.create(name='inner1')
-                    self.assertEqual(TestModel.select().count(), 2)
-                    sp.rollback()
-
-                self.assertEqual(TestModel.select().count(), 1)
-                TestModel.create(name='outer2')
-
-        await self.db.run(nested_with_inner_rollback)
-        self.assertEqual(await self.count_records(), 2)
-
-        async with self.db.atomic():
-            await self.db.run(TestModel.create, name='outer3')
-            async with self.db.atomic() as sp:
-                await self.db.run(TestModel.create, name='inner2')
-                self.assertEqual(await self.count_records(), 4)
-                await sp.arollback()
-
-            self.assertEqual(await self.count_records(), 3)
-            await self.db.run(TestModel.create, name='outer4')
-
-        self.assertEqual(await self.count_records(), 4)
-
-    async def test_nested_mix(self):
-        async with self.db.atomic():
-            await self.create_record('t1')
-            async with self.db.atomic():
-                await self.create_record('t2')
-                async with self.db.atomic():
-                    await self.create_record('t3')
-
-                try:
-                    async with self.db.atomic():
-                        await self.create_record('t4')
-                        self.assertEqual(await self.count_records(), 4)
-                        raise ValueError('fail')
-                except ValueError:
-                    pass
-
-                async with self.db.atomic() as sp:
-                    await self.create_record('t4')
-                    self.assertEqual(await self.count_records(), 4)
-                    await sp.arollback()
-
-                self.assertEqual(await self.count_records(), 3)
-
-            try:
-                async with self.db.atomic():
-                    await self.create_record('t5')
-                    self.assertEqual(await self.count_records(), 4)
-                    raise ValueError('fail')
-            except ValueError:
-                self.assertEqual(await self.count_records(), 3)
-
-        self.assertEqual(await self.count_records(), 3)
-
-        try:
-            async with self.db.atomic():
-                await self.create_record('t1')
-                async with self.db.atomic():
-                    await self.create_record('t2')
-                    async with self.db.atomic():
-                        await self.create_record('t3')
-                        self.assertEqual(await self.count_records(), 6)
-                raise ValueError('fail')
-        except ValueError:
-            pass
-
-        self.assertEqual(await self.count_records(), 3)
-
-    async def test_acommit_arollback(self):
-        async with self.db.atomic() as txn:
-            await self.create_record('committed', 1)
-            await txn.acommit()
-            await self.create_record('not-committed', 2)
-            await txn.arollback()
-
-        self.assertEqual(await self.count_records(), 1)
-
-
-class TestDatabaseHelpers(BaseDatabaseTestCase):
-    async def test_aexecute(self):
-        q = (TestModel
-             .insert_many([(f'item{i}', i) for i in range(10)]))
-
-        if SQLITE_RETURNING:
-            q = q.returning(TestModel.name)
-            res = await self.db.aexecute(q)
-            self.assertEqual([t.name for t in res],
-                             [f'item{i}' for i in range(10)])
-        else:
-            res = await self.db.aexecute(q)
-
-        self.assertEqual(await self.count_records(), 10)
-
-        q = (TestModel
-             .update(value=TestModel.value * 10)
-             .where(TestModel.value < 3))
-
-        if SQLITE_RETURNING:
-            q = q.returning(TestModel.name, TestModel.value)
-            res = await self.db.aexecute(q)
-            self.assertEqual(sorted([(t.name, t.value) for t in res]),
-                             [('item0', 0), ('item1', 10), ('item2', 20)])
-        else:
-            res = await self.db.aexecute(q)
-
-        q = TestModel.select().where(TestModel.value >= 10)
-        self.assertEqual(await self.db.run(q.count), 2)
-
-        rows = await self.db.aexecute(q.order_by(TestModel.value))
-        self.assertEqual([r.name for r in rows], ['item1', 'item2'])
-
-    async def test_list(self):
-        for i in range(5):
-            await self.create_record(f'item{i}', i)
-
-        results = await self.db.list(TestModel.select())
-        self.assertEqual(len(results), 5)
-        self.assertIsInstance(results[0], TestModel)
-
-    async def test_scalar(self):
-        for i in range(10):
-            await self.create_record(f'item{i}', i)
-
-        max_val = await self.db.scalar(
-            TestModel.select(fn.MAX(TestModel.value)))
-        self.assertEqual(max_val, 9)
-
-    async def test_get(self):
-        record = await self.create_record('unique', 999)
-
-        fetched = await self.db.get(
-            TestModel.select().where(TestModel.name == 'unique'))
-        self.assertEqual(fetched.id, record.id)
-
-    async def test_get_not_found(self):
-        with self.assertRaises(TestModel.DoesNotExist):
-            await self.db.get(
-                TestModel.select().where(TestModel.name == 'nonexistent'))
-
-    async def test_list_empty_query(self):
-        results = await self.db.list(TestModel.select())
-        self.assertEqual(results, [])
-
-    async def test_scalar_no_results(self):
-        count = await self.db.scalar(TestModel.select(fn.COUNT(TestModel.id)))
-        self.assertEqual(count, 0)
-
-    async def test_iteration_empty_results(self):
-        def iterate():
-            return list(TestModel.select())
-
-        results = await self.db.run(iterate)
-        self.assertEqual(results, [])
-
-    async def test_run_contextvars(self):
-        state = []
-        var = contextvars.ContextVar('data', default='x')
-
-        def do_run():
-            nonlocal state
-            state.append(var.get())
-
-        var.set('y')
-        state.append(var.get())
-        await self.db.run(do_run)
-        state.append(var.get())
-
-        self.assertEqual(state, ['y', 'y', 'y'])
-
-    async def test_count(self):
-        for i in range(5):
-            await self.create_record(f'item{i}', i)
-        self.assertEqual(await self.db.count(TestModel.select()), 5)
-
-    async def test_exists_empty(self):
-        self.assertFalse(await self.db.exists(TestModel.select()))
-
-    async def test_exists_nonempty(self):
-        await self.create_record('x', 1)
-        self.assertTrue(await self.db.exists(TestModel.select()))
-
-
-class TestModelOperations(BaseDatabaseTestCase):
-    async def test_create(self):
-        record = await self.create_record('test1', 100)
-        self.assertEqual(record.name, 'test1')
-        self.assertEqual(record.value, 100)
-
-    async def test_select(self):
-        await self.create_record('test1', 100)
-
-        records = await self.db.list(TestModel.select())
-        self.assertEqual(len(records), 1)
-        self.assertEqual(records[0].name, 'test1')
-
-    async def test_filter(self):
-        for i in range(20):
-            await self.create_record(f'item{i}', i * 10)
-
-        query = TestModel.select().where(TestModel.value > 100)
-        results = await self.db.list(query)
-        self.assertEqual(len(results), 9)
-
-    async def test_ordering(self):
-        for i in range(20):
-            await self.create_record(f'item{i}', i * 10)
-
-        query = TestModel.select().order_by(TestModel.value.desc()).limit(5)
-        results = await self.db.list(query)
-
-        self.assertEqual(len(results), 5)
-        self.assertEqual(results[0].value, 190)
-        self.assertEqual(results[4].value, 150)
-
-    async def test_aggregation(self):
-        for i in range(20):
-            await self.create_record(f'item{i}', i)
-
-        count = await self.db.scalar(TestModel.select(fn.COUNT(TestModel.id)))
-        self.assertEqual(count, 20)
-
-    async def test_update(self):
-        record = await self.create_record('test1', 100)
-
-        def update_record():
-            r = TestModel.get(TestModel.name == 'test1')
-            r.value = 999
-            r.save()
-
-            r = TestModel.get(TestModel.name == 'test1')
-            return r.value
-
-        new_value = await self.db.run(update_record)
-        self.assertEqual(new_value, 999)
-
-    async def test_delete(self):
-        for i in range(20):
-            await self.create_record(f'item{i}', i * 10)
-
-        def delete_query():
-            return TestModel.delete().where(TestModel.value < 50).execute()
-
-        await self.db.run(delete_query)
-        self.assertEqual(await self.count_records(), 15)
-
-    async def test_bulk_insert(self):
-        def bulk_insert():
-            with self.db.atomic():
-                for i in range(100):
-                    TestModel.create(name=f'bulk{i}', value=i)
-
-        await self.db.run(bulk_insert)
-        self.assertEqual(await self.count_records(), 100)
-
-
-class TestBulkOperations(BaseDatabaseTestCase):
-    async def test_bulk_create(self):
-        records = [TestModel(name=f'bulk{i}', value=i) for i in range(100)]
-
-        await self.db.run(TestModel.bulk_create, records, batch_size=25)
-        self.assertEqual(await self.count_records(), 100)
-
-    async def test_bulk_update(self):
-        for i in range(50):
-            await self.create_record(f'item{i}', i)
-
-        def bulk_update():
-            return (TestModel
-                    .update(value=TestModel.value + 1000)
-                    .where(TestModel.value < 25)
-                    .execute())
-
-        await self.db.run(bulk_update)
-
-        def check():
-            results = list(TestModel.select().where(TestModel.value >= 1000))
-            return len(results)
-
-        self.assertEqual(await self.db.run(check), 25)
-
-    async def test_insert_many(self):
-        def insert():
-            data = [{'name': f'item{i}', 'value': i} for i in range(100)]
-            return TestModel.insert_many(data).execute()
-
-        await self.db.run(insert)
-        self.assertEqual(await self.count_records(), 100)
-
-
-class TestConcurrency(BaseDatabaseTestCase):
-    async def test_concurrent_reads_writes(self):
-        # Create initial data
-        for i in range(10):
-            await self.create_record(f'init{i}', i)
-
-        async def writer(start_id):
-            async with self.db:
-                def write():
-                    for i in range(5):
-                        TestModel.create(
-                            name=f'writer{start_id}-{i}',
-                            value=start_id * 100 + i)
-                await self.db.run(write)
-
-        async def reader():
-            async with self.db:
-                return await self.db.run(lambda: len(list(TestModel.select())))
-
-        # Run concurrent operations
-        write_tasks = [writer(i) for i in range(3)]
-        read_tasks = [reader() for i in range(3)]
-
-        await asyncio.gather(*write_tasks)
-        read_results = await asyncio.gather(*read_tasks)
-
-        # All readers should get results
-        self.assertTrue(all(r >= 10 for r in read_results))
-
-        # Verify all writes completed
-        self.assertEqual(await self.count_records(), 10 + 15)
-
-    async def test_isolated_connections_per_task(self):
-        async def task_worker(task_id):
-            async with self.db:
-                conn_before = self.db._state.conn
-                await self.create_record(f'task{task_id}', task_id)
-                conn_after = self.db._state.conn
-                return conn_before is conn_after
-
-        results = await asyncio.gather(*[task_worker(i) for i in range(5)])
-
-        # Each task should use same connection throughout
-        self.assertTrue(all(results))
-        self.assertEqual(await self.count_records(), 5)
-
-    async def test_many_concurrent_tasks(self):
-        async def small_task(task_id):
-            async with self.db:
-                await self.create_record(f'task{task_id}', task_id)
-
-        await asyncio.gather(*[small_task(i) for i in range(50)])
-        self.assertEqual(await self.count_records(), 50)
-
-
-class TestConnectionPool(BaseDatabaseTestCase):
-    async def test_pool_initialization(self):
-        db = AsyncSqliteDatabase(self.db.database)
-        self.assertIsNone(db._pool)
-
-        await db.aconnect()
-        self.assertIsNotNone(db._pool)
-
-        await db.aclose()
+    async def test_task_state_cleanup_after_completion(self):
+        db = AsyncSqliteDatabase(':memory:')
+        TestModel._meta.set_database(db)
+        async with db:
+            await db.acreate_tables([TestModel])
+            async def task_with_state():
+                async with db:
+                    await db.run(TestModel.create, name='test', value=1)
+                return db._state._get_storage_key()
+            task_key = await task_with_state()
+            db._state.cleanup_dead_tasks()
         await db.close_pool()
 
-    async def test_multiple_close_safe(self):
-        await self.db.aclose()
-        await self.db.aclose()  # Should not error
-
-        await self.db.aconnect()  # Can reconnect
-
-    async def test_reconnect_after_pool_close(self):
-        await self.create_record('first', 1)
-        await self.db.aclose()
-        await self.db.close_pool()
-
-        self.assertIsNone(self.db._pool)
-
-        # Reconnect and verify data persists
-        async with self.db:
-            self.assertEqual(await self.count_records(), 1)
-
-        self.assertIsNotNone(self.db._pool)
-
-    async def test_connection_reuse_within_task(self):
-        await self.db.aconnect()
-        first_conn = self.db._state.conn
-
-        await self.create_record('test1', 1)
-        second_conn = self.db._state.conn
-
-        await self.create_record('test2', 2)
-        third_conn = self.db._state.conn
-
-        # All operations use same connection
-        self.assertIs(first_conn, second_conn)
-        self.assertIs(second_conn, third_conn)
-
-    async def test_closing_flag_prevents_connect(self):
-        self.db._closing = True
-        try:
-            with self.assertRaises(InterfaceError):
-                await self.db.aconnect()
-        finally:
-            self.db._closing = False
-
-    async def test_double_close_pool(self):
-        await self.db.aclose()
-        await self.db.close_pool()
-        await self.db.close_pool()  # Should not error.
+    async def test_concurrent_task_state_isolation(self):
+        db = AsyncSqliteDatabase(':memory:')
+        TestModel._meta.set_database(db)
+        async with db:
+            await db.acreate_tables([TestModel])
+            async def capture(tid):
+                async with db:
+                    before = id(db._state.get())
+                    await db.run(TestModel.create, name=f't{tid}', value=tid)
+                    after = id(db._state.get())
+                    return before == after
+            results = await asyncio.gather(*[capture(i) for i in range(5)])
+            self.assertTrue(all(results))
+        await db.close_pool()
 
 
-
-class TestErrorHandling(BaseDatabaseTestCase):
-    async def test_syntax_error_recovery(self):
-        with self.assertRaises(Exception):
-            await self.db.aexecute_sql('INVALID SQL')
-
-        await self.create_record('after_error', 1)
-        self.assertEqual(await self.count_records(), 1)
-
-    async def test_constraint_violation_recovery(self):
-        await self.db.aexecute_sql('CREATE TABLE unique_test ('
-                                   'id INTEGER PRIMARY KEY,'
-                                   'unique_value TEXT UNIQUE)')
-
-        await self.db.aexecute_sql(
-            'INSERT INTO unique_test (unique_value) VALUES (?)', ('unique',))
-
-        with self.assertRaises(IntegrityError):
-            await self.db.aexecute_sql(
-                'INSERT INTO unique_test (unique_value) VALUES (?)', ('unique',))
-
-        await self.db.aexecute_sql(
-            'INSERT INTO unique_test (unique_value) VALUES (?)', ('different',))
-
-    async def test_concurrent_errors(self):
-        errors_caught = []
-        successes = []
-
-        async def task_that_may_fail(task_id):
-            async with self.db:
-                try:
-                    def work():
-                        TestModel.create(name=f'task{task_id}', value=task_id)
-                        if task_id % 2 == 0:
-                            raise ValueError(f'Task {task_id} fails')
-                    await self.db.run(work)
-                    successes.append(task_id)
-                except ValueError:
-                    errors_caught.append(task_id)
-
-        await asyncio.gather(*[task_that_may_fail(i) for i in range(10)])
-
-        self.assertEqual(sorted(errors_caught), [0, 2, 4, 6, 8])
-        self.assertEqual(sorted(successes), [1, 3, 5, 7, 9])
-        self.assertEqual(await self.count_records(), 10)
-
-    async def test_exception_in_context_manager(self):
-        try:
-            async with self.db:
-                raise RuntimeError('Test exception')
-        except RuntimeError:
-            pass
-
-        # State should be cleaned up
-        self.assertTrue(self.db._state.closed)
-
-        # Can reconnect
-        async with self.db:
-            await self.create_record('after_error', 1)
-
-
-class TestIntegration(unittest.IsolatedAsyncioTestCase):
+class IntegrationTests(object):
     db_path = None
     models = [TestModel, User, Tweet]
 
     def get_database(self):
-        with tempfile.NamedTemporaryFile(delete=False) as db_file:
-            self.db_path = db_file.name
+        with tempfile.NamedTemporaryFile(delete=False) as f:
+            self.db_path = f.name
         return AsyncSqliteDatabase(self.db_path)
 
     def tearDown(self):
@@ -1105,8 +614,20 @@ class TestIntegration(unittest.IsolatedAsyncioTestCase):
         except Exception as exc:
             self.skipTest(f'Cannot connect: {exc}')
 
-        for model in self.models:
-            model._meta.set_database(self.db)
+        if isinstance(self.db, AsyncSqliteDatabase):
+            self.driver = 'sqlite'
+            self.support_returning = SQLITE_RETURNING
+        elif isinstance(self.db, AsyncMySQLDatabase):
+            self.driver = 'mysql'
+            self.support_returning = False
+        elif isinstance(self.db, AsyncPostgresqlDatabase):
+            self.driver = 'postgresql'
+            self.support_returning = True
+        else:
+            raise ValueError('Unrecognized driver')
+
+        for m in self.models:
+            m._meta.set_database(self.db)
         async with self.db:
             await self.db.adrop_tables(self.models)
             await self.db.acreate_tables(self.models)
@@ -1122,31 +643,656 @@ class TestIntegration(unittest.IsolatedAsyncioTestCase):
     async def count_records(self):
         return await self.db.run(TestModel.select().count)
 
-    async def test_basic_crud(self):
-        # Create
-        record = await self.create_record('testx', value=2)
-        self.assertEqual(record.name, 'testx')
+    async def seed(self, n=20):
+        def _seed():
+            with self.db.atomic():
+                for i in range(n):
+                    TestModel.create(name=f'item{i:02d}', value=i * 10)
+        await self.db.run(_seed)
 
-        # Read
+    async def test_pool_created_on_connect(self):
+        await self.db.aclose()
+        await self.db.close_pool()
+        self.assertIsNone(self.db._pool)
+        await self.db.aconnect()
+        self.assertIsNotNone(self.db._pool)
+        self.assertIsNotNone(self.db._state.conn)
+        await self.db.aclose()
+        self.assertIsNone(self.db._state.conn)
+
+    async def test_is_closed(self):
+        await self.db.aconnect()
+        self.assertFalse(self.db.is_closed())
+        await self.db.aclose()
+        self.assertTrue(self.db.is_closed())
+
+    async def test_multiple_close_safe(self):
+        await self.db.aclose()
+        await self.db.aclose()
+        await self.db.aconnect()
+
+    async def test_reconnect_after_pool_close(self):
+        await self.create_record('first', 1)
+        await self.db.aclose()
+        await self.db.close_pool()
+        self.assertIsNone(self.db._pool)
+        async with self.db:
+            self.assertEqual(await self.count_records(), 1)
+        self.assertIsNotNone(self.db._pool)
+
+    async def test_connection_reuse_within_task(self):
+        await self.db.aconnect()
+        c1 = self.db._state.conn
+        await self.create_record('a', 1)
+        c2 = self.db._state.conn
+        await self.create_record('b', 2)
+        self.assertIs(c1, c2)
+        self.assertIs(c2, self.db._state.conn)
+
+    async def test_closing_flag_prevents_connect(self):
+        self.db._closing = True
+        try:
+            with self.assertRaises(InterfaceError):
+                await self.db.aconnect()
+        finally:
+            self.db._closing = False
+
+    async def test_double_close_pool(self):
+        await self.db.aclose()
+        await self.db.close_pool()
+        await self.db.close_pool()
+
+    async def test_dead_connection_replaced(self):
+        if self.driver == 'mysql':
+            self.skipTest('closing underlying conn incompatible with aiomysql')
+            return
+
+        await self.db.aconnect()
+        conn = self.db._state.conn
+        await conn.close()
+        await self.create_record('test', 1)
+        self.assertIsNot(self.db._state.conn, conn)
+        self.assertEqual(await self.count_records(), 1)
+
+    async def test_context_manager(self):
+        async with self.db:
+            self.assertIsNotNone(self.db._state.conn)
+            self.assertFalse(self.db._state.closed)
+        self.assertIsNone(self.db._state.conn)
+        self.assertTrue(self.db._state.closed)
+
+    async def test_exception_in_context_manager(self):
+        try:
+            async with self.db:
+                raise RuntimeError('fail')
+        except RuntimeError:
+            pass
+        self.assertTrue(self.db._state.closed)
+        async with self.db:
+            await self.create_record('after_error', 1)
+
+    async def test_execute_sql(self):
+        iq, iparams = User.insert(username='x').sql()
+        sq, _= User.select().sql()
+        await self.db.aexecute_sql(iq, iparams)
+        r = await self.db.aexecute_sql(sq)
+        self.assertEqual(r.fetchall()[0][1], 'x')
+
+    async def test_multiple_tasks_raw_sql(self):
+        iq, _ = User.insert(username='x').sql()
+        sq, _ = User.select(User.username).where(User.username == 'x').sql()
+
+        async def worker(tid):
+            username = f'u{tid}'
+            await self.db.aconnect()
+            await self.db.aexecute_sql(iq, (username,))
+            r = await self.db.aexecute_sql(sq, (username,))
+            row = r.fetchone()
+            self.assertEqual(row[0], username)
+            await self.db.aclose()
+            return row
+
+        results = await asyncio.gather(*[worker(i) for i in range(3)])
+        self.assertEqual(sorted(results), [('u0',), ('u1',), ('u2',)])
+
+    async def test_list(self):
+        await self.seed(5)
+        results = await self.db.list(TestModel.select())
+        self.assertEqual(len(results), 5)
+        self.assertIsInstance(results[0], TestModel)
+
+    async def test_list_empty(self):
+        self.assertEqual(await self.db.list(TestModel.select()), [])
+
+    async def test_get(self):
+        rec = await self.create_record('unique', 999)
+        fetched = await self.db.get(
+            TestModel.select().where(TestModel.name == 'unique'))
+        self.assertEqual(fetched.id, rec.id)
+
+    async def test_get_not_found(self):
+        with self.assertRaises(TestModel.DoesNotExist):
+            await self.db.get(
+                TestModel.select().where(TestModel.name == 'nope'))
+
+    async def test_scalar(self):
+        await self.seed(10)
+        self.assertEqual(
+            await self.db.scalar(
+                TestModel.select(fn.MAX(TestModel.value))), 90)
+
+    async def test_scalar_no_results(self):
+        self.assertEqual(
+            await self.db.scalar(
+                TestModel.select(fn.COUNT(TestModel.id))), 0)
+
+    async def test_count(self):
+        await self.seed(5)
+        self.assertEqual(await self.db.count(TestModel.select()), 5)
+
+    async def test_exists(self):
+        self.assertFalse(await self.db.exists(TestModel.select()))
+        await self.create_record('x', 1)
+        self.assertTrue(await self.db.exists(TestModel.select()))
+
+    async def test_aexecute(self):
+        q = TestModel.insert_many([(f'item{i}', i) for i in range(10)])
+        if self.support_returning:
+            q = q.returning(TestModel.name)
+            res = await self.db.aexecute(q)
+            self.assertEqual([t.name for t in res],
+                             [f'item{i}' for i in range(10)])
+        else:
+            await self.db.aexecute(q)
+        self.assertEqual(await self.count_records(), 10)
+
+        q = (TestModel
+             .update(value=TestModel.value * 10)
+             .where(TestModel.value < 3))
+
+        if self.support_returning:
+            q = q.returning(TestModel.name, TestModel.value)
+            res = await self.db.aexecute(q)
+            self.assertEqual(sorted([(t.name, t.value) for t in res]),
+                             [('item0', 0), ('item1', 10), ('item2', 20)])
+        else:
+            res = await self.db.aexecute(q)
+            self.assertEqual(res, 2)
+
+        q = TestModel.select().where(TestModel.value >= 10)
+        self.assertEqual(await self.db.run(q.count), 2)
+
+        rows = await self.db.aexecute(q.order_by(TestModel.value))
+        self.assertEqual([r.name for r in rows], ['item1', 'item2'])
+
+        q = TestModel.delete().where(TestModel.value >= 10)
+        if self.support_returning:
+            q = q.returning(TestModel.name, TestModel.value)
+            res = await self.db.aexecute(q)
+            self.assertEqual(sorted([(t.name, t.value) for t in res]),
+                             [('item1', 10), ('item2', 20)])
+        else:
+            res = await self.db.aexecute(q)
+            self.assertEqual(res, 2)
+
+    async def test_run_contextvars(self):
+        var = contextvars.ContextVar('v', default='x')
+        state = []
+        def do_run():
+            state.append(var.get())
+        var.set('y')
+        state.append(var.get())
+        await self.db.run(do_run)
+        state.append(var.get())
+        self.assertEqual(state, ['y', 'y', 'y'])
+
+    async def test_create(self):
+        rec = await self.create_record('test1', 100)
+        self.assertEqual(rec.name, 'test1')
+        self.assertEqual(rec.value, 100)
+
+    async def test_select(self):
+        await self.create_record('test1', 100)
+        recs = await self.db.list(TestModel.select())
+        self.assertEqual(len(recs), 1)
+        self.assertEqual(recs[0].name, 'test1')
+
+    async def test_filter(self):
+        await self.seed(20)
+        query = TestModel.select().where(TestModel.value > 100)
+        results = await self.db.list(query)
+        self.assertEqual(len(results), 9)
+
+    async def test_ordering(self):
+        await self.seed(20)
+        query = TestModel.select().order_by(TestModel.value.desc()).limit(5)
+        results = await self.db.list(query)
+        self.assertEqual(results[0].value, 190)
+        self.assertEqual(results[4].value, 150)
+
+    async def test_aggregation(self):
+        await self.seed(20)
+        ct = await self.db.scalar(TestModel.select(fn.COUNT(TestModel.id)))
+        self.assertEqual(ct, 20)
+
+        ct = await self.db.count(TestModel.select())
+        self.assertEqual(ct, 20)
+
+    async def test_create_save_update(self):
+        rec = await self.create_record('test1', 100)
+        def do_update():
+            r = TestModel.get(TestModel.name == 'test1')
+            r.value = 999; r.save()
+            return TestModel.get(TestModel.name == 'test1').value
+        self.assertEqual(await self.db.run(do_update), 999)
+
+        uq = TestModel.update(name='test1x').where(TestModel.name == 'test1')
+        res = await self.db.aexecute(uq)
+        #self.assertEqual(res, 1)
+
+        tm = await self.db.get(
+            TestModel.select().where(TestModel.name == 'test1x'))
+        self.assertEqual(tm.value, 999)
+
+    async def test_update(self):
+        await self.seed(50)
+        await self.db.aexecute(TestModel
+                               .update(value=TestModel.value + 1000)
+                               .where(TestModel.value < 250))
+        query = TestModel.select().where(TestModel.value >= 1000)
+        self.assertEqual(await self.db.count(query), 25)
+
+    async def test_delete(self):
+        await self.seed(20)
+        await self.db.aexecute(TestModel.delete().where(TestModel.value < 50))
+        self.assertEqual(await self.count_records(), 15)
+
+    async def test_bulk_create(self):
+        recs = [TestModel(name=f'b{i}', value=i) for i in range(100)]
+        await self.db.run(TestModel.bulk_create, recs, batch_size=25)
+        self.assertEqual(await self.count_records(), 100)
+
+    async def test_bulk_update(self):
+        if self.driver == 'postgresql':
+            self.skipTest('bulk_update incompatible with asyncpg')
+            return
+
+        accum = []
+        for i in range(5):
+            accum.append(await self.db.run(TestModel.create,
+                                           name=f'b{i}', value=i))
+
+        for tm in accum:
+            tm.name += '-x'
+            tm.value += 100
+
+        await self.db.run(TestModel.bulk_update, accum,
+                          fields=[TestModel.name, TestModel.value])
+
+        q = await self.db.list(TestModel.select().order_by(TestModel.value))
+        self.assertEqual([(tm.name, tm.value) for tm in q],
+                         [('b0-x', 100), ('b1-x', 101), ('b2-x', 102),
+                          ('b3-x', 103), ('b4-x', 104)])
+
+    async def test_insert_many(self):
+        def insert():
+            data = [{'name': f'i{i}', 'value': i} for i in range(100)]
+            TestModel.insert_many(data).execute()
+        await self.db.run(insert)
+        self.assertEqual(await self.count_records(), 100)
+
+        data = [{'name': f'i{i}', 'value': i} for i in range(100, 200)]
+        await self.db.aexecute(TestModel.insert_many(data))
+        self.assertEqual(await self.count_records(), 200)
+
+    async def test_atomic(self):
+        async with self.db.atomic():
+            await self.create_record('a', 1)
+        self.assertEqual(await self.count_records(), 1)
+
+        async with self.db.atomic() as txn:
+            await self.create_record('b', 2)
+            self.assertEqual(await self.count_records(), 2)
+            await txn.arollback()
+            self.assertEqual(await self.count_records(), 1)
+        self.assertEqual(await self.count_records(), 1)
+
+    async def test_transaction_commit(self):
+        def create_in_tx():
+            with self.db.atomic():
+                TestModel.create(name='tx1')
+                TestModel.create(name='tx2')
+        await self.db.run(create_in_tx)
+        self.assertEqual(await self.count_records(), 2)
+
+    async def test_transaction_rollback(self):
+        def failing():
+            with self.db.atomic():
+                TestModel.create(name='tx1')
+                raise ValueError('fail')
+        with self.assertRaises(ValueError):
+            await self.db.run(failing)
+        self.assertEqual(await self.count_records(), 0)
+
+        async with self.db.atomic() as txn:
+            await self.create_record('tx2')
+            await txn.arollback()
+        self.assertEqual(await self.count_records(), 0)
+
+    async def test_nested_transactions(self):
+        def nested():
+            with self.db.atomic():
+                TestModel.create(name='outer1', value=1)
+                with self.db.atomic():
+                    TestModel.create(name='inner1', value=2)
+                    TestModel.create(name='inner2', value=3)
+                TestModel.create(name='outer2', value=4)
+        await self.db.run(nested)
+        self.assertEqual(await self.count_records(), 4)
+
+    async def test_nested_implicit_rollback(self):
+        def nested():
+            with self.db.atomic():
+                TestModel.create(name='o1', value=1)
+                try:
+                    with self.db.atomic():
+                        TestModel.create(name='i1', value=2)
+                        raise ValueError('fail')
+                except ValueError:
+                    pass
+                TestModel.create(name='o2', value=3)
+        await self.db.run(nested)
+        self.assertEqual(await self.count_records(), 2)
+
+    async def test_nested_explicit_rollback(self):
+        def nested():
+            with self.db.atomic():
+                TestModel.create(name='o1')
+                with self.db.atomic() as sp:
+                    TestModel.create(name='i1')
+                    self.assertEqual(TestModel.select().count(), 2)
+                    sp.rollback()
+                self.assertEqual(TestModel.select().count(), 1)
+                TestModel.create(name='o2')
+        await self.db.run(nested)
+        self.assertEqual(await self.count_records(), 2)
+
+        async with self.db.atomic():
+            await self.db.run(TestModel.create, name='o3')
+            async with self.db.atomic() as sp:
+                await self.db.run(TestModel.create, name='i2')
+                self.assertEqual(await self.count_records(), 4)
+                await sp.arollback()
+            self.assertEqual(await self.count_records(), 3)
+            await self.db.run(TestModel.create, name='o4')
+        self.assertEqual(await self.count_records(), 4)
+
+    async def test_nested_mix(self):
+        async with self.db.atomic():
+            await self.create_record('t1')
+            async with self.db.atomic():
+                await self.create_record('t2')
+                async with self.db.atomic():
+                    await self.create_record('t3')
+                try:
+                    async with self.db.atomic():
+                        await self.create_record('t4')
+                        self.assertEqual(await self.count_records(), 4)
+                        raise ValueError('fail')
+                except ValueError:
+                    pass
+                async with self.db.atomic() as sp:
+                    await self.create_record('t4')
+                    self.assertEqual(await self.count_records(), 4)
+                    await sp.arollback()
+                self.assertEqual(await self.count_records(), 3)
+            try:
+                async with self.db.atomic():
+                    await self.create_record('t5')
+                    self.assertEqual(await self.count_records(), 4)
+                    raise ValueError('fail')
+            except ValueError:
+                self.assertEqual(await self.count_records(), 3)
+        self.assertEqual(await self.count_records(), 3)
+
+        try:
+            async with self.db.atomic():
+                await self.create_record('t1')
+                async with self.db.atomic():
+                    await self.create_record('t2')
+                    async with self.db.atomic():
+                        await self.create_record('t3')
+                        self.assertEqual(await self.count_records(), 6)
+                raise ValueError('fail')
+        except ValueError:
+            pass
+        self.assertEqual(await self.count_records(), 3)
+
+    async def test_acommit_arollback(self):
+        async with self.db.atomic() as txn:
+            await self.create_record('committed', 1)
+            await txn.acommit()
+            await self.create_record('not-committed', 2)
+            await txn.arollback()
+        self.assertEqual(await self.count_records(), 1)
+
+    async def test_concurrent_reads_writes(self):
+        await self.seed(10)
+
+        async def writer(sid):
+            async with self.db:
+                await self.db.run(lambda: [
+                    TestModel.create(name=f'w{sid}-{i}', value=sid * 100 + i)
+                    for i in range(5)])
+
+        async def reader():
+            async with self.db:
+                return await self.db.run(
+                    lambda: len(list(TestModel.select())))
+
+        await asyncio.gather(*[writer(i) for i in range(3)])
+        reads = await asyncio.gather(*[reader() for _ in range(3)])
+        self.assertTrue(all(r >= 10 for r in reads))
+        self.assertEqual(await self.count_records(), 10 + 15)
+
+    async def test_isolated_connections_per_task(self):
+        async def worker(tid):
+            async with self.db:
+                c1 = self.db._state.conn
+                await self.create_record(f't{tid}', tid)
+                return c1 is self.db._state.conn
+        results = await asyncio.gather(*[worker(i) for i in range(5)])
+        self.assertTrue(all(results))
+        self.assertEqual(await self.count_records(), 5)
+
+    async def test_many_concurrent_tasks(self):
+        ntasks = 50 if self.driver == 'sqlite' else 10
+        async def task(tid):
+            async with self.db:
+                await self.create_record(f't{tid}', tid)
+        await asyncio.gather(*[task(i) for i in range(ntasks)])
+        self.assertEqual(await self.count_records(), ntasks)
+
+    async def test_syntax_error_recovery(self):
+        with self.assertRaises(Exception):
+            await self.db.aexecute_sql('INVALID SQL')
+        await self.create_record('after_error', 1)
+        self.assertEqual(await self.count_records(), 1)
+
+    async def test_concurrent_errors(self):
+        errors, successes = [], []
+
+        async def worker(tid):
+            async with self.db:
+                try:
+                    def work():
+                        TestModel.create(name=f't{tid}', value=tid)
+                        if tid % 2 == 0:
+                            raise ValueError(f'Task {tid} fails')
+                    await self.db.run(work)
+                    successes.append(tid)
+                except ValueError:
+                    errors.append(tid)
+
+        await asyncio.gather(*[worker(i) for i in range(10)])
+        self.assertEqual(sorted(errors), [0, 2, 4, 6, 8])
+        self.assertEqual(sorted(successes), [1, 3, 5, 7, 9])
+        self.assertEqual(await self.count_records(), 10)
+
+    async def test_iterate_yields_model_instances(self):
+        await self.seed(20)
+        results = []
+        async for obj in self.db.iterate(
+                TestModel.select().order_by(TestModel.value)):
+            results.append(obj)
+        self.assertEqual(len(results), 20)
+        self.assertTrue(all(isinstance(r, TestModel) for r in results))
+        self.assertEqual(results[0].name, 'item00')
+        self.assertEqual(results[0].value, 0)
+        self.assertEqual(results[-1].name, 'item19')
+        self.assertEqual(results[-1].value, 190)
+
+    async def test_iterate_matches_list(self):
+        await self.seed(20)
+        query = TestModel.select().order_by(TestModel.name)
+        eager = await self.db.list(query)
+        lazy = []
+        async for obj in self.db.iterate(query):
+            lazy.append(obj)
+        self.assertEqual(len(eager), len(lazy))
+        for e, l in zip(eager, lazy):
+            self.assertEqual(e.name, l.name)
+            self.assertEqual(e.value, l.value)
+
+    async def test_iterate_dicts(self):
+        await self.seed(5)
+        results = []
+        async for row in self.db.iterate(
+                TestModel.select().order_by(TestModel.value).dicts()):
+            results.append(row)
+        self.assertEqual(len(results), 5)
+        self.assertIsInstance(results[0], dict)
+        self.assertEqual(results[0]['name'], 'item00')
+
+    async def test_iterate_tuples(self):
+        await self.seed(5)
+        results = []
+        async for row in self.db.iterate(
+                TestModel.select(TestModel.name)
+                .order_by(TestModel.name).tuples()):
+            results.append(row)
+        self.assertEqual(len(results), 5)
+        self.assertIsInstance(results[0], tuple)
+        self.assertEqual(results[0][0], 'item00')
+
+    async def test_iterate_namedtuples(self):
+        await self.seed(5)
+        results = []
+        async for row in self.db.iterate(
+                TestModel.select().order_by(TestModel.value).namedtuples()):
+            results.append(row)
+        self.assertEqual(len(results), 5)
+        self.assertTrue(hasattr(results[0], 'name'))
+        self.assertEqual(results[0].name, 'item00')
+
+    async def test_iterate_with_where(self):
+        await self.seed(20)
+        results = []
+        async for obj in self.db.iterate(
+                TestModel.select().where(TestModel.value >= 150)
+                .order_by(TestModel.value)):
+            results.append(obj)
+        self.assertEqual(len(results), 5)
+        self.assertEqual(results[0].value, 150)
+
+    async def test_iterate_empty(self):
+        results = []
+        async for obj in self.db.iterate(
+                TestModel.select().where(TestModel.value > 9999)):
+            results.append(obj)
+        self.assertEqual(results, [])
+
+    async def test_iterate_buffer_size(self):
+        await self.seed(20)
+        results = []
+        async for obj in self.db.iterate(
+                TestModel.select().order_by(TestModel.value),
+                buffer_size=3):
+            results.append(obj)
+        self.assertEqual(len(results), 20)
+        self.assertEqual(results[0].value, 0)
+
+    async def test_iterate_early_break(self):
+        await self.seed(20)
+        count = 0
+        async for obj in self.db.iterate(
+                TestModel.select().order_by(TestModel.value)):
+            count += 1
+            if count == 5:
+                break
+        self.assertEqual(count, 5)
+        # Database still usable (lock released).
+        self.assertEqual(
+            await self.db.scalar(
+                TestModel.select(fn.COUNT(TestModel.id))), 20)
+
+    async def test_iterate_does_not_affect_list(self):
+        await self.seed(10)
+        results = await self.db.list(TestModel.select())
+        self.assertEqual(len(results), 10)
+        self.assertIsInstance(results[0], TestModel)
+
+    async def test_iterate_aggregation(self):
+        await self.seed(20)
+        results = []
+        async for row in self.db.iterate(
+                TestModel.select(
+                    fn.AVG(TestModel.value).alias('avg_val')).dicts()):
+            results.append(row)
+        self.assertEqual(len(results), 1)
+        self.assertEqual(results[0]['avg_val'], 95.0)
+
+    async def test_iterate_sequential(self):
+        await self.seed(20)
+        r1 = []
+        async for obj in self.db.iterate(
+                TestModel.select().where(TestModel.value < 50)
+                .order_by(TestModel.value)):
+            r1.append(obj.value)
+        r2 = []
+        async for obj in self.db.iterate(
+                TestModel.select().where(TestModel.value >= 150)
+                .order_by(TestModel.value)):
+            r2.append(obj.value)
+        self.assertEqual(r1, [0, 10, 20, 30, 40])
+        self.assertEqual(r2, [150, 160, 170, 180, 190])
+
+    async def test_iterate_break_then_iterate_again(self):
+        await self.seed(20)
+        async for obj in self.db.iterate(
+                TestModel.select().order_by(TestModel.value)):
+            break
+        results = []
+        async for obj in self.db.iterate(
+                TestModel.select().order_by(TestModel.value)):
+            results.append(obj.value)
+        self.assertEqual(len(results), 20)
+
+    async def test_basic_crud(self):
+        rec = await self.create_record('testx', value=2)
+        self.assertEqual(rec.name, 'testx')
         fetched = await self.db.run(TestModel.get, TestModel.name == 'testx')
         self.assertEqual(fetched.value, 2)
 
-        # Update
         def update():
-            r = TestModel.get(TestModel.id == record.id)
-            r.value = 100
-            r.save()
+            r = TestModel.get(TestModel.id == rec.id)
+            r.value = 100; r.save()
+            return TestModel.get(TestModel.id == rec.id)
+        self.assertEqual((await self.db.run(update)).value, 100)
 
-            r = TestModel.get(TestModel.id == record.id)
-            return r
-
-        updated = await self.db.run(update)
-        self.assertEqual(updated.value, 100)
-
-        # Delete
-        await self.db.run(TestModel.delete().where(TestModel.id == record.id).execute)
-        count = await self.db.run(TestModel.select().count)
-        self.assertEqual(count, 0)
+        await self.db.run(
+            TestModel.delete().where(TestModel.id == rec.id).execute)
+        self.assertEqual(await self.count_records(), 0)
 
     async def test_foreign_keys(self):
         users = [User(username=f'u{i}') for i in range(3)]
@@ -1155,73 +1301,51 @@ class TestIntegration(unittest.IsolatedAsyncioTestCase):
         users = await self.db.list(User.select())
 
         async with self.db.atomic():
-            for user in users:
+            for u in users:
                 for i in range(2):
-                    t = await self.db.run(Tweet.create, user=user,
-                                          message=f'{user.username}-{i}')
-
+                    await self.db.run(
+                        Tweet.create, user=u, message=f'{u.username}-{i}')
         self.assertEqual(await self.db.run(Tweet.select().count), 6)
 
-        query = Tweet.select().where(Tweet.message == 'u0-0')
-        tweet = await self.db.get(query)
+        tweet = await self.db.get(
+            Tweet.select().where(Tweet.message == 'u0-0'))
+        self.assertEqual(
+            await self.db.run(lambda: tweet.user.username), 'u0')
 
-        # Resolving a foreign key must be done inside a greenlet context!
-        self.assertEqual(await self.db.run(lambda: tweet.user.username), 'u0')
-
-        # Selecting relations allows it to work.
-        query = (Tweet.select(Tweet, User)
-                 .join(User)
-                 .where(Tweet.message == 'u0-0'))
-        tweet = await self.db.get(query)
+        tweet = await self.db.get(
+            Tweet.select(Tweet, User).join(User)
+            .where(Tweet.message == 'u0-0'))
         self.assertEqual(tweet.user.username, 'u0')
 
-        # Resolving related items must be done inside a greenlet.
-        user = await self.db.get(User.select().where(User.username == 'u2'))
+        user = await self.db.get(
+            User.select().where(User.username == 'u2'))
         tweets = await self.db.list(user.tweets.order_by(Tweet.id))
         self.assertEqual([t.message for t in tweets], ['u2-0', 'u2-1'])
 
-        # Prefetch allows us to do it in one go:
-        users = User.select().order_by(User.username)
-        tweets = Tweet.select().order_by(Tweet.message)
-        user_tweets = await self.db.aprefetch(users, tweets)
-        accum = [('u0', ['u0-0', 'u0-1']),
-                 ('u1', ['u1-0', 'u1-1']),
-                 ('u2', ['u2-0', 'u2-1'])]
-        self.assertEqual([(u.username, [t.message for t in u.tweets])
-                          for u in users], accum)
-
-    async def test_concurrent_tasks(self):
-        async def task_worker(task_id):
-            async with self.db:
-                for i in range(5):
-                    await self.create_record(
-                        f'task{task_id}_record{i}',
-                        task_id * 100 + i)
-
-        await asyncio.gather(*[task_worker(i) for i in range(10)])
-        count = await self.db.run(TestModel.select().count)
-        self.assertEqual(count, 50)
+        users_q = User.select().order_by(User.username)
+        tweets_q = Tweet.select().order_by(Tweet.message)
+        await self.db.aprefetch(users_q, tweets_q)
+        self.assertEqual(
+            [(u.username, [t.message for t in u.tweets]) for u in users_q],
+            [('u0', ['u0-0', 'u0-1']),
+             ('u1', ['u1-0', 'u1-1']),
+             ('u2', ['u2-0', 'u2-1'])])
 
     async def test_transactions(self):
-        # Successful transaction
-        def successful_tx():
+        def ok_tx():
             with self.db.atomic():
                 TestModel.create(name='tx1', value=1)
                 TestModel.create(name='tx2', value=2)
-
-        await self.db.run(successful_tx)
+        await self.db.run(ok_tx)
         self.assertEqual(await self.count_records(), 2)
 
-        # Failed transaction
-        def failed_tx():
+        def bad_tx():
             with self.db.atomic():
                 TestModel.create(name='tx3', value=3)
                 raise ValueError('fail')
-
         with self.assertRaises(ValueError):
-            await self.db.run(failed_tx)
+            await self.db.run(bad_tx)
 
-        # Mixed tx.
         async with self.db.atomic():
             await self.create_record('tx4')
             try:
@@ -1232,37 +1356,110 @@ class TestIntegration(unittest.IsolatedAsyncioTestCase):
             except ValueError:
                 pass
             self.assertEqual(await self.count_records(), 3)
-
         self.assertEqual(await self.count_records(), 3)
+
+    async def test_iterate_model_instances(self):
+        await self.seed(20)
+        results = []
+        async for obj in self.db.iterate(
+                TestModel.select().order_by(TestModel.value)):
+            results.append(obj)
+        self.assertEqual(len(results), 20)
+        self.assertTrue(all(isinstance(r, TestModel) for r in results))
+        self.assertEqual(results[0].value, 0)
+        self.assertEqual(results[-1].value, 190)
+
+    async def test_iterate_dicts(self):
+        await self.seed(10)
+        results = []
+        async for row in self.db.iterate(
+                TestModel.select().order_by(TestModel.value).dicts()):
+            results.append(row)
+        self.assertEqual(len(results), 10)
+        self.assertIsInstance(results[0], dict)
+        self.assertEqual(results[0]['name'], 'item00')
+
+    async def test_iterate_early_break(self):
+        await self.seed(20)
+        count = 0
+        async for obj in self.db.iterate(
+                TestModel.select().order_by(TestModel.value)):
+            count += 1
+            if count == 5:
+                break
+        self.assertEqual(count, 5)
+        self.assertEqual(await self.count_records(), 20)
+
+    async def test_iterate_empty(self):
+        results = []
+        async for obj in self.db.iterate(
+                TestModel.select().where(TestModel.value > 9999)):
+            results.append(obj)
+        self.assertEqual(results, [])
+
+
+class TestSqliteIntegration(IntegrationTests, unittest.IsolatedAsyncioTestCase):
+    def get_database(self):
+        with tempfile.NamedTemporaryFile(delete=False) as f:
+            self.db_path = f.name
+        return AsyncSqliteDatabase(self.db_path)
+
+    async def test_pragmas(self):
+        db = AsyncSqliteDatabase(':memory:', pragmas={'user_version': '99'})
+        conn = await db.aconnect()
+        r = await conn.execute('PRAGMA user_version')
+        self.assertEqual(r.fetchone(), (99,))
+        await db.close_pool()
+
+    async def test_custom_functions(self):
+        db = AsyncSqliteDatabase(':memory:')
+
+        @db.func()
+        def title_case(s):
+            return s.title()
+
+        async with db:
+            r = await db.aexecute_sql('SELECT title_case(?)', ('test foo',))
+            self.assertEqual(r.fetchone(), ('Test Foo',))
+        await db.close_pool()
+
+    async def test_constraint_violation_recovery(self):
+        await self.db.aexecute_sql(
+            'CREATE TABLE ut (id INTEGER PRIMARY KEY, v TEXT UNIQUE)')
+        await self.db.aexecute_sql(
+            'INSERT INTO ut (v) VALUES (?)', ('x',))
+        with self.assertRaises(IntegrityError):
+            await self.db.aexecute_sql(
+                'INSERT INTO ut (v) VALUES (?)', ('x',))
+        await self.db.aexecute_sql(
+            'INSERT INTO ut (v) VALUES (?)', ('y',))
 
 
 @unittest.skipUnless(asyncpg, 'asyncpg not installed')
-class TestPostgresqlIntegration(TestIntegration):
+class TestPostgresqlIntegration(IntegrationTests, unittest.IsolatedAsyncioTestCase):
     def get_database(self):
         return AsyncPostgresqlDatabase('peewee_test', **PSQL_PARAMS)
 
     async def test_placeholder_conversion(self):
-        def insert_with_placeholders():
+        def insert():
             return self.db.execute_sql(
                 'INSERT INTO testmodel (name, value) VALUES (%s, %s)',
                 ('placeholder_test', 999))
+        await self.db.run(insert)
 
-        await self.db.run(insert_with_placeholders)
-
-        def query_with_placeholders():
-            result = self.db.execute_sql(
+        def query():
+            r = self.db.execute_sql(
                 'SELECT * FROM testmodel WHERE name = %s',
                 ('placeholder_test',))
-            return result.fetchone()
-
-        row = await self.db.run(query_with_placeholders)
+            return r.fetchone()
+        row = await self.db.run(query)
         self.assertIsNotNone(row)
         self.assertEqual(row['name'], 'placeholder_test')
         self.assertEqual(row['value'], 999)
 
 
 @unittest.skipUnless(aiomysql, 'aiomysql not installed')
-class TestMySQLIntegration(TestIntegration):
+class TestMySQLIntegration(IntegrationTests, unittest.IsolatedAsyncioTestCase):
     def get_database(self):
         return AsyncMySQLDatabase('peewee_test', **MYSQL_PARAMS)
 
