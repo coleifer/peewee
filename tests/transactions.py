@@ -1,3 +1,5 @@
+import threading
+
 from peewee import *
 
 from .base import DatabaseTestCase
@@ -273,6 +275,36 @@ class TestTransaction(BaseTransactionTestCase):
 
         self.assertTrue(db.is_closed())
         self.assertRegister([1, 2, 4])
+
+    def test_transaction_concurrency(self):
+        barrier = threading.Barrier(5)
+        accum = []
+
+        def run_thread():
+            barrier.wait(timeout=2)
+            for i in range(10):
+                try:
+                    with db.atomic() as tx:
+                        for j in range(10):
+                            try:
+                                with db.atomic() as sp:
+                                    sp.commit()
+                                    if j % 2 == 0:
+                                        raise ValueError()
+                            except ValueError:
+                                pass
+                        if i % 1 == 0:
+                            raise ValueError()
+                except ValueError:
+                    pass
+            accum.append(True)
+
+        threads = [threading.Thread(target=run_thread) for _ in range(4)]
+        for t in threads: t.start()
+        barrier.wait(timeout=2)
+        for t in threads: t.join()
+
+        self.assertEqual(accum, [True, True, True, True])
 
 
 @requires_nested

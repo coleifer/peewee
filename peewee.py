@@ -4621,17 +4621,15 @@ class _transaction(object):
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         depth = self.db.transaction_depth()
-        try:
-            if exc_type and depth == 1:
+        self.db.pop_transaction()
+        if exc_type and depth == 1:
+            self.rollback(False)
+        elif depth == 1:
+            try:
+                self.commit(False)
+            except:
                 self.rollback(False)
-            elif depth == 1:
-                try:
-                    self.commit(False)
-                except:
-                    self.rollback(False)
-                    raise
-        finally:
-            self.db.pop_transaction()
+                raise
 
 
 class _savepoint(object):
