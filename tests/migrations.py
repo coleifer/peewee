@@ -809,9 +809,6 @@ class TestSchemaMigration(ModelTestCase):
             ('PRAGMA "main".index_info("index_model_first_name_last_name")',
              None),
 
-            # Get foreign keys.
-            ('PRAGMA "main".foreign_key_list("index_model")', None),
-
             # Drop any temporary table, if it exists.
             ('DROP TABLE IF EXISTS "index_model__tmp__"', []),
 
@@ -866,7 +863,7 @@ class TestSchemaMigration(ModelTestCase):
             ('PRAGMA "main".index_list("page")', None),
             ('PRAGMA "main".index_info("page_name")', None),
             ('PRAGMA "main".index_info("page_user_id")', None),
-            ('PRAGMA "main".foreign_key_list("page")', None),
+            #('PRAGMA "main".foreign_key_list("page")', None),
 
             # Clear out a temp table and create it w/o the user_id FK.
             ('DROP TABLE IF EXISTS "page__tmp__"', []),
