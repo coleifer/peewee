@@ -679,6 +679,67 @@ class AsyncPgAdapter(Psycopg3Adapter):
         self.jsonb_type = Json
 
 
+class AsyncPgAtomic(object):
+    def __init__(self, db, *args, **kwargs):
+        self.db = db
+        self._begin_args = (args, kwargs)
+
+    def __enter__(self):
+        await_(self._abegin())
+        self.db._state.transactions.append(self)
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.db._state.transactions.pop()
+        if exc_type:
+            self.rollback(False)
+        else:
+            try:
+                self.commit(False)
+            except:
+                self.rollback(False)
+                raise
+
+    def commit(self, begin=True):
+        await_(self.acommit(begin))
+
+    def rollback(self, begin=True):
+        await_(self.arollback(begin))
+
+    async def _abegin(self):
+        a, k = self._begin_args
+        conn = await self.db.aconnect()
+        self._tx = conn.conn.transaction(*a, **k)
+        await self._tx.start()
+        return self._tx
+
+    async def acommit(self, begin=True):
+        await self._tx.commit()
+        if begin:
+            await self._abegin()
+
+    async def arollback(self, begin=True):
+        await self._tx.rollback()
+        if begin:
+            await self._abegin()
+
+    async def __aenter__(self):
+        await self._abegin()
+        self.db._state.transactions.append(self)
+        return self
+
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        self.db._state.transactions.pop()
+        if exc_type:
+            await self.arollback(False)
+        else:
+            try:
+                await self.acommit(False)
+            except:
+                await self.arollback(False)
+                raise
+
+
 class AsyncPostgresqlDatabase(AsyncDatabaseMixin, PostgresqlDatabase):
     psycopg2_adapter = psycopg3_adapter = AsyncPgAdapter
 
@@ -722,3 +783,10 @@ class AsyncPostgresqlDatabase(AsyncDatabaseMixin, PostgresqlDatabase):
 
     async def _pool_close(self):
         await self._pool.close()
+
+    def atomic(self, *args, **kwargs):
+        return AsyncPgAtomic(self, *args, **kwargs)
+    def transaction(self, *args, **kwargs):
+        return AsyncPgAtomic(self, *args, **kwargs)
+    def savepoint(self, *args, **kwargs):
+        return AsyncPgAtomic(self, *args, **kwargs)

@@ -759,9 +759,11 @@ class IntegrationTests(object):
 
     async def test_list(self):
         await self.seed(5)
-        results = await self.db.list(TestModel.select())
+        query = TestModel.select().order_by(TestModel.value)
+        results = await self.db.list(query)
         self.assertEqual(len(results), 5)
         self.assertIsInstance(results[0], TestModel)
+        self.assertEqual([r.value for r in results], [0, 10, 20, 30, 40])
 
     async def test_list_empty(self):
         self.assertEqual(await self.db.list(TestModel.select()), [])
@@ -771,24 +773,28 @@ class IntegrationTests(object):
         fetched = await self.db.get(
             TestModel.select().where(TestModel.name == 'unique'))
         self.assertEqual(fetched.id, rec.id)
+        self.assertEqual(fetched.name, 'unique')
+        self.assertEqual(fetched.value, 999)
 
     async def test_get_not_found(self):
         with self.assertRaises(TestModel.DoesNotExist):
-            await self.db.get(
-                TestModel.select().where(TestModel.name == 'nope'))
+            q = TestModel.select().where(TestModel.id == 0)
+            await self.db.get(q)
 
     async def test_scalar(self):
         await self.seed(10)
-        self.assertEqual(
-            await self.db.scalar(
-                TestModel.select(fn.MAX(TestModel.value))), 90)
+        query = TestModel.select(fn.MAX(TestModel.value))
+        self.assertEqual(await self.db.scalar(query), 90)
 
     async def test_scalar_no_results(self):
-        self.assertEqual(
-            await self.db.scalar(
-                TestModel.select(fn.COUNT(TestModel.id))), 0)
+        query = TestModel.select(fn.COUNT(TestModel.id))
+        self.assertEqual(await self.db.scalar(query), 0)
+
+        await self.seed(5)
+        self.assertEqual(await self.db.scalar(query), 5)
 
     async def test_count(self):
+        self.assertEqual(await self.db.count(TestModel.select()), 0)
         await self.seed(5)
         self.assertEqual(await self.db.count(TestModel.select()), 5)
 
@@ -849,15 +855,23 @@ class IntegrationTests(object):
         self.assertEqual(state, ['y', 'y', 'y'])
 
     async def test_create(self):
-        rec = await self.create_record('test1', 100)
-        self.assertEqual(rec.name, 'test1')
-        self.assertEqual(rec.value, 100)
+        tm = await self.create_record('test1', 100)
+        self.assertEqual(tm.name, 'test1')
+        self.assertEqual(tm.value, 100)
+
+        tm = await self.db.run(TestModel.create, name='test2', value=101)
+        self.assertEqual(tm.name, 'test2')
+        self.assertEqual(tm.value, 101)
+
+        q = await self.db.list(TestModel.select(TestModel.name).tuples())
+        self.assertEqual(sorted(q), [('test1',), ('test2',)])
 
     async def test_select(self):
-        await self.create_record('test1', 100)
-        recs = await self.db.list(TestModel.select())
-        self.assertEqual(len(recs), 1)
-        self.assertEqual(recs[0].name, 'test1')
+        tm = await self.create_record('test1', 100)
+        res = await self.db.list(TestModel.select())
+        self.assertEqual(len(res), 1)
+        self.assertEqual(res[0].name, 'test1')
+        self.assertEqual(res[0], tm)
 
     async def test_filter(self):
         await self.seed(20)
@@ -872,28 +886,22 @@ class IntegrationTests(object):
         self.assertEqual(results[0].value, 190)
         self.assertEqual(results[4].value, 150)
 
-    async def test_aggregation(self):
-        await self.seed(20)
-        ct = await self.db.scalar(TestModel.select(fn.COUNT(TestModel.id)))
-        self.assertEqual(ct, 20)
-
-        ct = await self.db.count(TestModel.select())
-        self.assertEqual(ct, 20)
-
     async def test_create_save_update(self):
-        rec = await self.create_record('test1', 100)
+        await self.create_record('test1', 100)
+
         def do_update():
             r = TestModel.get(TestModel.name == 'test1')
             r.value = 999; r.save()
             return TestModel.get(TestModel.name == 'test1').value
+
         self.assertEqual(await self.db.run(do_update), 999)
 
         uq = TestModel.update(name='test1x').where(TestModel.name == 'test1')
         res = await self.db.aexecute(uq)
         #self.assertEqual(res, 1)
 
-        tm = await self.db.get(
-            TestModel.select().where(TestModel.name == 'test1x'))
+        q = TestModel.select().where(TestModel.name == 'test1x')
+        tm = await self.db.get(q)
         self.assertEqual(tm.value, 999)
 
     async def test_update(self):
@@ -903,6 +911,9 @@ class IntegrationTests(object):
                                .where(TestModel.value < 250))
         query = TestModel.select().where(TestModel.value >= 1000)
         self.assertEqual(await self.db.count(query), 25)
+
+        query = TestModel.select(fn.SUM(TestModel.value))
+        self.assertEqual(await self.db.scalar(query), 37250)
 
     async def test_delete(self):
         await self.seed(20)
@@ -919,11 +930,8 @@ class IntegrationTests(object):
             self.skipTest('bulk_update incompatible with asyncpg')
             return
 
-        accum = []
-        for i in range(5):
-            accum.append(await self.db.run(TestModel.create,
-                                           name=f'b{i}', value=i))
-
+        accum = [await self.db.run(TestModel.create, name=f'b{i}', value=i)
+                 for i in range(5)]
         for tm in accum:
             tm.name += '-x'
             tm.value += 100
@@ -947,6 +955,12 @@ class IntegrationTests(object):
         await self.db.aexecute(TestModel.insert_many(data))
         self.assertEqual(await self.count_records(), 200)
 
+        data = [(f'i{i}', i) for i in range(200, 300)]
+        iq = (TestModel
+              .insert_many(data, fields=[TestModel.name, TestModel.value]))
+        await self.db.aexecute(iq)
+        self.assertEqual(await self.count_records(), 300)
+
     async def test_atomic(self):
         async with self.db.atomic():
             await self.create_record('a', 1)
@@ -957,7 +971,9 @@ class IntegrationTests(object):
             self.assertEqual(await self.count_records(), 2)
             await txn.arollback()
             self.assertEqual(await self.count_records(), 1)
-        self.assertEqual(await self.count_records(), 1)
+            await self.create_record('c', 3)
+            await self.create_record('d', 4)
+        self.assertEqual(await self.count_records(), 3)
 
     async def test_transaction_commit(self):
         def create_in_tx():
@@ -966,6 +982,11 @@ class IntegrationTests(object):
                 TestModel.create(name='tx2')
         await self.db.run(create_in_tx)
         self.assertEqual(await self.count_records(), 2)
+
+        async with self.db.atomic():
+            await self.db.run(TestModel.create, name='tx1')
+            await self.db.run(TestModel.create, name='tx2')
+        self.assertEqual(await self.count_records(), 4)
 
     async def test_transaction_rollback(self):
         def failing():
@@ -978,6 +999,7 @@ class IntegrationTests(object):
 
         async with self.db.atomic() as txn:
             await self.create_record('tx2')
+            self.assertEqual(await self.count_records(), 1)
             await txn.arollback()
         self.assertEqual(await self.count_records(), 0)
 
@@ -992,6 +1014,15 @@ class IntegrationTests(object):
         await self.db.run(nested)
         self.assertEqual(await self.count_records(), 4)
 
+        async with self.db.atomic():
+            await self.db.run(TestModel.create, name='outer1', value=1)
+            async with self.db.atomic():
+                await self.db.run(TestModel.create, name='inner1', value=2)
+                await self.db.run(TestModel.create, name='inner2', value=3)
+            await self.db.run(TestModel.create, name='outer2', value=4)
+
+        self.assertEqual(await self.count_records(), 8)
+
     async def test_nested_implicit_rollback(self):
         def nested():
             with self.db.atomic():
@@ -1005,6 +1036,18 @@ class IntegrationTests(object):
                 TestModel.create(name='o2', value=3)
         await self.db.run(nested)
         self.assertEqual(await self.count_records(), 2)
+
+        async with self.db.atomic():
+            await self.db.run(TestModel.create, name='o1', value=1)
+            try:
+                async with self.db.atomic():
+                    await self.db.run(TestModel.create, name='i1', value=2)
+                    raise ValueError('fail')
+            except ValueError:
+                pass
+            self.assertEqual(await self.count_records(), 3)
+            await self.db.run(TestModel.create, name='o2', value=3)
+        self.assertEqual(await self.count_records(), 4)
 
     async def test_nested_explicit_rollback(self):
         def nested():
@@ -1168,88 +1211,99 @@ class IntegrationTests(object):
 
     async def test_iterate_dicts(self):
         await self.seed(5)
+        query = TestModel.select().order_by(TestModel.name)
         results = []
-        async for row in self.db.iterate(
-                TestModel.select().order_by(TestModel.value).dicts()):
+        async for row in self.db.iterate(query.dicts()):
             results.append(row)
         self.assertEqual(len(results), 5)
         self.assertIsInstance(results[0], dict)
         self.assertEqual(results[0]['name'], 'item00')
+        self.assertEqual(results[-1]['name'], 'item04')
 
     async def test_iterate_tuples(self):
         await self.seed(5)
+        query = TestModel.select(TestModel.name).order_by(TestModel.name)
         results = []
-        async for row in self.db.iterate(
-                TestModel.select(TestModel.name)
-                .order_by(TestModel.name).tuples()):
+        async for row in self.db.iterate(query.tuples()):
             results.append(row)
         self.assertEqual(len(results), 5)
         self.assertIsInstance(results[0], tuple)
         self.assertEqual(results[0][0], 'item00')
+        self.assertEqual(results[-1][0], 'item04')
 
     async def test_iterate_namedtuples(self):
         await self.seed(5)
+        query = TestModel.select(TestModel.name).order_by(TestModel.name)
         results = []
-        async for row in self.db.iterate(
-                TestModel.select().order_by(TestModel.value).namedtuples()):
+        async for row in self.db.iterate(query.namedtuples()):
             results.append(row)
         self.assertEqual(len(results), 5)
-        self.assertTrue(hasattr(results[0], 'name'))
         self.assertEqual(results[0].name, 'item00')
+        self.assertEqual(results[0][0], 'item00')
+        self.assertEqual(results[-1].name, 'item04')
+        self.assertEqual(results[-1][0], 'item04')
 
     async def test_iterate_with_where(self):
         await self.seed(20)
+        query = (TestModel.select()
+                 .where(TestModel.value >= 150)
+                 .order_by(TestModel.value))
         results = []
-        async for obj in self.db.iterate(
-                TestModel.select().where(TestModel.value >= 150)
-                .order_by(TestModel.value)):
+        async for obj in self.db.iterate(query):
             results.append(obj)
         self.assertEqual(len(results), 5)
         self.assertEqual(results[0].value, 150)
+        self.assertEqual(results[-1].value, 190)
 
     async def test_iterate_empty(self):
         results = []
-        async for obj in self.db.iterate(
-                TestModel.select().where(TestModel.value > 9999)):
+        query = TestModel.select().where(TestModel.id == 0)
+        async for obj in self.db.iterate(query):
             results.append(obj)
         self.assertEqual(results, [])
 
     async def test_iterate_buffer_size(self):
         await self.seed(20)
         results = []
-        async for obj in self.db.iterate(
-                TestModel.select().order_by(TestModel.value),
-                buffer_size=3):
+        query = TestModel.select().order_by(TestModel.value)
+        async for obj in self.db.iterate(query, buffer_size=3):
             results.append(obj)
         self.assertEqual(len(results), 20)
         self.assertEqual(results[0].value, 0)
+        self.assertEqual(results[-1].value, 190)
 
     async def test_iterate_early_break(self):
         await self.seed(20)
         count = 0
-        async for obj in self.db.iterate(
-                TestModel.select().order_by(TestModel.value)):
+        query = TestModel.select().order_by(TestModel.value)
+        async for obj in self.db.iterate(query):
             count += 1
             if count == 5:
                 break
         self.assertEqual(count, 5)
         # Database still usable (lock released).
-        self.assertEqual(
-            await self.db.scalar(
-                TestModel.select(fn.COUNT(TestModel.id))), 20)
+        self.assertEqual(await self.db.count(TestModel.select()), 20)
 
-    async def test_iterate_does_not_affect_list(self):
+    async def test_list_and_iterate(self):
         await self.seed(10)
+        query = TestModel.select()
+
         results = await self.db.list(TestModel.select())
+        self.assertEqual(len(results), 10)
+        self.assertIsInstance(results[0], TestModel)
+
+        curs = self.db.iterate(TestModel.select())
+        results = [obj async for obj in curs]
         self.assertEqual(len(results), 10)
         self.assertIsInstance(results[0], TestModel)
 
     async def test_iterate_aggregation(self):
         await self.seed(20)
         results = []
-        async for row in self.db.iterate(
-                TestModel.select(
-                    fn.AVG(TestModel.value).alias('avg_val')).dicts()):
+        query = (TestModel
+                 .select(fn.AVG(TestModel.value).alias('avg_val'))
+                 .dicts())
+        async for row in self.db.iterate(query):
             results.append(row)
         self.assertEqual(len(results), 1)
         self.assertEqual(results[0]['avg_val'], 95.0)
@@ -1257,26 +1311,29 @@ class IntegrationTests(object):
     async def test_iterate_sequential(self):
         await self.seed(20)
         r1 = []
-        async for obj in self.db.iterate(
-                TestModel.select().where(TestModel.value < 50)
-                .order_by(TestModel.value)):
+        query = (TestModel.select()
+                 .where(TestModel.value < 50)
+                 .order_by(TestModel.value))
+        async for obj in self.db.iterate(query):
             r1.append(obj.value)
+
         r2 = []
-        async for obj in self.db.iterate(
-                TestModel.select().where(TestModel.value >= 150)
-                .order_by(TestModel.value)):
+        query = (TestModel.select()
+                 .where(TestModel.value >= 150)
+                 .order_by(TestModel.value))
+        async for obj in self.db.iterate(query):
             r2.append(obj.value)
+
         self.assertEqual(r1, [0, 10, 20, 30, 40])
         self.assertEqual(r2, [150, 160, 170, 180, 190])
 
     async def test_iterate_break_then_iterate_again(self):
         await self.seed(20)
-        async for obj in self.db.iterate(
-                TestModel.select().order_by(TestModel.value)):
+        query = TestModel.select().order_by(TestModel.value)
+        async for obj in self.db.iterate(query):
             break
         results = []
-        async for obj in self.db.iterate(
-                TestModel.select().order_by(TestModel.value)):
+        async for obj in self.db.iterate(query):
             results.append(obj.value)
         self.assertEqual(len(results), 20)
 
@@ -1292,8 +1349,7 @@ class IntegrationTests(object):
             return TestModel.get(TestModel.id == rec.id)
         self.assertEqual((await self.db.run(update)).value, 100)
 
-        await self.db.run(
-            TestModel.delete().where(TestModel.id == rec.id).execute)
+        await self.db.run(rec.delete_instance)
         self.assertEqual(await self.count_records(), 0)
 
     async def test_foreign_keys(self):
@@ -1307,20 +1363,21 @@ class IntegrationTests(object):
                 for i in range(2):
                     await self.db.run(
                         Tweet.create, user=u, message=f'{u.username}-{i}')
+
         self.assertEqual(await self.db.run(Tweet.select().count), 6)
 
-        tweet = await self.db.get(
-            Tweet.select().where(Tweet.message == 'u0-0'))
-        self.assertEqual(
-            await self.db.run(lambda: tweet.user.username), 'u0')
+        q = Tweet.select().where(Tweet.message == 'u0-0')
+        tweet = await self.db.get(q)
+        self.assertEqual(await self.db.run(lambda: tweet.user.username), 'u0')
 
-        tweet = await self.db.get(
-            Tweet.select(Tweet, User).join(User)
-            .where(Tweet.message == 'u0-0'))
+        q = (Tweet.select(Tweet, User)
+             .join(User)
+             .where(Tweet.message == 'u0-0'))
+        tweet = await self.db.get(q)
         self.assertEqual(tweet.user.username, 'u0')
 
-        user = await self.db.get(
-            User.select().where(User.username == 'u2'))
+        q = User.select().where(User.username == 'u2')
+        user = await self.db.get(q)
         tweets = await self.db.list(user.tweets.order_by(Tweet.id))
         self.assertEqual([t.message for t in tweets], ['u2-0', 'u2-1'])
 
@@ -1359,45 +1416,6 @@ class IntegrationTests(object):
                 pass
             self.assertEqual(await self.count_records(), 3)
         self.assertEqual(await self.count_records(), 3)
-
-    async def test_iterate_model_instances(self):
-        await self.seed(20)
-        results = []
-        async for obj in self.db.iterate(
-                TestModel.select().order_by(TestModel.value)):
-            results.append(obj)
-        self.assertEqual(len(results), 20)
-        self.assertTrue(all(isinstance(r, TestModel) for r in results))
-        self.assertEqual(results[0].value, 0)
-        self.assertEqual(results[-1].value, 190)
-
-    async def test_iterate_dicts(self):
-        await self.seed(10)
-        results = []
-        async for row in self.db.iterate(
-                TestModel.select().order_by(TestModel.value).dicts()):
-            results.append(row)
-        self.assertEqual(len(results), 10)
-        self.assertIsInstance(results[0], dict)
-        self.assertEqual(results[0]['name'], 'item00')
-
-    async def test_iterate_early_break(self):
-        await self.seed(20)
-        count = 0
-        async for obj in self.db.iterate(
-                TestModel.select().order_by(TestModel.value)):
-            count += 1
-            if count == 5:
-                break
-        self.assertEqual(count, 5)
-        self.assertEqual(await self.count_records(), 20)
-
-    async def test_iterate_empty(self):
-        results = []
-        async for obj in self.db.iterate(
-                TestModel.select().where(TestModel.value > 9999)):
-            results.append(obj)
-        self.assertEqual(results, [])
 
 
 class TestSqliteIntegration(IntegrationTests, unittest.IsolatedAsyncioTestCase):
@@ -1459,6 +1477,18 @@ class TestPostgresqlIntegration(IntegrationTests, unittest.IsolatedAsyncioTestCa
         self.assertIsNotNone(row)
         self.assertEqual(row['name'], 'placeholder_test')
         self.assertEqual(row['value'], 999)
+
+    async def test_iterator_with_transaction(self):
+        results = []
+        async with self.db.atomic() as tx:
+            await self.seed(2)
+            q = TestModel.select().order_by(TestModel.value)
+            async for obj in self.db.iterate(q):
+                results.append(obj.value)
+            self.assertEqual(results, [0, 10])
+            await tx.arollback()
+
+        self.assertEqual(await self.db.count(TestModel.select()), 0)
 
 
 @unittest.skipIf(not IS_MYSQL, 'skipping mysql test')
