@@ -1,4 +1,5 @@
 import asyncio
+import json
 import logging
 import weakref
 
@@ -6,6 +7,9 @@ from greenlet import greenlet, getcurrent
 from peewee import *
 from peewee import _atomic, _savepoint, _transaction
 from peewee import __exception_wrapper__
+from peewee import Node
+from peewee import Psycopg3Adapter
+from playhouse.postgres_ext import Json
 
 try:
     import aiosqlite
@@ -510,7 +514,34 @@ class AsyncPostgresqlConnection(AsyncConnectionWrapper):
         return ''.join(accum)
 
 
+class AsyncPgAdapter(Psycopg3Adapter):
+    def __init__(self):
+        super(AsyncPgAdapter, self).__init__()
+        self.json_type = Json
+        self.jsonb_type = Json
+
+
 class AsyncPostgresqlDatabase(AsyncDatabaseMixin, PostgresqlDatabase):
+    psycopg2_adapter = psycopg3_adapter = AsyncPgAdapter
+
+    async def register_adapters(self, conn):
+        def decode_json(bval):
+            return json.loads(bval.decode())
+
+        await conn.set_type_codec(
+            'json', encoder=str.encode, decoder=decode_json,
+            schema='pg_catalog', format='binary')
+
+        def encode_jsonb(val):
+            return b'\x01' + val.encode('utf8')
+
+        def decode_jsonb(bval):
+            return json.loads(bval[1:].decode())
+
+        await conn.set_type_codec(
+            'jsonb', encoder=encode_jsonb, decoder=decode_jsonb,
+            schema='pg_catalog', format='binary')
+
     async def _create_pool_async(self):
         if asyncpg is None:
             raise ImproperlyConfigured('asyncpg is not installed')
@@ -518,6 +549,7 @@ class AsyncPostgresqlDatabase(AsyncDatabaseMixin, PostgresqlDatabase):
             database=self.database,
             min_size=self._pool_min_size,
             max_size=self._pool_size,
+            init=self.register_adapters,
             **self.connect_params)
 
     async def _pool_acquire(self):
