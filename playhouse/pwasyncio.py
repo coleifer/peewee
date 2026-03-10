@@ -1,4 +1,5 @@
 import asyncio
+import collections
 import json
 import logging
 import weakref
@@ -321,11 +322,35 @@ class AsyncDatabaseMixin(object):
     async def aprefetch(self, query, *subqueries):
         return await self.run(prefetch, query, *subqueries)
 
+    async def iterate(self, query, buffer_size=None):
+        # Use similar approach to postgres_ext server-side query impl.
+        query.bind(self)
+        sql, params = query.sql()
+        conn = await self.aconnect()
+        cursor = await conn.execute_iter(sql, params or ())
+        if buffer_size is not None:
+            cursor._buffer_size = buffer_size
+
+        try:
+            wrapper = query._get_cursor_wrapper(cursor)
+            row_iter = wrapper.iterator()
+            _sentinel = object()
+
+            # Cursor wrapper `iterator()` calls fetchone() to grab rows from
+            # the internal buffer. `fetchone()` may dispatch do the event loop
+            # to refill buffer (async).
+            while True:
+                row = await greenlet_spawn(next, row_iter, _sentinel)
+                if row is _sentinel:
+                    break
+                yield row
+        finally:
+            await cursor.aclose()
+
     async def run(self, fn, *args, **kwargs):
         return await greenlet_spawn(fn, *args, **kwargs)
 
     def is_closed(self):
-        """Check if the current task's connection is closed."""
         try:
             return self._state.closed
         except RuntimeError:
@@ -333,28 +358,72 @@ class AsyncDatabaseMixin(object):
 
 
 class CursorAdapter(object):
-    def __init__(self, rows, lastrowid=None, rowcount=None, description=None):
-        self._rows = rows
+    DEFAULT_BUFFER_SIZE = 100
+
+    def __init__(self, rows=None, lastrowid=None, rowcount=None,
+                 description=None, fetch_many=None, cleanup=None,
+                 buffer_size=None):
+        self._rows = rows or []
         self._idx = 0
         self.lastrowid = lastrowid
-        self.rowcount = rowcount if rowcount is not None else len(rows)
+        self.rowcount = rowcount if rowcount is not None else len(self._rows)
         self.description = description or []
 
+        # Async server-side cursor support.
+        self._fetch_many = fetch_many
+        self._cleanup = cleanup
+        self._buffer_size = buffer_size or self.DEFAULT_BUFFER_SIZE
+        self._buffer = collections.deque()
+        self._exhausted = False
+
     def fetchone(self):
+        if self._fetch_many is not None:
+            return self._lazy_fetchone()
         if self._idx >= len(self._rows):
             return
         row = self._rows[self._idx]
         self._idx += 1
         return row
 
+    def _lazy_fetchone(self):
+        if not self._buffer:
+            if self._exhausted:
+                return None
+            rows = await_(self._fetch_many(self._buffer_size))
+            if not rows:
+                self._exhausted = True
+                return None
+            self._buffer.extend(rows)
+        return self._buffer.popleft()
+
     def fetchall(self):
+        if self._fetch_many is not None:
+            return list(self)
         return self._rows
 
     def __iter__(self):
+        if self._fetch_many is not None:
+            return _lazy_cursor_iter(self)
         return iter(self._rows)
 
     def close(self):
         pass
+
+    async def aclose(self):
+        if self._cleanup is not None:
+            try:
+                await self._cleanup()
+            finally:
+                self._cleanup = None
+                self._fetch_many = None
+
+
+def _lazy_cursor_iter(cursor):
+    while True:
+        row = cursor.fetchone()
+        if row is None:
+            return
+        yield row
 
 
 class DummyCursor(object):
@@ -383,6 +452,9 @@ class AsyncConnectionWrapper(object):
     def cursor(self):
         return DummyCursor(self)
 
+    async def execute_iter(self, sql, params=None):
+        raise NotImplementedError('Subclasses must implement.')
+
     async def close(self):
         if self.conn:
             await self.conn.close()
@@ -400,6 +472,30 @@ class AsyncSQLiteConnection(AsyncConnectionWrapper):
         await cursor.close()
         return CursorAdapter(rows, lastrowid=lastrowid, rowcount=rowcount,
                              description=description)
+
+    async def execute_iter(self, sql, params=None):
+        await self._lock.acquire()
+        try:
+            cursor = await self.conn.execute(sql, params or ())
+        except BaseException:
+            self._lock.release()
+            raise
+
+        lock = self._lock
+
+        async def fetch_many(count):
+            return await cursor.fetchmany(count)
+
+        async def cleanup():
+            try:
+                await cursor.close()
+            finally:
+                lock.release()
+
+        return CursorAdapter(
+            description=cursor.description,
+            fetch_many=fetch_many,
+            cleanup=cleanup)
 
 
 class AsyncSqliteDatabase(AsyncDatabaseMixin, SqliteDatabase):
@@ -459,6 +555,32 @@ class AsyncMySQLConnection(AsyncConnectionWrapper):
         return CursorAdapter(rows, lastrowid=lastrowid, rowcount=rowcount,
                              description=description)
 
+    async def execute_iter(self, sql, params=None):
+        await self._lock.acquire()
+        try:
+            # Server-side cursor for unbuffered streaming.
+            cursor = await self.conn.cursor(aiomysql.SSCursor)
+            await cursor.execute(sql, params or ())
+        except BaseException:
+            self._lock.release()
+            raise
+
+        lock = self._lock
+
+        async def fetch_many(count):
+            return await cursor.fetchmany(count)
+
+        async def cleanup():
+            try:
+                await cursor.close()
+            finally:
+                lock.release()
+
+        return CursorAdapter(
+            description=cursor.description,
+            fetch_many=fetch_many,
+            cleanup=cleanup)
+
 
 class AsyncMySQLDatabase(AsyncDatabaseMixin, MySQLDatabase):
     async def _create_pool_async(self):
@@ -501,6 +623,42 @@ class AsyncPostgresqlConnection(AsyncConnectionWrapper):
             rows = []
 
         return CursorAdapter(rows, description=description)
+
+    async def execute_iter(self, sql, params=None):
+        if params:
+            sql = self._translate_placeholders(sql)
+        await self._lock.acquire()
+        try:
+            # NB: asyncpg cursors require an active transaction.
+            # Right now we cannot use peewee-managed transactions because
+            # asyncpg's Cursor._check_ready() requires an asyncpg-managed
+            # transaction be active.
+            # See: https://github.com/MagicStack/asyncpg/issues/1311
+            tr = self.conn.transaction()
+            await tr.start()
+            stmt = await self.conn.prepare(sql)
+            cursor = await stmt.cursor(*(params or ()))
+        except BaseException:
+            self._lock.release()
+            raise
+
+        lock = self._lock
+
+        async def fetch_many(count):
+            return await cursor.fetch(count)
+
+        async def cleanup():
+            try:
+                await tr.rollback()
+            except:
+                pass
+            finally:
+                lock.release()
+
+        return CursorAdapter(
+            fetch_many=fetch_many,
+            cleanup=cleanup,
+            description=[(a.name,) for a in stmt.get_attributes()])
 
     @staticmethod
     def _translate_placeholders(sql):
