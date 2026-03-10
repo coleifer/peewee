@@ -541,11 +541,10 @@ class TestAsyncSqliteDatabase(BaseDatabaseTestCase):
         await db.close_pool()
 
     async def test_is_closed(self):
-        db = AsyncSqliteDatabase(':memory:')
-        conn = await db.aconnect()
-        self.assertFalse(db.is_closed())
-        await db.aclose()
-        self.assertTrue(db.is_closed())
+        await self.db.aconnect()
+        self.assertFalse(self.db.is_closed())
+        await self.db.aclose()
+        self.assertTrue(self.db.is_closed())
 
 
 class TestAsyncAtomic(BaseDatabaseTestCase):
