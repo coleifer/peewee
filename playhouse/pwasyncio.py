@@ -503,7 +503,6 @@ class AsyncSqliteDatabase(AsyncDatabaseMixin, SqliteDatabase):
         if aiosqlite is None:
             raise ImproperlyConfigured('aiosqlite is not installed')
         conn = await aiosqlite.connect(self.database, isolation_level=None)
-        conn.row_factory = lambda cursor, row: tuple(row)
         await self._add_conn_hooks(conn)
         return AsyncSQLiteConnection(conn)
 
