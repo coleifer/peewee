@@ -8,6 +8,10 @@ https://github.com/coleifer/peewee/releases
 ## master
 
 * Remove all Python 2.x compatibility code.
+* Add streaming result cursors to pwasyncio module via `db.iterator(query)`.
+* Better serialization and deserialization of datetimes and binary data in the
+  DataSet module. Previously binary data was encoded as base64, going forward
+  hex is the new default. For base64 specify `base64_bytes=True`.
 
 [View commits](https://github.com/coleifer/peewee/compare/4.0.1...master)
 

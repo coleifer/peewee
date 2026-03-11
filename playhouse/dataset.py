@@ -149,24 +149,35 @@ class DataSet(object):
                 format, valid_formats))
 
     def freeze(self, query, format='csv', filename=None, file_obj=None,
-               encoding='utf8', **kwargs):
+               encoding='utf8', iso8601_datetimes=False, base64_bytes=False,
+               **kwargs):
         self._check_arguments(filename, file_obj, format, self._export_formats)
         if filename:
             file_obj = open(filename, 'w', encoding=encoding)
 
-        exporter = self._export_formats[format](query)
+        exporter = self._export_formats[format](
+            query,
+            iso8601_datetimes=iso8601_datetimes,
+            base64_bytes=base64_bytes)
+
         exporter.export(file_obj, **kwargs)
 
         if filename:
             file_obj.close()
 
     def thaw(self, table, format='csv', filename=None, file_obj=None,
-             strict=False, encoding='utf8', **kwargs):
+             strict=False, encoding='utf8', iso8601_datetimes=False,
+             base64_bytes=False, **kwargs):
         self._check_arguments(filename, file_obj, format, self._export_formats)
         if filename:
             file_obj = open(filename, 'r', encoding=encoding)
 
-        importer = self._import_formats[format](self[table], strict)
+        importer = self._import_formats[format](
+            self[table],
+            strict=strict,
+            iso8601_datetimes=iso8601_datetimes,
+            base64_bytes=base64_bytes)
+
         count = importer.load(file_obj, **kwargs)
 
         if filename:
@@ -319,38 +330,35 @@ class Table(object):
 
 
 class Exporter(object):
-    def __init__(self, query):
+    def __init__(self, query, iso8601_datetimes=False, base64_bytes=False):
         self.query = query
+        self.iso8601_datetimes = iso8601_datetimes
+        self.base64_bytes = base64_bytes
 
     def export(self, file_obj):
         raise NotImplementedError
 
 
+_datetime_types = (datetime.datetime, datetime.date, datetime.time)
+
+
 class JSONExporter(Exporter):
-    def __init__(self, query, iso8601_datetimes=False, base64_bytes=True):
-        super(JSONExporter, self).__init__(query)
-        self.iso8601_datetimes = iso8601_datetimes
-        self.base64_bytes = base64_bytes
-
     def _make_default(self):
-        datetime_types = (datetime.datetime, datetime.date, datetime.time)
-
-        if self.iso8601_datetimes:
-            def default(o):
-                if isinstance(o, datetime_types):
+        def default(o):
+            if isinstance(o, _datetime_types):
+                if self.iso8601_datetimes:
                     return o.isoformat()
-                elif isinstance(o, (Decimal, uuid.UUID)):
+                else:
                     return str(o)
-                elif isinstance(o, bytes) and self.base64_bytes:
+            elif isinstance(o, (Decimal, uuid.UUID)):
+                return str(o)
+            elif isinstance(o, bytes):
+                if self.base64_bytes:
                     return base64.urlsafe_b64encode(o).decode('utf8')
-                raise TypeError('Unable to serialize %r as JSON' % o)
-        else:
-            def default(o):
-                if isinstance(o, datetime_types + (Decimal, uuid.UUID)):
-                    return str(o)
-                elif isinstance(o, bytes) and self.base64_bytes:
-                    return base64.urlsafe_b64encode(o).decode('utf8')
-                raise TypeError('Unable to serialize %r as JSON' % o)
+                else:
+                    return o.hex()
+            raise TypeError('Unable to serialize %r as JSON' % o)
+
         return default
 
     def export(self, file_obj, **kwargs):
@@ -369,7 +377,23 @@ class CSVExporter(Exporter):
         if header and getattr(tuples, 'columns', None):
             writer.writerow([column for column in tuples.columns])
         for row in tuples:
-            writer.writerow(row)
+            accum = []
+            for value in row:
+                if isinstance(value, _datetime_types):
+                    if self.iso8601_datetimes:
+                        value = value.isoformat()
+                    else:
+                        value = str(value)
+                elif isinstance(value, (Decimal, uuid.UUID)):
+                    value = str(value)
+                elif isinstance(value, bytes):
+                    if self.base64_bytes:
+                        value = base64.urlsafe_b64encode(value).decode('utf8')
+                    else:
+                        value = value.hex()
+                accum.append(value)
+
+            writer.writerow(accum)
 
 
 class TSVExporter(CSVExporter):
@@ -379,9 +403,12 @@ class TSVExporter(CSVExporter):
 
 
 class Importer(object):
-    def __init__(self, table, strict=False):
+    def __init__(self, table, strict=False, iso8601_datetimes=False,
+                 base64_bytes=False):
         self.table = table
         self.strict = strict
+        self.iso8601_datetimes = iso8601_datetimes
+        self.base64_bytes = base64_bytes
 
         model = self.table.model_class
         self.columns = model._meta.columns
@@ -397,14 +424,25 @@ class JSONImporter(Importer):
         count = 0
 
         for row in data:
-            if self.strict:
-                obj = {}
-                for key in row:
-                    field = self.columns.get(key)
-                    if field is not None:
-                        obj[field.name] = field.python_value(row[key])
-            else:
-                obj = row
+            obj = {}
+            for key in row:
+                field = self.columns.get(key)
+                value = row[key]
+                if isinstance(field, DateTimeField) and self.iso8601_datetimes:
+                    value = datetime.datetime.fromisoformat(value)
+                elif isinstance(field, DateField) and self.iso8601_datetimes:
+                    value = datetime.date.fromisoformat(value)
+                elif isinstance(field, BlobField):
+                    if self.base64_bytes:
+                        value = base64.urlsafe_b64decode(value.encode('utf8'))
+                    else:
+                        value = bytes.fromhex(value)
+
+                if field is not None:
+                    value = field.python_value(value)
+                    obj[key] = value
+                elif not self.strict:
+                    obj[key] = value
 
             if obj:
                 self.table.insert(**obj)
@@ -417,32 +455,43 @@ class CSVImporter(Importer):
     def load(self, file_obj, header=True, **kwargs):
         count = 0
         reader = csv.reader(file_obj, **kwargs)
+
+        header_fields = []
         if header:
             try:
                 header_keys = next(reader)
             except StopIteration:
                 return count
 
-            if self.strict:
-                header_fields = []
-                for idx, key in enumerate(header_keys):
-                    if key in self.columns:
-                        header_fields.append((idx, self.columns[key]))
-            else:
-                header_fields = list(enumerate(header_keys))
+            for idx, key in enumerate(header_keys):
+                if key in self.columns or not self.strict:
+                    header_fields.append((idx, key, self.columns.get(key)))
         else:
-            header_fields = list(enumerate(self.model._meta.sorted_fields))
+            for idx, field in enumerate(self.model._meta.sorted_fields):
+                header_fields.append((idx, field.name, field))
 
         if not header_fields:
             return count
 
         for row in reader:
             obj = {}
-            for idx, field in header_fields:
-                if self.strict:
-                    obj[field.name] = field.python_value(row[idx])
-                else:
-                    obj[field] = row[idx]
+            for idx, name, field in header_fields:
+                value = row[idx]
+                if field is None:
+                    obj[name] = value
+                    continue
+
+                if isinstance(field, DateTimeField) and self.iso8601_datetimes:
+                    value = datetime.datetime.fromisoformat(value)
+                elif isinstance(field, DateField) and self.iso8601_datetimes:
+                    value = datetime.date.fromisoformat(value)
+                elif isinstance(field, BlobField):
+                    if self.base64_bytes:
+                        value = base64.urlsafe_b64decode(value.encode('utf8'))
+                    else:
+                        value = bytes.fromhex(value)
+
+                obj[field.name] = field.python_value(value)
 
             self.table.insert(**obj)
             count += 1

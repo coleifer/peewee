@@ -14,6 +14,7 @@ from .base import IS_SQLITE_OLD
 from .base import ModelTestCase
 from .base import TestModel
 from .base import get_sqlite_db
+from .base import requires_models
 from .base import skip_if
 
 
@@ -28,10 +29,15 @@ class Note(TestModel):
     content = TextField()
     timestamp = DateTimeField()
     status = IntegerField(default=1)
+    data = BlobField()
 
 class Category(TestModel):
     name = TextField()
     parent = ForeignKeyField('self', null=True)
+
+class Bin(TestModel):
+    data = BlobField()
+    ts = DateTimeField()
 
 
 class TestDataSet(ModelTestCase):
@@ -84,7 +90,8 @@ class TestDataSet(ModelTestCase):
             notes = self.dataset['note']
             for i, (ct, st) in enumerate([('n1', 1), ('n2', 2), ('n3', 1)]):
                 notes.insert(content=ct, status=st, user_id='charlie',
-                             timestamp=datetime.datetime(2022, 1, 1 + i))
+                             timestamp=datetime.datetime(2022, 1, 1 + i),
+                             data=b'')
 
             self.assertFalse('notes_public' in self.dataset)
 
@@ -175,8 +182,8 @@ class TestDataSet(ModelTestCase):
 
         note = self.dataset['note']
         columns = sorted(note.columns)
-        self.assertEqual(columns, ['content', 'id', 'status', 'timestamp',
-                                   'user_id'])
+        self.assertEqual(columns, ['content', 'data', 'id', 'status',
+                                   'timestamp', 'user_id'])
 
         category = self.dataset['category']
         columns = sorted(category.columns)
@@ -317,17 +324,20 @@ class TestDataSet(ModelTestCase):
                 content='note %s' % i,
                 timestamp=datetime.date(2014, 1, i),
                 status=i,
-                user_id='charlie')
+                user_id='charlie',
+                data=b'')
 
         notes = sorted(note.all(), key=operator.itemgetter('id'))
         self.assertEqual(notes[0], {
             'content': 'note 1',
+            'data': b'',
             'id': 1,
             'status': 1,
             'timestamp': datetime.datetime(2014, 1, 1),
             'user_id': 'charlie'})
         self.assertEqual(notes[-1], {
             'content': 'note 3',
+            'data': b'',
             'id': 3,
             'status': 3,
             'timestamp': datetime.datetime(2014, 1, 3),
@@ -430,7 +440,7 @@ class TestDataSet(ModelTestCase):
         note = self.dataset['note']
         note_ts = datetime.datetime(2017, 1, 2, 3, 4, 5)
         note.insert(content='foo', timestamp=note_ts, user_id='charlie',
-                    status=2)
+                    status=2, data=b'\xff\x00\xcc')
 
         buf = StringIO()
         self.dataset.freeze(note.all(), 'json', file_obj=buf)
@@ -439,7 +449,8 @@ class TestDataSet(ModelTestCase):
             'user_id': 'charlie',
             'content': 'foo',
             'status': 2,
-            'timestamp': '2017-01-02 03:04:05'}])
+            'timestamp': '2017-01-02 03:04:05',
+            'data': 'ff00cc'}])
 
         note.delete(id=1)
         self.assertEqual(list(note.all()), [])
@@ -451,7 +462,90 @@ class TestDataSet(ModelTestCase):
             'user_id': 'charlie',
             'content': 'foo',
             'status': 2,
-            'timestamp': note_ts}])
+            'timestamp': note_ts,
+            'data': b'\xff\x00\xcc'}])
+
+    @requires_models(Bin)
+    def test_freeze_thaw_datatypes_json(self):
+        Bin = self.dataset['bin']
+        ts = datetime.datetime(2026, 1, 2, 3, 4, 5,
+                               tzinfo=datetime.timezone.utc)
+
+        Bin.insert(data=b'\xff\x00\xcc', ts=ts)
+
+        buf = StringIO()
+        self.dataset.freeze(Bin.all(), 'json', file_obj=buf)
+        self.assertEqual(json.loads(buf.getvalue()), [{
+            'id': 1,
+            'data': 'ff00cc',
+            'ts': '2026-01-02 03:04:05+00:00'}])
+
+        Bin.delete(id=1)
+        buf.seek(0)
+        Bin.thaw(format='json', file_obj=buf)
+
+        self.assertEqual(list(Bin.all()), [{
+            'id': 1,
+            'data': b'\xff\x00\xcc',
+            'ts': ts}])
+
+        buf = StringIO()
+        self.dataset.freeze(Bin.all(), 'json', file_obj=buf,
+                            iso8601_datetimes=True, base64_bytes=True)
+        self.assertEqual(json.loads(buf.getvalue()), [{
+            'id': 1,
+            'data': '_wDM',
+            'ts': '2026-01-02T03:04:05+00:00'}])
+
+        Bin.delete(id=1)
+        buf.seek(0)
+        Bin.thaw(format='json', file_obj=buf, iso8601_datetimes=True,
+                 base64_bytes=True)
+
+        self.assertEqual(list(Bin.all()), [{
+            'id': 1,
+            'data': b'\xff\x00\xcc',
+            'ts': ts}])
+
+    @requires_models(Bin)
+    def test_freeze_thaw_datatypes_csv(self):
+        Bin = self.dataset['bin']
+        ts = datetime.datetime(2026, 1, 2, 3, 4, 5,
+                               tzinfo=datetime.timezone.utc)
+
+        Bin.insert(data=b'\xff\x00\xcc', ts=ts)
+
+        buf = StringIO()
+        self.dataset.freeze(Bin.all(), 'csv', file_obj=buf)
+        self.assertEqual(buf.getvalue().splitlines(), [
+            'id,data,ts',
+            '1,ff00cc,2026-01-02 03:04:05+00:00'])
+
+        Bin.delete(id=1)
+        buf.seek(0)
+        Bin.thaw(format='csv', file_obj=buf)
+
+        self.assertEqual(list(Bin.all()), [{
+            'id': 1,
+            'data': b'\xff\x00\xcc',
+            'ts': ts}])
+
+        buf = StringIO()
+        self.dataset.freeze(Bin.all(), 'csv', file_obj=buf,
+                            iso8601_datetimes=True, base64_bytes=True)
+        self.assertEqual(buf.getvalue().splitlines(), [
+            'id,data,ts',
+            '1,_wDM,2026-01-02T03:04:05+00:00'])
+
+        Bin.delete(id=1)
+        buf.seek(0)
+        Bin.thaw(format='csv', file_obj=buf, iso8601_datetimes=True,
+                 base64_bytes=True)
+
+        self.assertEqual(list(Bin.all()), [{
+            'id': 1,
+            'data': b'\xff\x00\xcc',
+            'ts': ts}])
 
     def test_table_column_creation(self):
         table = self.dataset['people']

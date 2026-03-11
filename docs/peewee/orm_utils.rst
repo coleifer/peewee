@@ -749,18 +749,21 @@ Introspection:
 
       Return a context manager representing a transaction.
 
-   .. method:: freeze(query, format='csv', filename=None, file_obj=None, encoding='utf8', **kwargs)
+   .. method:: freeze(query, format='csv', filename=None, file_obj=None, encoding='utf8', iso8601_datetimes=False, base64_bytes=False, **kwargs)
 
       :param query: A :class:`SelectQuery`, generated using :meth:`~Table.all` or `~Table.find`.
       :param format: Output format. By default, *csv* and *json* are supported.
       :param filename: Filename to write output to.
       :param file_obj: File-like object to write output to.
       :param str encoding: File encoding.
+      :param bool iso8601_datetimes: Encode datetimes and dates in ISO 8601 format.
+      :param bool base64_bytes: Encode binary data as base64. By default hex
+         is used.
       :param kwargs: Arbitrary parameters for export-specific functionality.
 
       Export data to a file.
 
-   .. method:: thaw(table, format='csv', filename=None, file_obj=None, strict=False, encoding='utf8', **kwargs)
+   .. method:: thaw(table, format='csv', filename=None, file_obj=None, strict=False, encoding='utf8', iso8601_datetimes=False, base64_bytes=False, **kwargs)
 
       :param str table: The name of the table to load data into.
       :param format: Input format. By default, *csv* and *json* are supported.
@@ -768,6 +771,9 @@ Introspection:
       :param file_obj: File-like object to read data from.
       :param bool strict: Whether to store values for columns that do not already exist on the table.
       :param str encoding: File encoding.
+      :param bool iso8601_datetimes: Decode datetimes and dates from ISO 8601 format.
+      :param bool base64_bytes: Decode BLOB field-data from base64. By default hex
+         is assumed.
       :param kwargs: Arbitrary parameters for import-specific functionality.
 
       Import data from a file into ``table``. If ``strict=False`` (default),
@@ -834,19 +840,27 @@ Introspection:
           # Create a unique index on the `username` column.
           db['users'].create_index(['username'], unique=True)
 
-   .. method:: freeze(format='csv', filename=None, file_obj=None, **kwargs)
+   .. method:: freeze(format='csv', filename=None, file_obj=None, encoding='utf8', iso8601_datetimes=False, base64_bytes=False, **kwargs)
 
       :param format: Output format. By default, *csv* and *json* are supported.
       :param filename: Filename to write output to.
       :param file_obj: File-like object to write output to.
+      :param str encoding: File encoding.
+      :param bool iso8601_datetimes: Encode datetimes and dates in ISO 8601 format.
+      :param bool base64_bytes: Encode binary data as base64. By default hex
+         is used.
       :param kwargs: Arbitrary parameters for export-specific functionality.
 
-   .. method:: thaw(format='csv', filename=None, file_obj=None, strict=False, **kwargs)
+   .. method:: thaw(format='csv', filename=None, file_obj=None, strict=False, encoding='utf8', iso8601_datetimes=False, base64_bytes=False, **kwargs)
 
       :param format: Input format. By default, *csv* and *json* are supported.
       :param filename: Filename to read data from.
       :param file_obj: File-like object to read data from.
       :param bool strict: Whether to store values for columns that do not already exist on the table.
+      :param str encoding: File encoding.
+      :param bool iso8601_datetimes: Decode datetimes and dates from ISO 8601 format.
+      :param bool base64_bytes: Decode BLOB field-data from base64. By default hex
+         is assumed.
       :param kwargs: Arbitrary parameters for import-specific functionality.
 
 
