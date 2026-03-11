@@ -1,4 +1,7 @@
+import datetime
+import decimal
 import re
+import uuid
 import warnings
 from collections import OrderedDict
 from collections import namedtuple
@@ -32,6 +35,32 @@ RESERVED_WORDS = set([
     'import', 'in', 'is', 'lambda', 'not', 'or', 'pass', 'print', 'raise',
     'return', 'try', 'while', 'with', 'yield',
 ])
+
+
+FieldTypeMap = {
+    'AUTO': int,
+    'BIGAUTO': int,
+    'BIGINT': int,
+    'BLOB': bytes,
+    'BOOL': bool,
+    'CHAR': str,
+    'DATE': datetime.date,
+    'DATETIME': datetime.datetime,
+    'DECIMAL': decimal.Decimal,
+    'DOUBLE': float,
+    'FLOAT': float,
+    'INT': int,
+    'SMALLINT': int,
+    'TEXT': str,
+    'TIME': datetime.time,
+    'UUID': uuid.UUID,
+    'UUIDB': bytes,
+    'VARCHAR': str,
+    'JSON': dict,
+    'JSONB': dict,
+    'TIMESTAMPTZ': datetime.datetime,
+    'INTERVAL': datetime.timedelta,
+}
 
 
 class UnknownField(object):
