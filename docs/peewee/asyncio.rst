@@ -226,17 +226,6 @@ To shut down completely (e.g. during application teardown):
 
    await db.close_pool()
 
-SQLite
-^^^^^^
-
-SQLite uses a single shared connection, as the underlying database does not
-support concurrent writers.
-
-Generally SQLite is a poor fit for asynchronous workflows where writes may be
-coming in at any time. Furthermore, SQLite does not do any network I/O.
-
-The SQLite implementation is provided mostly for testing and local development.
-
 MySQL and Postgresql
 ^^^^^^^^^^^^^^^^^^^^
 
@@ -244,9 +233,9 @@ MySQL and Postgresql use the driver's native connection pool.
 
 Pool configuration options include:
 
-* ``pool_size`` - Maximum number of connections
-* ``pool_min_size`` - Minimum pool size
-* ``acquire_timeout`` - Timeout when acquiring a connection
+* ``pool_size``: Maximum number of connections
+* ``pool_min_size``: Minimum pool size
+* ``acquire_timeout``: Timeout when acquiring a connection
 
 .. code-block:: python
 
@@ -257,6 +246,38 @@ Pool configuration options include:
        pool_size=10,
        pool_min_size=1,
        acquire_timeout=10)
+
+SQLite
+^^^^^^
+
+Peewee provides a simple connection-pooling implementation for SQLite
+connections.
+
+Pool configuration options include:
+
+* ``pool_size``: Maximum number of connections
+* ``acquire_timeout``: Timeout when acquiring a connection
+
+SQLite operates on local disk storage, so queries typically execute extremely
+quickly (microseconds / few milliseconds). The cost of dispatching to a
+background thread and wrapping in coroutines increases the latency per query.
+For every query executed, a closure must be created, a future allocated, a
+queue written-to, a loop ``call_soon_threadsafe()`` issued, and two context
+switches made. This is the case with `aiosqlite <https://github.com/omnilib/aiosqlite/blob/main/aiosqlite/core.py>`__.
+
+If your SQLite workload is heavy enough that avoiding blocking the event-loop
+is an issue, SQLite may not be a good fit. SQLite only allows one writer at a
+time, so while using an async wrapper may keep things responsive while waiting
+to obtain the write lock, writes will not occur "faster", the bottleneck has
+merely been moved. Conversely, if you don’t have that much load, the async
+wrapper adds complexity and overhead for no measurable benefit.
+
+To use SQLite in an async environment anyways, it is strongly recommended to
+use WAL-mode, which allows multiple readers to co-exist with a single writer:
+
+.. code-block:: python
+
+   db = AsyncSqliteDatabase('app.db', pragmas={'journal_mode': 'wal'})
 
 
 Sharp Corners

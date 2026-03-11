@@ -461,7 +461,71 @@ class AsyncConnectionWrapper(object):
             self.conn = None
 
 
-class AsyncSQLiteConnection(AsyncConnectionWrapper):
+class AsyncSqlitePool(object):
+    def __init__(self, database, pool_size=5, on_connect=None,
+                 **connect_params):
+        self._database = database
+        self._pool_size = pool_size
+        self._on_connect = on_connect
+        self._connect_params = connect_params
+        self._queue = asyncio.Queue(maxsize=pool_size)
+        self._all_connections = []
+        self._closed = False
+
+    async def initialize(self):
+        for _ in range(self._pool_size):
+            conn = await self._create_connection()
+            self._queue.put_nowait(conn)
+        return self
+
+    async def _create_connection(self):
+        conn = await aiosqlite.connect(
+            self._database,
+            isolation_level=None,
+            **self._connect_params)
+        if self._on_connect is not None:
+            await self._on_connect(conn )
+        wrapped = AsyncSqliteConnection(conn )
+        self._all_connections.append(wrapped)
+        return wrapped
+
+    async def acquire(self, timeout=None):
+        if self._closed:
+            raise InterfaceError('Pool is closed.')
+        return await asyncio.wait_for(self._queue.get(), timeout=timeout)
+
+    def _conn_is_valid(self, conn):
+        driver_conn = conn.conn
+        if driver_conn is None:
+            return False
+        if not driver_conn._running or not driver_conn._connection:
+            return False
+        return True
+
+    async def release(self, conn):
+        if self._closed:
+            return
+        elif self._conn_is_valid(conn):
+            await self._queue.put(conn)
+        else:
+            try:
+                self._all_connections.remove(conn)
+            except ValueError:
+                pass
+            await self._queue.put(await self._create_connection())
+
+    async def close(self):
+        self._closed = True
+        conns, self._all_connections = list(self._all_connections), []
+        for conn in conns:
+            try:
+                await conn.close()
+            except Exception:
+                logger.warning('Error closing pooled connection',
+                               exc_info=True)
+
+
+class AsyncSqliteConnection(AsyncConnectionWrapper):
     async def _execute(self, sql, params=None):
         params = params or ()
         cursor = await self.conn.execute(sql, params)
@@ -502,9 +566,9 @@ class AsyncSqliteDatabase(AsyncDatabaseMixin, SqliteDatabase):
     async def _create_pool_async(self):
         if aiosqlite is None:
             raise ImproperlyConfigured('aiosqlite is not installed')
-        conn = await aiosqlite.connect(self.database, isolation_level=None)
-        await self._add_conn_hooks(conn)
-        return AsyncSQLiteConnection(conn)
+        pool = AsyncSqlitePool(self.database, pool_size=self._pool_size,
+                               on_connect=self._add_conn_hooks)
+        return await pool.initialize()
 
     async def _add_conn_hooks(self, conn):
         if self._pragmas:
@@ -522,17 +586,11 @@ class AsyncSqliteDatabase(AsyncDatabaseMixin, SqliteDatabase):
             await conn.create_function(name, n_params, fn, **kwargs)
 
     async def _pool_acquire(self):
-        # SQLite uses a single shared connection. Re-create if lost.
-        async with self._pool_lock:
-            if self._pool is None or self._pool.conn is None:
-                self._pool = await self._create_pool_async()
-        return self._pool
+        return await self._pool.acquire(timeout=self._acquire_timeout)
 
     async def _pool_release(self, conn):
-        # For SQLite we don't actually release the shared connection — we only
-        # disassociate it from the current task's state.  The connection stays
-        # open until close_pool().
-        pass
+        if conn is not None:
+            await self._pool.release(conn)
 
     async def _pool_close(self):
         if self._pool:

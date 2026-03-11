@@ -1,6 +1,8 @@
 import asyncio
 import collections
 import contextvars
+import gc
+import glob
 import itertools
 import tempfile
 import os
@@ -311,7 +313,7 @@ class TestConnectionWrappers(unittest.IsolatedAsyncioTestCase):
         mock_conn = AsyncMock()
         mock_conn.execute.return_value = mock_cursor
 
-        result = await AsyncSQLiteConnection(mock_conn).execute(
+        result = await AsyncSqliteConnection(mock_conn).execute(
             'SELECT * FROM test')
         self.assertIsInstance(result, CursorAdapter)
         self.assertEqual(result.fetchall(), [(1, 'test')])
@@ -324,7 +326,7 @@ class TestConnectionWrappers(unittest.IsolatedAsyncioTestCase):
         mock_conn = AsyncMock()
         mock_conn.execute.return_value = mock_cursor
 
-        conn = AsyncSQLiteConnection(mock_conn)
+        conn = AsyncSqliteConnection(mock_conn)
         cursor = await conn.execute_iter('SELECT a, b FROM t')
         self.assertIsInstance(cursor, CursorAdapter)
         self.assertIsNotNone(cursor._fetch_many)
@@ -337,7 +339,7 @@ class TestConnectionWrappers(unittest.IsolatedAsyncioTestCase):
         mock_conn = AsyncMock()
         mock_conn.execute.return_value = mock_cursor
 
-        conn = AsyncSQLiteConnection(mock_conn)
+        conn = AsyncSqliteConnection(mock_conn)
         cursor = await conn.execute_iter('SELECT 1')
         self.assertTrue(conn._lock.locked())
         await cursor.aclose()
@@ -347,7 +349,7 @@ class TestConnectionWrappers(unittest.IsolatedAsyncioTestCase):
     async def test_sqlite_execute_iter_lock_on_failure(self):
         mock_conn = AsyncMock()
         mock_conn.execute.side_effect = RuntimeError('fail')
-        conn = AsyncSQLiteConnection(mock_conn)
+        conn = AsyncSqliteConnection(mock_conn)
         with self.assertRaises(RuntimeError):
             await conn.execute_iter('invalid')
         self.assertFalse(conn._lock.locked())
@@ -551,48 +553,49 @@ class TestConnectionWrappers(unittest.IsolatedAsyncioTestCase):
 
 
 class TestTaskLifecycle(unittest.IsolatedAsyncioTestCase):
-    async def test_concurrent_task_state_isolation(self):
-        db = AsyncSqliteDatabase(':memory:')
-        TestModel._meta.set_database(db)
-        async with db:
-            await db.acreate_tables([TestModel])
-            async def capture(tid):
-                async with db:
-                    before = id(db._state.get())
-                    await db.run(TestModel.create, name=f't{tid}', value=tid)
-                    after = id(db._state.get())
-                    return before == after
-            results = await asyncio.gather(*[capture(i) for i in range(5)])
-            self.assertTrue(all(results))
-        await db.close_pool()
+    async def asyncSetUp(self):
+        with tempfile.NamedTemporaryFile(delete=False) as f:
+            self.db_path = f.name
+
+        self.db = AsyncSqliteDatabase(self.db_path)
+        TestModel._meta.set_database(self.db)
+
+        await self.db.aconnect()
+        await self.db.acreate_tables([TestModel])
+
+    async def asyncTearDown(self):
+        await self.db.aclose()
+        await self.db.close_pool()
+
+        if self.db_path and os.path.exists(self.db_path):
+            for fname in glob.glob(self.db_path + '*'):
+                os.unlink(fname)
 
     async def test_task_state_cleanup_after_completion(self):
-        db = AsyncSqliteDatabase(':memory:')
-        TestModel._meta.set_database(db)
-        async with db:
-            await db.acreate_tables([TestModel])
-            async def task_with_state():
-                async with db:
-                    await db.run(TestModel.create, name='test', value=1)
-                return db._state._get_storage_key()
-            task_key = await task_with_state()
-            db._state.cleanup_dead_tasks()
-        await db.close_pool()
+        async def task_with_state():
+            async with self.db:
+                await self.db.run(TestModel.create, name='test', value=1)
+            return self.db._state._get_storage_key()
+
+        task_key = await asyncio.create_task(task_with_state())
+        await asyncio.sleep(0)
+        gc.collect()
+
+        self.db._state.cleanup_dead_tasks()
+        self.assertFalse(task_key in self.db._state._state_storage)
 
     async def test_concurrent_task_state_isolation(self):
-        db = AsyncSqliteDatabase(':memory:')
-        TestModel._meta.set_database(db)
-        async with db:
-            await db.acreate_tables([TestModel])
-            async def capture(tid):
-                async with db:
-                    before = id(db._state.get())
-                    await db.run(TestModel.create, name=f't{tid}', value=tid)
-                    after = id(db._state.get())
-                    return before == after
-            results = await asyncio.gather(*[capture(i) for i in range(5)])
-            self.assertTrue(all(results))
-        await db.close_pool()
+        async def capture(tid):
+            async with self.db:
+                before = id(self.db._state.get())
+                await self.db.run(TestModel.create, name=f't{tid}', value=tid)
+                after = id(self.db._state.get())
+                self.assertEqual(before, after)
+                return before
+
+        results = await asyncio.gather(*[capture(i) for i in range(5)])
+        self.assertTrue(all(results))
+        self.assertTrue(len(set(results)), 5)
 
 
 class IntegrationTests(object):
