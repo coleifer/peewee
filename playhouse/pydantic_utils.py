@@ -10,6 +10,7 @@ from peewee import Model
 from playhouse.reflection import FieldTypeMap
 
 from pydantic import BaseModel
+from pydantic import ConfigDict
 from pydantic import Field
 from pydantic import create_model
 
@@ -74,4 +75,7 @@ def to_pydantic(model_cls, exclude=None, include=None, exclude_autofield=True,
 
     model_name = model_name or ('%sSchema' % model_cls.__name__)
 
-    return create_model(model_name, **fields)
+    return create_model(
+        model_name,
+        __config__=ConfigDict(from_attributes=True),
+        **fields)

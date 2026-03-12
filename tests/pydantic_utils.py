@@ -9,13 +9,13 @@ from peewee import *
 from playhouse.pydantic_utils import to_pydantic
 from pydantic import BaseModel
 
-from .base import BaseTestCase
+from .base import ModelDatabaseTestCase
 from .base import get_in_memory_db
+from .base import requires_models
+from .base import TestModel
 
 
-db = get_in_memory_db()
-
-class Person(db.Model):
+class Person(TestModel):
     name = CharField(verbose_name='Full Name', help_text='Display name')
     age = IntegerField()
     active = BooleanField(default=True)
@@ -31,15 +31,15 @@ class Person(db.Model):
         ])
     created = DateTimeField(default=datetime.datetime.now)
 
-class User(db.Model):
+class User(TestModel):
     name = CharField()
 
-class Tweet(db.Model):
+class Tweet(TestModel):
     user = ForeignKeyField(User)
     content = TextField()
     timestamp = TimestampField(default=datetime.datetime.now)
 
-class AllTypes(db.Model):
+class AllTypes(TestModel):
     f_blob = BlobField()
     f_bool = BooleanField()
     f_char = CharField()
@@ -55,7 +55,9 @@ class AllTypes(db.Model):
     f_uuid = UUIDField()
 
 
-class TestPydanticConversion(BaseTestCase):
+class TestPydanticConversion(ModelDatabaseTestCase):
+    database = get_in_memory_db()
+
     def test_conversion(self):
         Schema = to_pydantic(Person)
         self.assertTrue(issubclass(Schema, BaseModel))
@@ -90,6 +92,31 @@ class TestPydanticConversion(BaseTestCase):
             obj = Schema(name='Huey', age=14, status='invalid')
 
         self.assertTrue('Input should be' in str(ctx.exception))
+
+    @requires_models(Person)
+    def test_validate_model(self):
+        Schema = to_pydantic(Person)
+
+        p = Person.create(name='Huey', age=14, status='active')
+        validated = Schema.model_validate(p)
+        self.assertEqual(validated.dict(), {
+            'name': 'Huey',
+            'age': 14,
+            'active': True,
+            'bio': None,
+            'score': 0.0,
+            'status': 'active',
+            'created': p.created})
+
+        ps = Person(**validated.dict())
+        self.assertEqual(ps.name, 'Huey')
+        self.assertEqual(ps.age, 14)
+        self.assertTrue(ps.active)
+        self.assertIsNone(ps.bio)
+        self.assertEqual(ps.score, 0.0)
+        self.assertEqual(ps.status, 'active')
+        self.assertEqual(ps.created, p.created)
+        self.assertIsNone(ps.id)
 
     def test_include_exclude(self):
         Schema = to_pydantic(Person, exclude=('age', 'bio'))
