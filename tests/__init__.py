@@ -78,13 +78,7 @@ try:
 except (ImportError, SyntaxError):
     print('Unable to import asyncio tests, skipping.')
 
-
-if __name__ == '__main__':
-    print(r"""\x1b[1;31m
-     ______   ______     ______     __     __     ______     ______
-    /\  == \ /\  ___\   /\  ___\   /\ \  _ \ \   /\  ___\   /\  ___\\
-    \ \  _-/ \ \  __\   \ \  __\   \ \ \/ ".\ \  \ \  __\   \ \  __\\
-     \ \_\    \ \_____\  \ \_____\  \ \__/".~\_\  \ \_____\  \ \_____\\
-      \/_/     \/_____/   \/_____/   \/_/   \/_/   \/_____/   \/_____/
-    \x1b[0m""")
-    unittest.main(argv=sys.argv)
+try:
+    from .pydantic_utils import *
+except (ImportError, SyntaxError):
+    print('Unable to import pydantic tests, skipping.')
