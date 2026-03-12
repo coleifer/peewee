@@ -638,6 +638,7 @@ class IntegrationTests(object):
             await self.db.acreate_tables(self.models)
 
     async def asyncTearDown(self):
+        await self.db.aclose()
         async with self.db:
             await self.db.adrop_tables(self.models)
         await self.db.close_pool()
