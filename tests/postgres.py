@@ -619,6 +619,37 @@ class TestBinaryJsonField(BaseBinaryJsonFieldTestCase, ModelTestCase):
         assertData(['k1', 'kx', 'ky', 'k3'], {'k2': 'v2', 'k4': [0, 1, 2]})
         assertData(['k4', 'k3'], {'k1': 'v1', 'k2': 'v2'})
 
+    def test_remove_path(self):
+        BJson.delete().execute()  # Clear out db.
+        data = {'k1': {'x1': {'y1': 'z1', 'y2': 'z2'}, 'x2': ['i1', 'i2']}}
+        BJson.create(data=data)
+
+        def assertData(exp_list, expected_data):
+            curr = BJson.data
+            for exp in exp_list:
+                curr = curr[exp]
+
+            query = BJson.select(curr.remove()).tuples()
+            data = query[:][0][0]
+            self.assertEqual(data, expected_data)
+
+        assertData(['k1'], {})
+
+        assertData(['k1', 'x1'], {'k1': {'x2': ['i1', 'i2']}})
+
+        assertData(['k1', 'x1', 'y1'],
+                   {'k1': {'x1': {'y2': 'z2'}, 'x2': ['i1', 'i2']}})
+        assertData(['k1', 'x1', 'y2'],
+                   {'k1': {'x1': {'y1': 'z1'}, 'x2': ['i1', 'i2']}})
+
+        assertData(['k1', 'x2', 0],
+                   {'k1': {'x1': {'y1': 'z1', 'y2': 'z2'}, 'x2': ['i2']}})
+        assertData(['k1', 'x2', -1],
+                   {'k1': {'x1': {'y1': 'z1', 'y2': 'z2'}, 'x2': ['i1']}})
+
+        assertData(['kx'], data)
+        assertData(['k1', 'zz'], data)
+
     def test_json_contains_in_list(self):
         m1 = self.M.create(data=[{'k1': 'v1', 'k2': 'v2'}, {'a1': 'b1'}])
         m2 = self.M.create(data=[{'k3': 'v3'}, {'k4': 'v4'}])

@@ -51,6 +51,7 @@ JSONB_CONTAINS_ANY_KEY = '?|'
 JSONB_CONTAINS_ALL_KEYS = '?&'
 JSONB_EXISTS = '?'
 JSONB_REMOVE = '-'
+JSONB_PATH_REMOVE = '#-'
 JSONB_PATH = '#>'
 
 
@@ -289,6 +290,10 @@ class _JsonLookupBase(_LookupNode):
 
     def has_key(self, key):
         return Expression(self.as_json(True), JSONB_CONTAINS_KEY, key)
+
+    def remove(self):
+        value = AsIs(list(map(str, self.parts)), False)
+        return Expression(self.node, JSONB_PATH_REMOVE, value)
 
     def path(self, *keys):
         return JsonPath(self.as_json(True), keys, as_json=True)

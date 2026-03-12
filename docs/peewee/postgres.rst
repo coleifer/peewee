@@ -151,6 +151,15 @@ JSONField and BinaryJSONField
           .update(data=Event.data.concat({'result': {'success': True}}))
           .execute())
 
+      Nested data can also use ``concat()``:
+
+      .. code-block:: python
+
+         query = Event.select(
+             Event.data['result'].concat({'status': 'ok'}).alias('res'))
+         for evt in query:
+             print(evt.res)  # e.g. {'ip': '1.2.3.4', 'status': 'ok'}
+
 
 .. class:: BinaryJSONField(dumps=None, *args, **kwargs)
 
@@ -179,26 +188,55 @@ JSONField and BinaryJSONField
           .update(data=Event.data.concat({'result': {'success': True}}))
           .execute())
 
+      Nested data can also use ``concat()``:
+
+      .. code-block:: python
+
+         # Select the result subkey and merge with additional data:
+         # {'ip': '1.2.3.4'} --> {'ip': '1.2.3.4', 'status': 'ok'}
+
+         Event.select(Event.data['result'].concat({'status': 'ok'}))
+
    .. method:: contains(other)
 
       Test whether this field's value contains ``other`` (as a subset).
-      ``other`` may be a partial dict, list, or scalar value.
+      ``other`` may be a partial dict, list, or scalar value. Useful for
+      matching against a partial JSON object or checking if an item is in an
+      array.
 
       .. code-block:: python
 
          Event.create(data={
              'type': 'rename',
              'name': 'new name',
+             'metadata': {'old_name': 'the old name'},
              'tags': ['t1', 't2', 't3']})
+
+         # These queries match the above row:
 
          # Search by partial object:
          Event.select().where(Event.data.contains({'type': 'rename'}))
 
-         # Search arrays by one or more items:
+         # Partial object and partial array:
+         Event.select().where(Event.data.contains({
+             'type': 'rename',
+             'tags': ['t2', 't1'],
+         }))
+
+         # Partial array, irrespective of ordering:
          Event.select().where(Event.data['tags'].contains(['t2', 't1']))
 
-         # Search arrays by individual item:
+         # Search array by individual item:
          Event.select().where(Event.data['tags'].contains('t1'))
+
+      To test whether a **key** simply exists, use :meth:`~BinaryJSONField.has_key`:
+
+      .. code-block:: python
+
+         Event.select().where(Event.data.has_key('name'))
+
+         # Or search a sub-key.
+         Event.select().where(Event.data['metadata'].has_key('old_name'))
 
    .. method:: contains_any(*keys)
 
@@ -209,11 +247,19 @@ JSONField and BinaryJSONField
          Event.create(data={
              'type': 'rename',
              'name': 'new name',
+             'metadata': {'old_name': 'the old name'},
              'tags': ['t1', 't2', 't3']})
 
-         (Event
-          .select()
-          .where(Event.data.contains_any('name', 'other')))
+         # These queries match the above row:
+
+         Event.select().where(Event.data.contains_any('name', 'other'))
+
+         # Search a nested object:
+         Event.select().where(
+             Event.data['metadata'].contains_any('old_name', 'old_status'))
+
+         # Search nested object for items in an array:
+         Event.select().where(Event.data['tags'].contains_any('t3', 'tx'))
 
    .. method:: contains_all(*keys)
 
@@ -224,11 +270,15 @@ JSONField and BinaryJSONField
          Event.create(data={
              'type': 'rename',
              'name': 'new name',
+             'metadata': {'old_name': 'the old name'},
              'tags': ['t1', 't2', 't3']})
 
-         (Event
-          .select()
-          .where(Event.data.contains_all('name', 'tags')))
+         # These queries match the above row:
+
+         Event.select().where(Event.data.contains_all('name', 'tags'))
+
+         # Search nested object for items in an array:
+         Event.select().where(Event.data['tags'].contains_all('t3', 't2'))
 
    .. method:: contained_by(other)
 
@@ -240,11 +290,28 @@ JSONField and BinaryJSONField
              'type': 'login',
              'result': {'success': True}})
 
+         Event.create(data={
+             'type': 'rename',
+             'name': 'new name',
+             'metadata': {'old_name': 'the old name'},
+             'tags': ['t1', 't2', 't3']})
+
+         # Matches the login row.
          (Event
           .select()
           .where(Event.data.contained_by({
               'type': 'login',
               'result': {'success': True, 'message': 'OK'}})))
+
+         # Match events that have a result w/success=True and/or
+         # error=False:
+         Event.select().where(Event.data['result'].contained_by({
+             'success': True,
+             'error': False})
+
+         # Check that tags are subset of the popular tags (matches rename row).
+         popular_tags = ['t3', 't2', 't1', 'tx', 'ty']
+         Event.select().where(Event.data['tags'].contained_by(popular_tags))
 
    .. method:: has_key(key)
 
@@ -264,6 +331,12 @@ JSONField and BinaryJSONField
 
          # Atomically remove key:
          Event.update(data=Event.data.remove('result')).execute()
+
+         # Equivalent to above:
+         Event.update(data=Event.data['result'].remove()).execute()
+
+         # Remove deeply-nested item:
+         Event.update(data=Event.data['metadata']['prior'].remove())
 
 
 .. _postgres-hstore:
