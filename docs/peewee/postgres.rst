@@ -72,11 +72,19 @@ JSON Support
 
 Peewee provides two JSON field types for Postgresql:
 
-- :class:`JSONField` - stores JSON as text, supports key access and comparison.
 - :class:`BinaryJSONField` - stores JSON in the efficient binary ``jsonb``
-  format and adds containment operators.
+  format. Supports key/item access, containment operations.
+- :class:`JSONField` - stores JSON as text, supports key/item access.
 
-In general always use :class:`BinaryJSONField`.
+Most applications will wish to use :class:`BinaryJSONField` (``JSONB``):
+
+* Faster Queries: direct access to data elements without parsing the entire
+  JSON document each time.
+* Index Support: supports indexing via GiST or GIN.
+* Faster updates without requiring rewriting the entire document.
+
+The only time :class:`JSONField` is preferable is when you must store
+the exact JSON data verbatim (whitespace, object key ordering).
 
 .. code-block:: python
 
@@ -122,16 +130,6 @@ In general always use :class:`BinaryJSONField`.
 
 BinaryJSONField and JSONField
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-
-Most applications will wish to use :class:`BinaryJSONField` (``JSONB``):
-
-* Faster Queries: direct access to data elements without parsing the entire
-  JSON document each time.
-* Index Support: supports indexing via GiST or GIN.
-* Faster updates without requiring rewriting the entire document.
-
-The only time :class:`JSONField` is preferable is when you must store
-the exact JSON data verbatim (whitespace, object key ordering).
 
 .. class:: BinaryJSONField(dumps=None, *args, **kwargs)
 
