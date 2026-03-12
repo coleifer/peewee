@@ -139,6 +139,107 @@ Thread-Safe Database Swapping
        # Safe to do at runtime from any thread:
        BaseModel._meta.database = replica
 
+.. _pydantic:
+
+Pydantic
+--------
+
+.. module:: playhouse.pydantic_utils
+
+``playhouse.pydantic_utils`` provides a helper for generating a Pydantic model
+from an existing Peewee :class:`Model` class.
+
+.. function:: to_pydantic(model_cls, exclude=None, include=None, exclude_autofield=True, model_name=None)
+
+   :param Model model_cls: Peewee Model to generate.
+   :param exclude: field names to exclude from Pydantic model.
+   :type exclude: list, set, tuple
+   :param include: field names to include when generating Pydantic model.
+   :type include: list, set, tuple
+   :param bool exclude_autofield: Exclude auto-incrementing ID field when
+      generating Pydantic model.
+   :param str model_name: Name for Pydantic model. Default to ``<model_cls>Schema``.
+
+   Generate a Pydantic ``Model`` for the given Peewee ``model_cls``. The
+   generated model will preserve Peewee field metadata:
+
+   * ``choices`` - restrict acceptable values for field.
+   * ``default`` - provide a default value for field.
+   * ``verbose_name`` - provide a human-readable title for field.
+   * ``help_text`` - provide a human-readable description for field.
+   * ``null`` - control whether field is optional or required.
+
+   Foreign-key fields are exposed using the underlying column name, and
+   accept a scalar value.
+
+   Example:
+
+   .. code-block:: python
+
+      class Person(TestModel):
+          name = CharField(verbose_name='Full Name', help_text='Display name')
+          age = IntegerField()
+          active = BooleanField(default=True)
+          bio = TextField(null=True)
+          score = FloatField(null=True, default=0.0)
+          status = CharField(
+              verbose_name='Status',
+              help_text='Record status',
+              choices=[
+                  ('active', 'Active'),
+                  ('archived', 'Archived'),
+                  ('deleted', 'Deleted'),
+              ])
+          created = DateTimeField(default=datetime.datetime.now)
+
+      PersonSchema = to_pydantic(Person)
+
+   The above model will have the following JSON schema:
+
+   .. code-block:: python
+
+      {'properties': {'name': {'description': 'Display name',
+                               'title': 'Full Name',
+                               'type': 'string'},
+                      'age': {'title': 'Age', 'type': 'integer'},
+                      'active': {'default': True,
+                                 'title': 'Active',
+                                 'type': 'boolean'},
+                      'bio': {'anyOf': [{'type': 'string'}, {'type': 'null'}],
+                              'default': None,
+                              'title': 'Bio'},
+                      'score': {'anyOf': [{'type': 'number'}, {'type': 'null'}],
+                                'default': 0.0,
+                                'title': 'Score'},
+                      'status': {'description': "Record status | Choices: 'active' = "
+                                                "Active, 'archived' = Archived, "
+                                                "'deleted' = Deleted",
+                                 'enum': ['active', 'archived', 'deleted'],
+                                 'title': 'Status',
+                                 'type': 'string'},
+                      'created': {'format': 'date-time',
+                                  'title': 'Created',
+                                  'type': 'string'}},
+       'required': ['name', 'age', 'status'],
+       'title': 'PersonSchema',
+       'type': 'object'}
+
+   Usage:
+
+   .. code-block:: python
+
+      # Validate a model instance.
+      huey = Person.create(name='Huey', age=14, status='active')
+
+      validated = PersonSchema.model_validate(huey)
+      print(validated.dict())  # {'name': 'Huey', ...}
+
+      # Validate data from HTTP request.
+      validated = PersonSchema.model_validate(request.POST)
+
+      # Construct model instance from validated request data.
+      person = Person(**validated.dict())
+
 
 .. _hybrid:
 

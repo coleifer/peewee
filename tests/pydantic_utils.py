@@ -118,6 +118,9 @@ class TestPydanticConversion(ModelDatabaseTestCase):
         self.assertEqual(ps.created, p.created)
         self.assertIsNone(ps.id)
 
+        v2 = Schema.model_validate(validated.dict())
+        self.assertEqual(validated, v2)
+
     def test_include_exclude(self):
         Schema = to_pydantic(Person, exclude=('age', 'bio'))
         self.assertEqual(set(Schema.model_fields), {
