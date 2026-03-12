@@ -650,6 +650,50 @@ class TestBinaryJsonField(BaseBinaryJsonFieldTestCase, ModelTestCase):
         assertData(['kx'], data)
         assertData(['k1', 'zz'], data)
 
+    def test_json_length(self):
+        BJson.delete().execute()  # Clear out db.
+        data = {'k1': {'x1': [1, 2, 3], 'x2': [1, 2], 'x3': []}}
+        BJson.create(data=data)
+
+        def assertLength(exp_list, count):
+            curr = BJson.data
+            for exp in exp_list:
+                curr = curr[exp]
+
+            query = BJson.select(curr.length()).tuples()
+            data = query[:][0][0]
+            self.assertEqual(data, count)
+
+        assertLength(('k1', 'x1'), 3)
+        assertLength(('k1', 'x2'), 2)
+        assertLength(('k1', 'x3'), 0)
+
+        BJson.delete().execute()  # Clear out db.
+        BJson.create(data=[0, 1, 2, 3, 4, 5])
+        assertLength((), 6)
+
+    def test_json_extract(self):
+        BJson.delete().execute()  # Clear out db.
+        data = {'k1': {'x1': {'y1': 'z1', 'y2': 'z2'}, 'x2': ['i1', 'i2']}}
+        BJson.create(data=data)
+
+        def assertData(node, path, expected_data):
+            query = BJson.select(node.extract(*path)).tuples()
+            data = query[:][0][0]
+            self.assertEqual(data, expected_data)
+
+        assertData(BJson.data, ('k1', 'x1', 'y1'), 'z1')
+        assertData(BJson.data, ('k1', 'x1'), {'y1': 'z1', 'y2': 'z2'})
+        assertData(BJson.data, ('k1', 'x2', 0), 'i1')
+        assertData(BJson.data, ('k1', 'x2', -1), 'i2')
+        assertData(BJson.data, ('k1',),
+                   {'x1': {'y1': 'z1', 'y2': 'z2'}, 'x2': ['i1', 'i2']})
+        assertData(BJson.data, ('kx',), None)
+
+        assertData(BJson.data['k1'], ('x1', 'y1'), 'z1')
+        assertData(BJson.data['k1']['x1'], ('y1',), 'z1')
+        assertData(BJson.data['k1']['x2'], (0,), 'i1')
+
     def test_json_contains_in_list(self):
         m1 = self.M.create(data=[{'k1': 'v1', 'k2': 'v2'}, {'a1': 'b1'}])
         m2 = self.M.create(data=[{'k3': 'v3'}, {'k4': 'v4'}])

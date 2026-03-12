@@ -252,6 +252,7 @@ class HStoreField(IndexedFieldMixin, Field):
 class _JsonLookupBase(_LookupNode):
     def __init__(self, node, parts, as_json=False):
         super(_JsonLookupBase, self).__init__(node, parts)
+        self._jsonb = getattr(node, '_json_type', 'jsonb') == 'jsonb'
         self._as_json = as_json
 
     def clone(self):
@@ -292,8 +293,18 @@ class _JsonLookupBase(_LookupNode):
         return Expression(self.as_json(True), JSONB_CONTAINS_KEY, key)
 
     def remove(self):
-        value = AsIs(list(map(str, self.parts)), False)
+        parts = [str(p) if isinstance(p, int) else p for p in self.parts]
+        value = AsIs(parts, False)
         return Expression(self.node, JSONB_PATH_REMOVE, value)
+
+    def length(self):
+        func = fn.jsonb_array_length if self._jsonb else fn.json_array_length
+        return func(self.as_json(True))
+
+    def extract(self, *path):
+        path = [str(p) if isinstance(p, int) else p for p in path]
+        func = fn.jsonb_extract_path if self._jsonb else fn.json_extract_path
+        return func(self.as_json(True), *path)
 
     def path(self, *keys):
         return JsonPath(self.as_json(True), keys, as_json=True)
@@ -369,6 +380,13 @@ class JSONField(FieldDatabaseHook, Field):
             value = self.json_type(value)
         return super(JSONField, self).concat(value)
 
+    def length(self):
+        return fn.json_array_length(self)
+
+    def extract(self, *path):
+        path = [str(p) if isinstance(p, int) else p for p in path]
+        return fn.json_extract_path(self, *path)
+
 
 class BinaryJSONField(IndexedFieldMixin, JSONField):
     field_type = 'JSONB'
@@ -418,6 +436,13 @@ class BinaryJSONField(IndexedFieldMixin, JSONField):
     def remove(self, *items):
         value = Cast(AsIs(list(items), False), 'text[]')
         return Expression(self, JSONB_REMOVE, value)
+
+    def length(self):
+        return fn.jsonb_array_length(self)
+
+    def extract(self, *path):
+        path = [str(p) if isinstance(p, int) else p for p in path]
+        return fn.jsonb_extract_path(self, *path)
 
 
 class TSVectorField(IndexedFieldMixin, TextField):

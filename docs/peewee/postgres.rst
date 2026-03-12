@@ -120,46 +120,18 @@ In general always use :class:`BinaryJSONField`.
    Refer to the `Postgresql JSON documentation <https://www.postgresql.org/docs/current/functions-json.html>`__
    for in-depth discussion and examples of using JSON and JSONB.
 
-JSONField and BinaryJSONField
+BinaryJSONField and JSONField
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-.. class:: JSONField(dumps=None, *args, **kwargs)
+Most applications will wish to use :class:`BinaryJSONField` (``JSONB``):
 
-   :param dumps: custom implementation of ``json.dumps``
+* Faster Queries: direct access to data elements without parsing the entire
+  JSON document each time.
+* Index Support: supports indexing via GiST or GIN.
+* Faster updates without requiring rewriting the entire document.
 
-   Field that stores and retrieves JSON data. Supports ``__getitem__`` key
-   access for filtering and sub-object retrieval.
-
-   Consider using the :class:`BinaryJSONField` instead as it
-   offers better performance and more powerful querying options.
-
-   .. method:: as_json()
-
-      Deserialize and return the JSON value at the given path.
-
-   .. method:: concat(data)
-
-      Concatenate the field value with ``data``. Note this is a shallow
-      operation and does not deep-merge nested objects.
-
-      Example:
-
-      .. code-block:: python
-
-         # Add object - if "result" key existed before it is overwritten.
-         (Event
-          .update(data=Event.data.concat({'result': {'success': True}}))
-          .execute())
-
-      Nested data can also use ``concat()``:
-
-      .. code-block:: python
-
-         query = Event.select(
-             Event.data['result'].concat({'status': 'ok'}).alias('res'))
-         for evt in query:
-             print(evt.res)  # e.g. {'ip': '1.2.3.4', 'status': 'ok'}
-
+The only time :class:`JSONField` is preferable is when you must store
+the exact JSON data verbatim (whitespace, object key ordering).
 
 .. class:: BinaryJSONField(dumps=None, *args, **kwargs)
 
@@ -337,6 +309,61 @@ JSONField and BinaryJSONField
 
          # Remove deeply-nested item:
          Event.update(data=Event.data['metadata']['prior'].remove())
+
+   .. method:: length()
+
+      Return the length of the JSON array at the given path.
+
+      .. code-block:: python
+
+         Event.select().where(Event.data['tags'].length() > 3)
+
+   .. method:: extract(*path)
+
+      Extract the JSON data at the given path.
+
+      .. code-block:: python
+
+         Event.select().where(Event.data.extract('tags', 0) == 'first_tag')
+
+         Event.select().where(Event.data.extract('result', 'success') == True)
+
+         # Equivalent to above.
+         Event.select().where(Event.data['result'].extract('success') == True)
+
+
+.. class:: JSONField(dumps=None, *args, **kwargs)
+
+   :param dumps: custom implementation of ``json.dumps``
+
+   Field that stores and retrieves JSON data. Supports ``__getitem__`` key
+   access for filtering and sub-object retrieval.
+
+   Consider using the :class:`BinaryJSONField` instead as it
+   offers better performance and more powerful querying options.
+
+   .. method:: as_json()
+
+      Deserialize and return the JSON value at the given path.
+
+   .. method:: concat(data)
+
+      Concatenate the field value with ``data``. Note this is a shallow
+      operation and does not deep-merge nested objects.
+
+      See :ref:`BinaryJSONField.concat` for example usage.
+
+   .. method:: length()
+
+      Return the length of the JSON array at the given path.
+
+      See :ref:`BinaryJSONField.length` for example usage.
+
+   .. method:: extract(*path)
+
+      Extract the JSON data at the given path.
+
+      See :ref:`BinaryJSONField.extract` for example usage.
 
 
 .. _postgres-hstore:

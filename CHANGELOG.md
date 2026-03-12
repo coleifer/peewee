@@ -12,6 +12,9 @@ https://github.com/coleifer/peewee/releases
 * Better serialization and deserialization of datetimes and binary data in the
   DataSet module. Previously binary data was encoded as base64, going forward
   hex is the new default. For base64 specify `base64_bytes=True`.
+* Improvements to Postgres `BinaryJSONField`, support atomic removal of
+  sub-elements, as well as alternate helper for extracting sub-elements and
+  querying array length.
 
 [View commits](https://github.com/coleifer/peewee/compare/4.0.1...master)
 
