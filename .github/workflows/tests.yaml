@@ -57,7 +57,7 @@ jobs:
         run: |
           sudo apt-get install libsqlite3-dev
           pip install setuptools psycopg2-binary cython pymysql 'apsw' mysql-connector sqlcipher3 pysqlite3 'psycopg[binary]' gevent
-          pip install greenlet aiosqlite aiomysql asyncpg
+          pip install greenlet aiosqlite aiomysql asyncpg pydantic
           python setup.py build_ext -i
           psql peewee_test -c 'CREATE EXTENSION hstore;'
       - name: crdb
