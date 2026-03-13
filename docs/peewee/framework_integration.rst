@@ -59,7 +59,8 @@ Use ``before_request`` and ``teardown_request``:
 ``teardown_request`` is called regardless of whether the request succeeded or
 raised an exception, making it the correct hook for cleanup.
 
-For a complete Flask + Peewee application example, see :ref:`example`.
+For a **complete** Flask + Peewee application example, including authentication
+and other common functionality, see :ref:`example`.
 
 .. seealso:: :ref:`flask-utils`
 
@@ -168,7 +169,7 @@ Full Example using Pydantic
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 Below is a full example FastAPI application demonstrating dependency-injection
-style hooks, async queries, and pydantic integration:
+style hooks, :ref:`async queries <asyncio>`, and :ref:`pydantic integration <pydantic>`:
 
 .. code-block:: python
 
@@ -185,11 +186,16 @@ style hooks, async queries, and pydantic integration:
    class User(Model):
        name = CharField(verbose_name='Full Name', help_text='Display name')
        email = CharField(unique=True)
-       active = BooleanField(default=True)
+       status = IntegerField(default=1, choices=(
+           (1, 'Active'),
+           (2, 'Inactive'),
+           (3, 'Deleted')))
        class Meta:
            database = db
 
    # Generate pydantic schemas suitable for create and responses.
+   # Schemas will include metadata from verbose_name, help_text, choices, and
+   # default settings.
    UserCreate = to_pydantic(User, model_name='UserCreate')
    UserResponse = to_pydantic(User, exclude_autofield=False, model_name='UserResponse')
 
@@ -241,22 +247,46 @@ Populate and query data:
         -H "Content-Type: application/json" \
         -d '{"name": "Alice", "email": "alice@example.com"}'
 
-   {"id":1,"name":"Alice","email":"alice@example.com","active":true}
+   {"id":1,"name":"Alice","email":"alice@example.com","status":1}
 
    $ curl -X POST http://localhost:8000/users \
         -H "Content-Type: application/json" \
-        -d '{"name": "Bob", "email": "bob@example.com", "active": false}'
+        -d '{"name": "Bob", "email": "bob@example.com", "status": 2}'
 
-   {"id":2,"name":"Bob","email":"bob@example.com","active":false}
+   {"id":2,"name":"Bob","email":"bob@example.com","status":2}
 
    $ curl http://localhost:8000/users
 
-   [{"id":1,"name":"Alice","email":"alice@example.com","active":true},
-    {"id":2,"name":"Bob","email":"bob@example.com","active":false}]
+   [{"id":1,"name":"Alice","email":"alice@example.com","status":1},
+    {"id":2,"name":"Bob","email":"bob@example.com","status":2}]
 
    $ curl http://localhost:8000/users/1
 
-   {"id":1,"name":"Alice","email":"alice@example.com","active":true}
+   {"id":1,"name":"Alice","email":"alice@example.com","status":1}
+
+We can also verify that the pydantic schemas captured our Peewee model
+metadata:
+
+.. code-block:: python
+
+   >>> UserCreate.model_json_schema()
+   {'properties': {
+      'name': {
+         'description': 'Display name',
+         'title': 'Full Name',
+         'type': 'string'},
+      'email': {
+         'title': 'Email',
+         'type': 'string'},
+     'status': {
+         'default': 1,
+         'description': 'Choices: 1 = Active, 2 = Inactive, 3 = Deleted',
+         'enum': [1, 2, 3],
+         'title': 'Status',
+         'type': 'integer'}},
+    'required': ['name', 'email'],
+    'title': 'UserCreate',
+    'type': 'object'}
 
 .. seealso::
    * :ref:`pwasyncio`
