@@ -2179,24 +2179,24 @@ has more information.
 
       .. code-block:: python
 
-          query = (DocumentIndex
-                   .select(
-                       DocumentIndex,
-                       DocumentIndex.rank().alias('score'))
-                   .where(DocumentIndex.match('search phrase'))
-                   .order_by(DocumentIndex.rank()))
+         query = (DocumentIndex
+                  .select(
+                      DocumentIndex,
+                      DocumentIndex.rank().alias('score'))
+                  .where(DocumentIndex.match('search phrase'))
+                  .order_by(DocumentIndex.rank()))
 
-          for search_result in query:
-              print(search_result.title, search_result.score)
+         for search_result in query:
+             print(search_result.title, search_result.score)
 
-       The above code example is equivalent to calling the
-       :meth:`~FTS5Model.search` method:
+      The above code example is equivalent to calling the
+      :meth:`~FTS5Model.search` method:
 
-       .. code-block:: python
+      .. code-block:: python
 
-           query = DocumentIndex.search('search phrase', with_score=True)
-           for search_result in query:
-               print(search_result.title, search_result.score)
+         query = DocumentIndex.search('search phrase', with_score=True)
+         for search_result in query:
+             print(search_result.title, search_result.score)
 
    .. classmethod:: bm25(col1_weight, col2_weight...coln_weight)
 

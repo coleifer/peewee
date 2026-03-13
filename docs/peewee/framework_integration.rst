@@ -37,7 +37,15 @@ approach for each.
 Flask
 -----
 
-Use ``before_request`` and ``teardown_request``:
+For a **complete** Flask + Peewee application example, including authentication
+and other common webapp functionality, see :ref:`example`. There is also a
+full `blog app <https://github.com/coleifer/peewee/tree/master/examples/blog>`__
+and an `analytics app <https://github.com/coleifer/peewee/tree/master/examples/analytics>`__
+in the project ``examples/`` directory.
+
+The **minimal** Flask integration ensures that database connection lifecycles
+are tied to the request/response cycle via ``before_request`` and ``teardown_request``
+hooks:
 
 .. code-block:: python
 
@@ -59,10 +67,32 @@ Use ``before_request`` and ``teardown_request``:
 ``teardown_request`` is called regardless of whether the request succeeded or
 raised an exception, making it the correct hook for cleanup.
 
-For a **complete** Flask + Peewee application example, including authentication
-and other common functionality, see :ref:`example`.
+For applications that receive a large number of requests, a connection pool is
+recommended:
 
-.. seealso:: :ref:`flask-utils`
+.. code-block:: python
+
+   from flask import Flask
+   from playhouse.pool import PooledPostgresqlDatabase
+
+   db = PooledPostgresqlDatabase('app', host='10.8.0.1', user='postgres')
+   app = Flask(__name__)
+
+   # Note that when using the pooled implementation the hooks are the exact
+   # same. Opening and closing the connection simply acquires and releases it
+   # from the pool for the lifetime of the request.
+   @app.before_request
+   def _db_connect():
+       db.connect()
+
+   @app.teardown_request
+   def _db_close(exc):
+       if not db.is_closed():
+           db.close()
+
+.. seealso::
+   The :ref:`flask-utils` extension provides helpers for common tasks like
+   declarative database configuration, object retrieval and pagination.
 
 .. _fastapi:
 
@@ -107,7 +137,7 @@ Async Example using Pydantic
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 Below is a full example FastAPI application demonstrating dependency-injection
-style hooks, fully :ref:`async query execution <asyncio>`, and
+style hooks, fully :ref:`async query execution <pwasyncio>`, and
 :ref:`pydantic integration <pydantic>`:
 
 .. code-block:: python

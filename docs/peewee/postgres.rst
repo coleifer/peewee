@@ -349,19 +349,19 @@ BinaryJSONField and JSONField
       Concatenate the field value with ``data``. Note this is a shallow
       operation and does not deep-merge nested objects.
 
-      See :ref:`BinaryJSONField.concat` for example usage.
+      See :meth:`BinaryJSONField.concat` for example usage.
 
    .. method:: length()
 
       Return the length of the JSON array at the given path.
 
-      See :ref:`BinaryJSONField.length` for example usage.
+      See :meth:`BinaryJSONField.length` for example usage.
 
    .. method:: extract(*path)
 
       Extract the JSON data at the given path.
 
-      See :ref:`BinaryJSONField.extract` for example usage.
+      See :meth:`BinaryJSONField.extract` for example usage.
 
 
 .. _postgres-hstore:
