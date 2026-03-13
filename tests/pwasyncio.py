@@ -560,16 +560,52 @@ class TestTaskLifecycle(unittest.IsolatedAsyncioTestCase):
         self.db = AsyncSqliteDatabase(self.db_path)
         TestModel._meta.set_database(self.db)
 
-        await self.db.aconnect()
-        await self.db.acreate_tables([TestModel])
+        async with self.db:
+            await self.db.acreate_tables([TestModel])
 
     async def asyncTearDown(self):
-        await self.db.aclose()
         await self.db.close_pool()
 
         if self.db_path and os.path.exists(self.db_path):
             for fname in glob.glob(self.db_path + '*'):
                 os.unlink(fname)
+
+    async def test_task_id_behavior(self):
+        async def a1(db):
+            accum = []
+            async with db:
+                accum.append(db._state._get_storage_key())
+                accum.append(await a2(db))
+            return accum
+
+        async def a2(db):
+            async with db:
+                return db._state._get_storage_key()
+
+        def s1(db):
+            accum = []
+            with db.connection_context():
+                accum.append(db._state._get_storage_key())
+                accum.append(s2(db))
+            return accum
+
+        def s2(db):
+            with db.connection_context():
+                return db._state._get_storage_key()
+
+        async with self.db:
+            ids = await(a1(self.db))
+            ids.extend(await self.db.run(s1, self.db))
+
+        self.assertEqual(len(ids), 4)
+        self.assertEqual(len(set(ids)), 1)
+
+        async with self.db:
+            ids = await asyncio.create_task(a1(self.db))
+            ids.extend(await asyncio.create_task(self.db.run(s1, self.db)))
+
+        self.assertEqual(len(ids), 4)
+        self.assertEqual(len(set(ids)), 2)
 
     async def test_task_state_cleanup_after_completion(self):
         async def task_with_state():
