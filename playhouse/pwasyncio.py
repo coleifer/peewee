@@ -90,6 +90,7 @@ class TaskLocal(object):
         self._state_storage = {}  # Keyed by task id.
         self._task_refs = weakref.WeakSet()
         self._access_count = 0
+        self._orphaned_conns = []
 
     def _get_storage_key(self):
         try:
@@ -121,7 +122,8 @@ class TaskLocal(object):
         return getattr(self._current(), name)
 
     def __setattr__(self, name, value):
-        if name in ('_state_storage', '_task_refs', '_access_count'):
+        if name in ('_state_storage', '_task_refs', '_access_count',
+                    '_orphaned_conns'):
             super(TaskLocal, self).__setattr__(name, value)
         else:
             setattr(self._current(), name, value)
@@ -154,7 +156,11 @@ class TaskLocal(object):
         dead_keys = [key for key in self._state_storage
                      if key not in live_task_ids]
         for key in dead_keys:
-            del self._state_storage[key]
+            state = self._state_storage.pop(key)
+            if state.conn is not None and not state.closed:
+                self._orphaned_conns.append(state.conn)
+                state.conn = None
+                state.closed = True
         return len(dead_keys)
 
 
@@ -209,6 +215,11 @@ class AsyncDatabaseMixin(object):
         if self._closing:
             raise InterfaceError('Database pool is shutting down.')
 
+        # Drain any connections orphaned by dead tasks.
+        while self._state._orphaned_conns:
+            orphan = self._state._orphaned_conns.pop()
+            await self._pool_release(orphan)
+
         conn = self._state.conn
         if conn is None or conn.conn is None:
             if conn is not None:
@@ -250,12 +261,13 @@ class AsyncDatabaseMixin(object):
         self._closing = True
         try:
             if self._pool:
-                # Snapshot active connections and release them.
-                active = list(self._state._state_storage.values())
-                for state in active:
+                # Flush dead-task state into _orphaned_conns so their
+                # connections can be released below.
+                self._state.cleanup_dead_tasks()
+
+                # Release connections held by any task still in storage.
+                for state in list(self._state._state_storage.values()):
                     if state.conn and not state.closed:
-                        logger.debug('Closing active connection for task %s',
-                                     id(state.conn))
                         try:
                             await self._pool_release(state.conn)
                         except Exception:
@@ -266,12 +278,16 @@ class AsyncDatabaseMixin(object):
                         state.closed = True
                         state.transactions = []
 
+                while self._state._orphaned_conns:
+                    orphan = self._state._orphaned_conns.pop()
+                    try:
+                        await self._pool_release(orphan)
+                    except Exception:
+                        logger.warning('Error releasing orphaned connection',
+                                       exc_info=True)
+
                 await self._pool_close()
                 self._pool = None
-
-            cleaned = self._state.cleanup_dead_tasks()
-            if cleaned > 0:
-                logger.debug('Cleaned up %d dead task states', cleaned)
         finally:
             self._closing = False
 
