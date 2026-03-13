@@ -69,7 +69,54 @@ FastAPI
 -------
 
 FastAPI is an async framework and can be used with Peewee's :ref:`pwasyncio`
-integration.
+integration. Peewee also provides :ref:`pydantic` support, which works well
+with FastAPI.
+
+Using dependency injection
+^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+The following example demonstrates how to:
+
+* Ensure connection is opened and closed automatically for endpoints that use
+  the database.
+* Create tables/resources when app server starts.
+* Shut-down connection pool when app server exits.
+
+.. code-block:: python
+
+   from contextlib import asynccontextmanager
+   from fastapi import Depends, FastAPI
+   from peewee import *
+   from playhouse.pwasyncio import *
+
+
+   app = FastAPI()
+
+   db = AsyncPostgresqlDatabase('peewee_test', host='10.8.0.1', user='postgres')
+
+   async def get_db():
+       await db.aconnect()
+       try:
+           yield db
+       finally:
+           await db.aclose()
+
+   @asynccontextmanager
+   async def lifespan(app):
+       async with db:
+           await db.acreate_tables([User])
+       yield
+       await db.close_pool()
+
+   app = FastAPI(lifespan=lifespan)
+
+   @app.get('/users')
+   async def list_users(db=Depends(get_db)):
+       return await db.list(User.select().dicts())
+
+
+Using middleware and startup hooks
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 The following example demonstrates how to:
 
@@ -106,10 +153,7 @@ The following example demonstrates how to:
    async def on_shutdown():
        await db.close_pool()
 
-Example demonstrating executing an async query:
-
-.. code-block:: python
-
+   # Async queries.
    @app.get('/users')
    async def list_users():
        return await db.list(User.select().dicts())
@@ -119,7 +163,104 @@ Example demonstrating executing an async query:
        user = await db.run(User.create, name=name)
        return {'id': user.id, 'name': user.name}
 
-.. seealso:: :ref:`pwasyncio`
+
+Full Example using Pydantic
+^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Below is a full example FastAPI application demonstrating dependency-injection
+style hooks, async queries, and pydantic integration:
+
+.. code-block:: python
+
+   # example.py
+   from fastapi import Depends, FastAPI, HTTPException
+   from contextlib import asynccontextmanager
+   from peewee import *
+   from playhouse.pwasyncio import AsyncPostgresqlDatabase
+   from playhouse.pydantic_utils import to_pydantic
+
+
+   db = AsyncPostgresqlDatabase('peewee_test')
+
+   class User(Model):
+       name = CharField(verbose_name='Full Name', help_text='Display name')
+       email = CharField(unique=True)
+       active = BooleanField(default=True)
+       class Meta:
+           database = db
+
+   # Generate pydantic schemas suitable for create and responses.
+   UserCreate = to_pydantic(User, model_name='UserCreate')
+   UserResponse = to_pydantic(User, exclude_autofield=False, model_name='UserResponse')
+
+   async def get_db():
+       await db.aconnect()
+       try:
+           yield db
+       finally:
+           await db.aclose()
+
+   @asynccontextmanager
+   async def lifespan(app):
+       async with db:
+           await db.acreate_tables([User])
+       yield
+       await db.close_pool()
+
+   app = FastAPI(lifespan=lifespan)
+
+   @app.get('/users', response_model=list[UserResponse])
+   async def list_users(database=Depends(get_db)):
+       rows = await database.list(User.select().dicts())
+       return [UserResponse(**row) for row in rows]
+
+   @app.post('/users', response_model=UserResponse)
+   async def create_user(data: UserCreate, database=Depends(get_db)):
+       user = await database.run(User.create, **data.model_dump())
+       return UserResponse.model_validate(user)
+
+   @app.get('/users/{user_id}', response_model=UserResponse)
+   async def get_user(user_id: int, database=Depends(get_db)):
+       try:
+           user = await database.get(User.select().where(User.id == user_id))
+       except User.DoesNotExist:
+           raise HTTPException(status_code=404, detail='User not found')
+       return UserResponse.model_validate(user)
+
+Run the example:
+
+.. code-block:: console
+
+   $ fastapi dev example.py
+
+Populate and query data:
+
+.. code-block:: console
+
+   $ curl -X POST http://localhost:8000/users \
+        -H "Content-Type: application/json" \
+        -d '{"name": "Alice", "email": "alice@example.com"}'
+
+   {"id":1,"name":"Alice","email":"alice@example.com","active":true}
+
+   $ curl -X POST http://localhost:8000/users \
+        -H "Content-Type: application/json" \
+        -d '{"name": "Bob", "email": "bob@example.com", "active": false}'
+
+   {"id":2,"name":"Bob","email":"bob@example.com","active":false}
+
+   $ curl http://localhost:8000/users
+
+   [{"id":1,"name":"Alice","email":"alice@example.com","active":true},
+    {"id":2,"name":"Bob","email":"bob@example.com","active":false}]
+
+   $ curl http://localhost:8000/users/1
+
+   {"id":1,"name":"Alice","email":"alice@example.com","active":true}
+
+.. seealso::
+   * :ref:`pwasyncio`
+   * :ref:`pydantic`
 
 Django
 ------

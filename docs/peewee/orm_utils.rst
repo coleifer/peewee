@@ -141,8 +141,8 @@ Thread-Safe Database Swapping
 
 .. _pydantic:
 
-Pydantic
---------
+Pydantic Integration
+--------------------
 
 .. module:: playhouse.pydantic_utils
 
