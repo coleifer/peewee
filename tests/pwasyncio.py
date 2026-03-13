@@ -597,6 +597,18 @@ class TestTaskLifecycle(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(all(results))
         self.assertTrue(len(set(results)), 5)
 
+    async def test_connection_returned_when_task_dies(self):
+        async def acquire_and_abandon():
+            await self.db.aconnect()
+            return self.db._state._get_storage_key()
+
+        task_id = await asyncio.create_task(acquire_and_abandon())
+
+        gc.collect()
+
+        self.db._state.cleanup_dead_tasks()
+        await asyncio.wait_for(self.db.close_pool(), timeout=2.0)
+
 
 class IntegrationTests(object):
     db_path = None
