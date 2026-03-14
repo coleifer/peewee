@@ -15,6 +15,7 @@ https://github.com/coleifer/peewee/releases
 * Improvements to Postgres `BinaryJSONField`, support atomic removal of
   sub-elements, as well as alternate helper for extracting sub-elements and
   querying array length.
+* [Pydantic integration](https://docs.peewee-orm.com/en/latest/peewee/orm_utils.html#module-playhouse.pydantic_utils)
 
 [View commits](https://github.com/coleifer/peewee/compare/4.0.1...master)
 
