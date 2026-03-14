@@ -10,9 +10,10 @@ Peewee is a simple and small ORM. It has few (but expressive) concepts, making i
 * supports sqlite, mysql, mariadb, postgresql
 * asyncio support
 * tons of extensions
-* use with `flask <https://docs.peewee-orm.com/en/latest/peewee/framework_integration.html#flask>`_
-  `fastapi <https://docs.peewee-orm.com/en/latest/peewee/framework_integration.html#fastapi>`_ and
-  `more <https://docs.peewee-orm.com/en/latest/peewee/framework_integration.html>`_.
+* use with `flask <https://docs.peewee-orm.com/en/latest/peewee/framework_integration.html#flask>`__,
+  `fastapi <https://docs.peewee-orm.com/en/latest/peewee/framework_integration.html#fastapi>`__,
+  `pydantic <https://docs.peewee-orm.com/en/latest/peewee/orm_utils.html#module-playhouse.pydantic_utils>`__, and
+  `more <https://docs.peewee-orm.com/en/latest/peewee/framework_integration.html>`__.
 
 New to peewee? These may help:
 

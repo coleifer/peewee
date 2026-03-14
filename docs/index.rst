@@ -16,7 +16,8 @@ it easy to learn and intuitive to use.
 * supports :ref:`sqlite, mysql, mariadb, postgresql <database>`.
 * :ref:`asyncio support <pwasyncio>`
 * tons of extensions
-* use with :ref:`flask <flask>`, :ref:`fastapi <fastapi>` and :ref:`more <framework-integration>`
+* use with :ref:`flask <flask>`, :ref:`fastapi <fastapi>`, :ref:`pydantic <pydantic>`
+  and :ref:`more <framework-integration>`
 
 Peewee's source code hosted on `GitHub <https://github.com/coleifer/peewee>`_.
 
