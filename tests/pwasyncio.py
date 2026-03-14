@@ -1,7 +1,6 @@
 import asyncio
 import collections
 import contextvars
-import gc
 import glob
 import itertools
 import tempfile
@@ -11,7 +10,7 @@ from unittest.mock import Mock, AsyncMock, MagicMock, patch
 
 from peewee import *
 from playhouse.pwasyncio import *
-from playhouse.pwasyncio import _State, _lazy_cursor_iter
+from playhouse.pwasyncio import _State, _ConnectionState, _lazy_cursor_iter
 from .base import MYSQL_PARAMS
 from .base import PSQL_PARAMS
 from .base import IS_MYSQL
@@ -94,71 +93,70 @@ class TestGreenletSpawn(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(state, ['y', 'y', 'y'])
 
 
-class TestTaskLocal(unittest.IsolatedAsyncioTestCase):
+class TestConnectionState(unittest.IsolatedAsyncioTestCase):
     async def test_task_isolation(self):
-        tl = TaskLocal()
+        cs = _ConnectionState()
         async def worker(tid):
-            tl._current().conn = tid
+            cs._current().conn = tid
             await asyncio.sleep(0.01)
-            return tl._current().conn
+            return cs._current().conn
         results = await asyncio.gather(*[worker(i) for i in range(5)])
         self.assertEqual(results, [0, 1, 2, 3, 4])
 
     async def test_state_attributes(self):
-        tl = TaskLocal()
-        tl.conn = 'c'
-        tl.closed = False
-        tl.transactions = [1]
-        self.assertEqual(tl.conn, 'c')
-        self.assertFalse(tl.closed)
-        self.assertEqual(tl.transactions, [1])
+        cs = _ConnectionState()
+        cs.set_connection('c')
+        cs.transactions.append(1)
+        self.assertEqual(cs.conn, 'c')
+        self.assertFalse(cs.closed)
+        self.assertEqual(cs.transactions, [1])
 
     async def test_get_returns_fresh_state(self):
-        s = TaskLocal().get()
+        s = _ConnectionState()._current()
         self.assertIsNone(s.conn)
         self.assertTrue(s.closed)
         self.assertEqual(s.transactions, [])
 
-    async def test_clear(self):
-        tl = TaskLocal()
-        tl.conn = 'x'
-        key = tl._get_storage_key()
-        tl.clear()
-        self.assertNotIn(key, tl._state_storage)
-
     async def test_reset(self):
-        tl = TaskLocal()
-        tl.conn = 'x'
-        tl.closed = False
-        tl.transactions = [1, 2]
-        tl.reset()
-        self.assertIsNone(tl.conn)
-        self.assertTrue(tl.closed)
-        self.assertEqual(tl.transactions, [])
+        cs = _ConnectionState()
+        cs.set_connection('x')
+        cs.transactions.append(1)
+        cs.reset()
+        self.assertIsNone(cs.conn)
+        self.assertTrue(cs.closed)
+        self.assertEqual(cs.transactions, [])
 
     async def test_set_connection(self):
-        tl = TaskLocal()
+        cs = _ConnectionState()
         m = Mock()
-        tl.set_connection(m)
-        self.assertIs(tl.conn, m)
-        self.assertFalse(tl.closed)
+        cs.set_connection(m)
+        self.assertIs(cs.conn, m)
+        self.assertFalse(cs.closed)
 
-    async def test_cleanup_dead_tasks(self):
-        tl = TaskLocal()
-        tl._current().conn = 1
-        tl._state_storage[999999] = Mock()
-        cleaned = tl.cleanup_dead_tasks()
-        self.assertGreaterEqual(cleaned, 1)
-        self.assertNotIn(999999, tl._state_storage)
+    async def test_done_callback_orphans_connection(self):
+        cs = _ConnectionState()
+        conn_mock = Mock()
 
-    async def test_periodic_cleanup(self):
-        tl = TaskLocal()
-        super(TaskLocal, tl).__setattr__('_CLEANUP_INTERVAL', 5)
-        tl._state_storage[888888] = _State()
-        for _ in range(5):
-            self.assertIn(888888, tl._state_storage)
-            tl._current()
-        self.assertNotIn(888888, tl._state_storage)
+        async def acquire_and_abandon():
+            cs.set_connection(conn_mock)
+            return id(asyncio.current_task())
+
+        task_id = await asyncio.create_task(acquire_and_abandon())
+        # After the task completes, the done-callback should have fired.
+        await asyncio.sleep(0)
+        self.assertNotIn(task_id, cs._states)
+        self.assertIn(conn_mock, cs._orphaned_conns)
+
+    async def test_done_callback_noop_when_closed(self):
+        cs = _ConnectionState()
+
+        async def open_and_close():
+            cs.set_connection(Mock())
+            cs.reset()  # Simulate proper close.
+
+        await asyncio.create_task(open_and_close())
+        await asyncio.sleep(0)
+        self.assertEqual(cs._orphaned_conns, [])
 
 
 def _make_lazy_cursor(rows, batch_size=2):
@@ -574,24 +572,24 @@ class TestTaskLifecycle(unittest.IsolatedAsyncioTestCase):
         async def a1(db):
             accum = []
             async with db:
-                accum.append(db._state._get_storage_key())
+                accum.append(db._state._current())
                 accum.append(await a2(db))
             return accum
 
         async def a2(db):
             async with db:
-                return db._state._get_storage_key()
+                return db._state._current()
 
         def s1(db):
             accum = []
             with db.connection_context():
-                accum.append(db._state._get_storage_key())
+                accum.append(db._state._current())
                 accum.append(s2(db))
             return accum
 
         def s2(db):
             with db.connection_context():
-                return db._state._get_storage_key()
+                return db._state._current()
 
         async with self.db:
             ids = await(a1(self.db))
@@ -611,38 +609,38 @@ class TestTaskLifecycle(unittest.IsolatedAsyncioTestCase):
         async def task_with_state():
             async with self.db:
                 await self.db.run(TestModel.create, name='test', value=1)
-            return self.db._state._get_storage_key()
+            return id(asyncio.current_task())
 
         task_key = await asyncio.create_task(task_with_state())
-        await asyncio.sleep(0)
-        gc.collect()
+        await asyncio.sleep(0)  # Let done-callbacks fire.
 
-        self.db._state.cleanup_dead_tasks()
-        self.assertFalse(task_key in self.db._state._state_storage)
+        # Done-callback should have removed the state automatically.
+        self.assertNotIn(task_key, self.db._state._states)
 
     async def test_concurrent_task_state_isolation(self):
         async def capture(tid):
             async with self.db:
-                before = id(self.db._state.get())
+                before = id(self.db._state._current())
                 await self.db.run(TestModel.create, name=f't{tid}', value=tid)
-                after = id(self.db._state.get())
+                after = id(self.db._state._current())
                 self.assertEqual(before, after)
                 return before
 
         results = await asyncio.gather(*[capture(i) for i in range(5)])
         self.assertTrue(all(results))
-        self.assertTrue(len(set(results)), 5)
+        self.assertEqual(len(set(results)), 5)
 
     async def test_connection_returned_when_task_dies(self):
         async def acquire_and_abandon():
             await self.db.aconnect()
-            return self.db._state._get_storage_key()
+            return id(asyncio.current_task())
 
         task_id = await asyncio.create_task(acquire_and_abandon())
+        await asyncio.sleep(0)  # Let done-callbacks fire.
 
-        gc.collect()
-
-        self.db._state.cleanup_dead_tasks()
+        # The done-callback should have moved the connection to orphans.
+        self.assertNotIn(task_id, self.db._state._states)
+        # close_pool drains orphans, so it must not deadlock.
         await asyncio.wait_for(self.db.close_pool(), timeout=2.0)
 
 

@@ -1,8 +1,8 @@
 import asyncio
 import collections
+import contextvars
 import json
 import logging
-import weakref
 
 from greenlet import greenlet, getcurrent
 from peewee import *
@@ -74,94 +74,87 @@ def await_(awaitable):
 
 
 class _State(object):
-    __slots__ = ('conn', 'closed', 'transactions')
+    __slots__ = ('conn', 'closed', 'transactions', '_task_id')
+
     def __init__(self):
+        self._task_id = None
+        self.reset()
+
+    def reset(self):
         self.conn = None
         self.closed = True
         self.transactions = []
 
 
-class TaskLocal(object):
-    # Interval (in number of _current() calls) between automatic cleanups of
-    # dead-task state. Set to 0 to disable periodic cleanup.
-    _CLEANUP_INTERVAL = 100
-
+class _ConnectionState(object):
     def __init__(self):
-        self._state_storage = {}  # Keyed by task id.
-        self._task_refs = weakref.WeakSet()
-        self._access_count = 0
+        self._cv = contextvars.ContextVar('pwasyncio_state')
+        # Central registry: task-id -> _State.  Allows close_pool() to
+        # enumerate *all* live states and release their connections.
+        self._states = {}
         self._orphaned_conns = []
 
-    def _get_storage_key(self):
+    def _current(self):
+        task = asyncio.current_task()
+        if task is None:
+            raise RuntimeError('Cannot determine current task')
+        tid = id(task)
+
         try:
-            task = asyncio.current_task()
-            if task is not None:
-                self._task_refs.add(task)
-                return id(task)
-        except RuntimeError:
+            state = self._cv.get()
+            if state._task_id == tid:
+                # Re-register if evicted (e.g. by close_pool clearing _states).
+                if tid not in self._states:
+                    self._states[tid] = state
+                    # Unnecessary to register the callback; task is still
+                    # running so the original callback should be present.
+                    # task.add_done_callback(self._on_task_done)
+                return state
+        except LookupError:
             pass
 
-    def _current(self):
-        key = self._get_storage_key()
-        if key is None:
-            raise RuntimeError('Cannot determine current task')
-
-        if key not in self._state_storage:
-            self._state_storage[key] = _State()
-
-        # Periodically clean up state for dead tasks to prevent memory leaks.
-        if self._CLEANUP_INTERVAL > 0:
-            self._access_count += 1
-            if self._access_count >= self._CLEANUP_INTERVAL:
-                self._access_count = 0
-                self.cleanup_dead_tasks()
-
-        return self._state_storage[key]
-
-    def __getattr__(self, name):
-        return getattr(self._current(), name)
-
-    def __setattr__(self, name, value):
-        if name in ('_state_storage', '_task_refs', '_access_count',
-                    '_orphaned_conns'):
-            super(TaskLocal, self).__setattr__(name, value)
+        if tid in self._states:
+            state = self._states[tid]
         else:
-            setattr(self._current(), name, value)
+            state = _State()
+            state._task_id = tid
+            self._states[tid] = state
+            task.add_done_callback(self._on_task_done)
 
-    def __delattr__(self, name):
-        delattr(self._current(), name)
+        # Cache in the contextvar for subsequent calls for task.
+        self._cv.set(state)
+        return state
 
-    def get(self):
-        return self._current()
+    def _on_task_done(self, task):
+        tid = id(task)
+        state = self._states.pop(tid, None)
+        if state is not None and state.conn is not None and not state.closed:
+            self._orphaned_conns.append(state.conn)
+            state.reset()
 
-    def clear(self):
-        key = self._get_storage_key()
-        if key and key in self._state_storage:
-            del self._state_storage[key]
+    @property
+    def conn(self):
+        return self._current().conn
+
+    @property
+    def closed(self):
+        return self._current().closed
+
+    @property
+    def transactions(self):
+        return self._current().transactions
 
     def reset(self):
-        key = self._get_storage_key()
-        if key and key in self._state_storage:
-            state = self._state_storage[key]
-            state.conn = None
-            state.closed = True
-            state.transactions = []
+        try:
+            state = self._current()
+        except RuntimeError:
+            return
+        state.reset()
 
     def set_connection(self, conn):
-        self.conn = conn
-        self.closed = False
-
-    def cleanup_dead_tasks(self):
-        live_task_ids = {id(task) for task in self._task_refs}
-        dead_keys = [key for key in self._state_storage
-                     if key not in live_task_ids]
-        for key in dead_keys:
-            state = self._state_storage.pop(key)
-            if state.conn is not None and not state.closed:
-                self._orphaned_conns.append(state.conn)
-                state.conn = None
-                state.closed = True
-        return len(dead_keys)
+        state = self._current()
+        state.conn = conn
+        state.closed = False
 
 
 class _async_transaction_helper(object):
@@ -190,7 +183,7 @@ class AsyncDatabaseMixin(object):
         self._acquire_timeout = kwargs.pop('acquire_timeout', 10)
         super(AsyncDatabaseMixin, self).__init__(database, **kwargs)
 
-        self._state = TaskLocal()
+        self._state = _ConnectionState()
         self._pool = None
         self._pool_lock = asyncio.Lock()
         self._closing = False  # Guard against use during shutdown.
@@ -223,7 +216,7 @@ class AsyncDatabaseMixin(object):
         conn = self._state.conn
         if conn is None or conn.conn is None:
             if conn is not None:
-                # Previous connection was invalidated; release it.
+                # Previous connection was invalidated, release it.
                 await self._pool_release(conn)
             conn = await self._acquire_conn_async()
             self._state.set_connection(conn)
@@ -261,23 +254,25 @@ class AsyncDatabaseMixin(object):
         self._closing = True
         try:
             if self._pool:
-                # Flush dead-task state into _orphaned_conns so their
-                # connections can be released below.
-                self._state.cleanup_dead_tasks()
-
-                # Release connections held by any task still in storage.
-                for state in list(self._state._state_storage.values()):
+                # Release connections held by any task still in the registry.
+                # We must clear each state BEFORE releasing the connection,
+                # because the await in _pool_release can let the event loop
+                # run pending task-done callbacks.  If the callback sees
+                # state.conn still set it will orphan the same connection,
+                # leading to a double-release that overfills the pool queue.
+                for state in list(self._state._states.values()):
                     if state.conn and not state.closed:
+                        conn = state.conn
+                        state.reset()
                         try:
-                            await self._pool_release(state.conn)
+                            await self._pool_release(conn)
                         except Exception:
                             logger.warning(
                                 'Error releasing connection during pool close',
                                 exc_info=True)
-                        state.conn = None
-                        state.closed = True
-                        state.transactions = []
+                self._state._states.clear()
 
+                # Drain any connections orphaned by completed tasks.
                 while self._state._orphaned_conns:
                     orphan = self._state._orphaned_conns.pop()
                     try:
