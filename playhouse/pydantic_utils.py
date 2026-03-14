@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Any
 from typing import Literal
 from typing import Optional
+from typing import get_origin
 
 from peewee import AutoField
 from peewee import ForeignKeyField
@@ -27,9 +28,19 @@ def get_field_type(field):
     return FieldTypeMap.get(field.field_type, Any)
 
 def to_pydantic(model_cls, exclude=None, include=None, exclude_autofield=True,
-                model_name=None):
+                model_name=None, relationships=None):
     exclude = exclude or set()
+    relationships = relationships or {}
     fields = {}
+
+    rel_fields = {}
+    backref_fields = {}
+    for field, schema in relationships.items():
+        if isinstance(field, ForeignKeyField):
+            rel_fields[field.name] = schema
+        else:
+            backref_fields[field.field.backref] = schema
+
     for field in model_cls._meta.sorted_fields:
         name = field.name
         if name in exclude:
@@ -40,6 +51,19 @@ def to_pydantic(model_cls, exclude=None, include=None, exclude_autofield=True,
             continue
 
         if isinstance(field, ForeignKeyField):
+            if name in rel_fields:
+                schema = rel_fields[name]
+                field_kwargs = {}
+                if field.verbose_name:
+                    field_kwargs['title'] = field.verbose_name
+                if field.help_text:
+                    field_kwargs['description'] = field.help_text
+                if field.null:
+                    schema = Optional[schema]
+                    field_kwargs['default'] = None
+                fields[name] = (schema, Field(**field_kwargs))
+                continue
+
             name = field.column_name
 
         python_type = get_field_type(field)
@@ -72,6 +96,12 @@ def to_pydantic(model_cls, exclude=None, include=None, exclude_autofield=True,
             field_kwargs['default'] = None
 
         fields[name] = (python_type, Field(**field_kwargs))
+
+    for name, schema in backref_fields.items():
+        origin = get_origin(schema)
+        if origin is not list:
+            raise ValueError('back-references must use a List type')
+        fields[name] = (schema, Field(default_factory=list))
 
     model_name = model_name or ('%sSchema' % model_cls.__name__)
 

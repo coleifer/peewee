@@ -149,7 +149,7 @@ Pydantic Integration
 ``playhouse.pydantic_utils`` provides a helper for generating a Pydantic model
 from an existing Peewee :class:`Model` class.
 
-.. function:: to_pydantic(model_cls, exclude=None, include=None, exclude_autofield=True, model_name=None)
+.. function:: to_pydantic(model_cls, exclude=None, include=None, exclude_autofield=True, relationships=None, model_name=None)
 
    :param Model model_cls: Peewee Model to generate.
    :param exclude: field names to exclude from Pydantic model.
@@ -158,6 +158,8 @@ from an existing Peewee :class:`Model` class.
    :type include: list, set, tuple
    :param bool exclude_autofield: Exclude auto-incrementing ID field when
       generating Pydantic model.
+   :param dict relationships: Mapping of foreign-key / backref : pydantic
+      schema.
    :param str model_name: Name for Pydantic model. Default to ``<model_cls>Schema``.
 
    Generate a Pydantic ``Model`` for the given Peewee ``model_cls``. The
@@ -170,13 +172,14 @@ from an existing Peewee :class:`Model` class.
    * ``null`` - control whether field is optional or required.
 
    Foreign-key fields are exposed using the underlying column name, and
-   accept a scalar value.
+   accept a scalar value **unless** you specify the schema for the relation
+   using the ``relationships`` parameter. See below for example.
 
-   Example:
+   Basic Example:
 
    .. code-block:: python
 
-      class Person(TestModel):
+      class User(db.Model):
           name = CharField(verbose_name='Full Name', help_text='Display name')
           age = IntegerField()
           active = BooleanField(default=True)
@@ -192,7 +195,7 @@ from an existing Peewee :class:`Model` class.
               ])
           created = DateTimeField(default=datetime.datetime.now)
 
-      PersonSchema = to_pydantic(Person)
+      UserSchema = to_pydantic(User)
 
    The above model will have the following JSON schema:
 
@@ -221,7 +224,7 @@ from an existing Peewee :class:`Model` class.
                                   'title': 'Created',
                                   'type': 'string'}},
        'required': ['name', 'age', 'status'],
-       'title': 'PersonSchema',
+       'title': 'UserSchema',
        'type': 'object'}
 
    Usage:
@@ -229,16 +232,93 @@ from an existing Peewee :class:`Model` class.
    .. code-block:: python
 
       # Validate a model instance.
-      huey = Person.create(name='Huey', age=14, status='active')
+      huey = User.create(name='Huey', age=14, status='active')
 
-      validated = PersonSchema.model_validate(huey)
+      validated = UserSchema.model_validate(huey)
       print(validated.dict())  # {'name': 'Huey', ...}
 
       # Validate data from HTTP request.
-      validated = PersonSchema.model_validate(request.POST)
+      validated = UserSchema.model_validate(request.POST)
 
       # Construct model instance from validated request data.
-      person = Person(**validated.dict())
+      user = User(**validated.dict())
+
+   Example with Foreign Keys (flat):
+
+   .. code-block:: python
+
+      class User(db.Model):
+          ...  # Same as above example # ...
+
+      class Tweet(db.Model):
+          user = ForeignKeyField(User, backref='tweets')
+          content = TextField()
+          created = DateTimeField(default=datetime.datetime.now)
+
+      # By default foreign-keys are exposed as a flat/scalar value:
+      TweetSchema = to_pydantic(Tweet)
+
+      # Validate a model instance.
+      huey = User.create(name='Huey', age=14, status='active')
+      tweet = Tweet.create(user=huey, content='hello')
+
+      validated = TweetSchema.model_validate(tweet)
+      print(validated.dict())
+
+      # {'content': 'hello', 'user_id': 1, ...}
+
+      # Validate data from HTTP request.
+      validated = TweetSchema.model_validate(request.POST)
+
+      # Construct model instance from validated request data.
+      tweet = Tweet(**validated.dict())
+
+   Example with Foreign Keys (nested):
+
+   .. code-block:: python
+
+      UserSchema = to_pydantic(User, exclude_autofield=False)
+      TweetResponse = to_pydantic(
+          Tweet, exclude_autofield=False,
+          relationships={Tweet.user: UserSchema})
+
+      # Example data.
+      user = User.create(name='Huey', age=14, status='active')
+      tweet = Tweet.create(user=user, content='hello')
+
+      # Will trigger a query to look up tweet.user if it isn't populated.
+      validated = TweetResponse.model_validate(tweet)
+      print(validated.dict())
+      # {'content': 'hello', 'id': 1, 'user': {'name': 'Huey', ...}, ...}
+
+      # To avoid a query looking up the related user, use a join:
+      tweet = (Tweet
+               .select(Tweet, User)
+               .join(User)
+               .get())
+      validated = TweetResponse.model_validate(tweet)  # Same result as above.
+
+   Example with Backrefs (nested):
+
+   .. code-block:: python
+
+      TweetResponse = to_pydantic(Tweet, exclude={'user'}, exclude_autofield=False)
+      UserDetail = to_pydantic(
+          User, exclude_autofield=False,
+          relationships={User.tweets: List[TweetResponse]})
+
+      user = User.create(name='Huey', age=14, status='active')
+      Tweet.create(user=user, content=f't0')
+      Tweet.create(user=user, content=f't1')
+
+      # Will trigger a query to look up user.tweets if it isn't prefetched.
+      validated = UserDetail.model_validate(user)
+      print(validated.dict())
+      # {'name': 'Huey', 'tweets': [{'content': 't0', ...}, {...}], ...}
+
+      # To avoid a query looking up the related tweets, use prefetch:
+      user = User.select().prefetch(Tweet)[0]
+      validated = UserDetail.model_validate(user)  # Same result as above.
 
 
 .. _hybrid:
