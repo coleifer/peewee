@@ -571,6 +571,12 @@ class TestBitFields(ModelTestCase):
         for i in range(1, 5):
             Bits.create(flags=i)
 
+        q = Bits.select((~Bits.flags & 2).alias('bn')).order_by(Bits.id)
+        self.assertEqual([b.bn for b in q], [2, 0, 0, 2])
+
+        q = Bits.select().where(Bits.flags & 2).order_by(Bits.id)
+        self.assertEqual([b.flags for b in q], [2, 3])
+
         Bits.update(flags=Bits.flags & ~2).execute()
         assertFlags([1, 0, 1, 4])
 

@@ -1417,6 +1417,8 @@ class BitwiseMixin(object):
 
 
 class BitwiseNegated(BitwiseMixin, WrappedNode):
+    op = OP.BITWISE_NEGATION
+
     def __invert__(self):
         return self.node
 

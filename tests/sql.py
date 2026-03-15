@@ -1019,6 +1019,17 @@ class TestSelectQuery(BaseTestCase):
             'SELECT "t1"."id" FROM "users" AS "t1" '
             'WHERE ("t1"."username" ILIKE ?)'), ['%abc%'])
 
+    def test_bitwise_ops(self):
+        query = User.select(User.c.id).where(User.c.id.bin_and(4))
+        self.assertSQL(query, (
+            'SELECT "t1"."id" FROM "users" AS "t1" '
+            'WHERE ("t1"."id" & ?)'), [4])
+
+        query = User.select(User.c.id).where(User.c.id.bin_or(1))
+        self.assertSQL(query, (
+            'SELECT "t1"."id" FROM "users" AS "t1" '
+            'WHERE ("t1"."id" | ?)'), [1])
+
 
 class TestInsertQuery(BaseTestCase):
     def test_insert_simple(self):
