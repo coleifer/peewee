@@ -128,6 +128,26 @@ class TestModelDDL(ModelDatabaseTestCase):
              'FOREIGN KEY ("user_id") REFERENCES "foo"."user" ("id"))'),
             ('CREATE INDEX "bar"."tweet_user_id" ON "tweet" ("user_id")')])
 
+    def test_bigauto_and_fk(self):
+        class CustomDB(SqliteDatabase):
+            field_types = {
+                'BIGAUTO': 'BIGAUTO',
+                'BIGINT': 'BIGINT'}
+        db = CustomDB(None)
+
+        class User(db.Model):
+            id = BigAutoField()
+        class Tweet(db.Model):
+            user = ForeignKeyField(User)
+
+        self.assertCreateTable(User, [
+            ('CREATE TABLE "user" ("id" BIGAUTO NOT NULL PRIMARY KEY)')])
+        self.assertCreateTable(Tweet, [
+            ('CREATE TABLE "tweet" ("id" INTEGER NOT NULL PRIMARY KEY, '
+             '"user_id" BIGINT NOT NULL, FOREIGN KEY ("user_id") REFERENCES '
+             '"user" ("id"))'),
+            ('CREATE INDEX "tweet_user_id" ON "tweet" ("user_id")')])
+
     def test_model_indexes_with_schema(self):
         # Attach cache database so we can reference "cache." as the schema.
         self.database.execute_sql("attach database ':memory:' as cache;")
