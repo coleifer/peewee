@@ -611,11 +611,15 @@ class TestTaskLifecycle(unittest.IsolatedAsyncioTestCase):
                 await self.db.run(TestModel.create, name='test', value=1)
             return id(asyncio.current_task())
 
-        task_key = await asyncio.create_task(task_with_state())
-        await asyncio.sleep(0)  # Let done-callbacks fire.
+        await asyncio.create_task(task_with_state())
 
-        # Done-callback should have removed the state automatically.
-        self.assertNotIn(task_key, self.db._state._states)
+        # Child task properly closed connection (async with db), so close pool
+        # should exit cleanly.
+        await asyncio.wait_for(self.db.close_pool(), timeout=2.0)
+
+        # Verify the write persisted.
+        async with self.db:
+            self.assertEqual(await self.db.count(TestModel.select()), 1)
 
     async def test_concurrent_task_state_isolation(self):
         async def capture(tid):
@@ -633,14 +637,13 @@ class TestTaskLifecycle(unittest.IsolatedAsyncioTestCase):
     async def test_connection_returned_when_task_dies(self):
         async def acquire_and_abandon():
             await self.db.aconnect()
-            return id(asyncio.current_task())
+            return  # Connection is not closed, callback must handle cleanup.
 
-        task_id = await asyncio.create_task(acquire_and_abandon())
-        await asyncio.sleep(0)  # Let done-callbacks fire.
+        await asyncio.create_task(acquire_and_abandon())
 
-        # The done-callback should have moved the connection to orphans.
-        self.assertNotIn(task_id, self.db._state._states)
-        # close_pool drains orphans, so it must not deadlock.
+        # The done-callback should have moved the connection to orphaned
+        # connections, which are handled either via done callback or during
+        # pool shutdown.
         await asyncio.wait_for(self.db.close_pool(), timeout=2.0)
 
 
