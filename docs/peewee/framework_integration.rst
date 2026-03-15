@@ -107,31 +107,30 @@ Quick note on SQLModel
 ^^^^^^^^^^^^^^^^^^^^^^
 
 FastAPI advocates using SQLModel for database access. SQLModel combines
-SQLAlchemy and Pydantic into a single class, which works well for simple
-examples. There are a few things worth noting, however:
+SQLAlchemy and Pydantic into a single class, which may work well for simple
+examples. There are a few things to watch out for, though:
 
-* **Async is an afterthought**: SQLModel's official tutorial uses synchronous
-  endpoints exclusively, which FastAPI runs in a threadpool (at the cost of
-  diminished concurrency). Async usage is listed as an "advanced" topic and
-  is undocumented currently.
-* **Lazy-loading breaks in async contexts**: SQLAlchemy's implicit lazy-loading
+* SQLModel's official tutorial uses synchronous endpoints exclusively, which
+  FastAPI runs on a threadpool. Async usage is listed as an "advanced" topic
+  and is undocumented currently.
+* Lazy-loading often breaks in async contexts. SQLAlchemy's implicit lazy-loading
   of relationships can trigger ``MissingGreenlet`` errors when used with async
   sessions. This can also occur with Peewee, but it's straightforward to avoid
   by selecting joined relations.
-* **Dual drivers / dual engines**: Because SQLModel uses synchronous drivers
-  for DDL and certain operations, you typically need both a sync AND async
-  driver installed, along with separate engine configurations.
-* **Classes, classes, classes**: SQLModel uses inheritance to manage input,
-  output and table schemas. In practice a single database table often requires
-  three or four model classes, e.g. ``UserBase``, ``User``, ``UserCreate`` and
-  ``UserRead``.
+* Because SQLModel uses synchronous drivers for DDL and certain operations, you
+  typically need both a sync AND async driver installed, along with separate
+  engine configurations.
+* SQLModel uses inheritance to manage input, output and table schemas. In
+  practice a single database table often requires three or four model classes,
+  e.g. ``UserBase``, ``User``, ``UserCreate`` and ``UserRead`` - all of this is
+  managed through inheritance.
 
 Peewee may provide a simpler experience - there is a single database to manage
-with built-in pooling, no implicit lazy-load gotcha's, and the Pydantic schemas
-generated with :func:`~playhouse.pydantic_utils.to_pydantic` can be configured
-to include/exclude fields. Field metadata is captured automatically: choice
-enums, default values, descriptions, titles and type information are captured
-in the JSON schema and OpenAPI docs.
+with built-in pooling, fewer implicit lazy-load gotcha's, and the Pydantic
+schemas generated with :func:`~playhouse.pydantic_utils.to_pydantic` can be
+configured to include/exclude fields without inheritance. Field metadata is
+captured automatically: choice enums, default values, descriptions, titles and
+type information are captured in the JSON schema and OpenAPI docs.
 
 Peewee requires far less machinery to provide real asyncio database access, and
 of course works equally well for synchronous FastAPI endpoints.
