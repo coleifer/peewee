@@ -147,7 +147,8 @@ Pydantic Integration
 .. module:: playhouse.pydantic_utils
 
 ``playhouse.pydantic_utils`` generates `Pydantic v2 <https://docs.pydantic.dev/latest/>`_
-models from Peewee :class:`Model` classes.
+models from Peewee :class:`Model` classes using the :func:`~playhouse.pydantic_utils.to_pydantic`
+function.
 
 Example
 ^^^^^^^
@@ -200,7 +201,7 @@ serialize instances, or populate instances from user data:
 How field metadata is mapped
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-``to_pydantic`` reads the metadata you already set on your Peewee fields and
+:func:`to_pydantic` reads the metadata you already set on your Peewee fields and
 translates it into the Pydantic equivalents:
 
 .. list-table::
@@ -287,8 +288,8 @@ When a field has ``choices`` defined, the mapped Python type above is
 the underlying field type.
 
 
-``to_pydantic`` API reference
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+API reference
+^^^^^^^^^^^^^^
 
 .. function:: to_pydantic(model_cls, exclude=None, include=None, exclude_autofield=True, model_name=None, relationships=None)
 
@@ -338,21 +339,27 @@ are accepting input data:
    class Tweet(db.Model):
        user = ForeignKeyField(User, backref='tweets')
        content = TextField()
-       created = DateTimeField(default=datetime.datetime.now)
+       timestamp = DateTimeField(default=datetime.datetime.now)
+       is_published = BooleanField(default=True)
 
    TweetSchema = to_pydantic(Tweet)
 
    # The schema exposes the column name "user_id", not "user":
    data = TweetSchema.model_validate({'user_id': 1, 'content': 'hello'})
    print(data.model_dump())
-   # {'user_id': 1, 'content': 'hello', 'created': datetime.datetime(...)}
+   # {'user_id': 1,
+   #  'content': 'hello',
+   #  'timestamp': datetime.datetime(...),
+   #  'is_published: True}
 
    # Works when validating from a model instance too:
    tweet = Tweet.create(user=huey, content='hello')
    data = TweetSchema.model_validate(tweet)
    print(data.model_dump())
-   # {'user_id': 1, 'content': 'hello', 'created': datetime.datetime(...)}
-
+   # {'user_id': 1,
+   #  'content': 'hello',
+   #  'timestamp': datetime.datetime(...),
+   #  'is_published: True}
 
 .. _pydantic-relationships:
 
@@ -382,7 +389,8 @@ When you wish to embed the related object rather than just its ID, pass a
    # {'id': 1,
    #  'content': 'hello',
    #  'user': {'id': 1, 'name': 'Huey', 'age': 14, ...},
-   #  'created': datetime.datetime(...)}
+   #  'timestamp': datetime.datetime(...),
+   #  'is_published': True}
 
 .. note::
    Validating from a model instance will access ``tweet.user``, which triggers
@@ -397,13 +405,10 @@ When you wish to embed the related object rather than just its ID, pass a
                .get())
       data = TweetResponse.model_validate(tweet)  # No additional query.
 
-**Nullable foreign keys** are handled automatically: if the Peewee field has
-``null=True``, the nested schema becomes ``Optional`` and defaults to ``None``.
-
 **Nested back-references**
 
 Back-references work the same way, but the schema must be wrapped in
-``List[...]`` because a back-reference is a collection:
+``List[...]`` since back-references may contain 0..n records.
 
 .. code-block:: python
 
@@ -433,7 +438,11 @@ Back-references work the same way, but the schema must be wrapped in
 
    .. code-block:: python
 
-      users = User.select().prefetch(Tweet)
+      users = (User
+               .select()
+               .where(User.id == 123)
+               .prefetch(Tweet))
+
       data = UserDetail.model_validate(users[0])  # No additional query.
 
 
