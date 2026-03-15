@@ -54,7 +54,7 @@ releases it on exit:
            # Async lazy result fetching (uses server-side cursors where
            # available).
            query = User.select().order_by(User.name)
-           async for user in db.iterator(query):
+           async for user in db.iterate(query):
                print(user.name)
 
        await db.close_pool()
@@ -134,7 +134,7 @@ For single-query operations, the async helpers are more direct:
    users = await db.list(User.select().order_by(User.name))
 
    # SELECT and stream results from the database asynchronously.
-   users = [user async for user in db.iterator(User.select())]
+   users = [user async for user in db.iterate(User.select())]
 
    # SELECT and return a scalar value.
    count = await db.scalar(User.select(fn.COUNT(User.id)))
@@ -563,7 +563,7 @@ API Reference
       .. code-block:: python
 
          query = User.select().order_by(User.username)
-         async for user in db.iterator(query):
+         async for user in db.iterate(query):
              print(user.username)
 
    .. method:: scalar(query)
@@ -708,7 +708,7 @@ API Reference
 
       Execute SQL asynchronously. Returns a cursor-like object whose rows are
       already fetched (call ``.fetchall()`` synchronously). For result
-      streaming, see :meth:`~AsyncDatabaseMixin.iterator`.
+      streaming, see :meth:`~AsyncDatabaseMixin.iterate`.
 
 
 .. class:: AsyncSqliteDatabase(database, **kwargs)
