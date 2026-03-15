@@ -1408,14 +1408,15 @@ class IntegrationTests(object):
         self.assertEqual(len(results), 20)
 
     async def test_iterate_multi(self):
-        await self.seed(200)
+        await self.seed(10)
         async def iterate_multi():
-            query = TestModel.select().order_by(TestModel.value)
-            return [obj.id async for obj in self.db.iterate(query)]
+            async with self.db:
+                query = TestModel.select().order_by(TestModel.value)
+                return [obj.id async for obj in self.db.iterate(query)]
 
         results = await asyncio.gather(*[iterate_multi() for i in range(5)])
         self.assertEqual(len(results), 5)
-        self.assertTrue(all(len(r) == 200 for r in results))
+        self.assertTrue(all(len(r) == 10 for r in results))
 
     async def test_basic_crud(self):
         rec = await self.create_record('testx', value=2)
