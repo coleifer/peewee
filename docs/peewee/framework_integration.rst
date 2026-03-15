@@ -171,11 +171,8 @@ style hooks, fully :ref:`async query execution <pwasyncio>`, and
    UserResponse = to_pydantic(User, exclude_autofield=False, model_name='UserResponse')
 
    async def get_db():
-       await db.aconnect()
-       try:
+       async with db:
            yield db
-       finally:
-           await db.aclose()
 
    @asynccontextmanager
    async def lifespan(app):
@@ -287,11 +284,8 @@ The following is a minimal example demonstrating:
    db = AsyncPostgresqlDatabase('peewee_test', host='10.8.0.1', user='postgres')
 
    async def get_db():
-       await db.aconnect()
-       try:
+       async with db:
            yield db
-       finally:
-           await db.aclose()
 
    @asynccontextmanager
    async def lifespan(app):
@@ -329,11 +323,8 @@ instead of dependency injection.
 
    @app.middleware('http')
    async def database_connection(request, call_next):
-       await db.aconnect()  # Obtain connection from connection pool.
-       try:
+       async with db:  # Obtain connection from connection pool.
            response = await call_next(request)
-       finally:
-           await db.aclose()  # Release connection back to pool.
        return response
 
    @app.on_event('startup')
