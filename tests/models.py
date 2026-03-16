@@ -4499,7 +4499,6 @@ class Product(TestModel):
 class TestModelConstraints(ModelTestCase):
     requires = [Product]
 
-    @skip_if(IS_MYSQL)  # MySQL fails intermittently on Travis-CI (?).
     def test_model_constraints(self):
         p = Product.create(name='p1', price=1, status='a')
         self.assertTrue(p.flags is None)
@@ -4513,22 +4512,22 @@ class TestModelConstraints(ModelTestCase):
         # Cannot update price with invalid value, must be > 0.
         with self.database.atomic():
             p.price = -1
-            self.assertRaises(IntegrityError, p.save)
+            self.assertRaises(DatabaseError, p.save)
 
         # Nor can we create a new product with an invalid price.
         with self.database.atomic():
-            self.assertRaises(IntegrityError, Product.create, name='p2',
+            self.assertRaises(DatabaseError, Product.create, name='p2',
                               price=0, status='a')
 
         # Cannot set status to a value other than 1, 2 or 3.
         with self.database.atomic():
             p.price = 1
             p.status = 'd'
-            self.assertRaises(IntegrityError, p.save)
+            self.assertRaises(DatabaseError, p.save)
 
         # Cannot create a new product with invalid status.
         with self.database.atomic():
-            self.assertRaises(IntegrityError, Product.create, name='p3',
+            self.assertRaises(DatabaseError, Product.create, name='p3',
                               price=1, status='x')
 
 
