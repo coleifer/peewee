@@ -818,7 +818,7 @@ class TestModelAPIs(ModelTestCase):
             # It did this since we are selecting from Venue/City and Venue is
             # an intermediary model. It is more correct for Event.venue to be
             # None in this case. This is now patched / fixed.
-            r = [(e.name, e.venue and e.venue.city.name or None)
+            r = [(e.name, e.venue is not None and e.venue.city.name or None)
                  for e in query]
             self.assertEqual(r, [
                 ('House Party', 'Topeka'),

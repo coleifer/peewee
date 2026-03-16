@@ -1876,22 +1876,25 @@ class NodeList(ColumnBase):
         self.nodes = nodes
         self.glue = glue
         self.parens = parens
-        if parens and len(self.nodes) == 1 and \
-           isinstance(self.nodes[0], Expression) and \
-           not self.nodes[0].flat:
-            # Hack to avoid double-parentheses.
-            self.nodes = (self.nodes[0].clone(),)
-            self.nodes[0].flat = True
 
     def __sql__(self, ctx):
         n_nodes = len(self.nodes)
         if n_nodes == 0:
             return ctx.literal('()') if self.parens else ctx
+        elif self.parens and n_nodes == 1 and \
+           isinstance(self.nodes[0], Expression) and \
+           not self.nodes[0].flat:
+            # Hack to avoid double-parentheses.
+            nodes = (self.nodes[0].clone(),)
+            nodes[0].flat = True
+        else:
+            nodes = self.nodes
+
         with ctx(parentheses=self.parens):
             for i in range(n_nodes - 1):
-                ctx.sql(self.nodes[i])
+                ctx.sql(nodes[i])
                 ctx.literal(self.glue)
-            ctx.sql(self.nodes[n_nodes - 1])
+            ctx.sql(nodes[n_nodes - 1])
         return ctx
 
 
@@ -8188,15 +8191,29 @@ class ModelCursorWrapper(BaseModelCursorWrapper):
             except KeyError:
                 continue
 
+            # Determine if anything further along in the graph is set.
+            assign = False
+            if dest not in set_keys and dest in self.joins:
+                q = list(self.joins[dest])
+                while q:
+                    _key, _, _, _ = q.pop(0)
+                    if _key in set_keys:
+                        assign = True
+                        break
+                    if _key in self.joins:
+                        q.extend(self.joins[_key])
+
             # If no fields were set on the destination instance then do not
             # assign an "empty" instance.
-            if instance is None or dest is None or \
-               (dest not in set_keys and not self.src_is_dest.get(dest)):
-                continue
+            if dest not in set_keys and not assign:
+                if join_type.endswith('OUTER JOIN'):
+                    joined_instance = None
+                else:
+                    continue
 
             # If no fields were set on either the source or the destination,
             # then we have nothing to do here.
-            if instance not in set_keys and dest not in set_keys \
+            if src not in set_keys and dest not in set_keys \
                and join_type.endswith('OUTER JOIN'):
                 continue
 
