@@ -3504,7 +3504,7 @@ Fields
       The :class:`Model` representing the many-to-many junction table.
       Will be auto-generated if not explicitly declared.
 
-   .. method:: add(value, clear_existing=True)
+   .. method:: add(value, clear_existing=False)
 
       :param value: Either a :class:`Model` instance, a list of model
           instances, or a :class:`SelectQuery`.

@@ -6964,7 +6964,8 @@ class Model(with_metaclass(ModelBase, Node)):
         sq = cls.select()
         if query:
             # Handle simple lookup using just the primary key.
-            if len(query) == 1 and isinstance(query[0], int):
+            if len(query) == 1 and isinstance(query[0], int) and \
+               cls._meta.auto_increment:
                 sq = sq.where(cls._meta.primary_key == query[0])
             else:
                 sq = sq.where(*query)
