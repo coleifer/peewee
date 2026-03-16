@@ -8076,7 +8076,7 @@ class ModelCursorWrapper(BaseModelCursorWrapper):
                             if field is not None])
         select, columns = self.select, self.columns
 
-        self.key_to_constructor = {self.model: self.model}
+        self.key_to_constructor = {self.model: (self.model, True)}
         self.src_is_dest = {}
         self.src_to_dest = []
         accum = collections.deque(self.from_list)
@@ -8095,7 +8095,8 @@ class ModelCursorWrapper(BaseModelCursorWrapper):
             is_dict = isinstance(curr, dict)
             for key, attr, constructor, join_type in self.joins[curr]:
                 if key not in self.key_to_constructor:
-                    self.key_to_constructor[key] = constructor
+                    self.key_to_constructor[key] = (constructor,
+                                                    is_model(constructor))
 
                     # (src, attr, dest, is_dict, join_type).
                     self.src_to_dest.append((curr, attr, key, is_dict,
@@ -8107,9 +8108,9 @@ class ModelCursorWrapper(BaseModelCursorWrapper):
         for src in selected_src:
             if src not in self.key_to_constructor:
                 if is_model(src):
-                    self.key_to_constructor[src] = src
+                    self.key_to_constructor[src] = (src, True)
                 elif isinstance(src, ModelAlias):
-                    self.key_to_constructor[src] = src.model
+                    self.key_to_constructor[src] = (src.model, True)
 
         # Indicate which sources are also dests.
         for src, _, dest, _, _ in self.src_to_dest:
@@ -8142,8 +8143,11 @@ class ModelCursorWrapper(BaseModelCursorWrapper):
     def process_row(self, row):
         objects = {}
         object_list = []
-        for key, constructor in self.key_to_constructor.items():
-            objects[key] = constructor(__no_default__=True)
+        for key, (constructor, _is_model) in self.key_to_constructor.items():
+            if _is_model:
+                objects[key] = constructor(__no_default__=True)
+            else:
+                objects[key] = constructor()
             object_list.append(objects[key])
 
         default_instance = objects[self.model]

@@ -874,6 +874,32 @@ class TestModelAPIs(ModelTestCase):
             ('zaizee', 'huey'),
             ('mickey', 'huey')])
 
+    @requires_models(User, Tweet)
+    def test_join_to_dict(self):
+        huey = self.add_user('huey')
+        mickey = self.add_user('mickey')
+        self.add_tweets(huey, 'meow', 'hiss', 'purr')
+        self.add_tweets(mickey, 'woof')
+
+        with self.assertQueryCount(1):
+            q = Select((User,), (User.id, User.username,))
+            query = (Tweet
+                     .select(Tweet.content, q.c.username)
+                     .join(q, on=(Tweet.user == q.c.id), attr='u')
+                     .order_by(q.c.username, Tweet.content))
+            self.assertSQL(query, (
+                'SELECT "t1"."content", "t2"."username" FROM "tweet" AS "t1" '
+                'INNER JOIN (SELECT "t3"."id", "t3"."username" FROM "users" '
+                'AS "t3") AS "t2" ON ("t1"."user_id" = "t2"."id") '
+                'ORDER BY "t2"."username", "t1"."content"'), [])
+
+            tweets = list(query)
+            self.assertEqual([(t.content, t.u) for t in tweets], [
+                ('hiss', {'username': 'huey'}),
+                ('meow', {'username': 'huey'}),
+                ('purr', {'username': 'huey'}),
+                ('woof', {'username': 'mickey'})])
+
     @requires_models(User)
     def test_peek(self):
         for username in ('huey', 'mickey', 'zaizee'):
