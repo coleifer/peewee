@@ -1035,7 +1035,7 @@ class TestModelCompoundSelect(BaseTestCase):
         self.assertSQL(compound, (
             'SELECT "t1"."alpha" FROM "alpha" AS "t1" UNION '
             'SELECT "t2"."alpha" FROM "alpha" AS "t2" UNION '
-            'SELECT "t2"."alpha" FROM "alpha" AS "t2"'), [])
+            'SELECT "t3"."alpha" FROM "alpha" AS "t3"'), [])
 
         compound = q1 | (q2 | q3)
         self.assertSQL(compound, (
@@ -1075,8 +1075,8 @@ class TestModelCompoundSelect(BaseTestCase):
             'SELECT "t3"."alpha" FROM "alpha" AS "t3" '
             'WHERE ("t3"."alpha" > ?) '
             'UNION '
-            'SELECT "t2"."beta" FROM "beta" AS "t2" '
-            'WHERE ("t2"."beta" > ?)'), [2, 3, 5, 4])
+            'SELECT "t4"."beta" FROM "beta" AS "t4" '
+            'WHERE ("t4"."beta" > ?)'), [2, 3, 5, 4])
 
     def test_limit(self):
         lhs = Alpha.select(Alpha.alpha).order_by(Alpha.alpha).limit(3)

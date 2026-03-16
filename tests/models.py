@@ -911,6 +911,17 @@ class TestModelAPIs(ModelTestCase):
             self.assertEqual(query.peek(n=2), [{'username': 'huey'},
                                                {'username': 'mickey'}])
 
+    @requires_models(User)
+    def test_first(self):
+        for u in 'abc':
+            self.add_user(u)
+
+        # Multiple calls to first() do not result in multiple executions.
+        with self.assertQueryCount(1):
+            q = User.select().order_by(User.username)
+            self.assertEqual(q.first().username, 'a')
+            self.assertEqual(q.first().username, 'a')
+
     @requires_models(User, Tweet, Favorite)
     def test_multi_join(self):
         u1 = User.create(username='u1')
@@ -1222,8 +1233,8 @@ class TestModelAPIs(ModelTestCase):
             'WHERE ("t1"."value" < ?) UNION '
             'SELECT "t2"."id", "t2"."value" FROM "register" AS "t2" '
             'WHERE ("t2"."value" > ?) UNION '
-            'SELECT "t2"."id", "t2"."value" FROM "register" AS "t2" '
-            'WHERE ("t2"."value" = ?) ORDER BY 2'), [2, 7, 5])
+            'SELECT "t3"."id", "t3"."value" FROM "register" AS "t3" '
+            'WHERE ("t3"."value" = ?) ORDER BY 2'), [2, 7, 5])
 
         self.assertEqual([row.value for row in c2], [0, 1, 5, 8, 9])
         self.assertEqual(c2.count(), 5)

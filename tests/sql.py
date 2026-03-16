@@ -388,11 +388,11 @@ class TestSelectQuery(BaseTestCase):
                  .with_cte(c1, c2))
         self.assertSQL(query, (
             'WITH "user_ids" AS (SELECT "t1"."id" FROM "users" AS "t1"), '
-            '"user_names" AS (SELECT "t1"."username" FROM "users" AS "t1") '
+            '"user_names" AS (SELECT "t2"."username" FROM "users" AS "t2") '
             'SELECT "user_ids"."id", "user_names"."username" '
-            'FROM "users" AS "t2" '
-            'WHERE (("user_ids"."id" = "t2"."id") AND '
-            '("user_names"."username" = "t2"."username"))'), [])
+            'FROM "users" AS "t3" '
+            'WHERE (("user_ids"."id" = "t3"."id") AND '
+            '("user_names"."username" = "t3"."username"))'), [])
 
     def test_select_from_cte(self):
         # Use the "select_from()" helper on the CTE object.
@@ -413,8 +413,8 @@ class TestSelectQuery(BaseTestCase):
             'SELECT "t1"."username" FROM "users" AS "t1" '
             'WHERE ("t1"."is_admin" = ?)), '
             '"c2" AS ('
-            'SELECT "t1"."username" FROM "users" AS "t1" '
-            'WHERE ("t1"."is_staff" = ?)) '
+            'SELECT "t2"."username" FROM "users" AS "t2" '
+            'WHERE ("t2"."is_staff" = ?)) '
             'SELECT "c1"."username", "c2"."username" FROM "c1", "c2"'), [1, 1])
 
     def test_materialize_cte(self):
@@ -774,8 +774,8 @@ class TestSelectQuery(BaseTestCase):
             '(SELECT "t2"."value" FROM "register" AS "t2" '
             'WHERE ("t2"."value" > ?))) '
             'UNION '
-            '(SELECT "t2"."value" FROM "register" AS "t2" '
-            'WHERE ("t2"."value" = ?))'),
+            '(SELECT "t3"."value" FROM "register" AS "t3" '
+            'WHERE ("t3"."value" = ?))'),
             [2, 7, 5], compound_select_parentheses=1)  # Always.
 
         # CSQ = unnested, no nesting but all individual queries have parens.
@@ -786,8 +786,8 @@ class TestSelectQuery(BaseTestCase):
             '(SELECT "t2"."value" FROM "register" AS "t2" '
             'WHERE ("t2"."value" > ?)) '
             'UNION '
-            '(SELECT "t2"."value" FROM "register" AS "t2" '
-            'WHERE ("t2"."value" = ?))'),
+            '(SELECT "t3"."value" FROM "register" AS "t3" '
+            'WHERE ("t3"."value" = ?))'),
             [2, 7, 5], compound_select_parentheses=2)  # Un-nested.
 
     def test_compound_select_order_limit(self):
@@ -1029,6 +1029,17 @@ class TestSelectQuery(BaseTestCase):
         self.assertSQL(query, (
             'SELECT "t1"."id" FROM "users" AS "t1" '
             'WHERE ("t1"."id" | ?)'), [1])
+
+    def test_entity_escaping(self):
+        Tbl = Table('te"st')
+        query = Tbl.select(Tbl.c.id).where(Tbl.c.value > 5)
+        self.assertSQL(query, (
+            'SELECT "t1"."id" FROM "te""st" AS "t1" '
+            'WHERE ("t1"."value" > ?)'), [5])
+
+        self.assertSQL(query, (
+            'SELECT `t1`.`id` FROM `te"st` AS `t1` '
+            'WHERE (`t1`.`value` > ?)'), [5], quote='``')
 
 
 class TestInsertQuery(BaseTestCase):

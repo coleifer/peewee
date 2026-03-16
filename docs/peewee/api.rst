@@ -76,10 +76,10 @@ Database
 
       String used as parameter placeholder in SQL queries.
 
-   .. attribute:: quote = '"'
+   .. attribute:: quote = '""'
 
-      Type of quotation-mark to use to denote entities such as tables or
-      columns.
+      Type of quotation-mark(s) to use to denote entities such as tables or
+      columns, specified as ``'<open quote><close quote>'``.
 
    .. method:: init(database, **kwargs)
 
@@ -196,7 +196,7 @@ Database
 
    .. method:: cursor(named_cursor=None)
 
-      :param named_cursor: Reserved for internal use.
+      :param named_cursor: Reserved for internal use by Postgres extension.
 
       Return a DB-API ``cursor`` object on the current connection. If a
       connection is not open, one will be opened.
@@ -552,13 +552,15 @@ Database
               data_type='INTEGER',
               null=False,
               primary_key=True,
-              table='entry'),
+              table='entry',
+              default=None),
           ColumnMetadata(
               name='title',
               data_type='TEXT',
               null=False,
               primary_key=False,
-              table='entry'),
+              table='entry',
+              default=None),
           ...]
 
    .. method:: get_primary_keys(table, schema=None)
@@ -3108,17 +3110,19 @@ Fields
       # Tweet.user will be resolved into a ForeignKeyField:
       DeferredForeignKey.resolve(User)
 
-.. class:: ManyToManyField(model, backref=None, through_model=None, on_delete=None, on_update=None)
+.. class:: ManyToManyField(model, backref=None, through_model=None, on_delete=None, on_update=None, prevent_unsaved=True)
 
    :param Model model: Model to create relationship with.
    :param str backref: Accessor name for back-reference
    :param Model through_model: :class:`Model` to use for the intermediary
-       table. If not provided, a simple through table will be automatically
-       created.
+      table. If not provided, a simple through table will be automatically
+      created.
    :param str on_delete: ON DELETE action, e.g. ``'CASCADE'``. Will be used
-       for foreign-keys in through model.
+      for foreign-keys in through model.
    :param str on_update: ON UPDATE action. Will be used for foreign-keys in
-       through model.
+      through model.
+   :param bool prevent_unsaved: Raise ``ValueError`` if accessing relation from
+      an unsaved model instance (default True).
 
    The :class:`ManyToManyField` provides a simple interface for working
    with many-to-many relationships, inspired by Django. A many-to-many
@@ -4946,6 +4950,10 @@ Queries
       Execute the query and return the first row, if it exists. Multiple
       calls will result in multiple queries being executed.
 
+      If no matching row is found this method returns ``None`` - this differs
+      from the behavior of :meth:`ModelSelect.get` and :meth:`Model.get`, which
+      raise ``DoesNotExist`` when no row is found.
+
 
 .. class:: CompoundSelectQuery(lhs, op, rhs)
 
@@ -5606,7 +5614,7 @@ Constants and Helpers
 
 .. class:: DatabaseProxy()
 
-   Proxy subclass that is suitable to use as a placeholder for a
+   :class:`Proxy` subclass that is suitable to use as a placeholder for a
    :class:`Database` instance.
 
    See :ref:`initializing-database` for details.

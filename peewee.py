@@ -186,7 +186,7 @@ if sqlite3:
         def datetime_adapter(d): return d.isoformat(' ')
         def convert_date(d): return datetime.date(*map(int, d.split(b'-')))
         def convert_timestamp(t):
-            date, time = t.split(b' ')
+            date, time = t.split(b'T') if b'T' in t else t.split(b' ')
             y, m, d = map(int, date.split(b'-'))
             t_full = time.split(b'.')
             hour, minute, second = map(int, t_full[0].split(b':'))
@@ -243,6 +243,8 @@ def _sqlite_date_trunc(lookup_type, datetime_string):
     return dt.strftime(__sqlite_date_trunc__[lookup_type])
 
 def _sqlite_regexp(regex, value):
+    if value is None:
+        return False
     return re.search(regex, value) is not None
 
 
@@ -411,8 +413,8 @@ def chunked(it, n):
     marker = object()
     groups = itertools.zip_longest(*[iter(it)] * n, fillvalue=marker)
     for group in (list(g) for g in groups):
-        if group[-1] is marker:
-            del group[group.index(marker):]
+        while group and group[-1] is marker:
+            group.pop()
         yield group
 
 
@@ -537,6 +539,7 @@ class AliasManager(object):
     def pop(self):
         if self._current_index == 1:
             raise ValueError('Cannot pop() from empty alias manager.')
+        self._mapping[self._current_index - 1].clear()
         self._current_index -= 1
 
 
@@ -702,13 +705,13 @@ def _query_val_transform(v):
     # Interpolate parameters.
     if isinstance(v, (str, datetime.datetime, datetime.date,
                       datetime.time)):
-        v = "'%s'" % v
+        v = "'%s'" % str(v).replace("'", "''")
     elif isinstance(v, bytes):
         try:
             v = v.decode('utf8')
         except UnicodeDecodeError:
             v = v.decode('raw_unicode_escape')
-        v = "'%s'" % v
+        v = "'%s'" % v.replace("'", "''")
     elif isinstance(v, int):
         v = '%s' % int(v)  # Also handles booleans -> 1 or 0.
     elif v is None:
@@ -1548,9 +1551,12 @@ class Expression(ColumnBase):
             # Postgresql reports an error for IN/NOT IN (), so convert to
             # the equivalent boolean expression.
             op_in = self.op == OP.IN or self.op == OP.NOT_IN
-            if op_in and ctx.as_new().parse(self.rhs)[0] == '()':
-                return ctx.literal('0 = 1' if self.op == OP.IN else '1 = 1')
             rhs = self.rhs
+            if op_in:
+                if isinstance(rhs, multi_types) and not rhs:
+                    return ctx.literal('0 = 1' if self.op == OP.IN else '1 = 1')
+                elif ctx.as_new().parse(rhs)[0] == '()':
+                    return ctx.literal('0 = 1' if self.op == OP.IN else '1 = 1')
             if rhs is None and (self.op == OP.IS or self.op == OP.IS_NOT):
                 rhs = SQL('NULL')
 
@@ -1569,7 +1575,7 @@ class StringExpression(Expression):
 
 class Entity(ColumnBase):
     def __init__(self, *path):
-        self._path = [part.replace('"', '""') for part in path if part]
+        self._path = [p for p in path if p]
 
     def __getattr__(self, attr):
         return Entity(*self._path + [attr])
@@ -1581,7 +1587,10 @@ class Entity(ColumnBase):
         return hash((self.__class__.__name__, tuple(self._path)))
 
     def __sql__(self, ctx):
-        return ctx.literal(quote(self._path, ctx.state.quote or '""'))
+        quote_chars = ctx.state.quote or '""'
+        q = quote_chars[0]
+        escaped = [p.replace(q, quote_chars) for p in self._path]
+        return ctx.literal(quote(escaped, quote_chars))
 
 
 class SQL(ColumnBase):
@@ -2182,8 +2191,7 @@ class Query(BaseQuery):
 
     @Node.copy
     def paginate(self, page, paginate_by=20):
-        if page > 0:
-            page -= 1
+        page = page - 1 if page > 0 else 0
         self._limit = paginate_by
         self._offset = page * paginate_by
 
@@ -4483,7 +4491,7 @@ class MySQLDatabase(Database):
             # depending on the MySQL server version. MySQL and MariaDB prior to
             # 10.3.3 use "VALUES", while MariaDB 10.3.3+ use "VALUE".
             version = self.server_version or (0,)
-            if version[0] == 10 and version >= (10, 3, 3):
+            if version[0] >= 10 and version >= (10, 3, 3):
                 VALUE_FN = fn.VALUE
             else:
                 VALUE_FN = fn.VALUES
@@ -5316,12 +5324,9 @@ class BigBitFieldData(object):
 
     def __repr__(self):
         return repr(self._buffer)
-    if sys.version_info[0] < 3:
-        def __str__(self):
-            return bytes(self._buffer)
-    else:
-        def __bytes__(self):
-            return bytes(self._buffer)
+
+    def __bytes__(self):
+        return bytes(self._buffer)
 
 
 class BigBitFieldAccessor(FieldAccessor):
