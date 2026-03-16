@@ -948,6 +948,11 @@ class TestSelectQuery(BaseTestCase):
             'SELECT "t1"."id" FROM "users" AS "t1" '
             'WHERE (1 = 1)'), [])
 
+        query = User.select(User.c.id).where(User.c.username.in_(Value([])))
+        self.assertSQL(query, (
+            'SELECT "t1"."id" FROM "users" AS "t1" '
+            'WHERE (0 = 1)'), [])
+
     def test_add_custom_op(self):
         def mod(lhs, rhs):
             return Expression(lhs, '%', rhs)

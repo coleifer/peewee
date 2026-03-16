@@ -1119,7 +1119,7 @@ Database
       .. code-block:: python
 
          # psycopg2 or psycopg3
-         db = db.set_isolation_level('SERIALIZABLE')
+         db.set_isolation_level('SERIALIZABLE')
 
          # psycopg2
          from psycopg2.extensions import ISOLATION_LEVEL_SERIALIZABLE
@@ -2248,28 +2248,99 @@ Model
 
    Model-specific implementation of SELECT query.
 
-   .. method:: switch(ctx=None)
+   .. method:: get()
 
-      :param ctx: A :class:`Model`, :class:`ModelAlias`, subquery, or
-          other object that was joined-on.
+      :param Database database: database to execute query against.
+      :return: A single row from the database.
+      :raises: ``DoesNotExist`` if row not found.
 
-      Switch the *join context* - the source which subsequent calls to
-      :meth:`~ModelSelect.join` will be joined against. Used for
-      specifying multiple joins against a single table.
+      Execute the query and return the first row, if it exists. Multiple
+      calls will result in multiple queries being executed.
 
-      See :ref:`relationships` for additional discussion.
+      If no matching row is found, raise ``DoesNotExist``.
 
-      If the ``ctx`` is not given, then the query's model will be used.
+   .. method:: peek(n=1)
 
-      The following example selects from tweet and joins on both user and
-      tweet-flag:
+      :param int n: Number of rows to return.
+      :return: A single row if n = 1, else a list of rows.
+
+      Execute the query and return the given number of rows from the start
+      of the cursor. This function may be called multiple times safely, and
+      will always return the first N rows of results.
+
+   .. method:: first(n=1)
+
+      :param int n: Number of rows to return.
+      :return: A single row if n = 1, else a list of rows.
+
+      Like the :meth:`~ModelSelect.peek` method, except a ``LIMIT`` is
+      applied to the query to ensure that only ``n`` rows are returned.
+      Multiple calls for the same value of ``n`` will not result in multiple
+      executions.
+
+      The query is altered in-place so it is **not** possible to call
+      :meth:`~ModelSelect.first` and then later iterate over the full
+      result-set using the same query object. Again, this is done to ensure
+      that multiple calls to ``first()`` will not result in multiple query
+      executions.
+
+   .. method:: scalar(as_tuple=False, as_dict=False)
+
+      :param bool as_tuple: Return the result as a tuple?
+      :param bool as_dict: Return the result as a dict?
+      :return: Single scalar value. If ``as_tuple = True``, a row tuple is
+          returned. If ``as_dict = True``, a row dict is returned.
+
+      Return a scalar value from the first row of results. If multiple
+      scalar values are anticipated (e.g. multiple aggregations in a single
+      query) then you may specify ``as_tuple=True`` to get the row tuple.
+
+      Example:
 
       .. code-block:: python
 
-          sq = Tweet.select().join(User).switch(Tweet).join(TweetFlag)
+         query = Note.select(fn.MAX(Note.timestamp))
+         max_ts = query.scalar()
 
-          # Equivalent (since Tweet is the query's model)
-          sq = Tweet.select().join(User).switch().join(TweetFlag)
+         query = Note.select(fn.MAX(Note.timestamp), fn.COUNT(Note.id))
+         max_ts, n_notes = query.scalar(as_tuple=True)
+
+         query = Note.select(fn.COUNT(Note.id).alias('count'))
+         assert query.scalar(as_dict=True) == {'count': 123}
+
+   .. method:: count(clear_limit=False)
+
+      :param bool clear_limit: Clear any LIMIT clause when counting.
+      :return: Number of rows in the query result-set.
+
+      Return number of rows in the query result-set.
+
+      Implemented by running SELECT COUNT(1) FROM (<current query>).
+
+   .. method:: exists()
+
+      :return: Whether any results exist for the current query.
+
+      Return a boolean indicating whether the current query has any results.
+
+   .. method:: dicts(as_dict=True)
+
+      :param bool as_dict: Specify whether to return rows as dictionaries.
+
+      Return rows as dictionaries.
+
+   .. method:: tuples(as_tuples=True)
+
+      :param bool as_tuples: Specify whether to return rows as tuples.
+
+      Return rows as tuples.
+
+   .. method:: namedtuples(as_namedtuple=True)
+
+      :param bool as_namedtuple: Specify whether to return rows as named
+          tuples.
+
+      Return rows as named tuples.
 
    .. method:: objects(constructor=None)
 
@@ -2284,9 +2355,28 @@ Model
       model instances). For very complex queries this can have a positive
       performance impact, especially iterating large result sets.
 
-      Similarly, you can use :meth:`~BaseQuery.dicts`,
-      :meth:`~BaseQuery.tuples` or :meth:`~BaseQuery.namedtuples`
+      Similarly, you can use :meth:`~ModelSelect.dicts`,
+      :meth:`~ModelSelect.tuples` or :meth:`~ModelSelect.namedtuples`
       to achieve even more performance.
+
+   .. method:: models()
+
+      Return result rows as :class:`Model` instances, rebuilding the model
+      graph from explicitly selected and joined data. **This is the default**.
+
+      .. code-block:: python
+
+         query = (Tweet
+                  .select(Tweet, User)
+                  .join(User))
+
+         # Note that `tweet.user` is populated already since we SELECTed
+         # columns from the joined User model.
+         for tweet in query:
+             print(tweet.user.username, '->', tweet.content)
+
+      For an in-depth discussion of foreign-keys, joins and relationships
+      between models, refer to :ref:`relationships`.
 
    .. method:: join(dest, join_type='INNER', on=None, src=None, attr=None)
 
@@ -2335,6 +2425,29 @@ Model
       Use same parameter order as the non-model-specific
       :meth:`~ModelSelect.join`. Bypasses the *join context* by requiring
       the join source to be specified.
+
+   .. method:: switch(ctx=None)
+
+      :param ctx: A :class:`Model`, :class:`ModelAlias`, subquery, or
+          other object that was joined-on.
+
+      Switch the *join context* - the source which subsequent calls to
+      :meth:`~ModelSelect.join` will be joined against. Used for
+      specifying multiple joins against a single table.
+
+      See :ref:`relationships` for additional discussion.
+
+      If the ``ctx`` is not given, then the query's model will be used.
+
+      The following example selects from tweet and joins on both user and
+      tweet-flag:
+
+      .. code-block:: python
+
+          sq = Tweet.select().join(User).switch(Tweet).join(TweetFlag)
+
+          # Equivalent (since Tweet is the query's model)
+          sq = Tweet.select().join(User).switch().join(TweetFlag)
 
    .. method:: filter(*args, **kwargs)
 

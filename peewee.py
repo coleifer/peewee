@@ -1553,9 +1553,8 @@ class Expression(ColumnBase):
             op_in = self.op == OP.IN or self.op == OP.NOT_IN
             rhs = self.rhs
             if op_in:
-                if isinstance(rhs, multi_types) and not rhs:
-                    return ctx.literal('0 = 1' if self.op == OP.IN else '1 = 1')
-                elif ctx.as_new().parse(rhs)[0] == '()':
+                #
+                if self._is_rhs_empty(rhs, ctx):
                     return ctx.literal('0 = 1' if self.op == OP.IN else '1 = 1')
             if rhs is None and (self.op == OP.IS or self.op == OP.IS_NOT):
                 rhs = SQL('NULL')
@@ -1564,6 +1563,14 @@ class Expression(ColumnBase):
                     .sql(self.lhs)
                     .literal(' %s ' % op_sql)
                     .sql(rhs))
+
+    def _is_rhs_empty(self, rhs, ctx):
+        if isinstance(rhs, multi_types):
+            return not bool(rhs)
+        elif isinstance(rhs, Value):
+            return (rhs.multi and not rhs.values)
+        else:
+            return ctx.as_new().parse(rhs)[0] == '()'
 
 
 class StringExpression(Expression):
@@ -3607,7 +3614,7 @@ class SqliteDatabase(Database):
                                isolation_level=None, **self.connect_params)
         try:
             self._add_conn_hooks(conn)
-        except:
+        except Exception:
             conn.close()
             raise
         return conn
@@ -4016,9 +4023,6 @@ class Psycopg2Adapter(_BasePsycopgAdapter):
             conn.rollback()
         return False
 
-    def extract_date(self, date_part, date_field):
-        return fn.EXTRACT(NodeList((date_part, SQL('FROM'), date_field)))
-
 
 class Psycopg3Adapter(_BasePsycopgAdapter):
     isolation_levels = {
@@ -4074,9 +4078,6 @@ class Psycopg3Adapter(_BasePsycopgAdapter):
         elif txn_status != TransactionStatus.IDLE:
             conn.rollback()
         return False
-
-    def extract_date(self, date_part, date_field):
-        return fn.EXTRACT(NodeList((SQL(date_part), SQL('FROM'), date_field)))
 
 
 class PostgresqlDatabase(Database):
@@ -4289,7 +4290,7 @@ class PostgresqlDatabase(Database):
         return self._build_on_conflict_update(oc, query)
 
     def extract_date(self, date_part, date_field):
-        return self._adapter.extract_date(date_part, date_field)
+        return fn.EXTRACT(NodeList((SQL(date_part), SQL('FROM'), date_field)))
 
     def truncate_date(self, date_part, date_field):
         return fn.DATE_TRUNC(date_part, date_field)
@@ -4308,7 +4309,7 @@ class PostgresqlDatabase(Database):
         return ctx.sql(Select().columns(SQL('0')).where(SQL('false')))
 
     def set_time_zone(self, timezone):
-        self.execute_sql('set time zone "%s";' % timezone)
+        self.execute_sql('set time zone \'%s\';' % timezone.replace("'", "''"))
 
     def set_isolation_level(self, isolation_level):
         self._isolation_level = self._adapter.isolation_level_int(
@@ -4373,7 +4374,7 @@ class MySQLDatabase(Database):
         if 'maria' in version:
             match_obj = re.search(r'(1\d\.\d+\.\d+)', version)
         else:
-            match_obj = re.search(r'(\d\.\d+\.\d+)', version)
+            match_obj = re.search(r'(\d{1,2}\.\d+\.\d+)', version)
         if match_obj is not None:
             return tuple(int(num) for num in match_obj.groups()[0].split('.'))
 
@@ -4386,7 +4387,7 @@ class MySQLDatabase(Database):
 
         conn = self._state.conn
         if hasattr(conn, 'ping'):
-            if self.server_version[0] == 8:
+            if self.server_version[0] >= 8:
                 args = ()
             else:
                 args = (False,)
@@ -4637,7 +4638,7 @@ class _transaction(object):
         elif depth == 1:
             try:
                 self.commit(False)
-            except:
+            except Exception:
                 self.rollback(False)
                 raise
 
@@ -4676,7 +4677,7 @@ class _savepoint(object):
         else:
             try:
                 self.commit(begin=False)
-            except:
+            except Exception:
                 self.rollback(begin=False)
                 raise
 
@@ -5032,7 +5033,7 @@ class IntegerField(Field):
     def adapt(self, value):
         try:
             return int(value)
-        except ValueError:
+        except (ValueError, TypeError):
             return value
 
 
@@ -5082,7 +5083,7 @@ class FloatField(Field):
     def adapt(self, value):
         try:
             return float(value)
-        except ValueError:
+        except (ValueError, TypeError):
             return value
 
 
@@ -5374,7 +5375,7 @@ class UUIDField(Field):
             return value.hex
         try:
             return uuid.UUID(value).hex
-        except:
+        except Exception:
             return value
 
     def python_value(self, value):
@@ -7365,6 +7366,10 @@ class _ModelQueryHelper(object):
         self._row_type = ROW.CONSTRUCTOR
         self._constructor = self.model if constructor is None else constructor
 
+    @Node.copy
+    def models(self):
+        self._row_type = ROW.MODEL
+
     def _get_cursor_wrapper(self, cursor):
         row_type = self._row_type or self.default_row_type
         if row_type == ROW.MODEL:
@@ -7719,7 +7724,7 @@ class ModelSelect(BaseModelSelect, Select):
                 for piece in key.split('__'):
                     for dest, attr, _, _ in self._joins.get(curr, ()):
                         try: model_attr = getattr(curr, piece, None)
-                        except: pass
+                        except Exception: pass
                         if attr == piece or (isinstance(dest, ModelAlias) and
                                              dest.alias == piece):
                             curr = dest
