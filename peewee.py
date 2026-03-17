@@ -4848,7 +4848,10 @@ class FieldAccessor(object):
 
     def __get__(self, instance, instance_type=None):
         if instance is not None:
-            return instance.__data__.get(self.name)
+            try:
+                return instance.__data__[self.name]
+            except KeyError:
+                return
         return self.field
 
     def __set__(self, instance, value):
