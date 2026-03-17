@@ -236,10 +236,31 @@ class TestModelSQL(ModelDatabaseTestCase):
             class Meta:
                 schema = 'notes'
 
-        query = Note.alias().select()
+        query = Note.select()
         self.assertSQL(query, (
             'SELECT "t1"."id", "t1"."content" '
             'FROM "notes"."note" AS "t1"'), [])
+
+        query = Note.alias('na').select()
+        self.assertSQL(query, (
+            'SELECT "na"."id", "na"."content" '
+            'FROM "notes"."note" AS "na"'), [])
+
+    def test_model_alias_join_with_schema(self):
+        class Note(TestModel):
+            content = TextField()
+            class Meta:
+                schema = 'notes'
+
+        NA = Note.alias('na')
+        query = (Note
+                 .select(Note.content, NA.content)
+                 .join(NA, on=(NA.id == Note.id)))
+        self.assertSQL(query, (
+            'SELECT "t1"."content", "na"."content" '
+            'FROM "notes"."note" AS "t1" '
+            'INNER JOIN "notes"."note" AS "na" '
+            'ON ("na"."id" = "t1"."id")'), [])
 
     def test_filter_simple(self):
         query = User.filter(username='huey')
@@ -961,6 +982,48 @@ class TestOnConflictSQL(ModelDatabaseTestCase):
             'DO UPDATE SET "extra" = EXCLUDED."extra" '
             'WHERE ("ukvp"."key" != ?) RETURNING "ukvp"."id"'),
             ['k1', 1, 2, 'k2', 2, 3, 1, 'kx'])
+
+    def test_preserve_and_update(self):
+        query = (UKVP
+                 .insert(key='k1', value=1, extra=10)
+                 .on_conflict(
+                     conflict_target=(UKVP.key,),
+                     preserve=(UKVP.value,),
+                     update={UKVP.extra: UKVP.extra + 1}))
+        self.assertSQL(query, (
+            'INSERT INTO "ukvp" ("key", "value", "extra") '
+            'VALUES (?, ?, ?) '
+            'ON CONFLICT ("key") DO UPDATE SET '
+            '"value" = EXCLUDED."value", '
+            '"extra" = ("ukvp"."extra" + ?) '
+            'RETURNING "ukvp"."id"'), ['k1', 1, 10, 1])
+
+    def test_preserve_with_where(self):
+        query = (UKVP
+                 .insert(key='k1', value=1, extra=10)
+                 .on_conflict(
+                     conflict_target=(UKVP.key,),
+                     preserve=(UKVP.value,),
+                     where=(UKVP.extra < 100)))
+        self.assertSQL(query, (
+            'INSERT INTO "ukvp" ("key", "value", "extra") '
+            'VALUES (?, ?, ?) '
+            'ON CONFLICT ("key") DO UPDATE SET '
+            '"value" = EXCLUDED."value" '
+            'WHERE ("ukvp"."extra" < ?) '
+            'RETURNING "ukvp"."id"'), ['k1', 1, 10, 100])
+
+    def test_on_conflict_named_constraint(self):
+        query = (UKVP
+                 .insert(key='k1', value=1)
+                 .on_conflict(
+                     conflict_constraint='ukvp_key',
+                     update={UKVP.value: UKVP.value + 1}))
+        self.assertSQL(query, (
+            'INSERT INTO "ukvp" ("key", "value") VALUES (?, ?) '
+            'ON CONFLICT ON CONSTRAINT "ukvp_key" '
+            'DO UPDATE SET "value" = ("ukvp"."value" + ?) '
+            'RETURNING "ukvp"."id"'), ['k1', 1, 1])
 
 
 class TestStringsForFieldsa(ModelDatabaseTestCase):

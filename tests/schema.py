@@ -762,6 +762,39 @@ class TestModelDDL(ModelDatabaseTestCase):
              'FOREIGN KEY ("parent_id") REFERENCES "cat_a2" ("id"))'),
             ('CREATE INDEX "cat_a2_parent_id" ON "cat_a2" ("parent_id")')])
 
+    def test_field_ddl(self):
+        class Base(self.database.Model):
+            pass
+        class FC(Base):
+            code = FixedCharField(max_length=5)
+            name = CharField()
+
+        class Dbl(Base):
+            value = DoubleField()
+            label = CharField()
+
+        class SmInt(Base):
+            value = SmallIntegerField()
+            label = CharField()
+
+        self.assertSQL(FC._schema._create_table(False), (
+            'CREATE TABLE "fc" ('
+            '"id" INTEGER NOT NULL PRIMARY KEY, '
+            '"code" CHAR(5) NOT NULL, '
+            '"name" VARCHAR(255) NOT NULL)'), [])
+
+        self.assertSQL(Dbl._schema._create_table(False), (
+            'CREATE TABLE "dbl" ('
+            '"id" INTEGER NOT NULL PRIMARY KEY, '
+            '"value" REAL NOT NULL, '
+            '"label" VARCHAR(255) NOT NULL)'), [])
+
+        self.assertSQL(SmInt._schema._create_table(False), (
+            'CREATE TABLE "smint" ('
+            '"id" INTEGER NOT NULL PRIMARY KEY, '
+            '"value" INTEGER NOT NULL, '
+            '"label" VARCHAR(255) NOT NULL)'), [])
+
 
 class NoteX(TestModel):
     content = TextField()

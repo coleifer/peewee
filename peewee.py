@@ -1781,7 +1781,7 @@ class Window(Node):
 
     def __sql__(self, ctx):
         if ctx.scope != SCOPE_SOURCE and not self._inline:
-            ctx.literal(self._alias)
+            ctx.sql(Entity(self._alias))
             ctx.literal(' AS ')
 
         with ctx(parentheses=True):
@@ -1789,9 +1789,9 @@ class Window(Node):
             if self._extends is not None:
                 ext = self._extends
                 if isinstance(ext, Window):
-                    ext = SQL(ext._alias)
+                    ext = Entity(ext._alias)
                 elif isinstance(ext, str):
-                    ext = SQL(ext)
+                    ext = Entity(ext)
                 parts.append(ext)
             if self.partition_by:
                 parts.extend((
@@ -1827,7 +1827,7 @@ class WindowAlias(Node):
         return self
 
     def __sql__(self, ctx):
-        return ctx.literal(self.window._alias or 'w')
+        return ctx.sql(Entity(self.window._alias or 'w'))
 
 
 class _InFunction(Node):
@@ -5203,10 +5203,10 @@ class CharField(_StringField):
 class FixedCharField(CharField):
     field_type = 'CHAR'
 
-    def python_value(self, value):
-        value = super(FixedCharField, self).python_value(value)
+    def adapt(self, value):
+        value = super(FixedCharField, self).adapt(value)
         if value:
-            value = value.strip()
+            value = value[:self.max_length]
         return value
 
 

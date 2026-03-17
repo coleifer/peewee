@@ -1508,3 +1508,19 @@ class TestSqliteInvalidDataTypes(ModelTestCase):
         self.assertEqual(it_db1.tfield, '100')
         self.assertEqual(it_db1.ifield, 'five')
         self.assertEqual(it_db1.ffield, 'pi')
+
+
+class FC(TestModel):
+    code = FixedCharField(max_length=5)
+    name = CharField()
+
+
+class TestFixedCharFieldIntegration(ModelTestCase):
+    database = get_in_memory_db()
+    requires = [FC]
+
+    def test_fixed_char_truncates(self):
+        FC.create(code='ABCDEF', name='short')
+
+        fc = FC.get(FC.code == 'ABCDE')
+        self.assertEqual(fc.code, 'ABCDE')

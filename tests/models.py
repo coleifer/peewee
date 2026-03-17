@@ -2332,6 +2332,54 @@ class TestWindowFunctionIntegration(ModelTestCase):
             (2, 4.),
             (3, 100.)])
 
+    def test_row_number(self):
+        query = (Sample
+                 .select(Sample.counter,
+                         fn.ROW_NUMBER().over(
+                             order_by=[Sample.counter]).alias('rn'))
+                 .order_by(Sample.counter)
+                 .tuples())
+        self.assertEqual(list(query),
+                         [(1, 1), (1, 2), (2, 3), (2, 4), (3, 5)])
+
+    def test_sum_with_frame(self):
+        w = Window(order_by=[Sample.counter],
+                   frame_type=Window.ROWS,
+                   start=Window.preceding(1),
+                   end=Window.CURRENT_ROW)
+        query = (Sample
+                 .select(Sample.counter,
+                         fn.SUM(Sample.value).over(w).alias('rsum'))
+                 .window(w)
+                 .order_by(Sample.counter)
+                 .tuples())
+        results = list(query)
+        # Each row sums current + previous row's value.
+        self.assertEqual(results, [
+            (1, 10.0),  # just 10
+            (1, 30.0),  # 10 + 20
+            (2, 21.0),  # 20 + 1
+            (2, 4.0),  # 1 + 3
+            (3, 103.0)])  # 3 + 100
+
+    def test_lag_lead(self):
+        query = (Sample
+                 .select(Sample.counter,
+                         fn.LAG(Sample.value, 1).over(
+                             order_by=[Sample.counter]).alias('prev'),
+                         fn.LEAD(Sample.value, 1).over(
+                             order_by=[Sample.counter]).alias('next'))
+                 .order_by(Sample.counter)
+                 .tuples())
+        results = list(query)
+        self.assertEqual(results, [
+            (1, None, 20.0),
+            (1, 10.0, 1.0),
+            (2, 20.0, 3.0),
+            (2, 1.0, 100.0),
+            (3, 3.0, None)])
+        #values = ((1, 10), (1, 20), (2, 1), (2, 3), (3, 100))
+
 
 @skip_if(IS_SQLITE or (IS_MYSQL and not IS_MYSQL_ADVANCED_FEATURES))
 @skip_unless(db.for_update, 'requires for update')
@@ -2995,6 +3043,23 @@ class TestCTEIntegration(ModelTestCase):
             (1, .25),
             (2, .2),
             (2, .4)])
+
+    @skip_if(IS_SQLITE_OLD or IS_MYSQL)
+    @requires_models(Sample)
+    def test_cte_with_aggregate_filter(self):
+        for i in range(1, 11):
+            Sample.create(counter=i, value=float(i * i))
+
+        cte = (Sample
+               .select(Sample.counter, Sample.value)
+               .where(Sample.counter <= 5)
+               .cte('small'))
+        query = (cte
+                 .select_from(fn.SUM(cte.c.value).alias('total'))
+                 .where(cte.c.counter > 2))
+        result = query.scalar()
+        # sum of 3^2 + 4^2 + 5^2 = 9 + 16 + 25 = 50
+        self.assertEqual(result, 50.0)
 
 
 @skip_if(not IS_SQLITE_15, 'requires row-values')
@@ -4102,6 +4167,35 @@ class TestUpsertPostgresql(PGOnConflictTests, ModelTestCase):
             ('k1', 'v1', 'e1'),
             ('k2', 'v2', 'x2'),
             ('k3', 'v3', 'e1')])
+
+    @requires_models(Emp)
+    def test_upsert_preserves_existing(self):
+        #Emp.create(first='beanie', last='cat', empno='998')
+        Emp.create(first='beanie', last='cat', empno='999')
+        (Emp
+         .insert(first='huey', last='kitten', empno='999')
+         .on_conflict(
+             conflict_target=(Emp.empno,),
+             preserve=(Emp.last,))
+         .execute())
+        obj = Emp.get(Emp.empno == '999')
+        self.assertEqual(obj.first, 'beanie')
+        # last was NOT preserved, so it gets the val from the insert.
+        self.assertEqual(obj.last, 'kitten')
+
+    @requires_models(Emp)
+    def test_upsert_update_expression(self):
+        Emp.create(first='huey', last='cat', empno='999')
+        (Emp
+         .insert(first='hueky', last='kitten', empno='999')
+         .on_conflict(
+             conflict_target=(Emp.empno,),
+             update={Emp.first: Emp.first + 'yyy',
+                     Emp.last: Emp.last + 'lands'})
+         .execute())
+        obj = Emp.get(Emp.empno == '999')
+        self.assertEqual(obj.first, 'hueyyyy')
+        self.assertEqual(obj.last, 'catlands')
 
 
 class TestJoinSubquery(ModelTestCase):
