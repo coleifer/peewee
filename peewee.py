@@ -1445,6 +1445,8 @@ class Value(ColumnBase):
                     self.values.append(item)
                 else:
                     self.values.append(Value(item, self.converter))
+        else:
+            self.values = None
 
     def __sql__(self, ctx):
         if self.multi:
@@ -3332,7 +3334,8 @@ class Database(_callable_context_manager):
         return self._state.conn.cursor()
 
     def execute_sql(self, sql, params=None):
-        logger.debug((sql, params))
+        if logger.isEnabledFor(logging.DEBUG):
+            logger.debug((sql, params))
         with __exception_wrapper__:
             cursor = self.cursor()
             cursor.execute(sql, params or ())
@@ -6801,9 +6804,10 @@ class Model(with_metaclass(ModelBase, Node)):
     def __init__(self, *args, **kwargs):
         if kwargs.pop('__no_default__', None):
             self.__data__ = {}
+            self._dirty = set()
         else:
             self.__data__ = self._meta.get_default_dict()
-        self._dirty = set(self.__data__)
+            self._dirty = set(self.__data__)
         self.__rel__ = {}
 
         for k in kwargs:
