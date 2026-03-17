@@ -8124,9 +8124,15 @@ class ModelCursorWrapper(BaseModelCursorWrapper):
                     self.key_to_constructor[key] = (constructor,
                                                     is_model(constructor))
 
-                    # (src, attr, dest, is_dict, join_type).
-                    self.src_to_dest.append((curr, attr, key, is_dict,
-                                             join_type))
+                    # (src, attr, dest, is_dict, join_type, is outer?).
+                    self.src_to_dest.append((
+                        curr,
+                        attr,
+                        key,
+                        is_dict,
+                        join_type,
+                        join_type.endswith('OUTER')))
+
                     dests.add(key)
                     accum.append(key)
 
@@ -8139,7 +8145,7 @@ class ModelCursorWrapper(BaseModelCursorWrapper):
                     self.key_to_constructor[src] = (src.model, True)
 
         # Indicate which sources are also dests.
-        for src, _, dest, _, _ in self.src_to_dest:
+        for src, _, dest, _, _, _ in self.src_to_dest:
             self.src_is_dest[src] = src in dests and (dest in selected_src
                                                       or src in selected_src)
 
@@ -8166,20 +8172,46 @@ class ModelCursorWrapper(BaseModelCursorWrapper):
 
             self.column_keys.append(key)
 
+        # Pre-compute flat list of key/col/converter for each column index.
+        self._row_spec = tuple(
+            (self.column_keys[i], self.columns[i], self.converters[i])
+            for i in range(self.ncols))
+
+        # Flatten list of key / constructor / is model? flag.
+        self._constructor_list = [
+            (key, construct, _is_model)
+            for key, (construct, _is_model) in self.key_to_constructor.items()]
+
+        # Pre-compute join-graph reachability.
+        self._dest_reachable = {}
+        for (src, attr, dest, is_dict, join_type, _) in self.src_to_dest:
+            if dest not in self.joins:
+                continue
+            reachable = set()
+            q = collections.deque([dest])
+            while q:
+                curr = q.popleft()
+                if curr in self.joins:
+                    for _key, _, _, _ in self.joins[curr]:
+                        reachable.add(_key)
+                        q.append(_key)
+
+            self._dest_reachable[dest] = frozenset(reachable)
+
     def process_row(self, row):
         objects = {}
-        object_list = []
-        for key, (constructor, _is_model) in self.key_to_constructor.items():
+        model_list = []
+        for key, constructor, _is_model in self._constructor_list:
             if _is_model:
                 objects[key] = constructor(__no_default__=True)
+                model_list.append(objects[key])
             else:
                 objects[key] = constructor()
-            object_list.append(objects[key])
 
         default_instance = objects[self.model]
 
         set_keys = set()
-        for idx, key in enumerate(self.column_keys):
+        for idx, (key, column, converter) in enumerate(self._row_spec):
             # Get the instance corresponding to the selected column/value,
             # falling back to the "root" model instance.
             instance = objects.get(key, default_instance)
@@ -8187,8 +8219,8 @@ class ModelCursorWrapper(BaseModelCursorWrapper):
             value = row[idx]
             if value is not None:
                 set_keys.add(key)
-            if self.converters[idx]:
-                value = self.converters[idx](value)
+            if converter is not None:
+                value = converter(value)
 
             if isinstance(instance, dict):
                 instance[column] = value
@@ -8196,37 +8228,28 @@ class ModelCursorWrapper(BaseModelCursorWrapper):
                 setattr(instance, column, value)
 
         # Need to do some analysis on the joins before this.
-        for (src, attr, dest, is_dict, join_type) in self.src_to_dest:
-            instance = objects[src]
-            try:
-                joined_instance = objects[dest]
-            except KeyError:
+        for (src, attr, dest, is_dict, _, is_outer) in self.src_to_dest:
+            instance = objects.get(src)
+            joined_instance = objects.get(dest)
+            if joined_instance is None and dest not in objects:
                 continue
 
             # Determine if anything further along in the graph is set.
             assign = False
-            if dest not in set_keys and dest in self.joins:
-                q = list(self.joins[dest])
-                while q:
-                    _key, _, _, _ = q.pop(0)
-                    if _key in set_keys:
-                        assign = True
-                        break
-                    if _key in self.joins:
-                        q.extend(self.joins[_key])
+            if dest not in set_keys and dest in self._dest_reachable:
+                assign = bool(self._dest_reachable[dest] & set_keys)
 
             # If no fields were set on the destination instance then do not
             # assign an "empty" instance.
             if dest not in set_keys and not assign:
-                if join_type.endswith('OUTER JOIN'):
+                if is_outer:
                     joined_instance = None
                 else:
                     continue
 
             # If no fields were set on either the source or the destination,
             # then we have nothing to do here.
-            if src not in set_keys and dest not in set_keys \
-               and join_type.endswith('OUTER JOIN'):
+            if src not in set_keys and dest not in set_keys and is_outer:
                 continue
 
             if is_dict:
@@ -8235,9 +8258,8 @@ class ModelCursorWrapper(BaseModelCursorWrapper):
                 setattr(instance, attr, joined_instance)
 
         # When instantiating models from a cursor, we clear the dirty fields.
-        for instance in object_list:
-            if isinstance(instance, Model):
-                instance._dirty.clear()
+        for instance in model_list:
+            instance._dirty.clear()
 
         return objects[self.model]
 
