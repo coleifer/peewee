@@ -378,6 +378,9 @@ CSQ_PARENTHESES_UNNESTED = 2
 SNAKE_CASE_STEP1 = re.compile('(.)_*([A-Z][a-z]+)')
 SNAKE_CASE_STEP2 = re.compile('([a-z0-9])_*([A-Z])')
 
+# Used for making valid Python identifiers.
+IDENTIFIER_RE = re.compile(r'[A-Za-z_][A-Za-z0-9_]*')
+
 # Helper functions that are used in various parts of the codebase.
 MODEL_BASE = '_metaclass_helper_'
 
@@ -408,6 +411,12 @@ def ensure_entity(value):
 def make_snake_case(s):
     first = SNAKE_CASE_STEP1.sub(r'\1_\2', s)
     return SNAKE_CASE_STEP2.sub(r'\1_\2', first).lower()
+
+def make_identifier(s):
+    match_obj = IDENTIFIER_RE.search(s.rsplit('.', 1)[-1])
+    if match_obj is not None:
+        return match_obj.group()
+    return s
 
 def chunked(it, n):
     marker = object()
@@ -4769,6 +4778,9 @@ class CursorWrapper(object):
         n = n or float('Inf')
         if n < 0:
             raise ValueError('Negative values are not supported.')
+        if self.populated or n <= self.count:
+            # We've already filled the requested rows.
+            return
 
         iterator = ResultIterator(self)
         iterator.index = self.count
@@ -4778,15 +4790,32 @@ class CursorWrapper(object):
             except StopIteration:
                 break
 
+    def dedupe_columns(self, columns, valid_identifiers=True):
+        # Try to clean-up messy column descriptions when people do not
+        # provide an alias. The idea is that we take something like:
+        # SUM("t1"."price") -> "price") -> price. Similarly, duplicated column
+        # names will get an integer suffix, e.g. val, val_2, val_3.
+        identifiers = []
+        duplicates = {}
+        for column in columns:
+            if valid_identifiers:
+                column = make_identifier(column)
+
+            if column in duplicates:
+                duplicates[column] += 1
+                column = '%s_%s' % (column, duplicates[column])
+            else:
+                duplicates[column] = 1
+            identifiers.append(column)
+        return identifiers
+
 
 class DictCursorWrapper(CursorWrapper):
-    def _initialize_columns(self):
-        description = self.cursor.description
-        self.columns = [t[0][t[0].rfind('.') + 1:].strip('()"`')
-                        for t in description]
-        self.ncols = len(description)
-
-    initialize = _initialize_columns
+    def initialize(self):
+        self.columns = self.dedupe_columns(
+            [col_spec[0] for col_spec in self.cursor.description],
+            valid_identifiers=False)
+        self.ncols = len(self.columns)
 
     def _row_to_dict(self, row):
         result = {}
@@ -4796,12 +4825,11 @@ class DictCursorWrapper(CursorWrapper):
 
     process_row = _row_to_dict
 
-
 class NamedTupleCursorWrapper(CursorWrapper):
     def initialize(self):
-        description = self.cursor.description
-        self.tuple_class = collections.namedtuple('Row', [
-            t[0][t[0].rfind('.') + 1:].strip('()"`') for t in description])
+        identifiers = self.dedupe_columns(
+            [col_spec[0] for col_spec in self.cursor.description])
+        self.tuple_class = collections.namedtuple('Row', identifiers)
 
     def process_row(self, row):
         return self.tuple_class(*row)
@@ -4811,6 +4839,12 @@ class ObjectCursorWrapper(DictCursorWrapper):
     def __init__(self, cursor, constructor):
         super(ObjectCursorWrapper, self).__init__(cursor)
         self.constructor = constructor
+
+    def initialize(self):
+        self.columns = self.dedupe_columns(
+            [col_spec[0] for col_spec in self.cursor.description],
+            valid_identifiers=True)
+        self.ncols = len(self.columns)
 
     def process_row(self, row):
         row_dict = self._row_to_dict(row)
@@ -7964,7 +7998,7 @@ class BaseModelCursorWrapper(DictCursorWrapper):
         self.model = model
         self.select = columns or []
 
-    def _initialize_columns(self):
+    def initialize(self):
         combined = self.model._meta.combined
         table = self.model._meta.table
         description = self.cursor.description
@@ -8037,34 +8071,36 @@ class BaseModelCursorWrapper(DictCursorWrapper):
                 if isinstance(node, Column) and node.source == table:
                     fields[idx] = combined[column]
 
-    initialize = _initialize_columns
-
     def process_row(self, row):
         raise NotImplementedError
 
 
 class ModelDictCursorWrapper(BaseModelCursorWrapper):
+    def initialize(self):
+        super(ModelDictCursorWrapper, self).initialize()
+        self.unique_columns = self.dedupe_columns(
+            self.columns,
+            valid_identifiers=False)
+
     def process_row(self, row):
         result = {}
-        columns, converters = self.columns, self.converters
-        fields = self.fields
+        columns, converters = self.unique_columns, self.converters
 
-        for i in range(self.ncols):
+        for i, value in enumerate(row):
             attr = columns[i]
-            if attr in result: continue  # Don't overwrite if we have dupes.
             if converters[i] is not None:
-                result[attr] = converters[i](row[i])
+                result[attr] = converters[i](value)
             else:
-                result[attr] = row[i]
+                result[attr] = value
 
         return result
 
 
-class ModelTupleCursorWrapper(ModelDictCursorWrapper):
+class ModelTupleCursorWrapper(BaseModelCursorWrapper):
     constructor = tuple
 
     def process_row(self, row):
-        columns, converters = self.columns, self.converters
+        converters = self.converters
         return self.constructor([
             (converters[i](row[i]) if converters[i] is not None else row[i])
             for i in range(self.ncols)])
@@ -8072,12 +8108,10 @@ class ModelTupleCursorWrapper(ModelDictCursorWrapper):
 
 class ModelNamedTupleCursorWrapper(ModelTupleCursorWrapper):
     def initialize(self):
-        self._initialize_columns()
-        attributes = []
-        for i in range(self.ncols):
-            attributes.append(self.columns[i])
-        self.tuple_class = collections.namedtuple('Row', attributes)
-        self.constructor = lambda row: self.tuple_class(*row)
+        super(ModelNamedTupleCursorWrapper, self).initialize()
+        identifiers = self.dedupe_columns(self.columns)
+        self.impl = collections.namedtuple('Row', identifiers)
+        self.constructor = lambda row: self.impl(*row)
 
 
 class ModelObjectCursorWrapper(ModelDictCursorWrapper):
@@ -8086,8 +8120,21 @@ class ModelObjectCursorWrapper(ModelDictCursorWrapper):
         self.is_model = is_model(constructor)
         super(ModelObjectCursorWrapper, self).__init__(cursor, model, select)
 
+    def initialize(self):
+        super(ModelObjectCursorWrapper, self).initialize()
+        self.identifiers = self.dedupe_columns(self.columns)
+
     def process_row(self, row):
-        data = super(ModelObjectCursorWrapper, self).process_row(row)
+        data = {}
+        columns, converters = self.identifiers, self.converters
+
+        for i, value in enumerate(row):
+            attr = columns[i]
+            if converters[i] is not None:
+                data[attr] = converters[i](value)
+            else:
+                data[attr] = value
+
         if self.is_model:
             # Clear out any dirty fields before returning to the user.
             obj = self.constructor(__no_default__=1, **data)
@@ -8104,10 +8151,11 @@ class ModelCursorWrapper(BaseModelCursorWrapper):
         self.joins = joins
 
     def initialize(self):
-        self._initialize_columns()
+        super(ModelCursorWrapper, self).initialize()
         selected_src = set([field.model for field in self.fields
                             if field is not None])
-        select, columns = self.select, self.columns
+        select = self.select
+        columns = [make_identifier(c) for c in self.columns]
 
         self.key_to_constructor = {self.model: (self.model, True)}
         self.src_is_dest = {}
@@ -8181,7 +8229,7 @@ class ModelCursorWrapper(BaseModelCursorWrapper):
 
         # Pre-compute flat list of key/col/converter for each column index.
         self._row_spec = tuple(
-            (self.column_keys[i], self.columns[i], self.converters[i])
+            (self.column_keys[i], columns[i], self.converters[i])
             for i in range(self.ncols))
 
         # Flatten list of key / constructor / is model? flag.

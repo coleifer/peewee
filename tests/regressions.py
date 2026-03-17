@@ -1615,7 +1615,6 @@ class TestWeirdAliases(ModelTestCase):
             assertAlias(SQL('LOWER("t1"."username")'), 'username')
 
 
-
 class NDF(TestModel):
     key = CharField(primary_key=True)
     date = DateTimeField(null=True)

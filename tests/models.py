@@ -1287,11 +1287,13 @@ class TestModelAPIs(ModelTestCase):
 
         with self.assertQueryCount(1):
             union_flat = (q1 | q2).objects()
-            results = [(t.id, t.content, t.username) for t in union_flat]
+            results = list(results)
+            results = [(t.id, t.content, t.username, t.id_2)
+                       for t in union_flat]
             self.assertEqual(sorted(results), [
-                (1, 'u1-t1', 'u1'),
-                (2, 'u1-t2', 'u1'),
-                (3, 'u2-t1', 'u2')])
+                (1, 'u1-t1', 'u1', 1),
+                (2, 'u1-t2', 'u1', 1),
+                (3, 'u2-t1', 'u2', 2)])
 
     @requires_models(User, Tweet)
     def test_compound_select_as_subquery(self):
