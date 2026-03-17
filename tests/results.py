@@ -136,7 +136,7 @@ class TestCursorWrapper(ModelTestCase):
             assertCache(cursor, 10)
 
 
-class TestModelObjectCursorWrapper(ModelTestCase):
+class TestRowTypes(ModelTestCase):
     database = get_in_memory_db()
     requires = [User, Tweet]
 
@@ -157,13 +157,13 @@ class TestModelObjectCursorWrapper(ModelTestCase):
                 ('huey', 'purr'),
                 ('mickey', 'woof')])
 
-    def test_dict_flattening(self):
+    def test_dicts(self):
         u = User.create(username='u1')
         for i in range(3):
             Tweet.create(user=u, content='t%d' % (i + 1))
 
         query = (Tweet
-                 .select(Tweet, User)
+                 .select(Tweet, User.username)
                  .join(User)
                  .order_by(Tweet.id)
                  .dicts())
@@ -173,6 +173,23 @@ class TestModelObjectCursorWrapper(ModelTestCase):
                 (1, 't1', 'u1'),
                 (2, 't2', 'u1'),
                 (3, 't3', 'u1')])
+
+    def test_dict_duplicate_colname(self):
+        User.create(username='u1')
+        User.create(username='u2')
+
+        query = (User
+                 .select(User.username, Value('abc').alias('username'))
+                 .order_by(User.id)
+                 .dicts())
+        self.assertEqual(list(query), [{'username': 'u1'}, {'username': 'u2'}])
+
+        query = (User
+                 .select(Value('abc').alias('username'), User.username)
+                 .order_by(User.id)
+                 .dicts())
+        self.assertEqual(list(query),
+                         [{'username': 'abc'}, {'username': 'abc'}])
 
 
 class Reg(TestModel):
