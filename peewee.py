@@ -1850,17 +1850,25 @@ class Case(ColumnBase):
 
 
 class ForUpdate(Node):
-    def __init__(self, expr, of=None, nowait=None):
+    def __init__(self, expr, of=None, nowait=None, skip_locked=None):
         expr = 'FOR UPDATE' if expr is True else expr
         if expr.lower().endswith('nowait'):
             expr = expr[:-7]  # Strip off the "nowait" bit.
             nowait = True
+        elif expr.lower().endswith('skip locked'):
+            expr = expr[:-12]
+            skip_locked = True
+
+        if nowait and skip_locked:
+            raise ValueError('Only one of nowait and skip_locked may be used '
+                             'in a FOR UPDATE clause.')
 
         self._expr = expr
         if of is not None and not isinstance(of, (list, set, tuple)):
             of = (of,)
         self._of = of
         self._nowait = nowait
+        self._skip_locked = skip_locked
 
     def __sql__(self, ctx):
         ctx.literal(self._expr)
@@ -1868,6 +1876,8 @@ class ForUpdate(Node):
             ctx.literal(' OF ').sql(CommaNodeList(self._of))
         if self._nowait:
             ctx.literal(' NOWAIT')
+        elif self._skip_locked:
+            ctx.literal(' SKIP LOCKED')
         return ctx
 
 
@@ -2403,7 +2413,7 @@ class CompoundSelectQuery(SelectBase):
 class Select(SelectBase):
     def __init__(self, from_list=None, columns=None, group_by=None,
                  having=None, distinct=None, windows=None, for_update=None,
-                 for_update_of=None, nowait=None, lateral=None, **kwargs):
+                 lateral=None, **kwargs):
         super(Select, self).__init__(**kwargs)
         self._from_list = (list(from_list) if isinstance(from_list, tuple)
                            else from_list) or []
@@ -2411,9 +2421,7 @@ class Select(SelectBase):
         self._group_by = group_by
         self._having = having
         self._windows = None
-        self._for_update = for_update  # XXX: consider reorganizing.
-        self._for_update_of = for_update_of
-        self._for_update_nowait = nowait
+        self._for_update = for_update
         self._lateral = lateral
 
         self._distinct = self._simple_distinct = None
@@ -2456,6 +2464,8 @@ class Select(SelectBase):
         if not self._from_list:
             raise ValueError('No sources to join on.')
         item = self._from_list.pop()
+        if join_type == JOIN.LATERAL or join_type == JOIN.LEFT_LATERAL:
+            on = True
         self._from_list.append(Join(item, dest, join_type, on))
 
     def left_outer_join(self, dest, on=None):
@@ -2500,12 +2510,15 @@ class Select(SelectBase):
         self._windows = windows if windows else None
 
     @Node.copy
-    def for_update(self, for_update=True, of=None, nowait=None):
-        if not for_update and (of is not None or nowait):
+    def for_update(self, for_update=True, of=None, nowait=None,
+                   skip_locked=None):
+        if not for_update and (of is not None or nowait or skip_locked):
             for_update = True
-        self._for_update = for_update
-        self._for_update_of = of
-        self._for_update_nowait = nowait
+
+        if not for_update:
+            self._for_update = None
+        else:
+            self._for_update = ForUpdate(for_update, of, nowait, skip_locked)
 
     @Node.copy
     def lateral(self, lateral=True):
@@ -2572,13 +2585,12 @@ class Select(SelectBase):
             # Apply ORDER BY, LIMIT, OFFSET.
             self._apply_ordering(ctx)
 
-            if self._for_update:
+            if self._for_update is not None:
                 if not ctx.state.for_update:
                     raise ValueError('FOR UPDATE specified but not supported '
                                      'by database.')
                 ctx.literal(' ')
-                ctx.sql(ForUpdate(self._for_update, self._for_update_of,
-                                  self._for_update_nowait))
+                ctx.sql(self._for_update)
 
         # If the subquery is inside a function -or- we are evaluating a
         # subquery on either side of an expression w/o an explicit alias, do

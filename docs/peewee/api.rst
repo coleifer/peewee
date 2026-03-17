@@ -4682,6 +4682,19 @@ Query-builder
       FROM "numbers"
 
 
+.. class:: ForUpdate(expr, of=None, nowait=None, skip_locked=None)
+
+   :param str expr: Either a boolean (``True``) or a string indicating the
+       desired lock strength, e.g. "FOR SHARE" or "FOR NO KEY UPDATE".
+   :param of: One or more models to restrict locking to.
+   :param bool nowait: Specify NOWAIT option when locking.
+   :param bool skip_locked: Specify SKIP LOCKED option when locking.
+
+   Represent a ``FOR UPDATE`` SQL clause in a :class:`Select` query. Typically
+   you will call :meth:`Select.for_update` rather than using this class
+   directly.
+
+
 .. class:: NodeList(nodes, glue=' ', parens=False)
 
    :param list nodes: Zero or more nodes.
@@ -5237,7 +5250,7 @@ Queries
    Class representing a compound SELECT query.
 
 
-.. class:: Select(from_list=None, columns=None, group_by=None, having=None, distinct=None, windows=None, for_update=None, for_update_of=None, for_update_nowait=None, **kwargs)
+.. class:: Select(from_list=None, columns=None, group_by=None, having=None, distinct=None, windows=None, for_update=None, **kwargs)
 
    :param list from_list: List of sources for FROM clause.
    :param list columns: Columns or values to select.
@@ -5245,9 +5258,7 @@ Queries
    :param Expression having: Expression for HAVING clause.
    :param distinct: Either a boolean or a list of column-like objects.
    :param list windows: List of :class:`Window` clauses.
-   :param for_update: Boolean or str indicating if SELECT...FOR UPDATE.
-   :param for_update_of: One or more tables for FOR UPDATE OF clause.
-   :param bool for_update_nowait: Specify NOWAIT locking.
+   :param ForUpdate for_update: indicate SELECT...FOR UPDATE.
 
    Class representing a SELECT query.
 
@@ -5431,12 +5442,13 @@ Queries
                   .window(window)  # Note call to ".window()"
                   .order_by(Sample.counter))
 
-   .. method:: for_update(for_update=True, of=None, nowait=None)
+   .. method:: for_update(for_update=True, of=None, nowait=None, skip_locked=None)
 
       :param for_update: Either a boolean or a string indicating the
-          desired expression, e.g. "FOR SHARE".
+          desired lock strength, e.g. "FOR SHARE" or "FOR NO KEY UPDATE".
       :param of: One or more models to restrict locking to.
       :param bool nowait: Specify NOWAIT option when locking.
+      :param bool skip_locked: Specify SKIP LOCKED option when locking.
 
 
 .. class:: _WriteQuery(table, returning=None, **kwargs)
