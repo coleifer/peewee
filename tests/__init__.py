@@ -5,16 +5,11 @@ from peewee import OperationalError
 
 # Core modules.
 from .db_tests import *
-from .expressions import *
 from .fields import *
-from .keys import *
 from .manytomany import *
 from .models import *
-from .model_save import *
 from .model_sql import *
 from .prefetch_tests import *
-from .queries import *
-from .regressions import *
 from .results import *
 from .schema import *
 from .sql import *
@@ -54,7 +49,6 @@ except OperationalError:
           'the postgres_ext tests.')
 from .pwiz_integration import *
 from .reflection import *
-from .returning import *
 from .shortcuts import *
 from .signals import *
 try:

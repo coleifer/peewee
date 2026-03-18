@@ -7,9 +7,7 @@ from peewee import ModelIndex
 
 from .base import get_in_memory_db
 from .base import requires_pglike
-from .base import skip_if
 from .base import BaseTestCase
-from .base import IS_CRDB
 from .base import ModelDatabaseTestCase
 from .base import TestModel
 from .base import __sql__
@@ -1039,7 +1037,6 @@ class TestOnConflictSQL(ModelDatabaseTestCase):
             'WHERE ("ukvp"."extra" < ?) '
             'RETURNING "ukvp"."id"'), ['k1', 1, 10, 100])
 
-    @skip_if(IS_CRDB, 'crdb lol')
     def test_on_conflict_named_constraint(self):
         query = (UKVP
                  .insert(key='k1', value=1)
@@ -1299,3 +1296,72 @@ class TestModelArgument(BaseTestCase):
         self.assertSQL(query, (
             'SELECT "t1"."id", score("t1") AS "score" '
             'FROM "post" AS "t1" ORDER BY "t1"."timestamp"'), [])
+
+
+QUser = Table('users', ['id', 'username'])
+QTweet = Table('tweet', ['id', 'user_id', 'content'])
+
+
+class TestQueryCloning(BaseTestCase):
+    def test_clone_tables(self):
+        self._do_test_clone(QUser, QTweet)
+
+    def test_clone_models(self):
+        class User(TestModel):
+            username = TextField()
+            class Meta:
+                table_name = 'users'
+        class Tweet(TestModel):
+            user = ForeignKeyField(User, backref='tweets')
+            content = TextField()
+        self._do_test_clone(User, Tweet)
+
+    def _do_test_clone(self, User, Tweet):
+        query = Tweet.select(Tweet.id)
+        base_sql = 'SELECT "t1"."id" FROM "tweet" AS "t1"'
+        self.assertSQL(query, base_sql, [])
+
+        qj = query.join(User, on=(Tweet.user_id == User.id))
+        self.assertSQL(query, base_sql, [])
+        self.assertSQL(qj, (
+            'SELECT "t1"."id" FROM "tweet" AS "t1" '
+            'INNER JOIN "users" AS "t2" ON ("t1"."user_id" = "t2"."id")'), [])
+
+        qw = query.where(Tweet.id > 3)
+        self.assertSQL(query, base_sql, [])
+        self.assertSQL(qw, base_sql + ' WHERE ("t1"."id" > ?)', [3])
+
+        qw2 = qw.where(Tweet.id < 6)
+        self.assertSQL(query, base_sql, [])
+        self.assertSQL(qw, base_sql + ' WHERE ("t1"."id" > ?)', [3])
+        self.assertSQL(qw2, base_sql + (' WHERE (("t1"."id" > ?) '
+                                        'AND ("t1"."id" < ?))'), [3, 6])
+
+        qo = query.order_by(Tweet.id)
+        self.assertSQL(query, base_sql, [])
+        self.assertSQL(qo, base_sql + ' ORDER BY "t1"."id"', [])
+
+        qo2 = qo.order_by(Tweet.content, Tweet.id)
+        self.assertSQL(query, base_sql, [])
+        self.assertSQL(qo, base_sql + ' ORDER BY "t1"."id"', [])
+        self.assertSQL(qo2,
+                       base_sql + ' ORDER BY "t1"."content", "t1"."id"', [])
+
+        qg = query.group_by(Tweet.id)
+        self.assertSQL(query, base_sql, [])
+        self.assertSQL(qg, base_sql + ' GROUP BY "t1"."id"', [])
+
+
+class NLM(TestModel):
+    a = IntegerField()
+    b = IntegerField()
+
+class TestRegressionNodeListClone(BaseTestCase):
+    def test_node_list_clone_expr(self):
+        expr = (NLM.a + NLM.b)
+        query = NLM.select(expr.alias('expr')).order_by(expr).distinct(expr)
+        self.assertSQL(query, (
+            'SELECT DISTINCT ON ("t1"."a" + "t1"."b") '
+            '("t1"."a" + "t1"."b") AS "expr" '
+            'FROM "nlm" AS "t1" '
+            'ORDER BY ("t1"."a" + "t1"."b")'), [])

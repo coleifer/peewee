@@ -1,5 +1,6 @@
 import calendar
 import datetime
+import json
 import sqlite3
 import time
 import uuid
@@ -9,6 +10,8 @@ from decimal import ROUND_UP
 from peewee import NodeList
 from peewee import VirtualField
 from peewee import *
+
+from playhouse.hybrid import *
 
 from .base import BaseTestCase
 from .base import IS_CRDB
@@ -24,6 +27,9 @@ from .base import requires_mysql
 from .base import requires_pglike
 from .base import requires_sqlite
 from .base import skip_if
+from .base_models import Note
+from .base_models import Person
+from .base_models import Relationship
 from .base_models import Tweet
 from .base_models import User
 
@@ -66,6 +72,10 @@ class Bits(TestModel):
     is_sticky = flags.flag(F_STICKY)
     is_favorite = flags.flag(F_FAVORITE)
     is_minimized = flags.flag(F_MINIMIZED)
+
+    status = BitField(default=0)
+    st_active = status.flag()
+    st_draft = status.flag()
 
     data = BigBitField()
 
@@ -162,23 +172,36 @@ class TestDecimalField(ModelTestCase):
 
 
 class BoolModel(TestModel):
+    key = TextField()
     value = BooleanField(null=True)
-    name = CharField()
 
 
 class TestBooleanField(ModelTestCase):
     requires = [BoolModel]
 
     def test_boolean_field(self):
-        BoolModel.create(value=True, name='t')
-        BoolModel.create(value=False, name='f')
-        BoolModel.create(value=None, name='n')
+        BoolModel.create(key='t', value=True)
+        BoolModel.create(key='f', value=False)
+        BoolModel.create(key='n', value=None)
 
-        vals = sorted((b.name, b.value) for b in BoolModel.select())
+        vals = sorted((b.key, b.value) for b in BoolModel.select())
         self.assertEqual(vals, [
             ('f', False),
             ('n', None),
             ('t', True)])
+
+    def test_boolean_compare(self):
+        b1 = BoolModel.create(key='b1', value=True)
+        b2 = BoolModel.create(key='b2', value=False)
+
+        expr2key = (
+            ((BoolModel.value == True), 'b1'),
+            ((BoolModel.value == False), 'b2'),
+            ((BoolModel.value != True), 'b2'),
+            ((BoolModel.value != False), 'b1'))
+        for expr, key in expr2key:
+            q = BoolModel.select().where(expr)
+            self.assertEqual([b.key for b in q], [key])
 
 
 class DateModel(TestModel):
@@ -659,6 +682,30 @@ class TestBitFields(ModelTestCase):
 
         query = Bits.select().where(Bits.is_sticky & ~Bits.is_favorite)
         self.assertEqual([x.id for x in query], [b1.id])
+
+    def test_bit_field_name(self):
+        def assertBits(bf, expected):
+            self.assertEqual(
+                (bf.is_sticky, bf.is_favorite, bf.st_active, bf.st_draft),
+                expected)
+
+        bf = Bits.create(flags=1)
+        assertBits(bf, (True, False, False, False))
+
+        bf.is_sticky = False
+        bf.is_favorite = True
+        bf.st_active = True
+        bf.save()
+        assertBits(bf, (False, True, True, False))
+
+        bf = Bits.get(Bits.id == bf.id)
+        assertBits(bf, (False, True, True, False))
+
+        self.assertEqual(bf.flags, 2)
+        self.assertEqual(bf.status, 1)
+
+        self.assertEqual(Bits.select().where(Bits.is_favorite).count(), 1)
+        self.assertEqual(Bits.select().where(Bits.st_draft).count(), 0)
 
     def test_bigbit_field_instance_data(self):
         b = Bits()
@@ -1584,3 +1631,1029 @@ class TestVirtualFieldBehavior(BaseTestCase):
         vf = VF.computed
         self.assertEqual(vf.db_value('42'), 42)
         self.assertEqual(vf.python_value('42'), 42)
+
+
+class Package(TestModel):
+    barcode = CharField(unique=True)
+
+
+class PackageItem(TestModel):
+    title = CharField()
+    package = ForeignKeyField(Package, Package.barcode, backref='items')
+
+
+class Manufacturer(TestModel):
+    name = CharField()
+
+
+class Component(TestModel):
+    name = CharField()
+    manufacturer = ForeignKeyField(Manufacturer, null=True)
+
+
+class Computer(TestModel):
+    hard_drive = ForeignKeyField(Component, backref='c1')
+    memory = ForeignKeyField(Component, backref='c2')
+    processor = ForeignKeyField(Component, backref='c3')
+
+
+class CompositeKeyModel(TestModel):
+    f1 = CharField()
+    f2 = IntegerField()
+    f3 = FloatField()
+
+    class Meta:
+        primary_key = CompositeKey('f1', 'f2')
+
+
+class Post(TestModel):
+    title = CharField()
+
+class Tag(TestModel):
+    tag = CharField()
+
+class TagPostThrough(TestModel):
+    tag = ForeignKeyField(Tag, backref='posts')
+    post = ForeignKeyField(Post, backref='tags')
+
+    class Meta:
+        primary_key = CompositeKey('tag', 'post')
+
+class TagPostThroughAlt(TestModel):
+    tag = ForeignKeyField(Tag, backref='posts_alt')
+    post = ForeignKeyField(Post, backref='tags_alt')
+
+class DIParent(TestModel):
+    title = CharField()
+
+class DIChild(TestModel):
+    parent = ForeignKeyField(DIParent, backref='children')
+    data = CharField()
+
+    class Meta:
+        primary_key = CompositeKey('data', 'parent')
+
+
+class TestForeignKeyToNonPrimaryKey(ModelTestCase):
+    requires = [Package, PackageItem]
+
+    def setUp(self):
+        super(TestForeignKeyToNonPrimaryKey, self).setUp()
+
+        for barcode in ['101', '102']:
+            Package.create(barcode=barcode)
+            for i in range(2):
+                PackageItem.create(
+                    package=barcode,
+                    title='%s-%s' % (barcode, i))
+
+    def test_fk_resolution(self):
+        pi = PackageItem.get(PackageItem.title == '101-0')
+        self.assertEqual(pi.__data__['package'], '101')
+        self.assertEqual(pi.package, Package.get(Package.barcode == '101'))
+
+    def test_select_generation(self):
+        p = Package.get(Package.barcode == '101')
+        self.assertEqual(
+            [item.title for item in p.items.order_by(PackageItem.title)],
+            ['101-0', '101-1'])
+
+
+class TestMultipleForeignKey(ModelTestCase):
+    requires = [Manufacturer, Component, Computer]
+    test_values = [
+        ['3TB', '16GB', 'i7'],
+        ['128GB', '1GB', 'ARM'],
+    ]
+
+    def setUp(self):
+        super(TestMultipleForeignKey, self).setUp()
+        intel = Manufacturer.create(name='Intel')
+        amd = Manufacturer.create(name='AMD')
+        kingston = Manufacturer.create(name='Kingston')
+        for hard_drive, memory, processor in self.test_values:
+            c = Computer.create(
+                hard_drive=Component.create(name=hard_drive),
+                memory=Component.create(name=memory, manufacturer=kingston),
+                processor=Component.create(name=processor, manufacturer=intel))
+
+        # The 2nd computer has an AMD processor.
+        c.processor.manufacturer = amd
+        c.processor.save()
+
+    def test_multi_join(self):
+        HDD = Component.alias('hdd')
+        HDDMf = Manufacturer.alias('hddm')
+        Memory = Component.alias('mem')
+        MemoryMf = Manufacturer.alias('memm')
+        Processor = Component.alias('proc')
+        ProcessorMf = Manufacturer.alias('procm')
+        query = (Computer
+                 .select(
+                     Computer,
+                     HDD,
+                     Memory,
+                     Processor,
+                     HDDMf,
+                     MemoryMf,
+                     ProcessorMf)
+                 .join(HDD, on=(
+                     Computer.hard_drive_id == HDD.id).alias('hard_drive'))
+                 .join(
+                     HDDMf,
+                     JOIN.LEFT_OUTER,
+                     on=(HDD.manufacturer_id == HDDMf.id))
+                 .switch(Computer)
+                 .join(Memory, on=(
+                     Computer.memory_id == Memory.id).alias('memory'))
+                 .join(
+                     MemoryMf,
+                     JOIN.LEFT_OUTER,
+                     on=(Memory.manufacturer_id == MemoryMf.id))
+                 .switch(Computer)
+                 .join(Processor, on=(
+                     Computer.processor_id == Processor.id).alias('processor'))
+                 .join(
+                     ProcessorMf,
+                     JOIN.LEFT_OUTER,
+                     on=(Processor.manufacturer_id == ProcessorMf.id))
+                 .order_by(Computer.id))
+
+        with self.assertQueryCount(1):
+            vals = []
+            manufacturers = []
+            for computer in query:
+                components = [
+                    computer.hard_drive,
+                    computer.memory,
+                    computer.processor]
+                vals.append([component.name for component in components])
+                for component in components:
+                    if component.manufacturer:
+                        manufacturers.append(component.manufacturer.name)
+                    else:
+                        manufacturers.append(None)
+
+            self.assertEqual(vals, self.test_values)
+            self.assertEqual(manufacturers, [
+                None, 'Kingston', 'Intel',
+                None, 'Kingston', 'AMD',
+            ])
+
+
+class TestMultipleForeignKeysJoining(ModelTestCase):
+    requires = [Person, Relationship]
+
+    def test_multiple_fks(self):
+        a = Person.create(first='a', last='l')
+        b = Person.create(first='b', last='l')
+        c = Person.create(first='c', last='l')
+
+        self.assertEqual(list(a.relations), [])
+        self.assertEqual(list(a.related_to), [])
+
+        r_ab = Relationship.create(from_person=a, to_person=b)
+        self.assertEqual(list(a.relations), [r_ab])
+        self.assertEqual(list(a.related_to), [])
+        self.assertEqual(list(b.relations), [])
+        self.assertEqual(list(b.related_to), [r_ab])
+
+        r_bc = Relationship.create(from_person=b, to_person=c)
+
+        following = Person.select().join(
+            Relationship, on=Relationship.to_person
+        ).where(Relationship.from_person == a)
+        self.assertEqual(list(following), [b])
+
+        followers = Person.select().join(
+            Relationship, on=Relationship.from_person
+        ).where(Relationship.to_person == a.id)
+        self.assertEqual(list(followers), [])
+
+        following = Person.select().join(
+            Relationship, on=Relationship.to_person
+        ).where(Relationship.from_person == b.id)
+        self.assertEqual(list(following), [c])
+
+        followers = Person.select().join(
+            Relationship, on=Relationship.from_person
+        ).where(Relationship.to_person == b.id)
+        self.assertEqual(list(followers), [a])
+
+        following = Person.select().join(
+            Relationship, on=Relationship.to_person
+        ).where(Relationship.from_person == c.id)
+        self.assertEqual(list(following), [])
+
+        followers = Person.select().join(
+            Relationship, on=Relationship.from_person
+        ).where(Relationship.to_person == c.id)
+        self.assertEqual(list(followers), [b])
+
+
+class TestCompositePrimaryKey(ModelTestCase):
+    requires = [Tag, Post, TagPostThrough, CompositeKeyModel]
+
+    def setUp(self):
+        super(TestCompositePrimaryKey, self).setUp()
+        tags = [Tag.create(tag='t%d' % i) for i in range(1, 4)]
+        posts = [Post.create(title='p%d' % i) for i in range(1, 4)]
+        p12 = Post.create(title='p12')
+        for t, p in zip(tags, posts):
+            TagPostThrough.create(tag=t, post=p)
+        TagPostThrough.create(tag=tags[0], post=p12)
+        TagPostThrough.create(tag=tags[1], post=p12)
+
+    def test_create_table_query(self):
+        query, params = TagPostThrough._schema._create_table().query()
+        sql = ('CREATE TABLE IF NOT EXISTS "tag_post_through" ('
+               '"tag_id" INTEGER NOT NULL, '
+               '"post_id" INTEGER NOT NULL, '
+               'PRIMARY KEY ("tag_id", "post_id"), '
+               'FOREIGN KEY ("tag_id") REFERENCES "tag" ("id"), '
+               'FOREIGN KEY ("post_id") REFERENCES "post" ("id"))')
+        if IS_MYSQL:
+            sql = sql.replace('"', '`')
+        self.assertEqual(query, sql)
+
+    def test_get_set_id(self):
+        tpt = (TagPostThrough
+               .select()
+               .join(Tag)
+               .switch(TagPostThrough)
+               .join(Post)
+               .order_by(Tag.tag, Post.title)).get()
+        # Sanity check.
+        self.assertEqual(tpt.tag.tag, 't1')
+        self.assertEqual(tpt.post.title, 'p1')
+
+        tag = Tag.select().where(Tag.tag == 't1').get()
+        post = Post.select().where(Post.title == 'p1').get()
+        self.assertEqual(tpt._pk, (tag.id, post.id))
+
+        # set_id is a no-op.
+        with self.assertRaisesCtx(TypeError):
+            tpt._pk = None
+
+        self.assertEqual(tpt._pk, (tag.id, post.id))
+        t3 = Tag.get(Tag.tag == 't3')
+        p3 = Post.get(Post.title == 'p3')
+        tpt._pk = (t3, p3)
+        self.assertEqual(tpt.tag.tag, 't3')
+        self.assertEqual(tpt.post.title, 'p3')
+
+    def test_querying(self):
+        posts = (Post.select()
+                 .join(TagPostThrough)
+                 .join(Tag)
+                 .where(Tag.tag == 't1')
+                 .order_by(Post.title))
+        self.assertEqual([p.title for p in posts], ['p1', 'p12'])
+
+        tags = (Tag.select()
+                .join(TagPostThrough)
+                .join(Post)
+                .where(Post.title == 'p12')
+                .order_by(Tag.tag))
+        self.assertEqual([t.tag for t in tags], ['t1', 't2'])
+
+    def test_composite_key_model(self):
+        CKM = CompositeKeyModel
+        values = [
+            ('a', 1, 1.0),
+            ('a', 2, 2.0),
+            ('b', 1, 1.0),
+            ('b', 2, 2.0)]
+        c1, c2, c3, c4 = [
+            CKM.create(f1=f1, f2=f2, f3=f3) for f1, f2, f3 in values]
+
+        # Update a single row, giving it a new value for `f3`.
+        CKM.update(f3=3.0).where((CKM.f1 == 'a') & (CKM.f2 == 2)).execute()
+
+        c = CKM.get((CKM.f1 == 'a') & (CKM.f2 == 2))
+        self.assertEqual(c.f3, 3.0)
+
+        # Update the `f3` value and call `save()`, triggering an update.
+        c3.f3 = 4.0
+        c3.save()
+
+        c = CKM.get((CKM.f1 == 'b') & (CKM.f2 == 1))
+        self.assertEqual(c.f3, 4.0)
+
+        # Only 1 row updated.
+        query = CKM.select().where(CKM.f3 == 4.0)
+        self.assertEqual(query.count(), 1)
+
+        # Unfortunately this does not work since the original value of the
+        # PK is lost (and hence cannot be used to update).
+        c4.f1 = 'c'
+        c4.save()
+        self.assertRaises(
+            CKM.DoesNotExist,
+            lambda: CKM.get((CKM.f1 == 'c') & (CKM.f2 == 2)))
+
+    def test_count_composite_key(self):
+        CKM = CompositeKeyModel
+        values = [
+            ('a', 1, 1.0),
+            ('a', 2, 2.0),
+            ('b', 1, 1.0),
+            ('b', 2, 1.0)]
+        for f1, f2, f3 in values:
+            CKM.create(f1=f1, f2=f2, f3=f3)
+
+        self.assertEqual(CKM.select().count(), 4)
+        self.assertTrue(CKM.select().where(
+            (CKM.f1 == 'a') &
+            (CKM.f2 == 1)).exists())
+        self.assertFalse(CKM.select().where(
+            (CKM.f1 == 'a') &
+            (CKM.f2 == 3)).exists())
+
+    @requires_models(DIParent, DIChild)
+    def test_delete_instance(self):
+        p1, p2 = [DIParent.create(title='p%s' % i) for i in range(2)]
+        c1 = DIChild.create(data='m1', parent=p1)
+        c2 = DIChild.create(data='m2', parent=p1)
+        c3 = DIChild.create(data='m3', parent=p2)
+        c4 = DIChild.create(data='m4', parent=p2)
+
+        res = c1.delete_instance()
+        self.assertEqual(res, 1)
+        self.assertEqual(
+            [x.data for x in DIChild.select().order_by(DIChild.data)],
+            ['m2', 'm3', 'm4'])
+
+        p2.delete_instance(recursive=True)
+        self.assertEqual(
+            [x.data for x in DIChild.select().order_by(DIChild.data)],
+            ['m2'])
+
+    def test_composite_key_inheritance(self):
+        class Person(TestModel):
+            first = TextField()
+            last = TextField()
+
+            class Meta:
+                primary_key = CompositeKey('first', 'last')
+
+        self.assertTrue(isinstance(Person._meta.primary_key, CompositeKey))
+        self.assertEqual(Person._meta.primary_key.field_names,
+                         ('first', 'last'))
+
+        class Employee(Person):
+            title = TextField()
+
+        self.assertTrue(isinstance(Employee._meta.primary_key, CompositeKey))
+        self.assertEqual(Employee._meta.primary_key.field_names,
+                         ('first', 'last'))
+        sql = ('CREATE TABLE IF NOT EXISTS "employee" ('
+               '"first" TEXT NOT NULL, "last" TEXT NOT NULL, '
+               '"title" TEXT NOT NULL, PRIMARY KEY ("first", "last"))')
+        if IS_MYSQL:
+            sql = sql.replace('"', '`')
+        self.assertEqual(Employee._schema._create_table().query(), (sql, []))
+
+
+class TestForeignKeyConstraints(ModelTestCase):
+    requires = [Person, Note]
+
+    def setUp(self):
+        super(TestForeignKeyConstraints, self).setUp()
+        self.set_foreign_key_pragma(True)
+
+    def tearDown(self):
+        self.set_foreign_key_pragma(False)
+        super(TestForeignKeyConstraints, self).tearDown()
+
+    def set_foreign_key_pragma(self, is_enabled):
+        if IS_SQLITE:
+            self.database.foreign_keys = 'on' if is_enabled else 'off'
+
+    def test_constraint_exists(self):
+        max_id = Person.select(fn.MAX(Person.id)).scalar() or 0
+        with self.assertRaisesCtx(IntegrityError):
+            with self.database.atomic():
+                Note.create(author=max_id + 1, content='test')
+
+    @requires_sqlite
+    def test_disable_constraint(self):
+        self.set_foreign_key_pragma(False)
+        Note.create(author=0, content='test')
+
+
+class FK_A(TestModel):
+    key = CharField(max_length=16, unique=True)
+
+class FK_B(TestModel):
+    fk_a = ForeignKeyField(FK_A, field='key')
+
+
+class TestFKtoNonPKField(ModelTestCase):
+    requires = [FK_A, FK_B]
+
+    def test_fk_to_non_pk_field(self):
+        a1 = FK_A.create(key='a1')
+        a2 = FK_A.create(key='a2')
+        b1 = FK_B.create(fk_a=a1)
+        b2 = FK_B.create(fk_a=a2)
+
+        args = (b1.fk_a, b1.fk_a_id, a1, a1.key)
+        for arg in args:
+            query = FK_B.select().where(FK_B.fk_a == arg)
+            self.assertSQL(query, (
+                'SELECT "t1"."id", "t1"."fk_a_id" FROM "fk_b" AS "t1" '
+                'WHERE ("t1"."fk_a_id" = ?)'), ['a1'])
+            b1_db = query.get()
+            self.assertEqual(b1_db.id, b1.id)
+
+    def test_fk_to_non_pk_insert_update(self):
+        a1 = FK_A.create(key='a1')
+        b1 = FK_B.create(fk_a=a1)
+        self.assertEqual(FK_B.select().where(FK_B.fk_a == a1).count(), 1)
+
+        exprs = (
+            {FK_B.fk_a: a1},
+            {'fk_a': a1},
+            {FK_B.fk_a: a1.key},
+            {'fk_a': a1.key})
+        for n, expr in enumerate(exprs, 2):
+            self.assertTrue(FK_B.insert(expr).execute())
+            self.assertEqual(FK_B.select().where(FK_B.fk_a == a1).count(), n)
+
+        a2 = FK_A.create(key='a2')
+        exprs = (
+            {FK_B.fk_a: a2},
+            {'fk_a': a2},
+            {FK_B.fk_a: a2.key},
+            {'fk_a': a2.key})
+
+        b_list = list(FK_B.select().where(FK_B.fk_a == a1))
+        for i, (b, expr) in enumerate(zip(b_list[1:], exprs), 1):
+            self.assertTrue(FK_B.update(expr).where(FK_B.id == b.id).execute())
+            self.assertEqual(FK_B.select().where(FK_B.fk_a == a2).count(), i)
+
+
+class TestDeferredForeignKeyIntegration(ModelTestCase):
+    database = get_in_memory_db()
+
+    def test_deferred_fk_simple(self):
+        class Base(TestModel):
+            class Meta:
+                database = self.database
+        class DFFk(Base):
+            fk = DeferredForeignKey('DFPk')
+
+        # Deferred key not bound yet.
+        self.assertTrue(isinstance(DFFk.fk, DeferredForeignKey))
+
+        class DFPk(Base): pass
+
+        # Deferred key is bound correctly.
+        self.assertTrue(isinstance(DFFk.fk, ForeignKeyField))
+        self.assertEqual(DFFk.fk.rel_model, DFPk)
+        self.assertEqual(DFFk._meta.refs, {DFFk.fk: DFPk})
+        self.assertEqual(DFFk._meta.backrefs, {})
+        self.assertEqual(DFPk._meta.refs, {})
+        self.assertEqual(DFPk._meta.backrefs, {DFFk.fk: DFFk})
+        self.assertSQL(DFFk._schema._create_table(False), (
+            'CREATE TABLE "df_fk" ("id" INTEGER NOT NULL PRIMARY KEY, '
+            '"fk_id" INTEGER NOT NULL)'), [])
+
+    def test_deferred_fk_as_pk(self):
+        class Base(TestModel):
+            class Meta:
+                database = self.database
+        class DFFk(Base):
+            fk = DeferredForeignKey('DFPk', primary_key=True)
+
+        # Deferred key not bound yet.
+        self.assertTrue(isinstance(DFFk.fk, DeferredForeignKey))
+        self.assertTrue(DFFk._meta.primary_key is DFFk.fk)
+
+        class DFPk(Base): pass
+
+        # Resolved and primary-key set correctly.
+        self.assertTrue(isinstance(DFFk.fk, ForeignKeyField))
+        self.assertTrue(DFFk._meta.primary_key is DFFk.fk)
+
+        self.assertEqual(DFFk.fk.rel_model, DFPk)
+        self.assertEqual(DFFk._meta.refs, {DFFk.fk: DFPk})
+        self.assertEqual(DFFk._meta.backrefs, {})
+        self.assertEqual(DFPk._meta.refs, {})
+        self.assertEqual(DFPk._meta.backrefs, {DFFk.fk: DFFk})
+        self.assertSQL(DFFk._schema._create_table(False), (
+            'CREATE TABLE "df_fk" ("fk_id" INTEGER NOT NULL PRIMARY KEY)'), [])
+
+
+class BaseNamesTest(ModelTestCase):
+    requires = [User]
+
+    def assertNames(self, exp, x):
+        query = User.select().where(exp).order_by(User.username)
+        self.assertEqual([u.username for u in query], x)
+
+
+class TestRegexp(BaseNamesTest):
+    @skip_if(IS_SQLITE)
+    def test_regexp_iregexp(self):
+        users = [User.create(username=name) for name in ('n1', 'n2', 'n3')]
+
+        self.assertNames(User.username.regexp('n[1,3]'), ['n1', 'n3'])
+        self.assertNames(User.username.regexp('N[1,3]'), [])
+        self.assertNames(User.username.iregexp('n[1,3]'), ['n1', 'n3'])
+        self.assertNames(User.username.iregexp('N[1,3]'), ['n1', 'n3'])
+
+
+class TestContains(BaseNamesTest):
+    def test_contains_startswith_endswith(self):
+        users = [User.create(username=n) for n in ('huey', 'mickey', 'zaizee')]
+
+        self.assertNames(User.username.contains('ey'), ['huey', 'mickey'])
+        self.assertNames(User.username.contains('EY'), ['huey', 'mickey'])
+
+        self.assertNames(User.username.startswith('m'), ['mickey'])
+        self.assertNames(User.username.startswith('M'), ['mickey'])
+
+        self.assertNames(User.username.endswith('ey'), ['huey', 'mickey'])
+        self.assertNames(User.username.endswith('EY'), ['huey', 'mickey'])
+
+
+class TestValueConversion(ModelTestCase):
+    """
+    Test the conversion of field values using a field's db_value() function.
+
+    It is possible that a field's `db_value()` function may returns a Node
+    subclass (e.g. a SQL function). These tests verify and document how such
+    conversions are applied in various parts of the query.
+    """
+    database = get_in_memory_db()
+    requires = [UpperModel]
+
+    def test_value_conversion(self):
+        # Ensure value is converted on INSERT.
+        insert = UpperModel.insert({UpperModel.name: 'huey'})
+        self.assertSQL(insert, (
+            'INSERT INTO "upper_model" ("name") VALUES (UPPER(?))'), ['huey'])
+        uid = insert.execute()
+
+        obj = UpperModel.get(UpperModel.id == uid)
+        self.assertEqual(obj.name, 'HUEY')
+
+        # Ensure value is converted on UPDATE.
+        update = (UpperModel
+                  .update({UpperModel.name: 'zaizee'})
+                  .where(UpperModel.id == uid))
+        self.assertSQL(update, (
+            'UPDATE "upper_model" SET "name" = UPPER(?) '
+            'WHERE ("upper_model"."id" = ?)'),
+            ['zaizee', uid])
+        update.execute()
+
+        # Ensure it works with SELECT (or more generally, WHERE expressions).
+        select = UpperModel.select().where(UpperModel.name == 'zaizee')
+        self.assertSQL(select, (
+            'SELECT "t1"."id", "t1"."name" FROM "upper_model" AS "t1" '
+            'WHERE ("t1"."name" = UPPER(?))'), ['zaizee'])
+        obj = select.get()
+        self.assertEqual(obj.name, 'ZAIZEE')
+
+        # Ensure it works with DELETE.
+        delete = UpperModel.delete().where(UpperModel.name == 'zaizee')
+        self.assertSQL(delete, (
+            'DELETE FROM "upper_model" '
+            'WHERE ("upper_model"."name" = UPPER(?))'), ['zaizee'])
+        self.assertEqual(delete.execute(), 1)
+
+    def test_value_conversion_mixed(self):
+        um = UpperModel.create(name='huey')
+
+        # If we apply a function to the field, the conversion is not applied.
+        sq = UpperModel.select().where(fn.SUBSTR(UpperModel.name, 1, 1) == 'h')
+        self.assertSQL(sq, (
+            'SELECT "t1"."id", "t1"."name" FROM "upper_model" AS "t1" '
+            'WHERE (SUBSTR("t1"."name", ?, ?) = ?)'), [1, 1, 'h'])
+        self.assertRaises(UpperModel.DoesNotExist, sq.get)
+
+        # If we encapsulate the object as a value, the conversion is applied.
+        sq = UpperModel.select().where(UpperModel.name == Value('huey'))
+        self.assertSQL(sq, (
+            'SELECT "t1"."id", "t1"."name" FROM "upper_model" AS "t1" '
+            'WHERE ("t1"."name" = UPPER(?))'), ['huey'])
+        self.assertEqual(sq.get().id, um.id)
+
+        # Unless we explicitly pass converter=False.
+        sq = UpperModel.select().where(UpperModel.name == Value('huey', False))
+        self.assertSQL(sq, (
+            'SELECT "t1"."id", "t1"."name" FROM "upper_model" AS "t1" '
+            'WHERE ("t1"."name" = ?)'), ['huey'])
+        self.assertRaises(UpperModel.DoesNotExist, sq.get)
+
+        # If we specify explicit SQL on the rhs, the conversion is not applied.
+        sq = UpperModel.select().where(UpperModel.name == SQL('?', ['huey']))
+        self.assertSQL(sq, (
+            'SELECT "t1"."id", "t1"."name" FROM "upper_model" AS "t1" '
+            'WHERE ("t1"."name" = ?)'), ['huey'])
+        self.assertRaises(UpperModel.DoesNotExist, sq.get)
+
+        # Function arguments are not coerced.
+        sq = UpperModel.select().where(UpperModel.name == fn.LOWER('huey'))
+        self.assertSQL(sq, (
+            'SELECT "t1"."id", "t1"."name" FROM "upper_model" AS "t1" '
+            'WHERE ("t1"."name" = LOWER(?))'), ['huey'])
+        self.assertRaises(UpperModel.DoesNotExist, sq.get)
+
+    def test_value_conversion_query(self):
+        um = UpperModel.create(name='huey')
+        UM = UpperModel.alias()
+        subq = UM.select(UM.name).where(UM.name == 'huey')
+
+        # Select from WHERE ... IN <subquery>.
+        query = UpperModel.select().where(UpperModel.name.in_(subq))
+        self.assertSQL(query, (
+            'SELECT "t1"."id", "t1"."name" FROM "upper_model" AS "t1" '
+            'WHERE ("t1"."name" IN ('
+            'SELECT "t2"."name" FROM "upper_model" AS "t2" '
+            'WHERE ("t2"."name" = UPPER(?))))'), ['huey'])
+        self.assertEqual(query.get().id, um.id)
+
+        # Join on sub-query.
+        query = (UpperModel
+                 .select()
+                 .join(subq, on=(UpperModel.name == subq.c.name)))
+        self.assertSQL(query, (
+            'SELECT "t1"."id", "t1"."name" FROM "upper_model" AS "t1" '
+            'INNER JOIN (SELECT "t2"."name" FROM "upper_model" AS "t2" '
+            'WHERE ("t2"."name" = UPPER(?))) AS "t3" '
+            'ON ("t1"."name" = "t3"."name")'), ['huey'])
+        row = query.tuples().get()
+        self.assertEqual(row, (um.id, 'HUEY'))
+
+    def test_having_clause(self):
+        query = (UpperModel
+                 .select(UpperModel.name, fn.COUNT(UpperModel.id).alias('ct'))
+                 .group_by(UpperModel.name)
+                 .having(UpperModel.name == 'huey'))
+        self.assertSQL(query, (
+            'SELECT "t1"."name", COUNT("t1"."id") AS "ct" '
+            'FROM "upper_model" AS "t1" '
+            'GROUP BY "t1"."name" '
+            'HAVING ("t1"."name" = UPPER(?))'), ['huey'])
+
+
+class TS(TestModel):
+    key = CharField(primary_key=True)
+    timestamp = TimestampField(utc=True)
+
+
+class TestZeroTimestamp(ModelTestCase):
+    requires = [TS]
+
+    def test_zero_timestamp(self):
+        t0 = TS.create(key='t0', timestamp=0)
+        t1 = TS.create(key='t1', timestamp=1)
+
+        t0_db = TS.get(TS.key == 't0')
+        self.assertEqual(t0_db.timestamp, datetime.datetime(1970, 1, 1))
+
+        t1_db = TS.get(TS.key == 't1')
+        self.assertEqual(t1_db.timestamp,
+                         datetime.datetime(1970, 1, 1, 0, 0, 1))
+
+
+class TestBlobFieldContextRegression(BaseTestCase):
+    def test_blob_field_context_regression(self):
+        class A(Model):
+            f = BlobField()
+
+        orig = A.f._constructor
+        db = get_in_memory_db()
+        with db.bind_ctx([A]):
+            self.assertTrue(A.f._constructor is db.get_binary_type())
+
+        self.assertTrue(A.f._constructor is orig)
+
+
+class TC(TestModel):
+    ifield = IntegerField()
+    ffield = FloatField()
+    cfield = TextField()
+    tfield = TextField()
+
+
+class TestTypeCoercion(ModelTestCase):
+    requires = [TC]
+
+    def test_type_coercion(self):
+        t = TC.create(ifield='10', ffield='20.5', cfield=30, tfield=40)
+        t_db = TC.get(TC.id == t.id)
+
+        self.assertEqual(t_db.ifield, 10)
+        self.assertEqual(t_db.ffield, 20.5)
+        self.assertEqual(t_db.cfield, '30')
+        self.assertEqual(t_db.tfield, '40')
+
+
+class JsonField(TextField):
+    def db_value(self, value):
+        return json.dumps(value) if value is not None else None
+    def python_value(self, value):
+        return json.loads(value) if value is not None else None
+
+
+class JM(TestModel):
+    key = TextField()
+    data = JsonField()
+
+
+class TestListValueConversion(ModelTestCase):
+    requires = [JM]
+
+    def test_list_value_conversion(self):
+        jm = JM.create(key='k1', data=['i0', 'i1'])
+        jm.key = 'k1-x'
+        jm.save()
+
+        jm_db = JM.get(JM.key == 'k1-x')
+        self.assertEqual(jm_db.data, ['i0', 'i1'])
+
+        JM.update(data=['i1', 'i2']).execute()
+        jm_db = JM.get(JM.key == 'k1-x')
+        self.assertEqual(jm_db.data, ['i1', 'i2'])
+
+        jm2 = JM.create(key='k2', data=['i3', 'i4'])
+
+        jm_db.data = ['i1', 'i2', 'i3']
+        jm2.data = ['i4', 'i5']
+
+        JM.bulk_update([jm_db, jm2], fields=[JM.key, JM.data])
+
+        jm = JM.get(JM.key == 'k1-x')
+        self.assertEqual(jm.data, ['i1', 'i2', 'i3'])
+        jm2 = JM.get(JM.key == 'k2')
+        self.assertEqual(jm2.data, ['i4', 'i5'])
+
+
+class ModelTypeField(CharField):
+    def db_value(self, value):
+        if value is not None:
+            return value._meta.name
+    def python_value(self, value):
+        if value is not None:
+            return {'user': User, 'tweet': Tweet}[value]
+
+
+class MTF(TestModel):
+    name = TextField()
+    mtype = ModelTypeField()
+
+
+class TestFieldValueRegression(ModelTestCase):
+    requires = [MTF]
+
+    def test_field_value_regression(self):
+        u = MTF.create(name='user', mtype=User)
+        u_db = MTF.get()
+
+        self.assertEqual(u_db.name, 'user')
+        self.assertTrue(u_db.mtype is User)
+
+
+class CharPK(TestModel):
+    id = CharField(primary_key=True)
+    name = CharField(unique=True)
+
+    def __str__(self):
+        return self.name
+
+
+class CharFK(TestModel):
+    id = IntegerField(primary_key=True)
+    cpk = ForeignKeyField(CharPK, field=CharPK.name)
+
+
+class TestModelConversionRegression(ModelTestCase):
+    requires = [CharPK, CharFK]
+
+    def test_model_conversion_regression(self):
+        cpks = [CharPK.create(id=str(i), name='u%s' % i) for i in range(3)]
+
+        query = CharPK.select().where(CharPK.id << cpks)
+        self.assertEqual(sorted([c.id for c in query]), ['0', '1', '2'])
+
+        query = CharPK.select().where(CharPK.id.in_(list(CharPK.select())))
+        self.assertEqual(sorted([c.id for c in query]), ['0', '1', '2'])
+
+    def test_model_conversion_fk_retained(self):
+        cpks = [CharPK.create(id=str(i), name='u%s' % i) for i in range(3)]
+        cfks = [CharFK.create(id=i + 1, cpk='u%s' % i) for i in range(3)]
+
+        c0, c1, c2 = cpks
+        query = CharFK.select().where(CharFK.cpk << [c0, c2])
+        self.assertEqual(sorted([f.id for f in query]), [1, 3])
+
+
+class Product(TestModel):
+    id = CharField()
+    color = CharField()
+    class Meta:
+        primary_key = CompositeKey('id', 'color')
+
+class Sku(TestModel):
+    upc = CharField(primary_key=True)
+    product_id = CharField()
+    color = CharField()
+    class Meta:
+        constraints = [SQL('FOREIGN KEY (product_id, color) REFERENCES '
+                           'product(id, color)')]
+
+    @hybrid_property
+    def product(self):
+        if not hasattr(self, '_product'):
+            self._product = Product.get((Product.id == self.product_id) &
+                                        (Product.color == self.color))
+        return self._product
+
+    @product.setter
+    def product(self, obj):
+        self._product = obj
+        self.product_id = obj.id
+        self.color = obj.color
+
+    @product.expression
+    def product(cls):
+        return (Product.id == cls.product_id) & (Product.color == cls.color)
+
+
+class TestFKCompositePK(ModelTestCase):
+    requires = [Product, Sku]
+
+    def test_fk_composite_pk_regression(self):
+        Product.insert_many([
+            (1, 'red'),
+            (1, 'blue'),
+            (2, 'red'),
+            (2, 'green'),
+            (3, 'white')]).execute()
+        Sku.insert_many([
+            ('1-red', 1, 'red'),
+            ('1-blue', 1, 'blue'),
+            ('2-red', 2, 'red'),
+            ('2-green', 2, 'green'),
+            ('3-white', 3, 'white')]).execute()
+
+        query = (Product
+                 .select(Product, Sku)
+                 .join(Sku, on=Sku.product)
+                 .where(Product.color == 'red')
+                 .order_by(Product.id, Product.color))
+        with self.assertQueryCount(1):
+            rows = [(p.id, p.color, p.sku.upc) for p in query]
+            self.assertEqual(rows, [
+                ('1', 'red', '1-red'),
+                ('2', 'red', '2-red')])
+
+        query = (Sku
+                 .select(Sku, Product)
+                 .join(Product, on=Sku.product)
+                 .where(Product.color != 'red')
+                 .order_by(Sku.upc))
+        with self.assertQueryCount(1):
+            rows = [(s.upc, s.product_id, s.color,
+                     s.product.id, s.product.color) for s in query]
+            self.assertEqual(rows, [
+                ('1-blue', '1', 'blue', '1', 'blue'),
+                ('2-green', '2', 'green', '2', 'green'),
+                ('3-white', '3', 'white', '3', 'white')])
+
+class CPK(TestModel):
+    name = TextField()
+
+class CPKFK(TestModel):
+    key = CharField()
+    cpk = ForeignKeyField(CPK)
+    class Meta:
+        primary_key = CompositeKey('key', 'cpk')
+
+
+class TestCompositePKwithFK(ModelTestCase):
+    requires = [CPK, CPKFK]
+
+    def test_composite_pk_with_fk(self):
+        c1 = CPK.create(name='c1')
+        c2 = CPK.create(name='c2')
+        CPKFK.create(key='k1', cpk=c1)
+        CPKFK.create(key='k2', cpk=c1)
+        CPKFK.create(key='k3', cpk=c2)
+
+        query = (CPKFK
+                 .select(CPKFK.key, CPK)
+                 .join(CPK)
+                 .order_by(CPKFK.key, CPK.name))
+        with self.assertQueryCount(1):
+            self.assertEqual([(r.key, r.cpk.name) for r in query],
+                             [('k1', 'c1'), ('k2', 'c1'), ('k3', 'c2')])
+
+class FKN_A(TestModel): pass
+class FKN_B(TestModel):
+    a = ForeignKeyField(FKN_A, null=True)
+
+class TestSetFKNull(ModelTestCase):
+    requires = [FKN_A, FKN_B]
+
+    def test_set_fk_null(self):
+        a1 = FKN_A.create()
+        a2 = FKN_A()
+        b1 = FKN_B(a=a1)
+        b2 = FKN_B(a=a2)
+
+        self.assertTrue(b1.a is a1)
+        self.assertTrue(b2.a is a2)
+        b1.a = b2.a = None
+        self.assertTrue(b1.a is None)
+        self.assertTrue(b2.a is None)
+
+class FKF_A(TestModel):
+    key = CharField(max_length=16, unique=True)
+
+class FKF_B(TestModel):
+    fk_a_1 = ForeignKeyField(FKF_A, field='key')
+    fk_a_2 = IntegerField()
+
+
+class TestQueryWithModelInstanceParam(ModelTestCase):
+    requires = [FKF_A, FKF_B]
+
+    def test_query_with_model_instance_param(self):
+        a1 = FKF_A.create(key='k1')
+        a2 = FKF_A.create(key='k2')
+        b1 = FKF_B.create(fk_a_1=a1, fk_a_2=a1)
+        b2 = FKF_B.create(fk_a_1=a2, fk_a_2=a2)
+
+        # Ensure that UPDATE works as expected as well.
+        b1.save()
+
+        # See also keys.TestFKtoNonPKField test, which replicates much of this.
+        args = (b1.fk_a_1, b1.fk_a_1_id, a1, a1.key)
+        for arg in args:
+            query = FKF_B.select().where(FKF_B.fk_a_1 == arg)
+            self.assertSQL(query, (
+                'SELECT "t1"."id", "t1"."fk_a_1_id", "t1"."fk_a_2" '
+                'FROM "fkf_b" AS "t1" '
+                'WHERE ("t1"."fk_a_1_id" = ?)'), ['k1'])
+            b1_db = query.get()
+            self.assertEqual(b1_db.id, b1.id)
+
+        # When we are handed a model instance and a conversion (an IntegerField
+        # in this case), when the attempted conversion fails we fall back to
+        # using the given model's primary-key.
+        args = (b1.fk_a_2, a1, a1.id)
+        for arg in args:
+            query = FKF_B.select().where(FKF_B.fk_a_2 == arg)
+            self.assertSQL(query, (
+                'SELECT "t1"."id", "t1"."fk_a_1_id", "t1"."fk_a_2" '
+                'FROM "fkf_b" AS "t1" '
+                'WHERE ("t1"."fk_a_2" = ?)'), [a1.id])
+            b1_db = query.get()
+            self.assertEqual(b1_db.id, b1.id)
+
+class LK(TestModel):
+    key = TextField()
+
+class TestLikeEscape(ModelTestCase):
+    requires = [LK]
+
+    def assertNames(self, expr, expected):
+        query = LK.select().where(expr).order_by(LK.id)
+        self.assertEqual([lk.key for lk in query], expected)
+
+    def test_like_escape(self):
+        names = ('foo', 'foo%', 'foo%bar', 'foo_bar', 'fooxba', 'fooba')
+        LK.insert_many([(n,) for n in names]).execute()
+
+        cases = (
+            (LK.key.contains('bar'), ['foo%bar', 'foo_bar']),
+            (LK.key.contains('%'), ['foo%', 'foo%bar']),
+            (LK.key.contains('_'), ['foo_bar']),
+            (LK.key.contains('o%b'), ['foo%bar']),
+            (LK.key.startswith('foo%'), ['foo%', 'foo%bar']),
+            (LK.key.startswith('foo_'), ['foo_bar']),
+            (LK.key.startswith('bar'), []),
+            (LK.key.endswith('ba'), ['fooxba', 'fooba']),
+            (LK.key.endswith('_bar'), ['foo_bar']),
+            (LK.key.endswith('fo'), []),
+        )
+        for expr, expected in cases:
+            self.assertNames(expr, expected)
+
+    def test_like_escape_backslash(self):
+        names = ('foo_bar\\baz', 'bar\\', 'fbar\\baz', 'foo_bar')
+        LK.insert_many([(n,) for n in names]).execute()
+
+        cases = (
+            (LK.key.contains('\\'), ['foo_bar\\baz', 'bar\\', 'fbar\\baz']),
+            (LK.key.contains('_bar\\'), ['foo_bar\\baz']),
+            (LK.key.contains('bar\\'), ['foo_bar\\baz', 'bar\\', 'fbar\\baz']),
+        )
+        for expr, expected in cases:
+            self.assertNames(expr, expected)

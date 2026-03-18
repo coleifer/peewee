@@ -986,3 +986,32 @@ class TestSqliteColumnNameRegression(ModelTestCase):
 
         data.update(foreign_data='fx')
         self.assertTrue(BNT.insert(data).execute())
+
+
+class FKMA(TestModel):
+    name = TextField()
+
+class FKMB(TestModel):
+    name = TextField()
+    fkma = ForeignKeyField(FKMA, backref='fkmb_set', null=True)
+
+
+class TestFKMigrationRegression(ModelTestCase):
+    requires = [FKMA, FKMB]
+
+    def test_fk_migration(self):
+        migrator = SchemaMigrator.from_database(self.database)
+        kw = {'legacy': True} if IS_SQLITE else {}
+        migrate(migrator.drop_column(
+            FKMB._meta.table_name,
+            FKMB.fkma.column_name, **kw))
+
+        migrate(migrator.add_column(
+            FKMB._meta.table_name,
+            FKMB.fkma.column_name,
+            FKMB.fkma))
+
+        fa = FKMA.create(name='fa')
+        FKMB.create(name='fb', fkma=fa)
+        obj = FKMB.select().first()
+        self.assertEqual(obj.name, 'fb')

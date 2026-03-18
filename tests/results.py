@@ -3,6 +3,7 @@ import datetime
 from peewee import *
 
 from .base import get_in_memory_db
+from .base import DatabaseTestCase
 from .base import ModelTestCase
 from .base_models import *
 
@@ -334,3 +335,149 @@ class TestSpecifyConverter(ModelTestCase):
             ('k1', D(1), D(1)),
             ('k2', D(2), D(2)),
             ('k3', D(3), D(3))])
+
+
+QUser = Table('users', ['id', 'username'])
+QTweet = Table('tweet', ['id', 'user_id', 'content'])
+QRegister = Table('register', ['id', 'value'])
+
+
+class TestQueryExecution(DatabaseTestCase):
+    database = get_in_memory_db()
+
+    def setUp(self):
+        super(TestQueryExecution, self).setUp()
+        QUser.bind(self.database)
+        QTweet.bind(self.database)
+        QRegister.bind(self.database)
+        self.execute('CREATE TABLE "users" (id INTEGER NOT NULL PRIMARY KEY, '
+                     'username TEXT)')
+        self.execute('CREATE TABLE "tweet" (id INTEGER NOT NULL PRIMARY KEY, '
+                     'user_id INTEGER NOT NULL, content TEXT, FOREIGN KEY '
+                     '(user_id) REFERENCES users (id))')
+        self.execute('CREATE TABLE "register" ('
+                     'id INTEGER NOT NULL PRIMARY KEY, '
+                     'value REAL)')
+
+    def tearDown(self):
+        self.execute('DROP TABLE "tweet";')
+        self.execute('DROP TABLE "users";')
+        self.execute('DROP TABLE "register";')
+        super(TestQueryExecution, self).tearDown()
+
+    def create_user_tweets(self, username, *tweets):
+        user_id = QUser.insert({QUser.username: username}).execute()
+        for tweet in tweets:
+            QTweet.insert({
+                QTweet.user_id: user_id,
+                QTweet.content: tweet}).execute()
+        return user_id
+
+    def test_selection(self):
+        huey_id = self.create_user_tweets('huey', 'meow', 'purr')
+        query = QUser.select()
+        self.assertEqual(query[:], [{'id': huey_id, 'username': 'huey'}])
+
+        query = (QTweet
+                 .select(QTweet.content, QUser.username)
+                 .join(QUser, on=(QTweet.user_id == QUser.id))
+                 .order_by(QTweet.id))
+        self.assertEqual(query[:], [
+            {'content': 'meow', 'username': 'huey'},
+            {'content': 'purr', 'username': 'huey'}])
+
+    def test_select_peek_first(self):
+        huey_id = self.create_user_tweets('huey', 'meow', 'purr', 'hiss')
+        query = QTweet.select(QTweet.content).order_by(QTweet.id)
+        self.assertEqual(query.peek(n=2), [
+            {'content': 'meow'},
+            {'content': 'purr'}])
+        self.assertEqual(query.first(), {'content': 'meow'})
+
+        query = QTweet.select().where(QTweet.id == 0)
+        self.assertIsNone(query.peek(n=2))
+        self.assertIsNone(query.first())
+
+    def test_select_get(self):
+        huey_id = self.create_user_tweets('huey')
+        self.assertEqual(
+            QUser.select().where(QUser.username == 'huey').get(),
+            {'id': huey_id, 'username': 'huey'})
+        self.assertIsNone(
+            QUser.select().where(QUser.username == 'x').get())
+
+    def test_select_count(self):
+        huey_id = self.create_user_tweets('huey', 'meow', 'purr')
+        mickey_id = self.create_user_tweets('mickey', 'woof', 'pant', 'whine')
+
+        self.assertEqual(QUser.select().count(), 2)
+        self.assertEqual(QTweet.select().count(), 5)
+
+        query = QTweet.select().where(QTweet.user_id == mickey_id)
+        self.assertEqual(query.count(), 3)
+
+        query = (QTweet
+                 .select()
+                 .join(QUser, on=(QTweet.user_id == QUser.id))
+                 .where(QUser.username == 'foo'))
+        self.assertEqual(query.count(), 0)
+
+    def test_select_exists(self):
+        self.create_user_tweets('huey')
+        self.assertTrue(
+            QUser.select().where(QUser.username == 'huey').exists())
+        self.assertFalse(
+            QUser.select().where(QUser.username == 'foo').exists())
+
+    def test_scalar(self):
+        values = [1.0, 1.5, 2.0, 5.0, 8.0]
+        (QRegister
+         .insert([{QRegister.value: value} for value in values])
+         .execute())
+
+        query = QRegister.select(fn.AVG(QRegister.value))
+        self.assertEqual(query.scalar(), 3.5)
+
+        query = query.where(QRegister.value < 5)
+        self.assertEqual(query.scalar(), 1.5)
+
+        query = (QRegister
+                 .select(
+                     fn.SUM(QRegister.value),
+                     fn.COUNT(QRegister.value),
+                     fn.SUM(QRegister.value) / fn.COUNT(QRegister.value)))
+        self.assertEqual(query.scalar(as_tuple=True), (17.5, 5, 3.5))
+
+        query = query.where(QRegister.value >= 2)
+        self.assertEqual(query.scalar(as_tuple=True), (15, 3, 5))
+
+    def test_scalars(self):
+        values = [1.0, 1.5, 2.0, 5.0, 8.0]
+        (QRegister
+         .insert([{QRegister.value: value} for value in values])
+         .execute())
+
+        query = QRegister.select(QRegister.value).order_by(QRegister.value)
+        self.assertEqual(list(query.scalars()), values)
+
+        query = query.where(QRegister.value < 5)
+        self.assertEqual(list(query.scalars()), [1.0, 1.5, 2.0])
+
+    def test_slicing_select(self):
+        values = [1., 1., 2., 3., 5., 8.]
+        (QRegister
+         .insert([(v,) for v in values], columns=(QRegister.value,))
+         .execute())
+
+        query = (QRegister
+                 .select(QRegister.value)
+                 .order_by(QRegister.value)
+                 .tuples())
+        with self.assertQueryCount(1):
+            self.assertEqual(query[0], (1.,))
+            self.assertEqual(query[:2], [(1.,), (1.,)])
+            self.assertEqual(query[1:4], [(1.,), (2.,), (3.,)])
+            self.assertEqual(query[-1], (8.,))
+            self.assertEqual(query[-2], (5.,))
+            self.assertEqual(query[-2:], [(5.,), (8.,)])
+            self.assertEqual(query[2:-2], [(2.,), (3.,)])

@@ -3,12 +3,15 @@ from queue import Queue
 import platform
 import re
 import threading
+import time
 
 from peewee import *
 from peewee import Database
 from peewee import FIELD
 from peewee import attrdict
 from peewee import sort_models
+
+from playhouse.shortcuts import ThreadSafeDatabaseMetadata
 
 from .base import BaseTestCase
 from .base import DatabaseTestCase
@@ -24,6 +27,7 @@ from .base import get_sqlite_db
 from .base import new_connection
 from .base import requires_models
 from .base import requires_postgresql
+from .base import slow_test
 from .base_models import Category
 from .base_models import Tweet
 from .base_models import User
@@ -1021,3 +1025,60 @@ class TestChunkedUtility(BaseTestCase):
         gen = (x * 2 for x in range(5))
         result = list(chunked(gen, 2))
         self.assertEqual(result, [[0, 2], [4, 6], [8]])
+
+
+class TestThreadSafetyDecorators(ModelTestCase):
+    requires = [User]
+
+    def test_thread_safety_atomic(self):
+        @self.database.atomic()
+        def get_one(n):
+            time.sleep(n)
+            return User.select().first()
+        def run(n):
+            with self.database.atomic():
+                self.assertEqual(get_one(n).username, 'u')
+        User.create(username='u')
+        threads = [threading.Thread(target=run, args=(i,))
+                   for i in (0.01, 0.03, 0.05, 0.07, 0.09, 0.02, 0.04, 0.06)]
+        for t in threads: t.start()
+        for t in threads: t.join()
+
+
+class TestThreadSafeMetaRegression(ModelTestCase):
+    def test_thread_safe_meta(self):
+        d1 = get_in_memory_db()
+        d2 = get_in_memory_db()
+
+        class Meta:
+            database = d1
+            model_metadata_class = ThreadSafeDatabaseMetadata
+        attrs = {'Meta': Meta}
+        for i in range(1, 30):
+            attrs['f%d' % i] = IntegerField()
+        M = type('M', (TestModel,), attrs)
+
+        sql = ('SELECT "t1"."f1", "t1"."f2", "t1"."f3", "t1"."f4" '
+               'FROM "m" AS "t1"')
+        query = M.select(M.f1, M.f2, M.f3, M.f4)
+
+        def swap_db():
+            for i in range(100):
+                self.assertEqual(M._meta.database, d1)
+                self.assertSQL(query, sql)
+                with d2.bind_ctx([M]):
+                    self.assertEqual(M._meta.database, d2)
+                    self.assertSQL(query, sql)
+                self.assertEqual(M._meta.database, d1)
+                self.assertSQL(query, sql)
+
+        # From a separate thread, swap the database and verify it works
+        # correctly.
+        threads = [threading.Thread(target=swap_db)
+                   for i in range(10)]
+        for t in threads: t.start()
+        for t in threads: t.join()
+
+        # In the main thread the original database has not been altered.
+        self.assertEqual(M._meta.database, d1)
+        self.assertSQL(query, sql)

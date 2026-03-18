@@ -6,7 +6,7 @@ from .base import TestModel
 class Person(TestModel):
     first = CharField()
     last = CharField()
-    dob = DateField(index=True)
+    dob = DateField(index=True, null=True)
 
     class Meta:
         indexes = (

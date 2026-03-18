@@ -489,7 +489,7 @@ class TestModelDDL(ModelDatabaseTestCase):
              '"id" INTEGER NOT NULL PRIMARY KEY, '
              '"first" VARCHAR(255) NOT NULL, '
              '"last" VARCHAR(255) NOT NULL, '
-             '"dob" DATE NOT NULL)'),
+             '"dob" DATE)'),
             'CREATE INDEX "person_dob" ON "person" ("dob")',
             ('CREATE UNIQUE INDEX "person_first_last" ON '
              '"person" ("first", "last")')])
@@ -971,3 +971,26 @@ class TestCreateTableAs(ModelTestCase):
         query = TMKVNew.select().order_by(TMKVNew.key)
         self.assertEqual([(r.key, r.val) for r in query],
                          [('k00', 0), ('k01', 1), ('k02', 2), ('k03', 3)])
+
+
+class TestViewFieldMapping(ModelTestCase):
+    requires = [User]
+
+    def tearDown(self):
+        try:
+            self.execute('drop view user_testview_fm')
+        except Exception as exc:
+            pass
+        super(TestViewFieldMapping, self).tearDown()
+
+    def test_view_field_mapping(self):
+        user = User.create(username='huey')
+        self.execute('create view user_testview_fm as '
+                     'select id, username from users')
+
+        class View(User):
+            class Meta:
+                table_name = 'user_testview_fm'
+
+        self.assertEqual([(v.id, v.username) for v in View.select()],
+                         [(user.id, 'huey')])

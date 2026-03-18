@@ -2514,3 +2514,22 @@ class TestSqlToString(BaseTestCase):
 
     def test_sql_to_string_default(self):
         self._test_sql_to_string('%s')
+
+
+class TestSubqueryFunctionCall(BaseTestCase):
+    def test_subquery_function_call(self):
+        Sample = Table('sample')
+        SA = Sample.alias('s2')
+        query = (Sample
+                 .select(Sample.c.data)
+                 .where(~fn.EXISTS(
+                     SA.select(SQL('1')).where(SA.c.key == 'foo'))))
+        self.assertSQL(query, (
+            'SELECT "t1"."data" FROM "sample" AS "t1" '
+            'WHERE NOT EXISTS('
+            'SELECT 1 FROM "sample" AS "s2" WHERE ("s2"."key" = ?))'), ['foo'])
+
+
+class TestFunctionInfiniteLoop(BaseTestCase):
+    def test_function_infinite_loop(self):
+        self.assertRaises(TypeError, lambda: list(fn.COUNT()))
