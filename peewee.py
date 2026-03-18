@@ -8071,6 +8071,14 @@ class BaseModelCursorWrapper(DictCursorWrapper):
                 if isinstance(node, Column) and node.source == table:
                     fields[idx] = combined[column]
 
+        self.no_convert = []
+        self.convert = []
+        for i in range(self.ncols):
+            if converters[i] is not None:
+                self.convert.append(i)
+            else:
+                self.no_convert.append(i)
+
     def process_row(self, row):
         raise NotImplementedError
 
@@ -8084,15 +8092,11 @@ class ModelDictCursorWrapper(BaseModelCursorWrapper):
 
     def process_row(self, row):
         result = {}
-        columns, converters = self.unique_columns, self.converters
-
-        for i, value in enumerate(row):
-            attr = columns[i]
-            if converters[i] is not None:
-                result[attr] = converters[i](value)
-            else:
-                result[attr] = value
-
+        columns = self.unique_columns
+        for i in self.no_convert:
+            result[columns[i]] = row[i]
+        for i in self.convert:
+            result[columns[i]] = self.converters[i](row[i])
         return result
 
 
@@ -8125,23 +8129,20 @@ class ModelObjectCursorWrapper(ModelDictCursorWrapper):
         self.identifiers = self.dedupe_columns(self.columns)
 
     def process_row(self, row):
-        data = {}
-        columns, converters = self.identifiers, self.converters
-
-        for i, value in enumerate(row):
-            attr = columns[i]
-            if converters[i] is not None:
-                data[attr] = converters[i](value)
-            else:
-                data[attr] = value
+        result = {}
+        columns = self.identifiers
+        for i in self.no_convert:
+            result[columns[i]] = row[i]
+        for i in self.convert:
+            result[columns[i]] = self.converters[i](row[i])
 
         if self.is_model:
             # Clear out any dirty fields before returning to the user.
-            obj = self.constructor(__no_default__=1, **data)
+            obj = self.constructor(__no_default__=1, **result)
             obj._dirty.clear()
             return obj
         else:
-            return self.constructor(**data)
+            return self.constructor(**result)
 
 
 class ModelCursorWrapper(BaseModelCursorWrapper):
@@ -8229,7 +8230,7 @@ class ModelCursorWrapper(BaseModelCursorWrapper):
 
         # Pre-compute flat list of key/col/converter for each column index.
         self._row_spec = tuple(
-            (self.column_keys[i], columns[i], self.converters[i])
+            (i, self.column_keys[i], columns[i], self.converters[i])
             for i in range(self.ncols))
 
         # Flatten list of key / constructor / is model? flag.
@@ -8266,7 +8267,7 @@ class ModelCursorWrapper(BaseModelCursorWrapper):
         default_instance = objects[self.model]
 
         set_keys = set()
-        for idx, (key, column, converter) in enumerate(self._row_spec):
+        for idx, key, column, converter in self._row_spec:
             # Get the instance corresponding to the selected column/value,
             # falling back to the "root" model instance.
             instance = objects.get(key, default_instance)
