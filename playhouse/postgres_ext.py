@@ -477,19 +477,13 @@ class FetchManyCursor(object):
         self.exhausted = False
         self.iterable = self.row_gen()
 
-    def __del__(self):
-        if self.cursor and not self.cursor.closed:
-            try:
-                self.cursor.close()
-            except Exception:
-                pass
-
     @property
     def description(self):
         return self.cursor.description
 
     def close(self):
-        self.cursor.close()
+        if self.cursor is not None and not self.cursor.closed:
+            self.cursor.close()
 
     def row_gen(self):
         try:

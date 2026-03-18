@@ -18,7 +18,6 @@ from .regressions import *
 from .results import *
 from .schema import *
 from .sql import *
-from .test_gaps import *
 from .transactions import *
 
 # Extensions.

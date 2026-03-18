@@ -994,3 +994,30 @@ class TestModelPropertyHelper(BaseTestCase):
         db.initialize(test_db)
         for M in (M1, M2, CM1):
             self.assertEqual(M._meta.database.database, ':memory:')
+
+
+class TestChunkedUtility(BaseTestCase):
+    def test_chunked_exact_divisor(self):
+        result = list(chunked(range(6), 3))
+        self.assertEqual(result, [[0, 1, 2], [3, 4, 5]])
+
+    def test_chunked_with_remainder(self):
+        result = list(chunked(range(7), 3))
+        self.assertEqual(result, [[0, 1, 2], [3, 4, 5], [6]])
+
+    def test_chunked_single_element(self):
+        result = list(chunked([42], 5))
+        self.assertEqual(result, [[42]])
+
+    def test_chunked_empty(self):
+        result = list(chunked([], 5))
+        self.assertEqual(result, [])
+
+    def test_chunked_size_one(self):
+        result = list(chunked(range(3), 1))
+        self.assertEqual(result, [[0], [1], [2]])
+
+    def test_chunked_generator_input(self):
+        gen = (x * 2 for x in range(5))
+        result = list(chunked(gen, 2))
+        self.assertEqual(result, [[0, 2], [4, 6], [8]])

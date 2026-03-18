@@ -7,6 +7,7 @@ from decimal import Decimal as D
 from decimal import ROUND_UP
 
 from peewee import NodeList
+from peewee import VirtualField
 from peewee import *
 
 from .base import BaseTestCase
@@ -1510,6 +1511,41 @@ class TestSqliteInvalidDataTypes(ModelTestCase):
         self.assertEqual(it_db1.ffield, 'pi')
 
 
+class DblSI(TestModel):
+    df = DoubleField()
+    si = SmallIntegerField()
+
+
+class TestDoubleSmallInt(ModelTestCase):
+    database = get_in_memory_db()
+    requires = [DblSI]
+
+    def test_double_round_trip(self):
+        DblSI.create(df=3.141592653589793, si=0)
+        obj = DblSI.get()
+        self.assertAlmostEqual(obj.df, 3.141592653589793, places=10)
+
+    def test_small_int_round_trip(self):
+        DblSI.create(df=0, si=32000)
+        DblSI.create(df=0, si=-100)
+        results = (DblSI
+                   .select(DblSI.si)
+                   .order_by(DblSI.si)
+                   .tuples())
+        self.assertEqual(list(results), [(-100,), (32000,)])
+
+    def test_coercion(self):
+        DblSI.create(df=float('inf'), si='42')
+        obj = DblSI.get()
+        self.assertEqual(obj.df, float('inf'))
+        self.assertEqual(obj.si, 42)
+
+        obj = DblSI.create(df=float('-inf'), si='1.23')
+        obj = DblSI.get(DblSI.id == obj.id)
+        self.assertEqual(obj.df, float('-inf'))
+        self.assertEqual(obj.si, 1)
+
+
 class FC(TestModel):
     code = FixedCharField(max_length=5)
     name = CharField()
@@ -1524,3 +1560,27 @@ class TestFixedCharFieldIntegration(ModelTestCase):
 
         fc = FC.get(FC.code == 'ABCDE')
         self.assertEqual(fc.code, 'ABCDE')
+
+
+class VF(TestModel):
+    name = TextField()
+    computed = VirtualField(field_class=IntegerField)
+
+
+class TestVirtualFieldBehavior(BaseTestCase):
+    def test_virtual_field_not_in_columns(self):
+        """VirtualField should not appear in the model's SELECT columns."""
+        fields = VF._meta.sorted_fields
+        field_names = [f.name for f in fields]
+        self.assertIn('name', field_names)
+        # VirtualField should not be in sorted_fields (it's a MetaField).
+        self.assertNotIn('computed', field_names)
+
+        query = VF.select()
+        self.assertSQL(query, (
+            'SELECT "t1"."id", "t1"."name" FROM "vf" AS "t1"'))
+
+    def test_virtual_field_db_value(self):
+        vf = VF.computed
+        self.assertEqual(vf.db_value('42'), 42)
+        self.assertEqual(vf.python_value('42'), 42)

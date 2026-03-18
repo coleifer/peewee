@@ -710,6 +710,21 @@ class TestModelAPIs(ModelTestCase):
                 ('whine', 'mickey'),
                 ('woof', 'mickey')])
 
+    @requires_pglike
+    @requires_models(User, Tweet)
+    def test_distinct_on(self):
+        u1, u2 = self.add_user('u1'), self.add_user('u2')
+        self.add_tweets(u1, 'u1-t1', 'u1-t2', 'u1-t3')
+        self.add_tweets(u2, 'u2-t1')
+
+        query = (Tweet
+                 .select(Tweet.user, Tweet.content)
+                 .join(User)
+                 .distinct(Tweet.user)
+                 .order_by(Tweet.user, Tweet.timestamp))
+        self.assertEqual([(t.user_id, t.content) for t in query],
+                         [(u1.id, 'u1-t1'), (u2.id, 'u2-t1')])
+
     @requires_models(User, Tweet, Favorite)
     def test_join_two_fks(self):
         with self.database.atomic():
@@ -5104,3 +5119,33 @@ class TestBindTo(ModelTestCase):
                 ('t1', 'user 1'),
                 ('t2', 'user 2'),
                 ('t3', 'someone else')])
+
+
+class CascadeParent(TestModel):
+    name = TextField()
+
+class CascadeChild(TestModel):
+    parent = ForeignKeyField(CascadeParent, backref='children',
+                             on_delete='CASCADE')
+    data = TextField()
+
+
+class TestCascadeDeleteIntegration(ModelTestCase):
+    requires = [CascadeParent, CascadeChild]
+
+    def setUp(self):
+        super(TestCascadeDeleteIntegration, self).setUp()
+        if IS_SQLITE:
+            self.database.pragma('foreign_keys', 1)
+
+    def test_cascade_delete(self):
+        p1 = CascadeParent.create(name='p1')
+        p2 = CascadeParent.create(name='p2')
+        CascadeChild.create(parent=p1, data='c1')
+        CascadeChild.create(parent=p1, data='c2')
+        CascadeChild.create(parent=p2, data='c3')
+
+        self.assertEqual(CascadeChild.select().count(), 3)
+        p1.delete_instance()
+        self.assertEqual(CascadeChild.select().count(), 1)
+        self.assertEqual(CascadeChild.get().data, 'c3')
