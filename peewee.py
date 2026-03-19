@@ -21,6 +21,7 @@ import struct
 import sys
 import threading
 import time
+import types
 import uuid
 import warnings
 
@@ -155,7 +156,7 @@ logger.addHandler(logging.NullHandler())
 
 
 callable_ = lambda c: isinstance(c, Callable)
-multi_types = (list, tuple, frozenset, set, range)
+multi_types = (list, tuple, frozenset, set, range, types.GeneratorType)
 
 def reraise(tp, value, tb=None):
     if value.__traceback__ is not tb:
@@ -8146,10 +8147,11 @@ class ModelObjectCursorWrapper(ModelDictCursorWrapper):
 
 
 class ModelCursorWrapper(BaseModelCursorWrapper):
-    def __init__(self, cursor, model, select, from_list, joins):
+    def __init__(self, cursor, model, select, from_list, joins, dicts=False):
         super(ModelCursorWrapper, self).__init__(cursor, model, select)
         self.from_list = from_list
         self.joins = joins
+        self.dicts = dicts
 
     def initialize(self):
         super(ModelCursorWrapper, self).initialize()
@@ -8158,7 +8160,10 @@ class ModelCursorWrapper(BaseModelCursorWrapper):
         select = self.select
         columns = [make_identifier(c) for c in self.columns]
 
-        self.key_to_constructor = {self.model: (self.model, True)}
+        if self.dicts:
+            self.key_to_constructor = {self.model: (dict, False)}
+        else:
+            self.key_to_constructor = {self.model: (self.model, True)}
         self.src_is_dest = {}
         self.src_to_dest = []
         accum = collections.deque(self.from_list)
@@ -8176,6 +8181,9 @@ class ModelCursorWrapper(BaseModelCursorWrapper):
 
             is_dict = isinstance(curr, dict)
             for key, attr, constructor, join_type in self.joins[curr]:
+                if self.dicts:
+                    constructor = dict
+
                 if key not in self.key_to_constructor:
                     self.key_to_constructor[key] = (constructor,
                                                     is_model(constructor))
@@ -8185,7 +8193,7 @@ class ModelCursorWrapper(BaseModelCursorWrapper):
                         curr,
                         attr,
                         key,
-                        is_dict,
+                        is_dict or self.dicts,
                         join_type,
                         join_type.endswith('OUTER')))
 

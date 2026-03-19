@@ -90,7 +90,8 @@ class TestSelectQuery(BaseTestCase):
             ['charlie', 'huey'],
             ('charlie', 'huey'),
             set(('charlie', 'huey')),
-            frozenset(('charlie', 'huey'))]
+            frozenset(('charlie', 'huey')),
+            (x for x in ('charlie', 'huey'))]
 
         for names in names_vals:
             query = (Person
