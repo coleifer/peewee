@@ -28,7 +28,7 @@ def get_field_type(field):
     return FieldTypeMap.get(field.field_type, Any)
 
 def to_pydantic(model_cls, exclude=None, include=None, exclude_autofield=True,
-                model_name=None, relationships=None):
+                model_name=None, relationships=None, base_model=None):
     exclude = exclude or set()
     relationships = relationships or {}
     fields = {}
@@ -108,4 +108,5 @@ def to_pydantic(model_cls, exclude=None, include=None, exclude_autofield=True,
     return create_model(
         model_name,
         __config__=ConfigDict(from_attributes=True),
+        __base__=base_model or BaseModel,
         **fields)

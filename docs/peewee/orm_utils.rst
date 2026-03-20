@@ -291,7 +291,7 @@ the underlying field type.
 API reference
 ^^^^^^^^^^^^^^
 
-.. function:: to_pydantic(model_cls, exclude=None, include=None, exclude_autofield=True, model_name=None, relationships=None)
+.. function:: to_pydantic(model_cls, exclude=None, include=None, exclude_autofield=True, model_name=None, relationships=None, base_model=None)
 
    Generate a Pydantic ``BaseModel`` class from a Peewee model.
 
@@ -309,6 +309,8 @@ API reference
    :param dict relationships: A mapping that tells ``to_pydantic`` how to
        handle foreign-key or back-reference fields as nested Pydantic models
        instead of flat scalar values. See :ref:`pydantic-relationships` below.
+   :param base_model: User-provided subclass of Pydantic ``BaseModel`` to use
+       as the base class for the generated model.
    :returns: A Pydantic ``BaseModel`` subclass configured with
        ``from_attributes=True``.
 
