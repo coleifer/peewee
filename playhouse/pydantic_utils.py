@@ -105,8 +105,14 @@ def to_pydantic(model_cls, exclude=None, include=None, exclude_autofield=True,
 
     model_name = model_name or ('%sSchema' % model_cls.__name__)
 
-    return create_model(
-        model_name,
-        __config__=ConfigDict(from_attributes=True),
-        __base__=base_model or BaseModel,
-        **fields)
+    kwargs = {}
+    kwargs.update(fields)
+
+    if base_model is not None:
+        class Base(base_model, from_attributes=True):
+            pass
+        kwargs['__base__'] = Base
+    else:
+        kwargs['__config__'] = ConfigDict(from_attributes=True)
+
+    return create_model(model_name, **kwargs)
