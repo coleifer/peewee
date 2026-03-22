@@ -116,104 +116,6 @@ class TestModelSQL(ModelDatabaseTestCase):
         self.assertEqual(f_first.name, 'first')
         self.assertTrue(f_first.model is Person)
 
-    def test_where_coerce(self):
-        query = Person.select(Person.last).where(Person.id == '1337')
-        self.assertSQL(query, (
-            'SELECT "t1"."last" FROM "person" AS "t1" '
-            'WHERE ("t1"."id" = ?)'), [1337])
-
-        query = Person.select(Person.last).where(Person.id < (Person.id - '5'))
-        self.assertSQL(query, (
-            'SELECT "t1"."last" FROM "person" AS "t1" '
-            'WHERE ("t1"."id" < ("t1"."id" - ?))'), [5])
-
-        query = Person.select(Person.last).where(Person.first == b'foo')
-        self.assertSQL(query, (
-            'SELECT "t1"."last" FROM "person" AS "t1" '
-            'WHERE ("t1"."first" = ?)'), ['foo'])
-
-    def test_group_by(self):
-        query = (User
-                 .select(User, fn.COUNT(Tweet.id).alias('tweet_count'))
-                 .join(Tweet, JOIN.LEFT_OUTER)
-                 .group_by(User))
-        self.assertSQL(query, (
-            'SELECT "t1"."id", "t1"."username", '
-            'COUNT("t2"."id") AS "tweet_count" '
-            'FROM "users" AS "t1" '
-            'LEFT OUTER JOIN "tweet" AS "t2" ON ("t2"."user_id" = "t1"."id") '
-            'GROUP BY "t1"."id", "t1"."username"'), [])
-
-    def test_group_by_extend(self):
-        query = (User
-                 .select(User, fn.COUNT(Tweet.id).alias('tweet_count'))
-                 .join(Tweet, JOIN.LEFT_OUTER)
-                 .group_by_extend(User.id).group_by_extend(User.username))
-        self.assertSQL(query, (
-            'SELECT "t1"."id", "t1"."username", '
-            'COUNT("t2"."id") AS "tweet_count" '
-            'FROM "users" AS "t1" '
-            'LEFT OUTER JOIN "tweet" AS "t2" ON ("t2"."user_id" = "t1"."id") '
-            'GROUP BY "t1"."id", "t1"."username"'), [])
-
-    def test_order_by(self):
-        query = (User
-                 .select()
-                 .order_by(User.username.desc(), User.id))
-        self.assertSQL(query, (
-            'SELECT "t1"."id", "t1"."username" FROM "users" AS "t1" '
-            'ORDER BY "t1"."username" DESC, "t1"."id"'), [])
-
-    def test_order_by_extend(self):
-        query = (User
-                 .select()
-                 .order_by_extend(User.username.desc())
-                 .order_by_extend(User.id))
-        self.assertSQL(query, (
-            'SELECT "t1"."id", "t1"."username" FROM "users" AS "t1" '
-            'ORDER BY "t1"."username" DESC, "t1"."id"'), [])
-
-    def test_paginate(self):
-        # Get the first page, default is limit of 20.
-        query = User.select().paginate(1)
-        self.assertSQL(query, (
-            'SELECT "t1"."id", "t1"."username" FROM "users" AS "t1" '
-            'LIMIT ? OFFSET ?'), [20, 0])
-
-        # Page 3 contains rows 31-45.
-        query = User.select().paginate(3, 15)
-        self.assertSQL(query, (
-            'SELECT "t1"."id", "t1"."username" FROM "users" AS "t1" '
-            'LIMIT ? OFFSET ?'), [15, 30])
-
-    def test_subquery_correction(self):
-        users = User.select().where(User.username.in_(['foo', 'bar']))
-        query = Tweet.select().where(Tweet.user.in_(users))
-        self.assertSQL(query, (
-            'SELECT "t1"."id", "t1"."user_id", "t1"."content", '
-            '"t1"."timestamp" '
-            'FROM "tweet" AS "t1" '
-            'WHERE ("t1"."user_id" IN ('
-            'SELECT "t2"."id" FROM "users" AS "t2" '
-            'WHERE ("t2"."username" IN (?, ?))))'), ['foo', 'bar'])
-
-    def test_value_flattening(self):
-        sql = ('SELECT "t1"."id", "t1"."username" FROM "users" AS "t1" '
-               'WHERE ("t1"."username" IN (?, ?))')
-        expected = (sql, ['foo', 'bar'])
-
-        users = User.select().where(User.username.in_(['foo', 'bar']))
-        self.assertSQL(users, *expected)
-
-        users = User.select().where(User.username.in_(('foo', 'bar')))
-        self.assertSQL(users, *expected)
-
-        users = User.select().where(User.username.in_(set(['foo', 'bar'])))
-        # Sets are unordered so params may be in either order:
-        sql, params = __sql__(users)
-        self.assertEqual(sql, expected[0])
-        self.assertTrue(params in (['foo', 'bar'], ['bar', 'foo']))
-
     def test_model_select_from(self):
         inner = (User
                  .select(User.id, User.username)
@@ -224,33 +126,6 @@ class TestModelSQL(ModelDatabaseTestCase):
             'SELECT "t2"."id", "t2"."username" '
             'FROM "users" AS "t2" '
             'WHERE ("t2"."username" = ?)) AS "t1"'), ['x'])
-
-    def test_join_ctx(self):
-        query = Tweet.select(Tweet.id).join(Favorite).switch(Tweet).join(User)
-        self.assertSQL(query, (
-            'SELECT "t1"."id" FROM "tweet" AS "t1" '
-            'INNER JOIN "favorite" AS "t2" ON ("t2"."tweet_id" = "t1"."id") '
-            'INNER JOIN "users" AS "t3" ON ("t1"."user_id" = "t3"."id")'), [])
-
-        query = Tweet.select(Tweet.id).join(User).switch(Tweet).join(Favorite)
-        self.assertSQL(query, (
-            'SELECT "t1"."id" FROM "tweet" AS "t1" '
-            'INNER JOIN "users" AS "t2" ON ("t1"."user_id" = "t2"."id") '
-            'INNER JOIN "favorite" AS "t3" ON ("t3"."tweet_id" = "t1"."id")'),
-            [])
-
-        query = Tweet.select(Tweet.id).left_outer_join(Favorite).switch(Tweet).left_outer_join(User)
-        self.assertSQL(query, (
-            'SELECT "t1"."id" FROM "tweet" AS "t1" '
-            'LEFT OUTER JOIN "favorite" AS "t2" ON ("t2"."tweet_id" = "t1"."id") '
-            'LEFT OUTER JOIN "users" AS "t3" ON ("t1"."user_id" = "t3"."id")'), [])
-
-        query = Tweet.select(Tweet.id).left_outer_join(User).switch(Tweet).left_outer_join(Favorite)
-        self.assertSQL(query, (
-            'SELECT "t1"."id" FROM "tweet" AS "t1" '
-            'LEFT OUTER JOIN "users" AS "t2" ON ("t1"."user_id" = "t2"."id") '
-            'LEFT OUTER JOIN "favorite" AS "t3" ON ("t3"."tweet_id" = "t1"."id")'),
-            [])
 
     def test_model_alias(self):
         TA = Tweet.alias()
@@ -295,6 +170,66 @@ class TestModelSQL(ModelDatabaseTestCase):
             'FROM "notes"."note" AS "t1" '
             'INNER JOIN "notes"."note" AS "na" '
             'ON ("na"."id" = "t1"."id")'), [])
+
+    def test_aliases(self):
+        class A(TestModel):
+            a = CharField()
+        class B(TestModel):
+            b = CharField()
+            a_link = ForeignKeyField(A)
+        class C(TestModel):
+            c = CharField()
+            b_link = ForeignKeyField(B)
+        class D(TestModel):
+            d = CharField()
+            c_link = ForeignKeyField(C)
+
+        query = (D
+                 .select(D.d, C.c)
+                 .join(C)
+                 .where(C.b_link << (
+                     B.select(B.id).join(A).where(A.a == 'a'))))
+        self.assertSQL(query, (
+            'SELECT "t1"."d", "t2"."c" '
+            'FROM "d" AS "t1" '
+            'INNER JOIN "c" AS "t2" ON ("t1"."c_link_id" = "t2"."id") '
+            'WHERE ("t2"."b_link_id" IN ('
+            'SELECT "t3"."id" FROM "b" AS "t3" '
+            'INNER JOIN "a" AS "t4" ON ("t3"."a_link_id" = "t4"."id") '
+            'WHERE ("t4"."a" = ?)))'), ['a'])
+
+    def test_schema(self):
+        class WithSchema(TestModel):
+            data = CharField(primary_key=True)
+            class Meta:
+                schema = 'huey'
+
+        query = WithSchema.select().where(WithSchema.data == 'zaizee')
+        self.assertSQL(query, (
+            'SELECT "t1"."data" '
+            'FROM "huey"."with_schema" AS "t1" '
+            'WHERE ("t1"."data" = ?)'), ['zaizee'])
+
+
+# ===========================================================================
+# ON CONFLICT / upsert SQL with Models
+# ===========================================================================
+
+    def test_where_coerce(self):
+        query = Person.select(Person.last).where(Person.id == '1337')
+        self.assertSQL(query, (
+            'SELECT "t1"."last" FROM "person" AS "t1" '
+            'WHERE ("t1"."id" = ?)'), [1337])
+
+        query = Person.select(Person.last).where(Person.id < (Person.id - '5'))
+        self.assertSQL(query, (
+            'SELECT "t1"."last" FROM "person" AS "t1" '
+            'WHERE ("t1"."id" < ("t1"."id" - ?))'), [5])
+
+        query = Person.select(Person.last).where(Person.first == b'foo')
+        self.assertSQL(query, (
+            'SELECT "t1"."last" FROM "person" AS "t1" '
+            'WHERE ("t1"."first" = ?)'), ['foo'])
 
     def test_filter_simple(self):
         query = User.filter(username='huey')
@@ -386,6 +321,115 @@ class TestModelSQL(ModelDatabaseTestCase):
             'WHERE ("t1"."username" IN (?, ?)) '
             'GROUP BY "t1"."id", "t1"."username" '
             'ORDER BY COUNT("t2"."id") DESC'), ['huey', 'zaizee'])
+
+    def test_value_flattening(self):
+        sql = ('SELECT "t1"."id", "t1"."username" FROM "users" AS "t1" '
+               'WHERE ("t1"."username" IN (?, ?))')
+        expected = (sql, ['foo', 'bar'])
+
+        users = User.select().where(User.username.in_(['foo', 'bar']))
+        self.assertSQL(users, *expected)
+
+        users = User.select().where(User.username.in_(('foo', 'bar')))
+        self.assertSQL(users, *expected)
+
+        users = User.select().where(User.username.in_(set(['foo', 'bar'])))
+        # Sets are unordered so params may be in either order:
+        sql, params = __sql__(users)
+        self.assertEqual(sql, expected[0])
+        self.assertTrue(params in (['foo', 'bar'], ['bar', 'foo']))
+
+    def test_subquery_correction(self):
+        users = User.select().where(User.username.in_(['foo', 'bar']))
+        query = Tweet.select().where(Tweet.user.in_(users))
+        self.assertSQL(query, (
+            'SELECT "t1"."id", "t1"."user_id", "t1"."content", '
+            '"t1"."timestamp" '
+            'FROM "tweet" AS "t1" '
+            'WHERE ("t1"."user_id" IN ('
+            'SELECT "t2"."id" FROM "users" AS "t2" '
+            'WHERE ("t2"."username" IN (?, ?))))'), ['foo', 'bar'])
+
+    def test_group_by(self):
+        query = (User
+                 .select(User, fn.COUNT(Tweet.id).alias('tweet_count'))
+                 .join(Tweet, JOIN.LEFT_OUTER)
+                 .group_by(User))
+        self.assertSQL(query, (
+            'SELECT "t1"."id", "t1"."username", '
+            'COUNT("t2"."id") AS "tweet_count" '
+            'FROM "users" AS "t1" '
+            'LEFT OUTER JOIN "tweet" AS "t2" ON ("t2"."user_id" = "t1"."id") '
+            'GROUP BY "t1"."id", "t1"."username"'), [])
+
+    def test_group_by_extend(self):
+        query = (User
+                 .select(User, fn.COUNT(Tweet.id).alias('tweet_count'))
+                 .join(Tweet, JOIN.LEFT_OUTER)
+                 .group_by_extend(User.id).group_by_extend(User.username))
+        self.assertSQL(query, (
+            'SELECT "t1"."id", "t1"."username", '
+            'COUNT("t2"."id") AS "tweet_count" '
+            'FROM "users" AS "t1" '
+            'LEFT OUTER JOIN "tweet" AS "t2" ON ("t2"."user_id" = "t1"."id") '
+            'GROUP BY "t1"."id", "t1"."username"'), [])
+
+    def test_order_by(self):
+        query = (User
+                 .select()
+                 .order_by(User.username.desc(), User.id))
+        self.assertSQL(query, (
+            'SELECT "t1"."id", "t1"."username" FROM "users" AS "t1" '
+            'ORDER BY "t1"."username" DESC, "t1"."id"'), [])
+
+    def test_order_by_extend(self):
+        query = (User
+                 .select()
+                 .order_by_extend(User.username.desc())
+                 .order_by_extend(User.id))
+        self.assertSQL(query, (
+            'SELECT "t1"."id", "t1"."username" FROM "users" AS "t1" '
+            'ORDER BY "t1"."username" DESC, "t1"."id"'), [])
+
+    def test_paginate(self):
+        # Get the first page, default is limit of 20.
+        query = User.select().paginate(1)
+        self.assertSQL(query, (
+            'SELECT "t1"."id", "t1"."username" FROM "users" AS "t1" '
+            'LIMIT ? OFFSET ?'), [20, 0])
+
+        # Page 3 contains rows 31-45.
+        query = User.select().paginate(3, 15)
+        self.assertSQL(query, (
+            'SELECT "t1"."id", "t1"."username" FROM "users" AS "t1" '
+            'LIMIT ? OFFSET ?'), [15, 30])
+
+    def test_join_ctx(self):
+        query = Tweet.select(Tweet.id).join(Favorite).switch(Tweet).join(User)
+        self.assertSQL(query, (
+            'SELECT "t1"."id" FROM "tweet" AS "t1" '
+            'INNER JOIN "favorite" AS "t2" ON ("t2"."tweet_id" = "t1"."id") '
+            'INNER JOIN "users" AS "t3" ON ("t1"."user_id" = "t3"."id")'), [])
+
+        query = Tweet.select(Tweet.id).join(User).switch(Tweet).join(Favorite)
+        self.assertSQL(query, (
+            'SELECT "t1"."id" FROM "tweet" AS "t1" '
+            'INNER JOIN "users" AS "t2" ON ("t1"."user_id" = "t2"."id") '
+            'INNER JOIN "favorite" AS "t3" ON ("t3"."tweet_id" = "t1"."id")'),
+            [])
+
+        query = Tweet.select(Tweet.id).left_outer_join(Favorite).switch(Tweet).left_outer_join(User)
+        self.assertSQL(query, (
+            'SELECT "t1"."id" FROM "tweet" AS "t1" '
+            'LEFT OUTER JOIN "favorite" AS "t2" ON ("t2"."tweet_id" = "t1"."id") '
+            'LEFT OUTER JOIN "users" AS "t3" ON ("t1"."user_id" = "t3"."id")'), [])
+
+        query = Tweet.select(Tweet.id).left_outer_join(User).switch(Tweet).left_outer_join(Favorite)
+        self.assertSQL(query, (
+            'SELECT "t1"."id" FROM "tweet" AS "t1" '
+            'LEFT OUTER JOIN "users" AS "t2" ON ("t1"."user_id" = "t2"."id") '
+            'LEFT OUTER JOIN "favorite" AS "t3" ON ("t3"."tweet_id" = "t1"."id")'),
+            [])
 
     def test_join_parent(self):
         query = (Category
@@ -929,50 +973,6 @@ class TestModelSQL(ModelDatabaseTestCase):
              'WHERE ("relationship"."to_user_id" = ?)', [1]),
             ('DELETE FROM "tweet" WHERE ("tweet"."user_id" = ?)', [1]),
         ])
-
-    def test_aliases(self):
-        class A(TestModel):
-            a = CharField()
-        class B(TestModel):
-            b = CharField()
-            a_link = ForeignKeyField(A)
-        class C(TestModel):
-            c = CharField()
-            b_link = ForeignKeyField(B)
-        class D(TestModel):
-            d = CharField()
-            c_link = ForeignKeyField(C)
-
-        query = (D
-                 .select(D.d, C.c)
-                 .join(C)
-                 .where(C.b_link << (
-                     B.select(B.id).join(A).where(A.a == 'a'))))
-        self.assertSQL(query, (
-            'SELECT "t1"."d", "t2"."c" '
-            'FROM "d" AS "t1" '
-            'INNER JOIN "c" AS "t2" ON ("t1"."c_link_id" = "t2"."id") '
-            'WHERE ("t2"."b_link_id" IN ('
-            'SELECT "t3"."id" FROM "b" AS "t3" '
-            'INNER JOIN "a" AS "t4" ON ("t3"."a_link_id" = "t4"."id") '
-            'WHERE ("t4"."a" = ?)))'), ['a'])
-
-    def test_schema(self):
-        class WithSchema(TestModel):
-            data = CharField(primary_key=True)
-            class Meta:
-                schema = 'huey'
-
-        query = WithSchema.select().where(WithSchema.data == 'zaizee')
-        self.assertSQL(query, (
-            'SELECT "t1"."data" '
-            'FROM "huey"."with_schema" AS "t1" '
-            'WHERE ("t1"."data" = ?)'), ['zaizee'])
-
-
-# ===========================================================================
-# ON CONFLICT / upsert SQL with Models
-# ===========================================================================
 
 @requires_pglike
 class TestOnConflictSQL(ModelDatabaseTestCase):
