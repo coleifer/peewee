@@ -1,3 +1,16 @@
+"""
+Database connection, pragmas, introspection, threading, and utility tests.
+
+Test case ordering:
+  1. Core database features (pragmas, connection, context settings)
+  2. Connection semantics
+  3. Thread safety
+  4. SQLite-specific (isolation, attach)
+  5. Deferred database and proxy
+  6. Introspection
+  7. Exception handling
+  8. Utilities (model property, sort_models, chunked)
+"""
 from itertools import permutations
 from queue import Queue
 import platform
@@ -32,6 +45,10 @@ from .base_models import Category
 from .base_models import Tweet
 from .base_models import User
 
+
+# ===========================================================================
+# Core database features
+# ===========================================================================
 
 class TestDatabase(DatabaseTestCase):
     database = get_sqlite_db()
@@ -350,6 +367,10 @@ class TestDatabase(DatabaseTestCase):
         self.assertRaises(InterfaceError, db.cursor)
 
 
+# ===========================================================================
+# Thread safety
+# ===========================================================================
+
 class TestThreadSafety(ModelTestCase):
     # HACK: This workaround increases the Sqlite busy timeout when tests are
     # being run on certain architectures.
@@ -403,6 +424,10 @@ class TestThreadSafety(ModelTestCase):
         for t in threads: t.start()
         for t in threads: t.join()
 
+
+# ===========================================================================
+# Deferred database, proxy, and schema namespace
+# ===========================================================================
 
 class TestDeferredDatabase(BaseTestCase):
     def test_deferred_database(self):
@@ -460,6 +485,10 @@ class TestSchemaNamespace(ModelTestCase):
         self.assertEqual(toy.description, toy_db.description)
 
 
+# ===========================================================================
+# SQLite isolation, introspection, and ATTACH
+# ===========================================================================
+
 class TestSqliteIsolation(ModelTestCase):
     database = get_sqlite_db()
     requires = [User]
@@ -510,6 +539,9 @@ class IndexedModel(TestModel):
         )
 
 
+# NOTE: This is intentionally different from base_models.Note. This version
+# has ts/status columns and table_name='notes', which the introspection tests
+# (test_get_views) depend on for creating and querying views.
 class Note(TestModel):
     content = TextField()
     ts = DateTimeField()
@@ -519,6 +551,9 @@ class Note(TestModel):
         table_name = 'notes'
 
 
+# NOTE: This is intentionally different from base_models.Person. This version
+# uses 'email' instead of 'dob' and has a different index, which the
+# introspection tests (test_get_columns, test_get_indexes) depend on.
 class Person(TestModel):
     first = CharField()
     last = CharField()
@@ -932,6 +967,10 @@ class TestAttachDatabase(ModelTestCase):
         tables = self.database.get_tables(schema='cache')
         self.assertEqual(tables, ['cache_data'])
 
+
+# ===========================================================================
+# Connection semantics, exception handling, and utilities
+# ===========================================================================
 
 class TestDatabaseConnection(DatabaseTestCase):
     def test_is_connection_usable(self):

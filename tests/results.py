@@ -1,3 +1,12 @@
+"""
+Cursor wrapper, row type, and query execution tests.
+
+Test case ordering:
+  1. Cursor wrapper behavior (iteration, slicing, indexing)
+  2. Row types (dicts, tuples, named tuples)
+  3. Specify converter
+  4. Raw query execution with Table objects
+"""
 import datetime
 
 from peewee import *
@@ -15,6 +24,10 @@ def lange(x, y=None):
         value = range(x, y)
     return list(value)
 
+
+# ===========================================================================
+# Cursor wrapper behavior
+# ===========================================================================
 
 class TestCursorWrapper(ModelTestCase):
     database = get_in_memory_db()
@@ -136,6 +149,10 @@ class TestCursorWrapper(ModelTestCase):
             self.assertTrue(cursor.populated)
             assertCache(cursor, 10)
 
+
+# ===========================================================================
+# Row types (dicts, tuples, named tuples) and converter specification
+# ===========================================================================
 
 class TestRowTypes(ModelTestCase):
     database = get_in_memory_db()
@@ -337,6 +354,13 @@ class TestSpecifyConverter(ModelTestCase):
             ('k3', D(3), D(3))])
 
 
+# ===========================================================================
+# Raw query execution with Table objects
+# ===========================================================================
+
+# Lightweight Table objects for testing raw query execution.
+# NOTE: QUser and QTweet have identical definitions in model_sql.py
+# for query cloning tests.
 QUser = Table('users', ['id', 'username'])
 QTweet = Table('tweet', ['id', 'user_id', 'content'])
 QRegister = Table('register', ['id', 'value'])

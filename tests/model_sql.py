@@ -1,3 +1,19 @@
+"""
+SQL generation tests for Model-level queries.
+
+These tests verify that queries built using Model classes (with ForeignKeyField
+relationships, Meta options, etc.) produce correct SQL. Unlike sql.py which
+tests raw Table objects, these tests exercise the Model metaclass machinery
+including automatic join resolution, field type coercion, and alias handling.
+
+Test case ordering:
+  1. Core Model query SQL (SELECT, INSERT, UPDATE, DELETE)
+  2. ON CONFLICT SQL with Models
+  3. String-based field references
+  4. Compound SELECT with Models
+  5. Model index SQL
+  6. Query cloning and regressions
+"""
 import datetime
 
 from peewee import *
@@ -14,6 +30,9 @@ from .base import __sql__
 from .base_models import *
 
 
+# ---------------------------------------------------------------------------
+# Module-local model: composite primary key model for SQL generation tests.
+# ---------------------------------------------------------------------------
 class CKM(TestModel):
     category = CharField()
     key = CharField()
@@ -21,6 +40,10 @@ class CKM(TestModel):
     class Meta:
         primary_key = CompositeKey('category', 'key')
 
+
+# ===========================================================================
+# Core Model query SQL generation
+# ===========================================================================
 
 class TestModelSQL(ModelDatabaseTestCase):
     database = get_in_memory_db()
@@ -947,6 +970,10 @@ class TestModelSQL(ModelDatabaseTestCase):
             'WHERE ("t1"."data" = ?)'), ['zaizee'])
 
 
+# ===========================================================================
+# ON CONFLICT / upsert SQL with Models
+# ===========================================================================
+
 @requires_pglike
 class TestOnConflictSQL(ModelDatabaseTestCase):
     requires = [Emp, OCTest, UKVP]
@@ -1050,6 +1077,10 @@ class TestOnConflictSQL(ModelDatabaseTestCase):
             'RETURNING "ukvp"."id"'), ['k1', 1, 1])
 
 
+# ===========================================================================
+# String-based field references in queries
+# ===========================================================================
+
 class TestStringsForFieldsa(ModelDatabaseTestCase):
     database = get_in_memory_db()
     requires = [Note, Person, Relationship]
@@ -1080,6 +1111,10 @@ class TestStringsForFieldsa(ModelDatabaseTestCase):
                 'UPDATE "person" SET "last" = ? WHERE ("person"."last" = ?)'),
                 ['kitty', 'cat'])
 
+
+# ===========================================================================
+# Compound SELECT (UNION / INTERSECT / EXCEPT) with Models
+# ===========================================================================
 
 compound_db = get_in_memory_db()
 
@@ -1226,6 +1261,10 @@ class TestModelCompoundSelect(BaseTestCase):
             'SELECT "t2"."beta" FROM "beta" AS "t2"))'), [])
 
 
+# ===========================================================================
+# Model index SQL and miscellaneous
+# ===========================================================================
+
 class TestModelIndex(BaseTestCase):
     database = SqliteDatabase(None)
 
@@ -1298,6 +1337,12 @@ class TestModelArgument(BaseTestCase):
             'FROM "post" AS "t1" ORDER BY "t1"."timestamp"'), [])
 
 
+# ===========================================================================
+# Query cloning behavior and regressions
+# ===========================================================================
+
+# Lightweight Table objects for testing query cloning with raw tables.
+# NOTE: identical definitions exist in results.py for query execution tests.
 QUser = Table('users', ['id', 'username'])
 QTweet = Table('tweet', ['id', 'user_id', 'content'])
 

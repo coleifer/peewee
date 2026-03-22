@@ -1,3 +1,19 @@
+"""
+SQL generation tests for Table-level (non-Model) queries.
+
+These tests verify that the query builder produces correct SQL from raw Table
+objects, without involving Model metaclass machinery. Table objects are
+lightweight and internal to query building.
+
+Test case ordering:
+  1. Core DML: SELECT, INSERT, UPDATE, DELETE
+  2. Advanced SELECT features: window functions, VALUES lists, CASE
+  3. Miscellaneous SELECT features: FOR UPDATE, RETURNING, etc.
+  4. Expression SQL
+  5. ON CONFLICT (per-dialect: SQLite, MySQL, PostgreSQL)
+  6. Index generation
+  7. Utilities and edge cases
+"""
 import datetime
 import re
 
@@ -14,11 +30,20 @@ from .base import requires_sqlite
 from .base import __sql__
 
 
+# ---------------------------------------------------------------------------
+# Module-level Table objects shared across test cases in this module.
+# These are Table instances (not Model classes) — they test the low-level
+# query builder without Model metaclass involvement.
+# ---------------------------------------------------------------------------
 User = Table('users')
 Tweet = Table('tweets')
 Person = Table('person', ['id', 'name', 'dob'], primary_key='id')
 Note = Table('note', ['id', 'person_id', 'content'])
 
+
+# ===========================================================================
+# Core DML: SELECT, INSERT, UPDATE, DELETE
+# ===========================================================================
 
 class TestSelectQuery(BaseTestCase):
     def test_select(self):
@@ -1529,6 +1554,10 @@ class TestDeleteQuery(BaseTestCase):
             'RETURNING "users"."id" AS "old_id"'), [2])
 
 
+# ===========================================================================
+# Advanced SELECT features: window functions, VALUES lists, CASE expressions
+# ===========================================================================
+
 Register = Table('register', ('id', 'value', 'category'))
 
 
@@ -2061,6 +2090,9 @@ class TestCaseFunction(BaseTestCase):
             'FROM "n" AS "t1"'), [5, 5])
 
 
+# ===========================================================================
+# Miscellaneous SELECT features and expression SQL
+# ===========================================================================
 
 class TestSelectFeatures(BaseTestCase):
     def test_reselect(self):
@@ -2229,6 +2261,10 @@ class TestExpressionSQL(BaseTestCase):
             'avg(("t1"."income" + ?) * ("t1"."income" + ?)) '
             'FROM "users" AS "t1"'), [100, 100, 100])
 
+
+# ===========================================================================
+# ON CONFLICT / upsert SQL (per-dialect: SQLite, MySQL, PostgreSQL)
+# ===========================================================================
 
 #Person = Table('person', ['id', 'name', 'dob'])
 
@@ -2433,6 +2469,10 @@ class TestOnConflictPostgresql(BaseTestCase):
             ['k1', 1, 2, 'k2', 2, 3, 1, 'kx'])
 
 
+# ===========================================================================
+# Index generation
+# ===========================================================================
+
 #Person = Table('person', ['id', 'name', 'dob'])
 #Note = Table('note', ['id', 'person_id', 'content'])
 
@@ -2474,6 +2514,10 @@ class TestIndex(BaseTestCase):
         self.assertSQL(uidx, (
             'CREATE INDEX "users_info" ON "users" (username DESC, id)'), [])
 
+
+# ===========================================================================
+# Utilities and edge cases
+# ===========================================================================
 
 class TestSqlToString(BaseTestCase):
     def _test_sql_to_string(self, _param):

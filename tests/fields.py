@@ -1,3 +1,21 @@
+"""
+Field type tests: validation, conversion, storage, and retrieval for all
+field types, plus foreign key behavior, composite keys, and field-level
+constraints.
+
+Test case ordering (current):
+  1. Numeric and basic value types
+  2. Date/time fields
+  3. Foreign key basics and deferred FK resolution
+  4. Composite PK, field functions, IP, bit fields
+  5. Blob, BigAuto, UUID, timestamp, custom fields
+  6. String fields and misc field types
+  7. Virtual field behavior
+  8. Foreign key advanced: non-PK targets, multiple FKs, composite PK with FK
+  9. Search operators (regexp, contains)
+  10. Value conversion and type coercion
+  11. Regressions and edge cases
+"""
 import calendar
 import datetime
 import json
@@ -33,6 +51,10 @@ from .base_models import Relationship
 from .base_models import Tweet
 from .base_models import User
 
+
+# ===========================================================================
+# Numeric and basic value types
+# ===========================================================================
 
 class IntModel(TestModel):
     value = IntegerField()
@@ -204,6 +226,10 @@ class TestBooleanField(ModelTestCase):
             self.assertEqual([b.key for b in q], [key])
 
 
+# ===========================================================================
+# Date and time fields
+# ===========================================================================
+
 class DateModel(TestModel):
     date = DateField(null=True)
     time = TimeField(null=True)
@@ -345,6 +371,12 @@ class TestDateFields(ModelTestCase):
                          [1980, 1990, 2000, 2010])
 
 
+# ===========================================================================
+# Foreign key basics and deferred FK resolution
+# ===========================================================================
+
+# U2/T2: local User/Tweet variants for testing on_delete='CASCADE'.
+# Not to be confused with base_models.User/Tweet which lack on_delete.
 class U2(TestModel):
     username = TextField()
 
@@ -520,6 +552,10 @@ class TestDeferredForeignKeyResolution(ModelTestCase):
             'SELECT "t1"."id", "t1"."id_album", "t1"."id_Alt_album" '
             'FROM "photo" AS "t1" WHERE ("t1"."id_Alt_album" = ?)'), [4])
 
+
+# ===========================================================================
+# Composite primary key, field functions, IP field, bit fields
+# ===========================================================================
 
 class Composite(TestModel):
     first = CharField()
@@ -829,6 +865,10 @@ class TestBitFields(ModelTestCase):
             self.assertTrue(b.data.is_set(bit))
 
 
+# ===========================================================================
+# Blob, BigAutoField, and field value handling
+# ===========================================================================
+
 class BlobModel(TestModel):
     data = BlobField()
 
@@ -1007,6 +1047,10 @@ class TestFieldValueHandling(ModelTestCase):
         self.assertEqual(b3_db.key, 'k3')
         self.assertTrue(b3_db.value is None)
 
+
+# ===========================================================================
+# UUID, timestamp, and custom fields
+# ===========================================================================
 
 class UUIDModel(TestModel):
     data = UUIDField(null=True)
@@ -1340,6 +1384,10 @@ class TestSQLFunctionDBValue(ModelTestCase):
         self.assertRaises(UpperModel.DoesNotExist, UpperModel.get, expr)
 
 
+# ===========================================================================
+# Date/time math and foreign key lazy loading
+# ===========================================================================
+
 class Schedule(TestModel):
     interval = IntegerField()
 
@@ -1500,6 +1548,10 @@ class TestForeignKeyLazyLoad(ModelTestCase):
             self.assertTrue(bi.nq_lazy_null is None)
 
 
+# ===========================================================================
+# String fields, misc field types, virtual fields
+# ===========================================================================
+
 class SM(TestModel):
     text_field = TextField()
     char_field = CharField()
@@ -1632,6 +1684,11 @@ class TestVirtualFieldBehavior(BaseTestCase):
         self.assertEqual(vf.db_value('42'), 42)
         self.assertEqual(vf.python_value('42'), 42)
 
+
+# ===========================================================================
+# Foreign key advanced: non-PK targets, multiple FKs, constraints,
+# composite PK with FK, and deferred FK integration
+# ===========================================================================
 
 class Package(TestModel):
     barcode = CharField(unique=True)
@@ -2146,6 +2203,10 @@ class TestDeferredForeignKeyIntegration(ModelTestCase):
             'CREATE TABLE "df_fk" ("fk_id" INTEGER NOT NULL PRIMARY KEY)'), [])
 
 
+# ===========================================================================
+# Search operators (regexp, contains, like)
+# ===========================================================================
+
 class BaseNamesTest(ModelTestCase):
     requires = [User]
 
@@ -2178,6 +2239,10 @@ class TestContains(BaseNamesTest):
         self.assertNames(User.username.endswith('ey'), ['huey', 'mickey'])
         self.assertNames(User.username.endswith('EY'), ['huey', 'mickey'])
 
+
+# ===========================================================================
+# Value conversion, type coercion, and regressions
+# ===========================================================================
 
 class TestValueConversion(ModelTestCase):
     """

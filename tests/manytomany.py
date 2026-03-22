@@ -1,12 +1,28 @@
+"""
+ManyToManyField behavior tests: through models (auto and explicit), backrefs,
+inheritance, FK-to-non-PK, FK-as-PK, and multiple M2M on same tables.
+
+Test case ordering:
+  1. FK-to-non-PK M2M (Color/Logo with non-PK FK)
+  2. Backref behavior (Student/Course)
+  3. Inheritance of M2M through models
+  4. Core M2M operations (User/Note — the largest test class)
+  5. FK-as-PK M2M (Person/Account/AccountList)
+  6. Multiple M2M between same tables (Permission/Visitor)
+"""
 from peewee import *
 
 from .base import ModelTestCase
 from .base import TestModel
 from .base import get_in_memory_db
 from .base import requires_models
-from .base_models import Tweet
-from .base_models import User
 
+
+# ---------------------------------------------------------------------------
+# Module-local models for M2M tests.
+# NOTE: User and Note here are local to this module (not base_models).
+# User has TextField username (not CharField) and no explicit table_name.
+# ---------------------------------------------------------------------------
 
 class User(TestModel):
     username = TextField(unique=True)
@@ -66,6 +82,10 @@ class LogoColor(TestModel):
 
 LogoColorDeferred.set_model(LogoColor)
 
+
+# ===========================================================================
+# FK-to-non-PK, backref behavior, and inheritance
+# ===========================================================================
 
 class TestManyToManyFKtoNonPK(ModelTestCase):
     database = get_in_memory_db()
@@ -205,6 +225,10 @@ class TestManyToManyInheritance(ModelTestCase):
         self.assertTrue(PThrough.project.rel_model is Project)
         self.assertTrue(PThrough.user.rel_model is User)
 
+
+# ===========================================================================
+# Core M2M operations (add, remove, set, clear, prefetch)
+# ===========================================================================
 
 class TestManyToMany(ModelTestCase):
     database = get_in_memory_db()
@@ -543,6 +567,12 @@ class TestManyToMany(ModelTestCase):
             self.assertUsers(n5.users, ['zaizee'])
 
 
+# ===========================================================================
+# FK-as-PK M2M and multiple M2M between same tables
+# ===========================================================================
+
+# NOTE: This Person is local to manytomany.py (not base_models.Person).
+# It has only a 'name' CharField, used for FK-as-PK M2M testing.
 class Person(TestModel):
     name = CharField()
 

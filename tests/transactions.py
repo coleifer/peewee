@@ -1,3 +1,16 @@
+"""
+Transaction semantics, savepoints, session management, and isolation level
+tests.
+
+All test cases use the Register model (a single IntegerField) from
+base_models, via BaseTransactionTestCase.
+
+Test case ordering:
+  1. Transaction commit/rollback, nesting, savepoints
+  2. Session (context manager) behavior
+  3. Lock type
+  4. Isolation level
+"""
 import threading
 
 from peewee import *
@@ -31,6 +44,10 @@ def requires_nested(fn):
     return skip_if(IS_CRDB and not IS_CRDB_NESTED_TX,
                    'nested transaction support is required')(fn)
 
+
+# ===========================================================================
+# Transaction commit/rollback, nesting, and savepoints
+# ===========================================================================
 
 class TestTransaction(BaseTransactionTestCase):
     def test_simple(self):
@@ -307,6 +324,10 @@ class TestTransaction(BaseTransactionTestCase):
         self.assertEqual(accum, [True, True, True, True])
 
 
+# ===========================================================================
+# Session (context manager) behavior
+# ===========================================================================
+
 @requires_nested
 class TestSession(BaseTransactionTestCase):
     def test_session(self):
@@ -405,6 +426,10 @@ class TestSession(BaseTransactionTestCase):
         self.assertTrue(db.session_rollback())
         self.assertRegister([1, 2, 3])
 
+
+# ===========================================================================
+# Lock type and isolation level
+# ===========================================================================
 
 @skip_unless(IS_SQLITE, 'requires sqlite for transaction lock type')
 class TestTransactionLockType(BaseTransactionTestCase):

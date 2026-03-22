@@ -1,3 +1,13 @@
+"""
+DDL generation tests (CREATE TABLE, indexes, constraints, views).
+
+Test case ordering:
+  1. Core DDL SQL generation (TestModelDDL)
+  2. CREATE TABLE AS (SQL generation and integration)
+  3. View field mapping
+  4. Table name and truncation
+  5. Named constraints integration
+"""
 import datetime
 
 from peewee import *
@@ -16,6 +26,12 @@ from .base_models import Person
 from .base_models import Relationship
 from .base_models import User
 
+
+# ---------------------------------------------------------------------------
+# Module-local models for DDL generation tests.
+# Each exercises a specific schema feature (unique, sequence, indexes,
+# constraints, schema namespace, etc.).
+# ---------------------------------------------------------------------------
 
 class TMUnique(TestModel):
     data = TextField(unique=True)
@@ -73,6 +89,10 @@ idx = (Article
 Article.add_index(idx)
 Article.add_index(SQL('CREATE INDEX "article_foo" ON "article" ("flags" & 3)'))
 
+
+# ===========================================================================
+# Core DDL SQL generation
+# ===========================================================================
 
 class TestModelDDL(ModelDatabaseTestCase):
     database = get_in_memory_db()
@@ -796,6 +816,10 @@ class TestModelDDL(ModelDatabaseTestCase):
             '"label" VARCHAR(255) NOT NULL)'), [])
 
 
+# ===========================================================================
+# CREATE TABLE AS (SQL generation and integration)
+# ===========================================================================
+
 class NoteX(TestModel):
     content = TextField()
     timestamp = TimestampField()
@@ -850,6 +874,10 @@ class TestCreateAs(ModelTestCase):
             (2, 'n2', datetime.datetime(2019, 1, 2), 'draft'),
             (3, 'n3', datetime.datetime(2019, 1, 3), 'deleted')])
 
+
+# ===========================================================================
+# Table name, truncation, view field mapping, and named constraints
+# ===========================================================================
 
 class TestModelSetTableName(BaseTestCase):
     def test_set_table_name(self):

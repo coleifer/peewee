@@ -1,3 +1,18 @@
+"""
+Model CRUD API integration tests, joins, compound selects, CTEs, upsert,
+and regression tests.
+
+Test case ordering:
+  1. Core Model CRUD operations
+  2. Joins and aliases
+  3. Advanced query features (window functions, CTEs, compound selects)
+  4. INSERT conflict handling / upsert (per-dialect)
+  5. UPDATE / DELETE advanced features (UPDATE FROM, RETURNING, FOR UPDATE)
+  6. Bulk operations
+  7. Model metadata and configuration
+  8. Database integration
+  9. Regressions (roughly chronological)
+"""
 import datetime
 import threading
 import time
@@ -39,6 +54,12 @@ from .base import ModelTestCase
 from .base import TestModel
 from .base_models import *
 
+
+# ===========================================================================
+# Core Model CRUD operations
+# ===========================================================================
+
+# Module-local models used by TestModelAPIs and nearby CRUD tests.
 
 class Color(TestModel):
     name = CharField(primary_key=True)
@@ -1936,6 +1957,10 @@ class TestFunctionCoerce(ModelTestCase):
         self.assertEqual(query.get().a, 1.5)
 
 
+# ===========================================================================
+# Joins and aliases
+# ===========================================================================
+
 class TestJoinModelAlias(ModelTestCase):
     data = (
         ('huey', 'meow'),
@@ -2108,6 +2133,10 @@ class TestJoinModelAlias(ModelTestCase):
                 data = [(t.content, t.user.username) for t in query]
                 self.assertEqual(data, [('meow', 'huey'), ('purr', 'huey')])
 
+
+# ===========================================================================
+# Advanced query features (window functions, tuples, compound selects, etc.)
+# ===========================================================================
 
 @skip_unless(
     IS_POSTGRESQL or IS_MYSQL_ADVANCED_FEATURES or IS_SQLITE_25 or IS_CRDB,
@@ -2399,6 +2428,10 @@ class TestWindowFunctionIntegration(ModelTestCase):
             (3, 3.0, None)])
         #values = ((1, 10), (1, 20), (2, 1), (2, 3), (3, 100))
 
+
+# ===========================================================================
+# FOR UPDATE, RETURNING clause, and CTE integration
+# ===========================================================================
 
 @skip_if(IS_SQLITE or (IS_MYSQL and not IS_MYSQL_ADVANCED_FEATURES))
 @skip_unless(db.for_update, 'requires for update')
@@ -3126,6 +3159,10 @@ class TestTupleComparison(ModelTestCase):
             ('k1', 1, 20), ('k2', 2, 2), ('k3', 3, 20)])
 
 
+# ===========================================================================
+# Model metadata and configuration (graph, inheritance, Meta options)
+# ===========================================================================
+
 class TestModelGraph(BaseTestCase):
     def test_bind_model_database(self):
         class User(Model): pass
@@ -3670,6 +3707,10 @@ class TestModelAliasFieldProperties(ModelTestCase):
                  .where(Person.dob.year == 1983))
         self.assertSQL(query, expected_sql, expected_params)
 
+
+# ===========================================================================
+# INSERT conflict handling / upsert (per-dialect: MySQL, SQLite, PostgreSQL)
+# ===========================================================================
 
 class OnConflictTests(object):
     requires = [Emp]
@@ -4216,6 +4257,11 @@ class TestUpsertPostgresql(PGOnConflictTests, ModelTestCase):
         self.assertEqual(obj.first, 'hueyyyy')
         self.assertEqual(obj.last, 'catlands')
 
+
+# ===========================================================================
+# Miscellaneous integration tests (joins, aggregates, compound selects,
+# sequences, UPDATE FROM, LATERAL, self-joins, constraints, bulk ops, etc.)
+# ===========================================================================
 
 class TestJoinSubquery(ModelTestCase):
     requires = [Person, Relationship]
@@ -5500,6 +5546,10 @@ class DiBA(TestModel):
     a = ForeignKeyField(DiA, to_field=DiA.a)
     b = TextField()
 
+
+# ===========================================================================
+# Regressions and bug-fix tests
+# ===========================================================================
 
 class TestDeleteInstanceRegression(ModelTestCase):
     database = get_in_memory_db()

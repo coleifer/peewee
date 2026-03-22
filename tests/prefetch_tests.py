@@ -1,3 +1,14 @@
+"""
+Prefetch / N+1 query optimization tests.
+
+All models in this module are local (not from base_models), because prefetch
+tests need specific relational graph shapes that differ from the shared models.
+
+Test case ordering:
+  1. Core prefetch (Person → Note → NoteItem/Like/Flag, plus Category, Package)
+  2. Multi-reference prefetch (X → Z, A → B → C → C1/C2)
+  3. Multiple FK prefetch with join type control (State/Transition)
+"""
 from peewee import *
 
 from .base import get_in_memory_db
@@ -5,6 +16,13 @@ from .base import requires_models
 from .base import ModelTestCase
 from .base import TestModel
 
+
+# ---------------------------------------------------------------------------
+# Module-local models for core prefetch tests.
+# NOTE: Person, Note, Category, etc. here are intentionally different from
+# base_models — they have different fields and FK structures tailored for
+# prefetch testing.
+# ---------------------------------------------------------------------------
 
 class Person(TestModel):
     name = TextField()
@@ -48,6 +66,10 @@ class PackageItem(TestModel):
     name = TextField()
     package = ForeignKeyField(Package, backref='items', field=Package.barcode)
 
+
+# ===========================================================================
+# Core prefetch tests
+# ===========================================================================
 
 class TestPrefetch(ModelTestCase):
     database = get_in_memory_db()
@@ -527,6 +549,9 @@ class TestPrefetch(ModelTestCase):
                         self.assertEqual(item.dirty_fields, [])
 
 
+# ===========================================================================
+# Multi-reference prefetch (complex FK graphs)
+# ===========================================================================
 
 class X(TestModel):
     name = TextField()
@@ -660,7 +685,9 @@ class TestPrefetchMultiRefs(ModelTestCase):
         self.assertEqual(data, accum)
 
 
-# -- Tests from regressions. -----------------------------------------------
+# ===========================================================================
+# Multiple FK prefetch with join type control (regression)
+# ===========================================================================
 
 class State(TestModel):
     name = TextField()
