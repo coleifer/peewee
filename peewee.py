@@ -106,6 +106,7 @@ __all__ = [
     'DoesNotExist',
     'DoubleField',
     'DQ',
+    'Entity',
     'EXCLUDED',
     'Field',
     'FixedCharField',

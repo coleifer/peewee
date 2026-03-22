@@ -19,6 +19,7 @@ import datetime
 import re
 
 from peewee import *
+from peewee import Entity
 from peewee import Expression
 from peewee import Function
 from peewee import query_to_string
@@ -319,6 +320,65 @@ class TestSelectQuery(BaseTestCase):
             'FROM "users" AS "t1" '
             'INNER JOIN "users" AS "alt" ON ("t1"."id" = "alt"."id") '
             'ORDER BY "alt"."nuggz"'), [])
+
+    def test_group_by(self):
+        q = (User
+             .select(User.c.username, fn.COUNT(Tweet.c.id).alias('ct'))
+             .join(Tweet, on=(User.c.id == Tweet.c.user_id))
+             .group_by(User.c.username))
+        self.assertSQL(q, (
+            'SELECT "t1"."username", COUNT("t2"."id") AS "ct" '
+            'FROM "users" AS "t1" '
+            'INNER JOIN "tweets" AS "t2" ON ("t1"."id" = "t2"."user_id") '
+            'GROUP BY "t1"."username"'), [])
+
+        q = (Person
+             .select(Person, fn.COUNT(Note.id).alias('ct'))
+             .join(Note, on=(Person.id == Note.person_id))
+             .group_by(Person))
+        self.assertSQL(q, (
+            'SELECT "person" AS "t1", COUNT("t2"."id") AS "ct" '
+            'FROM "person" AS "t1" '
+            'INNER JOIN "note" AS "t2" ON ("t1"."id" = "t2"."person_id") '
+            'GROUP BY "t1"."id", "t1"."name", "t1"."dob"'), [])
+
+    def test_having(self):
+        q = (User
+             .select(User.c.username, fn.COUNT(Tweet.c.id).alias('ct'))
+             .join(Tweet, on=(User.c.id == Tweet.c.user_id))
+             .group_by(User.c.username)
+             .having(fn.COUNT(Tweet.c.id) > 3))
+        self.assertSQL(q, (
+            'SELECT "t1"."username", COUNT("t2"."id") AS "ct" '
+            'FROM "users" AS "t1" '
+            'INNER JOIN "tweets" AS "t2" ON ("t1"."id" = "t2"."user_id") '
+            'GROUP BY "t1"."username" '
+            'HAVING (COUNT("t2"."id") > ?)'), [3])
+
+        q = (User
+             .select(User.c.username, fn.COUNT(Tweet.c.id).alias('ct'))
+             .join(Tweet, on=(User.c.id == Tweet.c.user_id))
+             .group_by(User.c.username)
+             .having(fn.COUNT(Tweet.c.id) > 3, fn.MAX(Tweet.c.id) < 10))
+        self.assertSQL(q, (
+            'SELECT "t1"."username", COUNT("t2"."id") AS "ct" '
+            'FROM "users" AS "t1" '
+            'INNER JOIN "tweets" AS "t2" ON ("t1"."id" = "t2"."user_id") '
+            'GROUP BY "t1"."username" '
+            'HAVING ((COUNT("t2"."id") > ?) AND (MAX("t2"."id") < ?))'),
+            [3, 10])
+
+        q = (Person
+             .select(Person, fn.COUNT(Note.id).alias('ct'))
+             .join(Note, on=(Person.id == Note.person_id))
+             .group_by(Person)
+             .having((Entity('ct') > 2) & (fn.COUNT(Note.id) < 10)))
+        self.assertSQL(q, (
+            'SELECT "person" AS "t1", COUNT("t2"."id") AS "ct" '
+            'FROM "person" AS "t1" '
+            'INNER JOIN "note" AS "t2" ON ("t1"."id" = "t2"."person_id") '
+            'GROUP BY "t1"."id", "t1"."name", "t1"."dob" '
+            'HAVING (("ct" > ?) AND (COUNT("t2"."id") < ?))'), [2, 10])
 
     def test_limit(self):
         base = User.select(User.c.id)
