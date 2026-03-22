@@ -1694,6 +1694,8 @@ class TestDefaultValues(ModelTestCase):
             self.assertIsNone(sm2_db.sample.value)
             self.assertEqual(sm1_db.sample.counter, 1)
             self.assertEqual(sm2_db.sample.counter, 1)
+
+
 def incrementer():
     d = {'value': 0}
     def increment():
@@ -1976,6 +1978,7 @@ class TestPrimaryKeySaveHandling(ModelTestCase):
         self.assertEqual(t2_db.pk, 3)
         self.assertEqual(t2_db.value, 10)
 
+
 class T5(TestModel):
     val = IntegerField(null=True)
 
@@ -2137,10 +2140,10 @@ class TestCascadeDeleteIntegration(ModelTestCase):
         self.assertEqual(CascadeChild.select().count(), 1)
         self.assertEqual(CascadeChild.get().data, 'c3')
 
+
 # ===========================================================================
 # Joins and aliases
 # ===========================================================================
-
 
 
 class TestJoinModelAlias(ModelTestCase):
@@ -2642,10 +2645,10 @@ class TestJoinSubqueryAggregateViaLeftOuter(ModelTestCase):
 
         self.assertEqual(results, [('p1', 60, 20), ('p2', 410, 82)])
 
+
 # ===========================================================================
 # Advanced query features (window functions, tuples, compound selects, etc.)
 # ===========================================================================
-
 
 
 @skip_unless(
@@ -3057,6 +3060,8 @@ class TestCompoundSelectModels(ModelTestCase):
             {'content': 'walrus.txt', 'timestamp': self.ts(5)},
             {'content': 'peewee.txt', 'timestamp': self.ts(4)},
             {'content': 'note-c', 'timestamp': self.ts(3)}])
+
+
 def _create_users_tweets(db):
     data = (
         ('huey', ('meow', 'hiss', 'purr')),
@@ -3456,10 +3461,10 @@ class TestValuesListIntegration(ModelTestCase):
         query = vl.select()
         self.assertEqual(list(query.tuples().bind(self.database)), self._data)
 
+
 # ===========================================================================
 # Common Table Expressions (CTE)
 # ===========================================================================
-
 
 
 class Member(TestModel):
@@ -3760,6 +3765,7 @@ class C_Part(TestModel):
     part = CharField(primary_key=True)
     sub_part = ForeignKeyField('self', null=True)
 
+
 @skip_unless(IS_POSTGRESQL)
 class TestDataModifyingCTEIntegration(ModelTestCase):
     requires = [C_Product, C_Archive, C_Part]
@@ -3871,10 +3877,10 @@ class TestDataModifyingCTEIntegration(ModelTestCase):
             ('p0', 0), ('p1', 1), ('p2', 2), ('p3', 3), ('p4', 4), ('p5', 5),
             ('p6', 6)])
 
+
 # ===========================================================================
 # INSERT conflict handling / upsert (per-dialect)
 # ===========================================================================
-
 
 
 class OnConflictTests(object):
@@ -4422,10 +4428,10 @@ class TestUpsertPostgresql(PGOnConflictTests, ModelTestCase):
         self.assertEqual(obj.first, 'hueyyyy')
         self.assertEqual(obj.last, 'catlands')
 
+
 # ===========================================================================
 # FOR UPDATE, RETURNING, UPDATE FROM, and LATERAL
 # ===========================================================================
-
 
 
 @skip_if(IS_SQLITE or (IS_MYSQL and not IS_MYSQL_ADVANCED_FEATURES))
@@ -5003,6 +5009,7 @@ class TestLateralJoin(ModelTestCase):
             {'username': 'u2', 'content': 'u2-t3'},
             {'username': 'u2', 'content': 'u2-t2'}])
 
+
 # ===========================================================================
 # Bulk operations
 # ===========================================================================
@@ -5137,10 +5144,10 @@ class TestChunkedInsertMany(ModelTestCase):
         self.assertEqual(list(q), data)
         IMC.delete().execute()
 
+
 # ===========================================================================
 # Model metadata and configuration
 # ===========================================================================
-
 
 
 class TestModelGraph(BaseTestCase):
@@ -5838,10 +5845,10 @@ class TestSequence(ModelTestCase):
         self.assertEqual(s2.seq_id, 2)
         self.assertEqual(s3.seq_id, 3)
 
+
 # ===========================================================================
 # Database integration
 # ===========================================================================
-
 
 
 class TestBindTo(ModelTestCase):
@@ -6033,10 +6040,10 @@ class TestOptimisticLockingDemo(ModelTestCase):
         self.assertEqual(vt_db.version, 2)
         self.assertEqual(vt_db.user.username, 'u1')
 
+
 # ===========================================================================
 # Regressions and bug-fix tests
 # ===========================================================================
-
 
 
 class DiA(TestModel):
@@ -6945,4 +6952,3 @@ class TestModelSelectFromSubquery(ModelTestCase):
                  .order_by(subquery.c.username.desc()))
         self.assertEqual([u.username for u in query], ['u4', 'u0'])
         self.assertTrue(isinstance(query[0], User))
-

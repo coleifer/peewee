@@ -6,10 +6,11 @@ All test cases use the Register model (a single IntegerField) from
 base_models, via BaseTransactionTestCase.
 
 Test case ordering:
-  1. Transaction commit/rollback, nesting, savepoints
-  2. Session (context manager) behavior
-  3. Lock type
-  4. Isolation level
+
+1. Transaction commit/rollback, nesting, savepoints
+2. Session (context manager) behavior
+3. Lock type
+4. Isolation level
 """
 import threading
 

@@ -134,7 +134,7 @@ IS_MYSQL_JSON = False
 if IS_MYSQL:
     db.connect()
     server_info = db.server_version
-    if server_info[0] == 8 or server_info[:2] >= (10, 2):
+    if server_info[0] >= 8 or server_info[:2] >= (10, 2):
         IS_MYSQL_ADVANCED_FEATURES = True
     elif server_info[0] == 0:
         logger.warning('Could not determine mysql server version.')

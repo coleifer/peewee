@@ -7,12 +7,13 @@ tests raw Table objects, these tests exercise the Model metaclass machinery
 including automatic join resolution, field type coercion, and alias handling.
 
 Test case ordering:
-  1. Core Model query SQL (SELECT, INSERT, UPDATE, DELETE)
-  2. ON CONFLICT SQL with Models
-  3. String-based field references
-  4. Compound SELECT with Models
-  5. Model index SQL
-  6. Query cloning and regressions
+
+1. Core Model query SQL (SELECT, INSERT, UPDATE, DELETE)
+2. ON CONFLICT SQL with Models
+3. String-based field references
+4. Compound SELECT with Models
+5. Model index SQL
+6. Query cloning and regressions
 """
 import datetime
 

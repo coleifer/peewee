@@ -5,9 +5,10 @@ All models in this module are local (not from base_models), because prefetch
 tests need specific relational graph shapes that differ from the shared models.
 
 Test case ordering:
-  1. Core prefetch (Person → Note → NoteItem/Like/Flag, plus Category, Package)
-  2. Multi-reference prefetch (X → Z, A → B → C → C1/C2)
-  3. Multiple FK prefetch with join type control (State/Transition)
+
+1. Core prefetch (Person > Note > NoteItem/Like/Flag, plus Category, Package)
+2. Multi-reference prefetch (X > Z, A > B > C > C1/C2)
+3. Multiple FK prefetch with join type control (State/Transition)
 """
 from peewee import *
 
@@ -20,7 +21,7 @@ from .base import TestModel
 # ---------------------------------------------------------------------------
 # Module-local models for core prefetch tests.
 # NOTE: Person, Note, Category, etc. here are intentionally different from
-# base_models — they have different fields and FK structures tailored for
+# base_models - they have different fields and FK structures tailored for
 # prefetch testing.
 # ---------------------------------------------------------------------------
 
@@ -723,4 +724,3 @@ class TestJoinTypePrefetchMultipleFKs(ModelTestCase):
             ('s1', [t1, t2], [], ['s2a', 's2b'], []),
             ('s2a', [t3], [t1], ['s3'], ['s1']),
             ('s2b', [t4], [t2], ['s3'], ['s1'])])
-

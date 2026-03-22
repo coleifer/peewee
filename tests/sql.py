@@ -6,13 +6,14 @@ objects, without involving Model metaclass machinery. Table objects are
 lightweight and internal to query building.
 
 Test case ordering:
-  1. Core DML: SELECT, INSERT, UPDATE, DELETE
-  2. Advanced SELECT features: window functions, VALUES lists, CASE
-  3. Miscellaneous SELECT features: FOR UPDATE, RETURNING, etc.
-  4. Expression SQL
-  5. ON CONFLICT (per-dialect: SQLite, MySQL, PostgreSQL)
-  6. Index generation
-  7. Utilities and edge cases
+
+1. Core DML: SELECT, INSERT, UPDATE, DELETE
+2. Advanced SELECT features: window functions, VALUES lists, CASE
+3. Miscellaneous SELECT features: FOR UPDATE, RETURNING, etc.
+4. Expression SQL
+5. ON CONFLICT (per-dialect: SQLite, MySQL, PostgreSQL)
+6. Index generation
+7. Utilities and edge cases
 """
 import datetime
 import re
@@ -1235,6 +1236,7 @@ class TestSelectQuery(BaseTestCase):
             'FROM "tweets" AS "t2" '
             'WHERE ("t2"."content" = ?)))'), ['special'])
 
+
 class TestInsertQuery(BaseTestCase):
     def test_insert_simple(self):
         query = User.insert({
@@ -1898,7 +1900,6 @@ class TestWindowFunctions(BaseTestCase):
             'ORDER BY "t1"."a" GROUPS BETWEEN 1 FOLLOWING AND 5 FOLLOWING) '
             'FROM "tbl" AS "t1"'), [])
 
-
     def test_window_frametypes(self):
         Tbl = Table('tbl', ('b', 'c'))
         fts = (('as_range', Window.RANGE, 'RANGE'),
@@ -2266,8 +2267,6 @@ class TestExpressionSQL(BaseTestCase):
 # ON CONFLICT / upsert SQL (per-dialect: SQLite, MySQL, PostgreSQL)
 # ===========================================================================
 
-#Person = Table('person', ['id', 'name', 'dob'])
-
 class TestOnConflictSqlite(BaseTestCase):
     database = SqliteDatabase(None)
 
@@ -2472,9 +2471,6 @@ class TestOnConflictPostgresql(BaseTestCase):
 # ===========================================================================
 # Index generation
 # ===========================================================================
-
-#Person = Table('person', ['id', 'name', 'dob'])
-#Note = Table('note', ['id', 'person_id', 'content'])
 
 class TestIndex(BaseTestCase):
     def test_simple_index(self):

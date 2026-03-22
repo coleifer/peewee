@@ -3,12 +3,13 @@ ManyToManyField behavior tests: through models (auto and explicit), backrefs,
 inheritance, FK-to-non-PK, FK-as-PK, and multiple M2M on same tables.
 
 Test case ordering:
-  1. FK-to-non-PK M2M (Color/Logo with non-PK FK)
-  2. Backref behavior (Student/Course)
-  3. Inheritance of M2M through models
-  4. Core M2M operations (User/Note — the largest test class)
-  5. FK-as-PK M2M (Person/Account/AccountList)
-  6. Multiple M2M between same tables (Permission/Visitor)
+
+1. FK-to-non-PK M2M (Color/Logo with non-PK FK)
+2. Backref behavior (Student/Course)
+3. Inheritance of M2M through models
+4. Core M2M operations (User/Note — the largest test class)
+5. FK-as-PK M2M (Person/Account/AccountList)
+6. Multiple M2M between same tables (Permission/Visitor)
 """
 from peewee import *
 
@@ -21,7 +22,6 @@ from .base import requires_models
 # ---------------------------------------------------------------------------
 # Module-local models for M2M tests.
 # NOTE: User and Note here are local to this module (not base_models).
-# User has TextField username (not CharField) and no explicit table_name.
 # ---------------------------------------------------------------------------
 
 class User(TestModel):
@@ -81,7 +81,6 @@ class LogoColor(TestModel):
     color = ForeignKeyField(Color, field=Color.name)  # FK to non-PK column.
 
 LogoColorDeferred.set_model(LogoColor)
-
 
 
 # ===========================================================================
@@ -425,7 +424,6 @@ class TestManyToMany(ModelTestCase):
             self.assertUsers(n5.users, ['zaizee'])
 
 
-
 # ===========================================================================
 # Backref behavior, inheritance, and FK-to-non-PK
 # ===========================================================================
@@ -567,7 +565,6 @@ class TestManyToManyFKtoNonPK(ModelTestCase):
         black.logos.clear()
         assertLogos(black, [])
         assertLogos(red, ['logo-rb', 'logo-rgb'])
-
 
 
 # ===========================================================================
