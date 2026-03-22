@@ -505,3 +505,271 @@ class TestQueryExecution(DatabaseTestCase):
             self.assertEqual(query[-2], (5.,))
             self.assertEqual(query[-2:], [(5.,), (8.,)])
             self.assertEqual(query[2:-2], [(2.,), (3.,)])
+
+
+# ===========================================================================
+# Empty result edge cases and error paths
+# ===========================================================================
+
+class TestEmptyResultEdgeCases(DatabaseTestCase):
+    database = get_in_memory_db()
+
+    def setUp(self):
+        super(TestEmptyResultEdgeCases, self).setUp()
+        QUser.bind(self.database)
+        QRegister.bind(self.database)
+        self.execute('CREATE TABLE "users" (id INTEGER NOT NULL PRIMARY KEY, '
+                     'username TEXT)')
+        self.execute('CREATE TABLE "register" ('
+                     'id INTEGER NOT NULL PRIMARY KEY, '
+                     'value REAL)')
+
+    def tearDown(self):
+        self.execute('DROP TABLE "users";')
+        self.execute('DROP TABLE "register";')
+        super(TestEmptyResultEdgeCases, self).tearDown()
+
+    def test_count_empty(self):
+        self.assertEqual(QUser.select().count(), 0)
+
+    def test_exists_empty(self):
+        self.assertFalse(QUser.select().exists())
+
+    def test_first_empty(self):
+        self.assertIsNone(QUser.select().first())
+
+    def test_peek_empty(self):
+        self.assertIsNone(QUser.select().peek(n=1))
+
+    def test_get_empty(self):
+        """Table-level get() returns None when no rows match."""
+        self.assertIsNone(
+            QUser.select().where(QUser.username == 'nobody').get())
+
+    def test_scalar_empty(self):
+        """Scalar on empty result returns None."""
+        result = QRegister.select(fn.MAX(QRegister.value)).scalar()
+        self.assertIsNone(result)
+
+    def test_scalar_as_tuple_empty(self):
+        result = (QRegister
+                  .select(fn.MAX(QRegister.value), fn.MIN(QRegister.value))
+                  .scalar(as_tuple=True))
+        self.assertEqual(result, (None, None))
+
+    def test_scalar_as_dict_empty(self):
+        result = (QRegister
+                  .select(fn.COUNT(QRegister.value).alias('ct'))
+                  .scalar(as_dict=True))
+        self.assertEqual(result, {'ct': 0})
+
+    def test_iterate_empty(self):
+        self.assertEqual(list(QUser.select()), [])
+
+    def test_len_empty(self):
+        query = QUser.select()
+        # Force iteration, then check len.
+        list(query)
+        self.assertEqual(len(query), 0)
+
+    def test_getitem_empty(self):
+        query = QUser.select()
+        self.assertEqual(query[:], [])
+
+
+class TestScalarVariants(DatabaseTestCase):
+    database = get_in_memory_db()
+
+    def setUp(self):
+        super(TestScalarVariants, self).setUp()
+        QRegister.bind(self.database)
+        self.execute('CREATE TABLE "register" ('
+                     'id INTEGER NOT NULL PRIMARY KEY, '
+                     'value REAL)')
+        for v in (10., 20., 30.):
+            QRegister.insert({QRegister.value: v}).execute()
+
+    def tearDown(self):
+        self.execute('DROP TABLE "register";')
+        super(TestScalarVariants, self).tearDown()
+
+    def test_scalar(self):
+        result = QRegister.select(fn.SUM(QRegister.value)).scalar()
+        self.assertEqual(result, 60.)
+
+    def test_scalar_as_tuple(self):
+        result = (QRegister
+                  .select(fn.SUM(QRegister.value),
+                          fn.COUNT(QRegister.value))
+                  .scalar(as_tuple=True))
+        self.assertEqual(result, (60., 3))
+
+    def test_scalar_as_dict(self):
+        result = (QRegister
+                  .select(fn.SUM(QRegister.value).alias('total'),
+                          fn.COUNT(QRegister.value).alias('ct'))
+                  .scalar(as_dict=True))
+        self.assertEqual(result, {'total': 60., 'ct': 3})
+
+
+# ===========================================================================
+# Model-level result type tests
+# ===========================================================================
+
+class TestModelResultTypes(ModelTestCase):
+    database = get_in_memory_db()
+    requires = [User, Tweet]
+
+    def setUp(self):
+        super(TestModelResultTypes, self).setUp()
+        huey = User.create(username='huey')
+        Tweet.create(user=huey, content='meow')
+        Tweet.create(user=huey, content='purr')
+
+    def test_model_dicts(self):
+        result = list(User.select(User.username).dicts())
+        self.assertEqual(result, [{'username': 'huey'}])
+
+    def test_model_tuples(self):
+        result = list(User.select(User.username).tuples())
+        self.assertEqual(result, [('huey',)])
+
+    def test_model_namedtuples(self):
+        result = list(User.select(User.username).namedtuples())
+        self.assertEqual(len(result), 1)
+        self.assertEqual(result[0].username, 'huey')
+
+    def test_model_objects(self):
+        """objects() maps all selected columns onto the query's model."""
+        query = (Tweet
+                 .select(Tweet, User)
+                 .join(User)
+                 .order_by(Tweet.content)
+                 .objects())
+        results = list(query)
+        self.assertEqual(len(results), 2)
+        self.assertTrue(isinstance(results[0], Tweet))
+        self.assertEqual(results[0].content, 'meow')
+        self.assertEqual(results[0].username, 'huey')
+
+    def test_model_dicts_with_join(self):
+        """dicts() flattens join results."""
+        query = (Tweet
+                 .select(Tweet.content, User.username)
+                 .join(User)
+                 .order_by(Tweet.content)
+                 .dicts())
+        result = list(query)
+        self.assertEqual(result, [
+            {'content': 'meow', 'username': 'huey'},
+            {'content': 'purr', 'username': 'huey'}])
+
+    def test_model_tuples_with_join(self):
+        query = (Tweet
+                 .select(Tweet.content, User.username)
+                 .join(User)
+                 .order_by(Tweet.content)
+                 .tuples())
+        result = list(query)
+        self.assertEqual(result, [('meow', 'huey'), ('purr', 'huey')])
+
+
+# ===========================================================================
+# Model-level get/peek/first edge cases
+# ===========================================================================
+
+class TestModelGetEdgeCases(ModelTestCase):
+    database = get_in_memory_db()
+    requires = [User]
+
+    def test_get_does_not_exist(self):
+        """Model.get() raises DoesNotExist when no row matches."""
+        self.assertRaises(
+            User.DoesNotExist,
+            User.get, User.username == 'nobody')
+
+    def test_get_or_none_missing(self):
+        result = User.get_or_none(User.username == 'nobody')
+        self.assertIsNone(result)
+
+    def test_peek_empty_model(self):
+        """peek() on empty Model result returns None."""
+        query = User.select().where(User.username == 'nobody')
+        self.assertIsNone(query.peek(n=1))
+
+    def test_first_empty_model(self):
+        """first() on empty Model result returns None."""
+        query = User.select().where(User.username == 'nobody')
+        self.assertIsNone(query.first())
+
+    def test_scalar_model(self):
+        for u in ('huey', 'mickey', 'zaizee'):
+            User.create(username=u)
+        count = User.select(fn.COUNT(User.id)).scalar()
+        self.assertEqual(count, 3)
+
+    def test_exists_model(self):
+        User.create(username='huey')
+        self.assertTrue(User.select().where(User.username == 'huey').exists())
+        self.assertFalse(User.select().where(User.username == 'x').exists())
+
+
+# ===========================================================================
+# Query .sql() method and CursorWrapper utilities
+# ===========================================================================
+
+class TestQuerySqlMethod(ModelTestCase):
+    database = get_in_memory_db()
+    requires = [User]
+
+    def test_sql_returns_tuple(self):
+        """Query.sql() returns (sql_string, params)."""
+        query = User.select().where(User.username == 'huey')
+        sql, params = query.sql()
+        self.assertIn('SELECT', sql)
+        self.assertIn('"users"', sql)
+        self.assertEqual(params, ['huey'])
+
+    def test_sql_insert(self):
+        query = User.insert(username='huey')
+        sql, params = query.sql()
+        self.assertIn('INSERT', sql)
+        self.assertEqual(params, ['huey'])
+
+    def test_sql_update(self):
+        query = User.update({User.username: 'zaizee'}).where(User.id == 1)
+        sql, params = query.sql()
+        self.assertIn('UPDATE', sql)
+        self.assertEqual(params, ['zaizee', 1])
+
+    def test_sql_delete(self):
+        query = User.delete().where(User.id == 1)
+        sql, params = query.sql()
+        self.assertIn('DELETE', sql)
+        self.assertEqual(params, [1])
+
+
+class TestDedupeColumns(DatabaseTestCase):
+    database = get_in_memory_db()
+
+    def test_dedupe_columns(self):
+        """CursorWrapper.dedupe_columns handles duplicates."""
+        from peewee import CursorWrapper
+        cw = CursorWrapper.__new__(CursorWrapper)
+        result = cw.dedupe_columns(['name', 'value', 'name', 'name'])
+        self.assertEqual(result, ['name', 'value', 'name_2', 'name_3'])
+
+    def test_dedupe_columns_with_expressions(self):
+        """dedupe_columns cleans up messy column descriptions."""
+        from peewee import CursorWrapper
+        cw = CursorWrapper.__new__(CursorWrapper)
+        result = cw.dedupe_columns(['"t1"."name"', 'SUM("t1"."value")'])
+        self.assertEqual(result, ['name', 'value'])
+
+    def test_dedupe_columns_no_identifier_cleanup(self):
+        """dedupe_columns with valid_identifiers=False preserves raw names."""
+        from peewee import CursorWrapper
+        cw = CursorWrapper.__new__(CursorWrapper)
+        result = cw.dedupe_columns(
+            ['name', 'value', 'name'], valid_identifiers=False)
+        self.assertEqual(result, ['name', 'value', 'name_2'])

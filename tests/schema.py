@@ -816,6 +816,104 @@ class TestModelDDL(ModelDatabaseTestCase):
             '"label" VARCHAR(255) NOT NULL)'), [])
 
 
+class TestDDLAdditionalSQL(ModelDatabaseTestCase):
+    """Tests for DDL features not covered by TestModelDDL."""
+    database = get_in_memory_db()
+    requires = [User, Note, Person]
+
+    def test_not_null_vs_null(self):
+        """Verify NOT NULL is present for required fields and absent for
+        nullable fields."""
+        class NullableModel(TestModel):
+            required = CharField()
+            optional = CharField(null=True)
+            with_default = IntegerField(default=0)
+            class Meta:
+                database = self.database
+
+        self.assertSQL(NullableModel._schema._create_table(False), (
+            'CREATE TABLE "nullable_model" ('
+            '"id" INTEGER NOT NULL PRIMARY KEY, '
+            '"required" VARCHAR(255) NOT NULL, '
+            '"optional" VARCHAR(255), '
+            '"with_default" INTEGER NOT NULL)'), [])
+
+    def test_create_table_unsafe(self):
+        """CREATE TABLE without IF NOT EXISTS."""
+        self.assertSQL(User._schema._create_table(safe=False), (
+            'CREATE TABLE "users" ('
+            '"id" INTEGER NOT NULL PRIMARY KEY, '
+            '"username" VARCHAR(255) NOT NULL)'), [])
+
+    def test_create_table_safe(self):
+        """CREATE TABLE with IF NOT EXISTS."""
+        self.assertSQL(User._schema._create_table(safe=True), (
+            'CREATE TABLE IF NOT EXISTS "users" ('
+            '"id" INTEGER NOT NULL PRIMARY KEY, '
+            '"username" VARCHAR(255) NOT NULL)'), [])
+
+    def test_drop_table_unsafe(self):
+        """DROP TABLE without IF EXISTS."""
+        self.assertSQL(User._schema._drop_table(safe=False),
+                       'DROP TABLE "users"', [])
+
+    def test_drop_table_safe(self):
+        """DROP TABLE with IF EXISTS."""
+        self.assertSQL(User._schema._drop_table(safe=True),
+                       'DROP TABLE IF EXISTS "users"', [])
+
+    def test_drop_table_cascade_restrict(self):
+        self.assertSQL(Note._schema._drop_table(cascade=True),
+                       'DROP TABLE IF EXISTS "note" CASCADE', [])
+        self.assertSQL(Note._schema._drop_table(restrict=True),
+                       'DROP TABLE IF EXISTS "note" RESTRICT', [])
+
+    def test_drop_indexes_sql(self):
+        """Verify DROP INDEX SQL generation."""
+        class Indexed(TestModel):
+            val = CharField()
+            class Meta:
+                database = self.database
+                indexes = ((('val',), True),)
+
+        results = Indexed._schema._drop_indexes(safe=True)
+        self.assertEqual(len(results), 1)
+        sql, _ = results[0].query()
+        self.assertTrue(sql.startswith('DROP INDEX '))
+        self.assertIn('indexed_val', sql)
+
+    def test_create_foreign_key_sql(self):
+        """ALTER TABLE ADD CONSTRAINT for FK."""
+        self.assertSQL(Note._schema._create_foreign_key(Note.author), (
+            'ALTER TABLE "note" ADD CONSTRAINT '
+            '"fk_note_author_id_refs_person" '
+            'FOREIGN KEY ("author_id") REFERENCES "person" ("id")'), [])
+
+    def test_truncate_table_sqlite(self):
+        """On SQLite, truncate falls back to DELETE FROM."""
+        ctx = User._schema._truncate_table()
+        self.assertSQL(ctx, 'DELETE FROM "users"', [])
+
+    def test_bigautofield_ddl(self):
+        """BigAutoField produces correct PK DDL."""
+        class BigPK(TestModel):
+            id = BigAutoField()
+            data = TextField()
+            class Meta:
+                database = self.database
+
+        sql, _ = BigPK._schema._create_table(safe=False).query()
+        self.assertIn('PRIMARY KEY', sql)
+        self.assertIn('"id"', sql)
+
+    def test_database_required_error(self):
+        """SchemaManager raises ImproperlyConfigured when no DB set."""
+        class Orphan(Model):
+            name = CharField()
+
+        self.assertRaises(ImproperlyConfigured,
+                          lambda: Orphan._schema.database)
+
 
 # ===========================================================================
 # CREATE TABLE AS (SQL generation and integration)
