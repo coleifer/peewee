@@ -816,9 +816,44 @@ class TestModelDDL(ModelDatabaseTestCase):
             '"label" VARCHAR(255) NOT NULL)'), [])
 
 
+
 # ===========================================================================
 # CREATE TABLE AS (SQL generation and integration)
 # ===========================================================================
+
+class TMKV(TestModel):
+    key = CharField()
+    value = IntegerField()
+    extra = IntegerField()
+
+class TMKVNew(TestModel):
+    key = CharField()
+    val = IntegerField()
+    class Meta:
+        primary_key = False
+        table_name = 'tmkv_new'
+
+
+class TestCreateTableAsSQL(ModelDatabaseTestCase):
+    database = get_in_memory_db()
+    requires = [TMKV]
+
+    def test_create_table_as_sql(self):
+        query = (TMKV
+                 .select(TMKV.key, TMKV.value.alias('val'))
+                 .where(TMKV.extra < 4))
+        ctx = TMKV._schema._create_table_as('tmkv_new', query)
+        self.assertSQL(ctx, (
+            'CREATE TABLE IF NOT EXISTS "tmkv_new" AS '
+            'SELECT "t1"."key", "t1"."value" AS "val" FROM "tmkv" AS "t1" '
+            'WHERE ("t1"."extra" < ?)'), [4])
+
+        ctx = TMKV._schema._create_table_as(('alt', 'tmkv_new'), query)
+        self.assertSQL(ctx, (
+            'CREATE TABLE IF NOT EXISTS "alt"."tmkv_new" AS '
+            'SELECT "t1"."key", "t1"."value" AS "val" FROM "tmkv" AS "t1" '
+            'WHERE ("t1"."extra" < ?)'), [4])
+
 
 class NoteX(TestModel):
     content = TextField()
@@ -875,10 +910,62 @@ class TestCreateAs(ModelTestCase):
             (3, 'n3', datetime.datetime(2019, 1, 3), 'deleted')])
 
 
+class TestCreateTableAs(ModelTestCase):
+    requires = [TMKV]
+
+    def tearDown(self):
+        try:
+            TMKVNew.drop_table(safe=True)
+        except:
+            pass
+        super(TestCreateTableAs, self).tearDown()
+
+    def test_create_table_as(self):
+        TMKV.insert_many([('k%02d' % i, i, i) for i in range(10)]).execute()
+
+        query = (TMKV
+                 .select(TMKV.key, TMKV.value.alias('val'))
+                 .where(TMKV.extra < 4))
+        query.create_table('tmkv_new', safe=True)
+
+        expected = ['key', 'val']
+        if IS_CRDB: expected.append('rowid')  # CRDB adds this.
+
+        self.assertEqual(
+            [col.name for col in self.database.get_columns('tmkv_new')],
+            expected)
+
+        query = TMKVNew.select().order_by(TMKVNew.key)
+        self.assertEqual([(r.key, r.val) for r in query],
+                         [('k00', 0), ('k01', 1), ('k02', 2), ('k03', 3)])
+
+
+
 # ===========================================================================
 # Table name, truncation, view field mapping, and named constraints
 # ===========================================================================
 
+class TestViewFieldMapping(ModelTestCase):
+    requires = [User]
+
+    def tearDown(self):
+        try:
+            self.execute('drop view user_testview_fm')
+        except Exception as exc:
+            pass
+        super(TestViewFieldMapping, self).tearDown()
+
+    def test_view_field_mapping(self):
+        user = User.create(username='huey')
+        self.execute('create view user_testview_fm as '
+                     'select id, username from users')
+
+        class View(User):
+            class Meta:
+                table_name = 'user_testview_fm'
+
+        self.assertEqual([(v.id, v.username) for v in View.select()],
+                         [(user.id, 'huey')])
 class TestModelSetTableName(BaseTestCase):
     def test_set_table_name(self):
         class Foo(TestModel):
@@ -937,88 +1024,3 @@ class TestNamedConstraintsIntegration(ModelTestCase):
         self.assertEqual(len(TMNamedConstraints), 1)
 
 
-class TMKV(TestModel):
-    key = CharField()
-    value = IntegerField()
-    extra = IntegerField()
-
-class TMKVNew(TestModel):
-    key = CharField()
-    val = IntegerField()
-    class Meta:
-        primary_key = False
-        table_name = 'tmkv_new'
-
-
-class TestCreateTableAsSQL(ModelDatabaseTestCase):
-    database = get_in_memory_db()
-    requires = [TMKV]
-
-    def test_create_table_as_sql(self):
-        query = (TMKV
-                 .select(TMKV.key, TMKV.value.alias('val'))
-                 .where(TMKV.extra < 4))
-        ctx = TMKV._schema._create_table_as('tmkv_new', query)
-        self.assertSQL(ctx, (
-            'CREATE TABLE IF NOT EXISTS "tmkv_new" AS '
-            'SELECT "t1"."key", "t1"."value" AS "val" FROM "tmkv" AS "t1" '
-            'WHERE ("t1"."extra" < ?)'), [4])
-
-        ctx = TMKV._schema._create_table_as(('alt', 'tmkv_new'), query)
-        self.assertSQL(ctx, (
-            'CREATE TABLE IF NOT EXISTS "alt"."tmkv_new" AS '
-            'SELECT "t1"."key", "t1"."value" AS "val" FROM "tmkv" AS "t1" '
-            'WHERE ("t1"."extra" < ?)'), [4])
-
-
-class TestCreateTableAs(ModelTestCase):
-    requires = [TMKV]
-
-    def tearDown(self):
-        try:
-            TMKVNew.drop_table(safe=True)
-        except:
-            pass
-        super(TestCreateTableAs, self).tearDown()
-
-    def test_create_table_as(self):
-        TMKV.insert_many([('k%02d' % i, i, i) for i in range(10)]).execute()
-
-        query = (TMKV
-                 .select(TMKV.key, TMKV.value.alias('val'))
-                 .where(TMKV.extra < 4))
-        query.create_table('tmkv_new', safe=True)
-
-        expected = ['key', 'val']
-        if IS_CRDB: expected.append('rowid')  # CRDB adds this.
-
-        self.assertEqual(
-            [col.name for col in self.database.get_columns('tmkv_new')],
-            expected)
-
-        query = TMKVNew.select().order_by(TMKVNew.key)
-        self.assertEqual([(r.key, r.val) for r in query],
-                         [('k00', 0), ('k01', 1), ('k02', 2), ('k03', 3)])
-
-
-class TestViewFieldMapping(ModelTestCase):
-    requires = [User]
-
-    def tearDown(self):
-        try:
-            self.execute('drop view user_testview_fm')
-        except Exception as exc:
-            pass
-        super(TestViewFieldMapping, self).tearDown()
-
-    def test_view_field_mapping(self):
-        user = User.create(username='huey')
-        self.execute('create view user_testview_fm as '
-                     'select id, username from users')
-
-        class View(User):
-            class Meta:
-                table_name = 'user_testview_fm'
-
-        self.assertEqual([(v.id, v.username) for v in View.select()],
-                         [(user.id, 'huey')])

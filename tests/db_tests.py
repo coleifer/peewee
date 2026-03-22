@@ -47,7 +47,7 @@ from .base_models import User
 
 
 # ===========================================================================
-# Core database features
+# Core database features and connection semantics
 # ===========================================================================
 
 class TestDatabase(DatabaseTestCase):
@@ -367,6 +367,38 @@ class TestDatabase(DatabaseTestCase):
         self.assertRaises(InterfaceError, db.cursor)
 
 
+class TestDatabaseConnection(DatabaseTestCase):
+    def test_is_connection_usable(self):
+        # Ensure a connection is open.
+        conn = self.database.connection()
+        self.assertTrue(self.database.is_connection_usable())
+
+        self.database.close()
+        self.assertFalse(self.database.is_connection_usable())
+        self.database.connect()
+        self.assertTrue(self.database.is_connection_usable())
+
+    @requires_postgresql
+    def test_is_connection_usable_pg(self):
+        self.database.execute_sql('drop table if exists foo')
+        self.database.execute_sql('create table foo (data text not null)')
+        self.assertTrue(self.database.is_connection_usable())
+
+        with self.database.atomic() as txn:
+            with self.assertRaises(IntegrityError):
+                self.database.execute_sql('insert into foo (data) values (NULL)')
+
+            self.assertFalse(self.database.is_closed())
+            self.assertFalse(self.database.is_connection_usable())
+            txn.rollback()
+            self.assertTrue(self.database.is_connection_usable())
+
+            curs = self.database.execute_sql('select * from foo')
+            self.assertEqual(list(curs), [])
+            self.database.execute_sql('drop table foo')
+
+
+
 # ===========================================================================
 # Thread safety
 # ===========================================================================
@@ -425,6 +457,62 @@ class TestThreadSafety(ModelTestCase):
         for t in threads: t.join()
 
 
+class TestThreadSafetyDecorators(ModelTestCase):
+    requires = [User]
+
+    def test_thread_safety_atomic(self):
+        @self.database.atomic()
+        def get_one(n):
+            time.sleep(n)
+            return User.select().first()
+        def run(n):
+            with self.database.atomic():
+                self.assertEqual(get_one(n).username, 'u')
+        User.create(username='u')
+        threads = [threading.Thread(target=run, args=(i,))
+                   for i in (0.01, 0.03, 0.05, 0.07, 0.09, 0.02, 0.04, 0.06)]
+        for t in threads: t.start()
+        for t in threads: t.join()
+
+
+class TestThreadSafeMetaRegression(ModelTestCase):
+    def test_thread_safe_meta(self):
+        d1 = get_in_memory_db()
+        d2 = get_in_memory_db()
+
+        class Meta:
+            database = d1
+            model_metadata_class = ThreadSafeDatabaseMetadata
+        attrs = {'Meta': Meta}
+        for i in range(1, 30):
+            attrs['f%d' % i] = IntegerField()
+        M = type('M', (TestModel,), attrs)
+
+        sql = ('SELECT "t1"."f1", "t1"."f2", "t1"."f3", "t1"."f4" '
+               'FROM "m" AS "t1"')
+        query = M.select(M.f1, M.f2, M.f3, M.f4)
+
+        def swap_db():
+            for i in range(100):
+                self.assertEqual(M._meta.database, d1)
+                self.assertSQL(query, sql)
+                with d2.bind_ctx([M]):
+                    self.assertEqual(M._meta.database, d2)
+                    self.assertSQL(query, sql)
+                self.assertEqual(M._meta.database, d1)
+                self.assertSQL(query, sql)
+
+        # From a separate thread, swap the database and verify it works
+        # correctly.
+        threads = [threading.Thread(target=swap_db)
+                   for i in range(10)]
+        for t in threads: t.start()
+        for t in threads: t.join()
+
+        # In the main thread the original database has not been altered.
+        self.assertEqual(M._meta.database, d1)
+        self.assertSQL(query, sql)
+
 # ===========================================================================
 # Deferred database, proxy, and schema namespace
 # ===========================================================================
@@ -457,6 +545,100 @@ class TestDeferredDatabase(BaseTestCase):
         self.assertTrue(deferred_db.is_closed())
 
 
+class TestDBProxy(BaseTestCase):
+    def test_proxy_context_manager(self):
+        db = Proxy()
+        class User(Model):
+            username = TextField()
+
+            class Meta:
+                database = db
+
+        self.assertRaises(AttributeError, User.create_table)
+
+        sqlite_db = SqliteDatabase(':memory:')
+        db.initialize(sqlite_db)
+        User.create_table()
+        with db:
+            self.assertFalse(db.is_closed())
+        self.assertTrue(db.is_closed())
+
+    def test_db_proxy(self):
+        db = Proxy()
+        class BaseModel(Model):
+            class Meta:
+                database = db
+
+        class User(BaseModel):
+            username = TextField()
+
+        class Tweet(BaseModel):
+            user = ForeignKeyField(User, backref='tweets')
+            message = TextField()
+
+        sqlite_db = SqliteDatabase(':memory:')
+        db.initialize(sqlite_db)
+
+        self.assertEqual(User._meta.database.database, ':memory:')
+        self.assertEqual(Tweet._meta.database.database, ':memory:')
+
+        self.assertTrue(User._meta.database.is_closed())
+        self.assertTrue(Tweet._meta.database.is_closed())
+        sqlite_db.connect()
+        self.assertFalse(User._meta.database.is_closed())
+        self.assertFalse(Tweet._meta.database.is_closed())
+        sqlite_db.close()
+
+    def test_proxy_decorator(self):
+        db = DatabaseProxy()
+
+        @db.connection_context()
+        def with_connection():
+            self.assertFalse(db.is_closed())
+
+        @db.atomic()
+        def with_transaction():
+            self.assertTrue(db.in_transaction())
+
+        @db.manual_commit()
+        def with_manual_commit():
+            self.assertTrue(db.in_transaction())
+
+        db.initialize(SqliteDatabase(':memory:'))
+        with_connection()
+        self.assertTrue(db.is_closed())
+        with_transaction()
+        self.assertFalse(db.in_transaction())
+        with_manual_commit()
+        self.assertFalse(db.in_transaction())
+
+    def test_proxy_bind_ctx_callbacks(self):
+        db = Proxy()
+        class BaseModel(Model):
+            class Meta:
+                database = db
+
+        class Hook(BaseModel):
+            data = BlobField()  # Attaches hook to configure blob-type.
+
+        self.assertTrue(Hook.data._constructor is bytearray)
+
+        class CustomSqliteDB(SqliteDatabase):
+            sentinel = object()
+            def get_binary_type(self):
+                return self.sentinel
+
+        custom_db = CustomSqliteDB(':memory:')
+
+        with custom_db.bind_ctx([Hook]):
+            self.assertTrue(Hook.data._constructor is custom_db.sentinel)
+
+        self.assertTrue(Hook.data._constructor is bytearray)
+
+        custom_db.bind([Hook])
+        self.assertTrue(Hook.data._constructor is custom_db.sentinel)
+
+
 class CatToy(TestModel):
     description = TextField()
 
@@ -483,6 +665,7 @@ class TestSchemaNamespace(ModelTestCase):
         toy_db = CatToy.select().where(CatToy.id == toy.id).get()
         self.assertEqual(toy.id, toy_db.id)
         self.assertEqual(toy.description, toy_db.description)
+
 
 
 # ===========================================================================
@@ -718,148 +901,6 @@ class TestIntrospection(ModelTestCase):
             ('parent_id', 'category', 'name', 'category')])
 
 
-class TestSortModels(BaseTestCase):
-    def test_sort_models(self):
-        class A(Model):
-            pass
-        class B(Model):
-            a = ForeignKeyField(A)
-        class C(Model):
-            b = ForeignKeyField(B)
-        class D(Model):
-            c = ForeignKeyField(C)
-        class E(Model):
-            pass
-
-        models = [A, B, C, D, E]
-        for list_of_models in permutations(models):
-            sorted_models = sort_models(list_of_models)
-            self.assertEqual(sorted_models, models)
-
-    def test_sort_models_multi_fk(self):
-        class Inventory(Model):
-            pass
-        class Sheet(Model):
-            inventory = ForeignKeyField(Inventory)
-        class Program(Model):
-            inventory = ForeignKeyField(Inventory)
-        class ProgramSheet(Model):
-            program = ForeignKeyField(Program)
-            sheet = ForeignKeyField(Sheet)
-        class ProgramPart(Model):
-            program_sheet = ForeignKeyField(ProgramSheet)
-        class Offal(Model):
-            program_sheet = ForeignKeyField(ProgramSheet)
-            sheet = ForeignKeyField(Sheet)
-
-        M = [Inventory, Sheet, Program, ProgramSheet, ProgramPart, Offal]
-        sorted_models = sort_models(M)
-        self.assertEqual(sorted_models, [
-            Inventory,
-            Program,
-            Sheet,
-            ProgramSheet,
-            Offal,
-            ProgramPart,
-        ])
-        for list_of_models in permutations(M):
-            self.assertEqual(sort_models(list_of_models), sorted_models)
-
-
-class TestDBProxy(BaseTestCase):
-    def test_proxy_context_manager(self):
-        db = Proxy()
-        class User(Model):
-            username = TextField()
-
-            class Meta:
-                database = db
-
-        self.assertRaises(AttributeError, User.create_table)
-
-        sqlite_db = SqliteDatabase(':memory:')
-        db.initialize(sqlite_db)
-        User.create_table()
-        with db:
-            self.assertFalse(db.is_closed())
-        self.assertTrue(db.is_closed())
-
-    def test_db_proxy(self):
-        db = Proxy()
-        class BaseModel(Model):
-            class Meta:
-                database = db
-
-        class User(BaseModel):
-            username = TextField()
-
-        class Tweet(BaseModel):
-            user = ForeignKeyField(User, backref='tweets')
-            message = TextField()
-
-        sqlite_db = SqliteDatabase(':memory:')
-        db.initialize(sqlite_db)
-
-        self.assertEqual(User._meta.database.database, ':memory:')
-        self.assertEqual(Tweet._meta.database.database, ':memory:')
-
-        self.assertTrue(User._meta.database.is_closed())
-        self.assertTrue(Tweet._meta.database.is_closed())
-        sqlite_db.connect()
-        self.assertFalse(User._meta.database.is_closed())
-        self.assertFalse(Tweet._meta.database.is_closed())
-        sqlite_db.close()
-
-    def test_proxy_decorator(self):
-        db = DatabaseProxy()
-
-        @db.connection_context()
-        def with_connection():
-            self.assertFalse(db.is_closed())
-
-        @db.atomic()
-        def with_transaction():
-            self.assertTrue(db.in_transaction())
-
-        @db.manual_commit()
-        def with_manual_commit():
-            self.assertTrue(db.in_transaction())
-
-        db.initialize(SqliteDatabase(':memory:'))
-        with_connection()
-        self.assertTrue(db.is_closed())
-        with_transaction()
-        self.assertFalse(db.in_transaction())
-        with_manual_commit()
-        self.assertFalse(db.in_transaction())
-
-    def test_proxy_bind_ctx_callbacks(self):
-        db = Proxy()
-        class BaseModel(Model):
-            class Meta:
-                database = db
-
-        class Hook(BaseModel):
-            data = BlobField()  # Attaches hook to configure blob-type.
-
-        self.assertTrue(Hook.data._constructor is bytearray)
-
-        class CustomSqliteDB(SqliteDatabase):
-            sentinel = object()
-            def get_binary_type(self):
-                return self.sentinel
-
-        custom_db = CustomSqliteDB(':memory:')
-
-        with custom_db.bind_ctx([Hook]):
-            self.assertTrue(Hook.data._constructor is custom_db.sentinel)
-
-        self.assertTrue(Hook.data._constructor is bytearray)
-
-        custom_db.bind([Hook])
-        self.assertTrue(Hook.data._constructor is custom_db.sentinel)
-
-
 class Data(TestModel):
     key = TextField()
     value = TextField()
@@ -968,40 +1009,10 @@ class TestAttachDatabase(ModelTestCase):
         self.assertEqual(tables, ['cache_data'])
 
 
+
 # ===========================================================================
-# Connection semantics, exception handling, and utilities
+# Exception handling and utilities
 # ===========================================================================
-
-class TestDatabaseConnection(DatabaseTestCase):
-    def test_is_connection_usable(self):
-        # Ensure a connection is open.
-        conn = self.database.connection()
-        self.assertTrue(self.database.is_connection_usable())
-
-        self.database.close()
-        self.assertFalse(self.database.is_connection_usable())
-        self.database.connect()
-        self.assertTrue(self.database.is_connection_usable())
-
-    @requires_postgresql
-    def test_is_connection_usable_pg(self):
-        self.database.execute_sql('drop table if exists foo')
-        self.database.execute_sql('create table foo (data text not null)')
-        self.assertTrue(self.database.is_connection_usable())
-
-        with self.database.atomic() as txn:
-            with self.assertRaises(IntegrityError):
-                self.database.execute_sql('insert into foo (data) values (NULL)')
-
-            self.assertFalse(self.database.is_closed())
-            self.assertFalse(self.database.is_connection_usable())
-            txn.rollback()
-            self.assertTrue(self.database.is_connection_usable())
-
-            curs = self.database.execute_sql('select * from foo')
-            self.assertEqual(list(curs), [])
-            self.database.execute_sql('drop table foo')
-
 
 class TestExceptionWrapper(ModelTestCase):
     database = get_in_memory_db()
@@ -1039,6 +1050,54 @@ class TestModelPropertyHelper(BaseTestCase):
             self.assertEqual(M._meta.database.database, ':memory:')
 
 
+class TestSortModels(BaseTestCase):
+    def test_sort_models(self):
+        class A(Model):
+            pass
+        class B(Model):
+            a = ForeignKeyField(A)
+        class C(Model):
+            b = ForeignKeyField(B)
+        class D(Model):
+            c = ForeignKeyField(C)
+        class E(Model):
+            pass
+
+        models = [A, B, C, D, E]
+        for list_of_models in permutations(models):
+            sorted_models = sort_models(list_of_models)
+            self.assertEqual(sorted_models, models)
+
+    def test_sort_models_multi_fk(self):
+        class Inventory(Model):
+            pass
+        class Sheet(Model):
+            inventory = ForeignKeyField(Inventory)
+        class Program(Model):
+            inventory = ForeignKeyField(Inventory)
+        class ProgramSheet(Model):
+            program = ForeignKeyField(Program)
+            sheet = ForeignKeyField(Sheet)
+        class ProgramPart(Model):
+            program_sheet = ForeignKeyField(ProgramSheet)
+        class Offal(Model):
+            program_sheet = ForeignKeyField(ProgramSheet)
+            sheet = ForeignKeyField(Sheet)
+
+        M = [Inventory, Sheet, Program, ProgramSheet, ProgramPart, Offal]
+        sorted_models = sort_models(M)
+        self.assertEqual(sorted_models, [
+            Inventory,
+            Program,
+            Sheet,
+            ProgramSheet,
+            Offal,
+            ProgramPart,
+        ])
+        for list_of_models in permutations(M):
+            self.assertEqual(sort_models(list_of_models), sorted_models)
+
+
 class TestChunkedUtility(BaseTestCase):
     def test_chunked_exact_divisor(self):
         result = list(chunked(range(6), 3))
@@ -1066,58 +1125,3 @@ class TestChunkedUtility(BaseTestCase):
         self.assertEqual(result, [[0, 2], [4, 6], [8]])
 
 
-class TestThreadSafetyDecorators(ModelTestCase):
-    requires = [User]
-
-    def test_thread_safety_atomic(self):
-        @self.database.atomic()
-        def get_one(n):
-            time.sleep(n)
-            return User.select().first()
-        def run(n):
-            with self.database.atomic():
-                self.assertEqual(get_one(n).username, 'u')
-        User.create(username='u')
-        threads = [threading.Thread(target=run, args=(i,))
-                   for i in (0.01, 0.03, 0.05, 0.07, 0.09, 0.02, 0.04, 0.06)]
-        for t in threads: t.start()
-        for t in threads: t.join()
-
-
-class TestThreadSafeMetaRegression(ModelTestCase):
-    def test_thread_safe_meta(self):
-        d1 = get_in_memory_db()
-        d2 = get_in_memory_db()
-
-        class Meta:
-            database = d1
-            model_metadata_class = ThreadSafeDatabaseMetadata
-        attrs = {'Meta': Meta}
-        for i in range(1, 30):
-            attrs['f%d' % i] = IntegerField()
-        M = type('M', (TestModel,), attrs)
-
-        sql = ('SELECT "t1"."f1", "t1"."f2", "t1"."f3", "t1"."f4" '
-               'FROM "m" AS "t1"')
-        query = M.select(M.f1, M.f2, M.f3, M.f4)
-
-        def swap_db():
-            for i in range(100):
-                self.assertEqual(M._meta.database, d1)
-                self.assertSQL(query, sql)
-                with d2.bind_ctx([M]):
-                    self.assertEqual(M._meta.database, d2)
-                    self.assertSQL(query, sql)
-                self.assertEqual(M._meta.database, d1)
-                self.assertSQL(query, sql)
-
-        # From a separate thread, swap the database and verify it works
-        # correctly.
-        threads = [threading.Thread(target=swap_db)
-                   for i in range(10)]
-        for t in threads: t.start()
-        for t in threads: t.join()
-
-        # In the main thread the original database has not been altered.
-        self.assertEqual(M._meta.database, d1)
-        self.assertSQL(query, sql)
