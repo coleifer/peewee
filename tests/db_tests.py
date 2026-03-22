@@ -2,14 +2,15 @@
 Database connection, pragmas, introspection, threading, and utility tests.
 
 Test case ordering:
-  1. Core database features (pragmas, connection, context settings)
-  2. Connection semantics
-  3. Thread safety
-  4. SQLite-specific (isolation, attach)
-  5. Deferred database and proxy
-  6. Introspection
-  7. Exception handling
-  8. Utilities (model property, sort_models, chunked)
+
+1. Core database features (pragmas, connection, context settings)
+2. Connection semantics
+3. Thread safety
+4. SQLite-specific (isolation, attach)
+5. Deferred database and proxy
+6. Introspection
+7. Exception handling
+8. Utilities (model property, sort_models, chunked)
 """
 from itertools import permutations
 from queue import Queue
@@ -42,6 +43,7 @@ from .base import requires_models
 from .base import requires_postgresql
 from .base import slow_test
 from .base_models import Category
+from .base_models import Person
 from .base_models import Tweet
 from .base_models import User
 
@@ -456,10 +458,6 @@ class TestThreadSafety(ModelTestCase):
         for t in threads: t.start()
         for t in threads: t.join()
 
-
-class TestThreadSafetyDecorators(ModelTestCase):
-    requires = [User]
-
     def test_thread_safety_atomic(self):
         @self.database.atomic()
         def get_one(n):
@@ -667,7 +665,6 @@ class TestSchemaNamespace(ModelTestCase):
         self.assertEqual(toy.description, toy_db.description)
 
 
-
 # ===========================================================================
 # SQLite isolation, introspection, and ATTACH
 # ===========================================================================
@@ -722,29 +719,13 @@ class IndexedModel(TestModel):
         )
 
 
-# NOTE: This is intentionally different from base_models.Note. This version
-# has ts/status columns and table_name='notes', which the introspection tests
-# (test_get_views) depend on for creating and querying views.
-class Note(TestModel):
+class ViewTest(TestModel):
     content = TextField()
     ts = DateTimeField()
     status = IntegerField()
 
     class Meta:
-        table_name = 'notes'
-
-
-# NOTE: This is intentionally different from base_models.Person. This version
-# uses 'email' instead of 'dob' and has a different index, which the
-# introspection tests (test_get_columns, test_get_indexes) depend on.
-class Person(TestModel):
-    first = CharField()
-    last = CharField()
-    email = CharField()
-    class Meta:
-        indexes = (
-            (('last', 'first'), False),
-        )
+        table_name = 'viewtest'
 
 
 class TestIntrospection(ModelTestCase):
@@ -788,11 +769,12 @@ class TestIntrospection(ModelTestCase):
         # Multi-column index where columns are in different order than declared
         # on the table.
         indexes = self.database.get_indexes('person')
-        data = [(index.name, index.columns, index.unique)
-                for index in indexes
-                if index.name not in ('person_pkey', 'PRIMARY')]
+        data = sorted([(index.name, index.columns, index.unique)
+                       for index in indexes
+                       if index.name not in ('person_pkey', 'PRIMARY')])
         self.assertEqual(data, [
-            ('person_last_first', ['last', 'first'], False)])
+            ('person_dob', ['dob'], False),
+            ('person_first_last', ['first', 'last'], True)])
 
     def test_get_columns(self):
         columns = self.database.get_columns('indexed_model')
@@ -818,23 +800,23 @@ class TestIntrospection(ModelTestCase):
         primary_keys = self.database.get_primary_keys('category')
         self.assertEqual(primary_keys, ['name'])
 
-    @requires_models(Note)
+    @requires_models(ViewTest)
     def test_get_views(self):
         def normalize_view_meta(view_meta):
             sql_ws_norm = re.sub(r'[\n\s]+', ' ', view_meta.sql.strip('; '))
             return view_meta.name, (sql_ws_norm
                                     .replace('`peewee_test`.', '')
-                                    .replace('`notes`.', '')
-                                    .replace('notes.', '')
+                                    .replace('`viewtest`.', '')
+                                    .replace('viewtest.', '')
                                     .replace('`', ''))
 
         def assertViews(expected):
             # Create two sample views.
-            self.database.execute_sql('CREATE VIEW notes_public AS '
-                                      'SELECT content, ts FROM notes '
+            self.database.execute_sql('CREATE VIEW viewtest_public AS '
+                                      'SELECT content, ts FROM viewtest '
                                       'WHERE status = 1 ORDER BY ts DESC')
-            self.database.execute_sql('CREATE VIEW notes_deleted AS '
-                                      'SELECT content FROM notes '
+            self.database.execute_sql('CREATE VIEW viewtest_deleted AS '
+                                      'SELECT content FROM viewtest '
                                       'WHERE status = 9 ORDER BY id DESC')
             try:
                 views = self.database.get_views()
@@ -842,48 +824,48 @@ class TestIntrospection(ModelTestCase):
                 self.assertEqual(normalized, expected)
 
                 # Ensure that we can use get_columns to introspect views.
-                columns = self.database.get_columns('notes_deleted')
+                columns = self.database.get_columns('viewtest_deleted')
                 self.assertEqual([c.name for c in columns], ['content'])
 
-                columns = self.database.get_columns('notes_public')
+                columns = self.database.get_columns('viewtest_public')
                 self.assertEqual([c.name for c in columns], ['content', 'ts'])
             finally:
-                self.database.execute_sql('DROP VIEW notes_public;')
-                self.database.execute_sql('DROP VIEW notes_deleted;')
+                self.database.execute_sql('DROP VIEW viewtest_public;')
+                self.database.execute_sql('DROP VIEW viewtest_deleted;')
 
         # Unfortunately, all databases seem to represent VIEW definitions
         # differently internally.
         if IS_SQLITE:
             assertViews([
-                ('notes_deleted', ('CREATE VIEW notes_deleted AS '
-                                   'SELECT content FROM notes '
-                                   'WHERE status = 9 ORDER BY id DESC')),
-                ('notes_public', ('CREATE VIEW notes_public AS '
-                                  'SELECT content, ts FROM notes '
-                                  'WHERE status = 1 ORDER BY ts DESC'))])
+                ('viewtest_deleted', ('CREATE VIEW viewtest_deleted AS '
+                                      'SELECT content FROM viewtest '
+                                      'WHERE status = 9 ORDER BY id DESC')),
+                ('viewtest_public', ('CREATE VIEW viewtest_public AS '
+                                     'SELECT content, ts FROM viewtest '
+                                     'WHERE status = 1 ORDER BY ts DESC'))])
         elif IS_MYSQL:
             assertViews([
-                ('notes_deleted',
-                 ('select content AS content from notes '
+                ('viewtest_deleted',
+                 ('select content AS content from viewtest '
                   'where status = 9 order by id desc')),
-                ('notes_public',
-                 ('select content AS content,ts AS ts from notes '
+                ('viewtest_public',
+                 ('select content AS content,ts AS ts from viewtest '
                   'where status = 1 order by ts desc'))])
         elif IS_POSTGRESQL:
             assertViews([
-                ('notes_deleted',
-                 ('SELECT content FROM notes '
+                ('viewtest_deleted',
+                 ('SELECT content FROM viewtest '
                   'WHERE (status = 9) ORDER BY id DESC')),
-                ('notes_public',
-                 ('SELECT content, ts FROM notes '
+                ('viewtest_public',
+                 ('SELECT content, ts FROM viewtest '
                   'WHERE (status = 1) ORDER BY ts DESC'))])
         elif IS_CRDB:
             assertViews([
-                ('notes_deleted',
-                 ('SELECT content FROM peewee_test.public.notes '
+                ('viewtest_deleted',
+                 ('SELECT content FROM peewee_test.public.viewtest '
                   'WHERE status = 9 ORDER BY id DESC')),
-                ('notes_public',
-                 ('SELECT content, ts FROM peewee_test.public.notes '
+                ('viewtest_public',
+                 ('SELECT content, ts FROM peewee_test.public.viewtest '
                   'WHERE status = 1 ORDER BY ts DESC'))])
 
     @requires_models(User, Tweet, Category)
@@ -1009,7 +991,6 @@ class TestAttachDatabase(ModelTestCase):
         self.assertEqual(tables, ['cache_data'])
 
 
-
 # ===========================================================================
 # Exception handling and utilities
 # ===========================================================================
@@ -1123,5 +1104,3 @@ class TestChunkedUtility(BaseTestCase):
         gen = (x * 2 for x in range(5))
         result = list(chunked(gen, 2))
         self.assertEqual(result, [[0, 2], [4, 6], [8]])
-
-

@@ -1,35 +1,3 @@
-"""
-Shared model definitions for the core Peewee test suite.
-
-These models form a curated library of relational patterns used by the
-SQL-generation tests (model_sql.py), integration tests (models.py), and
-supporting test modules (schema.py, fields.py, db_tests.py, results.py,
-transactions.py). They are the "Tier 1" models in the test suite's tiered
-model strategy:
-
-  Tier 1 — Shared core models (this file). Stable, well-known models used
-           across many test modules. Changing a name or field here affects
-           SQL assertions in dozens of tests, so changes should be rare.
-
-  Tier 2 — Module-local shared models. Defined at the top of individual
-           test modules, used by multiple TestCase classes within that module.
-
-  Tier 3 — TestCase-local models. Defined immediately before the single
-           TestCase class that uses them, for testing specific field types
-           or edge cases not covered by the shared set.
-
-Design principles:
-  - Each model exists to exercise a specific relational pattern or ORM feature.
-  - Names are kept short for readability in SQL assertions.
-  - All models inherit from TestModel (base.py), which sets database=db and
-    legacy_table_names=False.
-  - Models are ordered by dependency: independent models first, then models
-    with foreign keys to earlier models.
-
-WARNING: Renaming a model or field changes the generated table/column names,
-which will break SQL assertion strings in model_sql.py and other SQL-gen tests.
-Always grep for the old name across the entire test suite before renaming.
-"""
 from peewee import *
 
 from .base import TestModel

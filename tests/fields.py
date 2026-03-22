@@ -3,18 +3,19 @@ Field type tests: validation, conversion, storage, and retrieval for all
 field types, plus foreign key behavior, composite keys, and field-level
 constraints.
 
-Test case ordering (current):
-  1. Numeric and basic value types
-  2. Date/time fields
-  3. Foreign key basics and deferred FK resolution
-  4. Composite PK, field functions, IP, bit fields
-  5. Blob, BigAuto, UUID, timestamp, custom fields
-  6. String fields and misc field types
-  7. Virtual field behavior
-  8. Foreign key advanced: non-PK targets, multiple FKs, composite PK with FK
-  9. Search operators (regexp, contains)
-  10. Value conversion and type coercion
-  11. Regressions and edge cases
+Test case ordering:
+
+1. Numeric and basic value types
+2. Date/time fields
+3. Foreign key basics and deferred FK resolution
+4. Composite PK, field functions, IP, bit fields
+5. Blob, BigAuto, UUID, timestamp, custom fields
+6. String fields and misc field types
+7. Virtual field behavior
+8. Foreign key advanced: non-PK targets, multiple FKs, composite PK with FK
+9. Search operators (regexp, contains)
+10. Value conversion and type coercion
+11. Regressions and edge cases
 """
 import calendar
 import datetime
@@ -45,6 +46,7 @@ from .base import requires_mysql
 from .base import requires_pglike
 from .base import requires_sqlite
 from .base import skip_if
+from .base_models import DfltM
 from .base_models import Note
 from .base_models import Person
 from .base_models import Relationship
@@ -71,32 +73,31 @@ class TestCoerce(ModelTestCase):
         self.assertEqual(i_db.value_null, 3)
 
 
-class DefaultValues(TestModel):
-    data = IntegerField(default=17)
-    data_callable = IntegerField(default=lambda: 1337)
-
-
 class TestDefaultValues(ModelTestCase):
-    requires = [DefaultValues]
+    requires = [DfltM]
 
     def test_default_values(self):
-        d = DefaultValues()
-        self.assertEqual(d.data, 17)
-        self.assertEqual(d.data_callable, 1337)
+        d = DfltM(name='d1')
+        self.assertEqual(d.dflt1, 1)
+        self.assertEqual(d.dflt2, 2)
+        self.assertIsNone(d.dfltn)
         d.save()
 
-        d_db = DefaultValues.get(DefaultValues.id == d.id)
-        self.assertEqual(d_db.data, 17)
-        self.assertEqual(d_db.data_callable, 1337)
+        d_db = DfltM.get(DfltM.id == d.id)
+        self.assertEqual(d_db.dflt1, 1)
+        self.assertEqual(d_db.dflt2, 2)
+        self.assertIsNone(d_db.dfltn)
 
     def test_defaults_create(self):
-        d = DefaultValues.create()
-        self.assertEqual(d.data, 17)
-        self.assertEqual(d.data_callable, 1337)
+        d = DfltM.create(name='d1')
+        self.assertEqual(d.dflt1, 1)
+        self.assertEqual(d.dflt2, 2)
+        self.assertIsNone(d.dfltn)
 
-        d_db = DefaultValues.get(DefaultValues.id == d.id)
-        self.assertEqual(d_db.data, 17)
-        self.assertEqual(d_db.data_callable, 1337)
+        d_db = DfltM.get(DfltM.id == d.id)
+        self.assertEqual(d_db.dflt1, 1)
+        self.assertEqual(d_db.dflt2, 2)
+        self.assertIsNone(d_db.dfltn)
 
 
 class TestNullConstraint(ModelTestCase):
@@ -200,8 +201,6 @@ class TestBooleanField(ModelTestCase):
             self.assertEqual([b.key for b in q], [key])
 
 
-
-
 # ===========================================================================
 # String fields
 # ===========================================================================
@@ -298,6 +297,7 @@ class TestLikeEscape(ModelTestCase):
         )
         for expr, expected in cases:
             self.assertNames(expr, expected)
+
 
 # ===========================================================================
 # Date and time fields
@@ -444,9 +444,6 @@ class TestDateFields(ModelTestCase):
                          [1980, 1990, 2000, 2010])
 
 
-
-# U2/T2: local User/Tweet variants for testing on_delete='CASCADE'.
-# Not to be confused with base_models.User/Tweet which lack on_delete.
 class TSModel(TestModel):
     ts_s = TimestampField()
     ts_us = TimestampField(resolution=10 ** 6)
@@ -698,7 +695,6 @@ class TestDateTimeMath(ModelTestCase):
         self._do_test_date_time_math(next_occurrence)
 
 
-
 # ===========================================================================
 # Blob, BigAutoField, and field value handling
 # ===========================================================================
@@ -893,8 +889,6 @@ class TestFieldValueHandling(ModelTestCase):
         b3_db = Bare.get(Bare.id == b3.id)
         self.assertEqual(b3_db.key, 'k3')
         self.assertTrue(b3_db.value is None)
-
-
 
 
 # ===========================================================================
@@ -1275,8 +1269,6 @@ class TestBitFields(ModelTestCase):
             self.assertTrue(b.data.is_set(bit))
 
 
-
-
 # ===========================================================================
 # Special fields (custom, virtual, field functions, misc types)
 # ===========================================================================
@@ -1348,6 +1340,7 @@ class TestSQLFunctionDBValue(ModelTestCase):
         # If we nest the field in a function, the conversion is not applied.
         expr = fn.SUBSTR(UpperModel.name, 1, 1) == 'z'
         self.assertRaises(UpperModel.DoesNotExist, UpperModel.get, expr)
+
 
 class VF(TestModel):
     name = TextField()
@@ -1468,11 +1461,12 @@ class TestSqliteInvalidDataTypes(ModelTestCase):
         self.assertEqual(it_db1.ffield, 'pi')
 
 
-
 # ===========================================================================
 # Foreign key basics, deferred FK, lazy loading, constraints
 # ===========================================================================
 
+# U2/T2: local User/Tweet variants for testing on_delete='CASCADE'.
+# Not to be confused with base_models.User/Tweet which lack on_delete.
 class U2(TestModel):
     username = TextField()
 
@@ -1657,6 +1651,7 @@ class TestDeferredForeignKeyResolution(ModelTestCase):
             'SELECT "t1"."id", "t1"."id_album", "t1"."id_Alt_album" '
             'FROM "photo" AS "t1" WHERE ("t1"."id_Alt_album" = ?)'), [4])
 
+
 class TestDeferredForeignKeyIntegration(ModelTestCase):
     database = get_in_memory_db()
 
@@ -1707,6 +1702,7 @@ class TestDeferredForeignKeyIntegration(ModelTestCase):
         self.assertEqual(DFPk._meta.backrefs, {DFFk.fk: DFFk})
         self.assertSQL(DFFk._schema._create_table(False), (
             'CREATE TABLE "df_fk" ("fk_id" INTEGER NOT NULL PRIMARY KEY)'), [])
+
 
 class NQ(TestModel):
     name = TextField()
@@ -1805,6 +1801,7 @@ class TestForeignKeyLazyLoad(ModelTestCase):
             self.assertTrue(bi.nq_null is None)
             self.assertTrue(bi.nq_lazy_null is None)
 
+
 class Package(TestModel):
     barcode = CharField(unique=True)
 
@@ -1837,6 +1834,18 @@ class TestForeignKeyToNonPrimaryKey(ModelTestCase):
         self.assertEqual(
             [item.title for item in p.items.order_by(PackageItem.title)],
             ['101-0', '101-1'])
+
+    def test_joining(self):
+        q = (PackageItem
+             .select(PackageItem, Package)
+             .join(Package)
+             .order_by(PackageItem.title))
+        with self.assertQueryCount(1):
+            self.assertEqual([(pi.title, pi.package.barcode) for pi in q], [
+                ('101-0', '101'),
+                ('101-1', '101'),
+                ('102-0', '102'),
+                ('102-1', '102')])
 
 
 class Manufacturer(TestModel):
@@ -2083,6 +2092,7 @@ class TestSetFKNull(ModelTestCase):
         b1.a = b2.a = None
         self.assertTrue(b1.a is None)
         self.assertTrue(b2.a is None)
+
 
 class FKF_A(TestModel):
     key = CharField(max_length=16, unique=True)
@@ -2448,13 +2458,6 @@ class TestCompositePKwithFK(ModelTestCase):
 # ===========================================================================
 
 class TestValueConversion(ModelTestCase):
-    """
-    Test the conversion of field values using a field's db_value() function.
-
-    It is possible that a field's `db_value()` function may returns a Node
-    subclass (e.g. a SQL function). These tests verify and document how such
-    conversions are applied in various parts of the query.
-    """
     database = get_in_memory_db()
     requires = [UpperModel]
 
@@ -2662,8 +2665,6 @@ class TestContains(BaseNamesTest):
         self.assertNames(User.username.endswith('EY'), ['huey', 'mickey'])
 
 
-
-
 # ===========================================================================
 # Regressions and edge cases
 # ===========================================================================
@@ -2691,6 +2692,12 @@ class TestFieldValueRegression(ModelTestCase):
 
         self.assertEqual(u_db.name, 'user')
         self.assertTrue(u_db.mtype is User)
+
+        t = MTF.create(name='t', mtype=Tweet)
+        t_db = MTF.get(MTF.id == t.id)
+
+        self.assertEqual(t_db.name, 't')
+        self.assertTrue(t_db.mtype is Tweet)
 
 
 class CharPK(TestModel):
@@ -2725,5 +2732,3 @@ class TestModelConversionRegression(ModelTestCase):
         c0, c1, c2 = cpks
         query = CharFK.select().where(CharFK.cpk << [c0, c2])
         self.assertEqual(sorted([f.id for f in query]), [1, 3])
-
-
