@@ -1258,6 +1258,149 @@ class TestModelAdvancedSQL(ModelDatabaseTestCase):
             'WHERE ("t3"."author_id" = "t1"."id") '
             'ORDER BY "t3"."id" DESC LIMIT ?) AS "t2" ON ?'), [2, True])
 
+    # -- orwhere --
+
+    def test_orwhere(self):
+        query = (User
+                 .select()
+                 .orwhere(User.username == 'huey')
+                 .orwhere(User.username == 'zaizee'))
+        self.assertSQL(query, (
+            'SELECT "t1"."id", "t1"."username" '
+            'FROM "users" AS "t1" '
+            'WHERE (("t1"."username" = ?) OR ("t1"."username" = ?))'),
+            ['huey', 'zaizee'])
+
+    def test_where_then_orwhere(self):
+        query = (User
+                 .select()
+                 .where(User.id > 0)
+                 .orwhere(User.username == 'huey')
+                 .orwhere(User.username == 'zaizee'))
+        self.assertSQL(query, (
+            'SELECT "t1"."id", "t1"."username" '
+            'FROM "users" AS "t1" '
+            'WHERE ((("t1"."id" > ?) OR '
+            '("t1"."username" = ?)) OR ("t1"."username" = ?))'),
+            [0, 'huey', 'zaizee'])
+
+    # -- ensure_join --
+
+    def test_ensure_join_noop(self):
+        """ensure_join is a no-op when the join already exists."""
+        query = (User
+                 .select(User, Tweet.content)
+                 .join(Tweet)
+                 .switch(User)
+                 .ensure_join(User, Tweet))
+        self.assertSQL(query, (
+            'SELECT "t1"."id", "t1"."username", "t2"."content" '
+            'FROM "users" AS "t1" '
+            'INNER JOIN "tweet" AS "t2" ON ("t2"."user_id" = "t1"."id")'),
+            [])
+
+    def test_ensure_join_adds(self):
+        """ensure_join adds the join when it doesn't exist."""
+        query = (User
+                 .select(User, Tweet.content)
+                 .ensure_join(User, Tweet))
+        self.assertSQL(query, (
+            'SELECT "t1"."id", "t1"."username", "t2"."content" '
+            'FROM "users" AS "t1" '
+            'INNER JOIN "tweet" AS "t2" ON ("t2"."user_id" = "t1"."id")'),
+            [])
+
+    # -- for_update SQL --
+
+    def test_for_update(self):
+        query = (User
+                 .select()
+                 .where(User.username == 'huey')
+                 .for_update())
+        self.assertSQL(query, (
+            'SELECT "t1"."id", "t1"."username" '
+            'FROM "users" AS "t1" '
+            'WHERE ("t1"."username" = ?) FOR UPDATE'),
+            ['huey'], for_update=True)
+
+    def test_for_update_options(self):
+        query = User.select().for_update(for_update='FOR SHARE')
+        self.assertSQL(query, (
+            'SELECT "t1"."id", "t1"."username" '
+            'FROM "users" AS "t1" FOR SHARE'), [], for_update=True)
+
+        query = User.select().for_update(nowait=True)
+        self.assertSQL(query, (
+            'SELECT "t1"."id", "t1"."username" '
+            'FROM "users" AS "t1" FOR UPDATE NOWAIT'), [], for_update=True)
+
+        query = User.select().for_update(skip_locked=True)
+        self.assertSQL(query, (
+            'SELECT "t1"."id", "t1"."username" '
+            'FROM "users" AS "t1" FOR UPDATE SKIP LOCKED'), [],
+            for_update=True)
+
+    def test_for_update_unsupported(self):
+        """FOR UPDATE on a database that doesn't support it raises."""
+        query = User.select().for_update()
+        self.assertRaises(ValueError, self.assertSQL, query,
+                          '', [])
+
+    # -- having --
+
+    def test_having(self):
+        query = (User
+                 .select(User.username,
+                         fn.COUNT(Tweet.id).alias('ct'))
+                 .join(Tweet, JOIN.LEFT_OUTER)
+                 .group_by(User.username)
+                 .having(fn.COUNT(Tweet.id) > 5))
+        self.assertSQL(query, (
+            'SELECT "t1"."username", COUNT("t2"."id") AS "ct" '
+            'FROM "users" AS "t1" '
+            'LEFT OUTER JOIN "tweet" AS "t2" '
+            'ON ("t2"."user_id" = "t1"."id") '
+            'GROUP BY "t1"."username" '
+            'HAVING (COUNT("t2"."id") > ?)'), [5])
+
+    # -- distinct on --
+
+    def test_distinct_on(self):
+        query = User.select().distinct(User.username)
+        self.assertSQL(query, (
+            'SELECT DISTINCT ON ("t1"."username") '
+            '"t1"."id", "t1"."username" '
+            'FROM "users" AS "t1"'), [])
+
+
+# ===========================================================================
+# ON CONFLICT shortcut SQL (on_conflict_ignore / on_conflict_replace)
+# ===========================================================================
+
+class TestOnConflictShortcutSQL(ModelDatabaseTestCase):
+    database = get_in_memory_db()
+    requires = [User, Emp]
+
+    def test_on_conflict_ignore(self):
+        query = User.insert(username='test').on_conflict_ignore()
+        self.assertSQL(query, (
+            'INSERT OR IGNORE INTO "users" ("username") VALUES (?)'),
+            ['test'])
+
+    def test_on_conflict_replace(self):
+        query = Emp.insert(first='h', last='c', empno='1').on_conflict_replace()
+        self.assertSQL(query, (
+            'INSERT OR REPLACE INTO "emp" '
+            '("first", "last", "empno") VALUES (?, ?, ?)'),
+            ['h', 'c', '1'])
+
+    def test_on_conflict_both_target_and_constraint_raises(self):
+        self.assertRaises(
+            ValueError,
+            User.insert(username='test').on_conflict,
+            conflict_target=[User.username],
+            conflict_constraint='foo')
+
 
 # ===========================================================================
 # ON CONFLICT / upsert SQL with Models
@@ -1548,6 +1691,35 @@ class TestModelCompoundSelect(BaseTestCase):
             '(SELECT "t1"."alpha" FROM "alpha" AS "t1" '
             'UNION '
             'SELECT "t2"."beta" FROM "beta" AS "t2"))'), [])
+
+    def test_union_method(self):
+        lhs = Alpha.select(Alpha.alpha).where(Alpha.alpha > 1)
+        rhs = Beta.select(Beta.beta).where(Beta.beta < 10)
+        query = lhs.union(rhs)
+        self.assertSQL(query, (
+            'SELECT "t1"."alpha" FROM "alpha" AS "t1" '
+            'WHERE ("t1"."alpha" > ?) '
+            'UNION '
+            'SELECT "t2"."beta" FROM "beta" AS "t2" '
+            'WHERE ("t2"."beta" < ?)'), [1, 10])
+
+    def test_intersect_method(self):
+        lhs = Alpha.select(Alpha.alpha)
+        rhs = Beta.select(Beta.beta)
+        query = lhs.intersect(rhs)
+        self.assertSQL(query, (
+            'SELECT "t1"."alpha" FROM "alpha" AS "t1" '
+            'INTERSECT '
+            'SELECT "t2"."beta" FROM "beta" AS "t2"'), [])
+
+    def test_except_method(self):
+        lhs = Alpha.select(Alpha.alpha)
+        rhs = Beta.select(Beta.beta)
+        query = lhs.except_(rhs)
+        self.assertSQL(query, (
+            'SELECT "t1"."alpha" FROM "alpha" AS "t1" '
+            'EXCEPT '
+            'SELECT "t2"."beta" FROM "beta" AS "t2"'), [])
 
 
 # ===========================================================================

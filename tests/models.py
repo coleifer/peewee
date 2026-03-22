@@ -3229,6 +3229,158 @@ class TestSelectValueConversion(ModelTestCase):
         self.assertEqual(u1_id, str(u1.id))
 
 
+class TestOrWhere(ModelTestCase):
+    requires = [User]
+
+    def test_orwhere(self):
+        User.insert_many([{'username': u} for u in
+                          ('huey', 'mickey', 'zaizee')]).execute()
+        query = (User
+                 .select()
+                 .orwhere(User.username == 'huey')
+                 .orwhere(User.username == 'zaizee')
+                 .order_by(User.username))
+        self.assertEqual([u.username for u in query], ['huey', 'zaizee'])
+
+    def test_where_then_orwhere(self):
+        User.insert_many([{'username': u} for u in
+                          ('huey', 'mickey', 'zaizee')]).execute()
+        # where + orwhere: the where is OR'd with subsequent orwhere calls.
+        query = (User
+                 .select()
+                 .where(User.username == 'huey')
+                 .orwhere(User.username == 'zaizee')
+                 .order_by(User.username))
+        self.assertEqual([u.username for u in query], ['huey', 'zaizee'])
+
+
+class TestEnsureJoin(ModelTestCase):
+    requires = [User, Tweet]
+
+    def test_ensure_join_noop(self):
+        """If join already exists, ensure_join doesn't duplicate it."""
+        u = User.create(username='huey')
+        Tweet.create(user=u, content='meow')
+
+        query = (User
+                 .select(User, Tweet.content)
+                 .join(Tweet)
+                 .switch(User)
+                 .ensure_join(User, Tweet))
+        result = [(row.username, row.tweet.content) for row in query]
+        self.assertEqual(result, [('huey', 'meow')])
+
+    def test_ensure_join_adds_when_missing(self):
+        """If join doesn't exist, ensure_join adds it."""
+        u = User.create(username='huey')
+        Tweet.create(user=u, content='meow')
+
+        query = (User
+                 .select(User, Tweet.content)
+                 .ensure_join(User, Tweet))
+        result = [(row.username, row.tweet.content) for row in query]
+        self.assertEqual(result, [('huey', 'meow')])
+
+
+class TestScalarIntegration(ModelTestCase):
+    requires = [User, Sample]
+
+    @requires_models(User)
+    def test_scalar(self):
+        for u in ('huey', 'mickey', 'zaizee'):
+            User.create(username=u)
+        count = User.select(fn.COUNT(User.id)).scalar()
+        self.assertEqual(count, 3)
+
+    @requires_models(User)
+    def test_scalar_as_tuple(self):
+        for u in ('huey', 'mickey', 'zaizee'):
+            User.create(username=u)
+        count, mx = (User
+                     .select(fn.COUNT(User.id), fn.MAX(User.id))
+                     .scalar(as_tuple=True))
+        self.assertEqual(count, 3)
+        self.assertTrue(mx > 0)
+
+    @requires_models(User)
+    def test_scalar_as_dict(self):
+        for u in ('huey', 'mickey', 'zaizee'):
+            User.create(username=u)
+        result = (User
+                  .select(fn.COUNT(User.id).alias('ct'))
+                  .scalar(as_dict=True))
+        self.assertEqual(result, {'ct': 3})
+
+    @requires_models(Sample)
+    def test_scalar_empty_result(self):
+        val = (Sample
+               .select(fn.MAX(Sample.value))
+               .scalar())
+        self.assertTrue(val is None)
+
+
+class TestExistsIntegration(ModelTestCase):
+    requires = [User]
+
+    @requires_models(User)
+    def test_exists_true(self):
+        User.create(username='huey')
+        self.assertTrue(
+            User.select().where(User.username == 'huey').exists())
+
+    @requires_models(User)
+    def test_exists_false(self):
+        User.create(username='huey')
+        self.assertFalse(
+            User.select().where(User.username == 'nobody').exists())
+
+
+class TestObjectsIntegration(ModelTestCase):
+    requires = [User, Tweet]
+
+    @requires_models(User, Tweet)
+    def test_objects_returns_target_model(self):
+        u = User.create(username='huey')
+        Tweet.create(user=u, content='meow')
+        Tweet.create(user=u, content='purr')
+
+        query = (Tweet
+                 .select(Tweet, User)
+                 .join(User)
+                 .order_by(Tweet.content)
+                 .objects())
+        results = list(query)
+        # .objects() maps all columns onto the Tweet model.
+        self.assertEqual(len(results), 2)
+        self.assertTrue(isinstance(results[0], Tweet))
+        self.assertEqual(results[0].content, 'meow')
+        self.assertEqual(results[0].username, 'huey')
+        self.assertEqual(results[1].content, 'purr')
+
+
+class TestRowTypeIntegration(ModelTestCase):
+    requires = [User]
+
+    @requires_models(User)
+    def test_tuples(self):
+        User.create(username='huey')
+        result = list(User.select(User.username).tuples())
+        self.assertEqual(result, [('huey',)])
+
+    @requires_models(User)
+    def test_dicts(self):
+        User.create(username='huey')
+        result = list(User.select(User.username).dicts())
+        self.assertEqual(result, [{'username': 'huey'}])
+
+    @requires_models(User)
+    def test_namedtuples(self):
+        User.create(username='huey')
+        result = list(User.select(User.username).namedtuples())
+        self.assertEqual(len(result), 1)
+        self.assertEqual(result[0].username, 'huey')
+
+
 class VL(TestModel):
     n = IntegerField()
     s = CharField()
