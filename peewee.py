@@ -4568,7 +4568,7 @@ class MySQLDatabase(Database):
         return fn.rand()
 
     def get_noop_select(self, ctx):
-        return ctx.literal('DO 0')
+        return ctx.literal('SELECT 0 WHERE 0=1')
 
 
 # TRANSACTION CONTROL.

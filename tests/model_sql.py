@@ -1872,3 +1872,121 @@ class TestRegressionNodeListClone(BaseTestCase):
             '("t1"."a" + "t1"."b") AS "expr" '
             'FROM "nlm" AS "t1" '
             'ORDER BY ("t1"."a" + "t1"."b")'), [])
+
+
+# ===========================================================================
+# Gap coverage: NoopModelSelect SQL, model group_by with model arg,
+# ModelSelect cross join error, FieldAlias delegation
+# ===========================================================================
+
+class TestNoopModelSelectSQL(ModelDatabaseTestCase):
+    database = get_in_memory_db()
+    requires = [User]
+
+    def test_noop_sql_generation(self):
+        """NoopModelSelect generates the database-specific noop SQL."""
+        query = User.noop()
+        sql_str, params = query.sql()
+        # SQLite: SELECT 0 WHERE (0)
+        self.assertIn('SELECT', sql_str)
+        self.assertIn('0', sql_str)
+
+    def test_noop_cursor_wrapper_type(self):
+        """NoopModelSelect uses plain CursorWrapper, not model wrapper."""
+        from peewee import CursorWrapper
+        query = User.noop()
+        result = query.execute()
+        self.assertIsInstance(result, CursorWrapper)
+
+
+class TestModelGroupByWithModel(ModelDatabaseTestCase):
+    database = get_in_memory_db()
+    requires = [User, Tweet]
+
+    def test_group_by_model_expands_fields(self):
+        """ModelSelect.group_by(Model) expands to all model fields."""
+        query = (Tweet
+                 .select(User, fn.COUNT(Tweet.id).alias('ct'))
+                 .join(User)
+                 .group_by(User))
+        self.assertSQL(query, (
+            'SELECT "t1"."id", "t1"."username", '
+            'COUNT("t2"."id") AS "ct" '
+            'FROM "tweet" AS "t2" '
+            'INNER JOIN "users" AS "t1" ON ("t2"."user_id" = "t1"."id") '
+            'GROUP BY "t1"."id", "t1"."username"'), [])
+
+
+class TestModelSelectCrossJoinError(BaseTestCase):
+    def test_cross_join_with_on_raises(self):
+        """ModelSelect.join with CROSS and on= raises ValueError."""
+        query = User.select()
+        with self.assertRaisesCtx(ValueError):
+            query.join(Tweet, JOIN.CROSS, on=(User.id == Tweet.user))
+
+
+class TestFieldAliasOperators(ModelDatabaseTestCase):
+    database = get_in_memory_db()
+    requires = [User]
+
+    def test_field_alias_contains(self):
+        """FieldAlias delegates contains() correctly."""
+        UA = User.alias('ua')
+        query = UA.select().where(UA.username.contains('test'))
+        sql, params = query.sql()
+        # On SQLite, ILIKE maps to LIKE. Just verify the query is valid.
+        self.assertIn('"ua"', sql)
+        # The param should contain the wrapped search term.
+        self.assertEqual(params, ['%test%'])
+
+    def test_field_alias_is_null(self):
+        """FieldAlias delegates is_null() correctly."""
+        UA = User.alias('ua')
+        query = UA.select().where(UA.username.is_null())
+        sql, params = query.sql()
+        self.assertIn('IS NULL', sql)
+
+    def test_field_alias_between(self):
+        """FieldAlias delegates between() correctly."""
+        UA = User.alias('ua')
+        query = UA.select().where(UA.id.between(1, 10))
+        sql, params = query.sql()
+        self.assertIn('BETWEEN', sql)
+        self.assertEqual(params, [1, 10])
+
+    def test_field_alias_in_(self):
+        """FieldAlias delegates in_() correctly."""
+        UA = User.alias('ua')
+        query = UA.select().where(UA.id.in_([1, 2, 3]))
+        sql, params = query.sql()
+        self.assertIn('IN', sql)
+        self.assertEqual(params, [1, 2, 3])
+
+
+class TestModelSelectSubqueryOptimization(ModelDatabaseTestCase):
+    database = get_in_memory_db()
+    requires = [User]
+
+    def test_default_subquery_collapses_to_pk(self):
+        """Default-selected model used as subquery collapses to just PK."""
+        inner = User.select()  # Default selection = all fields.
+        outer = User.select().where(User.id.in_(inner))
+        sql, _ = outer.sql()
+        # The inner subquery should only select the PK.
+        # Count occurrences of "username" — should appear only once (outer).
+        parts = sql.split('username')
+        self.assertEqual(len(parts), 2,
+                         'Inner subquery should collapse to PK only')
+
+
+class TestInsertDefaultValues(ModelDatabaseTestCase):
+    database = get_in_memory_db()
+    requires = [User]
+
+    def test_insert_empty_dict_uses_default_values(self):
+        """Insert({}) on a Table falls back to DEFAULT VALUES."""
+        from peewee import Table
+        t = Table('users')
+        query = t.insert({})
+        sql, _ = __sql__(query)
+        self.assertIn('DEFAULT VALUES', sql)

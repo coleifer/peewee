@@ -677,3 +677,81 @@ class TestMultipleManyToManySameTables(ModelTestCase):
             ('v1', ['p1', 'p2', 'p3'], []),
             ('v2', ['p2'], ['p1', 'p3']),
             ('v3', ['p3'], ['p1'])])
+
+
+# ===========================================================================
+# Gap coverage: M2M error paths and edge cases
+# ===========================================================================
+
+class TestManyToManyPreventUnsaved(ModelTestCase):
+    database = get_in_memory_db()
+    requires = [User, Note, NoteUserThrough]
+
+    def test_get_m2m_unsaved_raises(self):
+        """Accessing M2M on unsaved instance raises ValueError."""
+        n = Note(text='unsaved note')
+        # n has not been saved, so n.id is None.
+        with self.assertRaises(ValueError):
+            n.users  # Triggers ManyToManyFieldAccessor.__get__
+
+    def test_set_m2m_unsaved_raises(self):
+        """Setting M2M on unsaved instance raises ValueError."""
+        n = Note(text='unsaved note')
+        with self.assertRaises(ValueError):
+            n.users = [User(username='u')]
+
+    def test_get_m2m_saved_works(self):
+        """Accessing M2M on saved instance works fine."""
+        u = User.create(username='huey')
+        n = Note.create(text='note1')
+        # Should not raise.
+        result = list(n.users)
+        self.assertEqual(result, [])
+
+
+class TestManyToManyInitErrors(ModelTestCase):
+    database = get_in_memory_db()
+
+    def test_invalid_through_model_type(self):
+        """ManyToManyField raises TypeError for invalid through_model."""
+        with self.assertRaises(TypeError):
+            ManyToManyField(User, through_model='not_a_model')
+
+    def test_on_delete_with_through_model_raises(self):
+        """on_delete with through_model raises ValueError."""
+        class DummyThrough(TestModel):
+            pass
+        with self.assertRaises(ValueError):
+            ManyToManyField(User, through_model=DummyThrough,
+                            on_delete='CASCADE')
+
+    def test_on_update_with_through_model_raises(self):
+        """on_update with through_model raises ValueError."""
+        class DummyThrough(TestModel):
+            pass
+        with self.assertRaises(ValueError):
+            ManyToManyField(User, through_model=DummyThrough,
+                            on_update='CASCADE')
+
+
+class TestManyToManyEmptyOperations(ModelTestCase):
+    database = get_in_memory_db()
+    requires = [User, Note, NoteUserThrough]
+
+    def test_add_empty_list(self):
+        """add([]) is a no-op, no error."""
+        u = User.create(username='huey')
+        n = Note.create(text='note1')
+        n.users.add([])
+        self.assertEqual(list(n.users), [])
+
+    def test_remove_empty_list(self):
+        """remove([]) is a no-op, no error."""
+        u = User.create(username='huey')
+        n = Note.create(text='note1')
+        n.users.add([u])
+        result = n.users.remove([])
+        # remove with empty list returns None (early exit).
+        self.assertIsNone(result)
+        # The relationship should still exist.
+        self.assertEqual(len(list(n.users)), 1)

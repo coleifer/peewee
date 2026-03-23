@@ -22,6 +22,7 @@ import time
 from peewee import *
 from peewee import Database
 from peewee import FIELD
+from peewee import Function
 from peewee import attrdict
 from peewee import sort_models
 
@@ -1104,3 +1105,253 @@ class TestChunkedUtility(BaseTestCase):
         gen = (x * 2 for x in range(5))
         result = list(chunked(gen, 2))
         self.assertEqual(result, [[0, 2], [4, 6], [8]])
+
+
+# ===========================================================================
+# Gap coverage: Session edge cases and transaction helpers
+# ===========================================================================
+
+class TestSessionEdgeCases(DatabaseTestCase):
+    def test_session_commit_no_transaction(self):
+        """session_commit() returns False when no transaction is active."""
+        self.assertFalse(self.database.in_transaction())
+        self.assertFalse(self.database.session_commit())
+
+    def test_session_rollback_no_transaction(self):
+        """session_rollback() returns False when no transaction is active."""
+        self.assertFalse(self.database.in_transaction())
+        self.assertFalse(self.database.session_rollback())
+
+    def test_top_transaction_empty(self):
+        """top_transaction() returns None when no transactions are active."""
+        self.assertIsNone(self.database.top_transaction())
+
+    def test_top_transaction_with_active(self):
+        """top_transaction() returns innermost transaction."""
+        with self.database.atomic() as txn:
+            top = self.database.top_transaction()
+            self.assertIsNotNone(top)
+            self.assertEqual(self.database.transaction_depth(), 1)
+
+    def test_db_context_manager_nesting(self):
+        """Nested with db: pushes/pops ctx stack; closes only when empty."""
+        self.database.close()
+        with self.database:
+            self.assertFalse(self.database.is_closed())
+            self.assertEqual(self.database.transaction_depth(), 1)
+            with self.database:
+                self.assertFalse(self.database.is_closed())
+                # Inner atomic becomes savepoint (doesn't increase txn depth)
+                # but the ctx stack grows.
+                self.assertEqual(len(self.database._state.ctx), 2)
+            # Inner exited but outer still open.
+            self.assertFalse(self.database.is_closed())
+            self.assertEqual(len(self.database._state.ctx), 1)
+        # Both exited — db closed.
+        self.assertTrue(self.database.is_closed())
+
+    def test_init_closes_open_connection(self):
+        """Database.init() closes an existing open connection."""
+        db = get_in_memory_db()
+        db.connect()
+        self.assertFalse(db.is_closed())
+        db.init(':memory:')
+        self.assertTrue(db.is_closed())
+        # Can reconnect after re-init.
+        db.connect()
+        self.assertFalse(db.is_closed())
+        db.close()
+
+
+# ===========================================================================
+# Gap coverage: Database SQL-generation helpers
+# ===========================================================================
+
+class TestDatabaseSQLHelpers(BaseTestCase):
+    def test_random_sqlite(self):
+        """SqliteDatabase.random() produces fn.random()."""
+        db = SqliteDatabase(':memory:')
+        result = db.random()
+        self.assertIsInstance(result, Function)
+        from peewee import Context
+        ctx = Context()
+        sql, _ = ctx.sql(result).query()
+        self.assertEqual(sql, 'random()')
+
+    def test_get_noop_select_sqlite(self):
+        """SqliteDatabase.get_noop_select() produces SELECT 0 WHERE 0."""
+        db = SqliteDatabase(':memory:')
+        from peewee import Context
+        ctx = db.get_sql_context()
+        sql, _ = db.get_noop_select(ctx).query()
+        self.assertIn('SELECT', sql)
+        self.assertIn('0', sql)
+
+    def test_mysql_extract_server_version_mysql8(self):
+        """MySQLDatabase._extract_server_version parses MySQL 8.x."""
+        db = MySQLDatabase.__new__(MySQLDatabase)
+        version = db._extract_server_version('8.0.31')
+        self.assertEqual(version, (8, 0, 31))
+
+    def test_mysql_extract_server_version_mariadb(self):
+        """MySQLDatabase._extract_server_version parses MariaDB 10.x."""
+        db = MySQLDatabase.__new__(MySQLDatabase)
+        version = db._extract_server_version('5.5.5-10.6.12-MariaDB')
+        self.assertEqual(version, (10, 6, 12))
+
+    def test_mysql_extract_server_version_unknown(self):
+        """MySQLDatabase._extract_server_version returns (0,0,0) for unknown."""
+        import warnings
+        db = MySQLDatabase.__new__(MySQLDatabase)
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter('always')
+            version = db._extract_server_version('unknown')
+            self.assertEqual(version, (0, 0, 0))
+            self.assertTrue(len(w) > 0)
+
+    def test_mysql_extract_server_version_tuple_passthrough(self):
+        """MySQLDatabase._extract_server_version passes tuples through."""
+        db = MySQLDatabase.__new__(MySQLDatabase)
+        version = db._extract_server_version((8, 0, 31))
+        self.assertEqual(version, (8, 0, 31))
+
+    def test_thread_safe_false_uses_noop_lock(self):
+        """Database(thread_safe=False) uses _NoopLock."""
+        from peewee import _NoopLock, _ConnectionState
+        db = SqliteDatabase(':memory:', thread_safe=False)
+        self.assertIsInstance(db._lock, _NoopLock)
+        self.assertIsInstance(db._state, _ConnectionState)
+        # Should still work for basic operations.
+        db.connect()
+        self.assertFalse(db.is_closed())
+        db.close()
+        self.assertTrue(db.is_closed())
+
+
+# ===========================================================================
+# Gap coverage: Utility functions
+# ===========================================================================
+
+class TestUtilityFunctions(BaseTestCase):
+    def test_make_snake_case(self):
+        from peewee import make_snake_case
+        self.assertEqual(make_snake_case('SomeModel'), 'some_model')
+        self.assertEqual(make_snake_case('APIResponse'), 'api_response')
+        self.assertEqual(make_snake_case('fooBar'), 'foo_bar')
+        self.assertEqual(make_snake_case('MyHTTPClient'), 'my_http_client')
+        self.assertEqual(make_snake_case('Simple'), 'simple')
+        self.assertEqual(make_snake_case('A'), 'a')
+
+    def test_make_identifier(self):
+        from peewee import make_identifier
+        self.assertEqual(make_identifier('name'), 'name')
+        self.assertEqual(make_identifier('"t1"."name"'), 'name')
+        self.assertEqual(make_identifier('SUM("t1"."price")'), 'price')
+        self.assertEqual(make_identifier('"foo"()'), 'foo')
+        self.assertEqual(make_identifier('col name'), 'col')
+
+    def test_ensure_tuple(self):
+        from peewee import ensure_tuple
+        self.assertEqual(ensure_tuple(None), None)
+        self.assertEqual(ensure_tuple(1), (1,))
+        self.assertEqual(ensure_tuple('a'), ('a',))
+        self.assertEqual(ensure_tuple((1, 2)), (1, 2))
+        self.assertEqual(ensure_tuple([1, 2]), [1, 2])
+
+    def test_ensure_entity(self):
+        from peewee import ensure_entity, Entity
+        self.assertIsNone(ensure_entity(None))
+        e = ensure_entity('col_name')
+        self.assertIsInstance(e, Entity)
+        # Passing a Node returns it as-is.
+        existing = Entity('x')
+        self.assertIs(ensure_entity(existing), existing)
+
+    def test_merge_dict(self):
+        from peewee import merge_dict
+        base = {'a': 1, 'b': 2}
+        result = merge_dict(base, {'b': 3, 'c': 4})
+        self.assertEqual(result, {'a': 1, 'b': 3, 'c': 4})
+        # Original unchanged.
+        self.assertEqual(base, {'a': 1, 'b': 2})
+        # None/empty overrides.
+        self.assertEqual(merge_dict(base, None), {'a': 1, 'b': 2})
+        self.assertEqual(merge_dict(base, {}), {'a': 1, 'b': 2})
+
+    def test_quote(self):
+        from peewee import quote
+        self.assertEqual(quote(['table'], '""'), '"table"')
+        self.assertEqual(quote(['schema', 'table'], '""'),
+                         '"schema"."table"')
+        self.assertEqual(quote(['table'], '``'), '`table`')
+
+    def test_attrdict_operators(self):
+        d1 = attrdict(a=1, b=2)
+        d2 = attrdict(b=3, c=4)
+        # __add__ produces new merged dict.
+        d3 = d1 + d2
+        self.assertEqual(d3, {'a': 1, 'b': 3, 'c': 4})
+        self.assertIsInstance(d3, attrdict)
+        # Original unchanged.
+        self.assertEqual(d1, {'a': 1, 'b': 2})
+        # __iadd__ mutates in place.
+        d1 += d2
+        self.assertEqual(d1, {'a': 1, 'b': 3, 'c': 4})
+
+    def test_attrdict_getattr_missing(self):
+        d = attrdict(a=1)
+        self.assertEqual(d.a, 1)
+        self.assertRaises(AttributeError, lambda: d.missing)
+
+    def test_query_val_transform(self):
+        """_query_val_transform handles various Python types."""
+        import datetime
+        from peewee import _query_val_transform
+        self.assertEqual(_query_val_transform('hello'), "'hello'")
+        self.assertEqual(_query_val_transform("it's"), "'it''s'")
+        self.assertEqual(_query_val_transform(42), '42')
+        self.assertEqual(_query_val_transform(True), '1')
+        self.assertEqual(_query_val_transform(False), '0')
+        self.assertEqual(_query_val_transform(None), 'NULL')
+        dt = datetime.datetime(2023, 1, 15, 10, 30)
+        self.assertEqual(_query_val_transform(dt), "'2023-01-15 10:30:00'")
+        d = datetime.date(2023, 1, 15)
+        self.assertEqual(_query_val_transform(d), "'2023-01-15'")
+        b = b'hello'
+        result = _query_val_transform(b)
+        self.assertIn('hello', result)
+
+    def test_deprecated_emits_warning(self):
+        """__deprecated__() emits a DeprecationWarning."""
+        import warnings
+        from peewee import __deprecated__
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter('always')
+            __deprecated__('test message')
+            self.assertEqual(len(w), 1)
+            self.assertTrue(issubclass(w[0].category, DeprecationWarning))
+            self.assertIn('test message', str(w[0].message))
+
+
+# ===========================================================================
+# Gap coverage: Proxy error paths
+# ===========================================================================
+
+class TestProxyEdgeCases(BaseTestCase):
+    def test_proxy_uninitialized_getattr(self):
+        """Uninitialized Proxy raises AttributeError on attribute access."""
+        p = Proxy()
+        self.assertRaises(AttributeError, lambda: p.some_method)
+
+    def test_proxy_setattr_error(self):
+        """Proxy raises AttributeError when setting non-slot attributes."""
+        p = Proxy()
+        with self.assertRaisesCtx(AttributeError):
+            p.custom_attr = 42
+
+    def test_proxy_uninitialized_context_manager(self):
+        """Using uninitialized Proxy as context manager raises."""
+        p = Proxy()
+        with self.assertRaisesCtx(AttributeError):
+            with p:
+                pass

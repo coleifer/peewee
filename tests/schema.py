@@ -1122,3 +1122,114 @@ class TestNamedConstraintsIntegration(ModelTestCase):
         self.assertEqual(len(TMNamedConstraints), 1)
 
 
+# ===========================================================================
+# Gap coverage: Truncate SQL variants, sequence error paths
+# ===========================================================================
+
+class TestTruncateTableSQL(ModelDatabaseTestCase):
+    database = get_in_memory_db()
+    requires = [User]
+
+    def test_truncate_restart_identity(self):
+        """_truncate_table(restart_identity=True) on non-SQLite DB."""
+        # Create a fake database that supports TRUNCATE.
+        class FakeDB(SqliteDatabase):
+            truncate_table = True
+        fake_db = FakeDB(':memory:')
+        fake_db.connect()
+
+        class FakeUser(TestModel):
+            username = CharField()
+            class Meta:
+                database = fake_db
+                table_name = 'users'
+
+        ctx = FakeUser._schema._truncate_table(restart_identity=True)
+        sql, _ = ctx.query()
+        self.assertIn('TRUNCATE TABLE', sql)
+        self.assertIn('RESTART IDENTITY', sql)
+        fake_db.close()
+
+    def test_truncate_cascade(self):
+        """_truncate_table(cascade=True) on non-SQLite DB."""
+        class FakeDB(SqliteDatabase):
+            truncate_table = True
+        fake_db = FakeDB(':memory:')
+        fake_db.connect()
+
+        class FakeUser(TestModel):
+            username = CharField()
+            class Meta:
+                database = fake_db
+                table_name = 'users'
+
+        ctx = FakeUser._schema._truncate_table(cascade=True)
+        sql, _ = ctx.query()
+        self.assertIn('TRUNCATE TABLE', sql)
+        self.assertIn('CASCADE', sql)
+        fake_db.close()
+
+    def test_truncate_restart_and_cascade(self):
+        """_truncate_table with both options."""
+        class FakeDB(SqliteDatabase):
+            truncate_table = True
+        fake_db = FakeDB(':memory:')
+        fake_db.connect()
+
+        class FakeUser(TestModel):
+            username = CharField()
+            class Meta:
+                database = fake_db
+                table_name = 'users'
+
+        ctx = FakeUser._schema._truncate_table(
+            restart_identity=True, cascade=True)
+        sql, _ = ctx.query()
+        self.assertIn('RESTART IDENTITY', sql)
+        self.assertIn('CASCADE', sql)
+        fake_db.close()
+
+
+class TestSchemaSequenceErrors(ModelDatabaseTestCase):
+    database = get_in_memory_db()
+    requires = [User]
+
+    def test_check_sequences_no_support(self):
+        """_check_sequences raises ValueError when sequences not supported."""
+        schema = User._schema
+        self.assertRaises(ValueError, schema._check_sequences,
+                          User._meta.primary_key)
+
+    def test_check_sequences_no_sequence_on_field(self):
+        """_check_sequences raises ValueError when field has no sequence."""
+        class SeqDB(SqliteDatabase):
+            sequences = True
+        fake_db = SeqDB(':memory:')
+        fake_db.connect()
+
+        class FakeModel(TestModel):
+            data = IntegerField()
+            class Meta:
+                database = fake_db
+
+        schema = FakeModel._schema
+        self.assertRaises(ValueError, schema._check_sequences, FakeModel.data)
+        fake_db.close()
+
+
+class TestSchemaCreateAllDropAll(ModelTestCase):
+    requires = [User]
+
+    def test_create_all_drop_all(self):
+        """SchemaManager.create_all/drop_all work as convenience methods."""
+        class TempModel(TestModel):
+            data = CharField()
+
+        TempModel._meta.set_database(self.database)
+        TempModel._schema.create_all()
+        self.assertTrue(self.database.table_exists('temp_model'))
+
+        TempModel._schema.drop_all()
+        self.assertFalse(self.database.table_exists('temp_model'))
+
+

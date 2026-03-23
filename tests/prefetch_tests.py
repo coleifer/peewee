@@ -724,3 +724,39 @@ class TestJoinTypePrefetchMultipleFKs(ModelTestCase):
             ('s1', [t1, t2], [], ['s2a', 's2b'], []),
             ('s2a', [t3], [t1], ['s3'], ['s1']),
             ('s2b', [t4], [t2], ['s3'], ['s1'])])
+
+
+# ===========================================================================
+# Gap coverage: prefetch error paths and edge cases
+# ===========================================================================
+
+class TestPrefetchErrorPaths(ModelTestCase):
+    database = get_in_memory_db()
+    requires = [Person, Note, NoteItem]
+
+    def test_prefetch_unrelated_model_error(self):
+        """prefetch_add_subquery raises AttributeError for unrelated model."""
+        class Unrelated(TestModel):
+            data = TextField()
+            class Meta:
+                database = self.database
+
+        Unrelated.create_table()
+        try:
+            with self.assertRaises(AttributeError):
+                prefetch(Person.select(), Unrelated.select())
+        finally:
+            Unrelated.drop_table()
+
+    def test_prefetch_unrecognized_kwargs_error(self):
+        """prefetch() with unrecognized kwargs raises ValueError."""
+        with self.assertRaises(ValueError):
+            prefetch(Person.select(), Note, bad_kwarg=True)
+
+    def test_prefetch_empty_subqueries_passthrough(self):
+        """prefetch() with no subqueries returns the original query."""
+        Person.create(name='huey')
+        query = Person.select()
+        result = prefetch(query)
+        # Should return the query itself (not wrapped).
+        self.assertIs(result, query)

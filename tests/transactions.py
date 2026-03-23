@@ -527,3 +527,37 @@ class TestTransactionIsolationLevel(BaseTransactionTestCase):
         with Register.bind_ctx(db2):
             q = Register.select().order_by(Register.value)
             self.assertEqual([r.value for r in q], vals)
+
+
+# ===========================================================================
+# Gap coverage: Connection context as decorator, atomic decorator semantics
+# ===========================================================================
+
+class TestConnectionContextDecorator(BaseTransactionTestCase):
+    def test_connection_context_as_decorator(self):
+        """connection_context() can be used as a decorator."""
+        db2 = new_connection()
+
+        @db2.connection_context()
+        def do_work():
+            self.assertFalse(db2.is_closed())
+            return db2.execute_sql('SELECT 1').fetchone()
+
+        self.assertTrue(db2.is_closed())
+        result = do_work()
+        self.assertEqual(result, (1,))
+        self.assertTrue(db2.is_closed())
+
+    def test_manual_commit_as_decorator(self):
+        """manual_commit() can be used as a decorator."""
+        @db.manual_commit()
+        def do_work():
+            db.begin()
+            self._save(100)
+            db.rollback()
+            db.begin()
+            self._save(200)
+            db.commit()
+
+        do_work()
+        self.assertRegister([200])

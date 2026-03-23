@@ -2732,3 +2732,98 @@ class TestModelConversionRegression(ModelTestCase):
         c0, c1, c2 = cpks
         query = CharFK.select().where(CharFK.cpk << [c0, c2])
         self.assertEqual(sorted([f.id for f in query]), [1, 3])
+
+
+# ===========================================================================
+# Gap coverage: AnyField, PrimaryKeyField deprecation, toggle_bit
+# ===========================================================================
+
+class AnyM(TestModel):
+    data = AnyField(null=True)
+
+@requires_sqlite
+class TestAnyField(ModelTestCase):
+    requires = [AnyM]
+
+    def test_any_field_stores_values(self):
+        """AnyField accepts and returns values without coercion."""
+        AnyM.create(data='hello')
+        AnyM.create(data=42)
+        AnyM.create(data=None)
+        results = [m.data for m in AnyM.select().order_by(AnyM.id)]
+        # AnyField does not coerce — SQLite preserves original types.
+        self.assertEqual(results[0], 'hello')
+        self.assertEqual(results[1], 42)
+        self.assertIsNone(results[2])
+
+    def test_any_field_ddl(self):
+        """AnyField DDL uses the configured field type."""
+        from peewee import Context
+        ctx = Context()
+        ddl_sql, _ = ctx.sql(AnyM.data.ddl(ctx)).query()
+        self.assertIn('ANY', ddl_sql)
+
+
+class TestPrimaryKeyFieldDeprecation(BaseTestCase):
+    def test_primary_key_field_emits_warning(self):
+        """PrimaryKeyField emits a DeprecationWarning."""
+        import warnings
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter('always')
+            field = PrimaryKeyField()
+            self.assertTrue(any(issubclass(x.category, DeprecationWarning)
+                                for x in w))
+            self.assertTrue(any('PrimaryKeyField' in str(x.message)
+                                for x in w))
+
+
+class TestBigBitFieldToggle(ModelTestCase):
+    requires = [Bits]
+
+    def test_toggle_bit(self):
+        """BigBitFieldData.toggle_bit() XORs a bit and returns new state."""
+        b = Bits()
+        # Toggle bit 5 on (was off).
+        result = b.data.toggle_bit(5)
+        self.assertTrue(result)
+        self.assertTrue(b.data.is_set(5))
+
+        # Toggle bit 5 off (was on).
+        result = b.data.toggle_bit(5)
+        self.assertFalse(result)
+        self.assertFalse(b.data.is_set(5))
+
+    def test_toggle_bit_persists(self):
+        """toggle_bit changes persist to the database."""
+        b = Bits.create()
+        b.data.toggle_bit(3)
+        b.data.toggle_bit(7)
+        b.save()
+
+        b_db = Bits.get(Bits.id == b.id)
+        self.assertTrue(b_db.data.is_set(3))
+        self.assertTrue(b_db.data.is_set(7))
+        self.assertFalse(b_db.data.is_set(4))
+
+    def test_bigbit_incompatible_data_error(self):
+        """BigBitFieldData._bitwise_op raises ValueError for bad types."""
+        b = Bits()
+        b.data.set_bit(0)
+        self.assertRaises(ValueError, lambda: b.data & 42)
+        self.assertRaises(ValueError, lambda: b.data | 42)
+        self.assertRaises(ValueError, lambda: b.data ^ 42)
+
+
+class TestFieldAccessorEdgeCases(BaseTestCase):
+    def test_field_accessor_missing_key(self):
+        """FieldAccessor returns None for missing data key."""
+        u = User.__new__(User)
+        u.__data__ = {}
+        u.__rel__ = {}
+        u._dirty = set()
+        # Accessing a field not in __data__ should return None.
+        self.assertIsNone(u.username)
+
+    def test_autofield_primary_key_false_error(self):
+        """AutoField with primary_key=False raises ValueError."""
+        self.assertRaises(ValueError, AutoField, primary_key=False)

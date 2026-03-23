@@ -773,3 +773,90 @@ class TestDedupeColumns(DatabaseTestCase):
         result = cw.dedupe_columns(
             ['name', 'value', 'name'], valid_identifiers=False)
         self.assertEqual(result, ['name', 'value', 'name_2'])
+
+
+# ===========================================================================
+# Gap coverage: CursorWrapper edge cases
+# ===========================================================================
+
+class TestCursorWrapperEdgeCases(DatabaseTestCase):
+    database = get_in_memory_db()
+
+    def setUp(self):
+        super(TestCursorWrapperEdgeCases, self).setUp()
+        QUser.bind(self.database)
+        self.execute('CREATE TABLE "users" (id INTEGER NOT NULL PRIMARY KEY, '
+                     'username TEXT)')
+
+    def tearDown(self):
+        self.execute('DROP TABLE "users";')
+        super(TestCursorWrapperEdgeCases, self).tearDown()
+
+    def test_getitem_invalid_type_error(self):
+        """CursorWrapper.__getitem__ with non-int/slice raises ValueError."""
+        from peewee import CursorWrapper
+        QUser.insert({QUser.username: 'u1'}).execute()
+        query = QUser.select()
+        cursor = query.execute()
+        self.assertRaises(ValueError, cursor.__getitem__, 'bad')
+
+    def test_fill_cache_negative_error(self):
+        """CursorWrapper.fill_cache with negative n raises ValueError."""
+        from peewee import CursorWrapper
+        QUser.insert({QUser.username: 'u1'}).execute()
+        query = QUser.select()
+        cursor = query.execute()
+        self.assertRaises(ValueError, cursor.fill_cache, -1)
+
+    def test_peek_n_greater_than_one(self):
+        """peek(n=N) with N > 1 returns list of N rows."""
+        for i in range(5):
+            QUser.insert({QUser.username: 'u%d' % i}).execute()
+        query = QUser.select().order_by(QUser.id)
+        rows = query.peek(n=3)
+        self.assertEqual(len(rows), 3)
+        self.assertEqual([r['username'] for r in rows],
+                         ['u0', 'u1', 'u2'])
+
+    def test_count_clear_limit(self):
+        """SelectBase.count(clear_limit=True) ignores limit/offset."""
+        for i in range(5):
+            QUser.insert({QUser.username: 'u%d' % i}).execute()
+        query = QUser.select().limit(2).offset(1)
+        # Normal count respects limit.
+        self.assertEqual(query.count(), 2)
+        # clear_limit ignores it.
+        self.assertEqual(query.count(clear_limit=True), 5)
+
+
+class TestModelCursorEdgeCases(ModelTestCase):
+    database = get_in_memory_db()
+    requires = [User, Tweet]
+
+    def test_peek_n_model(self):
+        """peek(n=2) at Model level returns list of model instances."""
+        for name in ('alpha', 'bravo', 'charlie'):
+            User.create(username=name)
+        query = User.select().order_by(User.username)
+        rows = query.peek(n=2)
+        self.assertEqual(len(rows), 2)
+        self.assertEqual(rows[0].username, 'alpha')
+        self.assertEqual(rows[1].username, 'bravo')
+
+    def test_model_namedtuple_with_join(self):
+        """namedtuples() with a joined query flattens columns."""
+        u = User.create(username='huey')
+        Tweet.create(user=u, content='meow')
+        query = (Tweet
+                 .select(Tweet.content, User.username)
+                 .join(User)
+                 .namedtuples())
+        rows = list(query)
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0].content, 'meow')
+        self.assertEqual(rows[0].username, 'huey')
+
+    def test_model_raw_get_does_not_exist(self):
+        """ModelRaw.get() raises DoesNotExist when no rows match."""
+        query = User.raw('SELECT * FROM users WHERE username = ?', 'nobody')
+        self.assertRaises(User.DoesNotExist, query.get)
