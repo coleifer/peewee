@@ -283,6 +283,41 @@ class TestModelDDL(ModelDatabaseTestCase):
              'WHERE ("name_class" = ?)', ['scientific name']),
         ])
 
+    def test_add_index_with_fields(self):
+        class IdxModel(TestModel):
+            name = CharField()
+            value = IntegerField()
+            class Meta:
+                database = self.database
+
+        self.assertEqual(len(IdxModel._meta.indexes), 0)
+        IdxModel.add_index(IdxModel.name, IdxModel.value, unique=True)
+        self.assertEqual(len(IdxModel._meta.indexes), 1)
+
+        idx = IdxModel._meta.indexes[0]
+        self.assertIsInstance(idx, ModelIndex)
+        self.assertTrue(idx._unique)
+
+        self.assertIndexes(IdxModel, [
+            ('CREATE UNIQUE INDEX "idx_model_name_value" ON "idx_model" ('
+             '"name", "value")', []),
+        ])
+
+    def test_add_index_with_sql(self):
+        class IdxModel(TestModel):
+            name = CharField()
+            class Meta:
+                database = self.database
+
+        raw = SQL('CREATE INDEX test_idx ON idxmodel2 (name)')
+        self.assertEqual(len(IdxModel._meta.indexes), 0)
+        IdxModel.add_index(raw)
+        self.assertEqual(len(IdxModel._meta.indexes), 1)
+
+        self.assertIndexes(IdxModel, [
+            ('CREATE INDEX test_idx ON idxmodel2 (name)', []),
+        ])
+
     def test_legacy_model_table_and_indexes(self):
         class Base(Model):
             class Meta:

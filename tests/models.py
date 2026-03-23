@@ -40,7 +40,6 @@ from .base import TestModel
 from .base_models import *
 
 
-
 # ===========================================================================
 # Core Model CRUD operations
 # ===========================================================================
@@ -49,17 +48,14 @@ class Color(TestModel):
     name = CharField(primary_key=True)
     is_neutral = BooleanField(default=False)
 
-
 class Post(TestModel):
     content = TextField(column_name='Content')
     timestamp = DateTimeField(column_name='TimeStamp',
                               default=datetime.datetime.now)
 
-
 class PostNote(TestModel):
     post = ForeignKeyField(Post, backref='notes', primary_key=True)
     note = TextField()
-
 
 class Point(TestModel):
     x = IntegerField()
@@ -67,14 +63,12 @@ class Point(TestModel):
     class Meta:
         primary_key = False
 
-
 class CPK(TestModel):
     key = CharField()
     value = IntegerField()
     extra = IntegerField()
     class Meta:
         primary_key = CompositeKey('key', 'value')
-
 
 class City(TestModel):
     name = CharField()
@@ -87,6 +81,8 @@ class Venue(TestModel):
 class Event(TestModel):
     name = CharField()
     venue = ForeignKeyField(Venue, backref='events', null=True)
+
+
 class TestModelAPIs(ModelTestCase):
     def add_user(self, username):
         return User.create(username=username)
@@ -126,11 +122,13 @@ class TestModelAPIs(ModelTestCase):
                   .get())
             self.assertEqual(pn.post.content, 'p2')
 
-        if not IS_SQLITE:
-            exc_class = (ProgrammingError, IntegrityError)
-            with self.database.atomic() as txn:
-                self.assertRaises(exc_class, PostNote.create, note='pxn')
-                txn.rollback()
+        if IS_SQLITE:
+            self.database.foreign_keys = True
+
+        exc_class = (ProgrammingError, IntegrityError)
+        with self.database.atomic() as txn:
+            self.assertRaises(exc_class, PostNote.create, note='pxn')
+            txn.rollback()
 
     @requires_models(Post)
     def test_column_field_translation(self):
@@ -1071,10 +1069,9 @@ class TestModelAPIs(ModelTestCase):
                     ts += 1
 
     @requires_pglike
-    @requires_models(User)
+    @requires_models(User, Tweet)
     def test_join_on_valueslist(self):
-        for username in ('huey', 'mickey', 'zaizee'):
-            User.create(username=username)
+        self._create_user_tweets()
 
         vl = ValuesList([('huey',), ('zaizee',)], columns=['username'])
         with self.assertQueryCount(1):
@@ -2903,7 +2900,7 @@ class TestWindowFunctionIntegration(ModelTestCase):
                          [(1, 1), (1, 2), (2, 3), (2, 4), (3, 5)])
 
     def test_sum_with_frame(self):
-        w = Window(order_by=[Sample.counter],
+        w = Window(order_by=[Sample.counter, Sample.value],
                    frame_type=Window.ROWS,
                    start=Window.preceding(1),
                    end=Window.CURRENT_ROW)
@@ -2925,10 +2922,10 @@ class TestWindowFunctionIntegration(ModelTestCase):
     def test_lag_lead(self):
         query = (Sample
                  .select(Sample.counter,
-                         fn.LAG(Sample.value, 1).over(
-                             order_by=[Sample.counter]).alias('prev'),
-                         fn.LEAD(Sample.value, 1).over(
-                             order_by=[Sample.counter]).alias('next'))
+                         fn.LAG(Sample.value, 1).over(order_by=[
+                             Sample.counter, Sample.value]).alias('prev'),
+                         fn.LEAD(Sample.value, 1).over(order_by=[
+                             Sample.counter, Sample.value]).alias('next'))
                  .order_by(Sample.counter)
                  .tuples())
         results = list(query)
@@ -6953,26 +6950,19 @@ class TestModelSelectFromSubquery(ModelTestCase):
         self.assertTrue(isinstance(query[0], User))
 
 
-# ===========================================================================
-# Gap coverage: ModelAlias edge cases
-# ===========================================================================
-
 class TestModelAliasEdgeCases(BaseTestCase):
     def test_setattr_raises(self):
-        """ModelAlias.__setattr__ raises AttributeError."""
         UA = User.alias()
         with self.assertRaisesCtx(AttributeError):
             UA.custom_attr = 42
 
     def test_call_creates_instance(self):
-        """ModelAlias.__call__(**kwargs) creates a model instance."""
         UA = User.alias()
         inst = UA(username='huey')
         self.assertIsInstance(inst, User)
         self.assertEqual(inst.username, 'huey')
 
     def test_get_field_aliases(self):
-        """ModelAlias.get_field_aliases() returns FieldAlias for each field."""
         UA = User.alias()
         aliases = UA.get_field_aliases()
         field_names = [fa.field.name for fa in aliases]
@@ -6984,71 +6974,11 @@ class TestModelAliasEdgeCases(BaseTestCase):
 # Gap coverage: Metadata error paths and table properties
 # ===========================================================================
 
-class TestMetadataEdgeCases(BaseTestCase):
-    def test_model_graph_no_refs_no_backrefs_error(self):
-        """Metadata.model_graph(refs=False, backrefs=False) raises."""
-        self.assertRaises(ValueError, User._meta.model_graph,
-                          refs=False, backrefs=False)
 
-    def test_metadata_table_setter_error(self):
-        """Metadata.table setter raises AttributeError."""
-        with self.assertRaisesCtx(AttributeError):
-            User._meta.table = 'something'
-
-    def test_metadata_table_deleter_resets(self):
-        """Deleting Metadata.table resets the cached table object."""
-        t1 = User._meta.table
-        del User._meta.table
-        t2 = User._meta.table
-        # After delete and re-access, we get a fresh Table.
-        self.assertIsNotNone(t2)
-        self.assertIsNot(t1, t2)
-
-
-# ===========================================================================
-# Gap coverage: Model.add_index and NoopModelSelect
-# ===========================================================================
-
-class TestModelAddIndex(BaseTestCase):
-    def test_add_index_with_fields(self):
-        """Model.add_index() adds a ModelIndex to _meta.indexes."""
-        class IdxModel(TestModel):
-            name = CharField()
-            value = IntegerField()
-
-        before = len(IdxModel._meta.indexes)
-        IdxModel.add_index(IdxModel.name, IdxModel.value, unique=True)
-        after = len(IdxModel._meta.indexes)
-        self.assertEqual(after, before + 1)
-        idx = IdxModel._meta.indexes[-1]
-        self.assertIsInstance(idx, ModelIndex)
-        self.assertTrue(idx._unique)
-
-    def test_add_index_with_sql(self):
-        """Model.add_index(SQL(...)) adds raw SQL index."""
-        class IdxModel2(TestModel):
-            name = CharField()
-
-        raw = SQL('CREATE INDEX test_idx ON idx_model2 (name)')
-        before = len(IdxModel2._meta.indexes)
-        IdxModel2.add_index(raw)
-        after = len(IdxModel2._meta.indexes)
-        self.assertEqual(after, before + 1)
-        self.assertIs(IdxModel2._meta.indexes[-1], raw)
-
-
-class TestNoopModelSelectSQL(ModelTestCase):
+class TestNoopModelSelect(ModelTestCase):
     requires = [User]
 
-    def test_noop_select_sql(self):
-        """NoopModelSelect produces a no-op SELECT statement."""
-        query = User.noop()
-        sql_str, params = query.sql()
-        self.assertIn('SELECT', sql_str)
-        self.assertIn('0', sql_str)
-
     def test_noop_returns_empty(self):
-        """NoopModelSelect always returns empty result set."""
         User.create(username='huey')
         self.assertEqual(list(User.noop()), [])
 
@@ -7062,7 +6992,6 @@ class TestSafePythonValueFailure(ModelTestCase):
     requires = [Sample]
 
     def test_safe_python_value_catches_error(self):
-        """safe_python_value wraps conversion errors and returns raw value."""
         from peewee import safe_python_value
         def bad_converter(value):
             raise ValueError('bad')
@@ -7072,7 +7001,6 @@ class TestSafePythonValueFailure(ModelTestCase):
         self.assertEqual(result, 'hello')
 
     def test_safe_python_value_passes_through_success(self):
-        """safe_python_value passes through on successful conversion."""
         from peewee import safe_python_value
         safe = safe_python_value(int)
         self.assertEqual(safe('42'), 42)
@@ -7109,6 +7037,27 @@ class TestModelSaveNoDataError(ModelTestCase):
 # ===========================================================================
 # Gap coverage: Model.dependencies tested standalone
 # ===========================================================================
+
+class TestMetadataEdgeCases(BaseTestCase):
+    def test_model_graph_no_refs_no_backrefs_error(self):
+        """Metadata.model_graph(refs=False, backrefs=False) raises."""
+        self.assertRaises(ValueError, User._meta.model_graph,
+                          refs=False, backrefs=False)
+
+    def test_metadata_table_setter_error(self):
+        """Metadata.table setter raises AttributeError."""
+        with self.assertRaisesCtx(AttributeError):
+            User._meta.table = 'something'
+
+    def test_metadata_table_deleter_resets(self):
+        """Deleting Metadata.table resets the cached table object."""
+        t1 = User._meta.table
+        del User._meta.table
+        t2 = User._meta.table
+        # After delete and re-access, we get a fresh Table.
+        self.assertIsNotNone(t2)
+        self.assertIsNot(t1, t2)
+
 
 class DepParent(TestModel):
     name = CharField()
