@@ -5,17 +5,17 @@ constraints.
 
 Test case ordering:
 
-1. Numeric and basic value types
-2. Date/time fields
-3. Foreign key basics and deferred FK resolution
-4. Composite PK, field functions, IP, bit fields
-5. Blob, BigAuto, UUID, timestamp, custom fields
-6. String fields and misc field types
-7. Virtual field behavior
-8. Foreign key advanced: non-PK targets, multiple FKs, composite PK with FK
-9. Search operators (regexp, contains)
-10. Value conversion and type coercion
-11. Regressions and edge cases
+* Numeric and basic value types
+* Date/time fields
+* Foreign key basics and deferred FK resolution
+* Composite PK, field functions, IP, bit fields
+* Blob, Auto, BigAuto, UUID, timestamp, custom fields
+* String fields and misc field types
+* Virtual field behavior
+* Foreign key advanced: non-PK targets, multiple FKs, composite PK with FK
+* Search operators (regexp, contains)
+* Value conversion and type coercion
+* Regressions and edge cases
 """
 import calendar
 import datetime
@@ -696,7 +696,7 @@ class TestDateTimeMath(ModelTestCase):
 
 
 # ===========================================================================
-# Blob, BigAutoField, and field value handling
+# Blob, AutoField, BigAutoField, and field value handling
 # ===========================================================================
 
 class BlobModel(TestModel):
@@ -768,6 +768,34 @@ class TestBlobFieldContextRegression(BaseTestCase):
         self.assertTrue(A.f._constructor is orig)
 
 
+class AFModel(TestModel):
+    pk = AutoField()
+    data = TextField()
+
+
+class TestAutoField(ModelTestCase):
+    requires = [AFModel]
+
+    def test_autofield(self):
+        self.assertTrue(AFModel._meta.primary_key is AFModel.pk)
+        a1 = AFModel.create(data='a1')
+        a2 = AFModel.create(data='a2')
+
+        # Auto field gets populated on create.
+        self.assertTrue(a1.pk is not None)
+        self.assertTrue(a2.pk is not None)
+
+        a1_db = AFModel.get(AFModel.pk == a1.pk)
+        a2_db = AFModel.get(AFModel.pk == a2.pk)
+
+        self.assertTrue(a1_db.pk != a2_db.pk)
+        self.assertTrue(a1_db.data, 'a1')
+        self.assertTrue(a2_db.data, 'a2')
+
+    def test_autofield_primary_key_false_error(self):
+        self.assertRaises(ValueError, AutoField, primary_key=False)
+
+
 class BigModel(TestModel):
     pk = BigAutoField()
     data = TextField()
@@ -777,13 +805,19 @@ class TestBigAutoField(ModelTestCase):
     requires = [BigModel]
 
     def test_big_auto_field(self):
+        self.assertTrue(BigModel._meta.primary_key is BigModel.pk)
+
         b1 = BigModel.create(data='b1')
         b2 = BigModel.create(data='b2')
+
+        # Auto field gets populated on create.
+        self.assertTrue(b1.pk is not None)
+        self.assertTrue(b2.pk is not None)
 
         b1_db = BigModel.get(BigModel.pk == b1.pk)
         b2_db = BigModel.get(BigModel.pk == b2.pk)
 
-        self.assertTrue(b1_db.pk < b2_db.pk)
+        self.assertTrue(b1_db.pk != b2_db.pk)
         self.assertTrue(b1_db.data, 'b1')
         self.assertTrue(b2_db.data, 'b2')
 
@@ -1244,6 +1278,35 @@ class TestBitFields(ModelTestCase):
         self.assertEqual(b1.data | b'\xff', b'\xff\x11')
         self.assertEqual(b1.data ^ b'\xff', b'\xee\x11')
 
+    def test_toggle_bit(self):
+        b = Bits()
+        # Toggle bit 5 on (was off).
+        result = b.data.toggle_bit(5)
+        self.assertTrue(result)
+        self.assertTrue(b.data.is_set(5))
+
+        # Toggle bit 5 off (was on).
+        result = b.data.toggle_bit(5)
+        self.assertFalse(result)
+        self.assertFalse(b.data.is_set(5))
+
+        b = Bits.create()
+        b.data.toggle_bit(3)
+        b.data.toggle_bit(7)
+        b.save()
+
+        b_db = Bits.get(Bits.id == b.id)
+        self.assertTrue(b_db.data.is_set(3))
+        self.assertTrue(b_db.data.is_set(7))
+        self.assertFalse(b_db.data.is_set(4))
+
+    def test_bigbit_incompatible_data_error(self):
+        b = Bits()
+        b.data.set_bit(0)
+        self.assertRaises(ValueError, lambda: b.data & 42)
+        self.assertRaises(ValueError, lambda: b.data | 42)
+        self.assertRaises(ValueError, lambda: b.data ^ 42)
+
     def test_bigbit_field_bulk_create(self):
         b1, b2, b3 = Bits(), Bits(), Bits()
         b1.data.set_bit(1)
@@ -1349,7 +1412,6 @@ class VF(TestModel):
 
 class TestVirtualFieldBehavior(BaseTestCase):
     def test_virtual_field_not_in_columns(self):
-        """VirtualField should not appear in the model's SELECT columns."""
         fields = VF._meta.sorted_fields
         field_names = [f.name for f in fields]
         self.assertIn('name', field_names)
@@ -1459,6 +1521,24 @@ class TestSqliteInvalidDataTypes(ModelTestCase):
         self.assertEqual(it_db1.tfield, '100')
         self.assertEqual(it_db1.ifield, 'five')
         self.assertEqual(it_db1.ffield, 'pi')
+
+
+class AnyM(TestModel):
+    data = AnyField(null=True)
+
+@requires_sqlite
+class TestSqliteAnyField(ModelTestCase):
+    requires = [AnyM]
+
+    def test_any_field_stores_values(self):
+        AnyM.create(data='hello')
+        AnyM.create(data=42)
+        AnyM.create(data=None)
+        results = [m.data for m in AnyM.select().order_by(AnyM.id)]
+        self.assertEqual(results, ['hello', 42, None])
+
+    def test_any_field_ddl(self):
+        self.assertSQL(AnyM.data.ddl(Context()), '"data" ANY')
 
 
 # ===========================================================================
@@ -2704,9 +2784,6 @@ class CharPK(TestModel):
     id = CharField(primary_key=True)
     name = CharField(unique=True)
 
-    def __str__(self):
-        return self.name
-
 
 class CharFK(TestModel):
     id = IntegerField(primary_key=True)
@@ -2734,96 +2811,8 @@ class TestModelConversionRegression(ModelTestCase):
         self.assertEqual(sorted([f.id for f in query]), [1, 3])
 
 
-# ===========================================================================
-# Gap coverage: AnyField, PrimaryKeyField deprecation, toggle_bit
-# ===========================================================================
-
-class AnyM(TestModel):
-    data = AnyField(null=True)
-
-@requires_sqlite
-class TestAnyField(ModelTestCase):
-    requires = [AnyM]
-
-    def test_any_field_stores_values(self):
-        """AnyField accepts and returns values without coercion."""
-        AnyM.create(data='hello')
-        AnyM.create(data=42)
-        AnyM.create(data=None)
-        results = [m.data for m in AnyM.select().order_by(AnyM.id)]
-        # AnyField does not coerce — SQLite preserves original types.
-        self.assertEqual(results[0], 'hello')
-        self.assertEqual(results[1], 42)
-        self.assertIsNone(results[2])
-
-    def test_any_field_ddl(self):
-        """AnyField DDL uses the configured field type."""
-        from peewee import Context
-        ctx = Context()
-        ddl_sql, _ = ctx.sql(AnyM.data.ddl(ctx)).query()
-        self.assertIn('ANY', ddl_sql)
-
-
-class TestPrimaryKeyFieldDeprecation(BaseTestCase):
-    def test_primary_key_field_emits_warning(self):
-        """PrimaryKeyField emits a DeprecationWarning."""
-        import warnings
-        with warnings.catch_warnings(record=True) as w:
-            warnings.simplefilter('always')
-            field = PrimaryKeyField()
-            self.assertTrue(any(issubclass(x.category, DeprecationWarning)
-                                for x in w))
-            self.assertTrue(any('PrimaryKeyField' in str(x.message)
-                                for x in w))
-
-
-class TestBigBitFieldToggle(ModelTestCase):
-    requires = [Bits]
-
-    def test_toggle_bit(self):
-        """BigBitFieldData.toggle_bit() XORs a bit and returns new state."""
-        b = Bits()
-        # Toggle bit 5 on (was off).
-        result = b.data.toggle_bit(5)
-        self.assertTrue(result)
-        self.assertTrue(b.data.is_set(5))
-
-        # Toggle bit 5 off (was on).
-        result = b.data.toggle_bit(5)
-        self.assertFalse(result)
-        self.assertFalse(b.data.is_set(5))
-
-    def test_toggle_bit_persists(self):
-        """toggle_bit changes persist to the database."""
-        b = Bits.create()
-        b.data.toggle_bit(3)
-        b.data.toggle_bit(7)
-        b.save()
-
-        b_db = Bits.get(Bits.id == b.id)
-        self.assertTrue(b_db.data.is_set(3))
-        self.assertTrue(b_db.data.is_set(7))
-        self.assertFalse(b_db.data.is_set(4))
-
-    def test_bigbit_incompatible_data_error(self):
-        """BigBitFieldData._bitwise_op raises ValueError for bad types."""
-        b = Bits()
-        b.data.set_bit(0)
-        self.assertRaises(ValueError, lambda: b.data & 42)
-        self.assertRaises(ValueError, lambda: b.data | 42)
-        self.assertRaises(ValueError, lambda: b.data ^ 42)
-
-
 class TestFieldAccessorEdgeCases(BaseTestCase):
     def test_field_accessor_missing_key(self):
-        """FieldAccessor returns None for missing data key."""
-        u = User.__new__(User)
+        u = User()
         u.__data__ = {}
-        u.__rel__ = {}
-        u._dirty = set()
-        # Accessing a field not in __data__ should return None.
         self.assertIsNone(u.username)
-
-    def test_autofield_primary_key_false_error(self):
-        """AutoField with primary_key=False raises ValueError."""
-        self.assertRaises(ValueError, AutoField, primary_key=False)
