@@ -1106,11 +1106,9 @@ class TestModelAPIs(ModelTestCase):
 
             data = [(user.username, user.tweet.content) for user in query]
 
-        # Failing on travis-ci...old SQLite?
-        if not IS_SQLITE_OLD:
-            self.assertEqual(data, [
-                ('huey', 'hiss'),
-                ('mickey', 'grr')])
+        self.assertEqual(data, [
+            ('huey', 'hiss'),
+            ('mickey', 'grr')])
 
         with self.assertQueryCount(1):
             query = (Tweet
@@ -1538,6 +1536,9 @@ class TestModelAPIs(ModelTestCase):
         query = User.noop()
         self.assertEqual(list(query), [])
 
+        User.create(username='huey')
+        self.assertEqual(list(User.noop()), [])
+
     @requires_models(User)
     def test_iteration(self):
         self.assertEqual(list(User), [])
@@ -1549,17 +1550,35 @@ class TestModelAPIs(ModelTestCase):
         self.assertEqual(len(User), 2)
         self.assertTrue(User)
 
-    @requires_models(User)
+    @requires_models(User, Tweet)
     def test_iterator(self):
         users = ['charlie', 'huey', 'zaizee']
         with self.database.atomic():
             for username in users:
-                User.create(username=username)
+                user = User.create(username=username)
+                for i in range(3):
+                    Tweet.create(content='%s-%s' % (username, i), user=user)
 
         with self.assertQueryCount(1):
             query = User.select().order_by(User.username).iterator()
             self.assertEqual([u.username for u in query], users)
+            self.assertEqual(list(query), [])
 
+        with self.assertQueryCount(1):
+            query = (Tweet.select(Tweet, User)
+                     .join(User)
+                     .order_by(Tweet.content)
+                     .iterator())
+            self.assertEqual([(t.content, t.user.username) for t in query], [
+                ('charlie-0', 'charlie'),
+                ('charlie-1', 'charlie'),
+                ('charlie-2', 'charlie'),
+                ('huey-0', 'huey'),
+                ('huey-1', 'huey'),
+                ('huey-2', 'huey'),
+                ('zaizee-0', 'zaizee'),
+                ('zaizee-1', 'zaizee'),
+                ('zaizee-2', 'zaizee')])
             self.assertEqual(list(query), [])
 
     @requires_models(User)
@@ -1584,7 +1603,6 @@ class TestModelAPIs(ModelTestCase):
         assertBatch(6, 6, 1)
         assertBatch(6, 7, 1)
 
-
     @requires_models(User, Tweet)
     def test_assertQueryCount(self):
         self.add_tweets(self.add_user('charlie'), 'foo', 'bar', 'baz')
@@ -1596,7 +1614,6 @@ class TestModelAPIs(ModelTestCase):
         self.assertRaises(AssertionError, do_test, 3)
         do_test(4)
         self.assertRaises(AssertionError, do_test, 5)
-
 
 
 class TestRaw(ModelTestCase):
@@ -2034,8 +2051,8 @@ class TestDeleteInstance(ModelTestCase):
             mickey = User.create(username='mickey')
             woof = Tweet.create(user=mickey, content='woof')
             Favorite.create(user=huey, tweet=woof)
-            Favorite.create(user=mickey, tweet=Tweet.create(user=huey,
-                                                            content='hiss'))
+            Favorite.create(user=mickey,
+                            tweet=Tweet.create(user=huey, content='hiss'))
 
     def test_delete_instance_recursive(self):
         huey = User.get(User.username == 'huey')
@@ -2104,8 +2121,6 @@ class TestDeleteInstance(ModelTestCase):
         self.assertEqual(Tweet.select().count(), 1)
         tweet = Tweet.get()
         self.assertEqual(tweet.content, 'woof')
-
-
 
 
 class CascadeParent(TestModel):
@@ -2490,6 +2505,7 @@ class TestMultiSelfJoin(ModelTestCase):
             ('huey-2-1', 'huey-2', 'huey'),
         ])
 
+
 class CJ_A(TestModel):
     id = IntegerField(primary_key=True)
 class CJ_B(TestModel):
@@ -2521,7 +2537,6 @@ class TestCrossJoin(ModelTestCase):
                  .where(CJ_C.id.is_null())
                  .order_by(CJ_A.id, CJ_B.id))
         self.assertEqual(list(query.tuples()), [(2, 2), (3, 1), (3, 2)])
-
 
 
 class Student(TestModel):
@@ -2588,6 +2603,7 @@ class TestManyToManyJoining(ModelTestCase):
                  .where(Attendance.course.in_(courses)))
         self.assertQuery(query)
 
+
 class Player(TestModel):
     name = TextField()
 
@@ -2598,7 +2614,6 @@ class Game(TestModel):
 class Score(TestModel):
     game = ForeignKeyField(Game)
     points = IntegerField()
-
 
 class TestJoinSubqueryAggregateViaLeftOuter(ModelTestCase):
     requires = [Player, Game, Score]
@@ -2647,10 +2662,7 @@ class TestJoinSubqueryAggregateViaLeftOuter(ModelTestCase):
 # Advanced query features (window functions, tuples, compound selects, etc.)
 # ===========================================================================
 
-
-@skip_unless(
-    IS_POSTGRESQL or IS_MYSQL_ADVANCED_FEATURES or IS_SQLITE_25 or IS_CRDB,
-    'window function')
+@skip_unless(not IS_SQLITE or IS_SQLITE_25, 'window functions')
 class TestWindowFunctionIntegration(ModelTestCase):
     requires = [Sample]
 
@@ -2935,7 +2947,6 @@ class TestWindowFunctionIntegration(ModelTestCase):
             (2, 20.0, 3.0),
             (2, 1.0, 100.0),
             (3, 3.0, None)])
-        #values = ((1, 10), (1, 20), (2, 1), (2, 3), (3, 100))
 
 
 @skip_if(not IS_SQLITE_15, 'requires row-values')
@@ -3213,6 +3224,7 @@ class TestColumnNameStripping(ModelTestCase):
         self.assertEqual(row['dob'], d1)
         self.assertEqual(row['mdob'], d2)
 
+
 class TestSelectValueConversion(ModelTestCase):
     requires = [User]
 
@@ -3259,7 +3271,6 @@ class TestEnsureJoin(ModelTestCase):
     requires = [User, Tweet]
 
     def test_ensure_join_noop(self):
-        """If join already exists, ensure_join doesn't duplicate it."""
         u = User.create(username='huey')
         Tweet.create(user=u, content='meow')
 
@@ -3268,19 +3279,20 @@ class TestEnsureJoin(ModelTestCase):
                  .join(Tweet)
                  .switch(User)
                  .ensure_join(User, Tweet))
-        result = [(row.username, row.tweet.content) for row in query]
-        self.assertEqual(result, [('huey', 'meow')])
+        with self.assertQueryCount(1):
+            result = [(row.username, row.tweet.content) for row in query]
+            self.assertEqual(result, [('huey', 'meow')])
 
     def test_ensure_join_adds_when_missing(self):
-        """If join doesn't exist, ensure_join adds it."""
         u = User.create(username='huey')
         Tweet.create(user=u, content='meow')
 
         query = (User
                  .select(User, Tweet.content)
                  .ensure_join(User, Tweet))
-        result = [(row.username, row.tweet.content) for row in query]
-        self.assertEqual(result, [('huey', 'meow')])
+        with self.assertQueryCount(1):
+            result = [(row.username, row.tweet.content) for row in query]
+            self.assertEqual(result, [('huey', 'meow')])
 
 
 class TestScalarIntegration(ModelTestCase):
@@ -3329,57 +3341,8 @@ class TestExistsIntegration(ModelTestCase):
         self.assertTrue(
             User.select().where(User.username == 'huey').exists())
 
-    @requires_models(User)
-    def test_exists_false(self):
-        User.create(username='huey')
         self.assertFalse(
             User.select().where(User.username == 'nobody').exists())
-
-
-class TestObjectsIntegration(ModelTestCase):
-    requires = [User, Tweet]
-
-    @requires_models(User, Tweet)
-    def test_objects_returns_target_model(self):
-        u = User.create(username='huey')
-        Tweet.create(user=u, content='meow')
-        Tweet.create(user=u, content='purr')
-
-        query = (Tweet
-                 .select(Tweet, User)
-                 .join(User)
-                 .order_by(Tweet.content)
-                 .objects())
-        results = list(query)
-        # .objects() maps all columns onto the Tweet model.
-        self.assertEqual(len(results), 2)
-        self.assertTrue(isinstance(results[0], Tweet))
-        self.assertEqual(results[0].content, 'meow')
-        self.assertEqual(results[0].username, 'huey')
-        self.assertEqual(results[1].content, 'purr')
-
-
-class TestRowTypeIntegration(ModelTestCase):
-    requires = [User]
-
-    @requires_models(User)
-    def test_tuples(self):
-        User.create(username='huey')
-        result = list(User.select(User.username).tuples())
-        self.assertEqual(result, [('huey',)])
-
-    @requires_models(User)
-    def test_dicts(self):
-        User.create(username='huey')
-        result = list(User.select(User.username).dicts())
-        self.assertEqual(result, [{'username': 'huey'}])
-
-    @requires_models(User)
-    def test_namedtuples(self):
-        User.create(username='huey')
-        result = list(User.select(User.username).namedtuples())
-        self.assertEqual(len(result), 1)
-        self.assertEqual(result[0].username, 'huey')
 
 
 class VL(TestModel):
@@ -5061,6 +5024,7 @@ class TestBulkCreateWithFK(ModelTestCase):
             self.assertEqual(t_db.content, 't1')
             self.assertEqual(t_db.user.username, 'u1')
 
+
 class UUIDReg(TestModel):
     id = UUIDField(primary_key=True, default=uuid.uuid4)
     key = TextField()
@@ -5100,6 +5064,7 @@ class TestBulkUpdateNonIntegerPK(ModelTestCase):
             ('b', 'kb', 2),
             ('c', 'kc-x', 3)])
 
+
 class NDF(TestModel):
     key = CharField(primary_key=True)
     date = DateTimeField(null=True)
@@ -5116,6 +5081,7 @@ class TestBulkUpdateAllNull(ModelTestCase):
 
         query = NDF.select().order_by(NDF.key).tuples()
         self.assertEqual([r for r in query], [('n1', None), ('n2', None)])
+
 
 class IMC(TestModel):
     a = IntegerField()
@@ -5638,6 +5604,7 @@ class TestForeignKeyFieldDescriptors(BaseTestCase):
         self.assertEqual(T1.user.column_name, 'user')
         self.assertEqual(T1.user.object_id_name, 'user_id')
 
+
 class NoPK(TestModel):
     data = IntegerField()
     class Meta:
@@ -5951,6 +5918,7 @@ class TestDatabaseExecuteQuery(ModelTestCase):
         cursor = self.database.execute(query)
         self.assertEqual([row[1] for row in cursor], ['zaizee', 'huey'])
 
+
 class ConflictDetectedException(Exception): pass
 
 class BaseVersionedModel(TestModel):
@@ -6110,6 +6078,7 @@ class TestDeleteInstanceRegression(ModelTestCase):
         self.assertEqual([ba.b for ba in DiBA.select().order_by(DiBA.b)],
                          ['a3-b1', 'a3-b2'])
 
+
 class User2(TestModel):
     username = TextField()
 
@@ -6157,6 +6126,7 @@ class TestGithub1354(ModelTestCase):
         self.assertEqual(child_db.parent.name, 'parent')
         self.assertEqual(child_db.name, 'child')
 
+
 class TestInsertFromSQL(ModelTestCase):
     def setUp(self):
         super(TestInsertFromSQL, self).setUp()
@@ -6175,6 +6145,7 @@ class TestInsertFromSQL(ModelTestCase):
         query_src = SQL('SELECT name FROM user_src')
         User.insert_from(query=query_src, fields=[User.username]).execute()
         self.assertEqual([u.username for u in User.select()], ['foo'])
+
 
 @requires_postgresql
 class TestReturningIntegrationRegressions(ModelTestCase):
@@ -6227,6 +6198,7 @@ class TestReturningIntegrationRegressions(ModelTestCase):
         result = query.execute()
         self.assertEqual(sorted([(r.id, r.username) for r in result]), [
             (2, 'mickey'), (3, 'zaizee')])
+
 
 class TestUpdateIntegrationRegressions(ModelTestCase):
     requires = [User, Tweet, Sample]
@@ -6403,6 +6375,7 @@ class TestRegressionCountDistinct(ModelTestCase):
         RKV.insert_many([('k%s' % i, i, i) for i in range(5)]).execute()
         self.assertEqual(RKV.select().distinct().count(), 5)
 
+
 class TestReselectModelRegression(ModelTestCase):
     requires = [User]
 
@@ -6418,14 +6391,6 @@ class TestReselectModelRegression(ModelTestCase):
             (u2.id, 'u2',),
             (u1.id, 'u1',)])
 
-class RU(TestModel):
-    username = TextField()
-
-
-class Recipe(TestModel):
-    name = TextField()
-    created_by = ForeignKeyField(RU, backref='recipes')
-    changed_by = ForeignKeyField(RU, backref='recipes_modified')
 
 class TestJoinCorrelatedSubquery(ModelTestCase):
     requires = [User, Tweet]
@@ -6457,6 +6422,15 @@ class TestJoinCorrelatedSubquery(ModelTestCase):
                 ('u2-2', 'u2')])
 
 
+class RU(TestModel):
+    username = TextField()
+
+class Recipe(TestModel):
+    name = TextField()
+    created_by = ForeignKeyField(RU, backref='recipes')
+    changed_by = ForeignKeyField(RU, backref='recipes_modified')
+
+
 class TestMultiFKJoinRegression(ModelTestCase):
     requires = [RU, Recipe]
 
@@ -6479,6 +6453,7 @@ class TestMultiFKJoinRegression(ModelTestCase):
                 ('r12', 'u1', 'u2'),
                 ('r21', 'u2', 'u1')])
 
+
 class TestCompoundExistsRegression(ModelTestCase):
     requires = [User]
 
@@ -6492,6 +6467,7 @@ class TestCompoundExistsRegression(ModelTestCase):
         User.create(username='u1')
         self.assertTrue(cq.exists())
         self.assertEqual(cq.count(), 1)
+
 
 class TestLikeColumnValue(ModelTestCase):
     requires = [User, Tweet]
@@ -6523,6 +6499,7 @@ class TestLikeColumnValue(ModelTestCase):
                 ('u1', 'u1 is my name'),
                 ('u3', 'hey u3 is me')])
 
+
 class TestUnionParenthesesRegression(ModelTestCase):
     requires = [User]
 
@@ -6535,6 +6512,7 @@ class TestUnionParenthesesRegression(ModelTestCase):
 
         query = User.select().where(User.id.in_(union)).order_by(User.id)
         self.assertEqual([u.username for u in query], ['a', 'c'])
+
 
 class Site(TestModel):
     url = TextField()
@@ -6613,6 +6591,7 @@ class TestModelFilterJoinOrdering(ModelTestCase):
              .order_by(PageItem.content))
         assertQ(q)
 
+
 class TestCountSubqueryEquals(ModelTestCase):
     requires = [User, Tweet]
 
@@ -6625,6 +6604,7 @@ class TestCountSubqueryEquals(ModelTestCase):
                 .where(Tweet.user == User.id))
         query = User.select().where(subq == 0)
         self.assertEqual([u.username for u in query], ['c'])
+
 
 class TestChainWhere(ModelTestCase):
     requires = [User]
@@ -6645,6 +6625,7 @@ class TestChainWhere(ModelTestCase):
              .where(User.username == 'b'))
         self.assertEqual([u.username for u in q], ['b'])
 
+
 class TestSaveClearingPK(ModelTestCase):
     requires = [User, Tweet]
 
@@ -6658,6 +6639,7 @@ class TestSaveClearingPK(ModelTestCase):
         self.assertTrue(t1.id != orig_id)
         tweets = [t.content for t in u.tweets.order_by(Tweet.id)]
         self.assertEqual(tweets, ['t1', 't2'])
+
 
 class TestWeirdAliases(ModelTestCase):
     requires = [User]
@@ -6687,6 +6669,7 @@ class TestWeirdAliases(ModelTestCase):
         if IS_SQLITE:
             assertAlias(SQL('LOWER("t1"."username")'), 'username')
 
+
 class CQA(TestModel):
     a = TextField()
     b = TextField()
@@ -6706,6 +6689,7 @@ class TestSelectFromUnion(ModelTestCase):
         union = wq1 | wq2
         data = [val for val, in union.tuples()]
         self.assertEqual(sorted(data), ['a0', 'a1', 'a2', 'b0', 'b1', 'b2'])
+
 
 class DF(TestModel):
     name = TextField()
@@ -6792,6 +6776,7 @@ class TestDjangoFilterRegression(ModelTestCase):
         q = DF.select().join(DFC).join(DFGC)
         assertNames(q.filter(dfc_set__dfgc_set__name='a1-1'), ['a'])
 
+
 class I(TestModel):
     name = TextField()
 class S(TestModel):
@@ -6827,6 +6812,7 @@ class TestSumCaseSubquery(ModelTestCase):
         case = Case(None, [(Sample.id.in_(subq), Sample.value)], 0)
         q = Sample.select(fn.SUM(case))
         self.assertEqual(q.scalar(), 4.0)
+
 
 class TestDeleteInstanceDFS(ModelTestCase):
     @requires_models(Character, Shape, ShapeDetail)
@@ -6908,6 +6894,7 @@ class TestDeleteInstanceDFS(ModelTestCase):
         for m in models:
             self.assertEqual(m.select().count(), counts.get(m, 1))
 
+
 class TestQueryCountList(ModelTestCase):
     requires = [User]
 
@@ -6970,24 +6957,6 @@ class TestModelAliasEdgeCases(BaseTestCase):
         self.assertIn('username', field_names)
 
 
-# ===========================================================================
-# Gap coverage: Metadata error paths and table properties
-# ===========================================================================
-
-
-class TestNoopModelSelect(ModelTestCase):
-    requires = [User]
-
-    def test_noop_returns_empty(self):
-        User.create(username='huey')
-        self.assertEqual(list(User.noop()), [])
-
-
-# ===========================================================================
-# Gap coverage: safe_python_value failure, _BoundModelsContext decorator,
-# Model.__sql__ with FK to non-PK, and Model.save edge case
-# ===========================================================================
-
 class TestSafePythonValueFailure(ModelTestCase):
     requires = [Sample]
 
@@ -7025,7 +6994,6 @@ class TestModelSaveNoDataError(ModelTestCase):
     requires = [User]
 
     def test_save_raises_when_no_fields_to_update(self):
-        """Model.save() raises ValueError when only PK exists in data."""
         u = User.create(username='huey')
         # Clear the data so only the PK remains.
         u.__data__ = {'id': u.id}
@@ -7034,23 +7002,16 @@ class TestModelSaveNoDataError(ModelTestCase):
             u.save()
 
 
-# ===========================================================================
-# Gap coverage: Model.dependencies tested standalone
-# ===========================================================================
-
 class TestMetadataEdgeCases(BaseTestCase):
     def test_model_graph_no_refs_no_backrefs_error(self):
-        """Metadata.model_graph(refs=False, backrefs=False) raises."""
         self.assertRaises(ValueError, User._meta.model_graph,
                           refs=False, backrefs=False)
 
     def test_metadata_table_setter_error(self):
-        """Metadata.table setter raises AttributeError."""
         with self.assertRaisesCtx(AttributeError):
             User._meta.table = 'something'
 
     def test_metadata_table_deleter_resets(self):
-        """Deleting Metadata.table resets the cached table object."""
         t1 = User._meta.table
         del User._meta.table
         t2 = User._meta.table
@@ -7075,7 +7036,6 @@ class TestModelDependencies(ModelTestCase):
     requires = [DepParent, DepChild, DepGrandChild]
 
     def test_dependencies_produces_correct_graph(self):
-        """Model.dependencies() yields (query, fk) pairs in delete order."""
         p = DepParent.create(name='p1')
         c1 = DepChild.create(parent=p, value=1)
         c2 = DepChild.create(parent=p, value=2)
