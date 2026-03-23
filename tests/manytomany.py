@@ -4,12 +4,13 @@ inheritance, FK-to-non-PK, FK-as-PK, and multiple M2M on same tables.
 
 Test case ordering:
 
-1. FK-to-non-PK M2M (Color/Logo with non-PK FK)
-2. Backref behavior (Student/Course)
-3. Inheritance of M2M through models
-4. Core M2M operations (User/Note — the largest test class)
-5. FK-as-PK M2M (Person/Account/AccountList)
-6. Multiple M2M between same tables (Permission/Visitor)
+* Core M2M operations (User/Note — the largest test class)
+* Backref behavior (Student/Course)
+* Inheritance of M2M through models
+* FK-to-non-PK M2M (Color/Logo with non-PK FK)
+* FK-as-PK M2M (Person/Account/AccountList)
+* Multiple M2M between same tables (Permission/Visitor)
+* Errors / edge cases.
 """
 from peewee import *
 
@@ -680,45 +681,46 @@ class TestMultipleManyToManySameTables(ModelTestCase):
 
 
 # ===========================================================================
-# Gap coverage: M2M error paths and edge cases
+# Errors and edge-cases
 # ===========================================================================
 
 class TestManyToManyPreventUnsaved(ModelTestCase):
     database = get_in_memory_db()
     requires = [User, Note, NoteUserThrough]
 
-    def test_get_m2m_unsaved_raises(self):
-        """Accessing M2M on unsaved instance raises ValueError."""
+    def test_m2m_unsaved_raises(self):
         n = Note(text='unsaved note')
         # n has not been saved, so n.id is None.
         with self.assertRaises(ValueError):
             n.users  # Triggers ManyToManyFieldAccessor.__get__
 
-    def test_set_m2m_unsaved_raises(self):
-        """Setting M2M on unsaved instance raises ValueError."""
-        n = Note(text='unsaved note')
         with self.assertRaises(ValueError):
             n.users = [User(username='u')]
 
-    def test_get_m2m_saved_works(self):
-        """Accessing M2M on saved instance works fine."""
         u = User.create(username='huey')
         n = Note.create(text='note1')
-        # Should not raise.
+
         result = list(n.users)
         self.assertEqual(result, [])
+
+        with self.assertRaises(IntegrityError):
+            # Cannot set instance with no primary key.
+            with self.database.atomic():
+                n.users = [User()]
+
+        n.users = [u]
+        result = list(n.users)
+        self.assertEqual(result, [u])
 
 
 class TestManyToManyInitErrors(ModelTestCase):
     database = get_in_memory_db()
 
     def test_invalid_through_model_type(self):
-        """ManyToManyField raises TypeError for invalid through_model."""
         with self.assertRaises(TypeError):
             ManyToManyField(User, through_model='not_a_model')
 
     def test_on_delete_with_through_model_raises(self):
-        """on_delete with through_model raises ValueError."""
         class DummyThrough(TestModel):
             pass
         with self.assertRaises(ValueError):
@@ -726,7 +728,6 @@ class TestManyToManyInitErrors(ModelTestCase):
                             on_delete='CASCADE')
 
     def test_on_update_with_through_model_raises(self):
-        """on_update with through_model raises ValueError."""
         class DummyThrough(TestModel):
             pass
         with self.assertRaises(ValueError):
@@ -739,14 +740,12 @@ class TestManyToManyEmptyOperations(ModelTestCase):
     requires = [User, Note, NoteUserThrough]
 
     def test_add_empty_list(self):
-        """add([]) is a no-op, no error."""
         u = User.create(username='huey')
         n = Note.create(text='note1')
         n.users.add([])
         self.assertEqual(list(n.users), [])
 
     def test_remove_empty_list(self):
-        """remove([]) is a no-op, no error."""
         u = User.create(username='huey')
         n = Note.create(text='note1')
         n.users.add([u])
