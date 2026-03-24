@@ -1447,6 +1447,13 @@ class TestInsertQuery(BaseTestCase):
             sql = 'INSERT INTO "empty" DEFAULT VALUES'
         self.assertSQL(query, sql, [])
 
+    def test_insert_empty_dict_uses_default_values(self):
+        from peewee import Table
+        t = Table('users')
+        query = t.insert({})
+        sql, _ = __sql__(query)
+        self.assertIn('DEFAULT VALUES', sql)
+
 
 class TestUpdateQuery(BaseTestCase):
     def test_update_query(self):

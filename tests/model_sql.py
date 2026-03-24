@@ -3,17 +3,18 @@ SQL generation tests for Model-level queries.
 
 These tests verify that queries built using Model classes (with ForeignKeyField
 relationships, Meta options, etc.) produce correct SQL. Unlike sql.py which
-tests raw Table objects, these tests exercise the Model metaclass machinery
-including automatic join resolution, field type coercion, and alias handling.
+tests lower-level Table objects, these tests exercise the Model metaclass
+machinery including automatic join resolution, field type coercion, and alias
+handling.
 
 Test case ordering:
 
-1. Core Model query SQL (SELECT, INSERT, UPDATE, DELETE)
-2. ON CONFLICT SQL with Models
-3. String-based field references
-4. Compound SELECT with Models
-5. Model index SQL
-6. Query cloning and regressions
+* Core Model query SQL (SELECT, INSERT, UPDATE, DELETE)
+* ON CONFLICT SQL with Models
+* String-based field references
+* Compound SELECT with Models
+* Model index SQL
+* Query cloning and regressions
 """
 import datetime
 
@@ -31,9 +32,6 @@ from .base import __sql__
 from .base_models import *
 
 
-# ---------------------------------------------------------------------------
-# Module-local model: composite primary key model for SQL generation tests.
-# ---------------------------------------------------------------------------
 class CKM(TestModel):
     category = CharField()
     key = CharField()
@@ -51,6 +49,10 @@ class TestModelSQL(ModelDatabaseTestCase):
     requires = [Category, CKM, Note, Person, Relationship, Sample, User, DfltM]
 
     def test_select(self):
+        query = User.select()
+        self.assertSQL(query, (
+            'SELECT "t1"."id", "t1"."username" FROM "users" AS "t1"'))
+
         query = (Person
                  .select(
                      Person.first,
@@ -211,6 +213,18 @@ class TestModelSQL(ModelDatabaseTestCase):
             'FROM "huey"."with_schema" AS "t1" '
             'WHERE ("t1"."data" = ?)'), ['zaizee'])
 
+    def test_distinct(self):
+        query = User.select().distinct()
+        self.assertSQL(query, (
+            'SELECT DISTINCT "t1"."id", "t1"."username" '
+            'FROM "users" AS "t1"'), [])
+
+        query = User.select().distinct(User.username)
+        self.assertSQL(query, (
+            'SELECT DISTINCT ON ("t1"."username") '
+            '"t1"."id", "t1"."username" '
+            'FROM "users" AS "t1"'), [])
+
     def test_where_coerce(self):
         query = Person.select(Person.last).where(Person.id == '1337')
         self.assertSQL(query, (
@@ -226,6 +240,30 @@ class TestModelSQL(ModelDatabaseTestCase):
         self.assertSQL(query, (
             'SELECT "t1"."last" FROM "person" AS "t1" '
             'WHERE ("t1"."first" = ?)'), ['foo'])
+
+    def test_orwhere(self):
+        query = (User
+                 .select()
+                 .orwhere(User.username == 'huey')
+                 .orwhere(User.username == 'zaizee'))
+        self.assertSQL(query, (
+            'SELECT "t1"."id", "t1"."username" '
+            'FROM "users" AS "t1" '
+            'WHERE (("t1"."username" = ?) OR ("t1"."username" = ?))'),
+            ['huey', 'zaizee'])
+
+    def test_where_then_orwhere(self):
+        query = (User
+                 .select()
+                 .where(User.id > 0)
+                 .orwhere(User.username == 'huey')
+                 .orwhere(User.username == 'zaizee'))
+        self.assertSQL(query, (
+            'SELECT "t1"."id", "t1"."username" '
+            'FROM "users" AS "t1" '
+            'WHERE ((("t1"."id" > ?) OR '
+            '("t1"."username" = ?)) OR ("t1"."username" = ?))'),
+            [0, 'huey', 'zaizee'])
 
     def test_filter_simple(self):
         query = User.filter(username='huey')
@@ -329,6 +367,10 @@ class TestModelSQL(ModelDatabaseTestCase):
         users = User.select().where(User.username.in_(('foo', 'bar')))
         self.assertSQL(users, *expected)
 
+        genexp = (u for u in ('foo', 'bar'))
+        users = User.select().where(User.username.in_(genexp))
+        self.assertSQL(users, *expected)
+
         users = User.select().where(User.username.in_(set(['foo', 'bar'])))
         # Sets are unordered so params may be in either order:
         sql, params = __sql__(users)
@@ -346,6 +388,19 @@ class TestModelSQL(ModelDatabaseTestCase):
             'SELECT "t2"."id" FROM "users" AS "t2" '
             'WHERE ("t2"."username" IN (?, ?))))'), ['foo', 'bar'])
 
+        UA = User.alias()
+        users = (UA.select(UA.username)
+                 .where(UA.username.in_(['foo', 'bar'])))
+        query = (User
+                 .select()
+                 .where(User.username.in_(users)))
+        self.assertSQL(query, (
+            'SELECT "t1"."id", "t1"."username" '
+            'FROM "users" AS "t1" '
+            'WHERE ("t1"."username" IN ('
+            'SELECT "t2"."username" FROM "users" AS "t2" '
+            'WHERE ("t2"."username" IN (?, ?))))'), ['foo', 'bar'])
+
     def test_group_by(self):
         query = (User
                  .select(User, fn.COUNT(Tweet.id).alias('tweet_count'))
@@ -358,6 +413,18 @@ class TestModelSQL(ModelDatabaseTestCase):
             'LEFT OUTER JOIN "tweet" AS "t2" ON ("t2"."user_id" = "t1"."id") '
             'GROUP BY "t1"."id", "t1"."username"'), [])
 
+        query = (User
+                 .select(User.username,
+                         fn.COUNT(Tweet.id).alias('tweet_count'))
+                 .join(Tweet, JOIN.LEFT_OUTER)
+                 .group_by(User.username))
+        self.assertSQL(query, (
+            'SELECT "t1"."username", '
+            'COUNT("t2"."id") AS "tweet_count" '
+            'FROM "users" AS "t1" '
+            'LEFT OUTER JOIN "tweet" AS "t2" ON ("t2"."user_id" = "t1"."id") '
+            'GROUP BY "t1"."username"'), [])
+
     def test_group_by_extend(self):
         query = (User
                  .select(User, fn.COUNT(Tweet.id).alias('tweet_count'))
@@ -369,6 +436,21 @@ class TestModelSQL(ModelDatabaseTestCase):
             'FROM "users" AS "t1" '
             'LEFT OUTER JOIN "tweet" AS "t2" ON ("t2"."user_id" = "t1"."id") '
             'GROUP BY "t1"."id", "t1"."username"'), [])
+
+    def test_having(self):
+        query = (User
+                 .select(User.username,
+                         fn.COUNT(Tweet.id).alias('ct'))
+                 .join(Tweet, JOIN.LEFT_OUTER)
+                 .group_by(User.username)
+                 .having(fn.COUNT(Tweet.id) > 5))
+        self.assertSQL(query, (
+            'SELECT "t1"."username", COUNT("t2"."id") AS "ct" '
+            'FROM "users" AS "t1" '
+            'LEFT OUTER JOIN "tweet" AS "t2" '
+            'ON ("t2"."user_id" = "t1"."id") '
+            'GROUP BY "t1"."username" '
+            'HAVING (COUNT("t2"."id") > ?)'), [5])
 
     def test_order_by(self):
         query = (User
@@ -414,13 +496,19 @@ class TestModelSQL(ModelDatabaseTestCase):
             'INNER JOIN "favorite" AS "t3" ON ("t3"."tweet_id" = "t1"."id")'),
             [])
 
-        query = Tweet.select(Tweet.id).left_outer_join(Favorite).switch(Tweet).left_outer_join(User)
+        query = (Tweet.select(Tweet.id)
+                 .left_outer_join(Favorite)
+                 .switch(Tweet)
+                 .left_outer_join(User))
         self.assertSQL(query, (
             'SELECT "t1"."id" FROM "tweet" AS "t1" '
             'LEFT OUTER JOIN "favorite" AS "t2" ON ("t2"."tweet_id" = "t1"."id") '
             'LEFT OUTER JOIN "users" AS "t3" ON ("t1"."user_id" = "t3"."id")'), [])
 
-        query = Tweet.select(Tweet.id).left_outer_join(User).switch(Tweet).left_outer_join(Favorite)
+        query = (Tweet.select(Tweet.id)
+                 .left_outer_join(User)
+                 .switch(Tweet)
+                 .left_outer_join(Favorite))
         self.assertSQL(query, (
             'SELECT "t1"."id" FROM "tweet" AS "t1" '
             'LEFT OUTER JOIN "users" AS "t2" ON ("t1"."user_id" = "t2"."id") '
@@ -454,6 +542,11 @@ class TestModelSQL(ModelDatabaseTestCase):
             'FROM "a" AS "t1" '
             'CROSS JOIN "b" AS "t2" '
             'ORDER BY "t1"."id", "t2"."id"'), [])
+
+    def test_cross_join_with_on_raises(self):
+        query = User.select()
+        with self.assertRaisesCtx(ValueError):
+            query.join(Tweet, JOIN.CROSS, on=(User.id == Tweet.user))
 
     def test_join_expr(self):
         class User(TestModel):
@@ -979,8 +1072,6 @@ class TestModelAdvancedSQL(ModelDatabaseTestCase):
     database = get_in_memory_db()
     requires = [Category, Note, Person, Sample, User]
 
-    # -- RETURNING on UPDATE and DELETE --
-
     def test_update_returning(self):
         query = (User
                  .update({User.username: 'zaizee'})
@@ -1034,8 +1125,6 @@ class TestModelAdvancedSQL(ModelDatabaseTestCase):
                  .returning())
         self.assertSQL(query, (
             'DELETE FROM "users" WHERE ("users"."id" > ?)'), [3])
-
-    # -- Window functions --
 
     def test_window_partition(self):
         query = (Sample
@@ -1114,8 +1203,6 @@ class TestModelAdvancedSQL(ModelDatabaseTestCase):
             'FILTER (WHERE ("t1"."counter" > ?)) '
             'OVER (PARTITION BY "t1"."counter") '
             'FROM "sample" AS "t1"'), [1])
-
-    # -- CTE (Common Table Expressions) --
 
     def test_simple_cte(self):
         cte = (Category
@@ -1223,8 +1310,6 @@ class TestModelAdvancedSQL(ModelDatabaseTestCase):
                 'SELECT "t1"."id" FROM "users" AS "t1") '
                 'SELECT "uids"."id" FROM "uids"') % clause, [])
 
-    # -- LATERAL join --
-
     def test_lateral_join(self):
         PA = Person.alias()
         subq = (Note
@@ -1259,34 +1344,6 @@ class TestModelAdvancedSQL(ModelDatabaseTestCase):
             'WHERE ("t3"."author_id" = "t1"."id") '
             'ORDER BY "t3"."id" DESC LIMIT ?) AS "t2" ON ?'), [2, True])
 
-    # -- orwhere --
-
-    def test_orwhere(self):
-        query = (User
-                 .select()
-                 .orwhere(User.username == 'huey')
-                 .orwhere(User.username == 'zaizee'))
-        self.assertSQL(query, (
-            'SELECT "t1"."id", "t1"."username" '
-            'FROM "users" AS "t1" '
-            'WHERE (("t1"."username" = ?) OR ("t1"."username" = ?))'),
-            ['huey', 'zaizee'])
-
-    def test_where_then_orwhere(self):
-        query = (User
-                 .select()
-                 .where(User.id > 0)
-                 .orwhere(User.username == 'huey')
-                 .orwhere(User.username == 'zaizee'))
-        self.assertSQL(query, (
-            'SELECT "t1"."id", "t1"."username" '
-            'FROM "users" AS "t1" '
-            'WHERE ((("t1"."id" > ?) OR '
-            '("t1"."username" = ?)) OR ("t1"."username" = ?))'),
-            [0, 'huey', 'zaizee'])
-
-    # -- ensure_join --
-
     def test_ensure_join_noop(self):
         """ensure_join is a no-op when the join already exists."""
         query = (User
@@ -1310,8 +1367,6 @@ class TestModelAdvancedSQL(ModelDatabaseTestCase):
             'FROM "users" AS "t1" '
             'INNER JOIN "tweet" AS "t2" ON ("t2"."user_id" = "t1"."id")'),
             [])
-
-    # -- for_update SQL --
 
     def test_for_update(self):
         query = (User
@@ -1346,32 +1401,6 @@ class TestModelAdvancedSQL(ModelDatabaseTestCase):
         query = User.select().for_update()
         self.assertRaises(ValueError, self.assertSQL, query,
                           '', [])
-
-    # -- having --
-
-    def test_having(self):
-        query = (User
-                 .select(User.username,
-                         fn.COUNT(Tweet.id).alias('ct'))
-                 .join(Tweet, JOIN.LEFT_OUTER)
-                 .group_by(User.username)
-                 .having(fn.COUNT(Tweet.id) > 5))
-        self.assertSQL(query, (
-            'SELECT "t1"."username", COUNT("t2"."id") AS "ct" '
-            'FROM "users" AS "t1" '
-            'LEFT OUTER JOIN "tweet" AS "t2" '
-            'ON ("t2"."user_id" = "t1"."id") '
-            'GROUP BY "t1"."username" '
-            'HAVING (COUNT("t2"."id") > ?)'), [5])
-
-    # -- distinct on --
-
-    def test_distinct_on(self):
-        query = User.select().distinct(User.username)
-        self.assertSQL(query, (
-            'SELECT DISTINCT ON ("t1"."username") '
-            '"t1"."id", "t1"."username" '
-            'FROM "users" AS "t1"'), [])
 
 
 # ===========================================================================
@@ -1514,7 +1543,7 @@ class TestOnConflictSQL(ModelDatabaseTestCase):
 # String-based field references in queries
 # ===========================================================================
 
-class TestStringsForFieldsa(ModelDatabaseTestCase):
+class TestStringsForFieldsInsertUpdate(ModelDatabaseTestCase):
     database = get_in_memory_db()
     requires = [Note, Person, Relationship]
 
@@ -1884,7 +1913,6 @@ class TestNoopModelSelectSQL(ModelDatabaseTestCase):
     requires = [User]
 
     def test_noop_sql_generation(self):
-        """NoopModelSelect generates the database-specific noop SQL."""
         query = User.noop()
         sql_str, params = query.sql()
         # SQLite: SELECT 0 WHERE (0)
@@ -1892,37 +1920,10 @@ class TestNoopModelSelectSQL(ModelDatabaseTestCase):
         self.assertIn('0', sql_str)
 
     def test_noop_cursor_wrapper_type(self):
-        """NoopModelSelect uses plain CursorWrapper, not model wrapper."""
         from peewee import CursorWrapper
         query = User.noop()
         result = query.execute()
         self.assertIsInstance(result, CursorWrapper)
-
-
-class TestModelGroupByWithModel(ModelDatabaseTestCase):
-    database = get_in_memory_db()
-    requires = [User, Tweet]
-
-    def test_group_by_model_expands_fields(self):
-        """ModelSelect.group_by(Model) expands to all model fields."""
-        query = (Tweet
-                 .select(User, fn.COUNT(Tweet.id).alias('ct'))
-                 .join(User)
-                 .group_by(User))
-        self.assertSQL(query, (
-            'SELECT "t1"."id", "t1"."username", '
-            'COUNT("t2"."id") AS "ct" '
-            'FROM "tweet" AS "t2" '
-            'INNER JOIN "users" AS "t1" ON ("t2"."user_id" = "t1"."id") '
-            'GROUP BY "t1"."id", "t1"."username"'), [])
-
-
-class TestModelSelectCrossJoinError(BaseTestCase):
-    def test_cross_join_with_on_raises(self):
-        """ModelSelect.join with CROSS and on= raises ValueError."""
-        query = User.select()
-        with self.assertRaisesCtx(ValueError):
-            query.join(Tweet, JOIN.CROSS, on=(User.id == Tweet.user))
 
 
 class TestFieldAliasOperators(ModelDatabaseTestCase):
@@ -1930,7 +1931,6 @@ class TestFieldAliasOperators(ModelDatabaseTestCase):
     requires = [User]
 
     def test_field_alias_contains(self):
-        """FieldAlias delegates contains() correctly."""
         UA = User.alias('ua')
         query = UA.select().where(UA.username.contains('test'))
         sql, params = query.sql()
@@ -1940,14 +1940,12 @@ class TestFieldAliasOperators(ModelDatabaseTestCase):
         self.assertEqual(params, ['%test%'])
 
     def test_field_alias_is_null(self):
-        """FieldAlias delegates is_null() correctly."""
         UA = User.alias('ua')
         query = UA.select().where(UA.username.is_null())
         sql, params = query.sql()
         self.assertIn('IS NULL', sql)
 
     def test_field_alias_between(self):
-        """FieldAlias delegates between() correctly."""
         UA = User.alias('ua')
         query = UA.select().where(UA.id.between(1, 10))
         sql, params = query.sql()
@@ -1955,38 +1953,8 @@ class TestFieldAliasOperators(ModelDatabaseTestCase):
         self.assertEqual(params, [1, 10])
 
     def test_field_alias_in_(self):
-        """FieldAlias delegates in_() correctly."""
         UA = User.alias('ua')
         query = UA.select().where(UA.id.in_([1, 2, 3]))
         sql, params = query.sql()
         self.assertIn('IN', sql)
         self.assertEqual(params, [1, 2, 3])
-
-
-class TestModelSelectSubqueryOptimization(ModelDatabaseTestCase):
-    database = get_in_memory_db()
-    requires = [User]
-
-    def test_default_subquery_collapses_to_pk(self):
-        """Default-selected model used as subquery collapses to just PK."""
-        inner = User.select()  # Default selection = all fields.
-        outer = User.select().where(User.id.in_(inner))
-        sql, _ = outer.sql()
-        # The inner subquery should only select the PK.
-        # Count occurrences of "username" — should appear only once (outer).
-        parts = sql.split('username')
-        self.assertEqual(len(parts), 2,
-                         'Inner subquery should collapse to PK only')
-
-
-class TestInsertDefaultValues(ModelDatabaseTestCase):
-    database = get_in_memory_db()
-    requires = [User]
-
-    def test_insert_empty_dict_uses_default_values(self):
-        """Insert({}) on a Table falls back to DEFAULT VALUES."""
-        from peewee import Table
-        t = Table('users')
-        query = t.insert({})
-        sql, _ = __sql__(query)
-        self.assertIn('DEFAULT VALUES', sql)

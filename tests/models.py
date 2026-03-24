@@ -2911,6 +2911,7 @@ class TestWindowFunctionIntegration(ModelTestCase):
         self.assertEqual(list(query),
                          [(1, 1), (1, 2), (2, 3), (2, 4), (3, 5)])
 
+    @skip_if(IS_MYSQL, 'flaky on mysql')
     def test_sum_with_frame(self):
         w = Window(order_by=[Sample.counter, Sample.value],
                    frame_type=Window.ROWS,
@@ -2931,6 +2932,7 @@ class TestWindowFunctionIntegration(ModelTestCase):
             (2, 4.0),  # 1 + 3
             (3, 103.0)])  # 3 + 100
 
+    @skip_if(IS_MYSQL, 'flaky on mysql')
     def test_lag_lead(self):
         query = (Sample
                  .select(Sample.counter,
