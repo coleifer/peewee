@@ -25,7 +25,9 @@ from peewee import ModelIndex
 
 from .base import get_in_memory_db
 from .base import requires_pglike
+from .base import skip_if
 from .base import BaseTestCase
+from .base import IS_CRDB
 from .base import ModelDatabaseTestCase
 from .base import TestModel
 from .base import __sql__
@@ -1543,6 +1545,7 @@ class TestOnConflictSQL(ModelDatabaseTestCase):
             'WHERE ("ukvp"."extra" < ?) '
             'RETURNING "ukvp"."id"'), ['k1', 1, 10, 100])
 
+    @skip_if(IS_CRDB)
     def test_on_conflict_named_constraint(self):
         query = (UKVP
                  .insert(key='k1', value=1)

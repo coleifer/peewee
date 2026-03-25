@@ -7,6 +7,21 @@ https://github.com/coleifer/peewee/releases
 
 ## master
 
+* Refactor test suite - this was a mechanical refactor, just moving things
+  around and trying to group things more clearly. Also added new tests covering
+  some gaps.
+* Expand multi-value types to include generator expressions, so you can write
+  stuff like `.in(a for a in iterable if cond)`.
+* Ensure quotes embedded in entity names are escaped.
+* Improved specification of `FOR UPDATE` clauses.
+* Fix for negative values in `paginate()` method.
+* Fix for newer MySQL server versions in feature detection code.
+* More robust handling of unusual aliases / invalid attr names in cursor
+  wrapper.
+* Better handling of duplicated column names in cursor wrapper implementations.
+* Improve performance of ModelCursorWrapper when reconstructing model instance
+  graphs after multi-table selects.
+
 [View commits](https://github.com/coleifer/peewee/compare/4.0.2...master)
 
 ## 4.0.2
