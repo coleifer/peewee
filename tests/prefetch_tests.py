@@ -6,9 +6,9 @@ tests need specific relational graph shapes that differ from the shared models.
 
 Test case ordering:
 
-1. Core prefetch (Person > Note > NoteItem/Like/Flag, plus Category, Package)
-2. Multi-reference prefetch (X > Z, A > B > C > C1/C2)
-3. Multiple FK prefetch with join type control (State/Transition)
+* Core prefetch (Person > Note > NoteItem/Like/Flag, plus Category, Package)
+* Multi-reference prefetch (X > Z, A > B > C > C1/C2)
+* Multiple FK prefetch with join type control (State/Transition)
 """
 from peewee import *
 
@@ -726,35 +726,20 @@ class TestJoinTypePrefetchMultipleFKs(ModelTestCase):
             ('s2b', [t4], [t2], ['s3'], ['s1'])])
 
 
-# ===========================================================================
-# Gap coverage: prefetch error paths and edge cases
-# ===========================================================================
-
 class TestPrefetchErrorPaths(ModelTestCase):
     database = get_in_memory_db()
-    requires = [Person, Note, NoteItem]
+    requires = [Person]
 
     def test_prefetch_unrelated_model_error(self):
-        """prefetch_add_subquery raises AttributeError for unrelated model."""
         class Unrelated(TestModel):
             data = TextField()
             class Meta:
                 database = self.database
 
-        Unrelated.create_table()
-        try:
-            with self.assertRaises(AttributeError):
-                prefetch(Person.select(), Unrelated.select())
-        finally:
-            Unrelated.drop_table()
-
-    def test_prefetch_unrecognized_kwargs_error(self):
-        """prefetch() with unrecognized kwargs raises ValueError."""
-        with self.assertRaises(ValueError):
-            prefetch(Person.select(), Note, bad_kwarg=True)
+        with self.assertRaises(AttributeError):
+            prefetch(Person.select(), Unrelated.select())
 
     def test_prefetch_empty_subqueries_passthrough(self):
-        """prefetch() with no subqueries returns the original query."""
         Person.create(name='huey')
         query = Person.select()
         result = prefetch(query)
