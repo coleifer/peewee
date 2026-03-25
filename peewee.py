@@ -1015,7 +1015,7 @@ class Table(_HashableSource, BaseTable):
     @__bind_database__
     def replace(self, insert=None, columns=None, **kwargs):
         return (self
-                .insert(insert=insert, columns=columns)
+                .insert(insert=insert, columns=columns, **kwargs)
                 .on_conflict('REPLACE'))
 
     @__bind_database__

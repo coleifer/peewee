@@ -7,19 +7,20 @@ lightweight and internal to query building.
 
 Test case ordering:
 
-1. Core DML: SELECT, INSERT, UPDATE, DELETE
-2. Advanced SELECT features: window functions, VALUES lists, CASE
-3. Miscellaneous SELECT features: FOR UPDATE, RETURNING, etc.
-4. Expression SQL
-5. ON CONFLICT (per-dialect: SQLite, MySQL, PostgreSQL)
-6. Index generation
-7. Utilities and edge cases
+* Core DML: SELECT, INSERT, UPDATE, DELETE
+* Advanced SELECT features: window functions, VALUES lists, CASE
+* Miscellaneous SELECT features: FOR UPDATE, RETURNING, etc.
+* Expression SQL
+* ON CONFLICT (per-dialect: SQLite, MySQL, PostgreSQL)
+* Index generation
+* Utilities and edge cases
 """
 import datetime
 import re
 
 from peewee import *
 from peewee import Alias
+from peewee import AliasManager
 from peewee import Context
 from peewee import Entity
 from peewee import Expression
@@ -256,6 +257,34 @@ class TestSelectQuery(BaseTestCase):
             'SELECT "t1"."id" FROM "users" AS "t1" '
             'WHERE (0 = 1)'), [])
 
+        query = User.select(User.c.id).where(User.c.id << [])
+        self.assertSQL(query, (
+            'SELECT "t1"."id" FROM "users" AS "t1" WHERE (0 = 1)'))
+
+        query = User.select(User.c.id).where(User.c.id.not_in([]))
+        self.assertSQL(query, (
+            'SELECT "t1"."id" FROM "users" AS "t1" WHERE (1 = 1)'))
+
+    def test_between_via_slice(self):
+        query = User.select(User.c.id).where(User.c.age[18:65])
+        self.assertSQL(query, (
+            'SELECT "t1"."id" FROM "users" AS "t1" '
+            'WHERE ("t1"."age" BETWEEN ? AND ?)'), [18, 65])
+
+        self.assertRaises(ValueError, lambda: User.c.age[18:])
+        self.assertRaises(ValueError, lambda: User.c.age[:65])
+
+    def test_eq_none_produces_is_null(self):
+        query = User.select(User.c.id).where(User.c.name == None)
+        self.assertSQL(query, (
+            'SELECT "t1"."id" FROM "users" AS "t1" '
+            'WHERE ("t1"."name" IS NULL)'), [])
+
+        query = User.select(User.c.id).where(User.c.name != None)
+        self.assertSQL(query, (
+            'SELECT "t1"."id" FROM "users" AS "t1" '
+            'WHERE ("t1"."name" IS NOT NULL)'), [])
+
     def test_join_explicit_columns(self):
         query = (Note
                  .select(Note.content)
@@ -320,6 +349,41 @@ class TestSelectQuery(BaseTestCase):
             'INNER JOIN "note" AS "t2" '
             'ON Magic("t1"."id", "t2"."id") AS "magic"'), [])
 
+    def test_left_outer_join_shortcut(self):
+        query = (User
+                 .select(User.c.id, Tweet.c.content)
+                 .left_outer_join(Tweet, on=(User.c.id == Tweet.c.user_id)))
+        self.assertSQL(query, (
+            'SELECT "t1"."id", "t2"."content" '
+            'FROM "users" AS "t1" '
+            'LEFT OUTER JOIN "tweets" AS "t2" '
+            'ON ("t1"."id" = "t2"."user_id")'))
+
+    def test_operator_joins(self):
+        t1 = Table('a')
+        t2 = Table('b')
+
+        # & = INNER JOIN
+        j = t1 & t2
+        self.assertIsInstance(j, Join)
+        self.assertEqual(j.join_type, 'INNER JOIN')
+
+        # + = LEFT OUTER JOIN
+        j = t1 + t2
+        self.assertEqual(j.join_type, 'LEFT OUTER JOIN')
+
+        # - = RIGHT OUTER JOIN
+        j = t1 - t2
+        self.assertEqual(j.join_type, 'RIGHT OUTER JOIN')
+
+        # | = FULL OUTER JOIN
+        j = t1 | t2
+        self.assertEqual(j.join_type, 'FULL OUTER JOIN')
+
+        # * = CROSS JOIN
+        j = t1 * t2
+        self.assertEqual(j.join_type, 'CROSS JOIN')
+
     def test_user_defined_alias(self):
         UA = User.alias('alt')
         query = (User
@@ -352,6 +416,10 @@ class TestSelectQuery(BaseTestCase):
             'FROM "person" AS "t1" '
             'INNER JOIN "note" AS "t2" ON ("t1"."id" = "t2"."person_id") '
             'GROUP BY "t1"."id", "t1"."name", "t1"."dob"'), [])
+
+    def test_group_by_table_no_columns_error(self):
+        query = User.select()
+        self.assertRaises(ValueError, query.group_by, User)
 
     def test_having(self):
         q = (User
@@ -532,6 +600,10 @@ class TestSelectQuery(BaseTestCase):
             'WHERE ("sub"."name_len" > ?) '
             'ORDER BY "sub"."name_len"'), [3])
 
+    def test_select_from_subquery_no_columns_error(self):
+        query = User.select(User.c.id)
+        self.assertRaises(ValueError, query.select_from)
+
     def test_simple_cte(self):
         cte = User.select(User.c.id).cte('user_ids')
         query = (User
@@ -657,6 +729,34 @@ class TestSelectQuery(BaseTestCase):
                 'SELECT "t1"."id" FROM "users" AS "t1") '
                 'SELECT "user_ids"."id" FROM "user_ids" '
                 'WHERE ("user_ids"."id" < ?)') % clause, [10])
+
+    def test_cte_union_distinct(self):
+        # CTE.union() produces UNION (distinct) instead of UNION ALL.
+        base = User.select(User.c.id).where(User.c.id == 1)
+        cte = base.cte('cte1', recursive=True)
+        next_q = User.select(User.c.id).where(User.c.id < 5)
+        rcte = cte.union(next_q)
+        query = rcte.select_from(rcte.c.id)
+        self.assertSQL(query, (
+            'WITH RECURSIVE "cte1" AS ('
+            'SELECT "t1"."id" FROM "users" AS "t1" WHERE ("t1"."id" = ?) '
+            'UNION '
+            'SELECT "t2"."id" FROM "users" AS "t2" WHERE ("t2"."id" < ?)) '
+            'SELECT "cte1"."id" FROM "cte1"'), [1, 5])
+
+    def test_cte_select_from_no_columns_error(self):
+        # CTE.select_from() raises ValueError if no columns specified.
+        cte = User.select(User.c.id).cte('cte1')
+        self.assertRaises(ValueError, cte.select_from)
+
+    def test_source_cte_shortcut(self):
+        query = User.select(User.c.id).where(User.c.id > 0)
+        cte = query.cte('my_cte', columns=['id'])
+        result = cte.select_from(cte.c.id)
+        self.assertSQL(result, (
+            'WITH "my_cte" ("id") AS ('
+            'SELECT "t1"."id" FROM "users" AS "t1" WHERE ("t1"."id" > ?)) '
+            'SELECT "my_cte"."id" FROM "my_cte"'), [0])
 
     def test_fibonacci_cte(self):
         q1 = Select(columns=(
@@ -1157,6 +1257,10 @@ class TestSelectQuery(BaseTestCase):
             'ORDER BY CASE WHEN ("t1"."ts" IS NULL) THEN ? ELSE ? END, '
             '"t1"."ts" DESC'), [0, 1], nulls_ordering=False)
 
+    def test_ordering_invalid_nulls_error(self):
+        self.assertRaises(ValueError, Ordering, User.c.id, 'ASC',
+                          nulls='middle')
+
     def test_coalesce(self):
         Sample = Table('sample', ('counter', 'value'))
         query = (Sample
@@ -1261,7 +1365,6 @@ class TestSelectQuery(BaseTestCase):
             'SELECT `t1`.`id` FROM `te"st` AS `t1` '
             'WHERE (`t1`.`value` > ?)'), [5], quote='``')
 
-
     def test_tuple_comparison(self):
         name_dob = Tuple(Person.name, Person.dob)
         query = (Person
@@ -1318,11 +1421,27 @@ class TestInsertQuery(BaseTestCase):
             'INSERT INTO "users" ("admin", "superuser", "username") '
             'VALUES (?, ?, ?)'), [True, False, 'charlie'])
 
+    def test_table_insert_with_kwargs(self):
+        query = User.insert(
+            username='charlie',
+            superuser=False,
+            admin=True)
+        self.assertSQL(query, (
+            'INSERT INTO "users" ("admin", "superuser", "username") '
+            'VALUES (?, ?, ?)'), [True, False, 'charlie'])
+
     @requires_sqlite
     def test_replace_sqlite(self):
         query = User.replace({
             User.c.username: 'charlie',
             User.c.superuser: False})
+        self.assertSQL(query, (
+            'INSERT OR REPLACE INTO "users" ("superuser", "username") '
+            'VALUES (?, ?)'), [False, 'charlie'])
+
+        query = User.replace(
+            username='charlie',
+            superuser=False)
         self.assertSQL(query, (
             'INSERT OR REPLACE INTO "users" ("superuser", "username") '
             'VALUES (?, ?)'), [False, 'charlie'])
@@ -1438,21 +1557,19 @@ class TestInsertQuery(BaseTestCase):
 
     def test_empty(self):
         class Empty(TestModel): pass
-        query = Empty.insert()
         if isinstance(db, MySQLDatabase):
             sql = 'INSERT INTO "empty" () VALUES ()'
         elif isinstance(db, PostgresqlDatabase):
             sql = 'INSERT INTO "empty" DEFAULT VALUES RETURNING "empty"."id"'
         else:
             sql = 'INSERT INTO "empty" DEFAULT VALUES'
-        self.assertSQL(query, sql, [])
 
-    def test_insert_empty_dict_uses_default_values(self):
-        from peewee import Table
-        t = Table('users')
-        query = t.insert({})
-        sql, _ = __sql__(query)
-        self.assertIn('DEFAULT VALUES', sql)
+        for query in (Empty.insert(), Empty.insert({}), Empty.insert([])):
+            self.assertSQL(query, sql, [])
+
+    def test_insert_where_raises(self):
+        q = User.insert({User.c.username: 'huey'})
+        self.assertRaises(NotImplementedError, q.where, User.c.val > 0)
 
 
 class TestUpdateQuery(BaseTestCase):
@@ -1462,6 +1579,20 @@ class TestUpdateQuery(BaseTestCase):
                      User.c.username: 'nuggie',
                      User.c.admin: False,
                      User.c.counter: User.c.counter + 1})
+                 .where(User.c.username == 'nugz'))
+        self.assertSQL(query, (
+            'UPDATE "users" SET '
+            '"admin" = ?, '
+            '"counter" = ("users"."counter" + ?), '
+            '"username" = ? '
+            'WHERE ("users"."username" = ?)'), [False, 1, 'nuggie', 'nugz'])
+
+    def test_table_update_with_kwargs(self):
+        query = (User
+                 .update(
+                     username='nuggie',
+                     admin=False,
+                     counter=User.c.counter + 1)
                  .where(User.c.username == 'nugz'))
         self.assertSQL(query, (
             'UPDATE "users" SET '
@@ -1506,6 +1637,25 @@ class TestUpdateQuery(BaseTestCase):
             '"last_tweet_id" = (SELECT MAX("t1"."id") FROM "tweets" AS "t1" '
             'WHERE ("t1"."user_id" = "users"."id")) '
             'WHERE ("users"."last_tweet_id" IS NULL)'), [])
+
+    def test_update_from_cte(self):
+        cte = (Tweet
+               .select(Tweet.c.user_id, fn.COUNT(Tweet.c.id).alias('ct'))
+               .group_by(Tweet.c.user_id)
+               .cte('t'))
+        query = (User
+                 .update(tweet_count=cte.c.ct)
+                 .from_(cte)
+                 .where(User.c.id == cte.c.user_id)
+                 .with_cte(cte))
+        self.assertSQL(query, (
+            'WITH "t" AS '
+            '(SELECT "t1"."user_id", COUNT("t1"."id") AS "ct" '
+            'FROM "tweets" AS "t1" '
+            'GROUP BY "t1"."user_id") '
+            'UPDATE "users" SET "tweet_count" = "t"."ct" '
+            'FROM "t" '
+            'WHERE ("users"."id" = "t"."user_id")'), [])
 
     def test_update_from(self):
         data = [(1, 'u1-x'), (2, 'u2-x')]
@@ -1565,6 +1715,17 @@ class TestUpdateQuery(BaseTestCase):
             'UPDATE "users" SET "is_admin" = ? WHERE ("users"."username" = ?) '
             'RETURNING "users"."is_admin" AS "new_is_admin"'),
             [True, 'charlie'])
+
+    def test_update_with_order_limit(self):
+        query = (User
+                 .update(username=User.c.username.concat('-x'))
+                 .where(User.c.active == False)
+                 .order_by(User.c.id)
+                 .limit(10))
+        self.assertSQL(query, (
+            'UPDATE "users" SET "username" = ("users"."username" || ?) '
+            'WHERE ("users"."active" = ?) '
+            'ORDER BY "id" LIMIT ?'), ['-x', False, 10])
 
 
 class TestDeleteQuery(BaseTestCase):
@@ -1632,6 +1793,15 @@ class TestDeleteQuery(BaseTestCase):
             'DELETE FROM "users" '
             'WHERE ("users"."id" > ?) '
             'RETURNING "users"."id" AS "old_id"'), [2])
+
+    def test_delete_with_order_limit(self):
+        query = (User.delete()
+                 .where(User.c.active == False)
+                 .order_by(User.c.id)
+                 .limit(10))
+        self.assertSQL(query, (
+            'DELETE FROM "users" WHERE ("users"."active" = ?) '
+            'ORDER BY "id" LIMIT ?'), [False, 10])
 
 
 # ===========================================================================
@@ -1779,6 +1949,32 @@ class TestWindowFunctions(BaseTestCase):
                      'end': Window.following(), 'frame_type': Window.ROWS},
                     ('ORDER BY "t1"."value" '
                      'ROWS BETWEEN CURRENT ROW AND UNBOUNDED FOLLOWING'))
+
+    def test_window_end_without_start_error(self):
+        self.assertRaises(
+            ValueError, Window,
+            order_by=[User.c.id], end=Window.CURRENT_ROW)
+
+    def test_window_as_groups(self):
+        w = Window(order_by=[User.c.id],
+                   start=Window.preceding(),
+                   end=Window.CURRENT_ROW).as_groups()
+        query = User.select(fn.SUM(User.c.val).over(window=w)).window(w)
+        self.assertSQL(query, (
+            'SELECT SUM("t1"."val") OVER "w" FROM "users" AS "t1" '
+            'WINDOW "w" AS (ORDER BY "t1"."id" '
+            'GROUPS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW)'))
+
+    def test_window_exclude_with_string(self):
+        w = Window(order_by=[User.c.id],
+                   start=Window.preceding(),
+                   end=Window.CURRENT_ROW)
+        w = w.exclude('TIES')
+        query = User.select(fn.SUM(User.c.val).over(window=w)).window(w)
+        self.assertSQL(query, (
+            'SELECT SUM("t1"."val") OVER "w" FROM "users" AS "t1" '
+            'WINDOW "w" AS (ORDER BY "t1"."id" '
+            'ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW EXCLUDE TIES)'))
 
     def test_running_total(self):
         EventLog = Table('evtlog', ('id', 'timestamp', 'data'))
@@ -2309,6 +2505,36 @@ class TestSelectFeatures(BaseTestCase):
             'SELECT "t1"."id" FROM "person" AS "t1" WHERE ("t1"."name" = ?) '
             'FOR SHARE OF "t1" NOWAIT'), ['huey'], for_update=True)
 
+    def test_skip_locked_sql(self):
+        query = (Person
+                 .select(Person.id)
+                 .where(Person.name == 'huey')
+                 .for_update(skip_locked=True))
+        self.assertSQL(query, (
+            'SELECT "t1"."id" FROM "person" AS "t1" '
+            'WHERE ("t1"."name" = ?) '
+            'FOR UPDATE SKIP LOCKED'), ['huey'], for_update=True)
+
+    def test_skip_locked_string_parsing(self):
+        query = (Person
+                 .select(Person.id)
+                 .for_update('FOR SHARE SKIP LOCKED'))
+        self.assertSQL(query, (
+            'SELECT "t1"."id" FROM "person" AS "t1" '
+            'FOR SHARE SKIP LOCKED'), for_update=True)
+
+    def test_nowait_and_skip_locked_error(self):
+        self.assertRaises(ValueError, ForUpdate, 'FOR UPDATE',
+                          nowait=True, skip_locked=True)
+
+    def test_for_update_false_with_of_enables(self):
+        query = (Person
+                 .select(Person.id)
+                 .for_update(False, of=Person, nowait=True))
+        self.assertSQL(query, (
+            'SELECT "t1"."id" FROM "person" AS "t1" '
+            'FOR UPDATE OF "t1" NOWAIT'), for_update=True)
+
     def test_parentheses(self):
         query = (Person
                  .select(fn.MAX(
@@ -2659,7 +2885,6 @@ class TestFunctionInfiniteLoop(BaseTestCase):
 
 class TestNodeClone(BaseTestCase):
     def test_clone_produces_independent_copy(self):
-        """Node.clone() produces a shallow copy whose mutations are isolated."""
         t = Table('t')
         query = t.select(t.c.id).where(t.c.id > 1)
         clone = query.clone()
@@ -2671,20 +2896,7 @@ class TestNodeClone(BaseTestCase):
         self.assertEqual(p1, [1])
         self.assertEqual(p2, [1, 10])
 
-    def test_coerce_toggle(self):
-        """Node.coerce() returns a clone with _coerce toggled."""
-        t = Table('t1')
-        col = t.c.val
-        self.assertTrue(col._coerce)
-        no_coerce = col.coerce(False)
-        self.assertFalse(no_coerce._coerce)
-        self.assertTrue(col._coerce)  # Original unchanged.
-        # coerce(True) on already-True returns self.
-        same = col.coerce(True)
-        self.assertIs(same, col)
-
     def test_unwrap_and_is_alias(self):
-        """Node.unwrap() returns self; is_alias() returns False."""
         t = Table('t1')
         col = t.c.id
         self.assertIs(col.unwrap(), col)
@@ -2697,7 +2909,6 @@ class TestNodeClone(BaseTestCase):
 
 class TestTableOperations(BaseTestCase):
     def test_table_clone(self):
-        """Table.clone() preserves all properties."""
         t = Table('users', columns=['id', 'name'], primary_key='id',
                   schema='public', alias='u')
         clone = t.clone()
@@ -2706,118 +2917,15 @@ class TestTableOperations(BaseTestCase):
         self.assertEqual(clone._primary_key, 'id')
         self.assertEqual(clone._schema, 'public')
         self.assertEqual(clone._alias, 'u')
+        self.assertTrue(t is not clone)
 
     def test_table_explicit_column_error(self):
-        """Table with explicit columns raises AttributeError on dynamic c."""
         t = Table('users', columns=['id', 'name'])
         # Direct attribute access works.
         self.assertSQL(t.select(t.id, t.name),
                        'SELECT "t1"."id", "t1"."name" FROM "users" AS "t1"')
         # Dynamic column access via .c should raise.
         self.assertRaises(AttributeError, lambda: t.c.id)
-
-    @requires_sqlite
-    def test_table_replace_shortcut(self):
-        """Table.replace() produces INSERT OR REPLACE SQL."""
-        t = Table('kv', ('key', 'value'))
-        query = t.replace({t.key: 'k1', t.value: 'v1'})
-        self.assertSQL(query, (
-            'INSERT OR REPLACE INTO "kv" ("key", "value") VALUES (?, ?)'),
-            ['k1', 'v1'])
-
-    def test_table_insert_with_kwargs(self):
-        """Table.insert() with keyword arguments."""
-        t = Table('kv', ('key', 'value'))
-        query = t.insert(key='k1', value='v1')
-        self.assertSQL(query, (
-            'INSERT INTO "kv" ("key", "value") VALUES (?, ?)'),
-            ['k1', 'v1'])
-
-    def test_table_update_with_kwargs(self):
-        """Table.update() with keyword arguments."""
-        t = Table('kv', ('key', 'value'))
-        query = t.update(value='v2').where(t.key == 'k1')
-        self.assertSQL(query, (
-            'UPDATE "kv" SET "value" = ? WHERE ("kv"."key" = ?)'),
-            ['v2', 'k1'])
-
-    def test_left_outer_join_shortcut(self):
-        """Source.left_outer_join() convenience method."""
-        t1 = Table('users')
-        t2 = Table('tweets')
-        join = t1.left_outer_join(t2, on=(t1.c.id == t2.c.user_id))
-        query = (Select((join,), [t1.c.id, t2.c.content]))
-        self.assertSQL(query, (
-            'SELECT "t1"."id", "t2"."content" '
-            'FROM "users" AS "t1" '
-            'LEFT OUTER JOIN "tweets" AS "t2" '
-            'ON ("t1"."id" = "t2"."user_id")'))
-
-    def test_operator_joins(self):
-        """BaseTable operator-based join shortcuts (&, +, -, |, *)."""
-        t1 = Table('a')
-        t2 = Table('b')
-
-        # & = INNER JOIN
-        j = t1 & t2
-        self.assertIsInstance(j, Join)
-        self.assertEqual(j.join_type, 'INNER JOIN')
-
-        # + = LEFT OUTER JOIN
-        j = t1 + t2
-        self.assertEqual(j.join_type, 'LEFT OUTER JOIN')
-
-        # - = RIGHT OUTER JOIN
-        j = t1 - t2
-        self.assertEqual(j.join_type, 'RIGHT OUTER JOIN')
-
-        # | = FULL OUTER JOIN
-        j = t1 | t2
-        self.assertEqual(j.join_type, 'FULL OUTER JOIN')
-
-        # * = CROSS JOIN
-        j = t1 * t2
-        self.assertEqual(j.join_type, 'CROSS JOIN')
-
-
-# ===========================================================================
-# Gap coverage: CTE operations
-# ===========================================================================
-
-class TestCTEGaps(BaseTestCase):
-    def test_cte_union_distinct(self):
-        """CTE.union() produces UNION (distinct) instead of UNION ALL."""
-        base = User.select(User.c.id).where(User.c.id == 1)
-        cte = base.cte('cte1', recursive=True)
-        next_q = User.select(User.c.id).where(User.c.id < 5)
-        rcte = cte.union(next_q)
-        query = rcte.select_from(rcte.c.id)
-        self.assertSQL(query, (
-            'WITH RECURSIVE "cte1" AS ('
-            'SELECT "t1"."id" FROM "users" AS "t1" WHERE ("t1"."id" = ?) '
-            'UNION '
-            'SELECT "t2"."id" FROM "users" AS "t2" WHERE ("t2"."id" < ?)) '
-            'SELECT "cte1"."id" FROM "cte1"'), [1, 5])
-
-    def test_cte_select_from_no_columns_error(self):
-        """CTE.select_from() raises ValueError if no columns specified."""
-        cte = User.select(User.c.id).cte('cte1')
-        self.assertRaises(ValueError, cte.select_from)
-
-    def test_select_from_subquery_no_columns_error(self):
-        """SelectQuery.select_from() raises ValueError with no columns."""
-        query = User.select(User.c.id)
-        self.assertRaises(ValueError, query.select_from)
-
-    def test_source_cte_shortcut(self):
-        """Source.cte() creates a CTE from a query."""
-        query = User.select(User.c.id).where(User.c.id > 0)
-        cte = query.cte('my_cte', columns=['id'])
-        result = cte.select_from(cte.c.id)
-        self.assertSQL(result, (
-            'WITH "my_cte" ("id") AS ('
-            'SELECT "t1"."id" FROM "users" AS "t1" WHERE ("t1"."id" > ?)) '
-            'SELECT "my_cte"."id" FROM "my_cte"'), [0])
 
 
 # ===========================================================================
@@ -2826,7 +2934,6 @@ class TestCTEGaps(BaseTestCase):
 
 class TestWrappedNodes(BaseTestCase):
     def test_alias_realias_to_none(self):
-        """Alias.alias(None) returns the unwrapped node."""
         col = User.c.id
         aliased = col.alias('uid')
         self.assertIsInstance(aliased, Alias)
@@ -2835,9 +2942,9 @@ class TestWrappedNodes(BaseTestCase):
         # Should return the original column, not an Alias.
         self.assertNotIsInstance(unwrapped, Alias)
         self.assertFalse(unwrapped.is_alias())
+        self.assertTrue(unwrapped is col)
 
     def test_alias_realias_to_new_name(self):
-        """Alias.alias('new_name') returns a new Alias with the new name."""
         col = User.c.id
         a1 = col.alias('uid')
         a2 = a1.alias('user_id')
@@ -2845,13 +2952,11 @@ class TestWrappedNodes(BaseTestCase):
         self.assertEqual(a2._alias, 'user_id')
 
     def test_alias_unalias(self):
-        """Alias.unalias() returns the wrapped node."""
         col = User.c.id
         aliased = col.alias('uid')
         self.assertIs(aliased.unalias(), col)
 
     def test_alias_name_property(self):
-        """Alias.name getter/setter."""
         col = User.c.id
         aliased = col.alias('uid')
         self.assertEqual(aliased.name, 'uid')
@@ -2860,7 +2965,7 @@ class TestWrappedNodes(BaseTestCase):
         self.assertEqual(aliased._alias, 'new_name')
 
     def test_double_negation(self):
-        """~~expr returns the original expression (Negated.__invert__)."""
+        # ~~expr returns the original expression (Negated.__invert__).
         col = User.c.active
         negated = ~col
         self.assertIsInstance(negated, Negated)
@@ -2869,14 +2974,12 @@ class TestWrappedNodes(BaseTestCase):
         self.assertIs(double_neg, col)
 
     def test_negated_sql(self):
-        """Negated produces NOT prefix."""
         query = User.select(User.c.id).where(~(User.c.active == True))
         self.assertSQL(query, (
             'SELECT "t1"."id" FROM "users" AS "t1" '
             'WHERE NOT ("t1"."active" = ?)'), [True])
 
     def test_cast_sql(self):
-        """Cast produces CAST(x AS type) SQL."""
         expr = User.c.age.cast('TEXT')
         query = User.select(expr.alias('age_text'))
         self.assertSQL(query, (
@@ -2884,243 +2987,36 @@ class TestWrappedNodes(BaseTestCase):
             'FROM "users" AS "t1"'))
 
     def test_value_literals(self):
-        """ValueLiterals forces literal rendering of values."""
         from peewee import ValueLiterals
         expr = ValueLiterals(Value(42))
-        ctx = Context()
-        sql, params = ctx.sql(expr).query()
-        self.assertEqual(sql, '42')
-        self.assertEqual(params, [])
+        self.assertSQL(expr, '42', [])
 
-    def test_string_expression_concat_chain(self):
-        """StringExpression supports + operator for chaining concatenation."""
-        e1 = User.c.first.concat(User.c.last)
-        # e1 is a StringExpression; adding more should chain.
-        e2 = e1.concat(User.c.suffix)
-        query = User.select(e2.alias('full'))
-        sql, _ = __sql__(query)
-        self.assertIn('||', sql)
-
-    def test_qualified_names_sql(self):
-        """QualifiedNames forces column-scope rendering."""
-        from peewee import QualifiedNames
-        t = Table('users')
-        col = t.c.name
-        qn = QualifiedNames(col)
-        query = User.select(qn)
-        sql, _ = __sql__(query)
-        # Should contain a dotted reference like "t1"."name".
-        self.assertIn('"name"', sql)
-
-
-# ===========================================================================
-# Gap coverage: Expression edge cases
-# ===========================================================================
-
-class TestExpressionEdgeCases(BaseTestCase):
-    def test_empty_in_with_raw_list(self):
-        """IN with empty list produces 0 = 1."""
-        query = User.select(User.c.id).where(User.c.id << [])
-        self.assertSQL(query, (
-            'SELECT "t1"."id" FROM "users" AS "t1" WHERE (0 = 1)'))
-
-    def test_not_in_with_empty_list(self):
-        """NOT IN with empty list produces 1 = 1."""
-        query = User.select(User.c.id).where(User.c.id.not_in([]))
-        self.assertSQL(query, (
-            'SELECT "t1"."id" FROM "users" AS "t1" WHERE (1 = 1)'))
-
-    def test_between_via_slice(self):
-        """ColumnBase.__getitem__(slice) produces BETWEEN."""
-        query = User.select(User.c.id).where(User.c.age[18:65])
-        self.assertSQL(query, (
-            'SELECT "t1"."id" FROM "users" AS "t1" '
-            'WHERE ("t1"."age" BETWEEN ? AND ?)'), [18, 65])
-
-    def test_between_slice_requires_both_bounds(self):
-        """BETWEEN via slice with missing bound raises ValueError."""
-        self.assertRaises(ValueError, lambda: User.c.age[18:])
-        self.assertRaises(ValueError, lambda: User.c.age[:65])
-
-    def test_eq_none_produces_is_null(self):
-        """col == None produces IS NULL."""
-        query = User.select(User.c.id).where(User.c.name == None)
-        self.assertSQL(query, (
-            'SELECT "t1"."id" FROM "users" AS "t1" '
-            'WHERE ("t1"."name" IS NULL)'), [])
-
-    def test_ne_none_produces_is_not_null(self):
-        """col != None produces IS NOT NULL."""
-        query = User.select(User.c.id).where(User.c.name != None)
-        self.assertSQL(query, (
-            'SELECT "t1"."id" FROM "users" AS "t1" '
-            'WHERE ("t1"."name" IS NOT NULL)'), [])
-
-
-# ===========================================================================
-# Gap coverage: ForUpdate edge cases
-# ===========================================================================
-
-class TestForUpdateEdgeCases(BaseTestCase):
-    def test_skip_locked_sql(self):
-        """ForUpdate with skip_locked=True produces SKIP LOCKED."""
-        query = (Person
-                 .select(Person.id)
-                 .where(Person.name == 'huey')
-                 .for_update(skip_locked=True))
-        self.assertSQL(query, (
-            'SELECT "t1"."id" FROM "person" AS "t1" '
-            'WHERE ("t1"."name" = ?) '
-            'FOR UPDATE SKIP LOCKED'), ['huey'], for_update=True)
-
-    def test_skip_locked_string_parsing(self):
-        """ForUpdate parses 'FOR UPDATE SKIP LOCKED' string."""
-        query = (Person
-                 .select(Person.id)
-                 .for_update('FOR SHARE SKIP LOCKED'))
-        self.assertSQL(query, (
-            'SELECT "t1"."id" FROM "person" AS "t1" '
-            'FOR SHARE SKIP LOCKED'), for_update=True)
-
-    def test_nowait_and_skip_locked_error(self):
-        """ForUpdate with both nowait and skip_locked raises ValueError."""
-        self.assertRaises(ValueError, ForUpdate, 'FOR UPDATE',
-                          nowait=True, skip_locked=True)
-
-    def test_for_update_false_with_of_enables(self):
-        """for_update(False, of=...) auto-enables for_update."""
-        query = (Person
-                 .select(Person.id)
-                 .for_update(False, of=Person, nowait=True))
-        self.assertSQL(query, (
-            'SELECT "t1"."id" FROM "person" AS "t1" '
-            'FOR UPDATE OF "t1" NOWAIT'), for_update=True)
-
-
-# ===========================================================================
-# Gap coverage: Window edge cases
-# ===========================================================================
-
-class TestWindowEdgeCases(BaseTestCase):
-    def test_window_end_without_start_error(self):
-        """Window with end but no start raises ValueError."""
-        self.assertRaises(
-            ValueError, Window,
-            order_by=[User.c.id], end=Window.CURRENT_ROW)
-
-    def test_window_as_groups(self):
-        """Window.as_groups() produces GROUPS frame type."""
-        w = Window(order_by=[User.c.id],
-                   start=Window.preceding(),
-                   end=Window.CURRENT_ROW).as_groups()
-        query = User.select(fn.SUM(User.c.val).over(window=w)).window(w)
-        sql, _ = __sql__(query)
-        self.assertIn('GROUPS BETWEEN', sql)
-
-    def test_window_exclude_with_string(self):
-        """Window.exclude() with a string converts to SQL."""
-        w = Window(order_by=[User.c.id],
-                   start=Window.preceding(),
-                   end=Window.CURRENT_ROW)
-        w = w.exclude('TIES')
-        query = User.select(fn.SUM(User.c.val).over(window=w)).window(w)
-        sql, _ = __sql__(query)
-        self.assertIn('EXCLUDE TIES', sql)
-
-    def test_ordering_invalid_nulls_error(self):
-        """Ordering with invalid nulls= raises ValueError."""
-        self.assertRaises(ValueError, Ordering, User.c.id, 'ASC',
-                          nulls='middle')
-
-
-# ===========================================================================
-# Gap coverage: Miscellaneous query builder gaps
-# ===========================================================================
 
 class TestQueryBuilderMisc(BaseTestCase):
-    def test_insert_where_raises(self):
-        """Insert.where() raises NotImplementedError."""
-        t = Table('t1')
-        q = t.insert({t.c.val: 1})
-        self.assertRaises(NotImplementedError, q.where, t.c.val > 0)
-
     def test_entity_chained_getattr(self):
-        """Entity.__getattr__ chains path components."""
         e = Entity('schema', 'table')
         e2 = e.column
         self.assertIsInstance(e2, Entity)
-        ctx = Context()
-        sql, _ = ctx.sql(e2).query()
-        self.assertEqual(sql, '"schema"."table"."column"')
+        self.assertSQL(e2, '"schema"."table"."column"')
 
     def test_check_with_name(self):
-        """Check() with a name produces CONSTRAINT ... CHECK (...)."""
         c = Check('val > 0', name='positive_val')
-        ctx = Context()
-        sql, _ = ctx.sql(c).query()
-        self.assertIn('CONSTRAINT', sql)
-        self.assertIn('"positive_val"', sql)
-        self.assertIn('CHECK (val > 0)', sql)
+        self.assertSQL(c, 'CONSTRAINT "positive_val" CHECK (val > 0)', [])
 
     def test_check_without_name(self):
-        """Check() without a name produces only CHECK (...)."""
         c = Check('val > 0')
-        ctx = Context()
-        sql, _ = ctx.sql(c).query()
-        self.assertNotIn('CONSTRAINT', sql)
-        self.assertIn('CHECK (val > 0)', sql)
+        self.assertSQL(c, 'CHECK (val > 0)', [])
 
-    def test_nodelist_empty_with_parens(self):
-        """NodeList with zero nodes and parens=True produces ()."""
+    def test_nodelist_empty(self):
+        nl = NodeList([])
+        self.assertSQL(nl, '')
+
         nl = NodeList([], parens=True)
-        ctx = Context()
-        sql, _ = ctx.sql(nl).query()
-        self.assertEqual(sql, '()')
-
-    def test_nodelist_empty_without_parens(self):
-        """NodeList with zero nodes and no parens produces nothing."""
-        nl = NodeList([], parens=False)
-        ctx = Context()
-        sql, _ = ctx.sql(nl).query()
-        self.assertEqual(sql, '')
-
-    def test_group_by_with_explicit_column_table(self):
-        """Select.group_by() with a Table expands its columns."""
-        t = Table('t1', ('id', 'name', 'val'))
-        query = t.select(fn.SUM(t.val)).group_by(t)
-        sql, _ = __sql__(query)
-        self.assertIn('"id"', sql)
-        self.assertIn('"name"', sql)
-        self.assertIn('"val"', sql)
-
-    def test_group_by_table_no_columns_error(self):
-        """Select.group_by() with Table without columns raises ValueError."""
-        t = Table('t1')
-        query = t.select()
-        self.assertRaises(ValueError, query.group_by, t)
-
-    def test_delete_with_order_limit(self):
-        """Delete with ORDER BY and LIMIT."""
-        t = Table('t1')
-        query = t.delete().where(t.c.active == False).order_by(t.c.id).limit(10)
-        self.assertSQL(query, (
-            'DELETE FROM "t1" WHERE ("t1"."active" = ?) '
-            'ORDER BY "id" LIMIT ?'), [False, 10])
-
-    def test_sql_with_params(self):
-        """SQL node with params adds them without placeholders."""
-        s = SQL('SELECT * FROM t WHERE id = ?', [42])
-        ctx = Context()
-        result_sql, params = ctx.sql(s).query()
-        self.assertEqual(result_sql, 'SELECT * FROM t WHERE id = ?')
-        self.assertEqual(params, [42])
+        self.assertSQL(nl, '()')
 
     def test_namespace_attribute_sql(self):
-        """EXCLUDED namespace produces EXCLUDED."col" SQL."""
         expr = EXCLUDED.name
-        ctx = Context()
-        sql, _ = ctx.sql(expr).query()
-        self.assertEqual(sql, 'EXCLUDED."name"')
+        self.assertSQL(expr, 'EXCLUDED."name"')
 
 
 # ===========================================================================
@@ -3129,15 +3025,10 @@ class TestQueryBuilderMisc(BaseTestCase):
 
 class TestContextAndAliasManager(BaseTestCase):
     def test_alias_manager_pop_empty_error(self):
-        """AliasManager.pop() on empty manager raises ValueError."""
-        from peewee import AliasManager
         am = AliasManager()
-        # Initially at depth 1. Popping should raise.
         self.assertRaises(ValueError, am.pop)
 
     def test_alias_manager_push_pop(self):
-        """AliasManager push/pop creates isolated scopes."""
-        from peewee import AliasManager
         am = AliasManager()
         t = Table('users')
         alias1 = am.add(t)
@@ -3155,8 +3046,6 @@ class TestContextAndAliasManager(BaseTestCase):
         self.assertEqual(alias3, 't3')
 
     def test_alias_manager_get_any_depth(self):
-        """AliasManager.get(source, any_depth=True) searches all levels."""
-        from peewee import AliasManager
         am = AliasManager()
         t = Table('users')
         am.add(t)
@@ -3165,28 +3054,18 @@ class TestContextAndAliasManager(BaseTestCase):
         result = am.get(t, any_depth=True)
         self.assertEqual(result, 't1')
 
-    def test_query_to_string_with_types(self):
-        """query_to_string handles datetime, None, and bytes params."""
-        dt = datetime.datetime(2023, 1, 15, 10, 30, 0)
-        t = Table('t1')
-        query = t.select().where(t.c.ts == dt)
-        result = str(query)
-        self.assertIn("'2023-01-15 10:30:00'", result)
-
     def test_hashable_source_equality(self):
-        """_HashableSource equality and hashing semantics."""
         t1 = Table('users')
         t2 = Table('users')
-        # Same table name, no alias — should be equal.
+        # Same table name, no alias - should be equal.
         self.assertEqual(t1, t2)
         self.assertEqual(hash(t1), hash(t2))
 
-        # Aliased differently — should not be equal.
+        # Aliased differently - should not be equal.
         t3 = t1.alias('u')
         self.assertNotEqual(t1, t3)
 
     def test_hashable_source_in_set(self):
-        """Tables can be used in sets."""
         t1 = Table('users')
         t2 = Table('users')
         t3 = Table('tweets')

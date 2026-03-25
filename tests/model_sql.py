@@ -225,6 +225,23 @@ class TestModelSQL(ModelDatabaseTestCase):
             '"t1"."id", "t1"."username" '
             'FROM "users" AS "t1"'), [])
 
+    def test_string_expression_concat_chain(self):
+        class P(TestModel):
+            first = CharField()
+            last = TextField()
+            class Meta:
+                database = self.database
+
+        query = P.select(P.first + ' ' + P.last)
+        self.assertSQL(query, (
+            'SELECT (("t1"."first" || ?) || "t1"."last") '
+            'FROM "p" AS "t1"'), [' '])
+
+        query = P.select(P.last + ' ' + P.first)
+        self.assertSQL(query, (
+            'SELECT (("t1"."last" || ?) || "t1"."first") '
+            'FROM "p" AS "t1"'), [' '])
+
     def test_where_coerce(self):
         query = Person.select(Person.last).where(Person.id == '1337')
         self.assertSQL(query, (

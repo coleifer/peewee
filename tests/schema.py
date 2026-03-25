@@ -2,11 +2,12 @@
 DDL generation tests (CREATE TABLE, indexes, constraints, views).
 
 Test case ordering:
-  1. Core DDL SQL generation (TestModelDDL)
-  2. CREATE TABLE AS (SQL generation and integration)
-  3. View field mapping
-  4. Table name and truncation
-  5. Named constraints integration
+
+* Core DDL SQL generation (TestModelDDL)
+* CREATE TABLE AS (SQL generation and integration)
+* View field mapping
+* Table name and truncation
+* Named constraints integration
 """
 import datetime
 
@@ -852,13 +853,10 @@ class TestModelDDL(ModelDatabaseTestCase):
 
 
 class TestDDLAdditionalSQL(ModelDatabaseTestCase):
-    """Tests for DDL features not covered by TestModelDDL."""
     database = get_in_memory_db()
     requires = [User, Note, Person]
 
     def test_not_null_vs_null(self):
-        """Verify NOT NULL is present for required fields and absent for
-        nullable fields."""
         class NullableModel(TestModel):
             required = CharField()
             optional = CharField(null=True)
@@ -873,27 +871,21 @@ class TestDDLAdditionalSQL(ModelDatabaseTestCase):
             '"optional" VARCHAR(255), '
             '"with_default" INTEGER NOT NULL)'), [])
 
-    def test_create_table_unsafe(self):
-        """CREATE TABLE without IF NOT EXISTS."""
+    def test_create_table_safe_values(self):
         self.assertSQL(User._schema._create_table(safe=False), (
             'CREATE TABLE "users" ('
             '"id" INTEGER NOT NULL PRIMARY KEY, '
             '"username" VARCHAR(255) NOT NULL)'), [])
 
-    def test_create_table_safe(self):
-        """CREATE TABLE with IF NOT EXISTS."""
         self.assertSQL(User._schema._create_table(safe=True), (
             'CREATE TABLE IF NOT EXISTS "users" ('
             '"id" INTEGER NOT NULL PRIMARY KEY, '
             '"username" VARCHAR(255) NOT NULL)'), [])
 
-    def test_drop_table_unsafe(self):
-        """DROP TABLE without IF EXISTS."""
+    def test_drop_table_safe_values(self):
         self.assertSQL(User._schema._drop_table(safe=False),
                        'DROP TABLE "users"', [])
 
-    def test_drop_table_safe(self):
-        """DROP TABLE with IF EXISTS."""
         self.assertSQL(User._schema._drop_table(safe=True),
                        'DROP TABLE IF EXISTS "users"', [])
 
@@ -904,7 +896,6 @@ class TestDDLAdditionalSQL(ModelDatabaseTestCase):
                        'DROP TABLE IF EXISTS "note" RESTRICT', [])
 
     def test_drop_indexes_sql(self):
-        """Verify DROP INDEX SQL generation."""
         class Indexed(TestModel):
             val = CharField()
             class Meta:
@@ -918,31 +909,18 @@ class TestDDLAdditionalSQL(ModelDatabaseTestCase):
         self.assertIn('indexed_val', sql)
 
     def test_create_foreign_key_sql(self):
-        """ALTER TABLE ADD CONSTRAINT for FK."""
         self.assertSQL(Note._schema._create_foreign_key(Note.author), (
             'ALTER TABLE "note" ADD CONSTRAINT '
             '"fk_note_author_id_refs_person" '
             'FOREIGN KEY ("author_id") REFERENCES "person" ("id")'), [])
 
     def test_truncate_table_sqlite(self):
-        """On SQLite, truncate falls back to DELETE FROM."""
+        # SQLite truncate falls back to DELETE FROM.
         ctx = User._schema._truncate_table()
         self.assertSQL(ctx, 'DELETE FROM "users"', [])
 
-    def test_bigautofield_ddl(self):
-        """BigAutoField produces correct PK DDL."""
-        class BigPK(TestModel):
-            id = BigAutoField()
-            data = TextField()
-            class Meta:
-                database = self.database
-
-        sql, _ = BigPK._schema._create_table(safe=False).query()
-        self.assertIn('PRIMARY KEY', sql)
-        self.assertIn('"id"', sql)
-
     def test_database_required_error(self):
-        """SchemaManager raises ImproperlyConfigured when no DB set."""
+        # SchemaManager raises ImproperlyConfigured when no DB set.
         class Orphan(Model):
             name = CharField()
 
@@ -1165,64 +1143,31 @@ class TestTruncateTableSQL(ModelDatabaseTestCase):
     database = get_in_memory_db()
     requires = [User]
 
-    def test_truncate_restart_identity(self):
-        """_truncate_table(restart_identity=True) on non-SQLite DB."""
+    def test_truncate_options(self):
         # Create a fake database that supports TRUNCATE.
         class FakeDB(SqliteDatabase):
             truncate_table = True
         fake_db = FakeDB(':memory:')
-        fake_db.connect()
+        with fake_db:
+            class FakeUser(TestModel):
+                username = CharField()
+                class Meta:
+                    database = fake_db
+                    table_name = 'users'
 
-        class FakeUser(TestModel):
-            username = CharField()
-            class Meta:
-                database = fake_db
-                table_name = 'users'
+            query = FakeUser._schema._truncate_table()
+            self.assertSQL(query, 'TRUNCATE TABLE "users"')
 
-        ctx = FakeUser._schema._truncate_table(restart_identity=True)
-        sql, _ = ctx.query()
-        self.assertIn('TRUNCATE TABLE', sql)
-        self.assertIn('RESTART IDENTITY', sql)
-        fake_db.close()
+            query = FakeUser._schema._truncate_table(restart_identity=True)
+            self.assertSQL(query, 'TRUNCATE TABLE "users" RESTART IDENTITY')
 
-    def test_truncate_cascade(self):
-        """_truncate_table(cascade=True) on non-SQLite DB."""
-        class FakeDB(SqliteDatabase):
-            truncate_table = True
-        fake_db = FakeDB(':memory:')
-        fake_db.connect()
+            query = FakeUser._schema._truncate_table(cascade=True)
+            self.assertSQL(query, 'TRUNCATE TABLE "users" CASCADE')
 
-        class FakeUser(TestModel):
-            username = CharField()
-            class Meta:
-                database = fake_db
-                table_name = 'users'
-
-        ctx = FakeUser._schema._truncate_table(cascade=True)
-        sql, _ = ctx.query()
-        self.assertIn('TRUNCATE TABLE', sql)
-        self.assertIn('CASCADE', sql)
-        fake_db.close()
-
-    def test_truncate_restart_and_cascade(self):
-        """_truncate_table with both options."""
-        class FakeDB(SqliteDatabase):
-            truncate_table = True
-        fake_db = FakeDB(':memory:')
-        fake_db.connect()
-
-        class FakeUser(TestModel):
-            username = CharField()
-            class Meta:
-                database = fake_db
-                table_name = 'users'
-
-        ctx = FakeUser._schema._truncate_table(
-            restart_identity=True, cascade=True)
-        sql, _ = ctx.query()
-        self.assertIn('RESTART IDENTITY', sql)
-        self.assertIn('CASCADE', sql)
-        fake_db.close()
+            query = FakeUser._schema._truncate_table(restart_identity=True,
+                                                     cascade=True)
+            self.assertSQL(query, ('TRUNCATE TABLE "users" '
+                                   'RESTART IDENTITY CASCADE'))
 
 
 class TestSchemaSequenceErrors(ModelDatabaseTestCase):
@@ -1230,33 +1175,29 @@ class TestSchemaSequenceErrors(ModelDatabaseTestCase):
     requires = [User]
 
     def test_check_sequences_no_support(self):
-        """_check_sequences raises ValueError when sequences not supported."""
         schema = User._schema
         self.assertRaises(ValueError, schema._check_sequences,
                           User._meta.primary_key)
 
     def test_check_sequences_no_sequence_on_field(self):
-        """_check_sequences raises ValueError when field has no sequence."""
         class SeqDB(SqliteDatabase):
             sequences = True
+
         fake_db = SeqDB(':memory:')
-        fake_db.connect()
+        with fake_db:
+            class FakeModel(TestModel):
+                data = IntegerField()
+                class Meta:
+                    database = fake_db
 
-        class FakeModel(TestModel):
-            data = IntegerField()
-            class Meta:
-                database = fake_db
-
-        schema = FakeModel._schema
-        self.assertRaises(ValueError, schema._check_sequences, FakeModel.data)
-        fake_db.close()
+            with self.assertRaises(ValueError):
+                FakeModel._schema._check_sequences(FakeModel.data)
 
 
 class TestSchemaCreateAllDropAll(ModelTestCase):
     requires = [User]
 
     def test_create_all_drop_all(self):
-        """SchemaManager.create_all/drop_all work as convenience methods."""
         class TempModel(TestModel):
             data = CharField()
 
@@ -1266,5 +1207,3 @@ class TestSchemaCreateAllDropAll(ModelTestCase):
 
         TempModel._schema.drop_all()
         self.assertFalse(self.database.table_exists('temp_model'))
-
-
