@@ -1364,7 +1364,6 @@ class TestModelAdvancedSQL(ModelDatabaseTestCase):
             'ORDER BY "t3"."id" DESC LIMIT ?) AS "t2" ON ?'), [2, True])
 
     def test_ensure_join_noop(self):
-        """ensure_join is a no-op when the join already exists."""
         query = (User
                  .select(User, Tweet.content)
                  .join(Tweet)
@@ -1377,7 +1376,6 @@ class TestModelAdvancedSQL(ModelDatabaseTestCase):
             [])
 
     def test_ensure_join_adds(self):
-        """ensure_join adds the join when it doesn't exist."""
         query = (User
                  .select(User, Tweet.content)
                  .ensure_join(User, Tweet))
@@ -1416,7 +1414,6 @@ class TestModelAdvancedSQL(ModelDatabaseTestCase):
             for_update=True)
 
     def test_for_update_unsupported(self):
-        """FOR UPDATE on a database that doesn't support it raises."""
         query = User.select().for_update()
         self.assertRaises(ValueError, self.assertSQL, query,
                           '', [])

@@ -6981,7 +6981,6 @@ class TestBoundModelsContextUsage(ModelTestCase):
     requires = [User]
 
     def test_bound_models_context_restores_db(self):
-        """_BoundModelsContext restores original database on exit."""
         alt_db = get_in_memory_db()
         original_db = User._meta.database
 

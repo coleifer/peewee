@@ -177,7 +177,6 @@ class TestSelectQuery(BaseTestCase):
             'ORDER BY "i1"."name"'), [])
 
     def test_multiple_where(self):
-        """Ensure multiple calls to WHERE are AND-ed together."""
         query = (Person
                  .select(Person.name)
                  .where(Person.dob < datetime.date(1980, 1, 1))

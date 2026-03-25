@@ -2,10 +2,11 @@
 Cursor wrapper, row type, and query execution tests.
 
 Test case ordering:
-  1. Cursor wrapper behavior (iteration, slicing, indexing)
-  2. Row types (dicts, tuples, named tuples)
-  3. Specify converter
-  4. Raw query execution with Table objects
+
+* Cursor wrapper behavior (iteration, slicing, indexing)
+* Row types (dicts, tuples, named tuples)
+* Specify converter
+* Raw query execution with Table objects
 """
 import datetime
 
@@ -525,8 +526,8 @@ class TestEmptyResultEdgeCases(DatabaseTestCase):
                      'value REAL)')
 
     def tearDown(self):
-        self.execute('DROP TABLE "users";')
-        self.execute('DROP TABLE "register";')
+        self.execute('DROP TABLE "users"')
+        self.execute('DROP TABLE "register"')
         super(TestEmptyResultEdgeCases, self).tearDown()
 
     def test_count_empty(self):
@@ -542,12 +543,10 @@ class TestEmptyResultEdgeCases(DatabaseTestCase):
         self.assertIsNone(QUser.select().peek(n=1))
 
     def test_get_empty(self):
-        """Table-level get() returns None when no rows match."""
         self.assertIsNone(
             QUser.select().where(QUser.username == 'nobody').get())
 
     def test_scalar_empty(self):
-        """Scalar on empty result returns None."""
         result = QRegister.select(fn.MAX(QRegister.value)).scalar()
         self.assertIsNone(result)
 
@@ -590,7 +589,7 @@ class TestScalarVariants(DatabaseTestCase):
             QRegister.insert({QRegister.value: v}).execute()
 
     def tearDown(self):
-        self.execute('DROP TABLE "register";')
+        self.execute('DROP TABLE "register"')
         super(TestScalarVariants, self).tearDown()
 
     def test_scalar(self):
@@ -640,7 +639,6 @@ class TestModelResultTypes(ModelTestCase):
         self.assertEqual(result[0].username, 'huey')
 
     def test_model_objects(self):
-        """objects() maps all selected columns onto the query's model."""
         query = (Tweet
                  .select(Tweet, User)
                  .join(User)
@@ -653,7 +651,6 @@ class TestModelResultTypes(ModelTestCase):
         self.assertEqual(results[0].username, 'huey')
 
     def test_model_dicts_with_join(self):
-        """dicts() flattens join results."""
         query = (Tweet
                  .select(Tweet.content, User.username)
                  .join(User)
@@ -683,7 +680,6 @@ class TestModelGetEdgeCases(ModelTestCase):
     requires = [User]
 
     def test_get_does_not_exist(self):
-        """Model.get() raises DoesNotExist when no row matches."""
         self.assertRaises(
             User.DoesNotExist,
             User.get, User.username == 'nobody')
@@ -693,12 +689,10 @@ class TestModelGetEdgeCases(ModelTestCase):
         self.assertIsNone(result)
 
     def test_peek_empty_model(self):
-        """peek() on empty Model result returns None."""
         query = User.select().where(User.username == 'nobody')
         self.assertIsNone(query.peek(n=1))
 
     def test_first_empty_model(self):
-        """first() on empty Model result returns None."""
         query = User.select().where(User.username == 'nobody')
         self.assertIsNone(query.first())
 
@@ -723,7 +717,6 @@ class TestQuerySqlMethod(ModelTestCase):
     requires = [User]
 
     def test_sql_returns_tuple(self):
-        """Query.sql() returns (sql_string, params)."""
         query = User.select().where(User.username == 'huey')
         sql, params = query.sql()
         self.assertIn('SELECT', sql)
@@ -753,21 +746,18 @@ class TestDedupeColumns(DatabaseTestCase):
     database = get_in_memory_db()
 
     def test_dedupe_columns(self):
-        """CursorWrapper.dedupe_columns handles duplicates."""
         from peewee import CursorWrapper
         cw = CursorWrapper.__new__(CursorWrapper)
         result = cw.dedupe_columns(['name', 'value', 'name', 'name'])
         self.assertEqual(result, ['name', 'value', 'name_2', 'name_3'])
 
     def test_dedupe_columns_with_expressions(self):
-        """dedupe_columns cleans up messy column descriptions."""
         from peewee import CursorWrapper
         cw = CursorWrapper.__new__(CursorWrapper)
         result = cw.dedupe_columns(['"t1"."name"', 'SUM("t1"."value")'])
         self.assertEqual(result, ['name', 'value'])
 
     def test_dedupe_columns_no_identifier_cleanup(self):
-        """dedupe_columns with valid_identifiers=False preserves raw names."""
         from peewee import CursorWrapper
         cw = CursorWrapper.__new__(CursorWrapper)
         result = cw.dedupe_columns(
@@ -776,7 +766,7 @@ class TestDedupeColumns(DatabaseTestCase):
 
 
 # ===========================================================================
-# Gap coverage: CursorWrapper edge cases
+# CursorWrapper edge cases
 # ===========================================================================
 
 class TestCursorWrapperEdgeCases(DatabaseTestCase):
@@ -793,7 +783,6 @@ class TestCursorWrapperEdgeCases(DatabaseTestCase):
         super(TestCursorWrapperEdgeCases, self).tearDown()
 
     def test_getitem_invalid_type_error(self):
-        """CursorWrapper.__getitem__ with non-int/slice raises ValueError."""
         from peewee import CursorWrapper
         QUser.insert({QUser.username: 'u1'}).execute()
         query = QUser.select()
@@ -801,7 +790,6 @@ class TestCursorWrapperEdgeCases(DatabaseTestCase):
         self.assertRaises(ValueError, cursor.__getitem__, 'bad')
 
     def test_fill_cache_negative_error(self):
-        """CursorWrapper.fill_cache with negative n raises ValueError."""
         from peewee import CursorWrapper
         QUser.insert({QUser.username: 'u1'}).execute()
         query = QUser.select()
@@ -809,7 +797,6 @@ class TestCursorWrapperEdgeCases(DatabaseTestCase):
         self.assertRaises(ValueError, cursor.fill_cache, -1)
 
     def test_peek_n_greater_than_one(self):
-        """peek(n=N) with N > 1 returns list of N rows."""
         for i in range(5):
             QUser.insert({QUser.username: 'u%d' % i}).execute()
         query = QUser.select().order_by(QUser.id)
@@ -819,7 +806,6 @@ class TestCursorWrapperEdgeCases(DatabaseTestCase):
                          ['u0', 'u1', 'u2'])
 
     def test_count_clear_limit(self):
-        """SelectBase.count(clear_limit=True) ignores limit/offset."""
         for i in range(5):
             QUser.insert({QUser.username: 'u%d' % i}).execute()
         query = QUser.select().limit(2).offset(1)
@@ -834,7 +820,6 @@ class TestModelCursorEdgeCases(ModelTestCase):
     requires = [User, Tweet]
 
     def test_peek_n_model(self):
-        """peek(n=2) at Model level returns list of model instances."""
         for name in ('alpha', 'bravo', 'charlie'):
             User.create(username=name)
         query = User.select().order_by(User.username)
@@ -844,7 +829,6 @@ class TestModelCursorEdgeCases(ModelTestCase):
         self.assertEqual(rows[1].username, 'bravo')
 
     def test_model_namedtuple_with_join(self):
-        """namedtuples() with a joined query flattens columns."""
         u = User.create(username='huey')
         Tweet.create(user=u, content='meow')
         query = (Tweet
@@ -857,6 +841,5 @@ class TestModelCursorEdgeCases(ModelTestCase):
         self.assertEqual(rows[0].username, 'huey')
 
     def test_model_raw_get_does_not_exist(self):
-        """ModelRaw.get() raises DoesNotExist when no rows match."""
         query = User.raw('SELECT * FROM users WHERE username = ?', 'nobody')
         self.assertRaises(User.DoesNotExist, query.get)

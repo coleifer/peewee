@@ -7,10 +7,10 @@ base_models, via BaseTransactionTestCase.
 
 Test case ordering:
 
-1. Transaction commit/rollback, nesting, savepoints
-2. Session (context manager) behavior
-3. Lock type
-4. Isolation level
+* Transaction commit/rollback, nesting, savepoints
+* Session (context manager) behavior
+* Lock type
+* Isolation level
 """
 import threading
 
@@ -79,6 +79,68 @@ class TestTransaction(BaseTransactionTestCase):
 
         self.assertRegister([1, 3])
 
+        # Explicit commit, implicit rollback.
+        try:
+            with db.atomic() as txn:
+                self._save(6)
+                txn.commit()
+                self.assertTrue(db.in_transaction())  # New txn begun.
+                self._save(7)
+                raise ValueError('oops')
+        except ValueError:
+            pass
+
+        self.assertRegister([1, 3, 6])
+        self.assertFalse(db.in_transaction())
+
+    @requires_nested
+    def test_simple_nested(self):
+        self.assertFalse(db.in_transaction())
+        with db.atomic():
+            with db.atomic():
+                self._save(1)
+                self.assertTrue(db.in_transaction())
+            self.assertTrue(db.in_transaction())
+
+        self.assertFalse(db.in_transaction())
+        self.assertRegister([1])
+
+        # Explicit rollback, implicit commit.
+        with db.atomic() as txn:
+            with db.atomic() as sp:
+                self._save(2)
+                sp.rollback()
+                self.assertTrue(db.in_transaction())
+                self._save(3)
+
+        self.assertFalse(db.in_transaction())
+        self.assertRegister([1, 3])
+
+        # Explicit rollbacks.
+        with db.atomic() as txn:
+            with db.atomic() as sp:
+                self._save(4)
+                sp.rollback()
+                self._save(5)
+                sp.rollback()
+
+        self.assertRegister([1, 3])
+
+        # Explicit commit, implicit rollback.
+        with db.atomic() as txn:
+            try:
+                with db.atomic() as sp:
+                    self._save(6)
+                    sp.commit()
+                    self.assertTrue(db.in_transaction())  # New txn begun.
+                    self._save(7)
+                    raise ValueError('oops')
+            except ValueError:
+                pass
+
+        self.assertRegister([1, 3, 6])
+        self.assertFalse(db.in_transaction())
+
     @requires_nested
     def test_transactions(self):
         self.assertFalse(db.in_transaction())
@@ -131,6 +193,7 @@ class TestTransaction(BaseTransactionTestCase):
     def test_commit_rollback_nested(self):
         with db.atomic() as txn:
             self.test_commit_rollback()
+            self.assertRegister([1, 4])
             txn.rollback()
         self.assertRegister([])
 
@@ -235,6 +298,19 @@ class TestTransaction(BaseTransactionTestCase):
             db.commit()
 
         self.assertRegister([2, 4])
+
+    def test_manual_commit_as_decorator(self):
+        @db.manual_commit()
+        def do_work():
+            db.begin()
+            self._save(100)
+            db.rollback()
+            db.begin()
+            self._save(200)
+            db.commit()
+
+        do_work()
+        self.assertRegister([200])
 
     def test_mixing_manual_atomic(self):
         @db.manual_commit()
@@ -529,13 +605,8 @@ class TestTransactionIsolationLevel(BaseTransactionTestCase):
             self.assertEqual([r.value for r in q], vals)
 
 
-# ===========================================================================
-# Gap coverage: Connection context as decorator, atomic decorator semantics
-# ===========================================================================
-
 class TestConnectionContextDecorator(BaseTransactionTestCase):
     def test_connection_context_as_decorator(self):
-        """connection_context() can be used as a decorator."""
         db2 = new_connection()
 
         @db2.connection_context()
@@ -547,17 +618,3 @@ class TestConnectionContextDecorator(BaseTransactionTestCase):
         result = do_work()
         self.assertEqual(result, (1,))
         self.assertTrue(db2.is_closed())
-
-    def test_manual_commit_as_decorator(self):
-        """manual_commit() can be used as a decorator."""
-        @db.manual_commit()
-        def do_work():
-            db.begin()
-            self._save(100)
-            db.rollback()
-            db.begin()
-            self._save(200)
-            db.commit()
-
-        do_work()
-        self.assertRegister([200])
