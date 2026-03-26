@@ -7,6 +7,10 @@ https://github.com/coleifer/peewee/releases
 
 ## master
 
+[View commits](https://github.com/coleifer/peewee/compare/4.0.3...master)
+
+## 4.0.3
+
 * Refactor test suite - this was a mechanical refactor, just moving things
   around and trying to group things more clearly. Also added new tests covering
   some gaps.
@@ -23,7 +27,7 @@ https://github.com/coleifer/peewee/releases
   graphs after multi-table selects.
 * If only psycopg3 is installed, use it by default (#3036)
 
-[View commits](https://github.com/coleifer/peewee/compare/4.0.2...master)
+[View commits](https://github.com/coleifer/peewee/compare/4.0.2...4.0.3)
 
 ## 4.0.2
 
