@@ -4288,7 +4288,10 @@ class PostgresqlDatabase(Database):
         return bool(res.fetchone()[0])
 
     def get_binary_type(self):
-        return self._adapter.get_binary_type()
+        try:
+            return self._adapter.get_binary_type()
+        except AttributeError:
+            raise ImproperlyConfigured('Postgres driver not installed.')
 
     def conflict_statement(self, on_conflict, query):
         return
