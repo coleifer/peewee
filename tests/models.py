@@ -7051,3 +7051,86 @@ class TestModelDependencies(ModelTestCase):
         gc_idx = dep_models.index(DepGrandChild)
         c_idx = dep_models.index(DepChild)
         self.assertTrue(gc_idx < c_idx)
+
+
+class Customer(TestModel):
+    name = TextField()
+
+class Prod(TestModel):
+    name = TextField()
+    price = DecimalField(decimal_places=2)
+    class Meta:
+        table_name = 'product'
+
+class Order(TestModel):
+    customer = ForeignKeyField(Customer)
+    order_date = DateField()
+
+class OrderItem(TestModel):
+    order = ForeignKeyField(Order)
+    product = ForeignKeyField(Prod)
+    unit_price = DecimalField(decimal_places=2)
+    quantity = IntegerField(default=1)
+
+
+@skip_unless(IS_SQLITE_25 or IS_POSTGRESQL or IS_MYSQL_ADVANCED_FEATURES)
+class TestAnalyticalQueries(ModelTestCase):
+    requires = [Customer, Prod, Order, OrderItem]
+
+    def setUp(self):
+        super(TestAnalyticalQueries, self).setUp()
+        self.populate_sample_data()
+
+    def populate_sample_data(self):
+        c1 = Customer.create(name='c1')
+        c2 = Customer.create(name='c2')
+
+        p1 = Prod.create(name='p1', price=100)
+        p2 = Prod.create(name='p2', price=2)
+
+        def create_order(c, order_date, items):
+            o = Order.create(customer=c, order_date=order_date)
+            for p, q, up in items:
+                product = p1 if p == 'p1' else p2
+                OrderItem.create(order=o, product=product, quantity=q or 1,
+                                 unit_price=up or product.price)
+
+        create_order(c1, datetime.date(2026, 1, 1), [('p1', 1, None)])
+        create_order(c1, datetime.date(2026, 3, 1), [('p1', 2, 75)])
+        create_order(c1, datetime.date(2026, 4, 1), [
+            ('p1', 2, 100), ('p2', 1, 1)])
+        create_order(c1, datetime.date(2026, 4, 2), [('p1', 2, 100)])
+
+        create_order(c2, datetime.date(2026, 1, 31), [('p1', 1, None)])
+        create_order(c2, datetime.date(2026, 3, 31), [('p2', 1, None)])
+        create_order(c2, datetime.date(2026, 4, 29), [
+            ('p1', 5, 100), ('p2', 10, None)])
+        create_order(c2, datetime.date(2026, 4, 30), [('p1', 1, 100)])
+
+    def test_monthly_revenue(self):
+        revenue = fn.SUM(OrderItem.quantity * OrderItem.unit_price)
+        monthly = (Order
+                   .select(
+                       Order.order_date.truncate('month').alias('month'),
+                       revenue.alias('revenue'))
+                   .join(OrderItem, JOIN.LEFT_OUTER)
+                   .group_by(Order.order_date.truncate('month'))
+                   .cte('monthly_revenue'))
+
+        window = Window(order_by=[monthly.c.month])
+        query = (monthly
+                 .select_from(
+                     monthly.c.month.converter(Order.order_date.python_value),
+                     monthly.c.revenue,
+                     fn.SUM(monthly.c.revenue).over(window).alias('cum_rev'),
+                     (monthly.c.revenue -
+                      fn.LAG(monthly.c.revenue).over(window)).alias('mom_chg'))
+                 .window(window)
+                 .order_by(monthly.c.month))
+
+        data = list(query.tuples())
+        self.assertEqual(data, [
+            (datetime.date(2026, 1, 1), 200, 200, None),
+            (datetime.date(2026, 3, 1), 152, 352, -48),
+            (datetime.date(2026, 4, 1), 1021, 1373, 869),
+        ])

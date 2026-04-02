@@ -73,7 +73,7 @@ class TestCoerce(ModelTestCase):
         self.assertEqual(i_db.value_null, 3)
 
 
-class TestDefaultValues(ModelTestCase):
+class TestDefaultValuesFields(ModelTestCase):
     requires = [DfltM]
 
     def test_default_values(self):

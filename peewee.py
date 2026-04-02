@@ -1123,13 +1123,15 @@ class CTE(_HashableSource, Source):
             raise ValueError('select_from() must specify one or more columns '
                              'from the CTE to select.')
 
-        query = (Select((self,), columns)
-                 .with_cte(self)
-                 .bind(self._query._database))
-        try:
-            query = query.objects(self._query.model)
-        except AttributeError:
-            pass
+        if hasattr(self._query, 'model'):
+            query = (self._query.model
+                     .select(*columns)
+                     .from_(self)
+                     .with_cte(self))
+        else:
+            query = (Select((self,), columns)
+                     .with_cte(self)
+                     .bind(self._query._database))
         return query
 
     def _get_hash(self):
