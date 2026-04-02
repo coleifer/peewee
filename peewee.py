@@ -3022,12 +3022,12 @@ class Index(Node):
             ctx.sql(EnclosedNodeList([
                 SQL(expr) if isinstance(expr, str) else expr
                 for expr in self._expressions]))
-            if self._where is not None:
-                ctx.literal(' WHERE ').sql(self._where)
 
             if self._nulls_distinct is not None:
                 ctx.literal(' NULLS DISTINCT' if self._nulls_distinct else
                             ' NULLS NOT DISTINCT')
+            if self._where is not None:
+                ctx.literal(' WHERE ').sql(self._where)
 
         return ctx
 

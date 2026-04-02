@@ -319,6 +319,36 @@ class TestModelDDL(ModelDatabaseTestCase):
             ('CREATE INDEX test_idx ON idxmodel2 (name)', []),
         ])
 
+    def test_index_nulls_distinct(self):
+        class A(self.database.Model):
+            key = CharField()
+
+        A.add_index(A.key, unique=True, nulls_distinct=True)
+        self.assertIndexes(A, [
+            ('CREATE UNIQUE INDEX "a_key" ON "a" ("key") NULLS DISTINCT', []),
+        ])
+
+        class B(self.database.Model):
+            key = CharField()
+
+        B.add_index(A.key, unique=True, nulls_distinct=False)
+        self.assertIndexes(B, [
+            ('CREATE UNIQUE INDEX "b_key" ON "b" ("key") NULLS NOT DISTINCT',
+             []),
+        ])
+
+        class C(self.database.Model):
+            key = CharField()
+
+        C.add_index(C.key, unique=True, nulls_distinct=True, where=(
+            fn.LOWER(fn.SUBSTR(C.key, 1, 1)) == 'c'))
+        self.assertIndexes(C, [
+            ('CREATE UNIQUE INDEX "c_key" ON "c" ("key") '
+             'NULLS DISTINCT '
+             'WHERE (LOWER(SUBSTR("key", ?, ?)) = ?)',
+             [1, 1, 'c']),
+        ])
+
     def test_legacy_model_table_and_indexes(self):
         class Base(Model):
             class Meta:
