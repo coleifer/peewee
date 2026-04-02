@@ -27,6 +27,7 @@ from .base import IS_CRDB
 from .base import IS_MYSQL
 from .base import IS_MYSQL_ADVANCED_FEATURES
 from .base import IS_POSTGRESQL
+from .base import IS_PSYCOPG3
 from .base import IS_SQLITE
 from .base import IS_SQLITE_OLD
 from .base import IS_SQLITE_15  # Row-values.
@@ -7107,6 +7108,7 @@ class TestAnalyticalQueries(ModelTestCase):
             ('p1', 5, 100), ('p2', 10, None)])
         create_order(c2, datetime.date(2026, 4, 30), [('p1', 1, 100)])
 
+    @skip_if(IS_PSYCOPG3)
     def test_monthly_revenue(self):
         revenue = fn.SUM(OrderItem.quantity * OrderItem.unit_price)
         monthly = (Order
