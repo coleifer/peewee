@@ -44,21 +44,19 @@ except ImportError:
     pass
 try:
     import psycopg2
-    from psycopg2 import errors as pg_errors
     from psycopg2 import extensions as pg_extensions
     from psycopg2.extras import register_uuid as pg_register_uuid
     from psycopg2.extras import Json as Json_pg2
     pg_register_uuid()
 except ImportError:
-    psycopg2 = pg_errors = Json_pg2 = None
+    psycopg2 = Json_pg2 = None
 try:
     import psycopg
-    from psycopg import errors as pg3_errors
     from psycopg.pq import TransactionStatus
     from psycopg.types.json import Json as Json_pg3
     from psycopg.types.json import Jsonb as Jsonb_pg3
 except ImportError:
-    psycopg = pg3_errors = Json_pg3 = Jsonb_pg3 = None
+    psycopg = Json_pg3 = Jsonb_pg3 = None
 
 mysql_passwd = False
 try:
@@ -3109,14 +3107,8 @@ class ExceptionWrapper(object):
     def __exit__(self, exc_type, exc_value, traceback):
         if exc_type is None:
             return
-        # psycopg shits out a million cute error types. Try to catch em all.
-        if pg_errors is not None and exc_type.__name__ not in self.exceptions \
-           and issubclass(exc_type, pg_errors.Error):
-            exc_type = exc_type.__bases__[0]
-        elif pg3_errors is not None and \
-           exc_type.__name__ not in self.exceptions \
-           and issubclass(exc_type, pg3_errors.Error):
-            exc_type = exc_type.__bases__[0]
+        if exc_type.__name__ not in self.exceptions:
+            exc_type = exc_type.__bases__[0]  # Try grabbing DB-API class.
         if exc_type.__name__ in self.exceptions:
             new_type = self.exceptions[exc_type.__name__]
             exc_args = exc_value.args
