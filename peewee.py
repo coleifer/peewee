@@ -6302,6 +6302,14 @@ class SchemaManager(object):
                 .literal(statement)
                 .sql(index_name))
 
+    def drop_index(self, field=None, index=None, safe=True):
+        if field is None and index is None:
+            raise ValueError('field or index must be specified.')
+        elif field:
+            index = ModelIndex(self.model, (field,), unique=field.unique,
+                               using=field.index_type)
+        return self.database.execute(self._drop_index(index, safe=safe=))
+
     def drop_indexes(self, safe=True):
         for query in self._drop_indexes(safe=safe):
             self.database.execute(query)

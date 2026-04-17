@@ -63,8 +63,8 @@ Manual Commit / Rollback
 ------------------------
 
 You can commit or roll-back explicitly inside an :meth:`~Database.atomic`
-block. After calling :meth:`~Transaction.commit` or :meth:`~Transaction.rollback`
-a new transaction (or savepoint) begins automatically:
+block. After calling ``commit()`` or ``rollback()`` a new transaction (or
+savepoint) begins automatically:
 
 .. code-block:: python
 

@@ -2380,9 +2380,9 @@ Model
          for row in query:
              print(row)  # {'username': 'Alice', 'tweet_count': 12}
 
-   .. method:: tuples(as_tuples=True)
+   .. method:: tuples(as_tuple=True)
 
-      :param bool as_tuples: Specify whether to return rows as tuples.
+      :param bool as_tuple: Specify whether to return rows as tuples.
 
       Return rows as tuples.
 
@@ -3486,7 +3486,7 @@ Fields
       ['CS 101', 'CS151', 'English 101', 'English 151']
 
    To remove all relationships from a collection, you can use the
-   :meth:`~SelectQuery.clear` method. Let's say that English 101 is
+   :meth:`~ManyToManyQuery.clear` method. Let's say that English 101 is
    canceled, so we need to remove all the students from it:
 
    .. code-block:: pycon
@@ -3688,6 +3688,15 @@ Schema Manager
       :param bool safe: Specify IF EXISTS clause.
 
       Execute DROP INDEX queries for the indexes defined for the model.
+
+   .. method:: drop_index(field=None, index=None, safe=True)
+
+      :param Field field: field index to drop (for single-column indexes).
+      :param ModelIndex index: index to drop (for indexes other than
+         single-column, e.g. multi-col, partial, etc).
+      :param bool safe: Specify IF EXISTS clause.
+
+      Execute DROP INDEX query for the index specified.
 
    .. method:: create_sequence(field)
 
@@ -4816,9 +4825,9 @@ Queries
 
       Return rows as dictionaries.
 
-   .. method:: tuples(as_tuples=True)
+   .. method:: tuples(as_tuple=True)
 
-      :param bool as_tuples: Specify whether to return rows as tuples.
+      :param bool as_tuple: Specify whether to return rows as tuples.
 
       Return rows as tuples.
 
@@ -5699,7 +5708,8 @@ Queries
    :param subqueries: One or more models or :class:`ModelSelect` queries
        to eagerly fetch.
    :param prefetch_type: Query type to use for the subqueries.
-   :return: a list of models with selected relations prefetched.
+   :return: a list of models with selected relations prefetched. When called
+       with no subqueries returns ``sq`` unmodified.
 
    Eagerly fetch related objects, allowing efficient querying of multiple
    tables when a 1-to-many relationship exists. The prefetch type changes how
