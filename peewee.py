@@ -6016,7 +6016,6 @@ class ManyToManyField(MetaField):
         return type(klass_name, (Model,), attrs)
 
     def get_through_model(self):
-        # XXX: Deprecated. Just use the "through_model" property.
         return self.through_model
 
 
@@ -6308,7 +6307,7 @@ class SchemaManager(object):
         elif field:
             index = ModelIndex(self.model, (field,), unique=field.unique,
                                using=field.index_type)
-        return self.database.execute(self._drop_index(index, safe=safe=))
+        return self.database.execute(self._drop_index(index, safe=safe))
 
     def drop_indexes(self, safe=True):
         for query in self._drop_indexes(safe=safe):

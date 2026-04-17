@@ -1210,6 +1210,113 @@ Database
       Create a transaction context-manager, optionally using the specified
       isolation level (if unspecified, the server default will be used).
 
+
+.. class:: _atomic
+
+   Context-manager or decorator implementation for :meth:`Database.atomic`.
+   Uses a transaction at the outermost level and savepoints for nested calls.
+
+   See :ref:`transactions` for details on transaction management.
+
+   .. method:: __enter__()
+
+      Begin the transaction or savepoint.
+
+      :return: Either a :class:`_transaction` or :class:`_savepoint` instance,
+         depending on nesting.
+
+   .. method:: __exit__(exc_type, exc_val, exc_tb)
+
+      Commit the transaction or savepoint if exiting cleanly. If an unhandled
+      exception occurred, roll back.
+
+   .. method:: __call__(fn)
+
+      Decorate the wrapped function with a transaction or savepoint. Equivalent
+      to:
+
+      .. code-block::
+
+         @db.atomic()
+         def modify_data():
+             ...
+
+         def modify_data():
+             with db.atomic():
+                 ...
+
+
+.. class:: _transaction
+
+   The object yielded by :meth:`Database.transaction` and the outermost layer
+   of :meth:`Database.atomic`. Users do not instantiate ``_transaction`` directly.
+
+   A ``_transaction`` can be used as a context manager or as a decorator.
+   On clean exit, the wrapped block is committed; on an unhandled
+   exception, it is rolled back and the exception re-raised. Nested
+   ``_transaction`` blocks share the outermost transaction - inner
+   ``__enter__`` / ``__exit__`` pushes and pops a stack entry but does
+   not emit ``BEGIN`` / ``COMMIT`` at the database level. For true
+   nesting, use :meth:`Database.atomic`, which emits a savepoint for
+   inner blocks.
+
+   See :ref:`transactions` for details on transaction management.
+
+   .. method:: commit(begin=True)
+
+      :param bool begin: If ``True`` (default), automatically start a new
+          transaction after the commit completes.
+
+      Commit the current transaction. Subsequent statements inside the
+      wrapped block run in the new transaction unless ``begin=False``.
+
+   .. method:: rollback(begin=True)
+
+      :param bool begin: If ``True`` (default), automatically start a new
+          transaction after the rollback completes.
+
+      Roll back the current transaction. Subsequent statements inside
+      the wrapped block run in the new transaction unless
+      ``begin=False``.
+
+.. class:: _savepoint
+
+   The object yielded by :meth:`Database.savepoint` and inner layers of calls
+   to :meth:`Database.atomic`. Users do not instantiate ``_savepoint`` directly.
+
+   A ``_savepoint`` emits ``SAVEPOINT <id>`` on entry and either
+   ``RELEASE SAVEPOINT <id>`` (on clean exit) or ``ROLLBACK TO SAVEPOINT <id>``
+   (on exception). The savepoint name is generated automatically and is unique
+   per invocation. Savepoints can be nested arbitrarily, but must occur inside
+   an active transaction.
+
+   See :ref:`transactions` for details on transaction management.
+
+   .. method:: commit(begin=True)
+
+      :param bool begin: If ``True`` (default), automatically begin a
+          new savepoint after releasing.
+
+      Release the current savepoint. Subsequent statements run inside
+      the new savepoint unless ``begin=False``.
+
+   .. method:: rollback(begin=True)
+
+      :param bool begin: If ``True`` (default), automatically begin a
+          new savepoint after rollback.
+
+      Roll back to the current savepoint. Subsequent statements run
+      inside the new savepoint unless ``begin=False``.
+
+.. note::
+
+   Inside ``with db.atomic() as txn:``, the object bound to ``txn`` is
+   a :class:`_transaction` when ``atomic()`` is the outermost block, and
+   a :class:`_savepoint` when ``atomic()`` is nested inside another
+   transaction or savepoint. Both classes expose the same ``commit()`` /
+   ``rollback()`` interface, so code that calls ``txn.commit()`` or
+   ``txn.rollback()`` works identically in either case.
+
 .. _model-api:
 
 Model
@@ -2574,7 +2681,9 @@ Model
    .. method:: prefetch(*subqueries, prefetch_type=PREFETCH_TYPE.WHERE)
 
       :param subqueries: A list of :class:`Model` classes or select
-          queries to prefetch.
+          queries to prefetch. Each element may also be a ``(query, target_model)``
+          tuple: the ``target_model`` names which previously-listed model
+          should be joined through when more than one candidate exists.
       :param prefetch_type: Query type to use for the subqueries.
       :return: a list of models with selected relations prefetched.
 
@@ -2602,6 +2711,20 @@ Model
       necessary to be sure that the foreign-key/primary-key of any
       related models are selected, so that the related objects can be
       mapped correctly.
+
+      **Disambiguating multi-reference subqueries.** If a subquery relates to
+      more than one previously-fetched query (for example, a ``Favorite`` row
+      that has foreign keys to both ``User`` and ``Tweet``), use the
+      ``(subquery, target_model)`` tuple form to pin the relationship:
+
+      .. code-block:: python
+
+         users = User.select()
+         tweets = Tweet.select()
+         favorites = Favorite.select()
+
+         # Favorite will be attached to User (via Favorite.user), not to Tweet.
+         query = prefetch(users, tweets, (favorites, User))
 
 
 .. class:: DoesNotExist
@@ -3760,6 +3883,30 @@ Schema Manager
 
       Drop table for the model and associated indexes.
 
+   .. method:: create_table_as(table_name, query, safe=True, **meta)
+
+      :param str table_name: Name of the new table.
+      :param Select query: Query whose result set will populate the new
+          table.
+      :param bool safe: Specify IF NOT EXISTS clause.
+      :param meta: Additional table options forwarded to the context.
+
+      Execute ``CREATE TABLE ... AS SELECT ...`` for the given model. The
+      new table's schema and column names are derived from the SELECT
+      query's result set.
+
+   .. method:: create_sequences()
+
+      Create every sequence referenced by a field on the model. On
+      databases where :attr:`Database.sequences` is ``False`` this method
+      is a no-op. Called implicitly by :meth:`create_all`.
+
+   .. method:: drop_sequences()
+
+      Drop every sequence referenced by a field on the model. On
+      databases where :attr:`Database.sequences` is ``False`` this method
+      is a no-op. Called implicitly by :meth:`drop_all`.
+
 
 .. class:: Index(name, table, expressions, unique=False, safe=False, where=None, using=None, nulls_distinct=None)
 
@@ -4220,6 +4367,27 @@ Query-builder
       Indicate the alias that should be given to the specified column-like
       object.
 
+   .. method:: bind_to(dest)
+
+      :param dest: Model to bind this expression to when constructing the
+         model-graph. Destination must be among the JOINed tables.
+      :return: a :class:`BindTo` object encapsulating the binding.
+
+      Bind the current column/expression to a specific model.
+
+      Example:
+
+      .. code-block:: python
+
+         name = Case(User.username, [
+             ('u1', 'User One'),
+             ('u2', 'User Two')], 'Someone Else')
+         query = (Tweet
+                  .select(Tweet.content, name.alias('display').bind_to(User))
+                  .join(User))
+         for tweet in query:
+             print(tweet.content, tweet.user.display)
+
    .. method:: cast(as_type)
 
       :param str as_type: Type name to cast to.
@@ -4276,11 +4444,14 @@ Query-builder
       the new alias is ``None``, then the original column-like object is
       returned.
 
+.. class:: BindTo(node, dest)
+
+   Represent the binding of a given expression/value to a destination. Created
+   by :meth:`ColumnBase.bind_to`.
 
 .. class:: Negated(node)
 
    Represents a negated column-like object.
-
 
 .. class:: Value(value, converter=None, unpack=True)
 
@@ -5706,7 +5877,9 @@ Queries
 
    :param sq: Query to use as starting-point.
    :param subqueries: One or more models or :class:`ModelSelect` queries
-       to eagerly fetch.
+        to eagerly fetch. Each element may also be a ``(query, target_model)``
+        tuple: the ``target_model`` names which previously-listed model
+        should be joined through when more than one candidate exists.
    :param prefetch_type: Query type to use for the subqueries.
    :return: a list of models with selected relations prefetched. When called
        with no subqueries returns ``sq`` unmodified.

@@ -728,6 +728,8 @@ To find everyone who follows ``huey``:
 Passing the field instance to ``on=`` tells Peewee which foreign key column to
 use for the join.
 
+.. _joining-without-fk:
+
 Joining without a foreign key
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
@@ -773,6 +775,89 @@ to create the alias:
 .. seealso::
    Recursive queries over self-referential structures are covered in
    :ref:`cte` using recursive CTEs.
+
+.. _related-naming:
+
+Related-instance Names
+----------------------
+
+When Peewee reconstructs a model graph from a query, each related instance is
+attached to the parent object under an attribute. The attribute name follows
+a small set of conventions and can always be overridden explicitly.
+
+Default names
+^^^^^^^^^^^^^
+
+For a :class:`ForeignKeyField`:
+
+* **Forward direction**: the foreign-key field's own name. ``Tweet.user``
+  produces ``tweet.user``.
+* **Back-reference**: the ``backref`` argument to the foreign-key. If ``backref``
+  is not given, the default is ``<lowercase_classname>_set``, e.g. ``user.tweet_set``.
+  Pass ``backref='+'`` to suppress the back-reference entirely.
+
+For a :class:`ManyToManyField`, the default back-reference is the lowercase
+name of the declaring model with an ``s`` suffix. Declaring ``ManyToManyField(User)``
+on a ``Note`` model produces ``user.notes``. Pass ``backref='...'`` to override,
+or ``backref='+'`` to suppress.
+
+For joins performed by :meth:`~ModelSelect.join`:
+
+* If the join follows a foreign key that Peewee can resolve, the forward
+  direction uses the FK field's name, and the backref direction uses the
+  destination model's ``_meta.name`` (typically the lowercase class name).
+* If the join has no resolvable foreign key (for example, joining on an
+  arbitrary expression, a :class:`Table`, or a subquery), you must supply
+  ``attr=`` to name the attachment point - see below.
+
+Overriding with ``attr=``
+^^^^^^^^^^^^^^^^^^^^^^^^^
+
+:meth:`~ModelSelect.join` accepts an ``attr`` keyword that overrides the
+attribute name used to attach the joined instance:
+
+.. code-block:: python
+
+   query = (Tweet
+            .select(Tweet, User)
+            .join(User, attr='author'))
+
+   for tweet in query:
+       print(tweet.author.username)  # Instead of tweet.user.
+
+``attr`` is required when joining to a :class:`Table`, a subquery, or any
+source for which Peewee cannot resolve a foreign key (see
+:ref:`joining without a foreign key <joining-without-fk>`). It is also
+required in the rare case that a join's inferred name would collide with
+the ``<fk>_id`` name of an aliased foreign key, in which case passing
+``attr`` equal to that ``<fk>_id`` name raises :exc:`ValueError`.
+
+Directing computed columns with ``bind_to``
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+When a :class:`SELECT` includes a computed or aliased column whose logical
+owner is one of the joined sources, use :meth:`~ColumnBase.bind_to` to tell
+Peewee which source the column belongs to. The column is then attached to
+the corresponding instance in the reconstructed graph:
+
+.. code-block:: python
+
+   name = Case(User.username, [
+       ('u1', 'User One'),
+       ('u2', 'User Two')], 'Someone Else')
+
+   query = (Tweet
+            .select(Tweet.content, name.alias('display').bind_to(User))
+            .join(User))
+
+   for tweet in query:
+       print(tweet.content, tweet.user.display)
+
+Without ``bind_to``, the computed ``display`` column would be bound to the
+``tweet`` instance. ``bind_to`` accepts a :class:`Model`, :class:`ModelAlias`,
+or any other source that is present in the query's FROM / JOIN list. If the
+target is not selected, peewee raises a :exc:`ValueError` when building the
+result set.
 
 .. _manytomany:
 
@@ -940,6 +1025,16 @@ favorites on each tweet in three queries:
        for tweet in user.tweets:
            print(f'{user.username}: {tweet.content} '
                  f'({len(tweet.favorites)} favorites)')
+
+When a subquery relates to more than one previously-listed query - for
+example, a ``Favorite`` that has foreign keys to both ``User`` and ``Tweet`` -
+pass a ``(query, target_model)`` tuple to disambiguate which relationship
+to follow:
+
+.. code-block:: python
+
+   # Fetch favorites via User, not via Tweet.
+   query = prefetch(users, tweets, (favorites, User))
 
 Filtering prefetched rows
 ^^^^^^^^^^^^^^^^^^^^^^^^^
