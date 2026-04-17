@@ -4140,7 +4140,7 @@ Query-builder
          # FROM (VALUES (1, 'first'), (2, 'second')) AS v(idx, name)
 
 
-.. class:: CTE(name, query, recursive=False, columns=None)
+.. class:: CTE(name, query, recursive=False, columns=None, materialized=None)
 
    Represent a common-table-expression. For example queries, see :ref:`cte`.
 
@@ -4148,6 +4148,8 @@ Query-builder
    :param query: :class:`Select` query describing CTE.
    :param bool recursive: Whether the CTE is recursive.
    :param list columns: Explicit list of columns produced by CTE (optional).
+   :param bool materialized: Specify ``MATERIALIZED`` or ``NOT MATERIALIZED``
+       clause.
 
    .. method:: select_from(*columns)
 
@@ -4334,7 +4336,7 @@ Query-builder
    Short-hand for instantiating an descending :class:`Ordering` object.
 
 
-.. class:: Expression(lhs, op, rhs, flat=True)
+.. class:: Expression(lhs, op, rhs, flat=False)
 
    :param lhs: Left-hand side.
    :param op: Operation.
