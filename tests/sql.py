@@ -2573,7 +2573,7 @@ class TestExpressionSQL(BaseTestCase):
 class TestOnConflictSqlite(BaseTestCase):
     database = SqliteDatabase(None)
 
-    def test_replace(self):
+    def test_replace_sqlite(self):
         query = Person.insert(name='huey').on_conflict('replace')
         self.assertSQL(query, (
             'INSERT OR REPLACE INTO "person" ("name") VALUES (?)'), ['huey'])
@@ -2598,7 +2598,7 @@ class TestOnConflictMySQL(BaseTestCase):
         super(TestOnConflictMySQL, self).setUp()
         self.database.server_version = None
 
-    def test_replace(self):
+    def test_replace_mysql(self):
         query = Person.insert(name='huey').on_conflict('replace')
         self.assertSQL(query, (
             'REPLACE INTO "person" ("name") VALUES (?)'), ['huey'])
