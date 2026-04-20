@@ -2438,6 +2438,29 @@ Model
          query = Note.select(fn.COUNT(Note.id).alias('count'))
          assert query.scalar(as_dict=True) == {'count': 123}
 
+   .. method:: scalars()
+
+      Return an iterator that yields scalar values from the first column of
+      each result row. This is the multi-row equivalent of
+      :py:meth:`~BaseQuery.scalar`.
+
+      Equivalent to:
+
+      .. code-block:: python
+
+         [row[0] for row in query.tuples()]
+
+      Example:
+
+      .. code-block:: python
+
+         query = Note.select(Note.timestamp).order_by(Note.timestamp)
+         all_timestamps = list(query.scalars())
+
+         # Can also be iterated directly:
+         for ts in Note.select(Note.timestamp).scalars():
+             print(ts)
+
    .. method:: count(clear_limit=False)
 
       :param bool clear_limit: Clear any LIMIT clause when counting.
