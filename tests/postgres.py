@@ -718,6 +718,26 @@ class TestBinaryJsonField(BaseBinaryJsonFieldTestCase, ModelTestCase):
         self.assertRaises(ProgrammingError, fails)
 
 
+class Point(object):
+    def __init__(self, x, y):
+        self.x, self.y = x, y
+    def __eq__(self, other):
+        return (self.x, self.y) == (other.x, other.y)
+
+class CustomJsonField(BinaryJSONField):
+    def db_value(self, value):
+        if isinstance(value, Point):
+            value = {'x': value.x, 'y': value.y}
+        return super(CustomJsonField, self).db_value(value)
+    def python_value(self, value):
+        if value is not None:
+            return Point(**value)
+
+class CJM(TestModel):
+    name = TextField()
+    point = CustomJsonField()
+
+
 class TestJsonFieldRegressions(ModelTestCase):
     database = db
     requires = [JData]
@@ -742,6 +762,29 @@ class TestJsonFieldRegressions(ModelTestCase):
         self.assertTrue(JD.d1.index)
         self.assertEqual(JD.d1.index_type, 'GIN')
         self.assertFalse(JD.d2.index)
+
+    @requires_models(CJM)
+    def test_json_field_subclass(self):
+        c1 = CJM.create(name='c1', point=Point(1, 2))
+        c2 = CJM.insert(name='c2', point=Point(2, 3)).execute()
+
+        c1_db = CJM.get(CJM.name == 'c1')
+        c2_db = CJM.get(CJM.name == 'c2')
+        self.assertEqual(c1_db.point, Point(1, 2))
+        self.assertEqual(c2_db.point, Point(2, 3))
+
+        c2_db = CJM.select().where(CJM.point == Point(2, 3)).get()
+        self.assertEqual(c2_db.name, 'c2')
+
+        CJM.update(point=Point(3, 4)).where(CJM.point == Point(1, 2)).execute()
+        c1, c2 = CJM.select().order_by(CJM.name)
+        self.assertEqual(c1.point, Point(3, 4))
+        self.assertEqual(c2.point, Point(2, 3))
+
+        c1.point = Point(1.2, 2.5)
+        c1.save()
+        c1_db = CJM.get(CJM.name == 'c1')
+        self.assertEqual(c1_db.point, Point(1.2, 2.5))
 
 
 class TestJSONFieldCustomDumps(ModelTestCase):
