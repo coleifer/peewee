@@ -15,12 +15,13 @@ from peewee import *
 from peewee import NodeList
 
 from .base import BaseTestCase
-from .base import get_in_memory_db
 from .base import IS_CRDB
 from .base import IS_SQLITE
 from .base import ModelDatabaseTestCase
 from .base import ModelTestCase
 from .base import TestModel
+from .base import get_in_memory_db
+from .base import requires_postgresql
 from .base_models import Category
 from .base_models import Note
 from .base_models import Person
@@ -1237,3 +1238,36 @@ class TestSchemaCreateAllDropAll(ModelTestCase):
 
         TempModel._schema.drop_all()
         self.assertFalse(self.database.table_exists('temp_model'))
+
+@requires_postgresql
+class TestSchemaGetIndexes(ModelTestCase):
+    def setUp(self):
+        super(TestSchemaGetIndexes, self).setUp()
+        queries = [
+            'create schema s1', 'create schema s2',
+            'create table s1.t (c1 integer, c2 integer, c3 integer)',
+            'create table s2.t (c1 integer, c2 integer, c3 integer)',
+            'create index i1 on s1.t (c1, c2)',
+            'create index i1 on s2.t (c1, c2)',
+            'create index i2 on s1.t (c1)',
+        ]
+        with self.database:
+            for query in queries:
+                self.database.execute_sql(query)
+
+    def tearDown(self):
+        with self.database:
+            self.database.execute_sql('drop schema s1 cascade')
+            self.database.execute_sql('drop schema s2 cascade')
+        super(TestSchemaGetIndexes, self).setUp()
+
+    def test_schema_get_indexes(self):
+        tables = self.database.get_tables(schema='s1')
+        self.assertEqual(tables, ['t'])
+        idxs = self.database.get_indexes('t', schema='s1')
+        self.assertEqual([(i.name, i.columns) for i in idxs],
+                         [('i1', ['c1', 'c2']), ('i2', ['c1'])])
+
+        idxs = self.database.get_indexes('t', schema='s2')
+        self.assertEqual([(i.name, i.columns) for i in idxs],
+                         [('i1', ['c1', 'c2'])])
