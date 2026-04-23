@@ -7,7 +7,18 @@ https://github.com/coleifer/peewee/releases
 
 ## master
 
-[View commits](https://github.com/coleifer/peewee/compare/4.0.4...master)
+[View commits](https://github.com/coleifer/peewee/compare/4.0.5...master)
+
+## 4.0.5
+
+* Fix bug where `db_value()` may not get called in subclasses of Postgres
+  JSONField / BinaryJSONField, refs #3044.
+* Fix bug where indexes for table may be defined on multiple schema, #3043.
+* Always fall-through to base exception class if exception is not recognized in
+  DB drivers. This simplifies checking driver-specific subclasses of standard
+  DB-API exceptions.
+
+[View commits](https://github.com/coleifer/peewee/compare/4.0.4...4.0.5)
 
 ## 4.0.4
 
