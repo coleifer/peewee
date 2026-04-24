@@ -199,6 +199,16 @@ class TestJSONField(ModelTestCase):
             kd_db = KeyData.get(KeyData.key == 'kx')
             self.assertEqual(kd_db.data, value)
 
+    def test_key_with_special_chars(self):
+        kd = KeyData.create(key='k1', data={'k 1': {'k.. 2': {'{k3}': 'v4'}}})
+        def assertMatch(expr):
+            obj = KeyData.select().where(expr.is_null(False)).get()
+            self.assertEqual(obj.key, 'k1')
+
+        assertMatch(KeyData.data['k 1'])
+        assertMatch(KeyData.data['k 1']['k.. 2'])
+        assertMatch(KeyData.data['k 1']['k.. 2']['{k3}'])
+
     def test_json_unicode(self):
         with self.database.atomic():
             KeyData.delete().execute()
