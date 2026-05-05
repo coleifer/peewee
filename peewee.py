@@ -5472,8 +5472,23 @@ def _date_part(date_part):
         return self.model._meta.database.extract_date(date_part, self)
     return dec
 
+# fromisoformat() is C-implemented and ~10x faster than strptime. Available
+# since 3.7; pre-3.11 is strict about the separator and rejects 'Z'.
+_fromisoformat = getattr(datetime.datetime, 'fromisoformat', None)
+
+
 def format_date_time(value, formats, post_process=None):
     post_process = post_process or (lambda x: x)
+    if _fromisoformat is not None and value:
+        s = value
+        if len(s) > 10 and s[10] == ' ':
+            s = s[:10] + 'T' + s[11:]
+        if s[-1:] == 'Z':
+            s = s[:-1] + '+00:00'
+        try:
+            return post_process(_fromisoformat(s))
+        except (TypeError, ValueError):
+            pass
     for fmt in formats:
         try:
             return post_process(datetime.datetime.strptime(value, fmt))

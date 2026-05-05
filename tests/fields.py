@@ -28,6 +28,7 @@ from decimal import ROUND_UP
 
 from peewee import NodeList
 from peewee import VirtualField
+from peewee import format_date_time
 from peewee import *
 
 from playhouse.hybrid import *
@@ -403,6 +404,38 @@ class TestDateFields(ModelTestCase):
             datetime.datetime(2002, 1, 1, 0, 0, 0),
             datetime.datetime(2002, 3, 1, 0, 0, 0),
             datetime.datetime(2002, 3, 4, 0, 0, 0)])
+
+    def test_date_time_iso_fast_path(self):
+        dm = DateModel.create(date_time='2019-01-02 03:04:05.123456')
+        dm_db = DateModel[dm.id]
+        self.assertEqual(dm_db.date_time,
+                         datetime.datetime(2019, 1, 2, 3, 4, 5, 123456))
+
+        dm = DateModel.create(date_time='2019-01-02T03:04:05')
+        dm_db = DateModel[dm.id]
+        self.assertEqual(dm_db.date_time,
+                         datetime.datetime(2019, 1, 2, 3, 4, 5))
+
+        val = format_date_time('2019-01-02T03:04:05Z',
+                               DateTimeField.formats)
+        self.assertEqual(val,
+                         datetime.datetime(2019, 1, 2, 3, 4, 5,
+                                           tzinfo=datetime.timezone.utc))
+
+        val = format_date_time('2019-01-02', DateField.formats,
+                               lambda x: x.date())
+        self.assertEqual(val, datetime.date(2019, 1, 2))
+
+    def test_date_time_format_fallback(self):
+        val = format_date_time('01/02/2003 01:37 PM',
+                               ['%m/%d/%Y %I:%M %p'])
+        self.assertEqual(val, datetime.datetime(2003, 1, 2, 13, 37))
+
+        val = format_date_time('11:12:13', TimeField.formats,
+                               lambda x: x.time())
+        self.assertEqual(val, datetime.time(11, 12, 13))
+
+        self.assertEqual(format_date_time('not a date', []), 'not a date')
 
     def test_to_timestamp(self):
         dt = datetime.datetime(2019, 1, 2, 3, 4, 5)

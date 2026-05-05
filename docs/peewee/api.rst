@@ -3192,7 +3192,15 @@ Fields
 
       '%Y-%m-%d %H:%M:%S.%f' # year-month-day hour-minute-second.microsecond
       '%Y-%m-%d %H:%M:%S' # year-month-day hour-minute-second
+      '%Y-%m-%d %H:%M:%S.%f%z' # ...with timezone offset
+      '%Y-%m-%d %H:%M:%S%z' # ...with timezone offset
       '%Y-%m-%d' # year-month-day
+
+   In addition, any string accepted by
+   :py:meth:`datetime.datetime.fromisoformat` is parsed automatically,
+   including the ``T`` separator and a trailing ``Z`` (UTC). Custom
+   ``formats`` are still consulted as a fallback for non-ISO inputs (e.g.
+   ``'01/02/2003 01:37 PM'``).
 
    SQLite does not have a native datetime data-type, so datetimes are
    stored as strings. This is handled transparently by Peewee, but if you
@@ -3269,6 +3277,9 @@ Fields
       '%Y-%m-%d' # year-month-day
       '%Y-%m-%d %H:%M:%S' # year-month-day hour-minute-second
       '%Y-%m-%d %H:%M:%S.%f' # year-month-day hour-minute-second.microsecond
+
+   In addition, any string accepted by
+   :py:meth:`datetime.datetime.fromisoformat` is parsed automatically.
 
    .. note::
       If the incoming value does not match a format, it is returned as-is.
