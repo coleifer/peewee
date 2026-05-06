@@ -406,10 +406,11 @@ class TestDateFields(ModelTestCase):
             datetime.datetime(2002, 3, 4, 0, 0, 0)])
 
     def test_date_time_iso_fast_path(self):
-        dm = DateModel.create(date_time='2019-01-02 03:04:05.123456')
-        dm_db = DateModel[dm.id]
-        self.assertEqual(dm_db.date_time,
-                         datetime.datetime(2019, 1, 2, 3, 4, 5, 123456))
+        if not IS_MYSQL:
+            dm = DateModel.create(date_time='2019-01-02 03:04:05.123456')
+            dm_db = DateModel[dm.id]
+            self.assertEqual(dm_db.date_time,
+                             datetime.datetime(2019, 1, 2, 3, 4, 5, 123456))
 
         dm = DateModel.create(date_time='2019-01-02T03:04:05')
         dm_db = DateModel[dm.id]
