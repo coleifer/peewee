@@ -109,7 +109,7 @@ class TestTZField(ModelTestCase):
 
     @skip_if(os.environ.get('CI'), 'running in ci mode, skipping')
     def test_tz_field(self):
-        self.database.set_time_zone('us/eastern')
+        self.database.set_time_zone('America/New_York')
 
         # Our naive datetime is treated as if it were in US/Eastern.
         dt = datetime.datetime(2019, 1, 1, 12)
@@ -146,7 +146,7 @@ class TestTZField(ModelTestCase):
         self.assertEqual(tzq2.id, tz2.id)
 
         # Change the connection timezone?
-        self.database.set_time_zone('us/central')
+        self.database.set_time_zone('America/Chicago')
         tz_db = TZModel[tz.id]
         self.assertEqual(tz_db.dt.timetuple()[:4], (2019, 1, 1, 11))
         self.assertEqual(tz_db.dt.utctimetuple()[:4], (2019, 1, 1, 17))
@@ -649,6 +649,155 @@ class TestBinaryJsonField(BaseBinaryJsonFieldTestCase, ModelTestCase):
 
         assertData(['kx'], data)
         assertData(['k1', 'zz'], data)
+
+    def test_lookup_set(self):
+        BJson.delete().execute()
+        BJson.create(data={'a': 1, 'b': {'x': 1}})
+
+        def select(expr):
+            return BJson.select(expr).tuples()[:][0][0]
+
+        # Replace existing nested key.
+        self.assertEqual(select(BJson.data['a'].set(99)),
+                         {'a': 99, 'b': {'x': 1}})
+        # Create missing key (jsonb_set with create_missing=true).
+        self.assertEqual(select(BJson.data['c'].set('x')),
+                         {'a': 1, 'b': {'x': 1}, 'c': 'x'})
+        # Set with a nested dict value.
+        self.assertEqual(select(BJson.data['b']['y'].set({'z': 2})),
+                         {'a': 1, 'b': {'x': 1, 'y': {'z': 2}}})
+
+    def test_lookup_replace(self):
+        BJson.delete().execute()
+        BJson.create(data={'a': 1, 'b': 2})
+
+        def select(expr):
+            return BJson.select(expr).tuples()[:][0][0]
+
+        # Existing key gets replaced.
+        self.assertEqual(select(BJson.data['a'].replace(99)),
+                         {'a': 99, 'b': 2})
+        # Missing key, replace is a no-op (create_missing=false).
+        self.assertEqual(select(BJson.data['c'].replace(7)), {'a': 1, 'b': 2})
+
+    def test_lookup_insert(self):
+        BJson.delete().execute()
+        BJson.create(data={'a': 1, 'b': 2})
+
+        def select(expr):
+            return BJson.select(expr).tuples()[:][0][0]
+
+        # Missing key - value gets inserted.
+        self.assertEqual(select(BJson.data['c'].insert(7)),
+                         {'a': 1, 'b': 2, 'c': 7})
+        # Existing key - insert is a no-op.
+        self.assertEqual(select(BJson.data['a'].insert(99)), {'a': 1, 'b': 2})
+
+    def test_lookup_append(self):
+        BJson.delete().execute()
+        BJson.create(data={'arr': [1, 2, 3]})
+
+        def select(expr):
+            return BJson.select(expr).tuples()[:][0][0]
+
+        self.assertEqual(select(BJson.data['arr'].append(4)),
+                         {'arr': [1, 2, 3, 4]})
+        # Append a non-scalar.
+        self.assertEqual(select(BJson.data['arr'].append({'x': 1})),
+                         {'arr': [1, 2, 3, {'x': 1}]})
+
+    def test_lookup_update(self):
+        BJson.delete().execute()
+        BJson.create(data={'a': 1, 'b': {'x': 1}})
+
+        def select(expr):
+            return BJson.select(expr).tuples()[:][0][0]
+
+        # Shallow merge new keys into a nested object.
+        self.assertEqual(select(BJson.data['b'].update({'y': 2})),
+                         {'a': 1, 'b': {'x': 1, 'y': 2}})
+        # Existing keys get overwritten by the merged value (shallow).
+        self.assertEqual(select(BJson.data['b'].update({'x': 9, 'z': 3})),
+                         {'a': 1, 'b': {'x': 9, 'z': 3}})
+
+    def test_field_append_update(self):
+        # Root-level append (when the document is an array).
+        BJson.delete().execute()
+        BJson.create(data=[1, 2, 3])
+        result = BJson.select(BJson.data.append(4)).tuples()[:][0][0]
+        self.assertEqual(result, [1, 2, 3, 4])
+
+        # Root-level update (shallow merge into the root object).
+        BJson.delete().execute()
+        BJson.create(data={'a': 1})
+        result = BJson.select(BJson.data.update({'b': 2})).tuples()[:][0][0]
+        self.assertEqual(result, {'a': 1, 'b': 2})
+
+    def test_mutation_persists_through_update(self):
+        # Verify the builders work in an UPDATE statement, not just SELECT.
+        BJson.delete().execute()
+        bj = BJson.create(data={'a': 1})
+        BJson.update({BJson.data: BJson.data['b'].set('x')}).execute()
+        BJson.update({BJson.data: BJson.data['arr'].set([0, 1])}).execute()
+        BJson.update({BJson.data: BJson.data['arr'].append(2)}).execute()
+        bj = BJson.get(BJson.id == bj.id)
+        self.assertEqual(bj.data, {'a': 1, 'b': 'x', 'arr': [0, 1, 2]})
+
+    @skip_unless(pg12, 'requires Postgres 12+ for jsonpath support')
+    def test_path_exists(self):
+        BJson.delete().execute()
+        a = BJson.create(data={'foo': [1, 5, 10]})
+        b = BJson.create(data={'foo': [1, 2]})
+        c = BJson.create(data={'bar': 'x'})
+
+        # Path matches at least one element with @ > 4.
+        q = BJson.select().where(BJson.data.path_exists('$.foo[*] ? (@ > 4)'))
+        self.assertEqual([m.id for m in q], [a.id])
+
+        # Plain key existence.
+        q = BJson.select().where(BJson.data.path_exists('$.foo'))
+        self.assertEqual(sorted(m.id for m in q), sorted([a.id, b.id]))
+
+    @skip_unless(pg12, 'requires Postgres 12+ for jsonpath support')
+    def test_path_match(self):
+        BJson.delete().execute()
+        a = BJson.create(data={'n': 10})
+        b = BJson.create(data={'n': 1})
+
+        q = BJson.select().where(BJson.data.path_match('$.n > 5'))
+        self.assertEqual([m.id for m in q], [a.id])
+
+    @skip_unless(pg12, 'requires Postgres 12+ for jsonpath support')
+    def test_path_query_array(self):
+        BJson.delete().execute()
+        BJson.create(data={'items': [
+            {'name': 'a', 'qty': 1},
+            {'name': 'b', 'qty': 5},
+            {'name': 'c', 'qty': 3}]})
+
+        # All names with qty > 2.
+        q = BJson.select(BJson.data.path_query_array(
+            '$.items[*] ? (@.qty > 2).name'))
+        self.assertEqual(q.tuples()[:][0][0], ['b', 'c'])
+
+    @skip_unless(pg12, 'requires Postgres 12+ for jsonpath support')
+    def test_path_query_first(self):
+        BJson.delete().execute()
+        BJson.create(data={'items': [{'qty': 1}, {'qty': 5}, {'qty': 3}]})
+
+        q = BJson.select(BJson.data.path_query_first(
+            '$.items[*] ? (@.qty > 2).qty'))
+        self.assertEqual(q.tuples()[:][0][0], 5)
+
+    @skip_unless(pg12, 'requires Postgres 12+ for jsonpath support')
+    def test_path_query_srf(self):
+        # path_query returns a set-returning function; Postgres expands it
+        # into multiple rows when it appears in SELECT.
+        BJson.delete().execute()
+        BJson.create(data={'tags': ['a', 'b', 'c']})
+
+        q = BJson.select(BJson.data.path_query('$.tags[*]').alias('tag'))
+        self.assertEqual(sorted(r[0] for r in q.tuples()), ['a', 'b', 'c'])
 
     def test_json_length(self):
         BJson.delete().execute()  # Clear out db.

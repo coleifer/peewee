@@ -53,6 +53,8 @@ JSONB_EXISTS = '?'
 JSONB_REMOVE = '-'
 JSONB_PATH_REMOVE = '#-'
 JSONB_PATH = '#>'
+JSONB_PATH_EXISTS = '@?'
+JSONB_PATH_MATCH = '@@'
 
 
 class Json(Node):
@@ -249,6 +251,12 @@ class HStoreField(IndexedFieldMixin, Field):
         return Expression(self, HCONTAINS_ANY_KEY, AsIs(list(keys)))
 
 
+def _path_array(parts):
+    # Build a Postgres `text[]` literal from a sequence of path components.
+    # Used by the jsonb_set/jsonb_insert wrappers on JSON lookups and fields.
+    return Cast(AsIs([str(p) for p in parts], False), 'text[]')
+
+
 class _JsonLookupBase(_LookupNode):
     def __init__(self, node, parts, as_json=False):
         super(_JsonLookupBase, self).__init__(node, parts)
@@ -308,6 +316,58 @@ class _JsonLookupBase(_LookupNode):
 
     def path(self, *keys):
         return JsonPath(self.as_json(True), keys, as_json=True)
+
+    def _resolve_root(self):
+        # Walk up through chained lookups (e.g. lookup.path(...) wraps the
+        # lookup as the inner node) to find the underlying field and the full
+        # list of path parts relative to it.
+        node = self
+        parts = []
+        while isinstance(node, _JsonLookupBase):
+            parts = list(node.parts) + parts
+            node = node.node
+        return node, parts
+
+    def set(self, value):
+        # jsonb_set(field, '{path}', value, create_missing=true)
+        field, parts = self._resolve_root()
+        return fn.jsonb_set(field, _path_array(parts),
+                            field._wrap_value(value), True)
+
+    def replace(self, value):
+        # jsonb_set(field, '{path}', value, create_missing=false): no-op when
+        # the path doesn't exist.
+        field, parts = self._resolve_root()
+        return fn.jsonb_set(field, _path_array(parts),
+                            field._wrap_value(value), False)
+
+    def insert(self, value):
+        # SQLite-style "insert if missing": no-op when the path exists.
+        # Postgres has no single-call equivalent, so we wrap jsonb_set in a
+        # CASE that checks whether the path resolves.
+        field, parts = self._resolve_root()
+        current = JsonPath(field, parts, as_json=True)
+        return Case(None, [
+            (current.is_null(),
+             fn.jsonb_set(field, _path_array(parts),
+                          field._wrap_value(value), True))
+        ], field)
+
+    def append(self, value):
+        # Append to the array at this path. '-1' is the index of the last
+        # element; with insert_after=true, jsonb_insert places `value` after
+        # it.
+        field, parts = self._resolve_root()
+        path = _path_array(list(parts) + ['-1'])
+        return fn.jsonb_insert(field, path, field._wrap_value(value), True)
+
+    def update(self, value):
+        # Postgres lacks a real merge-patch (e.g. what SQLite offers, following
+        # RFC-7396), so this is just a shallow copy using '||'.
+        field, parts = self._resolve_root()
+        current = JsonPath(field, parts, as_json=True)
+        merged = Expression(current, OP.CONCAT, field._wrap_value(value))
+        return fn.jsonb_set(field, _path_array(parts), merged, True)
 
 
 class JsonLookup(_JsonLookupBase):
@@ -387,6 +447,26 @@ class JSONField(FieldDatabaseHook, Field):
         path = [str(p) if isinstance(p, int) else p for p in path]
         return fn.json_extract_path(self, *path)
 
+    def _wrap_value(self, value):
+        if isinstance(value, Node):
+            return value
+        return self.json_type(value)
+
+    def append(self, value):
+        # Append to the document when it's an array.
+        return fn.jsonb_insert(self, _path_array(['-1']),
+                               self._wrap_value(value), True)
+
+    def update(self, value):
+        # Shallow merge `value` into the root object via `||`.
+        return Expression(self, OP.CONCAT, self._wrap_value(value))
+
+
+def _jsonpath(expr):
+    if isinstance(expr, Node):
+        return expr
+    return Cast(Value(expr, False), 'jsonpath')
+
 
 class BinaryJSONField(IndexedFieldMixin, JSONField):
     field_type = 'JSONB'
@@ -443,6 +523,24 @@ class BinaryJSONField(IndexedFieldMixin, JSONField):
     def extract(self, *path):
         path = [str(p) if isinstance(p, int) else p for p in path]
         return fn.jsonb_extract_path(self, *path)
+
+    def path_exists(self, expr):
+        # field @? jsonpath - true if the path matches anything in the value.
+        return Expression(self, JSONB_PATH_EXISTS, _jsonpath(expr))
+
+    def path_match(self, expr):
+        # field @@ jsonpath - true if the path's predicate evaluates to true.
+        return Expression(self, JSONB_PATH_MATCH, _jsonpath(expr))
+
+    def path_query(self, expr):
+        # jsonb_path_query is set-returning, use in .from_() with an alias.
+        return fn.jsonb_path_query(self, _jsonpath(expr))
+
+    def path_query_array(self, expr):
+        return fn.jsonb_path_query_array(self, _jsonpath(expr))
+
+    def path_query_first(self, expr):
+        return fn.jsonb_path_query_first(self, _jsonpath(expr))
 
 
 class TSVectorField(IndexedFieldMixin, TextField):
