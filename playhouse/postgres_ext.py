@@ -369,6 +369,30 @@ class _JsonLookupBase(_LookupNode):
         merged = Expression(current, OP.CONCAT, field._wrap_value(value))
         return fn.jsonb_set(field, _path_array(parts), merged, True)
 
+    # SQL/JSON path expression operators applied to the value at this lookup.
+    # These produce jsonb-typed expressions; usable on lookups off jsonb
+    # columns. Requires PostgreSQL 12+.
+
+    def path_exists(self, expr):
+        return Expression(self.as_json(True), JSONB_PATH_EXISTS,
+                          _jsonpath(expr))
+
+    def path_match(self, expr):
+        return Expression(self.as_json(True), JSONB_PATH_MATCH,
+                          _jsonpath(expr))
+
+    def path_query(self, expr):
+        return fn.jsonb_path_query(self.as_json(True),
+                                   _jsonpath(expr))
+
+    def path_query_array(self, expr):
+        return fn.jsonb_path_query_array(self.as_json(True),
+                                         _jsonpath(expr))
+
+    def path_query_first(self, expr):
+        return fn.jsonb_path_query_first(self.as_json(True),
+                                         _jsonpath(expr))
+
 
 class JsonLookup(_JsonLookupBase):
     def __getitem__(self, value):

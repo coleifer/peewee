@@ -329,6 +329,141 @@ BinaryJSONField and JSONField
          # Equivalent to above.
          Event.select().where(Event.data['result'].extract('success') == True)
 
+   .. method:: set(value)
+
+      Set the value at the path described by this lookup. Wraps Postgres'
+      ``jsonb_set(..., create_missing=true)``: if the path does not exist it
+      is created. ``value`` may be a scalar, dict, or list.
+
+      .. code-block:: python
+
+         # Replace an existing key (or create it if missing).
+         Event.update(data=Event.data['result'].set({'success': True})) \\
+              .execute()
+
+         # Set a deeply nested key.
+         Event.update(data=Event.data['metadata']['author'].set('alice')) \\
+              .execute()
+
+   .. method:: replace(value)
+
+      Like :meth:`~BinaryJSONField.set`, but ``jsonb_set`` is called with
+      ``create_missing=false``: if the path does not exist, the document is
+      returned unchanged.
+
+      .. code-block:: python
+
+         # Updates only rows where data['result'] already exists.
+         Event.update(data=Event.data['result'].replace({'ok': True})) \\
+              .execute()
+
+   .. method:: insert(value)
+
+      Set the value at this path **only if the path does not already exist**.
+      Internally rendered as a ``CASE`` expression around ``jsonb_set`` since
+      Postgres has no single-call for this.
+
+      .. code-block:: python
+
+         # Add a "created_at" timestamp only on rows that don't already have one.
+         Event.update(data=Event.data['created_at'].insert(timestamp)) \\
+              .execute()
+
+   .. method:: append(value)
+
+      Append ``value`` to the array at this path. Wraps ``jsonb_insert`` with
+      ``insert_after=true`` at index ``-1``. The value may be any
+      JSON-serializable object.
+
+      .. code-block:: python
+
+         # Append a tag to an existing array.
+         Event.update(data=Event.data['tags'].append('new-tag')).execute()
+
+         # Field-level form: append to a root array.
+         Event.update(data=Event.data.append('new-tag')).execute()
+
+   .. method:: update(value)
+
+      Shallow-merge ``value`` into the object at this path. Equivalent to
+      ``jsonb_set(field, path, current || value, true)``. Top-level keys in
+      ``value`` overwrite existing keys, Postgres does **not** provide RFC-7396
+      deep merge.
+
+      .. code-block:: python
+
+         # Merge new keys into a nested object, existing 'success' is
+         # overwritten if present in `value`.
+         Event.update(data=Event.data['result'].update({'ok': True})) \\
+              .execute()
+
+         # Field-level form: merge into the root object.
+         Event.update(data=Event.data.update({'env': 'prod'})).execute()
+
+   .. method:: path_exists(jsonpath)
+
+      Return whether the SQL/JSON path expression matches anything in the
+      JSON document. Renders as the Postgres ``@?`` operator. The argument
+      is cast to ``jsonpath`` so it can be passed as a normal text parameter.
+      Requires PostgreSQL 12 or newer.
+
+      Available on the field directly and on path lookups, so you can target
+      a sub-document instead of the whole field:
+
+      .. code-block:: python
+
+         # Rows where data has any "tags" entry.
+         Event.select().where(Event.data.path_exists('$.tags'))
+
+         # Rows where any tag starts with "urgent".
+         Event.select().where(
+             Event.data.path_exists('$.tags[*] ? (@ starts with "urgent")'))
+
+         # Apply the path expression to a sub-document.
+         Event.select().where(
+             Event.data['users'].path_exists('$[*] ? (@.role == "admin")'))
+
+   .. method:: path_match(jsonpath)
+
+      Like :meth:`~BinaryJSONField.path_exists`, but uses the ``@@``
+      operator: the path expression is treated as a predicate and the
+      operator returns true when it evaluates to ``true``. Useful for
+      filtering on values inside the document.
+
+      .. code-block:: python
+
+         # Rows where data.score > 100.
+         Event.select().where(Event.data.path_match('$.score > 100'))
+
+   .. method:: path_query(jsonpath)
+
+      Wrap ``jsonb_path_query``, a set-returning function that yields each
+      match of ``jsonpath`` as a separate row. When used inside a
+      ``SELECT``, Postgres expands the SRF inline.
+
+      .. code-block:: python
+
+         # One row per tag in the data.
+         q = Event.select(Event.data.path_query('$.tags[*]').alias('tag'))
+         for row in q.tuples():
+             print(row[0])
+
+   .. method:: path_query_array(jsonpath)
+
+      Wrap ``jsonb_path_query_array``, which collects all matches into a
+      single JSON array.
+
+      .. code-block:: python
+
+         q = Event.select(
+             Event.data.path_query_array('$.items[*] ? (@.qty > 0).name')
+                  .alias('names'))
+
+   .. method:: path_query_first(jsonpath)
+
+      Wrap ``jsonb_path_query_first``, which returns the first match of
+      ``jsonpath`` (or ``NULL`` if there are no matches).
+
 
 .. class:: JSONField(dumps=None, *args, **kwargs)
 
@@ -362,6 +497,27 @@ BinaryJSONField and JSONField
       Extract the JSON data at the given path.
 
       See :meth:`BinaryJSONField.extract` for example usage.
+
+   .. method:: append(value)
+
+      Append ``value`` to the array at the document root. The lookup form
+      ``field['arr'].append(value)`` works as well for nested arrays.
+
+      See :meth:`BinaryJSONField.append` for example usage.
+
+   .. method:: update(value)
+
+      Shallow-merge ``value`` into the root object.
+
+      See :meth:`BinaryJSONField.update` for example usage and a note on
+      shallow-vs-deep merge semantics.
+
+   The lookup-level mutation builders (``set``, ``replace``, ``insert``,
+   ``append``, ``update``) are also available via ``__getitem__``, e.g.
+   ``MyModel.data['key'].set(value)``. They emit ``jsonb_set`` /
+   ``jsonb_insert`` SQL; for ``json`` columns Postgres casts implicitly on
+   ``UPDATE``. See the corresponding methods on :class:`BinaryJSONField` for
+   details.
 
 
 .. _postgres-hstore:

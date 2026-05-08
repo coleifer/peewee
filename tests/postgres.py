@@ -799,6 +799,29 @@ class TestBinaryJsonField(BaseBinaryJsonFieldTestCase, ModelTestCase):
         q = BJson.select(BJson.data.path_query('$.tags[*]').alias('tag'))
         self.assertEqual(sorted(r[0] for r in q.tuples()), ['a', 'b', 'c'])
 
+    @skip_unless(pg12, 'requires Postgres 12+ for jsonpath support')
+    def test_path_ops_on_lookup(self):
+        # path_* operators are also exposed on _JsonLookupBase so they can
+        # target a sub-document rather than the whole field.
+        BJson.delete().execute()
+        a = BJson.create(data={'users': [
+            {'name': 'alice', 'role': 'admin'},
+            {'name': 'bob'}]})
+        BJson.create(data={'users': [{'name': 'carol'}]})
+
+        q = BJson.select().where(
+            BJson.data['users'].path_exists('$[*] ? (@.role == "admin")'))
+        self.assertEqual([m.id for m in q], [a.id])
+
+        q = BJson.select().where(
+            BJson.data['users'].path_match('$[*].role == "admin"'))
+        self.assertEqual([m.id for m in q], [a.id])
+
+        q = (BJson
+             .select(BJson.data['users'].path_query_array('$[*].name'))
+             .where(BJson.id == a.id))
+        self.assertEqual(q.tuples()[:][0][0], ['alice', 'bob'])
+
     def test_json_length(self):
         BJson.delete().execute()  # Clear out db.
         data = {'k1': {'x1': [1, 2, 3], 'x2': [1, 2], 'x3': []}}
