@@ -7,6 +7,14 @@ https://github.com/coleifer/peewee/releases
 
 ## master
 
+* Add new methods to the postgres `BinaryJSONField`: helpers for in-place
+  modifications (`set`, `replace`, `insert`, `append`, `update`).
+* Also add json-path helpers to the postgres `BinaryJSONField` (`path_exists`,
+  `path_match`, `path_query`, `path_query_array`, `path_query_first`).
+* Quote path elements in SQLite's JSON field.
+* Better and faster parsing of formatted date/times. Use the stdlib
+  `fromisoformat` as a first attempt since it's faster and more robust.
+
 [View commits](https://github.com/coleifer/peewee/compare/4.0.5...master)
 
 ## 4.0.5
