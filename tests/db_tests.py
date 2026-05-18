@@ -110,6 +110,25 @@ class TestDatabase(DatabaseTestCase):
         # Closed after exit.
         self.assertTrue(self.database.is_closed())
 
+    def test_context_managers(self):
+        @self.database.connection_context()
+        def with_ctx():
+            self.assertFalse(self.database.is_closed())
+
+        with self.database.connection_context():
+            with_ctx()
+            self.assertFalse(self.database.is_closed())
+            with self.database.atomic():
+                with self.database.atomic():
+                    with_ctx()
+                    with self.database:
+                        pass
+                    self.assertTrue(self.database.in_transaction())
+                self.assertTrue(self.database.in_transaction())
+
+            self.assertFalse(self.database.is_closed())
+        self.assertTrue(self.database.is_closed())
+
     def test_connection_initialization(self):
         state = {'count': 0}
         class TestDatabase(SqliteDatabase):

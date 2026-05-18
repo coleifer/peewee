@@ -3174,11 +3174,16 @@ class _NoopLock(object):
 
 class ConnectionContext(object):
     __slots__ = ('db',)
-    def __init__(self, db): self.db = db
+    def __init__(self, db):
+        self.db = db
     def __enter__(self):
         if self.db.is_closed():
             self.db.connect()
-    def __exit__(self, exc_type, exc_val, exc_tb): self.db.close()
+        self.db._state.ctx.append(self)
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.db._state.ctx.pop()
+        if not self.db._state.ctx:
+            self.db.close()
     def __call__(self, fn):
         @wraps(fn)
         def inner(*args, **kwargs):
