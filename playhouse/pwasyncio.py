@@ -74,7 +74,7 @@ def await_(awaitable):
 
 
 class _State(object):
-    __slots__ = ('conn', 'closed', 'transactions', '_task_id')
+    __slots__ = ('conn', 'closed', 'transactions', 'ctx', '_task_id')
 
     def __init__(self):
         self._task_id = None
@@ -84,6 +84,7 @@ class _State(object):
         self.conn = None
         self.closed = True
         self.transactions = []
+        self.ctx = []
 
 
 class _ConnectionState(object):
@@ -143,6 +144,10 @@ class _ConnectionState(object):
     @property
     def transactions(self):
         return self._current().transactions
+
+    @property
+    def ctx(self):
+        return self._current().ctx
 
     def reset(self):
         try:
