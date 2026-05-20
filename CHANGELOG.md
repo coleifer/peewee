@@ -7,6 +7,10 @@ https://github.com/coleifer/peewee/releases
 
 ## master
 
+[View commits](https://github.com/coleifer/peewee/compare/4.0.6...master)
+
+## 4.0.6
+
 * Add new methods to the postgres `BinaryJSONField`: helpers for in-place
   modifications (`set`, `replace`, `insert`, `append`, `update`).
 * Also add json-path helpers to the postgres `BinaryJSONField` (`path_exists`,
@@ -14,11 +18,11 @@ https://github.com/coleifer/peewee/releases
 * Quote path elements in SQLite's JSON field.
 * Better and faster parsing of formatted date/times. Use the stdlib
   `fromisoformat` as a first attempt since it's faster and more robust.
-* Ensure `db.connection_context()` can be nested cleanly, #3046
-* Fix potential deadlock in `pool.close_all` and `pool.manual_close`, #3047
-* Restore whitespace stripping in `FixedCharField`, #3048
+* Ensure `db.connection_context()` can be nested cleanly, #3046.
+* Fix potential deadlock in `pool.close_all` and `pool.manual_close`, #3047.
+* Restore whitespace stripping in `FixedCharField`, #3048.
 
-[View commits](https://github.com/coleifer/peewee/compare/4.0.5...master)
+[View commits](https://github.com/coleifer/peewee/compare/4.0.5...4.0.6)
 
 ## 4.0.5
 
