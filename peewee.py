@@ -5213,7 +5213,7 @@ class FixedCharField(CharField):
     def adapt(self, value):
         value = super(FixedCharField, self).adapt(value)
         if value:
-            value = value[:self.max_length]
+            value = value.strip()[:self.max_length].strip()
         return value
 
 

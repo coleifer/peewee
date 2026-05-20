@@ -244,7 +244,6 @@ class TestStringFields(ModelTestCase):
 
 class FC(TestModel):
     code = FixedCharField(max_length=5)
-    name = CharField()
 
 
 class TestFixedCharFieldIntegration(ModelTestCase):
@@ -252,10 +251,34 @@ class TestFixedCharFieldIntegration(ModelTestCase):
     requires = [FC]
 
     def test_fixed_char_truncates(self):
-        FC.create(code='ABCDEF', name='short')
+        cases = (
+            'abcde',
+            'abcdef',
+            'abcde fgh',
+            'abcdef gh',
+            ' abcdef g',
+        )
+        for case in cases:
+            fc = FC.create(code=case)
+            fc_db1 = FC.get(FC.code == case, FC.id == fc.id)
+            fc_db2 = FC.get(FC.id == fc.id)
+            self.assertEqual(fc_db1.code, 'abcde', case)
+            self.assertEqual(fc_db1.code, fc_db2.code)
 
-        fc = FC.get(FC.code == 'ABCDE')
-        self.assertEqual(fc.code, 'ABCDE')
+        others = (
+            ('abc', 'abc'),
+            ('abc  ', 'abc'),
+            ('  abc  ', 'abc'),
+            ('abcd efg', 'abcd'),
+            ('a bcdef g', 'a bcd'),
+            (' a b cdef g', 'a b c'),
+        )
+        for inp, out in others:
+            fc = FC.create(code=inp)
+            fc_db1 = FC.get(FC.code == inp, FC.id == fc.id)
+            fc_db2 = FC.get(FC.code == out, FC.id == fc.id)
+            fc_db3 = FC.get(FC.id == fc.id)
+            self.assertTrue(fc_db1.code == fc_db2.code == fc_db3.code == out)
 
 
 class LK(TestModel):
