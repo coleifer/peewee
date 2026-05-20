@@ -15,6 +15,8 @@ https://github.com/coleifer/peewee/releases
 * Better and faster parsing of formatted date/times. Use the stdlib
   `fromisoformat` as a first attempt since it's faster and more robust.
 * Ensure `db.connection_context()` can be nested cleanly, #3046
+* Fix potential deadlock in `pool.close_all` and `pool.manual_close`, #3047
+* Restore whitespace stripping in `FixedCharField`, #3048
 
 [View commits](https://github.com/coleifer/peewee/compare/4.0.5...master)
 
