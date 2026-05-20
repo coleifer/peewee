@@ -185,7 +185,6 @@ class PooledDatabase(object):
         # Wake up thread that may be waiting on connection.
         self._pool_available.notify()
 
-    @locked
     def manual_close(self):
         """
         Close the underlying connection without returning it to the pool.
@@ -198,8 +197,11 @@ class PooledDatabase(object):
         key = self.conn_key(conn)
 
         # Remove from _in_use so that subsequent self.close() won't try to
-        # restore it to the pool.
-        self._in_use.pop(key, None)
+        # restore it to the pool. pool lock must be released before calling
+        # self.close(), since close acquires the database lock.
+        with self._pool_lock:
+            self._in_use.pop(key, None)
+
         self.close()
         self._close_raw(conn)
 
@@ -227,17 +229,21 @@ class PooledDatabase(object):
         self._pool_available.notify_all()
         return n
 
-    @locked
     def close_all(self):
         # Close all connections -- available and in-use. Warning: may break any
         # active connections used by other threads.
-        self.close()
-        self.close_idle()
-        in_use, self._in_use = self._in_use, {}
-        for pool_conn in in_use.values():
-            self._close_raw(pool_conn.connection)
 
-        self._pool_available.notify_all()
+        # self.close() acquires the database lock, calling it while holding
+        # the pool lock would invert the lock order used by Database.connect()
+        # (db lock, then pool lock via _connect) and deadlock.
+        self.close()
+        with self._pool_lock:
+            self.close_idle()
+            in_use, self._in_use = self._in_use, {}
+            for pool_conn in in_use.values():
+                self._close_raw(pool_conn.connection)
+
+            self._pool_available.notify_all()
 
 
 class _PooledMySQLDatabase(PooledDatabase):

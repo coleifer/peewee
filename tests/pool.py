@@ -595,6 +595,63 @@ class TestPooledDatabase(BaseTestCase):
         self.db.close()
         self.assertFalse(self.db.manual_close())  # Already closed.
 
+    def _assert_no_pool_lock_during_close(self, action_name, action):
+        # Helper: hold db._lock in the main thread (simulating another
+        # thread mid-connect) while a worker calls `action` (which must
+        # internally invoke self.close()). Verify the pool lock remains
+        # acquirable -- if the worker is holding the pool lock while
+        # blocked on db._lock, that is the lock-inversion deadlock.
+        db = FakePooledDatabase('testing')
+        worker_ready = threading.Event()
+        proceed = threading.Event()
+        worker_result = []
+
+        def worker():
+            try:
+                db._state.closed = True
+                db.connect()  # Establish thread-local connection.
+                worker_ready.set()
+                proceed.wait(timeout=2)
+                action(db)
+                worker_result.append('ok')
+            except Exception as exc:
+                worker_result.append(exc)
+
+        t = threading.Thread(target=worker)
+        t.start()
+        self.assertTrue(worker_ready.wait(timeout=2))
+
+        with db._lock:
+            proceed.set()
+            time.sleep(0.1)
+            got_pool_lock = db._pool_lock.acquire(timeout=0.5)
+            if got_pool_lock:
+                db._pool_lock.release()
+
+        t.join(timeout=2)
+        self.assertFalse(t.is_alive(),
+                         '%s worker thread still running' % action_name)
+        self.assertEqual(worker_result, ['ok'])
+        self.assertTrue(got_pool_lock,
+                        '%s held pool lock while blocked on db lock' %
+                        action_name)
+
+    def test_manual_close_does_not_hold_pool_lock(self):
+        # Regression: manual_close used to be @locked, meaning it held the
+        # pool lock across the call to self.close(). self.close() acquires
+        # the database lock; meanwhile Database.connect() in another thread
+        # acquires those locks in the opposite order (database lock first,
+        # then pool lock via the @locked _connect), so the two would
+        # deadlock.
+        self._assert_no_pool_lock_during_close(
+            'manual_close', lambda db: db.manual_close())
+
+    def test_close_all_does_not_hold_pool_lock(self):
+        # Regression: close_all used to be @locked, holding the pool lock
+        # across self.close() -- same lock-inversion as manual_close.
+        self._assert_no_pool_lock_during_close(
+            'close_all', lambda db: db.close_all())
+
     def test_close_idle_driver_closes_all(self):
         # Every idle connection should be driver-closed.
         db = FakePooledDatabase('testing', counter=5)
