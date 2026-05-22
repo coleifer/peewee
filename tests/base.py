@@ -76,7 +76,10 @@ if IS_MYSQL:
     try:
         import pymysql
     except ImportError:
-        raise ImportError('pymysql is not installed')
+        try:
+            import MySQLdb
+        except ImportError:
+            raise ImportError('mysql client is not installed')
 if BACKEND.startswith('postgres'):
     try:
         import psycopg2

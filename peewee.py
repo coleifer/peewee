@@ -58,13 +58,11 @@ try:
 except ImportError:
     psycopg = Json_pg3 = Jsonb_pg3 = None
 
-mysql_passwd = False
 try:
     import pymysql as mysql
 except ImportError:
     try:
         import MySQLdb as mysql
-        mysql_passwd = True
     except ImportError:
         mysql = None
 
@@ -4383,14 +4381,12 @@ class MySQLDatabase(Database):
             'sql_mode': self.sql_mode,
             'use_unicode': True}
         params.update(kwargs)
-        if 'password' in params and mysql_passwd:
-            params['passwd'] = params.pop('password')
         super(MySQLDatabase, self).init(database, **params)
 
     def _connect(self):
         if mysql is None:
             raise ImproperlyConfigured('MySQL driver not installed!')
-        conn = mysql.connect(db=self.database, autocommit=True,
+        conn = mysql.connect(database=self.database, autocommit=True,
                              **self.connect_params)
         return conn
 
