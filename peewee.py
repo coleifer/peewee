@@ -4390,7 +4390,7 @@ class MySQLDatabase(Database):
     def _connect(self):
         if mysql is None:
             raise ImproperlyConfigured('MySQL driver not installed!')
-        conn = mysql.connect(db=self.database, autocommit=True,
+        conn = mysql.connect(database=self.database, autocommit=True,
                              **self.connect_params)
         return conn
 
