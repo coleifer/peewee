@@ -8087,12 +8087,13 @@ def _resolve_model_columns(cursor, model, select):
                 # This usually works, but we use "safe_python_value()" so
                 # that if a TypeError or ValueError occurs during
                 # conversion we can just fall-back to the raw cursor value.
-                first = node.arguments[0].unwrap()
-                if isinstance(first, Entity):
-                    path = first._path[-1]  # Try to look-up by name.
-                    first = combined.get(path)
-                if isinstance(first, Field):
-                    converters[idx] = safe_python_value(first.python_value)
+                if node.arguments[0]._coerce:
+                    first = node.arguments[0].unwrap()
+                    if isinstance(first, Entity):
+                        path = first._path[-1]  # Try to look-up by name.
+                        first = combined.get(path)
+                    if isinstance(first, Field):
+                        converters[idx] = safe_python_value(first.python_value)
         elif column in combined:
             if node._coerce:
                 converters[idx] = combined[column].python_value

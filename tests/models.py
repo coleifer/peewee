@@ -1,4 +1,5 @@
 import datetime
+import sys
 import threading
 import time
 import unittest
@@ -7138,6 +7139,7 @@ class TestAnalyticalQueries(ModelTestCase):
         ])
 
 
+@skip_if(sys.version_info < (3, 11, 0), 'requires 3.11')
 class TestFunctionCoerce(ModelTestCase):
     database = get_in_memory_db()
     requires = [Post]
@@ -7169,6 +7171,8 @@ class TestFunctionCoerce(ModelTestCase):
             exp.bind_to(Post).alias('xyz'),
             exp.cast('text').coerce(True),
             exp.cast('text').alias('timestamp').coerce(True),
+            exp.python_value(Post.timestamp.python_value),
+            fn.upper(Post.timestamp),
         ]
         for e in convert:
             assertResults(e, [
@@ -7183,9 +7187,17 @@ class TestFunctionCoerce(ModelTestCase):
             exp.cast('text').alias('timestamp'),
             exp.alias('xyz').coerce(False),
             exp.cast('text').alias('xyz').coerce(False),
+            exp.python_value(Post.timestamp.python_value).cast('text'),
+            fn.upper(exp),
+            fn.upper(exp.cast('text')),
         ]
         for e in no_convert:
             assertResults(e, [
                 ('20260101', 3),
                 ('20260102', 2),
                 ('20260103', 1)])
+
+        assertResults(fn.upper(Post.timestamp.cast('text')), [
+            ('2026-01-01 00:00:00', 3),
+            ('2026-01-02 00:00:00', 2),
+            ('2026-01-03 00:00:00', 1)])
