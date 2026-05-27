@@ -7173,6 +7173,11 @@ class TestFunctionCoerce(ModelTestCase):
             exp.cast('text').alias('timestamp').coerce(True),
             exp.python_value(Post.timestamp.python_value),
             fn.upper(Post.timestamp),
+
+            # I don't want to screw up people doing stuff like fn.json_extract
+            # on a field casted to json (e.g.), so this will run through the
+            # converter:
+            fn.upper(Post.timestamp.cast('text')),
         ]
         for e in convert:
             assertResults(e, [
@@ -7196,8 +7201,3 @@ class TestFunctionCoerce(ModelTestCase):
                 ('20260101', 3),
                 ('20260102', 2),
                 ('20260103', 1)])
-
-        assertResults(fn.upper(Post.timestamp.cast('text')), [
-            ('2026-01-01 00:00:00', 3),
-            ('2026-01-02 00:00:00', 2),
-            ('2026-01-03 00:00:00', 1)])
