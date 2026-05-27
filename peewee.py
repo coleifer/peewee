@@ -8077,7 +8077,9 @@ def _resolve_model_columns(cursor, model, select):
         elif isinstance(node, ColumnBase) and raw_node._converter:
             converters[idx] = raw_node._converter
         elif isinstance(node, Function) and node._coerce:
-            if node._python_value is not None:
+            if raw_node._coerce is False:
+                pass
+            elif node._python_value is not None:
                 converters[idx] = node._python_value
             elif node.arguments and isinstance(node.arguments[0], Node):
                 # If the first argument is a field or references a column

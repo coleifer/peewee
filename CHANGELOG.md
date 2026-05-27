@@ -9,6 +9,11 @@ https://github.com/coleifer/peewee/releases
 
 * Eliminate use of deprecated params when connecting to MySQL databases, thanks
   to @abulgher, #3050.
+* Using `fromisoformat()` ended up causing previously-unconverted strings (Ymd)
+  to be converted in some cases, e.g. formatting a datetime as a str (#3051).
+  The change I made to address this is to make explicit casts on function calls
+  not attempt any heuristic python-value conversion. This makes it more natural
+  to call `fn.whatever().cast('text')` and you predictably get text out.
 
 [View commits](https://github.com/coleifer/peewee/compare/4.0.6...master)
 
