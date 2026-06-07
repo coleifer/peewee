@@ -28,78 +28,93 @@ class TM(TestModel):
     text = TextField()
 
 
-class TestStorageRoundTrip(ModelTestCase):
+class TestValueMatrix(ModelTestCase):
+    # For each representative value: store it, read it back (assert value AND
+    # type), then look it up via WHERE data == value (assert match).
+    # Combined matrix catches the cross-cut bug where storage works but
+    # equality doesn't (or vice versa).
     requires = [JM]
 
-    def _round_trip(self, value):
+    VALUES = [
+        # Strings.
+        ('str_empty',          ''),
+        ('str_plain',          'hello'),
+        ('str_single_quotes',  "with 'single' quotes"),
+        ('str_double_quotes',  'with "double" quotes'),
+        ('str_specials',       'newlines\nand\ttabs\\and\\backslashes'),
+        ('str_unicode',        'unicode héllo \U0001f30d 漢字'),
+        ('str_json_like',      '{"k": 1}'),  # must NOT auto-parse
+        ('str_long',           'x' * 10000),
+        # Numbers.
+        ('int_zero',           0),
+        ('int_one',            1),
+        ('int_negative',       -1),
+        ('int_max_32',         2**31 - 1),
+        ('int_min_32',         -(2**31)),
+        ('int_max_safe',       2**53 - 1),
+        ('float_zero',         0.0),
+        ('float_positive',     1.5),
+        ('float_negative',     -1.5),
+        ('float_large',        1e10),
+        ('float_small',        1e-10),
+        # Booleans.
+        ('bool_true',          True),
+        ('bool_false',         False),
+        # Containers.
+        ('list_empty',         []),
+        ('dict_empty',         {}),
+        ('list_ints',          [1, 2, 3]),
+        ('list_strs',          ['a', 'b', 'c']),
+        ('list_mixed',         [1, 'a', True, None, 1.5]),
+        ('list_nested',        [[1, 2], [3, 4]]),
+        ('dict_simple',        {'a': 1}),
+        ('dict_mixed',         {'a': 1, 'b': 'two', 'c': True, 'd': None}),
+        ('dict_deep',          {'a': {'b': {'c': {'d': 1}}}}),
+        # Special keys.
+        ('dict_dotted_key',    {'a.b': 1}),
+        ('dict_quoted_key',    {'k"q\\x': 1}),
+        ('dict_empty_key',     {'': 'empty key'}),
+        ('dict_unicode_key',   {'漢字': 'unicode key'}),
+        # JSON null inside a container (distinct from column SQL NULL).
+        ('json_null_in_dict',  {'k': None}),
+        ('json_null_in_list',  [None]),
+        # Column SQL NULL.
+        ('sql_null',           None),
+    ]
+
+    def _check_storage(self, label, value):
         JM.delete().execute()
         JM.create(data=value)
-        return JM.select().get().data
+        got = JM.select().get().data
+        self.assertEqual(got, value,
+            '[%s] storage round-trip value mismatch' % label)
+        self.assertIs(type(got), type(value),
+            '[%s] storage round-trip type mismatch: %s vs %s' % (
+                label, type(got).__name__, type(value).__name__))
 
-    def assertRoundTrip(self, value):
-        got = self._round_trip(value)
-        self.assertEqual(got, value)
-        if value is not None:
-            self.assertEqual(type(got), type(value))
+    def _check_filter(self, label, value):
+        # Find by equality with the same value.
+        rows = list(JM.select().where(JM.data == value))
+        self.assertEqual(len(rows), 1,
+            '[%s] WHERE data == value did not match the stored row' % label)
+        self.assertEqual(rows[0].data, value, '[%s] matched-row data drift' % label)
 
-    def test_strings(self):
-        cases = [
-            '',
-            'hello',
-            "with 'quotes'",
-            'with "doubles"',
-            'with\nnewlines\ttabs',
-            'with\\backslashes',
-            'unicode héllo \U0001f30d 漢字',
-            ' ' * 10,
-            '{"k": 1}',
-            'x' * 10000,
-        ]
-        for v in cases:
-            self.assertRoundTrip(v)
-            self.assertRoundTrip({v: 'x'})
-            self.assertRoundTrip({'x': v})
-            self.assertRoundTrip([v])
+    def test_value_matrix(self):
+        for label, value in self.VALUES:
+            with self.subTest(label=label):
+                self._check_storage(label, value)
+                self._check_filter(label, value)
 
-    def test_ints(self):
-        for v in (0, 1, -1, 2**31 - 1, -(2**31), 2**53 - 1):
-            self.assertRoundTrip(v)
-
-    def test_floats(self):
-        for v in (0.0, 1.5, -1.5, 1e10, 1e-10):
-            self.assertRoundTrip(v)
-        if IS_SQLITE:
-            self.assertRoundTrip(float('inf'))
-            self.assertRoundTrip(float('-inf'))
-
-    def test_bools(self):
-        self.assertIs(self._round_trip(True), True)
-        self.assertIs(self._round_trip(False), False)
-
-    def test_sql_null(self):
-        JM.delete().execute()
-        JM.create(data=None)
-        self.assertIsNone(JM.select().first().data)
-
-    def test_containers(self):
-        self.assertRoundTrip([])
-        self.assertRoundTrip({})
-        self.assertRoundTrip([1, 'a', True, None, 1.5])
-        self.assertRoundTrip({'a': 1, 'b': 'two', 'c': True, 'd': None})
-
-    def test_deep(self):
-        self.assertRoundTrip({'a': {'b': {'c': {'d': 1}}}})
-        self.assertRoundTrip({'a': [{'b': [{'c': 1}]}]})
-
-    def test_special_keys(self):
-        self.assertRoundTrip({'a.b': 1})
-        self.assertRoundTrip({'k"q\\x': 1})
-        self.assertRoundTrip({'': 'empty key'})
-        self.assertRoundTrip({'漢字': 'unicode key'})
-
-    def test_json_null_inside(self):
-        self.assertRoundTrip({'k': None})
-        self.assertRoundTrip([None])
+    def test_sqlite_float_infinity(self):
+        # SQLite's JSON1 tolerates non-finite floats; PG and MySQL reject them
+        # via the dumps step (json.dumps default allow_nan=True but the driver
+        # rejects them at parse time).
+        if not IS_SQLITE:
+            self.skipTest('SQLite-only: infinity through json1')
+        for v in (float('inf'), float('-inf')):
+            JM.delete().execute()
+            JM.create(data=v)
+            self.assertEqual(JM.select().get().data, v)
 
 
 @skip_if(SKIP_PATHS, 'requires SQLite 3.38 or non-SQLite backend')
@@ -610,15 +625,3 @@ class TestJoinOnJSONKey(ModelTestCase):
         ])
 
 
-class TestFilterByValue(ModelTestCase):
-    requires = [JM]
-
-    def test_filter_by_value(self):
-        values = ['hello', '', 0, 1, -1, 1.5, True, False, [], {},
-                  [1, 2, 3], ['a', 'b'], {'a': 1, 'b': 'two'},
-                  {'nested': {'a': 1}}]
-        for v in values:
-            JM.delete().execute()
-            JM.create(data=v)
-            m = JM.get(JM.data == v)
-            self.assertEqual(m.data, v)
