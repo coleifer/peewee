@@ -78,6 +78,11 @@ class SqliteJSONMethods(BaseJSONMethods):
     def cast_type(self, t):
         return {'int': 'INTEGER', 'float': 'REAL'}[t]
 
+    def cast_for_case(self, value, dumps):
+        # SQLite's CASE-WHEN tolerates a plain wrapped value.
+        return None
+
+
 class PostgresqlJSONMethods(BaseJSONMethods):
     field_type = 'JSONB'
 
@@ -147,6 +152,10 @@ class MySQLJSONMethods(BaseJSONMethods):
     def cast_type(self, t):
         return {'int': 'SIGNED', 'float': 'DOUBLE'}[t]
 
+    def cast_for_case(self, value, dumps):
+        # MySQL/MariaDB infer JSON-column type from the column, no cast needed.
+        return None
+
 
 class JSONPath(ColumnBase):
     def __init__(self, field, keys=(), as_text=False):
@@ -194,6 +203,12 @@ class JSONPath(ColumnBase):
         return self._field._compare(self, OP.EQ, OP.IS, rhs, self._as_text)
     def __ne__(self, rhs):
         return self._field._compare(self, OP.NE, OP.IS_NOT, rhs, self._as_text)
+
+    def is_null(self, is_null=True):
+        # Default-mode IS NULL on a path needs to catch SQL NULL, missing key,
+        # and stored JSON null — same three cases ``== None`` matches.
+        is_op = OP.IS if is_null else OP.IS_NOT
+        return self._field._compare(self, OP.EQ, is_op, None, self._as_text)
 
     __hash__ = object.__hash__
 

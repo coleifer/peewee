@@ -24,6 +24,10 @@ class JM(TestModel):
     data = JSONField(null=True)
 
 
+class TM(TestModel):
+    text = TextField()
+
+
 class TestStorageRoundTrip(ModelTestCase):
     requires = [JM]
 
@@ -46,12 +50,16 @@ class TestStorageRoundTrip(ModelTestCase):
             'with "doubles"',
             'with\nnewlines\ttabs',
             'with\\backslashes',
-            'unicode héllo \U0001f30d 漢字', ' ' * 10,
+            'unicode héllo \U0001f30d 漢字',
+            ' ' * 10,
             '{"k": 1}',
             'x' * 10000,
         ]
         for v in cases:
             self.assertRoundTrip(v)
+            self.assertRoundTrip({v: 'x'})
+            self.assertRoundTrip({'x': v})
+            self.assertRoundTrip([v])
 
     def test_ints(self):
         for v in (0, 1, -1, 2**31 - 1, -(2**31), 2**53 - 1):
@@ -85,7 +93,7 @@ class TestStorageRoundTrip(ModelTestCase):
 
     def test_special_keys(self):
         self.assertRoundTrip({'a.b': 1})
-        self.assertRoundTrip({'k"q': 1})
+        self.assertRoundTrip({'k"q\\x': 1})
         self.assertRoundTrip({'': 'empty key'})
         self.assertRoundTrip({'漢字': 'unicode key'})
 
@@ -131,6 +139,7 @@ class TestPathExtract(ModelTestCase):
         self.assertEqual(self._val('profile'), {
             'location': 'top city',
             'social': {'fb': 'huey.cat'}})
+        self.assertEqual(self._val('profile', 'social'), {'fb': 'huey.cat'})
 
     def test_chain(self):
         self.assertEqual(self._val('profile', 'location'), 'top city')
@@ -178,9 +187,6 @@ class TestEquality(ModelTestCase):
 
     def test_root_eq(self):
         q = JM.select().where(JM.data == {'k': 'v', 'n': 5, 'b': True})
-        # SQLite/MySQL/MariaDB whole-doc eq is byte compare (order-sensitive).
-        # All backends here produce the document in the same key order on
-        # both sides, so this matches.
         self.assertEqual(q.count(), 1)
 
     def test_root_eq_none(self):
@@ -194,9 +200,6 @@ class TestEquality(ModelTestCase):
         self.assertEqual(q.count(), 1)
 
     def test_path_eq_int(self):
-        # Works on PG (jsonb structural), MySQL (JSON-typed compare), and
-        # SQLite (canonical text '5' == json('5')). Confirms the f29578e4
-        # critic's "int eq fails" complaint from old peewee is fixed here.
         q = JM.select().where(JM.data['n'] == 5)
         self.assertEqual(q.count(), 1)
 
@@ -204,22 +207,12 @@ class TestEquality(ModelTestCase):
         q = JM.select().where(JM.data['b'] == True)
         self.assertEqual(q.count(), 1)
 
-    def test_path_eq_none_matches_missing(self):
-        # n is missing on the 'data=None' row and on the {'k':'other','n':10}
-        # row — wait, n is present in row 2. So only row 3 (data=None) matches.
-        q = JM.select().where(JM.data['n'] == None)
+    def test_path_in_canonicalized(self):
+        q = JM.select().where(JM.data['k'].in_(['v', 'other']))
+        self.assertEqual(q.count(), 2)
+
+        q = JM.select().where(JM.data['k'].in_(['v', 'xyz']))
         self.assertEqual(q.count(), 1)
-
-    def test_path_eq_none_matches_missing_key(self):
-        # 'nope' is missing in every row. extract_text → SQL NULL → match all.
-        q = JM.select().where(JM.data['nope'] == None)
-        self.assertEqual(q.count(), 3)
-
-    @skip_if(IS_MYSQL, 'json_unquote flaky on MariaDB and older MySQL')
-    def test_path_eq_none_matches_json_null(self):
-        JM.delete().execute()
-        JM.create(data={'k': None})
-        self.assertEqual(JM.select().where(JM.data['k'] == None).count(), 1)
 
 
 @skip_if(SKIP_PATHS, 'requires SQLite 3.38 or non-SQLite backend')
@@ -255,48 +248,6 @@ class TestTypedCasts(ModelTestCase):
         JM.create(data={'r': 3.5})
         q = JM.select().where(JM.data['r'].as_float() > 2.0)
         self.assertEqual(q.count(), 1)
-
-
-@skip_if(SKIP_PATHS, 'requires SQLite 3.38 or non-SQLite backend')
-class TestTextMode(ModelTestCase):
-    requires = [JM]
-
-    def setUp(self):
-        super(TestTextMode, self).setUp()
-        JM.create(data={'name': 'Alice'})
-        JM.create(data={'name': 'Bob'})
-        JM.create(data={'name': 'Charlie'})
-
-    def test_as_text_eq(self):
-        q = JM.select().where(JM.data['name'].as_text() == 'Alice')
-        self.assertEqual(q.count(), 1)
-
-    def test_ilike(self):
-        # like maps to GLOB on SQLite; ilike maps to LIKE everywhere.
-        q = JM.select().where(JM.data['name'].ilike('A%'))
-        self.assertEqual(q.count(), 1)
-
-    def test_startswith(self):
-        q = JM.select().where(JM.data['name'].startswith('A'))
-        self.assertEqual(q.count(), 1)
-
-    def test_endswith(self):
-        q = JM.select().where(JM.data['name'].endswith('e'))
-        self.assertEqual(q.count(), 2)
-
-    def test_contains_substring(self):
-        q = JM.select().where(JM.data['name'].contains('li'))
-        self.assertEqual(q.count(), 2)
-
-    def test_in_canonicalized(self):
-        # in_ canonicalizes RHS — works across backends without auto-text.
-        q = JM.select().where(JM.data['name'].in_(['Alice', 'Bob']))
-        self.assertEqual(q.count(), 2)
-
-    def test_in_text_mode(self):
-        q = (JM.select()
-             .where(JM.data['name'].as_text().in_(['Alice', 'Bob'])))
-        self.assertEqual(q.count(), 2)
 
 
 class TestReadModifyWrite(ModelTestCase):
@@ -373,17 +324,301 @@ class TestCustomDumps(ModelTestCase):
             M.drop_table()
 
 
-@skip_if(not IS_POSTGRESQL, 'PG-only: cast_for_case is psycopg-specific')
-class TestPostgresBulkUpdate(ModelTestCase):
-    # bulk_update's CASE-WHEN branch needs an explicit jsonb cast so psycopg
-    # can infer the parameter type. The helper provides cast_for_case().
+# NULL trichotomy. Storage has three distinct "no value" states that all
+# collapse to Python None on extract: column SQL NULL, key absent, and
+# stored JSON null. The path-level == None / != None / .is_null() /
+# .is_null(False) should treat them uniformly.
+@skip_if(SKIP_PATHS, 'requires SQLite 3.38 or non-SQLite backend')
+class TestNullSemantics(ModelTestCase):
     requires = [JM]
 
-    def test_bulk_update(self):
-        a = JM.create(data={'v': 1})
-        b = JM.create(data={'v': 2})
-        a.data = {'v': 10}
-        b.data = {'v': 20}
+    JSON_NULL_OK = not IS_MYSQL
+
+    def setUp(self):
+        super(TestNullSemantics, self).setUp()
+        # Build the four storage states. `mark` is a side-channel so we can
+        # identify rows without depending on path semantics under test.
+        self.r_present = JM.create(data={'k': 'v', 'mark': 1}).id
+        if self.JSON_NULL_OK:
+            self.r_json_null = JM.create(data={'k': None, 'mark': 2}).id
+        self.r_missing = JM.create(data={'mark': 3}).id
+        self.r_sql_null = JM.create(data=None).id
+
+        self._null_count = 3 if self.JSON_NULL_OK else 2
+        self._present_count = 1
+
+    # Path-level: all null-ish cases match.
+    def test_path_eq_none(self):
+        n = JM.select().where(JM.data['k'] == None).count()
+        self.assertEqual(n, self._null_count)
+
+    def test_path_ne_none(self):
+        n = JM.select().where(JM.data['k'] != None).count()
+        self.assertEqual(n, self._present_count)
+
+    def test_path_is_null(self):
+        n = JM.select().where(JM.data['k'].is_null()).count()
+        self.assertEqual(n, self._null_count)
+
+    def test_path_is_null_false(self):
+        n = JM.select().where(JM.data['k'].is_null(False)).count()
+        self.assertEqual(n, self._present_count)
+
+    # Text-mode: same semantics.
+    def test_as_text_eq_none(self):
+        n = JM.select().where(JM.data['k'].as_text() == None).count()
+        self.assertEqual(n, self._null_count)
+
+    def test_as_text_is_null(self):
+        n = JM.select().where(JM.data['k'].as_text().is_null()).count()
+        self.assertEqual(n, self._null_count)
+
+    def test_as_text_is_null_false(self):
+        n = JM.select().where(JM.data['k'].as_text().is_null(False)).count()
+        self.assertEqual(n, self._present_count)
+
+    def test_field_eq_none_only_sql_null(self):
+        ids = [r.id for r in JM.select().where(JM.data == None)]
+        self.assertEqual(ids, [self.r_sql_null])
+
+    def test_field_is_null_only_sql_null(self):
+        ids = [r.id for r in JM.select().where(JM.data.is_null())]
+        self.assertEqual(ids, [self.r_sql_null])
+
+    def test_field_is_null_false_excludes_sql_null(self):
+        ids = sorted(r.id for r in JM.select().where(JM.data.is_null(False)))
+        expected = [self.r_present, self.r_missing]
+        if self.JSON_NULL_OK:
+            expected.append(self.r_json_null)
+        self.assertEqual(ids, sorted(expected))
+
+    # Python value: all null-ish states collapse to None on extract.
+
+    def test_extract_python_value(self):
+        # Each row's data['k'] reads back as Python None for every null-ish
+        # case, and as 'v' for the present row.
+        rows = {r.id: r for r in JM.select(JM.id, JM.data['k'].alias('k'))}
+        self.assertEqual(rows[self.r_present].k, 'v')
+        self.assertIsNone(rows[self.r_missing].k)
+        self.assertIsNone(rows[self.r_sql_null].k)
+        if self.JSON_NULL_OK:
+            self.assertIsNone(rows[self.r_json_null].k)
+
+    def test_extract_text_python_value(self):
+        rows = {r.id: r for r in JM.select(
+            JM.id, JM.data['k'].as_text().alias('k'))}
+        self.assertEqual(rows[self.r_present].k, 'v')
+        self.assertIsNone(rows[self.r_missing].k)
+        self.assertIsNone(rows[self.r_sql_null].k)
+        if self.JSON_NULL_OK:
+            self.assertIsNone(rows[self.r_json_null].k)
+
+    # The trichotomy can be distinguished by dropping to fn.*. This isn't
+    # part of the field API — it's the documented escape hatch.
+    def test_distinguish_missing_vs_json_null_via_fn(self):
+        if not self.JSON_NULL_OK:
+            self.skipTest('MySQL/MariaDB collapse json null at unquote')
+        # Pick the right type function per backend.
+        if IS_POSTGRESQL:
+            type_fn = fn.jsonb_typeof(JM.data['k'])
+            json_null_marker = 'null'
+        elif IS_MYSQL:
+            type_fn = fn.json_type(JM.data['k'])
+            json_null_marker = 'NULL'
+        else:
+            type_fn = fn.json_type(JM.data, '$.k')
+            json_null_marker = 'null'
+        # Rows where the key is present AND is JSON null: only r_json_null.
+        ids = [r.id for r in JM.select().where(type_fn == json_null_marker)]
+        self.assertEqual(ids, [self.r_json_null])
+
+
+@skip_if(SKIP_PATHS, 'requires SQLite 3.38 or non-SQLite backend')
+class TestAsTextDeep(ModelTestCase):
+    requires = [JM]
+
+    def setUp(self):
+        super(TestAsTextDeep, self).setUp()
+        JM.create(data={'name': 'apple', 'count': 5,
+                        'tags': ['red', 'green']})
+        JM.create(data={'name': 'banana', 'count': 50,
+                        'tags': ['yellow']})
+        JM.create(data={'name': 'cherry', 'count': 100,
+                        'tags': ['red', 'dark']})
+
+    def test_eq(self):
+        n = JM.select().where(JM.data['name'].as_text() == 'banana').count()
+        self.assertEqual(n, 1)
+
+    def test_ne(self):
+        n = JM.select().where(JM.data['name'].as_text() != 'banana').count()
+        self.assertEqual(n, 2)
+
+    def test_lt(self):
+        # Lex compare: apple < b < banana < cherry.
+        n = JM.select().where(JM.data['name'].as_text() < 'b').count()
+        self.assertEqual(n, 1)
+
+    def test_between(self):
+        n = (JM.select()
+             .where(JM.data['name'].as_text().between('a', 'c')).count())
+        self.assertEqual(n, 2)
+
+    def test_in(self):
+        n = (JM.select()
+             .where(JM.data['name'].as_text().in_(['apple', 'cherry']))
+             .count())
+        self.assertEqual(n, 2)
+
+    def test_not_in(self):
+        n = (JM.select()
+             .where(JM.data['name'].as_text().not_in(['apple']))
+             .count())
+        self.assertEqual(n, 2)
+
+    def test_text_then_cast(self):
+        n = (JM.select()
+             .where(JM.data['count'].as_text().cast('integer') > 10).count())
+        self.assertEqual(n, 2)
+
+    def test_ordering(self):
+        names = [r.n for r in (JM.select(JM.data['name'].as_text().alias('n'))
+                               .order_by(JM.data['name'].as_text()))]
+        self.assertEqual(names, ['apple', 'banana', 'cherry'])
+
+    def test_as_text_returns_string_for_number(self):
+        # Stored JSON int. Text extract returns the text form on PG/MySQL;
+        # SQLite returns the SQL value (loose). Both compare to a numeric
+        # equivalent.
+        v = JM.select(JM.data['count'].as_text()).where(
+            JM.data['name'].as_text() == 'apple').scalar()
+        self.assertEqual(int(v), 5)
+
+    def test_as_text_for_container_is_json_text(self):
+        v = JM.select(JM.data['tags'].as_text()).where(
+            JM.data['name'].as_text() == 'banana').scalar()
+        self.assertEqual(json.loads(v), ['yellow'])
+
+    def test_ilike(self):
+        n = JM.select().where(JM.data['name'].ilike('a%')).count()
+        self.assertEqual(n, 1)
+
+    def test_startswith_endswith_contains(self):
+        self.assertEqual(
+            JM.select().where(JM.data['name'].startswith('a')).count(), 1)
+        self.assertEqual(
+            JM.select().where(JM.data['name'].endswith('y')).count(), 1)
+        self.assertEqual(
+            JM.select().where(JM.data['name'].contains('a')).count(), 2)
+
+
+class TestSQLShapes(ModelTestCase):
+    requires = [JM]
+
+    def _sql(self, query):
+        return query.sql()
+
+    def test_schema_per_backend(self):
+        ddl, _ = JM._schema._create_table().query()
+        if IS_SQLITE:
+            self.assertIn('"data" TEXT', ddl)
+        elif IS_POSTGRESQL:
+            self.assertIn('"data" JSONB', ddl)
+        elif IS_MYSQL:
+            self.assertIn('`data` JSON', ddl)
+
+    def test_extract_default_mode(self):
+        sql, params = self._sql(JM.select(JM.data['k']))
+        if IS_SQLITE:
+            self.assertIn(' -> ', sql)
+            self.assertIn('$."k"', params)
+        elif IS_POSTGRESQL:
+            self.assertIn(' -> ', sql)
+            self.assertIn('k', params)
+        elif IS_MYSQL:
+            lower = sql.lower()
+            # MariaDB needs JSON_COMPACT to normalize the extract for
+            # byte-compare; dropping it silently breaks path equality.
+            self.assertIn('json_compact', lower)
+            self.assertIn('json_extract', lower)
+
+    def test_extract_text_mode(self):
+        sql, _ = self._sql(JM.select(JM.data['k'].as_text()))
+        if IS_SQLITE or IS_POSTGRESQL:
+            self.assertIn(' ->> ', sql)
+        elif IS_MYSQL:
+            lower = sql.lower()
+            self.assertIn('json_unquote', lower)
+            self.assertIn('json_extract', lower)
+
+
+class TestBulkUpdate(ModelTestCase):
+    requires = [JM]
+
+    def test_bulk_update_top_level_dict(self):
+        a = JM.create(data={'x': 'y1'})
+        b = JM.create(data={'x': 'y2'})
+        a.data = {'x': 'z1'}
+        b.data = {'X': 'Z2'}
         JM.bulk_update([a, b], fields=[JM.data])
-        self.assertEqual(JM.get_by_id(a.id).data, {'v': 10})
-        self.assertEqual(JM.get_by_id(b.id).data, {'v': 20})
+        self.assertEqual(JM.get_by_id(a.id).data, {'x': 'z1'})
+        self.assertEqual(JM.get_by_id(b.id).data, {'X': 'Z2'})
+
+    def test_bulk_update_top_level_list(self):
+        a = JM.create(data=['a', 'b', 'c'])
+        b = JM.create(data=['d', 'e', 'f'])
+        a.data = ['g', 'h', 'i']
+        b.data = ['j', 'k', 'l']
+        JM.bulk_update([a, b], fields=[JM.data])
+        self.assertEqual(JM.get_by_id(a.id).data, ['g', 'h', 'i'])
+        self.assertEqual(JM.get_by_id(b.id).data, ['j', 'k', 'l'])
+
+
+class TestSubqueryAssign(ModelTestCase):
+    requires = [JM]
+
+    def test_assign_via_subquery(self):
+        src = JM.create(data={'origin': True, 'n': 7})
+        sub = JM.select(JM.data).where(JM.id == src.id)
+        dst = JM.create(data=sub)
+        self.assertEqual(JM.get_by_id(dst.id).data, {'origin': True, 'n': 7})
+
+
+@skip_if(SKIP_PATHS, 'requires SQLite 3.38 or non-SQLite backend')
+class TestJoinOnJSONKey(ModelTestCase):
+    requires = [JM, TM]
+
+    def setUp(self):
+        super(TestJoinOnJSONKey, self).setUp()
+        for data in (
+                {'foo': 'bar', 'baze': {'nugget': 'alpha'}},
+                {'foo': 'bar', 'baze': {'nugget': 'beta'}},
+                {'herp': 'derp', 'baze': {'nugget': 'epsilon'}},
+                {'herp': 'derp', 'bar': {'nuggie': 'alpha'}}):
+            JM.create(data=data)
+        for v in ('alpha', 'beta', 'gamma', 'delta'):
+            TM.create(text=v)
+
+    def test_join_path_as_text(self):
+        q = (JM.select()
+             .join(TM, on=(TM.text == JM.data['baze']['nugget'].as_text()))
+             .order_by(JM.id))
+        results = [m.data for m in q]
+        self.assertEqual(results, [
+            {'foo': 'bar', 'baze': {'nugget': 'alpha'}},
+            {'foo': 'bar', 'baze': {'nugget': 'beta'}},
+        ])
+
+
+class TestFilterByValue(ModelTestCase):
+    requires = [JM]
+
+    def test_filter_by_value(self):
+        values = ['hello', '', 0, 1, -1, 1.5, True, False, [], {},
+                  [1, 2, 3], ['a', 'b'], {'a': 1, 'b': 'two'},
+                  {'nested': {'a': 1}}]
+        for v in values:
+            JM.delete().execute()
+            JM.create(data=v)
+            m = JM.get(JM.data == v)
+            self.assertEqual(m.data, v)
