@@ -306,7 +306,7 @@ class JSONField(FieldDatabaseHook, Field):
             if isinstance(lhs, JSONPath) and not lhs._as_text and \
                self._helper is not None:
                 expr = self._helper.extract_text(self, lhs._keys)
-                return Expression(text, is_op, None)
+                return Expression(expr, is_op, None)
             return Expression(lhs, is_op, None)
         if as_text or isinstance(rhs, Node):
             return Expression(lhs, eq_op, rhs)

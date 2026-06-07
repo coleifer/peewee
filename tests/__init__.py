@@ -32,6 +32,7 @@ from .dataset import *
 from .db_url import *
 from .extra_fields import *
 from .hybrid import *
+from .json_field import *
 from .kv import *
 from .migrations import *
 try:
