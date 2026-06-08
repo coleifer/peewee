@@ -58,6 +58,7 @@ Contents:
    peewee/sqlite
    peewee/postgres
    peewee/mysql
+   peewee/json_field
    peewee/db_tools
    peewee/orm_utils
    peewee/recipes
