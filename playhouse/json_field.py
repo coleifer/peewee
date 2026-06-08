@@ -1,6 +1,7 @@
 import json
 
 from peewee import *
+from peewee import AsIs
 from peewee import ColumnBase
 from peewee import Expression
 from peewee import FieldDatabaseHook
@@ -55,6 +56,31 @@ class BaseJSONMethods(object):
         # can assign in to json fields.
         raise NotImplementedError
 
+    def set(self, field, keys, value):
+        raise NotImplementedError
+    def remove(self, field, keys):
+        raise NotImplementedError
+    def update(self, field, value):
+        raise NotImplementedError
+    def length(self, field, keys):
+        raise NotImplementedError
+
+    # Containment / key predicates, used in WHERE clauses.
+    def contains(self, field, keys, value):
+        raise NotImplementedError
+    def contained_by(self, field, keys, value):
+        raise NotImplementedError
+    def has_key(self, field, keys, key):
+        raise NotImplementedError
+    def has_keys(self, field, keys, key_list):
+        raise NotImplementedError
+    def has_any_keys(self, field, keys, key_list):
+        raise NotImplementedError
+
+
+def _is_container(v):
+    return isinstance(v, (dict, list))
+
 
 class SqliteJSONMethods(BaseJSONMethods):
     field_type = 'TEXT'  # Sqlite's affinity rules treat JSON as NUMERIC.
@@ -81,6 +107,34 @@ class SqliteJSONMethods(BaseJSONMethods):
     def cast_for_case(self, value, dumps):
         # SQLite's CASE-WHEN tolerates a plain wrapped value.
         return None
+
+    def _wrap_value(self, field, value):
+        # Wrap a Python value so SQLite stores it as JSON-typed. Containers
+        # and JSON null go through fn.json() so the result is JSON-typed
+        # (otherwise SQLite stores them as TEXT). Scalars are passed as-is.
+        if value is None:
+            return fn.json(Value('null', converter=False))
+        if _is_container(value):
+            return fn.json(field._dumps(value))
+        return value
+
+    def set(self, field, keys, value):
+        return fn.json_set(
+            field,
+            self._path(keys),
+            self._wrap_value(field, value))
+
+    def remove(self, field, keys):
+        return fn.json_remove(field, self._path(keys))
+
+    def length(self, field, keys):
+        if keys:
+            return fn.json_array_length(field, self._path(keys))
+        return fn.json_array_length(field)
+
+    def update(self, field, value):
+        # RFC-7396 merge patch. Null values delete keys.
+        return fn.json_patch(field, fn.json(field._dumps(value)))
 
 
 class PostgresqlJSONMethods(BaseJSONMethods):
@@ -128,6 +182,58 @@ class PostgresqlJSONMethods(BaseJSONMethods):
     def cast_for_case(self, value, dumps):
         return Cast(Value(dumps(value)), 'JSONB')
 
+    def _jsonb_wrap(self, field, value):
+        adapter = self.database._adapter
+        jsonb_cls = adapter.jsonb_type
+        if isinstance(value, (adapter.json_type, jsonb_cls)):
+            return value
+        return jsonb_cls(value, dumps=field._dumps)
+
+    def _path_array(self, keys):
+        # Build a text[] from keys for jsonb_set / #- operator.
+        parts = [str(k) for k in keys]
+        return Cast(AsIs(parts, False), 'text[]')
+
+    def set(self, field, keys, value):
+        # jsonb_set(field, '{path}'::text[], value::jsonb, create_missing=true)
+        return fn.jsonb_set(
+            field,
+            self._path_array(keys),
+            self._jsonb_wrap(field, value),
+            True)
+
+    def remove(self, field, keys):
+        return Expression(field, '#-', self._path_array(keys))
+
+    def length(self, field, keys):
+        if keys:
+            return fn.jsonb_array_length(self.extract(field, keys))
+        return fn.jsonb_array_length(field)
+
+    def update(self, field, value):
+        # Postgres `||` is a SHALLOW concat.
+        return Expression(field, '||', self._jsonb_wrap(field, value))
+
+    def contains(self, field, keys, value):
+        lhs = self.extract(field, keys)
+        return Expression(lhs, '@>', self._jsonb_wrap(field, value))
+
+    def contained_by(self, field, keys, value):
+        lhs = self.extract(field, keys)
+        return Expression(lhs, '<@', self._jsonb_wrap(field, value))
+
+    def has_key(self, field, keys, key):
+        lhs = self.extract(field, keys)
+        return Expression(lhs, '?', Value(key, converter=False))
+
+    def has_keys(self, field, keys, key_list):
+        lhs = self.extract(field, keys)
+        return Expression(lhs, '?&', AsIs(list(key_list), False))
+
+    def has_any_keys(self, field, keys, key_list):
+        lhs = self.extract(field, keys)
+        return Expression(lhs, '?|', AsIs(list(key_list), False))
+
 
 class MySQLJSONMethods(BaseJSONMethods):
     field_type = 'JSON'
@@ -155,6 +261,67 @@ class MySQLJSONMethods(BaseJSONMethods):
     def cast_for_case(self, value, dumps):
         # MySQL/MariaDB infer JSON-column type from the column, no cast needed.
         return None
+
+    def _json_value(self, field, value):
+        # Build a JSON-typed expression for use as the value argument to
+        # JSON_SET / JSON_MERGE_PATCH / JSON_CONTAINS etc. The bare string
+        # form (`Value(dumps(value))`) only works for scalars on MySQL —
+        # containers need JSON_COMPACT(?) to be parsed as JSON. Python None
+        # needs JSON_COMPACT('null') so we don't trip MySQL's "any-NULL-arg
+        # wipes the result" rule on JSON_SET.
+        if value is None:
+            return fn.JSON_COMPACT(Value('null', converter=False))
+        if _is_container(value):
+            return fn.JSON_COMPACT(Value(field._dumps(value), converter=False))
+        return Value(value, converter=False)
+
+    def set(self, field, keys, value):
+        return fn.JSON_SET(field, self._path(keys),
+                           self._json_value(field, value))
+
+    def remove(self, field, keys):
+        return fn.JSON_REMOVE(field, self._path(keys))
+
+    def length(self, field, keys):
+        if keys:
+            return fn.JSON_LENGTH(field, self._path(keys))
+        return fn.JSON_LENGTH(field)
+
+    def update(self, field, value):
+        # RFC-7396 merge patch (MySQL 8.0.7+, MariaDB 10.2.25+). Null values
+        # delete keys. Diverges from PG's shallow `||`.
+        return fn.JSON_MERGE_PATCH(field, self._json_value(field, value))
+
+    def contains(self, field, keys, value):
+        # JSON_CONTAINS returns 0/1; wrap in `= 1` so it composes cleanly in
+        # boolean contexts (NOT, AND, etc.).
+        path_args = (self._path(keys),) if keys else ()
+        call = fn.JSON_CONTAINS(field, self._json_value(field, value),
+                                *path_args)
+        return Expression(call, OP.EQ, 1)
+
+    def contained_by(self, field, keys, value):
+        # Args flipped: is `value` a superset of (sub-extract of) field?
+        lhs = self.extract(field, keys) if keys else field
+        call = fn.JSON_CONTAINS(self._json_value(field, value), lhs)
+        return Expression(call, OP.EQ, 1)
+
+    def has_key(self, field, keys, key):
+        # JSON_CONTAINS_PATH(field, 'one', '$.key'). Reuse _path([key]) so the
+        # key gets the same escaping as anywhere else.
+        path = self._path(tuple(keys) + (key,))
+        call = fn.JSON_CONTAINS_PATH(field, 'one', path)
+        return Expression(call, OP.EQ, 1)
+
+    def has_keys(self, field, keys, key_list):
+        paths = [self._path(tuple(keys) + (k,)) for k in key_list]
+        call = fn.JSON_CONTAINS_PATH(field, 'all', *paths)
+        return Expression(call, OP.EQ, 1)
+
+    def has_any_keys(self, field, keys, key_list):
+        paths = [self._path(tuple(keys) + (k,)) for k in key_list]
+        call = fn.JSON_CONTAINS_PATH(field, 'one', *paths)
+        return Expression(call, OP.EQ, 1)
 
 
 class JSONPath(ColumnBase):
@@ -249,12 +416,35 @@ class JSONPath(ColumnBase):
         return ColumnBase.regexp(self.as_text(True), rhs)
     def iregexp(self, rhs):
         return ColumnBase.iregexp(self.as_text(True), rhs)
-    def contains(self, rhs):
-        return ColumnBase.contains(self.as_text(True), rhs)
     def startswith(self, rhs):
         return ColumnBase.startswith(self.as_text(True), rhs)
     def endswith(self, rhs):
         return ColumnBase.endswith(self.as_text(True), rhs)
+
+    def contains(self, rhs):
+        return self._field._helper.contains(self._field, self._keys, rhs)
+
+    def set(self, value):
+        return self._field._helper.set(self._field, self._keys, value)
+
+    def remove(self):
+        return self._field._helper.remove(self._field, self._keys)
+
+    def length(self):
+        return self._field._helper.length(self._field, self._keys)
+
+    def contained_by(self, value):
+        return self._field._helper.contained_by(self._field, self._keys, value)
+
+    def has_key(self, key):
+        return self._field._helper.has_key(self._field, self._keys, key)
+
+    def has_keys(self, key_list):
+        return self._field._helper.has_keys(self._field, self._keys, key_list)
+
+    def has_any_keys(self, key_list):
+        return self._field._helper.has_any_keys(self._field, self._keys,
+                                                key_list)
 
 
 class JSONField(FieldDatabaseHook, Field):
@@ -332,3 +522,26 @@ class JSONField(FieldDatabaseHook, Field):
     def __ne__(self, rhs):
         return self._compare(self, OP.NE, OP.IS_NOT, rhs, False)
     __hash__ = Field.__hash__
+
+    def length(self):
+        return self._helper.length(self, ())
+
+    def update(self, value):
+        # RFC-7396 deep merge on SQLite/MySQL/MariaDB; shallow `||` concat on
+        # PostgreSQL. Same call, different semantics — see the docs.
+        return self._helper.update(self, value)
+
+    def contains(self, value):
+        return self._helper.contains(self, (), value)
+
+    def contained_by(self, value):
+        return self._helper.contained_by(self, (), value)
+
+    def has_key(self, key):
+        return self._helper.has_key(self, (), key)
+
+    def has_keys(self, key_list):
+        return self._helper.has_keys(self, (), key_list)
+
+    def has_any_keys(self, key_list):
+        return self._helper.has_any_keys(self, (), key_list)

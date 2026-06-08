@@ -523,8 +523,9 @@ class TestAsTextDeep(ModelTestCase):
             JM.select().where(JM.data['name'].startswith('a')).count(), 1)
         self.assertEqual(
             JM.select().where(JM.data['name'].endswith('y')).count(), 1)
-        self.assertEqual(
-            JM.select().where(JM.data['name'].contains('a')).count(), 2)
+        if IS_POSTGRESQL:
+            q = JM.select().where(JM.data['name'].contains('apple'))
+            self.assertEqual(q.count(), 1)
 
 
 class TestSQLShapes(ModelTestCase):
@@ -625,3 +626,150 @@ class TestJoinOnJSONKey(ModelTestCase):
         ])
 
 
+# Mutation primitives — set / remove / length. All three backends.
+@skip_if(SKIP_PATHS, 'requires SQLite 3.38 or non-SQLite backend')
+class TestMutation(ModelTestCase):
+    requires = [JM]
+
+    def test_set_scalar(self):
+        m = JM.create(data={'k': 'v', 'n': 5})
+        JM.update(data=JM.data['k'].set('updated')).where(JM.id == m.id).execute()
+        self.assertEqual(JM.get_by_id(m.id).data, {'k': 'updated', 'n': 5})
+
+    def test_set_container(self):
+        m = JM.create(data={'k': 'v'})
+        JM.update(data=JM.data['k'].set({'a': 1, 'b': [2]})).where(JM.id == m.id).execute()
+        self.assertEqual(JM.get_by_id(m.id).data, {'k': {'a': 1, 'b': [2]}})
+
+    def test_set_json_null(self):
+        # set(None) stores JSON null at the path, NOT SQL NULL on the column,
+        # and on MySQL must not trigger the "any-arg-NULL wipes document"
+        # footgun.
+        m = JM.create(data={'k': 'v'})
+        JM.update(data=JM.data['k'].set(None)).where(JM.id == m.id).execute()
+        self.assertEqual(JM.get_by_id(m.id).data, {'k': None})
+
+    def test_remove(self):
+        m = JM.create(data={'k': 'v', 'n': 5})
+        JM.update(data=JM.data['k'].remove()).where(JM.id == m.id).execute()
+        self.assertEqual(JM.get_by_id(m.id).data, {'n': 5})
+
+    def test_length_array(self):
+        JM.create(data={'tags': ['a', 'b', 'c']})
+        JM.create(data={'tags': []})
+        rows = list(JM.select(JM.data['tags'].length().alias('L')).order_by(JM.id))
+        self.assertEqual([r.L for r in rows], [3, 0])
+
+    def test_length_root(self):
+        # length() on root: array length of the document IF it's an array.
+        JM.create(data=['a', 'b', 'c'])
+        L = JM.select(JM.data.length()).scalar()
+        self.assertEqual(L, 3)
+
+
+# update() semantics intentionally diverge:
+#   SQLite, MySQL/MariaDB: RFC-7396 deep merge (null values delete keys).
+#   PostgreSQL:            shallow `||` concat (nested keys are overwritten;
+#                          null values are stored, NOT deleted).
+# These tests pin the divergence so it's caught if either side regresses.
+@skip_if(SKIP_PATHS, 'requires SQLite 3.38 or non-SQLite backend')
+class TestUpdateDivergence(ModelTestCase):
+    requires = [JM]
+
+    def setUp(self):
+        super(TestUpdateDivergence, self).setUp()
+        JM.create(data={'k': 'v', 'nested': {'a': 1, 'b': 2}})
+
+    def test_update_adds_top_level_key(self):
+        # Adding a new top-level key works the same on all backends.
+        JM.update(data=JM.data.update({'new': 1})).execute()
+        m = JM.select().get()
+        self.assertEqual(m.data['new'], 1)
+        self.assertEqual(m.data['k'], 'v')
+
+    def test_update_nested_keys_diverge(self):
+        # On SQLite/MySQL/MariaDB: deep merge preserves the un-overwritten
+        # nested key 'a'. On PostgreSQL: shallow concat overwrites the entire
+        # 'nested' value, dropping 'a'.
+        JM.update(data=JM.data.update({'nested': {'b': 99}})).execute()
+        m = JM.select().get()
+        if IS_POSTGRESQL:
+            self.assertEqual(m.data['nested'], {'b': 99})  # 'a' dropped
+        else:
+            self.assertEqual(m.data['nested'], {'a': 1, 'b': 99})
+
+    def test_update_null_deletes_diverge(self):
+        # On SQLite/MySQL/MariaDB (RFC-7396): null deletes the key.
+        # On PostgreSQL: null is stored as JSON null at the top level.
+        JM.update(data=JM.data.update({'k': None})).execute()
+        m = JM.select().get()
+        if IS_POSTGRESQL:
+            self.assertIn('k', m.data)
+            self.assertIsNone(m.data['k'])
+        else:
+            self.assertNotIn('k', m.data)
+
+
+# JSON containment / key checks. Native operators on PG and MySQL/MariaDB;
+# NotSupportedError on SQLite.
+@skip_if(IS_SQLITE, 'no native JSON containment/key operators on SQLite')
+class TestContainmentAndKeys(ModelTestCase):
+    requires = [JM]
+
+    def setUp(self):
+        super(TestContainmentAndKeys, self).setUp()
+        JM.create(data={'k': 'v', 'tags': ['python', 'orm'],
+                        'meta': {'env': 'prod', 'region': 'us'}})
+        JM.create(data={'k': 'v', 'tags': ['rust']})
+        JM.create(data={'k': 'other'})
+
+    def test_contains_root(self):
+        # Subset match at the root level.
+        q = JM.select().where(JM.data.contains({'k': 'v'}))
+        self.assertEqual(q.count(), 2)
+
+    def test_contains_nested(self):
+        q = JM.select().where(JM.data.contains({'meta': {'env': 'prod'}}))
+        self.assertEqual(q.count(), 1)
+
+    def test_contains_path(self):
+        # Sub-extract containment: data['tags'] @> ['python']
+        q = JM.select().where(JM.data['tags'].contains(['python']))
+        self.assertEqual(q.count(), 1)
+
+    def test_contained_by(self):
+        bigger = {'k': 'v', 'tags': ['python', 'orm', 'sql'],
+                  'meta': {'env': 'prod', 'region': 'us'}, 'extra': True}
+        q = JM.select().where(JM.data.contained_by(bigger))
+        # Row 1 fits inside `bigger`; rows 2 and 3 don't.
+        self.assertEqual(q.count(), 1)
+
+    def test_has_key(self):
+        q = JM.select().where(JM.data.has_key('meta'))
+        self.assertEqual(q.count(), 1)
+
+    def test_has_keys(self):
+        q = JM.select().where(JM.data.has_keys(['k', 'tags']))
+        self.assertEqual(q.count(), 2)
+
+    def test_has_any_keys(self):
+        q = JM.select().where(JM.data.has_any_keys(['nope', 'meta']))
+        self.assertEqual(q.count(), 1)
+
+    def test_has_key_on_path(self):
+        q = JM.select().where(JM.data['meta'].has_key('env'))
+        self.assertEqual(q.count(), 1)
+
+
+# SQLite users get a loud error on the non-portable ops.
+@skip_if(not IS_SQLITE, 'SQLite-only')
+class TestSqliteNotSupported(ModelTestCase):
+    requires = [JM]
+
+    def test_contains_raises(self):
+        with self.assertRaisesCtx(NotImplementedError):
+            JM.data.contains({'k': 'v'})
+
+    def test_has_key_raises(self):
+        with self.assertRaisesCtx(NotImplementedError):
+            JM.data.has_key('k')

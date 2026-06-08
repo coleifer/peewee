@@ -156,6 +156,67 @@ JSONField
       are canonicalized. On Postgresql the comparison is structural and
       key order does not matter.
 
+   .. method:: length()
+
+      Return the array length of the root document. See
+      :meth:`JSONPath.length` for the per-backend behavior on non-arrays.
+
+   .. method:: update(value)
+
+      Return an UPDATE-clause expression that merges ``value`` into the root
+      document. **The semantics intentionally diverge by backend** -
+      see the "update divergence" note below.
+
+      .. code-block:: python
+
+         Doc.update(data=Doc.data.update({'new_field': 1})).execute()
+
+   .. method:: contains(value)
+               contained_by(value)
+               has_key(key)
+               has_keys(key_list)
+               has_any_keys(key_list)
+
+      JSON structural containment and key-existence predicates. Postgresql
+      uses ``@>`` / ``<@`` / ``?`` / ``?&`` / ``?|``; MySQL / MariaDB use
+      ``JSON_CONTAINS`` / ``JSON_CONTAINS_PATH``. **Not supported on
+      SQLite** - calling any of these on a SQLite-backed model raises
+      :class:`peewee.NotSupportedError`.
+
+      .. code-block:: python
+
+         Doc.select().where(Doc.data.contains({'env': 'prod'}))
+         Doc.select().where(Doc.data.has_key('email'))
+         Doc.select().where(Doc.data.has_keys(['env', 'region']))
+
+.. warning::
+
+   :meth:`update` has intentionally **divergent semantics across backends**:
+
+   * **SQLite, MySQL, MariaDB** - RFC-7396 deep merge via ``json_patch`` /
+     ``JSON_MERGE_PATCH``. Nested objects are merged recursively;
+     ``null`` values **delete** the key.
+   * **Postgresql** - shallow concat via the ``||`` operator. Top-level
+     keys are overwritten; **nested objects are replaced wholesale**;
+     ``null`` is stored as JSON null and does **not** delete the key.
+
+   Concrete example - same Python call, three different results:
+
+   .. code-block:: python
+
+      Doc.create(data={'k': 'v', 'nested': {'a': 1, 'b': 2}})
+      Doc.update(data=Doc.data.update({'k': None,
+                                       'nested': {'b': 99}})).execute()
+
+      # SQLite / MySQL / MariaDB:
+      #   {'nested': {'a': 1, 'b': 99}}      ('k' deleted; nested merged)
+      # Postgresql:
+      #   {'k': None, 'nested': {'b': 99}}   ('k' kept as null; nested overwritten)
+
+   If you write portable code, prefer top-level key adds (where all three
+   agree) and avoid relying on either semantic for nested objects or null
+   deletion.
+
 JSONPath
 --------
 
@@ -328,7 +389,6 @@ JSONPath
 
    .. method:: startswith(rhs)
                endswith(rhs)
-               contains(rhs)
 
       Substring shortcuts that wrap the right-hand side in ``%`` wildcards.
       Like :meth:`like`, they auto-route through ``as_text()``:
@@ -336,7 +396,90 @@ JSONPath
       .. code-block:: python
 
          Doc.select().where(Doc.data['name'].startswith('h'))
+
+   .. method:: contains(rhs)
+
+      JSON structural containment. Dispatches through the helper: ``@>`` on
+      Postgresql, ``JSON_CONTAINS`` on MySQL / MariaDB.
+
+      Raises :class:`NotImplementedError` on SQLite.
+
+      .. code-block:: python
+
+         # Text substring.
          Doc.select().where(Doc.data['name'].contains('uey'))
+
+         # JSON structural containment (sub-array membership).
+         Doc.select().where(Doc.data['tags'].contains(['python']))
+
+   .. method:: set(value)
+
+      Return an UPDATE-clause expression that writes ``value`` at this path.
+      Uses ``json_set`` / ``jsonb_set`` / ``JSON_SET`` per backend. Existing
+      values are replaced; ``value=None`` writes JSON ``null`` (not SQL
+      NULL):
+
+      .. code-block:: python
+
+         Doc.update(data=Doc.data['count'].set(99)).execute()
+         Doc.update(data=Doc.data['profile'].set({'env': 'prod'})).execute()
+
+      .. note::
+
+         **Missing intermediate keys silently no-op on all three backends.**
+         ``data['a']['b']['c'].set(1)`` on ``data={}`` returns ``data``
+         unchanged. The leaf is created only when the parent exists.
+
+   .. method:: remove()
+
+      Return an UPDATE-clause expression that removes the value at this path.
+      Uses ``json_remove`` / ``#-`` / ``JSON_REMOVE`` per backend.
+
+      .. code-block:: python
+
+         Doc.update(data=Doc.data['stale_key'].remove()).execute()
+
+   .. method:: length()
+
+      Return the array length at this path. On non-array values the result
+      diverges by backend:
+
+      * **SQLite** - returns ``0`` for non-arrays.
+      * **Postgresql** - raises ``cannot get array length of a non-array``.
+      * **MySQL / MariaDB** - returns object key count for objects,
+        ``1`` for scalars.
+
+      Use only on values you know are arrays, or be prepared for the
+      backend-specific semantics.
+
+      .. code-block:: python
+
+         Doc.select(Doc.data['tags'].length().alias('n_tags'))
+
+   .. method:: contained_by(value)
+
+      Inverse of :meth:`contains` - test whether the value at this path is a
+      subset of ``value``. Postgresql ``<@``, MySQL / MariaDB
+      ``JSON_CONTAINS(value, lhs)``. Not supported on SQLite.
+
+      .. code-block:: python
+
+         Doc.select().where(Doc.data['tags'].contained_by(
+             ['python', 'orm', 'sql']))
+
+   .. method:: has_key(key)
+               has_keys(key_list)
+               has_any_keys(key_list)
+
+      Test whether the value at this path is an object containing the given
+      key(s). Postgresql uses the ``?`` / ``?&`` / ``?|`` operators; MySQL /
+      MariaDB use ``JSON_CONTAINS_PATH``. Not supported on SQLite.
+
+      .. code-block:: python
+
+         Doc.select().where(Doc.data.has_key('email'))
+         Doc.select().where(Doc.data['profile'].has_keys(['env', 'region']))
+         Doc.select().where(Doc.data.has_any_keys(['admin', 'staff']))
 
 .. _json-field-null-semantics:
 
@@ -420,11 +563,38 @@ Equality, ordering, and ``in_`` work against this form.
    # Strict numeric comparison.
    Doc.select().where(Doc.data['count'].as_int() > 10)
 
-Atomic mutation
----------------
+Mutation
+--------
 
-The cross-backend ``JSONField`` does not provide atomic mutation methods.
-For most cases, fetch-mutate-save works:
+The field and path expose a portable subset of atomic mutation primitives
+suitable for use inside ``UPDATE`` statements:
+
+============= ==================== ==================== =============================
+Method        On JSONField (root)  On JSONPath          Cross-backend?
+============= ==================== ==================== =============================
+``set(v)``    -                    yes                  yes
+``remove()``  -                    yes                  yes
+``length()``  yes                  yes                  yes (with caveats - see method)
+``update(v)`` yes                  -                    yes (**divergent semantics**)
+============= ==================== ==================== =============================
+
+.. code-block:: python
+
+   # Set a path (creates or replaces).
+   Doc.update(data=Doc.data['count'].set(99)).execute()
+
+   # Remove a path.
+   Doc.update(data=Doc.data['stale'].remove()).execute()
+
+   # Array length.
+   Doc.select(Doc.data['tags'].length())
+
+   # Document-level merge (see the warning above about divergence).
+   Doc.update(data=Doc.data.update({'last_seen': '2026-01-01'})).execute()
+
+For mutation patterns outside this subset (path-level update, ``insert``
+vs. ``replace`` semantics, ``json_each`` / ``jsonb_path_query``, etc.),
+either read-modify-save the row in Python:
 
 .. code-block:: python
 
@@ -433,7 +603,7 @@ For most cases, fetch-mutate-save works:
    doc.data['count'] = 5
    doc.save()
 
-For server-side atomic updates, drop down to ``fn.*``:
+or drop down to ``fn.*`` directly:
 
 .. code-block:: python
 
@@ -458,9 +628,9 @@ such as atomic mutation methods, ``jsonb`` operators, ``json_each`` /
 ``json_tree``, ``JSON_TABLE``, etc. use the corresponding playhouse module:
 
 * :class:`playhouse.postgres_ext.BinaryJSONField` - full ``jsonb`` operator
-  surface (``@>``, ``?``, ``?|``, ``?&``, ``jsonb_path_query*``, etc.).
+  surface (``jsonb_path_query*``, etc.) plus the engine-specific mutation
+  helpers.
 * :class:`playhouse.sqlite_ext.JSONField` - SQLite-specific
-  ``set`` / ``replace`` / ``insert`` / ``append`` / ``update`` / ``remove``
-  on the field and path, plus ``children`` / ``tree`` for recursion via
-  ``json_each`` and ``json_tree``.
+  ``replace`` / ``insert`` / ``append`` on the field and path, plus
+  ``children`` / ``tree`` for recursion via ``json_each`` and ``json_tree``.
 * :class:`playhouse.mysql_ext.JSONField` - basic MySQL ``JSON_EXTRACT`` access.
