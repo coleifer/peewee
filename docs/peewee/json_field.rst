@@ -132,7 +132,8 @@ JSONField
          Doc.data.path('profile', 'social', 'fb')
          # Same as Doc.data['profile']['social']['fb']
 
-   .. method:: __eq__(rhs) / __ne__(rhs)
+   .. method:: __eq__(rhs)
+               __ne__(rhs)
 
       Equality on the full document. The right-hand side is serialized
       through ``dumps`` and compared structurally on Postgresql (``jsonb =
@@ -227,7 +228,8 @@ JSONPath
 
          Doc.select().where(Doc.data['rating'].as_float() > 4.5)
 
-   .. method:: __eq__(rhs) / __ne__(rhs)
+   .. method:: __eq__(rhs)
+               __ne__(rhs)
 
       Equality on the path. In default (JSON) mode the right-hand side is
       canonicalized through the field's value wrapper (``fn.json(...)`` on
@@ -275,7 +277,8 @@ JSONPath
       ``NULL``, so :meth:`is_null` does not match stored JSON null on
       those versions. Missing keys and column SQL NULL are still matched.
 
-   .. method:: in_(rhs) / not_in(rhs)
+   .. method:: in_(rhs)
+               not_in(rhs)
 
       Membership test. In default mode each right-hand-side element is
       canonicalized through the field's value wrapper. In ``.as_text()``
