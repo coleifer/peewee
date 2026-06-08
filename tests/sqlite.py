@@ -159,7 +159,7 @@ class TestJSONField(ModelTestCase):
             'CREATE TABLE IF NOT EXISTS "key_data" ('
             '"id" INTEGER NOT NULL PRIMARY KEY, '
             '"key" TEXT NOT NULL, '
-            '"data" JSON NOT NULL)'), [])
+            '"data" TEXT NOT NULL)'), [])
 
     def test_create_read_update(self):
         test_values = (

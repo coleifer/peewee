@@ -164,7 +164,7 @@ class JSONBPath(JSONPath):
 
 
 class JSONField(TextField):
-    field_type = 'JSON'
+    field_type = 'TEXT'
     unpack = False
     Path = JSONPath
 
