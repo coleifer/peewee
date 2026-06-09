@@ -3082,15 +3082,8 @@ def _truncate_constraint_name(constraint, maxlen=64):
 
 class BaseJSONMethods(object):
     # Backend-specific JSON implementations.
-    field_type = 'JSON'
-
     def __init__(self, database):
         self.database = database
-
-    def make_value_wrapper(self, dumps):
-        def wrapper(value):
-            return dumps(value) if value is not None else value
-        return wrapper
 
     def make_value_reader(self, loads):
         def reader(value):
@@ -3125,9 +3118,9 @@ class BaseJSONMethods(object):
     def cast_type(self, t):
         raise NotImplementedError
     def cast_for_case(self, field, value):
-        # Postgres needs to wrap CAST(... AS JSONB) so untyped CASE expressions
-        # can assign in to json fields.
-        raise NotImplementedError
+        # Overridden by Postgres, which needs CAST(... AS JSONB) so untyped
+        # CASE expressions can assign in to json fields.
+        return None
 
     def set(self, field, keys, value):
         raise NotImplementedError
@@ -3175,10 +3168,6 @@ class SqliteJSONMethods(BaseJSONMethods):
 
     def cast_type(self, t):
         return {'int': 'INTEGER', 'float': 'REAL'}[t]
-
-    def cast_for_case(self, field, value):
-        # SQLite's CASE-WHEN tolerates a plain wrapped value.
-        return None
 
     def _wrap_value(self, field, value):
         # Wrap a Python value so SQLite stores it as JSON-typed. Containers
@@ -3248,25 +3237,15 @@ class PostgresqlJSONMethods(BaseJSONMethods):
         # can't use any user-provided loads() impl.
         return lambda v: v
 
-    @staticmethod
-    def _key(k):
-        return Value(k, converter=False)
-
     def extract(self, field, keys):
         if not keys:
             return field
-        node = field
-        for k in keys:
-            node = Expression(node, '->', self._key(k))
-        return node
+        return Expression(field, '#>', self._path_array(keys))
 
     def extract_text(self, field, keys):
         if not keys:
             return field
-        node = field
-        for k in keys[:-1]:
-            node = Expression(node, '->', self._key(k))
-        return Expression(node, '->>', self._key(keys[-1]))
+        return Expression(field, '#>>', self._path_array(keys))
 
     def cast_type(self, t):
         return {'int': 'INTEGER', 'float': 'DOUBLE PRECISION'}[t]
@@ -3397,10 +3376,6 @@ class MySQLJSONMethods(BaseJSONMethods):
 
     def cast_type(self, t):
         return {'int': 'SIGNED', 'float': 'DOUBLE'}[t]
-
-    def cast_for_case(self, field, value):
-        # MySQL/MariaDB infer JSON-column type from the column, no cast needed.
-        return None
 
     def _json_value(self, field, value):
         # Sending json-encoded text only works for scalars: containers and

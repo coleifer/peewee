@@ -14,6 +14,10 @@ https://github.com/coleifer/peewee/releases
   [docs](https://docs.peewee-orm.com/en/latest/peewee/models.html#json-field).
   May eventually replace the backend-specific implementations with subclasses
   that inherit semantics of this new field.
+  Note: `playhouse.mysql_ext.JSONField` is now the core field. The old
+  `json_dumps` / `json_loads` arguments are renamed `dumps` / `loads`, the
+  `extract()` method is removed (use item-access or `path()`), and MySQL
+  tables are now created with `JSON` columns rather than `TEXT`.
 * Eliminate use of deprecated params when connecting to MySQL databases, thanks
   to @abulgher, #3050.
 * Using `fromisoformat()` ended up causing previously-unconverted strings (Ymd)

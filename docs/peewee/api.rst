@@ -3438,9 +3438,9 @@ Fields
 
       Equality on the full document. The right-hand side is serialized
       through ``dumps`` and compared structurally on Postgresql (``jsonb =
-      jsonb``) and MySQL (``JSON_EQUALS`` on MariaDB-aware comparators). On
-      SQLite the comparison is byte-compare against the canonical JSON
-      representation produced by ``json()``.
+      jsonb``) and MySQL (native ``JSON`` comparison). On SQLite and
+      MariaDB the comparison is a byte-compare of the stored JSON text
+      (SQLite canonicalizes both sides via ``json()``).
 
       .. code-block:: python
 
@@ -3449,13 +3449,13 @@ Fields
 
    .. note::
 
-      On SQLite, MySQL, and MariaDB, the full-document equality is a byte
-      comparison of the canonical JSON text. Two dictionaries with the
-      same contents but different insertion order may *not* match. If you
-      need order-insensitive document equality on those backends, pass
+      On SQLite and MariaDB, the full-document equality is a byte
+      comparison of the JSON text. Two dictionaries with the same contents
+      but different insertion order may *not* match. If you need
+      order-insensitive document equality on those backends, pass
       ``dumps=functools.partial(json.dumps, sort_keys=True)`` so both sides
-      are canonicalized. On Postgresql the comparison is structural and
-      key order does not matter.
+      are canonicalized. On Postgresql and MySQL the comparison is
+      structural and key order does not matter.
 
    .. method:: length()
 

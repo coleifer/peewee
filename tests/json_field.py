@@ -601,8 +601,8 @@ class TestSQLShapes(ModelTestCase):
             self.assertIn(' -> ', sql)
             self.assertIn('$."k"', params)
         elif IS_POSTGRESQL:
-            self.assertIn(' -> ', sql)
-            self.assertIn('k', params)
+            self.assertIn(' #> ', sql)
+            self.assertIn(['k'], params)
         elif IS_MYSQL:
             lower = sql.lower()
             self.assertIn('json_extract', lower)
@@ -615,8 +615,10 @@ class TestSQLShapes(ModelTestCase):
 
     def test_extract_text_mode(self):
         sql, _ = self._sql(JM.select(JM.data['k'].as_text()))
-        if IS_SQLITE or IS_POSTGRESQL:
+        if IS_SQLITE:
             self.assertIn(' ->> ', sql)
+        elif IS_POSTGRESQL:
+            self.assertIn(' #>> ', sql)
         elif IS_MYSQL:
             lower = sql.lower()
             self.assertIn('json_unquote', lower)

@@ -641,6 +641,13 @@ Path-level queries treat all three uniformly:
    Doc.select().where(Doc.data['k'].is_null(False))
    Doc.select().where(Doc.data['k'] != None)
 
+.. warning::
+   On MySQL and MariaDB a stored JSON ``null`` (row B) is **not** matched
+   by ``== None`` / ``is_null()`` - extraction yields the string ``'null'``
+   rather than SQL ``NULL``, so row B is treated as present. The
+   missing-key and column-``NULL`` cases (C, D) behave as documented on
+   all backends.
+
 Field-level NULL checks **only** match column SQL NULL:
 
 .. code-block:: python
@@ -661,7 +668,8 @@ the backend's ``JSON_TYPE`` / ``jsonb_typeof`` function:
    # SQLite
    Doc.select().where(fn.json_type(Doc.data, '$.k') == 'null')
 
-   # MySQL
+   # MySQL (not MariaDB, whose JSON_EXTRACT does not preserve the null
+   # type - there, use has_key() to test for the key's presence instead).
    Doc.select().where(fn.json_type(Doc.data['k']) == 'NULL')
 
 .. _json-field-text-mode:
