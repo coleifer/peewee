@@ -198,8 +198,7 @@ class AsyncDatabaseMixin(object):
             return await_(self.aexecute_sql(sql, params or ()))
         except MissingGreenletBridge as exc:
             raise MissingGreenletBridge(
-                f'Attempted query {sql} ({params}) outside greenlet runner.') \
-                    from exc
+                f'Attempted query outside greenlet runner: {sql}') from exc
 
     async def aexecute_sql(self, sql, params=None):
         conn = await self.aconnect()
@@ -454,11 +453,30 @@ class DummyCursor(object):
 
 
 class AsyncConnectionWrapper(object):
+    # Grace period for an abandoned iterate() generator to finalize (e.g.
+    # the caller broke out of the async-for) before a competing query on
+    # this connection gives up instead of deadlocking.
+    streaming_timeout = 5.0
+
     def __init__(self, conn):
         self.conn = conn
         self._lock = asyncio.Lock()
+        self._streaming = False  # Lock is held by an open iterate() cursor.
 
     async def execute(self, sql, params=None):
+        if self._streaming:
+            try:
+                await asyncio.wait_for(self._lock.acquire(),
+                                       self.streaming_timeout)
+            except asyncio.TimeoutError:
+                raise InterfaceError(
+                    'Connection is busy streaming results from iterate(). '
+                    'Run the query from another task, or exhaust or '
+                    'aclose() the iterator.') from None
+            try:
+                return await self._execute(sql, params)
+            finally:
+                self._lock.release()
         async with self._lock:
             return await self._execute(sql, params)
 
@@ -500,8 +518,8 @@ class AsyncSqlitePool(object):
             isolation_level=None,
             **self._connect_params)
         if self._on_connect is not None:
-            await self._on_connect(conn )
-        wrapped = AsyncSqliteConnection(conn )
+            await self._on_connect(conn)
+        wrapped = AsyncSqliteConnection(conn)
         self._all_connections.append(wrapped)
         return wrapped
 
@@ -514,14 +532,26 @@ class AsyncSqlitePool(object):
         driver_conn = conn.conn
         if driver_conn is None:
             return False
-        if not driver_conn._running or not driver_conn._connection:
+        # aiosqlite private attrs - tolerate their absence in new versions.
+        if not getattr(driver_conn, '_running', True):
+            return False
+        if not getattr(driver_conn, '_connection', True):
             return False
         return True
 
     async def release(self, conn):
         if self._closed:
             return
-        elif self._conn_is_valid(conn):
+        valid = self._conn_is_valid(conn)
+        if valid and conn.conn.in_transaction:
+            # Roll back any transaction left open, e.g. by a dead task, so
+            # the next acquirer gets a clean connection.
+            try:
+                await conn.conn.rollback()
+            except Exception:
+                logger.warning('Error rolling back connection', exc_info=True)
+                valid = False
+        if valid:
             await self._queue.put(conn)
         else:
             try:
@@ -562,6 +592,7 @@ class AsyncSqliteConnection(AsyncConnectionWrapper):
             raise
 
         lock = self._lock
+        self._streaming = True
 
         async def fetch_many(count):
             return await cursor.fetchmany(count)
@@ -570,6 +601,7 @@ class AsyncSqliteConnection(AsyncConnectionWrapper):
             try:
                 await cursor.close()
             finally:
+                self._streaming = False
                 lock.release()
 
         return CursorAdapter(
@@ -639,6 +671,7 @@ class AsyncMySQLConnection(AsyncConnectionWrapper):
             raise
 
         lock = self._lock
+        self._streaming = True
 
         async def fetch_many(count):
             return await cursor.fetchmany(count)
@@ -647,6 +680,7 @@ class AsyncMySQLConnection(AsyncConnectionWrapper):
             try:
                 await cursor.close()
             finally:
+                self._streaming = False
                 lock.release()
 
         return CursorAdapter(
@@ -670,10 +704,20 @@ class AsyncMySQLDatabase(AsyncDatabaseMixin, MySQLDatabase):
         conn = await asyncio.wait_for(
             self._pool.acquire(),
             timeout=self._acquire_timeout)
+        if self.server_version is None:
+            # Distinguishes MySQL from MariaDB, e.g. for JSONField SQL.
+            self.server_version = self._extract_server_version(
+                conn.get_server_info())
         return AsyncMySQLConnection(conn)
 
     async def _pool_release(self, conn):
         if conn and conn.conn:
+            # Roll back any transaction left open, e.g. by a dead task, so
+            # the next acquirer gets a clean connection.
+            try:
+                await conn.conn.rollback()
+            except Exception:
+                logger.warning('Error rolling back connection', exc_info=True)
             self._pool.release(conn.conn)
 
     async def _pool_close(self):
@@ -687,15 +731,23 @@ class AsyncPostgresqlConnection(AsyncConnectionWrapper):
         if params:
             sql = self._translate_placeholders(sql)
 
-        records = await self.conn.fetch(sql, *(params or ()))
+        stmt = await self.conn.prepare(sql)
+        records = await stmt.fetch(*(params or ()))
         if records:
             description = [(k,) for k in records[0].keys()]
-            rows = records
         else:
             description = []
-            rows = []
 
-        return CursorAdapter(rows, description=description)
+        # asyncpg exposes no rowcount; parse the command-status tail, e.g.
+        # "UPDATE 3" / "DELETE 2" / "INSERT 0 3".
+        status = (stmt.get_statusmsg() or '').rsplit(' ', 1)
+        if len(status) == 2 and status[1].isdigit():
+            rowcount = int(status[1])
+        else:
+            rowcount = len(records)
+
+        return CursorAdapter(records, rowcount=rowcount,
+                             description=description)
 
     async def execute_iter(self, sql, params=None):
         if params:
@@ -716,6 +768,7 @@ class AsyncPostgresqlConnection(AsyncConnectionWrapper):
             raise
 
         lock = self._lock
+        self._streaming = True
 
         async def fetch_many(count):
             return await cursor.fetch(count)
@@ -723,9 +776,10 @@ class AsyncPostgresqlConnection(AsyncConnectionWrapper):
         async def cleanup():
             try:
                 await tr.rollback()
-            except:
+            except Exception:
                 pass
             finally:
+                self._streaming = False
                 lock.release()
 
         return CursorAdapter(
@@ -735,6 +789,9 @@ class AsyncPostgresqlConnection(AsyncConnectionWrapper):
 
     @staticmethod
     def _translate_placeholders(sql):
+        # %s is treated as a placeholder wherever it appears, including
+        # inside quoted strings - mirroring psycopg. Pass literal values as
+        # parameters.
         parts = sql.split('%s')
         if len(parts) == 1:
             return sql
@@ -769,7 +826,7 @@ class AsyncPgAtomic(object):
         else:
             try:
                 self.commit(False)
-            except:
+            except Exception:
                 self.rollback(False)
                 raise
 
@@ -808,7 +865,7 @@ class AsyncPgAtomic(object):
         else:
             try:
                 await self.acommit(False)
-            except:
+            except Exception:
                 await self.arollback(False)
                 raise
 

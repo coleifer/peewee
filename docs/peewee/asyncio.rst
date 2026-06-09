@@ -460,7 +460,9 @@ API Reference
    .. method:: aclose()
       :async:
 
-      Release the current task's connection back to the pool.
+      Release the current task's connection back to the pool. Any
+      transaction left open on the connection is rolled back, so the next
+      acquirer always sees a clean connection.
 
    .. method:: close_pool()
       :async:
@@ -468,6 +470,9 @@ API Reference
       Close the underlying connection pool and release all active connections.
 
       This method should be called during application shutdown.
+
+      Connections orphaned by tasks that exited without closing them are
+      reclaimed as well, with any open transaction rolled back.
 
    .. method:: __aenter__()
                __aexit__(exc_type, exc, tb)
@@ -513,6 +518,11 @@ API Reference
          for u in await db.aexecute(spammers):
              print(f'Deleted: {u.username}')
 
+      The query is bound to this database before executing. The convenience
+      methods (:meth:`get`, :meth:`list`, :meth:`scalar`, :meth:`count` and
+      :meth:`exists`) execute the query against whatever database it is
+      already bound to.
+
    .. method:: get(query)
       :async:
 
@@ -546,7 +556,7 @@ API Reference
       .. code-block:: python
 
          query = User.select().order_by(User.username)
-         async for user in db.list(query):
+         for user in await db.list(query):
              print(user.username)
 
    .. method:: iterate(query)
@@ -565,6 +575,14 @@ API Reference
          query = User.select().order_by(User.username)
          async for user in db.iterate(query):
              print(user.username)
+
+      .. note::
+         While streaming, the iterator holds the task's connection. Another
+         query on the same connection waits briefly for an abandoned
+         iterator to finalize (e.g. after breaking out of the loop early),
+         then raises :class:`InterfaceError`. To release the connection
+         promptly after a partial iteration, ``await`` the generator's
+         ``aclose()`` method.
 
    .. method:: scalar(query)
       :async:
@@ -663,6 +681,23 @@ API Reference
          async def main():
              await db.run(transfer_funds, user1, user2, 100.)
 
+   .. method:: transaction()
+               savepoint()
+
+      Like :meth:`atomic`, async-aware wrappers of peewee's transaction and
+      savepoint context-managers, supporting both ``async with`` and
+      ``with``. Transaction objects additionally provide ``acommit()`` and
+      ``arollback()`` coroutines, mirroring peewee's ``commit()`` and
+      ``rollback()``.
+
+      .. note::
+         On Postgresql, :meth:`atomic`, :meth:`transaction` and
+         :meth:`savepoint` all return a transaction manager built directly
+         on asyncpg: arguments are forwarded to asyncpg's
+         ``Connection.transaction()`` (e.g. ``isolation=``, ``readonly=``),
+         and nested blocks are implemented as savepoints by asyncpg's
+         transaction nesting.
+
    .. method:: acreate_tables(models, **options)
       :async:
 
@@ -715,8 +750,8 @@ API Reference
 
    Async SQLite database implementation.
 
-   Uses ``aiosqlite`` and maintains a single shared connection. Pool-related
-   configuration options are ignored.
+   Uses ``aiosqlite`` with a simple pool of ``pool_size`` connections
+   (``pool_min_size`` is ignored).
 
    Inherits from :class:`AsyncDatabaseMixin` and :class:`SqliteDatabase`.
 
@@ -724,15 +759,27 @@ API Reference
 
    Async Postgresql database implementation.
 
-   Uses ``asyncpg`` and the driver's native connection pool.
+   Uses ``asyncpg`` and the driver's native connection pool. Affected-row
+   counts for UPDATE and DELETE are derived from the command status
+   reported by the server.
 
    Inherits from :class:`AsyncDatabaseMixin` and :class:`PostgresqlDatabase`.
+
+   .. note::
+      :meth:`Model.bulk_update` is not supported with asyncpg. When raw SQL
+      strings are executed, ``%s`` placeholders are rewritten to asyncpg's
+      ``$n`` style wherever they appear - including inside quoted strings,
+      mirroring psycopg. Pass literal values as parameters rather than
+      embedding them in the SQL.
 
 .. class:: AsyncMySQLDatabase(database, **kwargs)
 
    Async MySQL / MariaDB database implementation.
 
-   Uses ``aiomysql`` and the driver's native connection pool.
+   Uses ``aiomysql`` and the driver's native connection pool. The server
+   version - used, e.g., to distinguish MySQL from MariaDB when generating
+   :class:`JSONField` SQL - is detected when the first connection is
+   acquired.
 
    Inherits from :class:`AsyncDatabaseMixin` and :class:`MySQLDatabase`.
 

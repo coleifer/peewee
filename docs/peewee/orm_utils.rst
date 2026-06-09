@@ -261,8 +261,8 @@ validation.
 +-------------------------------------------+------------------------+
 | ``UUIDField``                             | ``uuid.UUID``          |
 +-------------------------------------------+------------------------+
-| ``JSONField``, ``BinaryJSONField``        | ``dict``               |
-| (SQLite or Postgres extensions)           |                        |
+| ``JSONField``, ``BinaryJSONField``        | ``Any`` (an object,    |
+| (core, SQLite or Postgres extensions)     | array or scalar)       |
 +-------------------------------------------+------------------------+
 | ``IntervalField`` (Postgres)              | ``datetime.timedelta`` |
 +-------------------------------------------+------------------------+
@@ -296,11 +296,14 @@ API reference
    Generate a Pydantic ``BaseModel`` class from a Peewee model.
 
    :param Model model_cls: Peewee model class.
-   :param exclude: Field names to exclude from the generated schema.
-   :type exclude: set or list
+   :param exclude: Field names to exclude from the generated schema. A
+       plain foreign key matches either its field name (``'user'``) or its
+       column name (``'user_id'``).
+   :type exclude: set, list or str
    :param include: If provided, *only* these field names will appear in the
-       generated schema. All other fields are excluded.
-   :type include: set or list
+       generated schema. All other fields are excluded. Foreign keys match
+       either the field name or the column name.
+   :type include: set, list or str
    :param bool exclude_autofield: When ``True`` (the default), the
        auto-incrementing primary-key field is omitted from the schema. Set to
        ``False`` when you need the ``id`` field in responses.

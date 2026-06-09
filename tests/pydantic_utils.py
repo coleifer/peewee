@@ -439,3 +439,37 @@ class TestRelationships(BasePydanticTestCase):
             result = UserDetail.model_validate(user)
             self.assertEqual(result.name, 'Huey')
             self.assertEqual([t.content for t in result.tweets], ['t0', 't1'])
+
+
+class TestMisc(BasePydanticTestCase):
+    def test_fk_filter_by_either_name(self):
+        # Plain FKs appear as the column name, so filtering accepts both
+        # the field name and the column name.
+        for name in ('user', 'user_id'):
+            S = to_pydantic(Tweet, exclude={name})
+            self.assertEqual(set(S.model_fields), {'content', 'created'})
+
+        S = to_pydantic(Tweet, include={'user_id', 'content'})
+        self.assertEqual(set(S.model_fields), {'user_id', 'content'})
+        S = to_pydantic(Tweet, include=['user', 'content'])
+        self.assertEqual(set(S.model_fields), {'user_id', 'content'})
+
+    def test_backref_requires_list(self):
+        class TweetFlat(BaseModel):
+            content: str
+        with self.assertRaises(ValueError):
+            to_pydantic(User, relationships={User.tweets: TweetFlat})
+
+    def test_callable_default_uses_factory(self):
+        S = to_pydantic(User)
+        f = S.model_fields['created']
+        self.assertIsNotNone(f.default_factory)
+        self.assertIsInstance(f.default_factory(), datetime.datetime)
+
+    def test_json_field_accepts_any(self):
+        class JDoc(TestModel):
+            data = JSONField(null=True)
+
+        S = to_pydantic(JDoc)
+        for value in ({'a': 1}, [1, 2], 'scalar', 3, True, None):
+            self.assertEqual(S(data=value).data, value)

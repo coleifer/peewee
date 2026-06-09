@@ -431,26 +431,37 @@ class TestConnectionWrappers(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(conn._lock.locked())
         mock_cursor.close.assert_awaited_once()
 
+    def _pg_stmt(self, rows=None, status='SELECT 0'):
+        mock_stmt = AsyncMock()
+        mock_stmt.fetch.return_value = rows or []
+        mock_stmt.get_statusmsg = Mock(return_value=status)
+        mock_conn = AsyncMock()
+        mock_conn.prepare.return_value = mock_stmt
+        return mock_conn, mock_stmt
+
     async def test_pg_parameter_conversion(self):
         mock_record = Mock()
         mock_record.keys.return_value = ['id', 'name']
-        mock_conn = AsyncMock()
-        mock_conn.fetch.return_value = [mock_record]
+        mock_conn, mock_stmt = self._pg_stmt([mock_record], 'SELECT 1')
 
         await AsyncPostgresqlConnection(mock_conn).execute(
             'SELECT * FROM t WHERE id = %s AND name = %s', (1, 'x'))
-        sql = mock_conn.fetch.call_args[0][0]
+        sql = mock_conn.prepare.call_args[0][0]
         self.assertEqual(sql, 'SELECT * FROM t WHERE id = $1 AND name = $2')
+        mock_stmt.fetch.assert_awaited_once_with(1, 'x')
 
     async def test_pg_concurrent_serialized(self):
         order = []
-        async def tracked(sql, params=None):
+        async def prepare(sql):
             order.append(f'start-{sql}')
             await asyncio.sleep(0.05)
             order.append(f'end-{sql}')
-            return []
+            stmt = AsyncMock()
+            stmt.fetch.return_value = []
+            stmt.get_statusmsg = Mock(return_value=None)
+            return stmt
         mock_conn = AsyncMock()
-        mock_conn.fetch = tracked
+        mock_conn.prepare = prepare
 
         conn = AsyncPostgresqlConnection(mock_conn)
         await asyncio.gather(conn.execute('Q1', None),
@@ -460,19 +471,26 @@ class TestConnectionWrappers(unittest.IsolatedAsyncioTestCase):
                         or idx['end-Q2'] < idx['start-Q1'])
 
     async def test_pg_no_params(self):
-        mock_conn = AsyncMock()
-        mock_conn.fetch.return_value = []
+        mock_conn, mock_stmt = self._pg_stmt()
         await AsyncPostgresqlConnection(mock_conn).execute(
             'SELECT * FROM t', None)
-        mock_conn.fetch.assert_called_once_with('SELECT * FROM t')
+        mock_conn.prepare.assert_awaited_once_with('SELECT * FROM t')
+        mock_stmt.fetch.assert_awaited_once_with()
 
     async def test_pg_empty_results(self):
-        mock_conn = AsyncMock()
-        mock_conn.fetch.return_value = []
+        mock_conn, _ = self._pg_stmt()
         r = await AsyncPostgresqlConnection(mock_conn).execute(
             'SELECT * FROM empty')
         self.assertEqual(r.fetchall(), [])
         self.assertEqual(r.description, [])
+
+    async def test_pg_rowcount_from_status(self):
+        for status, expected in (('UPDATE 3', 3), ('DELETE 2', 2),
+                                 ('INSERT 0 4', 4), ('SELECT 0', 0),
+                                 (None, 0), ('CREATE TABLE', 0)):
+            mock_conn, _ = self._pg_stmt(status=status)
+            r = await AsyncPostgresqlConnection(mock_conn).execute('Q')
+            self.assertEqual(r.rowcount, expected)
 
     def test_translate_placeholders(self):
         f = AsyncPostgresqlConnection._translate_placeholders
@@ -483,6 +501,11 @@ class TestConnectionWrappers(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(
             f('INSERT INTO t VALUES (%s, %s, %s)'),
             'INSERT INTO t VALUES ($1, $2, $3)')
+        # Like psycopg, %s is a placeholder even inside quoted strings -
+        # literal values must be passed as parameters.
+        self.assertEqual(
+            f("SELECT * FROM t WHERE x LIKE '%s' AND y = %s"),
+            "SELECT * FROM t WHERE x LIKE '$1' AND y = $2")
 
     def _pg_mocks(self, rows=None):
         rows = rows or []
@@ -1502,6 +1525,70 @@ class IntegrationTests(object):
 
         await self.assertCount(3)
         await self.assertNames(['t1', 't2', 't4'])
+
+    async def test_update_delete_rowcount(self):
+        for name in ('a', 'b', 'c'):
+            await self.create_record(name)
+        # NB: use a new value - MySQL reports affected (changed) rows.
+        n = await self.db.aexecute(
+            TestModel.update(value=99).where(TestModel.name != 'a'))
+        self.assertEqual(n, 2)
+        n = await self.db.aexecute(TestModel.delete())
+        self.assertEqual(n, 3)
+
+    async def test_query_during_iterate(self):
+        await self.seed(3)
+        it = self.db.iterate(TestModel.select())
+        with patch.object(AsyncConnectionWrapper, 'streaming_timeout', 0.25):
+            with self.assertRaises(InterfaceError):
+                async for row in it:
+                    await self.db.scalar(
+                        TestModel.select(fn.MAX(TestModel.value)))
+        await it.aclose()
+        # The connection is usable again afterwards.
+        await self.assertCount(3)
+
+    async def test_task_death_rolls_back_transaction(self):
+        await self.create_record('keep')
+
+        async def dirty():
+            txn = self.db.atomic()
+            await txn.__aenter__()
+            await self.create_record('dirty')
+            # Task ends without commit/rollback or close().
+
+        await asyncio.ensure_future(dirty())
+        for _ in range(10):  # Allow the done-callback to orphan the conn.
+            await asyncio.sleep(0.01)
+            if self.db._state._orphaned_conns:
+                break
+        await self.db.aconnect()  # Drains the orphan: rolls back, releases.
+        await self.assertCount(1)
+        await self.create_record('after')
+        await self.assertCount(2)
+
+    async def test_json_field(self):
+        class JsonModel(Model):
+            data = JSONField(null=True)
+        try:
+            JsonModel._meta.set_database(self.db)
+        except NotSupportedError:
+            self.skipTest('sqlite too old for JSONField')
+
+        await self.db.acreate_tables([JsonModel])
+        try:
+            await self.db.run(JsonModel.create, data={'k': 'v', 'n': 5})
+            row = await self.db.get(JsonModel.select())
+            self.assertEqual(row.data, {'k': 'v', 'n': 5})
+            n = await self.db.count(
+                JsonModel.select().where(JsonModel.data['k'] == 'v'))
+            self.assertEqual(n, 1)
+        finally:
+            await self.db.adrop_tables([JsonModel])
+
+    async def test_sync_query_outside_bridge(self):
+        with self.assertRaises(MissingGreenletBridge):
+            list(TestModel.select())
 
 
 class TestSqliteIntegration(IntegrationTests, unittest.IsolatedAsyncioTestCase):

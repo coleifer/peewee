@@ -25,11 +25,17 @@ def choices_description(choices):
 def get_field_type(field):
     if isinstance(field, ForeignKeyField):
         field = field.rel_field
+    if field.field_type in ('JSON', 'JSONB'):
+        # A json value may be an object, array, scalar or null - the dict
+        # mapping in reflection is too narrow for schema validation.
+        return Any
     return FieldTypeMap.get(field.field_type, Any)
 
 def to_pydantic(model_cls, exclude=None, include=None, exclude_autofield=True,
                 model_name=None, relationships=None, base_model=None):
-    exclude = exclude or set()
+    exclude = {exclude} if isinstance(exclude, str) else set(exclude or ())
+    if include is not None:
+        include = {include} if isinstance(include, str) else set(include)
     relationships = relationships or {}
     fields = {}
 
@@ -43,9 +49,14 @@ def to_pydantic(model_cls, exclude=None, include=None, exclude_autofield=True,
 
     for field in model_cls._meta.sorted_fields:
         name = field.name
-        if name in exclude:
+        names = {name}
+        if isinstance(field, ForeignKeyField):
+            # Plain FKs are emitted as the column name ('user_id'), so honor
+            # either name when filtering.
+            names.add(field.column_name)
+        if names & exclude:
             continue
-        elif include is not None and name not in include:
+        elif include is not None and not (names & include):
             continue
         elif exclude_autofield and isinstance(field, AutoField):
             continue
