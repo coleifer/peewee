@@ -7,6 +7,12 @@ https://github.com/coleifer/peewee/releases
 
 ## master
 
+* Fixes for `playhouse.pwasyncio`: report correct UPDATE / DELETE rowcounts on
+  asyncpg, roll back open transactions when connections are returned to the
+  pool, raise instead of deadlocking when querying during `iterate()`, and
+  detect the MySQL / MariaDB server version.
+* Fixes for `playhouse.pydantic_utils`: JSON fields validate as `Any`, and
+  foreign keys may be included / excluded by field name or column name.
 * Add a new cross-backend `JSONField` to core that provides basic operations
   and also more consistent behavior when reading data. By default the new core
   JSONField treats extracted values as JSON, which is generally the correct
