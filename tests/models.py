@@ -27,6 +27,7 @@ from .base import BaseTestCase
 from .base import IS_CRDB
 from .base import IS_MYSQL
 from .base import IS_MYSQL_ADVANCED_FEATURES
+from .base import IS_ORACLE_MYSQL
 from .base import IS_POSTGRESQL
 from .base import IS_PSYCOPG3
 from .base import IS_SQLITE
@@ -4487,6 +4488,7 @@ class TestForUpdateIntegration(ModelTestCase):
         u = User.get()
         self.assertEqual(u.username, 'u1-x')
 
+    @skip_if(IS_ORACLE_MYSQL, 'MySQL: ER_UPDATE_TABLE_USED')
     def test_for_update_nested(self):
         User.insert_many([(u,) for u in 'abc']).execute()
         subq = User.select().where(User.username != 'b').for_update()
@@ -6254,6 +6256,7 @@ class TestUpdateIntegrationRegressions(ModelTestCase):
         self.assertEqual([u.username for u in users.clone()],
                          ['huey-cat-3', 'mickey-dog-2', 'zaizee-cat-0'])
 
+    @skip_if(IS_ORACLE_MYSQL, 'MySQL: cast-as-int / ER_UPDATE_TABLE_USED')
     def test_update_examples_2(self):
         SA = Sample.alias()
         subq = (SA
@@ -6920,6 +6923,7 @@ class TestQueryCountList(ModelTestCase):
 class TestModelSelectFromSubquery(ModelTestCase):
     requires = [User]
 
+    @skip_if(IS_ORACLE_MYSQL, 'MySQL requires VALUES ROW() syntax')
     def test_model_select_from_subquery(self):
         for i in range(5):
             User.create(username='u%s' % i)

@@ -4,6 +4,7 @@ from peewee import *
 from peewee import sqlite3
 
 from .base import IS_MYSQL
+from .base import IS_ORACLE_MYSQL
 from .base import IS_POSTGRESQL
 from .base import IS_SQLITE
 from .base import ModelTestCase
@@ -101,11 +102,10 @@ class TestValueMatrix(ModelTestCase):
         self.assertEqual(rows[0].ident, label)
 
     def test_value_matrix(self):
-        # MySQL (not MariaDB, which reports version >= 10) mangles
-        # supplementary-plane chars unless connected w/charset=utf8mb4.
-        skip_emoji = IS_MYSQL and db.server_version[0] < 10
         for label, value in self.VALUES:
-            if label == 'str_emoji' and skip_emoji:
+            if label == 'str_emoji' and IS_ORACLE_MYSQL:
+                # MySQL mangles supplementary-plane chars unless connected
+                # w/charset=utf8mb4.
                 continue
             with self.subTest(label=label):
                 self._check_storage(label, value)
@@ -606,12 +606,12 @@ class TestSQLShapes(ModelTestCase):
         elif IS_MYSQL:
             lower = sql.lower()
             self.assertIn('json_extract', lower)
-            if db.server_version[0] >= 10:
-                # MariaDB byte-compares extracts; JSON_COMPACT normalizes.
-                self.assertIn('json_compact', lower)
-            else:
+            if IS_ORACLE_MYSQL:
                 # MySQL has no JSON_COMPACT; CAST to its native json type.
                 self.assertIn('cast(', lower)
+            else:
+                # MariaDB byte-compares extracts; JSON_COMPACT normalizes.
+                self.assertIn('json_compact', lower)
 
     def test_extract_text_mode(self):
         sql, _ = self._sql(JM.select(JM.data['k'].as_text()))
@@ -650,11 +650,8 @@ class TestBulkUpdate(ModelTestCase):
 class TestSubqueryAssign(ModelTestCase):
     requires = [JM]
 
+    @skip_if(IS_ORACLE_MYSQL, 'MySQL: ER_UPDATE_TABLE_USED')
     def test_assign_via_subquery(self):
-        if IS_MYSQL and db.server_version[0] < 10:
-            # MySQL (not MariaDB) forbids reading the insert's target table
-            # from a scalar subquery (ER_UPDATE_TABLE_USED).
-            self.skipTest('not supported by MySQL')
         src = JM.create(data={'origin': True, 'n': 7})
         sub = JM.select(JM.data).where(JM.id == src.id)
         dst = JM.create(data=sub)

@@ -26,7 +26,7 @@ def db_loader(engine, name='peewee_test', db_class=None, **params):
         engine_aliases = {
             SqliteDatabase: ['sqlite', 'sqlite3'],
             CySqliteDatabase: ['cysqlite'],
-            MySQLDatabase: ['mysql'],
+            MySQLDatabase: ['mysql', 'mysql8'],
             PostgresqlDatabase: ['postgres', 'postgresql', 'psycopg3'],
             MySQLConnectorDatabase: ['mysqlconnector'],
             MariaDBConnectorDatabase: ['mariadb', 'maridbconnector'],
@@ -134,6 +134,7 @@ IS_SQLITE_37 = IS_SQLITE and sqlite3.sqlite_version_info >= (3, 37)
 IS_SQLITE_9 = IS_SQLITE and sqlite3.sqlite_version_info >= (3, 9)
 IS_MYSQL_ADVANCED_FEATURES = False
 IS_MYSQL_JSON = False
+IS_ORACLE_MYSQL = False
 if IS_MYSQL:
     db.connect()
     server_info = db.server_version
@@ -144,6 +145,7 @@ if IS_MYSQL:
     if server_info[0] >= 8 or ((5, 7) <= server_info[:2] <= (6, 0)):
         # Needs actual MySQL - not MariaDB.
         IS_MYSQL_JSON = True
+    IS_ORACLE_MYSQL = server_info[0] < 10  # MariaDB reports >= 10.
     db.close()
     if not IS_MYSQL_ADVANCED_FEATURES:
         logger.warning('MySQL too old to test certain advanced features.')

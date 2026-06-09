@@ -36,6 +36,7 @@ from playhouse.hybrid import *
 from .base import BaseTestCase
 from .base import IS_CRDB
 from .base import IS_MYSQL
+from .base import IS_ORACLE_MYSQL
 from .base import IS_POSTGRESQL
 from .base import IS_SQLITE
 from .base import ModelTestCase
@@ -2779,6 +2780,7 @@ class BaseNamesTest(ModelTestCase):
 
 class TestRegexp(BaseNamesTest):
     @skip_if(IS_SQLITE)
+    @skip_if(IS_ORACLE_MYSQL, 'MySQL 8 rejects REGEXP BINARY w/utf8mb4')
     def test_regexp_iregexp(self):
         users = [User.create(username=name) for name in ('n1', 'n2', 'n3')]
 

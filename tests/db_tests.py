@@ -33,6 +33,7 @@ from .base import BaseTestCase
 from .base import DatabaseTestCase
 from .base import IS_CRDB
 from .base import IS_MYSQL
+from .base import IS_ORACLE_MYSQL
 from .base import IS_POSTGRESQL
 from .base import IS_SQLITE
 from .base import ModelTestCase
@@ -493,6 +494,10 @@ class TestIntrospection(ModelTestCase):
     def test_get_views(self):
         def normalize_view_meta(view_meta):
             sql_ws_norm = re.sub(r'[\n\s]+', ' ', view_meta.sql.strip('; '))
+            if IS_ORACLE_MYSQL:
+                # MySQL 8 parenthesizes the where clause when it rewrites
+                # the view sql; MariaDB does not.
+                sql_ws_norm = sql_ws_norm.replace('(', '').replace(')', '')
             return view_meta.name, (sql_ws_norm
                                     .replace('`peewee_test`.', '')
                                     .replace('`viewtest`.', '')
