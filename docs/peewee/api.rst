@@ -3510,7 +3510,7 @@ Fields
      keys are overwritten; **nested objects are replaced wholesale**;
      ``null`` is stored as JSON null and does **not** delete the key.
 
-   Concrete example - same Python call, three different results:
+   Example:
 
    .. code-block:: python
 
@@ -3522,10 +3522,6 @@ Fields
       #   {'nested': {'a': 1, 'b': 99}}      ('k' deleted; nested merged)
       # Postgresql:
       #   {'k': None, 'nested': {'b': 99}}   ('k' kept as null; nested overwritten)
-
-   If you write portable code, prefer top-level key adds (where all three
-   agree) and avoid relying on either semantic for nested objects or null
-   deletion.
 
 
 .. class:: JSONPath
