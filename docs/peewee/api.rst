@@ -3775,8 +3775,15 @@ Fields
       .. note::
 
          Behavior when the path holds a non-array value diverges across
-         backends. SQLite and MySQL coerce the existing scalar into a
-         one-element array before appending; Postgresql raises an error.
+         backends:
+
+         * **SQLite** - silently leaves the document unchanged.
+         * **MySQL / MariaDB** - wraps the existing value into an array
+           before appending: ``{"a": 1}`` becomes ``{"a": [1, "x"]}``.
+         * **Postgresql** - silently leaves scalars unchanged, but
+           appending to an *object* inserts a literal ``"-1"`` key:
+           ``{"a": {"b": 1}}`` becomes ``{"a": {"b": 1, "-1": "x"}}``.
+
          Use only on values you know are arrays.
 
    .. method:: remove()
