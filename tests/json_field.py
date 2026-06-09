@@ -3,9 +3,6 @@ import json
 from peewee import *
 from peewee import sqlite3
 
-from playhouse.json_field import JSONField
-from playhouse.json_field import JSONPath
-
 from .base import IS_MYSQL
 from .base import IS_POSTGRESQL
 from .base import IS_SQLITE

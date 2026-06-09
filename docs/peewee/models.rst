@@ -183,6 +183,7 @@ Field Type              Sqlite              Postgresql          MySQL
 ``IPField``             integer             bigint              bigint
 ``BooleanField``        integer             boolean             bool
 ``BareField``           untyped             not supported       not supported
+``JSONField``           text (json)         jsonb               json
 ``ForeignKeyField``     integer             integer             integer
 =====================   =================   =================   =================
 
@@ -243,6 +244,8 @@ Special parameters
 +-----------------------------+------------------------------------------------+
 | :class:`DecimalField`       | ``max_digits``, ``decimal_places``,            |
 |                             | ``auto_round``, ``rounding``                   |
++-----------------------------+------------------------------------------------+
+| :class:`JSONField`          | ``loads``, ``dumps``                           |
 +-----------------------------+------------------------------------------------+
 | :class:`BareField`          | ``adapt``                                      |
 +-----------------------------+------------------------------------------------+
@@ -548,6 +551,218 @@ at least one event:
 :class:`TimestampField` stores a datetime as a Unix timestamp integer.
 The ``resolution`` parameter controls sub-second precision (default: seconds);
 ``utc=True`` instructs Peewee to treat stored values as UTC.
+
+.. _json-field:
+
+JSONField
+---------
+
+:class:`JSONField` works across SQLite (3.38+), Postgresql, and MySQL/MariaDB
+with a uniform API and a chainable :class:`JSONPath` for sub-element access.
+
+See :ref:`json-field-backend-specific` for the per-backend modules with
+additional engine-specific operators.
+
+.. code-block:: python
+
+   class Doc(db.Model):
+       data = JSONField(null=True)
+
+   Doc.create(data={
+       'name': 'huey',
+       'tags': ['cat', 'white', 'fluffy'],
+       'age': 14,
+       'profile': {'social': {'fb': 'huey.cat'}}})
+
+   # Read the whole document.
+   m = Doc.select().get()
+   m.data  # {'name': 'huey', 'tags': [...], 'profile': {...}}
+
+Path access uses ``__getitem__`` (chainable) or :meth:`~JSONField.path`
+to extract sub-elements. The result is a :class:`JSONPath` you can use in
+``SELECT``, ``WHERE``, ``ORDER BY``, etc.:
+
+.. code-block:: python
+
+   # Equivalent - both return a JSONPath.
+   Doc.data['profile']['social']['fb']
+   Doc.data.path('profile', 'social', 'fb')
+
+   # Filter rows by a nested value.
+   Doc.select().where(Doc.data['name'] == 'huey')
+   Doc.select().where(Doc.data['tags'][0] == 'cat')
+
+   # Pull out a sub-document.
+   for doc in Doc.select(Doc.data['profile'].alias('profile')):
+       print(doc.profile['fb'])  # 'huey.cat'
+
+Equality on a path is structural where the backend supports it (Postgresql
+``jsonb``, MySQL ``JSON``) and canonical-text byte-compare on SQLite. Lists,
+dictionaries, integers, booleans, and strings all work as right-hand-side
+values:
+
+.. code-block:: python
+
+   Doc.select().where(Doc.data['profile'] == {'social': {'fb': 'huey.cat'}})
+   Doc.select().where(Doc.data['tags'] == ['cat', 'white', 'fluffy'])
+   Doc.select().where(Doc.data['age'] == 14)
+
+For typed comparisons, ordering, or string operators on a path, see
+:ref:`typed access <json-field-typed-access>` and :ref:`text mode <json-field-text-mode>`
+below.
+
+.. _json-field-null-semantics:
+
+NULL semantics
+^^^^^^^^^^^^^^
+
+A JSON document has three distinct "absent" states, all of which collapse to
+Python ``None`` when extracted:
+
+1. **Column SQL ``NULL``** - ``data=None`` was stored.
+2. **Missing key** - the document doesn't contain the path being queried.
+3. **JSON ``null``** - the path resolves to a literal JSON ``null`` value
+   (e.g., ``data={'k': None}``).
+
+Path-level queries treat all three uniformly:
+
+.. code-block:: python
+
+   Doc.create(data={'k': 'value'})      # row A: key present, non-null
+   Doc.create(data={'k': None})         # row B: key present, JSON null
+   Doc.create(data={})                  # row C: key missing
+   Doc.create(data=None)                # row D: column SQL NULL
+
+   # Matches B, C, D (all three null-ish cases):
+   Doc.select().where(Doc.data['k'].is_null())
+   Doc.select().where(Doc.data['k'] == None)
+
+   # Matches A only:
+   Doc.select().where(Doc.data['k'].is_null(False))
+   Doc.select().where(Doc.data['k'] != None)
+
+Field-level NULL checks **only** match column SQL NULL:
+
+.. code-block:: python
+
+   # Matches D only (the column itself is NULL):
+   Doc.select().where(Doc.data.is_null())
+   Doc.select().where(Doc.data == None)
+
+If you need to distinguish JSON ``null`` from a missing key, drop down to
+the backend's ``JSON_TYPE`` / ``jsonb_typeof`` function:
+
+.. code-block:: python
+
+   # Postgresql
+   from peewee import fn
+   Doc.select().where(fn.jsonb_typeof(Doc.data['k']) == 'null')
+
+   # SQLite
+   Doc.select().where(fn.json_type(Doc.data, '$.k') == 'null')
+
+   # MySQL
+   Doc.select().where(fn.json_type(Doc.data['k']) == 'NULL')
+
+.. _json-field-text-mode:
+
+Text mode and typed casts
+^^^^^^^^^^^^^^^^^^^^^^^^^
+
+The default path mode returns the value in *JSON form* - JSON-encoded text
+(SQLite/MySQL) or a deserialized Python value via the driver (Postgresql).
+Equality, ordering, and ``in_`` work against this form.
+
+``.as_text()`` flips the path to *text mode*, returning the raw scalar text
+(``->>`` / ``JSON_UNQUOTE``). Text mode is appropriate for:
+
+* String comparisons against plain text columns (e.g., joins).
+* Pattern matching (``LIKE``, regex). The pattern operators auto-apply
+  ``as_text()`` so this is usually implicit.
+* Numeric or boolean comparison after an explicit cast (or use
+  :meth:`~JSONPath.as_int` / :meth:`~JSONPath.as_float`).
+
+.. code-block:: python
+
+   # Join a JSON-path value to a plain text column.
+   Doc.select().join(Tag, on=(Tag.name == Doc.data['tag'].as_text()))
+
+   # Pattern match (ilike is auto-text).
+   Doc.select().where(Doc.data['name'].ilike('h%'))
+
+   # Strict numeric comparison.
+   Doc.select().where(Doc.data['count'].as_int() > 10)
+
+Mutation
+^^^^^^^^
+
+The field and path expose a portable subset of atomic mutation primitives
+suitable for use inside ``UPDATE`` statements:
+
+============= ==================== ==================== =============================
+Method        On JSONField (root)  On JSONPath          Cross-backend?
+============= ==================== ==================== =============================
+``set(v)``    -                    yes                  yes
+``remove()``  -                    yes                  yes
+``length()``  yes                  yes                  yes (with caveats - see method)
+``update(v)`` yes                  -                    yes (**divergent semantics**)
+============= ==================== ==================== =============================
+
+.. code-block:: python
+
+   # Set a path (creates or replaces).
+   Doc.update(data=Doc.data['count'].set(99)).execute()
+
+   # Remove a path.
+   Doc.update(data=Doc.data['stale'].remove()).execute()
+
+   # Array length.
+   Doc.select(Doc.data['tags'].length())
+
+   # Document-level merge (see the warning above about divergence).
+   Doc.update(data=Doc.data.update({'last_seen': '2026-01-01'})).execute()
+
+For mutation patterns outside this subset (path-level update, ``insert``
+vs. ``replace`` semantics, ``json_each`` / ``jsonb_path_query``, etc.),
+either read-modify-save the row in Python:
+
+.. code-block:: python
+
+   doc = Doc.get_by_id(1)
+   doc.data['tags'].append('new')
+   doc.data['count'] = 5
+   doc.save()
+
+or drop down to ``fn.*`` directly:
+
+.. code-block:: python
+
+   from peewee import fn, Value
+
+   # SQLite
+   Doc.update(data=fn.json_set(Doc.data, '$.count', 99)).execute()
+
+   # Postgresql
+   Doc.update(data=fn.jsonb_set(Doc.data, '{count}', Value('99'))).execute()
+
+   # MySQL / MariaDB
+   Doc.update(data=fn.JSON_SET(Doc.data, '$.count', 99)).execute()
+
+.. _json-field-backend-specific:
+
+Backend-specific Modules
+^^^^^^^^^^^^^^^^^^^^^^^^
+
+This module is deliberately the portable subset. For engine-specific operators
+such as additional atomic mutation methods, ``jsonb`` operators, ``json_each``,
+``json_tree``, ``JSON_TABLE``, etc. use the corresponding playhouse module:
+
+* :class:`playhouse.postgres_ext.BinaryJSONField` - full ``jsonb`` operator
+  surface (``jsonb_path_query*``, etc.) plus the engine-specific mutation
+  helpers.
+* :class:`playhouse.sqlite_ext.JSONField` - SQLite-specific
+  ``replace`` / ``insert`` / ``append`` on the field and path, plus
+  ``children`` / ``tree`` for recursion via ``json_each`` and ``json_tree``.
 
 BitField and BigBitField
 ------------------------
