@@ -19,6 +19,7 @@ SKIP_PATHS = IS_SQLITE and not IS_SQLITE_38
 
 class JM(TestModel):
     data = JSONField(null=True)
+    ident = TextField(null=True)
 
 
 class TM(TestModel):
@@ -81,13 +82,14 @@ class TestValueMatrix(ModelTestCase):
 
     def _check_storage(self, label, value):
         JM.delete().execute()
-        JM.create(data=value)
-        got = JM.select().get().data
-        self.assertEqual(got, value,
+        JM.create(data=value, ident=label)
+        jm_db = JM.select().where(JM.ident == label).get()
+        stored = jm_db.data
+        self.assertEqual(stored, value,
             '[%s] storage round-trip value mismatch' % label)
-        self.assertIs(type(got), type(value),
+        self.assertIs(type(stored), type(value),
             '[%s] storage round-trip type mismatch: %s vs %s' % (
-                label, type(got).__name__, type(value).__name__))
+                label, type(stored).__name__, type(value).__name__))
 
     def _check_filter(self, label, value):
         # Find by equality with the same value.
@@ -95,6 +97,7 @@ class TestValueMatrix(ModelTestCase):
         self.assertEqual(len(rows), 1,
             '[%s] WHERE data == value did not match the stored row' % label)
         self.assertEqual(rows[0].data, value, '[%s] matched-row data drift' % label)
+        self.assertEqual(rows[0].ident, label)
 
     def test_value_matrix(self):
         for label, value in self.VALUES:
@@ -336,10 +339,6 @@ class TestCustomDumps(ModelTestCase):
             M.drop_table()
 
 
-# NULL trichotomy. Storage has three distinct "no value" states that all
-# collapse to Python None on extract: column SQL NULL, key absent, and
-# stored JSON null. The path-level == None / != None / .is_null() /
-# .is_null(False) should treat them uniformly.
 @skip_if(SKIP_PATHS, 'requires SQLite 3.38 or non-SQLite backend')
 class TestNullSemantics(ModelTestCase):
     requires = [JM]
@@ -348,8 +347,7 @@ class TestNullSemantics(ModelTestCase):
 
     def setUp(self):
         super(TestNullSemantics, self).setUp()
-        # Build the four storage states. `mark` is a side-channel so we can
-        # identify rows without depending on path semantics under test.
+
         self.r_present = JM.create(data={'k': 'v', 'mark': 1}).id
         if self.JSON_NULL_OK:
             self.r_json_null = JM.create(data={'k': None, 'mark': 2}).id
@@ -405,7 +403,6 @@ class TestNullSemantics(ModelTestCase):
         self.assertEqual(ids, sorted(expected))
 
     # Python value: all null-ish states collapse to None on extract.
-
     def test_extract_python_value(self):
         # Each row's data['k'] reads back as Python None for every null-ish
         # case, and as 'v' for the present row.
@@ -425,8 +422,6 @@ class TestNullSemantics(ModelTestCase):
         if self.JSON_NULL_OK:
             self.assertIsNone(rows[self.r_json_null].k)
 
-    # The trichotomy can be distinguished by dropping to fn.*. This isn't
-    # part of the field API — it's the documented escape hatch.
     def test_distinguish_missing_vs_json_null_via_fn(self):
         if not self.JSON_NULL_OK:
             self.skipTest('MySQL/MariaDB collapse json null at unquote')
@@ -623,7 +618,6 @@ class TestJoinOnJSONKey(ModelTestCase):
         ])
 
 
-# Mutation primitives — set / remove / length. All three backends.
 @skip_if(SKIP_PATHS, 'requires SQLite 3.38 or non-SQLite backend')
 class TestMutation(ModelTestCase):
     requires = [JM]
@@ -664,9 +658,6 @@ class TestMutation(ModelTestCase):
         self.assertEqual(L, 3)
 
 
-# insert() / replace() / append() — atomic mutation primitives that have a
-# single-call equivalent on every backend (insert is emulated on Postgres
-# via a CASE that distinguishes absent from stored JSON null).
 @skip_if(SKIP_PATHS, 'requires SQLite 3.38 or non-SQLite backend')
 class TestInsertReplaceAppend(ModelTestCase):
     requires = [JM]
@@ -682,7 +673,7 @@ class TestInsertReplaceAppend(ModelTestCase):
         self.assertEqual(JM.get_by_id(m.id).data, {'a': 1})
 
     def test_insert_existing_json_null_is_noop(self):
-        # A stored JSON null counts as "present" for insert — slot is
+        # A stored JSON null counts as "present" for insert, slot is
         # occupied, so insert() leaves it alone on every backend. The
         # Postgres CASE wrapper relies on `field -> 'k'` returning jsonb
         # 'null' (not SQL NULL) for stored JSON nulls so IS NULL is FALSE.
@@ -726,11 +717,6 @@ class TestInsertReplaceAppend(ModelTestCase):
         self.assertEqual(JM.get_by_id(m.id).data, ['a', 'b', 'c'])
 
 
-# update() semantics intentionally diverge:
-#   SQLite, MySQL/MariaDB: RFC-7396 deep merge (null values delete keys).
-#   PostgreSQL:            shallow `||` concat (nested keys are overwritten;
-#                          null values are stored, NOT deleted).
-# These tests pin the divergence so it's caught if either side regresses.
 @skip_if(SKIP_PATHS, 'requires SQLite 3.38 or non-SQLite backend')
 class TestUpdateDivergence(ModelTestCase):
     requires = [JM]
