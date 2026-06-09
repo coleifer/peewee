@@ -1,6 +1,7 @@
 import sys
 import unittest
 
+from peewee import NotSupportedError
 from peewee import OperationalError
 
 # Core modules.
@@ -32,7 +33,10 @@ from .dataset import *
 from .db_url import *
 from .extra_fields import *
 from .hybrid import *
-from .json_field import *
+try:
+    from .json_field import *
+except NotSupportedError:
+    print('Unable to import json_field tests, requires sqlite >= 3.38.')
 from .kv import *
 from .migrations import *
 try:

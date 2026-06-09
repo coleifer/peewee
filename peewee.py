@@ -6189,6 +6189,9 @@ class JSONPath(ColumnBase):
         return self._field.db_value(value)
 
     def _in_helper(self, op, rhs):
+        if isinstance(rhs, Node):
+            # Subqueries (or other nodes) pass through as-is.
+            return Expression(self, op, rhs)
         if self._as_text:
             return Expression(self, op, list(rhs))
         rhs = [r if isinstance(r, Node) else self._compare_value(r)

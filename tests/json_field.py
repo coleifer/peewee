@@ -235,6 +235,18 @@ class TestEquality(ModelTestCase):
         q = JM.select().where(JM.data['k'].in_(['v', 'xyz']))
         self.assertEqual(q.count(), 1)
 
+    def test_path_in_subquery(self):
+        sub = JM.select(JM.data['k'].as_text()).where(JM.data['n'] == 5)
+        q = JM.select().where(JM.data['k'].as_text().in_(sub))
+        self.assertEqual(q.count(), 1)
+
+        q = JM.select().where(JM.data['k'].as_text().not_in(sub))
+        self.assertEqual(q.count(), 1)
+
+        sub = JM.select(JM.data['k']).where(JM.data['n'] == 5)
+        q = JM.select().where(JM.data['k'].in_(sub))
+        self.assertEqual(q.count(), 1)
+
 
 @skip_if(SKIP_PATHS, 'requires SQLite 3.38 or non-SQLite backend')
 class TestContainerEquality(ModelTestCase):
