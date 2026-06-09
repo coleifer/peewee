@@ -4,7 +4,7 @@ from .base import TestModel
 
 
 # ---------------------------------------------------------------------------
-# Person / Note — basic FK relationship with indexes and nullable date field.
+# Person / Note - basic FK relationship with indexes and nullable date field.
 #
 # Person exercises: CharField fields, DateField with index and null=True,
 # compound unique index on (first, last). Used heavily in model_sql.py for
@@ -16,7 +16,7 @@ from .base import TestModel
 # tests.
 #
 # NOTE: db_tests.py and prefetch_tests.py define their own local Person
-# and Note models with different fields — those are intentionally separate.
+# and Note models with different fields - those are intentionally separate.
 # ---------------------------------------------------------------------------
 
 class Person(TestModel):
@@ -36,7 +36,7 @@ class Note(TestModel):
 
 
 # ---------------------------------------------------------------------------
-# Category — self-referential FK with non-integer primary key.
+# Category - self-referential FK with non-integer primary key.
 #
 # Exercises: ForeignKeyField('self'), CharField as primary_key, nullable
 # self-FK (parent=null for root nodes). This is the primary model for
@@ -50,7 +50,7 @@ class Category(TestModel):
 
 
 # ---------------------------------------------------------------------------
-# Relationship — multiple foreign keys to the same model.
+# Relationship - multiple foreign keys to the same model.
 #
 # Exercises: two ForeignKeyField columns pointing to the same model (Person),
 # with distinct backrefs. Tests multi-FK join resolution, delete cascading
@@ -63,7 +63,7 @@ class Relationship(TestModel):
 
 
 # ---------------------------------------------------------------------------
-# Register — minimal single-field model.
+# Register - minimal single-field model.
 #
 # Exercises: the simplest possible model (one IntegerField). Used as the
 # workhorse for transaction tests (transactions.py) where the test logic
@@ -76,14 +76,14 @@ class Register(TestModel):
 
 
 # ---------------------------------------------------------------------------
-# User / Account / Tweet / Favorite — social media graph.
+# User / Account / Tweet / Favorite - social media graph.
 #
 # This is the most heavily used model group in the test suite (~66 TestCase
 # classes reference User). It provides the canonical "has-many" and
 # "many-to-many-like" patterns.
 #
 # User exercises: CharField, explicit table_name override ('users'). The
-# explicit table_name is important — many SQL assertions reference "users"
+# explicit table_name is important - many SQL assertions reference "users"
 # rather than the default "user" that legacy_table_names=False would produce.
 #
 # Account exercises: nullable ForeignKeyField (user is optional). Tests
@@ -122,7 +122,7 @@ class Favorite(TestModel):
 
 
 # ---------------------------------------------------------------------------
-# Sample / SampleMeta — numeric aggregation models.
+# Sample / SampleMeta - numeric aggregation models.
 #
 # Sample exercises: IntegerField + FloatField with default. The primary model
 # for window function tests (partition by counter, aggregate over value),
@@ -143,7 +143,7 @@ class SampleMeta(TestModel):
 
 
 # ---------------------------------------------------------------------------
-# A / B / C — three-level FK chain.
+# A / B / C - three-level FK chain.
 #
 # Exercises: deep join traversal (A -> B -> C) through a linear FK chain.
 # Each model has a TextField and a FK to the previous level. Used in
@@ -151,7 +151,7 @@ class SampleMeta(TestModel):
 # join integration tests, and in schema.py for DDL ordering tests.
 #
 # NOTE: prefetch_tests.py defines its own A/B/C with different fields
-# and additional FK to an X model — those are intentionally separate.
+# and additional FK to an X model - those are intentionally separate.
 # ---------------------------------------------------------------------------
 
 class A(TestModel):
@@ -165,7 +165,7 @@ class C(TestModel):
 
 
 # ---------------------------------------------------------------------------
-# Emp — ON CONFLICT / upsert testing with unique constraint.
+# Emp - ON CONFLICT / upsert testing with unique constraint.
 #
 # Exercises: CharField with unique=True (empno), compound unique index on
 # (first, last). This is the primary model for REPLACE and ON CONFLICT
@@ -186,7 +186,7 @@ class Emp(TestModel):
 
 
 # ---------------------------------------------------------------------------
-# OCTest — ON CONFLICT with atomic update expressions.
+# OCTest - ON CONFLICT with atomic update expressions.
 #
 # Exercises: unique CharField (a) with IntegerField defaults. Designed for
 # testing ON CONFLICT DO UPDATE with arithmetic expressions (e.g.,
@@ -201,7 +201,7 @@ class OCTest(TestModel):
 
 
 # ---------------------------------------------------------------------------
-# UKVP — ON CONFLICT with partial unique index.
+# UKVP - ON CONFLICT with partial unique index.
 #
 # Exercises: partial index (unique on (key, value) WHERE extra > 1). This
 # tests the advanced PostgreSQL/SQLite pattern where ON CONFLICT must
@@ -224,7 +224,7 @@ class UKVP(TestModel):
 
 
 # ---------------------------------------------------------------------------
-# DfltM — default value variants.
+# DfltM - default value variants.
 #
 # Exercises three kinds of field defaults: static value (dflt1=1), callable
 # default (dflt2=lambda: 2), and nullable with no default (dfltn). Used in

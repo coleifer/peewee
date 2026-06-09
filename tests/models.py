@@ -6969,7 +6969,7 @@ class TestSafePythonValueFailure(ModelTestCase):
         def bad_converter(value):
             raise ValueError('bad')
         safe = safe_python_value(bad_converter)
-        # Should NOT raise — returns the raw value instead.
+        # Should NOT raise - returns the raw value instead.
         result = safe('hello')
         self.assertEqual(result, 'hello')
 

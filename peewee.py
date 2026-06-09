@@ -3187,7 +3187,7 @@ class SqliteJSONMethods(BaseJSONMethods):
 
     def insert(self, field, keys, value):
         # json_insert is a no-op when the path already exists (including
-        # when it exists with stored JSON null) — matches the "only-if-
+        # when it exists with stored JSON null) - matches the "only-if-
         # missing" semantic on every backend.
         return fn.json_insert(
             field,
@@ -3276,7 +3276,7 @@ class PostgresqlJSONMethods(BaseJSONMethods):
     def insert(self, field, keys, value):
         # Postgres has no single-call equivalent of json_insert. Wrap
         # jsonb_set in a CASE that no-ops when the path resolves to anything
-        # other than SQL NULL — `field -> 'k'` returns SQL NULL only for
+        # other than SQL NULL - `field -> 'k'` returns SQL NULL only for
         # absent keys; a stored JSON null comes back as jsonb 'null' which
         # is NOT SQL NULL, so this matches json_insert / JSON_INSERT.
         return Case(None, [
@@ -6151,7 +6151,7 @@ class JSONPath(ColumnBase):
 
     def is_null(self, is_null=True):
         # Default-mode IS NULL on a path needs to catch SQL NULL, missing key,
-        # and stored JSON null — same three cases ``== None`` matches.
+        # and stored JSON null - same three cases ``== None`` matches.
         is_op = OP.IS if is_null else OP.IS_NOT
         return self._field._compare(self, OP.EQ, is_op, None, self._as_text)
 
@@ -6324,7 +6324,7 @@ class JSONField(FieldDatabaseHook, Field):
 
     def update(self, value):
         # RFC-7396 deep merge on SQLite/MySQL/MariaDB; shallow `||` concat on
-        # PostgreSQL. Same call, different semantics — see the docs.
+        # PostgreSQL. Same call, different semantics - see the docs.
         return self._helper.update(self, value)
 
     def contains(self, value):

@@ -4,7 +4,7 @@ inheritance, FK-to-non-PK, FK-as-PK, and multiple M2M on same tables.
 
 Test case ordering:
 
-* Core M2M operations (User/Note — the largest test class)
+* Core M2M operations (User/Note - the largest test class)
 * Backref behavior (Student/Course)
 * Inheritance of M2M through models
 * FK-to-non-PK M2M (Color/Logo with non-PK FK)

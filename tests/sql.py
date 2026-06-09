@@ -46,7 +46,7 @@ from .base import __sql__
 
 # ---------------------------------------------------------------------------
 # Module-level Table objects shared across test cases in this module.
-# These are Table instances (not Model classes) — they test the low-level
+# These are Table instances (not Model classes) - they test the low-level
 # query builder without Model metaclass involvement.
 # ---------------------------------------------------------------------------
 User = Table('users')

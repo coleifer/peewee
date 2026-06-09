@@ -262,7 +262,7 @@ case with `aiosqlite <https://github.com/omnilib/aiosqlite/blob/main/aiosqlite/c
 Additionally, SQLite only allows one writer at a time, so while using an async
 wrapper may keep things responsive while waiting to obtain the write lock,
 writes will not occur "faster", the bottleneck has merely been moved.
-Conversely, if you don’t have that much load, the async wrapper adds complexity
+Conversely, if you don't have that much load, the async wrapper adds complexity
 and overhead for no measurable benefit.
 
 To use SQLite in an async environment anyways, it is strongly recommended to

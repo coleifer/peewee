@@ -486,7 +486,7 @@ class TestPooledDatabase(BaseTestCase):
         # Give the thread a moment to start waiting.
         time.sleep(0.05)
 
-        # Return conn 1 to the pool — should wake the waiting thread.
+        # Return conn 1 to the pool - should wake the waiting thread.
         db.close()
 
         t.join(timeout=2)
