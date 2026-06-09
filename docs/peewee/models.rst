@@ -699,19 +699,34 @@ Mutation
 The field and path expose a portable subset of atomic mutation primitives
 suitable for use inside ``UPDATE`` statements:
 
-============= ==================== ==================== =============================
-Method        On JSONField (root)  On JSONPath          Cross-backend?
-============= ==================== ==================== =============================
-``set(v)``    -                    yes                  yes
-``remove()``  -                    yes                  yes
-``length()``  yes                  yes                  yes (with caveats - see method)
-``update(v)`` yes                  -                    yes (**divergent semantics**)
-============= ==================== ==================== =============================
+============== ==================== ==================== =============================
+Method         On JSONField (root)  On JSONPath          Cross-backend?
+============== ==================== ==================== =============================
+``set(v)``     -                    yes                  yes
+``insert(v)``  -                    yes                  yes
+``replace(v)`` -                    yes                  yes
+``append(v)``  yes                  yes                  yes
+``remove()``   -                    yes                  yes
+``length()``   yes                  yes                  yes (with caveats - see method)
+``update(v)``  yes                  -                    yes (**divergent semantics**)
+============== ==================== ==================== =============================
 
 .. code-block:: python
 
    # Set a path (creates or replaces).
    Doc.update(data=Doc.data['count'].set(99)).execute()
+
+   # Insert at a path only if it is currently absent (no-op when present).
+   Doc.update(data=Doc.data['created_at'].insert(now())).execute()
+
+   # Replace a path only if it exists (no-op when absent).
+   Doc.update(data=Doc.data['count'].replace(99)).execute()
+
+   # Append to an array at a path.
+   Doc.update(data=Doc.data['tags'].append('new')).execute()
+
+   # Append to the root when the document itself is an array.
+   Doc.update(data=Doc.data.append('new')).execute()
 
    # Remove a path.
    Doc.update(data=Doc.data['stale'].remove()).execute()
@@ -722,9 +737,9 @@ Method        On JSONField (root)  On JSONPath          Cross-backend?
    # Document-level merge (see the warning above about divergence).
    Doc.update(data=Doc.data.update({'last_seen': '2026-01-01'})).execute()
 
-For mutation patterns outside this subset (path-level update, ``insert``
-vs. ``replace`` semantics, ``json_each`` / ``jsonb_path_query``, etc.),
-either read-modify-save the row in Python:
+For mutation patterns outside this subset (path-level update,
+``json_each`` / ``jsonb_path_query``, etc.), either read-modify-save the row
+in Python:
 
 .. code-block:: python
 
@@ -754,15 +769,14 @@ Backend-specific Modules
 ^^^^^^^^^^^^^^^^^^^^^^^^
 
 This module is deliberately the portable subset. For engine-specific operators
-such as additional atomic mutation methods, ``jsonb`` operators, ``json_each``,
-``json_tree``, ``JSON_TABLE``, etc. use the corresponding playhouse module:
+such as ``jsonb`` operators, ``json_each``, ``json_tree``, ``JSON_TABLE``,
+etc. use the corresponding playhouse module:
 
 * :class:`playhouse.postgres_ext.BinaryJSONField` - full ``jsonb`` operator
   surface (``jsonb_path_query*``, etc.) plus the engine-specific mutation
   helpers.
-* :class:`playhouse.sqlite_ext.JSONField` - SQLite-specific
-  ``replace`` / ``insert`` / ``append`` on the field and path, plus
-  ``children`` / ``tree`` for recursion via ``json_each`` and ``json_tree``.
+* :class:`playhouse.sqlite_ext.JSONField` - ``children`` / ``tree`` for
+  recursion via ``json_each`` and ``json_tree``.
 
 BitField and BigBitField
 ------------------------

@@ -3462,6 +3462,15 @@ Fields
       Return the array length of the root document. See
       :meth:`JSONPath.length` for the per-backend behavior on non-arrays.
 
+   .. method:: append(value)
+
+      Return an UPDATE-clause expression that appends ``value`` to the root
+      array. See :meth:`JSONPath.append` for the per-backend SQL and notes.
+
+      .. code-block:: python
+
+         Doc.update(data=Doc.data.append('new')).execute()
+
    .. method:: update(value)
 
       Return an UPDATE-clause expression that merges ``value`` into the root
@@ -3728,6 +3737,51 @@ Fields
          **Missing intermediate keys silently no-op on all three backends.**
          ``data['a']['b']['c'].set(1)`` on ``data={}`` returns ``data``
          unchanged. The leaf is created only when the parent exists.
+
+   .. method:: insert(value)
+
+      Return an UPDATE-clause expression that writes ``value`` at this path
+      **only if the path is currently absent**. A stored JSON ``null``
+      counts as "present" and is not overwritten. Uses ``json_insert`` on
+      SQLite and ``JSON_INSERT`` on MySQL / MariaDB; emulated on Postgresql
+      via ``CASE WHEN (field -> 'k') IS NULL THEN jsonb_set(...) ELSE field
+      END`` (correct because ``->`` returns SQL ``NULL`` for absent keys
+      and jsonb ``'null'`` for stored JSON nulls).
+
+      .. code-block:: python
+
+         # Initialize a counter only on rows that don't have one yet.
+         Doc.update(data=Doc.data['count'].insert(0)).execute()
+
+   .. method:: replace(value)
+
+      Return an UPDATE-clause expression that writes ``value`` at this path
+      **only if the path already exists**. Uses ``json_replace`` on SQLite,
+      ``jsonb_set(..., create_missing=false)`` on Postgresql, and
+      ``JSON_REPLACE`` on MySQL / MariaDB.
+
+      .. code-block:: python
+
+         # Update existing counters; leave rows without one untouched.
+         Doc.update(data=Doc.data['count'].replace(99)).execute()
+
+   .. method:: append(value)
+
+      Return an UPDATE-clause expression that appends ``value`` to the
+      array at this path. Uses ``json_set(field, '$.path[#]', value)`` on
+      SQLite, ``jsonb_insert`` with a trailing ``'-1'`` path element on
+      Postgresql, and ``JSON_ARRAY_APPEND`` on MySQL / MariaDB.
+
+      .. code-block:: python
+
+         Doc.update(data=Doc.data['tags'].append('python')).execute()
+
+      .. note::
+
+         Behavior when the path holds a non-array value diverges across
+         backends. SQLite and MySQL coerce the existing scalar into a
+         one-element array before appending; Postgresql raises an error.
+         Use only on values you know are arrays.
 
    .. method:: remove()
 

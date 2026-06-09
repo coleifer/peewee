@@ -3103,7 +3103,7 @@ class BaseJSONMethods(object):
         return reader
 
     @staticmethod
-    def _path(keys):
+    def _path(keys, suffix=''):
         parts = ['$']
         for k in keys:
             if isinstance(k, int):
@@ -3111,6 +3111,7 @@ class BaseJSONMethods(object):
             else:
                 k = str(k).replace('\\', '\\\\').replace('"', '\\"')
                 parts.append('."%s"' % k)
+        parts.append(suffix)
         return Value(''.join(parts), converter=False)
 
     def extract(self, field, keys):
@@ -3125,6 +3126,12 @@ class BaseJSONMethods(object):
         raise NotImplementedError
 
     def set(self, field, keys, value):
+        raise NotImplementedError
+    def insert(self, field, keys, value):
+        raise NotImplementedError
+    def replace(self, field, keys, value):
+        raise NotImplementedError
+    def append(self, field, keys, value):
         raise NotImplementedError
     def remove(self, field, keys):
         raise NotImplementedError
@@ -3183,6 +3190,29 @@ class SqliteJSONMethods(BaseJSONMethods):
         return fn.json_set(
             field,
             self._path(keys),
+            self._wrap_value(field, value))
+
+    def insert(self, field, keys, value):
+        # json_insert is a no-op when the path already exists (including
+        # when it exists with stored JSON null) — matches the "only-if-
+        # missing" semantic on every backend.
+        return fn.json_insert(
+            field,
+            self._path(keys),
+            self._wrap_value(field, value))
+
+    def replace(self, field, keys, value):
+        # json_replace is a no-op when the path is missing.
+        return fn.json_replace(
+            field,
+            self._path(keys),
+            self._wrap_value(field, value))
+
+    def append(self, field, keys, value):
+        # SQLite's '$.path[#]' target means "append after the last element."
+        return fn.json_set(
+            field,
+            self._path(keys, '[#]'),
             self._wrap_value(field, value))
 
     def remove(self, field, keys):
@@ -3260,6 +3290,35 @@ class PostgresqlJSONMethods(BaseJSONMethods):
             self._jsonb_wrap(field, value),
             True)
 
+    def insert(self, field, keys, value):
+        # Postgres has no single-call equivalent of json_insert. Wrap
+        # jsonb_set in a CASE that no-ops when the path resolves to anything
+        # other than SQL NULL — `field -> 'k'` returns SQL NULL only for
+        # absent keys; a stored JSON null comes back as jsonb 'null' which
+        # is NOT SQL NULL, so this matches json_insert / JSON_INSERT.
+        return Case(None, [
+            (self.extract(field, keys).is_null(),
+             fn.jsonb_set(field, self._path_array(keys),
+                          self._jsonb_wrap(field, value), True))
+        ], field)
+
+    def replace(self, field, keys, value):
+        # jsonb_set with create_missing=False is a no-op on absent paths.
+        return fn.jsonb_set(
+            field,
+            self._path_array(keys),
+            self._jsonb_wrap(field, value),
+            False)
+
+    def append(self, field, keys, value):
+        # '-1' as the trailing path element + insert_after=True means
+        # "insert after the last array element."
+        return fn.jsonb_insert(
+            field,
+            self._path_array(list(keys) + ['-1']),
+            self._jsonb_wrap(field, value),
+            True)
+
     def remove(self, field, keys):
         return Expression(field, '#-', self._path_array(keys))
 
@@ -3330,6 +3389,21 @@ class MySQLJSONMethods(BaseJSONMethods):
     def set(self, field, keys, value):
         return fn.JSON_SET(field, self._path(keys),
                            self._json_value(field, value))
+
+    def insert(self, field, keys, value):
+        # JSON_INSERT is a no-op when the path already exists (including
+        # when it exists with stored JSON null).
+        return fn.JSON_INSERT(field, self._path(keys),
+                              self._json_value(field, value))
+
+    def replace(self, field, keys, value):
+        # JSON_REPLACE is a no-op when the path is missing.
+        return fn.JSON_REPLACE(field, self._path(keys),
+                               self._json_value(field, value))
+
+    def append(self, field, keys, value):
+        return fn.JSON_ARRAY_APPEND(field, self._path(keys),
+                                    self._json_value(field, value))
 
     def remove(self, field, keys):
         return fn.JSON_REMOVE(field, self._path(keys))
@@ -6124,6 +6198,15 @@ class JSONPath(ColumnBase):
     def set(self, value):
         return self._field._helper.set(self._field, self._keys, value)
 
+    def insert(self, value):
+        return self._field._helper.insert(self._field, self._keys, value)
+
+    def replace(self, value):
+        return self._field._helper.replace(self._field, self._keys, value)
+
+    def append(self, value):
+        return self._field._helper.append(self._field, self._keys, value)
+
     def remove(self):
         return self._field._helper.remove(self._field, self._keys)
 
@@ -6214,6 +6297,10 @@ class JSONField(FieldDatabaseHook, Field):
 
     def length(self):
         return self._helper.length(self, ())
+
+    def append(self, value):
+        # Append to the root document, e.g. when it stores a JSON array.
+        return self._helper.append(self, (), value)
 
     def update(self, value):
         # RFC-7396 deep merge on SQLite/MySQL/MariaDB; shallow `||` concat on

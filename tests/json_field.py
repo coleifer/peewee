@@ -664,6 +664,68 @@ class TestMutation(ModelTestCase):
         self.assertEqual(L, 3)
 
 
+# insert() / replace() / append() — atomic mutation primitives that have a
+# single-call equivalent on every backend (insert is emulated on Postgres
+# via a CASE that distinguishes absent from stored JSON null).
+@skip_if(SKIP_PATHS, 'requires SQLite 3.38 or non-SQLite backend')
+class TestInsertReplaceAppend(ModelTestCase):
+    requires = [JM]
+
+    def test_insert_missing(self):
+        m = JM.create(data={'a': 1})
+        JM.update(data=JM.data['new'].insert(99)).where(JM.id == m.id).execute()
+        self.assertEqual(JM.get_by_id(m.id).data, {'a': 1, 'new': 99})
+
+    def test_insert_existing_is_noop(self):
+        m = JM.create(data={'a': 1})
+        JM.update(data=JM.data['a'].insert(99)).where(JM.id == m.id).execute()
+        self.assertEqual(JM.get_by_id(m.id).data, {'a': 1})
+
+    def test_insert_existing_json_null_is_noop(self):
+        # A stored JSON null counts as "present" for insert — slot is
+        # occupied, so insert() leaves it alone on every backend. The
+        # Postgres CASE wrapper relies on `field -> 'k'` returning jsonb
+        # 'null' (not SQL NULL) for stored JSON nulls so IS NULL is FALSE.
+        m = JM.create(data={'a': None})
+        JM.update(data=JM.data['a'].insert(99)).where(JM.id == m.id).execute()
+        self.assertEqual(JM.get_by_id(m.id).data, {'a': None})
+
+    def test_insert_container(self):
+        m = JM.create(data={'a': 1})
+        JM.update(data=JM.data['new'].insert({'b': 2})).where(JM.id == m.id).execute()
+        self.assertEqual(JM.get_by_id(m.id).data, {'a': 1, 'new': {'b': 2}})
+
+    def test_replace_existing(self):
+        m = JM.create(data={'a': 1})
+        JM.update(data=JM.data['a'].replace(99)).where(JM.id == m.id).execute()
+        self.assertEqual(JM.get_by_id(m.id).data, {'a': 99})
+
+    def test_replace_missing_is_noop(self):
+        m = JM.create(data={'a': 1})
+        JM.update(data=JM.data['new'].replace(99)).where(JM.id == m.id).execute()
+        self.assertEqual(JM.get_by_id(m.id).data, {'a': 1})
+
+    def test_replace_container(self):
+        m = JM.create(data={'a': 1})
+        JM.update(data=JM.data['a'].replace({'b': 2})).where(JM.id == m.id).execute()
+        self.assertEqual(JM.get_by_id(m.id).data, {'a': {'b': 2}})
+
+    def test_append_path(self):
+        m = JM.create(data={'tags': ['a', 'b']})
+        JM.update(data=JM.data['tags'].append('c')).where(JM.id == m.id).execute()
+        self.assertEqual(JM.get_by_id(m.id).data, {'tags': ['a', 'b', 'c']})
+
+    def test_append_container(self):
+        m = JM.create(data={'items': [1]})
+        JM.update(data=JM.data['items'].append({'k': 'v'})).where(JM.id == m.id).execute()
+        self.assertEqual(JM.get_by_id(m.id).data, {'items': [1, {'k': 'v'}]})
+
+    def test_append_root(self):
+        m = JM.create(data=['a', 'b'])
+        JM.update(data=JM.data.append('c')).where(JM.id == m.id).execute()
+        self.assertEqual(JM.get_by_id(m.id).data, ['a', 'b', 'c'])
+
+
 # update() semantics intentionally diverge:
 #   SQLite, MySQL/MariaDB: RFC-7396 deep merge (null values delete keys).
 #   PostgreSQL:            shallow `||` concat (nested keys are overwritten;
