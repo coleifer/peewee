@@ -3102,6 +3102,10 @@ class BaseJSONMethods(object):
             return value
         return reader
 
+    def compare_value(self, field, value):
+        # Canonicalize a value for comparison with the field or a path.
+        return field.db_value(value)
+
     @staticmethod
     def _path(keys, suffix=''):
         parts = ['$']
@@ -3351,18 +3355,40 @@ class PostgresqlJSONMethods(BaseJSONMethods):
         lhs = self.extract(field, keys)
         return Expression(lhs, '?|', AsIs(list(key_list), False))
 
+class _MySQLJSONValue(ColumnBase):
+    # MySQL and MariaDB share no SQL for json-marking a value: MariaDB
+    # needs JSON_COMPACT (it has no CAST AS JSON), MySQL needs CAST (it has
+    # no JSON_COMPACT). Flavor is keyed off the server version when the SQL
+    # is generated, as it is unknown until connected (assume MariaDB).
+    def __init__(self, database, node, compact=True):
+        super(_MySQLJSONValue, self).__init__()
+        self.database = database
+        self.node = node
+        self.compact = compact  # Normalize w/JSON_COMPACT (MariaDB only)?
+
+    def __sql__(self, ctx):
+        version = self.database.server_version
+        if version and version[0] < 10:  # MySQL reports 5.x / 8.x / 9.x.
+            return ctx.sql(Cast(self.node, 'JSON'))
+        return ctx.sql(fn.JSON_COMPACT(self.node) if self.compact
+                       else self.node)
+
 class MySQLJSONMethods(BaseJSONMethods):
+    def _as_json(self, node, compact=True):
+        return _MySQLJSONValue(self.database, node, compact)
+
     def make_value_wrapper(self, dumps):
-        # MySQL and MariaDB accept json-encoded str.
+        # Raw json-encoded str on MariaDB; MySQL gets a CAST to json.
         def wrapper(value):
-            return Value(dumps(value), converter=False)
+            return self._as_json(
+                Value(dumps(value), converter=False), compact=False)
         return wrapper
 
     def extract(self, field, keys):
         if not keys:
             return field
-        # json_compact() is needed to normalize on MariaDB.
-        return fn.json_compact(fn.json_extract(field, self._path(keys)))
+        # Normalized so it compares cleanly against compare_value().
+        return self._as_json(fn.json_extract(field, self._path(keys)))
 
     def extract_text(self, field, keys):
         if not keys:
@@ -3377,14 +3403,20 @@ class MySQLJSONMethods(BaseJSONMethods):
         return None
 
     def _json_value(self, field, value):
-        # Sending json-encoded text only works for scalars. dict/list need
-        # fn.json_compact() to be parsed as JSON, and `None` needs to be
-        # stringified as 'null' (MySQL treats NULL in json_set() as clear).
-        if value is None:
-            return fn.JSON_COMPACT(Value('null', converter=False))
-        if isinstance(value, (dict, list)):
-            return fn.JSON_COMPACT(Value(field._dumps(value), converter=False))
+        # Sending json-encoded text only works for scalars: containers and
+        # the json 'null' must be marked as documents (MySQL treats SQL
+        # NULL in json_set() as "delete this path").
+        if value is None or isinstance(value, (dict, list)):
+            return self._as_json(
+                Value(field._dumps(value), converter=False))
         return Value(value, converter=False)
+
+    def compare_value(self, field, value):
+        # Mark the rhs as json so comparison against extract() works - raw
+        # dumps() text matches neither flavor.
+        if value is None or isinstance(value, Node):
+            return value
+        return self._as_json(Value(field._dumps(value), converter=False))
 
     def set(self, field, keys, value):
         return fn.JSON_SET(field, self._path(keys),
@@ -6150,11 +6182,17 @@ class JSONPath(ColumnBase):
 
     __hash__ = object.__hash__
 
+    def _compare_value(self, value):
+        helper = self._field._helper
+        if helper is not None:
+            return helper.compare_value(self._field, value)
+        return self._field.db_value(value)
+
     def _in_helper(self, op, rhs):
         if self._as_text:
             return Expression(self, op, list(rhs))
-        field = self._field
-        rhs = [r if isinstance(r, Node) else field.db_value(r) for r in rhs]
+        rhs = [r if isinstance(r, Node) else self._compare_value(r)
+               for r in rhs]
         return Expression(self, op, rhs)
     def in_(self, rhs):
         return self._in_helper(OP.IN, rhs)
@@ -6165,7 +6203,7 @@ class JSONPath(ColumnBase):
         # Make RHS canonical for structural compare.
         if self._as_text or isinstance(rhs, Node):
             return Expression(self, op, rhs)
-        return Expression(self, op, self._field.db_value(rhs))
+        return Expression(self, op, self._compare_value(rhs))
 
     def __lt__(self, rhs): return self._cmp(OP.LT, rhs)
     def __le__(self, rhs): return self._cmp(OP.LTE, rhs)
@@ -6174,9 +6212,9 @@ class JSONPath(ColumnBase):
     def between(self, lo, hi):
         if not self._as_text:
             if not isinstance(lo, Node):
-                lo = self._field.db_value(lo)
+                lo = self._compare_value(lo)
             if not isinstance(hi, Node):
-                hi = self._field.db_value(hi)
+                hi = self._compare_value(hi)
         return super(JSONPath, self).between(lo, hi)
 
     def like(self, rhs):
@@ -6287,7 +6325,11 @@ class JSONField(FieldDatabaseHook, Field):
             return Expression(lhs, is_op, None)
         if as_text or isinstance(rhs, Node):
             return Expression(lhs, eq_op, rhs)
-        return Expression(lhs, eq_op, self.db_value(rhs))
+        if isinstance(lhs, JSONPath) and self._helper is not None:
+            rhs = self._helper.compare_value(self, rhs)
+        else:
+            rhs = self.db_value(rhs)
+        return Expression(lhs, eq_op, rhs)
 
     def __eq__(self, rhs):
         return self._compare(self, OP.EQ, OP.IS, rhs, False)

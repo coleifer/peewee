@@ -40,7 +40,8 @@ class TestValueMatrix(ModelTestCase):
         ('str_single_quotes',  "with 'single' quotes"),
         ('str_double_quotes',  'with "double" quotes'),
         ('str_specials',       'newlines\nand\ttabs\\and\\backslashes'),
-        ('str_unicode',        'unicode héllo \U0001f30d 漢字'),
+        ('str_unicode',        'unicode héllo ☃ 漢字'),
+        ('str_emoji',          'emoji \U0001f30d'),  # Supplementary plane.
         ('str_json_like',      '{"k": 1}'),  # must NOT auto-parse
         ('str_long',           'x' * 10000),
         # Numbers.
@@ -100,7 +101,12 @@ class TestValueMatrix(ModelTestCase):
         self.assertEqual(rows[0].ident, label)
 
     def test_value_matrix(self):
+        # MySQL (not MariaDB, which reports version >= 10) mangles
+        # supplementary-plane chars unless connected w/charset=utf8mb4.
+        skip_emoji = IS_MYSQL and db.server_version[0] < 10
         for label, value in self.VALUES:
+            if label == 'str_emoji' and skip_emoji:
+                continue
             with self.subTest(label=label):
                 self._check_storage(label, value)
                 self._check_filter(label, value)
@@ -228,6 +234,46 @@ class TestEquality(ModelTestCase):
 
         q = JM.select().where(JM.data['k'].in_(['v', 'xyz']))
         self.assertEqual(q.count(), 1)
+
+
+@skip_if(SKIP_PATHS, 'requires SQLite 3.38 or non-SQLite backend')
+class TestContainerEquality(ModelTestCase):
+    requires = [JM]
+
+    def test_path_eq_dict(self):
+        JM.create(data={'k': {'a': 1, 'b': [1, 2]}}, ident='t')
+        JM.create(data={'k': {'a': 2}})
+        q = JM.select().where(JM.data['k'] == {'a': 1, 'b': [1, 2]})
+        self.assertEqual([r.ident for r in q], ['t'])
+
+    def test_path_eq_list(self):
+        JM.create(data={'tags': ['x', 'y']}, ident='t')
+        JM.create(data={'tags': ['x']})
+        q = JM.select().where(JM.data['tags'] == ['x', 'y'])
+        self.assertEqual([r.ident for r in q], ['t'])
+
+    def test_nested_path_eq_dict(self):
+        JM.create(data={'a': {'b': {'c': 1, 'd': [1, 2]}}}, ident='t')
+        q = JM.select().where(JM.data['a']['b'] == {'c': 1, 'd': [1, 2]})
+        self.assertEqual([r.ident for r in q], ['t'])
+
+    def test_path_eq_after_mutation(self):
+        # Mutation ops rewrite the document server-side, so the stored text
+        # no longer carries the original dumps() formatting - equality must
+        # not depend on it surviving (MariaDB byte-compares text).
+        JM.create(data={'k': 'placeholder'}, ident='t')
+        JM.update(data=JM.data['k'].set({'a': 1, 'b': [2, 3]})).execute()
+        q = JM.select().where(JM.data['k'] == {'a': 1, 'b': [2, 3]})
+        self.assertEqual([r.ident for r in q], ['t'])
+
+    def test_path_in_containers(self):
+        JM.create(data={'k': {'a': 1}}, ident='t1')
+        JM.create(data={'k': {'a': 2}}, ident='t2')
+        JM.create(data={'k': {'a': 3}})
+        q = (JM.select()
+             .where(JM.data['k'].in_([{'a': 1}, {'a': 2}]))
+             .order_by(JM.ident))
+        self.assertEqual([r.ident for r in q], ['t1', 't2'])
 
 
 @skip_if(SKIP_PATHS, 'requires SQLite 3.38 or non-SQLite backend')
@@ -484,8 +530,10 @@ class TestAsTextDeep(ModelTestCase):
         self.assertEqual(n, 2)
 
     def test_text_then_cast(self):
+        # MySQL spells the integer cast-type SIGNED (MariaDB accepts both).
+        cast_type = 'signed' if IS_MYSQL else 'integer'
         n = (JM.select()
-             .where(JM.data['count'].as_text().cast('integer') > 10).count())
+             .where(JM.data['count'].as_text().cast(cast_type) > 10).count())
         self.assertEqual(n, 2)
 
     def test_ordering(self):
@@ -545,10 +593,13 @@ class TestSQLShapes(ModelTestCase):
             self.assertIn('k', params)
         elif IS_MYSQL:
             lower = sql.lower()
-            # MariaDB needs JSON_COMPACT to normalize the extract for
-            # byte-compare; dropping it silently breaks path equality.
-            self.assertIn('json_compact', lower)
             self.assertIn('json_extract', lower)
+            if db.server_version[0] >= 10:
+                # MariaDB byte-compares extracts; JSON_COMPACT normalizes.
+                self.assertIn('json_compact', lower)
+            else:
+                # MySQL has no JSON_COMPACT; CAST to its native json type.
+                self.assertIn('cast(', lower)
 
     def test_extract_text_mode(self):
         sql, _ = self._sql(JM.select(JM.data['k'].as_text()))
@@ -586,6 +637,10 @@ class TestSubqueryAssign(ModelTestCase):
     requires = [JM]
 
     def test_assign_via_subquery(self):
+        if IS_MYSQL and db.server_version[0] < 10:
+            # MySQL (not MariaDB) forbids reading the insert's target table
+            # from a scalar subquery (ER_UPDATE_TABLE_USED).
+            self.skipTest('not supported by MySQL')
         src = JM.create(data={'origin': True, 'n': 7})
         sub = JM.select(JM.data).where(JM.id == src.id)
         dst = JM.create(data=sub)
