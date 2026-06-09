@@ -195,6 +195,13 @@ class TestPathExtract(ModelTestCase):
         v = JM.select(JM.data.path()).scalar()
         self.assertEqual(v['name'], 'huey')
 
+    def test_dicts_tuples(self):
+        # Path converters apply in the non-model row wrappers, too.
+        q = JM.select(JM.data['name'].alias('n'),
+                      JM.data['matrix'][0].alias('m'))
+        self.assertEqual(list(q.dicts()), [{'n': 'huey', 'm': [1, 2]}])
+        self.assertEqual(list(q.tuples()), [('huey', [1, 2])])
+
 
 @skip_if(SKIP_PATHS, 'requires SQLite 3.38 or non-SQLite backend')
 class TestEquality(ModelTestCase):
@@ -395,6 +402,55 @@ class TestCustomDumps(ModelTestCase):
             self.assertEqual(got, {'price': '19.99'})
         finally:
             M.drop_table()
+
+
+class TestCustomLoads(ModelTestCase):
+    requires = []
+
+    def test_custom_loads(self):
+        def custom_loads(s):
+            return json.loads(s, parse_int=lambda v: int(v) * 100)
+
+        class ML(TestModel):
+            data = JSONField(null=True, loads=custom_loads)
+
+        ML._meta.database = db
+        ML.create_table()
+        try:
+            ML.create(data={'n': 5})
+            got = ML.select().first().data
+            if IS_POSTGRESQL:
+                # psycopg deserializes json values itself; a custom loads
+                # is not applied (see docs).
+                self.assertEqual(got, {'n': 5})
+            else:
+                self.assertEqual(got, {'n': 500})
+        finally:
+            ML.drop_table()
+
+
+class TestDeferredDatabase(ModelTestCase):
+    requires = []
+
+    def test_proxy_initialize(self):
+        proxy = Proxy()
+
+        class PM(TestModel):
+            data = JSONField(null=True)
+            class Meta:
+                database = proxy
+
+        # No helper is configured until the proxy is initialized.
+        self.assertIsNone(PM.data._helper)
+        proxy.initialize(db)
+        self.assertIsNotNone(PM.data._helper)
+
+        PM.create_table()
+        try:
+            PM.create(data={'k': [1, 2]})
+            self.assertEqual(PM.select().first().data, {'k': [1, 2]})
+        finally:
+            PM.drop_table()
 
 
 @skip_if(SKIP_PATHS, 'requires SQLite 3.38 or non-SQLite backend')
@@ -647,6 +703,22 @@ class TestBulkUpdate(ModelTestCase):
         self.assertEqual(JM.get_by_id(b.id).data, ['j', 'k', 'l'])
 
 
+class TestInsertMany(ModelTestCase):
+    requires = [JM]
+
+    def test_insert_many(self):
+        JM.insert_many([{'data': {'i': 0}}, {'data': [1, 2]},
+                        {'data': None}]).execute()
+        vals = [m.data for m in JM.select().order_by(JM.id)]
+        self.assertEqual(vals, [{'i': 0}, [1, 2], None])
+
+        JM.delete().execute()
+        JM.insert_many([({'j': 1},), ('scalar',)],
+                       fields=[JM.data]).execute()
+        vals = [m.data for m in JM.select().order_by(JM.id)]
+        self.assertEqual(vals, [{'j': 1}, 'scalar'])
+
+
 class TestSubqueryAssign(ModelTestCase):
     requires = [JM]
 
@@ -821,6 +893,69 @@ class TestUpdateDivergence(ModelTestCase):
             self.assertNotIn('k', m.data)
 
 
+@skip_if(SKIP_PATHS, 'requires SQLite 3.38 or non-SQLite backend')
+class TestDocumentedDivergences(ModelTestCase):
+    # Pin the per-backend behaviors promised in the docs, so the docs and
+    # the implementation cannot drift apart silently.
+    requires = [JM]
+
+    def test_set_missing_parents(self):
+        JM.create(data={})
+        JM.update(data=JM.data['a']['b'].set(1)).execute()
+        data = JM.select().get().data
+        if IS_SQLITE:
+            self.assertEqual(data, {'a': {'b': 1}})  # Chain is created.
+        else:
+            self.assertEqual(data, {})  # Silent no-op on PG and MySQL.
+
+    def test_append_non_array_object(self):
+        JM.create(data={'a': {'b': 1}})
+        JM.update(data=JM.data['a'].append('x')).execute()
+        data = JM.select().get().data
+        if IS_SQLITE:
+            self.assertEqual(data, {'a': {'b': 1}})  # Silent no-op.
+        elif IS_MYSQL:
+            self.assertEqual(data, {'a': [{'b': 1}, 'x']})  # Wrapped.
+        else:
+            self.assertEqual(data, {'a': {'b': 1, '-1': 'x'}})  # PG -1 key.
+
+    def test_append_non_array_scalar(self):
+        JM.create(data={'a': 1})
+        JM.update(data=JM.data['a'].append('x')).execute()
+        data = JM.select().get().data
+        if IS_MYSQL:
+            self.assertEqual(data, {'a': [1, 'x']})  # Wrapped.
+        else:
+            self.assertEqual(data, {'a': 1})  # No-op on SQLite and PG.
+
+    def test_length_non_array(self):
+        JM.create(data={'k': {'a': 1, 'b': 2}})
+        query = JM.select(JM.data['k'].length())
+        if IS_POSTGRESQL:
+            with self.assertRaises((DataError, ProgrammingError)):
+                with self.database.atomic():
+                    query.scalar()
+        elif IS_MYSQL:
+            self.assertEqual(query.scalar(), 2)  # Object key count.
+        else:
+            self.assertEqual(query.scalar(), 0)  # SQLite: 0 for non-array.
+
+    def test_default_mode_ordering(self):
+        JM.create(data={'n': 10})
+        JM.create(data={'n': 2})
+        # Numerically only n=10 exceeds 5; under text comparison neither
+        # '10' nor '2' exceeds '5'.
+        n = JM.select().where(JM.data['n'] > 5).count()
+        if IS_POSTGRESQL or IS_ORACLE_MYSQL:
+            self.assertEqual(n, 1)  # Typed (numeric) comparison.
+        else:
+            self.assertEqual(n, 0)  # SQLite/MariaDB: lexicographic text.
+
+        # as_int() is numeric everywhere.
+        n = JM.select().where(JM.data['n'].as_int() > 5).count()
+        self.assertEqual(n, 1)
+
+
 # JSON containment / key checks. Native operators on PG and MySQL/MariaDB;
 # NotSupportedError on SQLite.
 @skip_if(IS_SQLITE, 'no native JSON containment/key operators on SQLite')
@@ -869,6 +1004,21 @@ class TestContainmentAndKeys(ModelTestCase):
 
     def test_has_key_on_path(self):
         q = JM.select().where(JM.data['meta'].has_key('env'))
+        self.assertEqual(q.count(), 1)
+
+    def test_has_keys_on_path(self):
+        q = JM.select().where(JM.data['meta'].has_keys(['env', 'region']))
+        self.assertEqual(q.count(), 1)
+        q = JM.select().where(JM.data['meta'].has_keys(['env', 'nope']))
+        self.assertEqual(q.count(), 0)
+
+    def test_has_any_keys_on_path(self):
+        q = JM.select().where(JM.data['meta'].has_any_keys(['nope', 'env']))
+        self.assertEqual(q.count(), 1)
+
+    def test_contained_by_on_path(self):
+        q = JM.select().where(
+            JM.data['tags'].contained_by(['python', 'orm', 'sql']))
         self.assertEqual(q.count(), 1)
 
 

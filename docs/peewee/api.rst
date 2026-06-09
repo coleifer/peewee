@@ -3386,7 +3386,9 @@ Fields
 .. class:: JSONField(dumps=None, loads=None, **kwargs)
 
    :param dumps: Custom JSON serializer. Defaults to ``json.dumps``.
-   :param loads: Custom JSON deserializer. Defaults to ``json.loads``.
+   :param loads: Custom JSON deserializer. Defaults to ``json.loads``. Not
+       applied on Postgresql, where the driver deserializes json values
+       itself.
 
    Stores Python ``dict``, ``list``, scalar (``str``/``int``/``float``/``bool``),
    or ``None`` values as JSON. The column type used by ``CREATE TABLE`` is
@@ -3528,8 +3530,9 @@ Fields
 
    Returned by :meth:`JSONField.__getitem__` and :meth:`JSONField.path`.
    Represents an extraction at a path within the JSON document. SQL emission
-   uses ``->`` on SQLite and Postgresql or ``JSON_EXTRACT`` on MySQL by
-   default. Text-mode uses ``->>`` or ``JSON_UNQUOTE(JSON_EXTRACT(...))``.
+   uses ``->`` on SQLite, ``#>`` on Postgresql, or ``JSON_EXTRACT`` on MySQL
+   by default. Text-mode uses ``->>`` / ``#>>`` /
+   ``JSON_UNQUOTE(JSON_EXTRACT(...))``.
 
    .. method:: __getitem__(key)
 
@@ -3553,7 +3556,7 @@ Fields
       :rtype: JSONPath
 
       Return the path value in *text mode*. SQL emission switches to the
-      text-extract operator (``->>`` on SQLite/Postgresql,
+      text-extract operator (``->>`` on SQLite, ``#>>`` on Postgresql,
       ``JSON_UNQUOTE(JSON_EXTRACT(...))`` on MySQL). In text mode, the returned
       value is a raw scalar (no JSON quoting) and equality is byte-text
       compare.
@@ -3564,9 +3567,12 @@ Fields
          Doc.data['name'].as_text().ilike('h%')
 
       Pattern-matching operators (:meth:`like`, :meth:`ilike`,
-      :meth:`startswith`, :meth:`endswith`, :meth:`contains`, :meth:`regexp`,
+      :meth:`startswith`, :meth:`endswith`, :meth:`regexp`,
       :meth:`iregexp`) automatically apply ``as_text()`` so calling them on
       a path does the right thing without needing ``.as_text()`` explicitly.
+      :meth:`contains` is **not** among them - on a path it performs JSON
+      structural containment; for a substring test use
+      ``.as_text().contains(...)``.
 
    .. _json-field-typed-access:
 
@@ -3597,9 +3603,10 @@ Fields
                __ne__(rhs)
 
       Equality on the path. In default (JSON) mode the right-hand side is
-      canonicalized through the field's value wrapper (``fn.json(...)`` on
-      SQLite, the psycopg ``Jsonb`` adapter on Postgresql, ``JSON_COMPACT``
-      on MySQL) so the comparison works across backends:
+      canonicalized to match the extract (``fn.json(...)`` on SQLite, the
+      psycopg ``Jsonb`` adapter on Postgresql, ``JSON_COMPACT`` on MariaDB,
+      ``CAST(... AS JSON)`` on MySQL) so the comparison works across
+      backends:
 
       .. code-block:: python
 
@@ -3637,10 +3644,10 @@ Fields
 
    .. note::
 
-      On MariaDB and MySQL prior to 8.0.24, ``JSON_UNQUOTE`` of a stored
-      JSON ``null`` returns the literal string ``'null'`` instead of SQL
-      ``NULL``, so :meth:`is_null` does not match stored JSON null on
-      those versions. Missing keys and column SQL NULL are still matched.
+      On MySQL and MariaDB, extracting a stored JSON ``null`` yields the
+      string ``'null'`` rather than SQL ``NULL``, so :meth:`is_null` does
+      **not** match stored JSON nulls there. Missing keys and column SQL
+      ``NULL`` are matched as documented.
 
    .. method:: in_(rhs)
                not_in(rhs)
@@ -3660,11 +3667,11 @@ Fields
                between(lo, hi)
 
       Ordering and range comparisons. The right-hand side is canonicalized
-      through the field's value wrapper. Per-backend behavior:
+      the same way as for equality. Per-backend behavior:
 
       * **Postgresql** - structural ``jsonb`` ordering (type class then value).
-      * **MySQL / MariaDB** - JSON-typed comparison rules.
-      * **SQLite** - byte-text comparison after wrapping in ``json()``;
+      * **MySQL** - JSON-typed comparison rules.
+      * **SQLite and MariaDB** - text comparison of the json-encoded value;
         ``'10' > '2'`` is lexicographic, **which is rarely what you want**.
 
       For portable strict-numeric ordering, use :meth:`as_int` or
@@ -3703,18 +3710,16 @@ Fields
 
    .. method:: contains(rhs)
 
-      JSON structural containment. Dispatches through the helper: ``@>`` on
-      Postgresql, ``JSON_CONTAINS`` on MySQL / MariaDB.
-
-      Raises :class:`NotImplementedError` on SQLite.
+      JSON structural containment - ``@>`` on Postgresql, ``JSON_CONTAINS``
+      on MySQL / MariaDB. Raises :class:`NotImplementedError` on SQLite.
 
       .. code-block:: python
 
-         # Text substring.
-         Doc.select().where(Doc.data['name'].contains('uey'))
-
          # JSON structural containment (sub-array membership).
          Doc.select().where(Doc.data['tags'].contains(['python']))
+
+         # For a text substring test, drop to text mode instead:
+         Doc.select().where(Doc.data['name'].as_text().contains('uey'))
 
    .. method:: set(value)
 
@@ -3730,9 +3735,11 @@ Fields
 
       .. note::
 
-         **Missing intermediate keys silently no-op on all three backends.**
-         ``data['a']['b']['c'].set(1)`` on ``data={}`` returns ``data``
-         unchanged. The leaf is created only when the parent exists.
+         Behavior when intermediate keys are missing diverges:
+         ``data['a']['b'].set(1)`` on ``data={}`` creates the full chain on
+         SQLite (``{"a": {"b": 1}}``), but is a silent no-op on Postgresql
+         and MySQL / MariaDB, which only create the leaf when its parent
+         already exists.
 
    .. method:: insert(value)
 
@@ -3740,8 +3747,8 @@ Fields
       **only if the path is currently absent**. A stored JSON ``null``
       counts as "present" and is not overwritten. Uses ``json_insert`` on
       SQLite and ``JSON_INSERT`` on MySQL / MariaDB; emulated on Postgresql
-      via ``CASE WHEN (field -> 'k') IS NULL THEN jsonb_set(...) ELSE field
-      END`` (correct because ``->`` returns SQL ``NULL`` for absent keys
+      via ``CASE WHEN (field #> '{k}') IS NULL THEN jsonb_set(...) ELSE field
+      END`` (correct because ``#>`` returns SQL ``NULL`` for absent keys
       and jsonb ``'null'`` for stored JSON nulls).
 
       .. code-block:: python

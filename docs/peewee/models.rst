@@ -597,9 +597,9 @@ to extract sub-elements. The result is a :class:`JSONPath` you can use in
        print(doc.profile['fb'])  # 'huey.cat'
 
 Equality on a path is structural where the backend supports it (Postgresql
-``jsonb``, MySQL ``JSON``) and canonical-text byte-compare on SQLite. Lists,
-dictionaries, integers, booleans, and strings all work as right-hand-side
-values:
+``jsonb``, MySQL ``JSON``) and canonical-text byte-compare on SQLite and
+MariaDB. Lists, dictionaries, integers, booleans, and strings all work as
+right-hand-side values:
 
 .. code-block:: python
 
@@ -679,10 +679,12 @@ Text mode and typed casts
 
 The default path mode returns the value in *JSON form* - JSON-encoded text
 (SQLite/MySQL) or a deserialized Python value via the driver (Postgresql).
-Equality, ordering, and ``in_`` work against this form.
+Equality and ``in_`` work against this form. Relational comparisons compare
+the json *text* on SQLite and MariaDB - use :meth:`~JSONPath.as_int` /
+:meth:`~JSONPath.as_float` for portable numeric ordering.
 
 ``.as_text()`` flips the path to *text mode*, returning the raw scalar text
-(``->>`` / ``JSON_UNQUOTE``). Text mode is appropriate for:
+(``->>`` / ``#>>`` / ``JSON_UNQUOTE``). Text mode is appropriate for:
 
 * String comparisons against plain text columns (e.g., joins).
 * Pattern matching (``LIKE``, regex). The pattern operators auto-apply
@@ -742,7 +744,8 @@ Method         On JSONField (root)  On JSONPath          Cross-backend?
    # Array length.
    Doc.select(Doc.data['tags'].length())
 
-   # Document-level merge (see the warning above about divergence).
+   # Document-level merge. Semantics diverge by backend - see the
+   # JSONField.update() docs.
    Doc.update(data=Doc.data.update({'last_seen': '2026-01-01'})).execute()
 
 For mutation patterns outside this subset (path-level update,
