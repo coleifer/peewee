@@ -7,13 +7,13 @@ https://github.com/coleifer/peewee/releases
 
 ## master
 
-* Add a new cross-backend `JSONField` (`playhouse.json_field`) that provides
-  basic operations and also more consistent behavior when reading data. By
-  default the new core JSONField treats extracted values as JSON, which is
-  generally the correct thing, but "text-mode" is available as a chained
-  `.as_text()` method. See [docs](https://docs.peewee-orm.com/en/latest/peewee/json_field.html).
-  Plan is to eventually replace the backend-specific implementations with the
-  semantics of this new field.
+* Add a new cross-backend `JSONField` to core that provides basic operations
+  and also more consistent behavior when reading data. By default the new core
+  JSONField treats extracted values as JSON, which is generally the correct
+  thing, but "text-mode" is available as a chained `.as_text()` method. See
+  [docs](https://docs.peewee-orm.com/en/latest/peewee/models.html#json-field).
+  May eventually replace the backend-specific implementations with subclasses
+  that inherit semantics of this new field.
 * Eliminate use of deprecated params when connecting to MySQL databases, thanks
   to @abulgher, #3050.
 * Using `fromisoformat()` ended up causing previously-unconverted strings (Ymd)
