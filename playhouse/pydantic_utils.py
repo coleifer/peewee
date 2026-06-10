@@ -6,8 +6,10 @@ from typing import Optional
 from typing import get_origin
 
 from peewee import AutoField
+from peewee import BackrefAccessor
 from peewee import ForeignKeyField
 from peewee import Model
+from peewee import Node
 from playhouse.reflection import FieldTypeMap
 
 from pydantic import BaseModel
@@ -44,8 +46,12 @@ def to_pydantic(model_cls, exclude=None, include=None, exclude_autofield=True,
     for field, schema in relationships.items():
         if isinstance(field, ForeignKeyField):
             rel_fields[field.name] = schema
-        else:
+        elif isinstance(field, BackrefAccessor):
             backref_fields[field.field.backref] = schema
+        else:
+            raise ValueError('relationships keys must be ForeignKeyField '
+                             'or back-reference accessors (e.g. '
+                             'User.tweets), got: %r' % (field,))
 
     for field in model_cls._meta.sorted_fields:
         name = field.name
@@ -56,7 +62,10 @@ def to_pydantic(model_cls, exclude=None, include=None, exclude_autofield=True,
             names.add(field.column_name)
         if names & exclude:
             continue
-        elif include is not None and not (names & include):
+        elif (include is not None and not (names & include)
+              and name not in rel_fields):
+            # Explicit relationships entries are exempt from include=
+            # filtering; exclude= always wins.
             continue
         elif exclude_autofield and isinstance(field, AutoField):
             continue
@@ -95,11 +104,16 @@ def to_pydantic(model_cls, exclude=None, include=None, exclude_autofield=True,
         if description:
             field_kwargs['description'] = description
 
-        if field.default is not None:
-            if callable(field.default):
-                field_kwargs['default_factory'] = field.default
+        default = field.default
+        if isinstance(default, Node):
+            # Server-side default, e.g. SQL('CURRENT_TIMESTAMP') or
+            # fn.now() - not representable as a python-side value.
+            default = None
+        if default is not None:
+            if callable(default):
+                field_kwargs['default_factory'] = default
             else:
-                field_kwargs['default'] = field.default
+                field_kwargs['default'] = default
             if field.null:
                 python_type = Optional[python_type]
         elif field.null:
@@ -109,6 +123,8 @@ def to_pydantic(model_cls, exclude=None, include=None, exclude_autofield=True,
         fields[name] = (python_type, Field(**field_kwargs))
 
     for name, schema in backref_fields.items():
+        if name in exclude:
+            continue
         origin = get_origin(schema)
         if origin is not list:
             raise ValueError('back-references must use a List type')

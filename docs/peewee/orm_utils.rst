@@ -187,11 +187,11 @@ serialize instances, or populate instances from user data:
    # Validate a dict (e.g. from an HTTP request body).
    data = UserSchema.model_validate({'name': 'Huey', 'age': 14, 'status': 'active'})
    print(data.model_dump())
-   # {'name': 'Huey', 'age': 14, 'active': True, 'bio': None, 'score': None,
+   # {'name': 'Huey', 'age': 14, 'active': True, 'bio': None,
    #  'status': 'active', 'created': datetime.datetime(...)}
 
    # Populate an instance from the validated data.
-   user = User(**validated.dict())
+   user = User(**data.model_dump())
 
    # Validate directly from a Peewee model instance:
    huey = User.create(name='Huey', age=14, status='active')
@@ -279,13 +279,17 @@ overridden when you provide a nested schema via the ``relationships``
 parameter.
 
 Any field whose ``field_type`` is not present in the map falls back to
-``Any``, which means Pydantic will accept any value without validation. If you
-use custom field type and want strict validation, ensure they set a
+``Any``, which means Pydantic will accept any value without validation. If
+you use a custom field type and want strict validation, ensure it sets a
 recognized ``field_type`` or handle the conversion yourself.
 
 When a field has ``choices`` defined, the mapped Python type above is
 **replaced** by a ``Literal`` constrained to the choice values, regardless of
 the underlying field type.
+
+Because JSON fields validate as ``Any``, an explicit ``None`` is accepted by
+the schema even for ``null=False`` columns - JSON ``null`` is itself a valid
+JSON value. NOT NULL is still enforced at the database layer.
 
 
 API reference
@@ -311,7 +315,9 @@ API reference
        ``<ModelName>Schema``.
    :param dict relationships: A mapping that tells ``to_pydantic`` how to
        handle foreign-key or back-reference fields as nested Pydantic models
-       instead of flat scalar values. See :ref:`pydantic-relationships` below.
+       instead of flat scalar values. Entries are exempt from ``include=``
+       filtering, but are dropped by ``exclude=``. See
+       :ref:`pydantic-relationships` below.
    :param base_model: User-provided subclass of Pydantic ``BaseModel`` to use
        as the base class for the generated model.
    :returns: A Pydantic ``BaseModel`` subclass configured with
@@ -355,7 +361,7 @@ are accepting input data:
    # {'user_id': 1,
    #  'content': 'hello',
    #  'timestamp': datetime.datetime(...),
-   #  'is_published: True}
+   #  'is_published': True}
 
    # Works when validating from a model instance too:
    tweet = Tweet.create(user=huey, content='hello')
@@ -364,7 +370,7 @@ are accepting input data:
    # {'user_id': 1,
    #  'content': 'hello',
    #  'timestamp': datetime.datetime(...),
-   #  'is_published: True}
+   #  'is_published': True}
 
 .. _pydantic-relationships:
 
@@ -449,6 +455,13 @@ Back-references work the same way, but the schema must be wrapped in
                .prefetch(Tweet))
 
       data = UserDetail.model_validate(users[0])  # No additional query.
+
+.. note::
+   In async applications using the :ref:`asyncio extension <pwasyncio>`,
+   run validation inside the greenlet bridge unless relations were
+   preloaded - a lazy load outside ``db.run()`` raises
+   ``MissingGreenletBridge``:
+   ``data = await db.run(UserDetail.model_validate, user)``.
 
 
 JSON schema output

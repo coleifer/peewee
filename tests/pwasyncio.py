@@ -42,6 +42,9 @@ class Tweet(Model):
     user = ForeignKeyField(User, backref='tweets')
     message = TextField()
 
+class UniqueModel(Model):
+    name = CharField(unique=True)
+
 
 class TestGreenletSpawn(unittest.IsolatedAsyncioTestCase):
     async def test_simple_function(self):
@@ -77,6 +80,14 @@ class TestGreenletSpawn(unittest.IsolatedAsyncioTestCase):
     def test_await_outside_greenlet(self):
         with self.assertRaises(MissingGreenletBridge):
             await_(Mock())
+
+    def test_await_outside_greenlet_closes_coroutine(self):
+        async def coro():
+            pass
+        c = coro()
+        with self.assertRaises(MissingGreenletBridge):
+            await_(c)
+        self.assertIsNone(c.cr_frame)  # Closed - no warning at GC.
 
     async def test_contextvars(self):
         var = contextvars.ContextVar('data', default='x')
@@ -506,6 +517,11 @@ class TestConnectionWrappers(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(
             f("SELECT * FROM t WHERE x LIKE '%s' AND y = %s"),
             "SELECT * FROM t WHERE x LIKE '$1' AND y = $2")
+        # %% is an escaped literal percent, also mirroring psycopg.
+        self.assertEqual(
+            f("SELECT * FROM t WHERE x LIKE 'a%%b' AND y = %s"),
+            "SELECT * FROM t WHERE x LIKE 'a%b' AND y = $1")
+        self.assertEqual(f('100%% of %s'), '100% of $1')
 
     def _pg_mocks(self, rows=None):
         rows = rows or []
@@ -672,7 +688,7 @@ class TestTaskLifecycle(unittest.IsolatedAsyncioTestCase):
 
 class IntegrationTests(object):
     db_path = None
-    models = [TestModel, User, Tweet]
+    models = [TestModel, User, Tweet, UniqueModel]
 
     def get_database(self):
         with tempfile.NamedTemporaryFile(delete=False) as f:
@@ -1536,6 +1552,25 @@ class IntegrationTests(object):
         n = await self.db.aexecute(TestModel.delete())
         self.assertEqual(n, 3)
 
+    async def test_nested_iterate(self):
+        await self.seed(3)
+        with patch.object(AsyncConnectionWrapper, 'streaming_timeout', 0.25):
+            it = self.db.iterate(TestModel.select())
+            with self.assertRaises(InterfaceError):
+                async for row in it:
+                    async for row2 in self.db.iterate(TestModel.select()):
+                        pass
+            await it.aclose()
+        # The connection is usable again afterwards.
+        await self.assertCount(3)
+
+    async def test_integrity_error_translation(self):
+        await self.db.run(UniqueModel.create, name='u1')
+        with self.assertRaises(IntegrityError):
+            await self.db.run(UniqueModel.create, name='u1')
+        # The connection remains usable afterwards.
+        await self.db.run(UniqueModel.create, name='u2')
+
     async def test_query_during_iterate(self):
         await self.seed(3)
         it = self.db.iterate(TestModel.select())
@@ -1661,6 +1696,17 @@ class TestPostgresqlIntegration(IntegrationTests, unittest.IsolatedAsyncioTestCa
             results = [obj.value async for obj in self.db.iterate(q)]
             self.assertEqual(results, [0, 10])
 
+        await self.assertCount(2)
+
+    async def test_iterate_error_rolls_back(self):
+        await self.seed(2)
+        with self.assertRaises(ProgrammingError):
+            async for row in self.db.iterate(
+                    TestModel.select(SQL('no_such_column'))):
+                pass
+
+        # The connection is not stuck inside an aborted transaction.
+        self.assertFalse(self.db._state.conn.conn.is_in_transaction())
         await self.assertCount(2)
 
 

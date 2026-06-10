@@ -139,7 +139,7 @@ For single-query operations, the async helpers are more direct:
    # SELECT and return a scalar value.
    count = await db.scalar(User.select(fn.COUNT(User.id)))
 
-   # Or user shortcut.
+   # Or use the shortcut.
    count = await db.count(User.select())
 
    # CREATE TABLE / DROP TABLE:
@@ -210,7 +210,7 @@ Explicit control is also available:
    await db.aclose()      # Release connection back to pool.
 
 Each asyncio task gets its own connection from the pool. **Connections are not
-shared between tasks**. Each async task will have it's own connection and
+shared between tasks**. Each async task will have its own connection and
 transaction state - this prevents bugs that may occur when connections are
 shared and transactions end up interleaved across several running tasks.
 
@@ -272,6 +272,11 @@ single writer:
 .. code-block:: python
 
    db = AsyncSqliteDatabase('app.db', pragmas={'journal_mode': 'wal'})
+
+.. note::
+   In-memory databases (``':memory:'``) always use a single connection
+   regardless of ``pool_size`` - pooled in-memory connections would each be
+   a separate, empty database.
 
 
 Sharp Corners
@@ -341,12 +346,24 @@ Solutions:
    # Use prefetch:
    users = await db.run(
        prefetch,
-       User.select().where(User.username.in_(('Charlie', 'Huey', 'Mickey')))
+       User.select().where(User.username.in_(('Charlie', 'Huey', 'Mickey'))),
        Tweet.select())
 
    for user in users:
        for tweet in user.tweets:  # Prefetched - no extra query.
            print(tweet.content)
+
+Indirect query triggers
+^^^^^^^^^^^^^^^^^^^^^^^
+
+Helpers that walk model relations can also trigger lazy queries - e.g.
+pydantic validation of an instance (``Schema.model_validate(obj)``) or
+``model_to_dict(obj, backrefs=True)``. Run them inside the bridge unless
+relations were eagerly loaded:
+
+.. code-block:: python
+
+   data = await db.run(UserSchema.model_validate, user)
 
 Any code that triggers a database query must execute via either ``db.run()`` or
 one of the async helper methods.
@@ -357,10 +374,9 @@ API Reference
 .. class:: AsyncDatabaseMixin(database, pool_size=10, pool_min_size=1, acquire_timeout=10, **kwargs)
 
    :param str database: Database name or filename for SQLite.
-   :param int pool_size: Maximum size of the driver-managed connection pool
-       (no-op for SQLite).
-   :param int pool_min_size: Minimum size of the driver-managed connection pool
-       (no-op for SQLite).
+   :param int pool_size: Maximum size of the connection pool.
+   :param int pool_min_size: Minimum size of the connection pool (ignored
+       for SQLite, which always creates ``pool_size`` connections).
    :param float acquire_timeout: Time (in seconds) to wait for a free
        connection when acquiring from the pool.
    :param kwargs: Arbitrary keyword arguments passed to the underlying database
@@ -460,9 +476,11 @@ API Reference
    .. method:: aclose()
       :async:
 
-      Release the current task's connection back to the pool. Any
-      transaction left open on the connection is rolled back, so the next
-      acquirer always sees a clean connection.
+      Release the current task's connection back to the pool. Like
+      synchronous :meth:`~Database.close`, raises ``OperationalError`` if
+      called while a transaction is open. Connections reclaimed from tasks
+      that exited uncleanly have any open transaction rolled back, so the
+      next acquirer always sees a clean connection.
 
    .. method:: close_pool()
       :async:
@@ -559,11 +577,13 @@ API Reference
          for user in await db.list(query):
              print(user.username)
 
-   .. method:: iterate(query)
+   .. method:: iterate(query, buffer_size=None)
       :async:
 
       :param Query query: a Select query to stream results from using an async
          generator.
+      :param int buffer_size: Number of rows fetched per round-trip
+         (default 100).
 
       :meth:`~AsyncDatabaseMixin.iterate` method uses server-side cursors
       (MySQL and Postgres) to efficiently stream large result-sets.
@@ -578,11 +598,13 @@ API Reference
 
       .. note::
          While streaming, the iterator holds the task's connection. Another
-         query on the same connection waits briefly for an abandoned
-         iterator to finalize (e.g. after breaking out of the loop early),
-         then raises :class:`InterfaceError`. To release the connection
-         promptly after a partial iteration, ``await`` the generator's
-         ``aclose()`` method.
+         query on the same connection - including a second ``iterate()`` -
+         waits briefly for an abandoned iterator to finalize (e.g. after
+         breaking out of the loop early), then raises
+         :class:`InterfaceError`. The grace period is the connection
+         wrapper's ``streaming_timeout`` attribute (default 5 seconds). To
+         release the connection promptly after a partial iteration,
+         ``await`` the generator's ``aclose()`` method.
 
    .. method:: scalar(query)
       :async:
@@ -763,14 +785,16 @@ API Reference
    counts for UPDATE and DELETE are derived from the command status
    reported by the server.
 
+   A connection URL may be given as the ``database`` argument
+   (``'postgresql://...'``), and ``isolation_level`` accepts a level name
+   (e.g. ``'SERIALIZABLE'``) which is applied to each pooled connection.
+
    Inherits from :class:`AsyncDatabaseMixin` and :class:`PostgresqlDatabase`.
 
    .. note::
-      :meth:`Model.bulk_update` is not supported with asyncpg. When raw SQL
-      strings are executed, ``%s`` placeholders are rewritten to asyncpg's
-      ``$n`` style wherever they appear - including inside quoted strings,
-      mirroring psycopg. Pass literal values as parameters rather than
-      embedding them in the SQL.
+      :meth:`Model.bulk_update` is not supported with asyncpg: the CASE
+      expression's untyped parameters are resolved as ``text`` by the
+      server, which fails for non-text columns.
 
 .. class:: AsyncMySQLDatabase(database, **kwargs)
 

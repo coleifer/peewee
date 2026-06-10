@@ -11,8 +11,20 @@ https://github.com/coleifer/peewee/releases
   asyncpg, roll back open transactions when connections are returned to the
   pool, raise instead of deadlocking when querying during `iterate()`, and
   detect the MySQL / MariaDB server version.
-* Fixes for `playhouse.pydantic_utils`: JSON fields validate as `Any`, and
-  foreign keys may be included / excluded by field name or column name.
+* Additional `playhouse.pwasyncio` fixes: a second `iterate()` on a busy
+  connection raises instead of deadlocking, asyncpg exceptions are translated
+  to peewee exception types, registered aggregates / collations / window
+  functions / extensions and `timeout` are applied to async SQLite
+  connections, `:memory:` databases use a single connection, `atomic()`
+  accepts transaction arguments (e.g. `lock_type`), postgres connection URLs
+  and `isolation_level` are supported, `%%` in raw SQL is unescaped, and
+  attempting a query outside the greenlet bridge no longer emits "never
+  awaited" warnings.
+* Fixes for `playhouse.pydantic_utils`: JSON fields validate as `Any` (now
+  including the sqlite_ext `JSONField`), foreign keys may be included /
+  excluded by field name or column name, server-side defaults like
+  `SQL('CURRENT_TIMESTAMP')` are no longer emitted as schema defaults, and
+  `relationships` keys are validated.
 * Add a new cross-backend `JSONField` to core that provides basic operations
   and also more consistent behavior when reading data. By default the new core
   JSONField treats extracted values as JSON, which is generally the correct

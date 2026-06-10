@@ -473,3 +473,44 @@ class TestMisc(BasePydanticTestCase):
         S = to_pydantic(JDoc)
         for value in ({'a': 1}, [1, 2], 'scalar', 3, True, None):
             self.assertEqual(S(data=value).data, value)
+
+    def test_node_default_not_leaked(self):
+        class ServerDefault(TestModel):
+            ts = DateTimeField(default=SQL('CURRENT_TIMESTAMP'))
+            num = IntegerField(default=fn.ABS(-1))
+
+        S = to_pydantic(ServerDefault)
+        for name in ('ts', 'num'):
+            f = S.model_fields[name]
+            self.assertTrue(f.is_required(), name)
+            self.assertIsNone(f.default_factory)
+
+    def test_relationships_key_validation(self):
+        class TweetSchema(BaseModel):
+            content: str
+
+        for bad_key in ('tweets', User, Tweet.content):
+            with self.assertRaises(ValueError):
+                to_pydantic(User, relationships={bad_key: List[TweetSchema]})
+
+    def test_relationships_filtering(self):
+        class TweetSchema(BaseModel):
+            content: str
+
+        class UserSchema(BaseModel):
+            name: str
+
+        # Backref entries honor exclude=.
+        S = to_pydantic(User, exclude='tweets',
+                        relationships={User.tweets: List[TweetSchema]})
+        self.assertNotIn('tweets', S.model_fields)
+
+        # Explicit relationship FKs are exempt from include= filtering...
+        S = to_pydantic(Tweet, include='content',
+                        relationships={Tweet.user: UserSchema})
+        self.assertEqual(set(S.model_fields), {'content', 'user'})
+
+        # ...but exclude= always wins.
+        S = to_pydantic(Tweet, exclude='user',
+                        relationships={Tweet.user: UserSchema})
+        self.assertEqual(set(S.model_fields), {'content', 'created'})
