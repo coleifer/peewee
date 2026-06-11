@@ -7,6 +7,10 @@ https://github.com/coleifer/peewee/releases
 
 ## master
 
+[View commits](https://github.com/coleifer/peewee/compare/4.0.7...master)
+
+## 4.0.7
+
 * Fixes for `playhouse.pwasyncio`: report correct UPDATE / DELETE rowcounts on
   asyncpg, roll back open transactions when connections are returned to the
   pool, raise instead of deadlocking when querying during `iterate()`, and
@@ -44,7 +48,7 @@ https://github.com/coleifer/peewee/releases
   not attempt any heuristic python-value conversion. This makes it more natural
   to call `fn.whatever().cast('text')` and you predictably get text out.
 
-[View commits](https://github.com/coleifer/peewee/compare/4.0.6...master)
+[View commits](https://github.com/coleifer/peewee/compare/4.0.6...4.0.7)
 
 ## 4.0.6
 
