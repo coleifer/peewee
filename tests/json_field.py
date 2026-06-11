@@ -3,6 +3,7 @@ import json
 from peewee import *
 from peewee import sqlite3
 
+from .base import IS_CRDB
 from .base import IS_MYSQL
 from .base import IS_ORACLE_MYSQL
 from .base import IS_POSTGRESQL
@@ -16,6 +17,10 @@ from .base import skip_unless
 
 IS_SQLITE_38 = IS_SQLITE and sqlite3.sqlite_version_info >= (3, 38)
 SKIP_PATHS = IS_SQLITE and not IS_SQLITE_38
+
+# CockroachDB rides PostgresqlJSONMethods (and psycopg), so it gets the
+# postgres-flavored behaviors and SQL shapes in these tests.
+IS_PG_JSON = IS_POSTGRESQL or IS_CRDB
 
 
 class JM(TestModel):
@@ -366,7 +371,7 @@ class TestAtomicViaFn(ModelTestCase):
 
     def test_atomic_set(self):
         m = JM.select().first()
-        if IS_POSTGRESQL:
+        if IS_PG_JSON:
             atomic = fn.jsonb_set(JM.data, '{a}', Value('99'))
         elif IS_MYSQL:
             atomic = fn.JSON_SET(JM.data, '$.a', 99)
@@ -419,7 +424,7 @@ class TestCustomLoads(ModelTestCase):
         try:
             ML.create(data={'n': 5})
             got = ML.select().first().data
-            if IS_POSTGRESQL:
+            if IS_PG_JSON:
                 # psycopg deserializes json values itself; a custom loads
                 # is not applied (see docs).
                 self.assertEqual(got, {'n': 5})
@@ -540,7 +545,7 @@ class TestNullSemantics(ModelTestCase):
         if not self.JSON_NULL_OK:
             self.skipTest('MySQL/MariaDB collapse json null at unquote')
         # Pick the right type function per backend.
-        if IS_POSTGRESQL:
+        if IS_PG_JSON:
             type_fn = fn.jsonb_typeof(JM.data['k'])
             json_null_marker = 'null'
         elif IS_MYSQL:
@@ -631,7 +636,7 @@ class TestAsTextDeep(ModelTestCase):
             JM.select().where(JM.data['name'].startswith('a')).count(), 1)
         self.assertEqual(
             JM.select().where(JM.data['name'].endswith('y')).count(), 1)
-        if IS_POSTGRESQL:
+        if IS_PG_JSON:
             q = JM.select().where(JM.data['name'].contains('apple'))
             self.assertEqual(q.count(), 1)
 
@@ -646,7 +651,7 @@ class TestSQLShapes(ModelTestCase):
         ddl, _ = JM._schema._create_table().query()
         if IS_SQLITE:
             self.assertIn('"data" TEXT', ddl)
-        elif IS_POSTGRESQL:
+        elif IS_PG_JSON:
             self.assertIn('"data" JSONB', ddl)
         elif IS_MYSQL:
             self.assertIn('`data` JSON', ddl)
@@ -656,7 +661,7 @@ class TestSQLShapes(ModelTestCase):
         if IS_SQLITE:
             self.assertIn(' -> ', sql)
             self.assertIn('$."k"', params)
-        elif IS_POSTGRESQL:
+        elif IS_PG_JSON:
             self.assertIn(' #> ', sql)
             self.assertIn(['k'], params)
         elif IS_MYSQL:
@@ -673,7 +678,7 @@ class TestSQLShapes(ModelTestCase):
         sql, _ = self._sql(JM.select(JM.data['k'].as_text()))
         if IS_SQLITE:
             self.assertIn(' ->> ', sql)
-        elif IS_POSTGRESQL:
+        elif IS_PG_JSON:
             self.assertIn(' #>> ', sql)
         elif IS_MYSQL:
             lower = sql.lower()
@@ -876,7 +881,7 @@ class TestUpdateDivergence(ModelTestCase):
         # 'nested' value, dropping 'a'.
         JM.update(data=JM.data.update({'nested': {'b': 99}})).execute()
         m = JM.select().get()
-        if IS_POSTGRESQL:
+        if IS_PG_JSON:
             self.assertEqual(m.data['nested'], {'b': 99})  # 'a' dropped
         else:
             self.assertEqual(m.data['nested'], {'a': 1, 'b': 99})
@@ -886,7 +891,7 @@ class TestUpdateDivergence(ModelTestCase):
         # On PostgreSQL: null is stored as JSON null at the top level.
         JM.update(data=JM.data.update({'k': None})).execute()
         m = JM.select().get()
-        if IS_POSTGRESQL:
+        if IS_PG_JSON:
             self.assertIn('k', m.data)
             self.assertIsNone(m.data['k'])
         else:
@@ -931,7 +936,7 @@ class TestDocumentedDivergences(ModelTestCase):
     def test_length_non_array(self):
         JM.create(data={'k': {'a': 1, 'b': 2}})
         query = JM.select(JM.data['k'].length())
-        if IS_POSTGRESQL:
+        if IS_PG_JSON:
             with self.assertRaises((DataError, ProgrammingError)):
                 with self.database.atomic():
                     query.scalar()
@@ -946,7 +951,7 @@ class TestDocumentedDivergences(ModelTestCase):
         # Numerically only n=10 exceeds 5; under text comparison neither
         # '10' nor '2' exceeds '5'.
         n = JM.select().where(JM.data['n'] > 5).count()
-        if IS_POSTGRESQL or IS_ORACLE_MYSQL:
+        if IS_PG_JSON or IS_ORACLE_MYSQL:
             self.assertEqual(n, 1)  # Typed (numeric) comparison.
         else:
             self.assertEqual(n, 0)  # SQLite/MariaDB: lexicographic text.
