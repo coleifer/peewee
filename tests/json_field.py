@@ -945,6 +945,7 @@ class TestDocumentedDivergences(ModelTestCase):
         else:
             self.assertEqual(query.scalar(), 0)  # SQLite: 0 for non-array.
 
+    @skip_if(IS_CRDB)
     def test_default_mode_ordering(self):
         JM.create(data={'n': 10})
         JM.create(data={'n': 2})
