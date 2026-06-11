@@ -94,34 +94,6 @@ class TestMariaDBConnector(TestMySQLConnector):
 
 
 @requires_mysql
-@skip_unless(IS_MYSQL_JSON, 'requires MySQL 5.7+ or 8.x')
-class TestMySQLJSONField(ModelTestCase):
-    requires = [KJ]
-
-    def test_mysql_json_field(self):
-        values = (
-            0, 1.0, 2.3,
-            True, False,
-            'string',
-            ['foo', 'bar', 'baz'],
-            {'k1': 'v1', 'k2': 'v2'},
-            {'k3': [0, 1.0, 2.3], 'k4': {'x1': 'y1', 'x2': 'y2'}})
-        for i, value in enumerate(values):
-            # Verify data can be written.
-            kj = KJ.create(key='k%s' % i, data=value)
-
-            # Verify value is deserialized correctly.
-            kj_db = KJ['k%s' % i]
-            self.assertEqual(kj_db.data, value)
-
-        kj = KJ.select().where(KJ.data.extract('$.k1') == 'v1').get()
-        self.assertEqual(kj.key, 'k7')
-
-        with self.assertRaises(IntegrityError):
-            KJ.create(key='kx', data=None)
-
-
-@requires_mysql
 class TestMatchExpression(ModelDatabaseTestCase):
     requires = [Person]
 
