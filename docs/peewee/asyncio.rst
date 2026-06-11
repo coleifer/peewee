@@ -5,11 +5,11 @@ Async Support
 
 .. module:: playhouse.pwasyncio
 
-Peewee's async extension bridges blocking query execution to the asyncio event
-loop using ``greenlet``. When database I/O occurs inside a greenlet, control is
-transparently yielded to the event loop until the driver completes the
-operation. This allows synchronous Peewee code to run unmodified within an
-async context.
+Peewee's async extension provides asyncio-compatible database backends built on
+the standard async drivers, ``aiosqlite``, ``asyncpg`` and ``aiomysql``.
+Queries are dispatched to the driver as a coroutine and awaited on the asyncio
+event loop, while Peewee's query-building and result-processing code runs
+unmodified. See :ref:`how-it-works` for the mechanism.
 
 Example
 -------
@@ -60,6 +60,23 @@ releases it on exit:
        await db.close_pool()
 
    asyncio.run(main())
+
+.. _how-it-works:
+
+How it works
+------------
+
+Internally the extension uses ``greenlet`` the same way SQLAlchemy's asyncio
+support does: purely as a stack-switching mechanism, so that Peewee's
+synchronous internals can be suspended mid-call while the async driver
+performs I/O. Whenever a query executes, control switches to the event loop and
+the I/O coroutine is awaited like any other awaitable. Then the original call
+resumes with the result.
+
+.. note::
+   This is real asyncio, NOT gevent-style concurrency. Nothing is
+   monkey-patched, no sockets are wrapped, and the event loop is the ordinary
+   asyncio loop running the rest of your application.
 
 Installation
 ------------
