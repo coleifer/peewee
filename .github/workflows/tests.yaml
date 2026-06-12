@@ -88,3 +88,10 @@ jobs:
           PGPASSWORD: peewee
           CI: 1
         run: python runtests.py --mysql-user=root --mysql-password=peewee -s -v2
+      - name: asyncio stress
+        if: matrix.peewee-backend == 'postgresql' && matrix.python-version == '3.13'
+        env:
+          PGUSER: postgres
+          PGHOST: 127.0.0.1
+          PGPASSWORD: peewee
+        run: python runtests.py -A
