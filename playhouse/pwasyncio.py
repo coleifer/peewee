@@ -40,7 +40,7 @@ class MissingGreenletBridge(RuntimeError):
 
 _BRIDGE_ERR_HINT = (
     ' Hint: in async code, run queries through the async API, e.g. '
-    '`await Model.aget(...)`, `await db.aexecute(query)`, `await '
+    '`await Model.aget(...)`, `await query.aexecute()`, `await '
     'db.list(query)`, or wrap synchronous code with `await db.run(fn)`. '
     'For lazy foreign-key access use `await obj.afetch(Model.rel_field)`. See '
     'https://docs.peewee-orm.com/en/latest/peewee/asyncio.html#sharp-corners')

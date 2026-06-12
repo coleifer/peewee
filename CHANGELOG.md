@@ -7,6 +7,12 @@ https://github.com/coleifer/peewee/releases
 
 ## master
 
+* Add `BaseQuery.aexecute()` - an async twin of `execute()` available on all
+  query types, executing through the query's bound async database:
+  `await User.select().aexecute()`, `await user.tweets.aexecute()`. Returns
+  exactly what `execute()` returns, including result rows for DML with
+  `RETURNING`. Queries remain non-awaitable; this is an ordinary coroutine
+  method and the only async method on queries.
 * Add async model methods to `playhouse.pwasyncio` using "a"-prefixed coroutine
   counterparts of the row-level `Model` methods (`acreate`, `aget`,
   `aget_or_none`, `aget_by_id`, `aget_or_create`, `aset_by_id`,

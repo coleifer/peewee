@@ -139,8 +139,10 @@ take an ``a`` prefix (``acreate``, ``aget``, ``aget_or_none``,
 (:meth:`~AsyncDatabaseMixin.acreate_tables`,
 :meth:`~AsyncDatabaseMixin.adrop_tables`). Query-builder methods
 (``select()``, ``where()``, and the rest) only build SQL - they perform no
-I/O and need no async variant. The database helpers (``db.get``,
-``db.list``, etc.) accept any query as an argument.
+I/O and need no async variant. ``execute()``, the one query method that
+does perform I/O, has an async twin: :meth:`~BaseQuery.aexecute`. The
+database helpers (``db.get``, ``db.list``, etc.) accept any query as an
+argument.
 
 Classes derived from ``db.Model`` get these methods automatically when
 ``db`` is an async database. To declare an explicit base class, subclass
@@ -168,6 +170,45 @@ attribute access - no await needed. For a one-off lazy load, use
 ``await obj.afetch(Model.field)``, which runs the query on the event loop
 and caches the result on the instance. And if you are calling ``afetch()``
 in a loop, you wanted :meth:`~AsyncDatabaseMixin.aprefetch`.
+
+Executing queries: ``aexecute()``
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Queries provide :meth:`~BaseQuery.aexecute`, the async counterpart of
+:meth:`~BaseQuery.execute`. It executes the query on its bound async
+database and returns whatever ``execute()`` returns: a result wrapper for
+selects, the new primary key for inserts, the number of modified rows for
+updates and deletes.
+
+.. code-block:: python
+
+   # Equivalent to ``await db.aexecute(query)``:
+   active = await User.select().where(User.is_active == True).aexecute()
+   for user in active:  # Results are buffered; iteration performs no I/O.
+       print(user.username)
+
+   # Writes return their usual values:
+   pk = await User.insert(username='huey').aexecute()
+   n = await User.update(is_active=False).where(User.is_bot).aexecute()
+
+   # DML with RETURNING (Postgres, SQLite 3.35+):
+   query = (User
+            .delete()
+            .where(User.is_spammer)
+            .returning(User.username))
+   for user in await query.aexecute():
+       print('deleted:', user.username)
+
+   # Resolve a backref:
+   for tweet in await user.tweets.aexecute():
+       print(tweet.message)
+
+For selects, ``await query.aexecute()`` is interchangeable with
+``await db.list(query)`` for iteration - ``aexecute()`` returns the
+buffered result wrapper while ``list()`` returns a plain list.
+``aexecute()`` is the only async method on queries; aggregates and other
+conveniences remain database helpers (``await db.count(query)``,
+``await db.exists(query)``, and so on).
 
 ``db.run()`` - general-purpose entry point
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -514,8 +555,9 @@ well beyond async users. A forgotten ``await`` on a custom awaitable is
 also silent: Python's "coroutine was never awaited" warning applies only to
 real coroutines, so an unawaited ``User.insert(...)`` would simply never
 execute, without a sound. The ``a``-prefixed methods are ordinary
-coroutines - forget the ``await`` and Python itself warns you. Django's
-async ORM reached the same conclusion (DEP 0009).
+coroutines - forget the ``await`` and Python itself warns you. The nearest
+supported spelling, ``await User.select().aexecute()``, is exactly such a
+coroutine. Django's async ORM reached the same conclusion (DEP 0009).
 
 This is a current position, not a permanent one. Adding awaitable queries
 later is fully backward-compatible with everything described on this page;
@@ -692,7 +734,9 @@ API Reference
       The query is bound to this database before executing. The convenience
       methods (:meth:`get`, :meth:`list`, :meth:`scalar`, :meth:`count` and
       :meth:`exists`) execute the query against whatever database it is
-      already bound to.
+      already bound to. Queries bound to an async database can equivalently
+      be executed with :meth:`BaseQuery.aexecute`:
+      ``await query.aexecute()``.
 
    .. method:: get(query)
       :async:
@@ -936,6 +980,24 @@ API Reference
       Property which returns a base model class bound to this database,
       including the async model methods (see :class:`AsyncModelMixin`).
       Analogous to :attr:`Database.Model`.
+
+.. method:: BaseQuery.aexecute(database=None)
+   :async:
+
+   :param database: an async database; defaults to the query's bound
+       database.
+   :return: the normal return-value for the query type.
+
+   Async counterpart of :py:meth:`~BaseQuery.execute`, defined on all query
+   types (select, insert, update, delete, raw and compound queries).
+   Equivalent to ``await db.aexecute(query)``. Raises ``InterfaceError`` if
+   the query is not bound to a database, and ``AttributeError`` if the
+   bound database is synchronous.
+
+   .. code-block:: python
+
+      users = await User.select().order_by(User.username).aexecute()
+
 
 .. class:: AsyncModelMixin()
 

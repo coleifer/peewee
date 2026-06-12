@@ -121,6 +121,7 @@ class TestGreenletSpawn(unittest.IsolatedAsyncioTestCase):
         msg = str(ctx.exception)
         self.assertIn('db.run', msg)
         self.assertIn('afetch', msg)
+        self.assertIn('aexecute', msg)
 
     def test_await_outside_greenlet_closes_coroutine(self):
         async def coro():
@@ -727,6 +728,23 @@ class TestTaskLifecycle(unittest.IsolatedAsyncioTestCase):
         await asyncio.wait_for(self.db.close_pool(), timeout=2.0)
 
 
+class TestQueryAexecuteErrors(unittest.IsolatedAsyncioTestCase):
+    async def test_unbound_query(self):
+        class M(Model):
+            name = CharField()
+        with self.assertRaises(InterfaceError) as ctx:
+            await M.select().aexecute()
+        self.assertIn('aexecute', str(ctx.exception))
+
+    async def test_sync_database(self):
+        class M(Model):
+            name = CharField()
+            class Meta:
+                database = SqliteDatabase(':memory:')
+        with self.assertRaises(AttributeError):
+            await M.select().aexecute()
+
+
 class IntegrationTests(object):
     db_path = None
     models = [TestModel, User, Tweet, UniqueModel, AUser, ATweet, ANoLazy,
@@ -1280,6 +1298,86 @@ class IntegrationTests(object):
         else:
             res = await self.db.aexecute(q)
             self.assertEqual(res, 2)
+
+    async def test_query_aexecute(self):
+        # BaseQuery.aexecute() - postfix twin of db.aexecute(query).
+        q = TestModel.insert_many([(f'item{i}', i) for i in range(10)])
+        if self.support_returning:
+            q = q.returning(TestModel.name)
+            res = await q.aexecute()
+            self.assertEqual([t.name for t in res],
+                             [f'item{i}' for i in range(10)])
+        else:
+            await q.aexecute()
+        await self.assertCount(10)
+
+        q = (TestModel
+             .update(value=TestModel.value * 10)
+             .where(TestModel.value < 3))
+        if self.support_returning:
+            q = q.returning(TestModel.name, TestModel.value)
+            res = await q.aexecute()
+            self.assertEqual(sorted([(t.name, t.value) for t in res]),
+                             [('item0', 0), ('item1', 10), ('item2', 20)])
+        else:
+            res = await q.aexecute()
+            self.assertEqual(res, 2)
+
+        q = (TestModel
+             .select()
+             .where(TestModel.value >= 10)
+             .order_by(TestModel.value))
+        rows = await q.aexecute()
+        self.assertEqual([r.name for r in rows], ['item1', 'item2'])
+
+        # Interchangeable with db.aexecute() and, for iteration, db.list().
+        self.assertEqual([r.name for r in await self.db.aexecute(q)],
+                         ['item1', 'item2'])
+        self.assertEqual([r.name for r in await self.db.list(q)],
+                         ['item1', 'item2'])
+
+        q = TestModel.delete().where(TestModel.value >= 10)
+        if self.support_returning:
+            q = q.returning(TestModel.name)
+            res = await q.aexecute()
+            self.assertEqual(sorted([t.name for t in res]),
+                             ['item1', 'item2'])
+        else:
+            res = await q.aexecute()
+            self.assertEqual(res, 2)
+        await self.assertCount(8)
+
+        pk = await TestModel.insert(name='solo', value=99).aexecute()
+        obj = await self.db.run(TestModel.get_by_id, pk)
+        self.assertEqual(obj.name, 'solo')
+
+    async def test_query_aexecute_semantics(self):
+        await self.seed(3)
+        q = TestModel.select().order_by(TestModel.name)
+        r1 = await q.aexecute()
+        r2 = await q.aexecute()
+        self.assertIs(r1, r2)  # Sync execute() parity: select result cached.
+
+        u = TestModel.update(value=TestModel.value + 1)
+        self.assertEqual(await u.aexecute(), 3)
+        self.assertEqual(await u.aexecute(), 3)  # Writes re-execute.
+
+    async def test_query_aexecute_backref(self):
+        u = await AUser.acreate(username='u1')
+        for i in range(3):
+            await ATweet.acreate(user=u, message=f't{i}')
+
+        tweets = await u.tweets.aexecute()
+        self.assertEqual(sorted(t.message for t in tweets),
+                         ['t0', 't1', 't2'])
+
+    async def test_query_aexecute_compound(self):
+        await self.seed(4)
+        lhs = TestModel.select().where(TestModel.value == 0)
+        rhs = TestModel.select().where(TestModel.value == 30)
+        res = await (lhs | rhs).aexecute()
+        self.assertEqual(sorted([r.name for r in res]),
+                         ['item00', 'item03'])
 
     async def test_run_contextvars(self):
         var = contextvars.ContextVar('v', default='x')

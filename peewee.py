@@ -2124,6 +2124,10 @@ class BaseQuery(Node):
     def execute(self, database):
         return self._execute(database)
 
+    @database_required
+    async def aexecute(self, database):
+        return await database.aexecute(self)
+
     def _execute(self, database):
         raise NotImplementedError
 

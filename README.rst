@@ -166,8 +166,8 @@ Asyncio
             # Create a query - nothing is executed yet.
             query = Tweet.select(Tweet, User).join(User)
 
-            # Buffered results.
-            tweets = await db.list(query)
+            # Execute and buffer the results.
+            tweets = await query.aexecute()  # Or: await db.list(query)
             for tweet in tweets:
                 print(tweet.user.username, '->', tweet.message)
 
