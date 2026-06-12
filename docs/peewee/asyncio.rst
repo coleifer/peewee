@@ -51,9 +51,12 @@ releases it on exit:
            charlie.name = 'Charles'
            await charlie.asave()
 
-           # Execute a query and iterate results.
-           for user in await db.list(User.select().order_by(User.name)):
+           # Execute a query and iterate the buffered results.
+           for user in await User.select().order_by(User.name).aexecute():
                print(user.name)
+
+           # Or fetch the rows as a plain list:
+           users = await db.list(User.select().order_by(User.name))
 
            # Async lazy result fetching (uses server-side cursors where
            # available).
@@ -169,7 +172,9 @@ Related objects follow three rules. Rows selected with a join or with
 attribute access - no await needed. For a one-off lazy load, use
 ``await obj.afetch(Model.field)``, which runs the query on the event loop
 and caches the result on the instance. And if you are calling ``afetch()``
-in a loop, you wanted :meth:`~AsyncDatabaseMixin.aprefetch`.
+in a loop, you wanted :meth:`~AsyncDatabaseMixin.aprefetch`. Back-references
+are not relation attributes but ordinary select queries - execute them like
+any query: ``await user.tweets.aexecute()``.
 
 Executing queries: ``aexecute()``
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -246,6 +251,9 @@ For single-query operations, the async helpers are more direct:
    # Execute any query and get its natural return type.
    cursor = await db.aexecute(query)
 
+   # Equivalent, as a method on the query itself:
+   cursor = await query.aexecute()
+
    # Use a transaction:
    async with db.atomic() as tx:
        await db.run(User.create, name='Bob')
@@ -274,9 +282,10 @@ For single-query operations, the async helpers are more direct:
    print(cursor.fetchall())   # [(1,)]
 
 .. note::
-   Choosing between ``db.list()`` and ``db.iterate()``: ``list()`` buffers
-   the full result set, and it is safe to await other queries while looping
-   over the result. ``iterate()`` streams rows using server-side cursors
+   Choosing between buffered and streaming iteration: ``db.list()`` and
+   ``query.aexecute()`` buffer the full result set, and it is safe to await
+   other queries while looping over the result. ``db.iterate()`` streams
+   rows using server-side cursors
    where available - it holds the task's connection while open (an
    interleaved query on the same connection raises ``InterfaceError`` after
    a short grace period), and on Postgres the driver opens a transaction
@@ -480,6 +489,10 @@ Solutions:
 
 .. code-block:: python
 
+   # Execute the back-reference query directly:
+   for tweet in await user.tweets.aexecute():
+       print(tweet.content)
+
    # Using db.list():
    for tweet in await db.list(user.tweets):
        print(tweet.content)
@@ -509,8 +522,8 @@ relations were eagerly loaded:
 
    data = await db.run(UserSchema.model_validate, user)
 
-Any code that triggers a database query must execute via either ``db.run()`` or
-one of the async helper methods.
+Any code that triggers a database query must execute via ``db.run()``,
+``query.aexecute()``, or one of the async helper methods.
 
 Tasks spawned inside a transaction
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^

@@ -184,7 +184,7 @@ style hooks, fully :ref:`async query execution <pwasyncio>`, and
 
    @app.get('/users', response_model=list[UserResponse])
    async def list_users(db=Depends(get_db)):
-       rows = await db.list(User.select().dicts())
+       rows = await User.select().dicts().aexecute()
        return [UserResponse(**row) for row in rows]
 
    @app.post('/users', response_model=UserResponse)
