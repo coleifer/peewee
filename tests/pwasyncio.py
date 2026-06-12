@@ -2,6 +2,7 @@ import asyncio
 import collections
 import contextvars
 import glob
+import inspect
 import itertools
 import tempfile
 import os
@@ -741,8 +742,52 @@ class TestQueryAexecuteErrors(unittest.IsolatedAsyncioTestCase):
             name = CharField()
             class Meta:
                 database = SqliteDatabase(':memory:')
-        with self.assertRaises(AttributeError):
+        with self.assertRaises(AttributeError) as ctx:
             await M.select().aexecute()
+        self.assertIn('SqliteDatabase', str(ctx.exception))
+
+    def test_is_coroutine_function(self):
+        self.assertTrue(inspect.iscoroutinefunction(Select.aexecute))
+
+    async def test_explicit_database_no_rebind(self):
+        a1 = AsyncSqliteDatabase(':memory:', pool_size=1)
+        a2 = AsyncSqliteDatabase(':memory:', pool_size=1)
+        class M(Model):
+            name = CharField()
+            class Meta:
+                database = a1
+        await a1.aconnect()
+        await a1.acreate_tables([M])
+        await a2.aconnect()
+        def create_in_a2():
+            with M.bind_ctx(a2):
+                M.create_table()
+        await a2.run(create_in_a2)
+        await M.insert(name='in-a2').aexecute(a2)
+
+        q = M.select()
+        self.assertEqual([r.name for r in await q.aexecute(a2)], ['in-a2'])
+        self.assertIs(q._database, a1)  # Explicit database did not rebind.
+        self.assertEqual(await a1.count(M.select()), 0)
+        await a1.close_pool()
+        await a2.close_pool()
+
+    async def test_proxy_not_unwrapped(self):
+        proxy = DatabaseProxy()
+        class M(Model):
+            name = CharField()
+            class Meta:
+                database = proxy
+        adb = AsyncSqliteDatabase(':memory:', pool_size=1)
+        proxy.initialize(adb)
+        await adb.aconnect()
+        await adb.acreate_tables([M])
+        await M.insert(name='x').aexecute()
+
+        q = M.select()
+        self.assertEqual([r.name for r in await q.aexecute()], ['x'])
+        self.assertIs(q._database, proxy)  # Binding is still the proxy.
+        await adb.close_pool()
 
 
 class IntegrationTests(object):
@@ -1264,7 +1309,7 @@ class IntegrationTests(object):
         if self.support_returning:
             q = q.returning(TestModel.name)
             res = await self.db.aexecute(q)
-            self.assertEqual([t.name for t in res],
+            self.assertEqual(sorted([t.name for t in res]),
                              [f'item{i}' for i in range(10)])
         else:
             await self.db.aexecute(q)
@@ -1272,13 +1317,13 @@ class IntegrationTests(object):
 
         q = (TestModel
              .update(value=TestModel.value * 10)
-             .where(TestModel.value < 3))
+             .where((TestModel.value > 0) & (TestModel.value < 3)))
 
         if self.support_returning:
             q = q.returning(TestModel.name, TestModel.value)
             res = await self.db.aexecute(q)
             self.assertEqual(sorted([(t.name, t.value) for t in res]),
-                             [('item0', 0), ('item1', 10), ('item2', 20)])
+                             [('item1', 10), ('item2', 20)])
         else:
             res = await self.db.aexecute(q)
             self.assertEqual(res, 2)
@@ -1305,7 +1350,7 @@ class IntegrationTests(object):
         if self.support_returning:
             q = q.returning(TestModel.name)
             res = await q.aexecute()
-            self.assertEqual([t.name for t in res],
+            self.assertEqual(sorted([t.name for t in res]),
                              [f'item{i}' for i in range(10)])
         else:
             await q.aexecute()
@@ -1313,12 +1358,12 @@ class IntegrationTests(object):
 
         q = (TestModel
              .update(value=TestModel.value * 10)
-             .where(TestModel.value < 3))
+             .where((TestModel.value > 0) & (TestModel.value < 3)))
         if self.support_returning:
             q = q.returning(TestModel.name, TestModel.value)
             res = await q.aexecute()
             self.assertEqual(sorted([(t.name, t.value) for t in res]),
-                             [('item0', 0), ('item1', 10), ('item2', 20)])
+                             [('item1', 10), ('item2', 20)])
         else:
             res = await q.aexecute()
             self.assertEqual(res, 2)
@@ -1331,9 +1376,10 @@ class IntegrationTests(object):
         self.assertEqual([r.name for r in rows], ['item1', 'item2'])
 
         # Interchangeable with db.aexecute() and, for iteration, db.list().
-        self.assertEqual([r.name for r in await self.db.aexecute(q)],
+        # Clones ensure these execute fresh instead of reading q's cache.
+        self.assertEqual([r.name for r in await self.db.aexecute(q.clone())],
                          ['item1', 'item2'])
-        self.assertEqual([r.name for r in await self.db.list(q)],
+        self.assertEqual([r.name for r in await self.db.list(q.clone())],
                          ['item1', 'item2'])
 
         q = TestModel.delete().where(TestModel.value >= 10)
