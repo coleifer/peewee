@@ -20,7 +20,7 @@ def make_db_params(key):
 PSQL_PARAMS = make_db_params('PSQL')
 
 
-class User(Model):
+class User(AsyncModelMixin, Model):
     name = TextField()
     email = TextField()
 
@@ -39,28 +39,39 @@ async def worker_task(db, task_id, num_operations=10):
             email = 'user%s_%s@test.com' % (task_id, i)
 
             if op == 'create':
-                await db.run(User.create, name=name, email=email)
+                # Mix the general-purpose bridge and the a-method sugar.
+                if i % 2 == 0:
+                    await db.run(User.create, name=name, email=email)
+                else:
+                    await User.acreate(name=name, email=email)
 
             elif op == 'read':
                 users = await db.list(User.select().limit(5))
+                await User.aget_or_none(User.name == name)
 
             elif op == 'update':
                 users = await db.list(User.select().limit(1))
                 if users:
                     user = users[0]
                     user.name = 'Updated-%s-%s' % (task_id, i)
-                    await db.run(user.save)
+                    if i % 2 == 0:
+                        await db.run(user.save)
+                    else:
+                        await user.asave()
 
             elif op == 'delete':
                 users = await db.list(User.select().limit(1))
                 if users:
-                    await db.run(users[0].delete_instance)
+                    if i % 2 == 0:
+                        await db.run(users[0].delete_instance)
+                    else:
+                        await users[0].adelete_instance()
 
             elif op == 'transaction':
                 async with db.atomic():
-                    await db.run(User.create,
-                               name='TX-%s-%s' % (task_id, i),
-                               email='tx%s_%s@test.com' % (task_id, i))
+                    await User.acreate(
+                        name='TX-%s-%s' % (task_id, i),
+                        email='tx%s_%s@test.com' % (task_id, i))
                     try:
                         async with db.atomic():
                             await db.run(User.create,
@@ -120,8 +131,10 @@ async def stress_test(db, num_tasks=100, ops_per_task=10):
     async with db:
         total_users = await db.run(User.select().count)
 
-    # Cleanup dead tasks
-    cleaned = db._state.cleanup_dead_tasks()
+    # Dead-task state is reaped via task done-callbacks; orphaned
+    # connections (from tasks that died holding one) are drained on
+    # connect / close_pool.
+    orphans = len(db._state._orphaned_conns)
 
     # Report
     throughput = (num_tasks * ops_per_task) / elapsed
@@ -132,8 +145,8 @@ async def stress_test(db, num_tasks=100, ops_per_task=10):
     print('Failed tasks: %s/%s' % (failed, num_tasks))
     print('Total users in DB: %s' % total_users)
     print('Memory delta: %0.2f MB' % memory_delta)
-    print('Dead tasks cleaned: %s' % cleaned)
-    print('Remaining task states: %s' % len(db._state._state_storage))
+    print('Orphaned connections pending: %s' % orphans)
+    print('Remaining task states: %s' % len(db._state._states))
     print('-' * 60)
 
     # Cleanup
