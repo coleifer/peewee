@@ -11,6 +11,29 @@ Queries are dispatched to the driver as a coroutine and awaited on the asyncio
 event loop, while Peewee's query-building and result-processing code runs
 unmodified. See :ref:`how-it-works` for the mechanism.
 
+Installation
+------------
+
+Requires Python 3.8 or newer, ``greenlet`` and an async database driver:
+
+.. code-block:: shell
+
+   pip install peewee greenlet
+
+   pip install aiosqlite  # SQLite
+   pip install asyncpg  # Postgresql
+   pip install aiomysql  # MySQL / MariaDB
+
+Supported backends:
+
+================  ============  ====================================
+Database          Driver        Peewee class
+================  ============  ====================================
+SQLite            aiosqlite     :class:`AsyncSqliteDatabase`
+Postgresql        asyncpg       :class:`AsyncPostgresqlDatabase`
+MySQL / MariaDB   aiomysql      :class:`AsyncMySQLDatabase`
+================  ============  ====================================
+
 Example
 -------
 
@@ -71,7 +94,9 @@ releases it on exit:
 Every query is awaited on the asyncio event loop, in the calling task: the
 SQL is handed to the async driver (``aiosqlite``, ``asyncpg`` or
 ``aiomysql``) and awaited like any other coroutine. No thread executor is
-involved and nothing is monkey-patched.
+involved and nothing is monkey-patched. Each task acquires its own
+connection from the pool, so concurrent tasks never share connection or
+transaction state - details under `Connection Management`_ below.
 
 .. _how-it-works:
 
@@ -89,29 +114,6 @@ resumes with the result.
    This is real asyncio, NOT gevent-style concurrency. Nothing is
    monkey-patched, no sockets are wrapped, and the event loop is the ordinary
    asyncio loop running the rest of your application.
-
-Installation
-------------
-
-Requires Python 3.8 or newer, ``greenlet`` and an async database driver:
-
-.. code-block:: shell
-
-   pip install peewee greenlet
-
-   pip install aiosqlite  # SQLite
-   pip install asyncpg  # Postgresql
-   pip install aiomysql  # MySQL / MariaDB
-
-Supported backends:
-
-================  ============  ====================================
-Database          Driver        Peewee class
-================  ============  ====================================
-SQLite            aiosqlite     :class:`AsyncSqliteDatabase`
-Postgresql        asyncpg       :class:`AsyncPostgresqlDatabase`
-MySQL / MariaDB   aiomysql      :class:`AsyncMySQLDatabase`
-================  ============  ====================================
 
 Execution Methods
 -----------------
