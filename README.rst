@@ -3,7 +3,11 @@
 peewee
 ======
 
-Peewee is a simple and small ORM. It has few (but expressive) concepts, making it easy to learn and intuitive to use.
+Peewee is a simple and small ORM. It has few (but expressive) concepts, making
+it easy to learn and intuitive to use.
+
+Peewee is a single module with no required dependencies and has been running
+production workloads of all sizes since 2010.
 
 * a small, expressive ORM
 * flexible query-builder that exposes full power of SQL

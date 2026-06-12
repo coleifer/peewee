@@ -1,0 +1,34 @@
+# Peewee
+
+> Peewee is an expressive Python ORM with built-in asyncio support, in
+> continuous development since 2010. Supports SQLite, MySQL, MariaDB,
+> PostgreSQL and CockroachDB. The bundled playhouse extensions add connection
+> pooling, schema migrations, pydantic schema generation, JSON and full-text
+> search for SQLite and Postgres, and more. "Small" describes the library -
+> one module, zero dependencies - not the projects it supports: peewee runs
+> production workloads of all sizes.
+
+## Documentation
+
+- [Quickstart](https://docs.peewee-orm.com/en/latest/peewee/quickstart.html): models, connecting, basic CRUD.
+- [Models and fields](https://docs.peewee-orm.com/en/latest/peewee/models.html): field types, Meta options, indexes, constraints.
+- [Querying](https://docs.peewee-orm.com/en/latest/peewee/querying.html): select, insert, update, delete, joins, aggregates.
+- [Relationships and joins](https://docs.peewee-orm.com/en/latest/peewee/relationships.html): foreign keys, backrefs, prefetch, N+1 avoidance.
+- [Async support](https://docs.peewee-orm.com/en/latest/peewee/asyncio.html): built-in asyncio via playhouse.pwasyncio - async databases, a-prefixed model methods, query.aexecute(), db.run().
+- [Databases](https://docs.peewee-orm.com/en/latest/peewee/database.html): connection management, SQLite/MySQL/Postgres/CockroachDB configuration.
+- [Transactions](https://docs.peewee-orm.com/en/latest/peewee/transactions.html): atomic blocks, nesting, savepoints.
+- [API reference](https://docs.peewee-orm.com/en/latest/peewee/api.html): complete class and method reference.
+
+## Extensions
+
+- [SQLite extensions](https://docs.peewee-orm.com/en/latest/peewee/sqlite.html): JSON, full-text search, user-defined functions, cysqlite.
+- [Postgres extensions](https://docs.peewee-orm.com/en/latest/peewee/postgres.html): JSONB, arrays, hstore, full-text search.
+- [Framework integration](https://docs.peewee-orm.com/en/latest/peewee/framework_integration.html): Flask, FastAPI, Sanic, Django coexistence.
+- [ORM utilities](https://docs.peewee-orm.com/en/latest/peewee/orm_utils.html): pydantic schema generation, model_to_dict, dataclasses.
+- [Schema migrations](https://docs.peewee-orm.com/en/latest/peewee/db_tools.html): migrate(), schema introspection, pwiz model generation.
+
+## Optional
+
+- [Query examples](https://docs.peewee-orm.com/en/latest/peewee/query_library.html): cookbook of common query patterns.
+- [Example app](https://docs.peewee-orm.com/en/latest/peewee/example.html): a complete twitter-style application.
+- [Interactive use](https://docs.peewee-orm.com/en/latest/peewee/interactive.html): peewee in the REPL and notebooks.
