@@ -38,6 +38,14 @@ class MissingGreenletBridge(RuntimeError):
     pass
 
 
+_BRIDGE_ERR_HINT = (
+    ' Hint: in async code, run queries through the async API, e.g. '
+    '`await Model.aget(...)`, `await db.aexecute(query)`, `await '
+    'db.list(query)`, or wrap synchronous code with `await db.run(fn)`. '
+    'For lazy foreign-key access use `await obj.afetch(Model.rel_field)`. See '
+    'https://docs.peewee-orm.com/en/latest/peewee/asyncio.html#sharp-corners')
+
+
 async def greenlet_spawn(fn, *args, **kwargs):
     parent = getcurrent()
     result = None
@@ -74,7 +82,8 @@ def await_(awaitable):
     if parent is None:
         if asyncio.iscoroutine(awaitable):
             awaitable.close()  # Avoid a "never awaited" RuntimeWarning.
-        raise MissingGreenletBridge('await_() called outside greenlet_spawn()')
+        errmsg = 'await_() called outside greenlet_spawn()' + _BRIDGE_ERR_HINT
+        raise MissingGreenletBridge(errmsg)
     return parent.switch(awaitable)
 
 
@@ -202,8 +211,8 @@ class AsyncDatabaseMixin(object):
         try:
             return await_(self.aexecute_sql(sql, params or ()))
         except MissingGreenletBridge as exc:
-            raise MissingGreenletBridge(
-                f'Attempted query outside greenlet runner: {sql}') from exc
+            errmsg = f'Attempted query outside greenlet runner: {sql}.'
+            raise MissingGreenletBridge(errmsg + _BRIDGE_ERR_HINT) from exc
 
     async def aexecute_sql(self, sql, params=None):
         conn = await self.aconnect()
@@ -480,7 +489,7 @@ class AsyncModelMixin(object):
             return self.__rel__[field.name]  # Load cached.
         if not field.lazy_load:
             raise ValueError('%s.%s is declared with lazy_load=False.' %
-                             % (type(self).__name__, field.name))
+                             (type(self).__name__, field.name))
         return await _aio_database(type(self)).run(getattr, self, field.name)
 
 
