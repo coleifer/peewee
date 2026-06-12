@@ -2124,9 +2124,12 @@ class BaseQuery(Node):
     def execute(self, database):
         return self._execute(database)
 
-    @database_required
-    async def aexecute(self, database):
-        return await database.aexecute(self)
+    async def aexecute(self, database=None):
+        database = self._database if database is None else database
+        if not database:
+            raise InterfaceError('Query must be bound to a database in order '
+                                 'to call "aexecute".')
+        return await database.run(self.execute, database)
 
     def _execute(self, database):
         raise NotImplementedError
