@@ -5525,6 +5525,12 @@ Queries
       executed). For example, select queries the return result will be an
       iterator over the query results.
 
+   .. method:: aexecute(database=None)
+      :async:
+
+      Async counterpart of :py:meth:`execute`, for queries bound to an
+      asyncio-compatible database. See :ref:`pwasyncio`.
+
    .. method:: iterator(database=None)
 
       :param Database database: Database to execute query against. Not

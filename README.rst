@@ -134,7 +134,7 @@ Queries are expressive and composable:
     # table for tracking a "count" associated with each URL). We don't want to
     # naively get the save in two separate steps since this is prone to race
     # conditions.
-    Counter.update(count=Counter.count + 1).where(Counter.url == request.url)
+    Counter.update(count=Counter.count + 1).where(Counter.url == request.url).execute()
 
 Check out the `example twitter app <http://docs.peewee-orm.com/en/latest/peewee/example.html>`_.
 
@@ -143,6 +143,8 @@ Asyncio
 
 .. code-block:: python
 
+    import asyncio
+    from peewee import *
     from playhouse.pwasyncio import AsyncPostgresqlDatabase
 
     db = AsyncPostgresqlDatabase('my_app')
@@ -156,7 +158,10 @@ Asyncio
 
     async def main():
         async with db:
+            await db.acreate_tables([User, Tweet])
+
             # Queries are awaited on the event loop using asyncpg.
+            huey = await User.acreate(username='huey')
             tweet = await Tweet.acreate(user=huey, message='meow')
 
             async with db.atomic():
@@ -174,6 +179,10 @@ Asyncio
             # Streaming results via server-side cursor.
             async for tweet in db.iterate(query):
                 print(tweet.user.username, '->', tweet.message)
+
+        await db.close_pool()
+
+    asyncio.run(main())
 
 See the `asyncio docs <https://docs.peewee-orm.com/en/latest/peewee/asyncio.html>`_
 for details.

@@ -142,10 +142,11 @@ take an ``a`` prefix (``acreate``, ``aget``, ``aget_or_none``,
 (:meth:`~AsyncDatabaseMixin.acreate_tables`,
 :meth:`~AsyncDatabaseMixin.adrop_tables`). Query-builder methods
 (``select()``, ``where()``, and the rest) only build SQL - they perform no
-I/O and need no async variant. ``execute()``, the one query method that
-does perform I/O, has an async twin: :meth:`~BaseQuery.aexecute`. The
-database helpers (``db.get``, ``db.list``, etc.) accept any query as an
-argument.
+I/O and need no async variant. Of the query methods that do perform I/O,
+``execute()`` has an async twin, :meth:`~BaseQuery.aexecute`; the others
+(``count()``, ``exists()``, ``get()``, iteration) are covered by the
+database helpers (``db.count``, ``db.exists``, ``db.get``, ``db.list``,
+etc.), which accept any query as an argument.
 
 Classes derived from ``db.Model`` get these methods automatically when
 ``db`` is an async database. To declare an explicit base class, subclass
@@ -183,11 +184,12 @@ Queries provide :meth:`~BaseQuery.aexecute`, the async counterpart of
 :meth:`~BaseQuery.execute`. It executes the query on its bound async
 database and returns whatever ``execute()`` returns: a result wrapper for
 selects, the new primary key for inserts, the number of modified rows for
-updates and deletes.
+updates and deletes. With a ``RETURNING`` clause, writes return rows, like
+a select.
 
 .. code-block:: python
 
-   # Equivalent to ``await db.aexecute(query)``:
+   # The async counterpart of execute():
    active = await User.select().where(User.is_active == True).aexecute()
    for user in active:  # Results are buffered; iteration performs no I/O.
        print(user.username)
@@ -206,11 +208,13 @@ updates and deletes.
 
    # Resolve a backref:
    for tweet in await user.tweets.aexecute():
-       print(tweet.message)
+       print(tweet.content)
 
 For selects, ``await query.aexecute()`` is interchangeable with
 ``await db.list(query)`` for iteration - ``aexecute()`` returns the
-buffered result wrapper while ``list()`` returns a plain list.
+buffered result wrapper while ``list()`` returns a plain list. When in
+doubt, prefer ``query.aexecute()``; use ``db.list()`` when you want a
+plain list and ``db.iterate()`` when you want streaming.
 ``aexecute()`` is the only async method on queries; aggregates and other
 conveniences remain database helpers (``await db.count(query)``,
 ``await db.exists(query)``, and so on).
@@ -525,6 +529,15 @@ relations were eagerly loaded:
 Any code that triggers a database query must execute via ``db.run()``,
 ``query.aexecute()``, or one of the async helper methods.
 
+Sharing one query object across tasks
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Select queries cache their result on the query object. Two tasks that
+concurrently await the same not-yet-executed select will each execute it -
+the cache is only populated after the bridge yields to the event loop -
+and the last writer wins the cache. Give each task its own query object,
+or ``clone()`` a shared one.
+
 Tasks spawned inside a transaction
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
@@ -720,7 +733,8 @@ API Reference
    .. method:: aexecute(query)
       :async:
 
-      :param Query query: a Select, Insert, Update or Delete query.
+      :param Query query: any query - select, insert, update, delete,
+          raw or compound.
       :return: the normal return-value for the query type.
 
       Execute any Peewee query object and return its result.
@@ -747,9 +761,10 @@ API Reference
       The query is bound to this database before executing. The convenience
       methods (:meth:`get`, :meth:`list`, :meth:`scalar`, :meth:`count` and
       :meth:`exists`) execute the query against whatever database it is
-      already bound to. Queries bound to an async database can equivalently
-      be executed with :meth:`BaseQuery.aexecute`:
-      ``await query.aexecute()``.
+      already bound to. Queries bound to an async database can also be
+      executed with :meth:`BaseQuery.aexecute` (``await query.aexecute()``),
+      which executes against the bound database without modifying the
+      binding.
 
    .. method:: get(query)
       :async:
@@ -1002,10 +1017,13 @@ API Reference
    :return: the normal return-value for the query type.
 
    Async counterpart of :py:meth:`~BaseQuery.execute`, defined on all query
-   types (select, insert, update, delete, raw and compound queries).
-   Equivalent to ``await db.aexecute(query)``. Raises ``InterfaceError`` if
-   the query is not bound to a database, and ``AttributeError`` if the
-   bound database is synchronous.
+   types (select, insert, update, delete, raw and compound queries). An
+   explicit ``database`` is used for that execution only - unlike
+   :meth:`AsyncDatabaseMixin.aexecute`, the query's binding is never
+   modified. Raises ``InterfaceError`` if the query is not bound to a
+   database, and ``AttributeError`` if the bound database is synchronous
+   (a query bound to an uninitialized :class:`DatabaseProxy` also raises
+   ``AttributeError``).
 
    .. code-block:: python
 

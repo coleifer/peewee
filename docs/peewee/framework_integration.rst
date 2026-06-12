@@ -169,6 +169,7 @@ style hooks, fully :ref:`async query execution <pwasyncio>`, and
    UserResponse = to_pydantic(User, exclude_autofield=False, model_name='UserResponse')
 
    async def get_db():
+       # Hold a pooled connection open for the duration of the request.
        async with db:
            yield db
 
@@ -276,8 +277,6 @@ The following is a minimal example demonstrating:
    from peewee import *
    from playhouse.pwasyncio import *
 
-
-   app = FastAPI()
 
    db = AsyncPostgresqlDatabase('peewee_test', host='10.8.0.1', user='postgres')
 
