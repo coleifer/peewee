@@ -335,6 +335,9 @@ class AsyncDatabaseMixin(object):
     async def get(self, query):
         return await self.run(query.get)
 
+    async def first(self, query, n=1):
+        return await self.run(query.first, n=n)
+
     async def list(self, query):
         return await self.run(list, query)
 
@@ -384,6 +387,105 @@ class AsyncDatabaseMixin(object):
             return self._state.closed
         except RuntimeError:
             return True
+
+    @property
+    def Model(self):
+        if not hasattr(self, '_Model'):
+            class Meta: database = self
+            self._Model = type('AsyncBaseModel', (AsyncModel,), {'Meta': Meta})
+        return self._Model
+
+
+def _aio_database(model):
+    # Ensure we have an asyncio-friendly db.
+    db = model._meta.database
+    if isinstance(db, Proxy):
+        db = db.obj
+    if db is None:
+        raise InterfaceError('%s is not bound to a database. Async methods '
+                             'require an Async database.' % model.__name__)
+    elif not isinstance(db, AsyncDatabaseMixin):
+        raise InterfaceError('%s is not bound to an asyncio-compatible '
+                             'database (%s). Async methods require an Async '
+                             'database.' % (model.__name__, type(db).__name__))
+    return db
+
+
+class AsyncModelMixin(object):
+    @classmethod
+    async def acreate(cls, **query):
+        return await _aio_database(cls).run(cls.create, **query)
+
+    @classmethod
+    async def aget(cls, *query, **filters):
+        return await _aio_database(cls).run(cls.get, *query, **filters)
+
+    @classmethod
+    async def aget_or_none(cls, *query, **filters):
+        return await _aio_database(cls).run(cls.get_or_none, *query, **filters)
+
+    @classmethod
+    async def aget_by_id(cls, pk):
+        return await _aio_database(cls).run(cls.get_by_id, pk)
+
+    @classmethod
+    async def aget_or_create(cls, **kwargs):
+        # Delegates to Model.get_or_create: atomic() + IntegrityError race
+        # recovery run inside the bridge.
+        return await _aio_database(cls).run(cls.get_or_create, **kwargs)
+
+    @classmethod
+    async def aset_by_id(cls, key, value):
+        return await _aio_database(cls).run(cls.set_by_id, key, value)
+
+    @classmethod
+    async def adelete_by_id(cls, pk):
+        return await _aio_database(cls).run(cls.delete_by_id, pk)
+
+    @classmethod
+    async def abulk_create(cls, model_list, batch_size=None):
+        return await _aio_database(cls).run(
+            cls.bulk_create,
+            model_list,
+            batch_size)
+
+    @classmethod
+    async def abulk_update(cls, model_list, fields, batch_size=None):
+        return await _aio_database(cls).run(
+            cls.bulk_update,
+            model_list,
+            fields,
+            batch_size)
+
+    async def asave(self, force_insert=False, only=None):
+        # resolve MRO, e.g. playhouse.signals overrides running in bridge.
+        return await _aio_database(type(self)).run(
+            self.save,
+            force_insert,
+            only)
+
+    async def adelete_instance(self, recursive=False, delete_nullable=False):
+        return await _aio_database(type(self)).run(
+            self.delete_instance,
+            recursive,
+            delete_nullable)
+
+    async def afetch(self, field):
+        # await tweet.afetch(Tweet.user), lazy foreign-key helper.
+        if isinstance(field, str):
+            field = self._meta.combined[field]
+        if not isinstance(field, ForeignKeyField):
+            raise ValueError('afetch() accepts a foreign-key field.')
+        if field.name in self.__rel__:
+            return self.__rel__[field.name]  # Load cached.
+        if not field.lazy_load:
+            raise ValueError('%s.%s is declared with lazy_load=False.' %
+                             % (type(self).__name__, field.name))
+        return await _aio_database(type(self)).run(getattr, self, field.name)
+
+
+class AsyncModel(AsyncModelMixin, Model):
+    pass
 
 
 class CursorAdapter(object):
