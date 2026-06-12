@@ -7,6 +7,26 @@ https://github.com/coleifer/peewee/releases
 
 ## master
 
+* Add async model methods to `playhouse.pwasyncio` using "a"-prefixed coroutine
+  counterparts of the row-level `Model` methods (`acreate`, `aget`,
+  `aget_or_none`, `aget_by_id`, `aget_or_create`, `aset_by_id`,
+  `adelete_by_id`, `abulk_create`, `abulk_update`, `asave`,
+  `adelete_instance`), available via the new `AsyncModel` /
+  `AsyncModelMixin` classes. Each is a thin delegation through the greenlet
+  bridge, so behavior is identical to the synchronous implementation.
+  Note: the `Model` property of async databases now returns a base class
+  that includes these methods - relevant only if you introspect the base
+  class of `db.Model` subclasses.
+* Add `afetch()` for explicit, awaitable lazy foreign-key resolution:
+  `user = await tweet.afetch(Tweet.user)`. Already-loaded relations (via
+  join or prefetch) return immediately without a query.
+* Add `db.first(query, n=1)` async helper.
+* `MissingGreenletBridge` errors now include a hint describing the async
+  APIs to use.
+* The asyncio extension is no longer considered preliminary - the async
+  APIs documented in [the docs](https://docs.peewee-orm.com/en/latest/peewee/asyncio.html)
+  are stable. The asyncio stress test now also runs in CI.
+
 [View commits](https://github.com/coleifer/peewee/compare/4.0.7...master)
 
 ## 4.0.7

@@ -154,15 +154,13 @@ style hooks, fully :ref:`async query execution <pwasyncio>`, and
 
    db = AsyncPostgresqlDatabase('peewee_test')
 
-   class User(Model):
+   class User(db.Model):
        name = CharField(verbose_name='Full Name', help_text='Display name')
        email = CharField(unique=True)
        status = IntegerField(default=1, choices=(
            (1, 'Active'),
            (2, 'Inactive'),
            (3, 'Deleted')))
-       class Meta:
-           database = db
 
    # Generate pydantic schemas suitable for create and responses.
    # Schemas will include metadata from verbose_name, help_text, choices, and
@@ -191,7 +189,7 @@ style hooks, fully :ref:`async query execution <pwasyncio>`, and
 
    @app.post('/users', response_model=UserResponse)
    async def create_user(data: UserCreate, db=Depends(get_db)):
-       user = await db.run(User.create, **data.model_dump())
+       user = await User.acreate(**data.model_dump())
        return UserResponse.model_validate(user)
 
    @app.get('/users/{user_id}', response_model=UserResponse)
@@ -343,7 +341,7 @@ instead of dependency injection.
 
    @app.post('/users')
    async def create_user(name: str):
-       user = await db.run(User.create, name=name)
+       user = await User.acreate(name=name)
        return {'id': user.id, 'name': user.name}
 
 Synchronous FastAPI

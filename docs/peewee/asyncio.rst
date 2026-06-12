@@ -40,12 +40,16 @@ releases it on exit:
            await db.acreate_tables([User])
 
            # Create a new user in a transaction.
-           async with db.atomic() as txn:
-               user = await db.run(User.create, name='Charlie')
+           async with db.atomic():
+               user = await User.acreate(name='Charlie')
 
            # Fetch a single row from the database.
-           charlie = await db.get(User.select().where(User.name == 'Charlie'))
-           assert charlie.name == user.name
+           charlie = await User.aget(User.name == 'Charlie')
+           assert charlie.id == user.id
+
+           # Update the row.
+           charlie.name = 'Charles'
+           await charlie.asave()
 
            # Execute a query and iterate results.
            for user in await db.list(User.select().order_by(User.name)):
@@ -60,6 +64,11 @@ releases it on exit:
        await db.close_pool()
 
    asyncio.run(main())
+
+Every query is awaited on the asyncio event loop, in the calling task: the
+SQL is handed to the async driver (``aiosqlite``, ``asyncpg`` or
+``aiomysql``) and awaited like any other coroutine. No thread executor is
+involved and nothing is monkey-patched.
 
 .. _how-it-works:
 
@@ -103,6 +112,62 @@ MySQL / MariaDB   aiomysql      :class:`AsyncMySQLDatabase`
 
 Execution Methods
 -----------------
+
+Async Model Methods
+^^^^^^^^^^^^^^^^^^^
+
+Models bound to an async database have ``a``-prefixed counterparts of the
+:class:`Model` methods that read or write rows:
+
+.. code-block:: python
+
+   user = await User.acreate(name='Huey')
+
+   user.name = 'Huey-zai'
+   await user.asave()
+
+   huey = await User.aget(User.name == 'Huey-zai')
+   obj, created = await User.aget_or_create(name='Mickey')
+
+   await huey.adelete_instance()
+
+The naming rule: methods that read or write *rows* live on the model and
+take an ``a`` prefix (``acreate``, ``aget``, ``aget_or_none``,
+``aget_by_id``, ``aget_or_create``, ``aset_by_id``, ``adelete_by_id``,
+``abulk_create``, ``abulk_update``, ``asave``, ``adelete_instance``,
+``afetch``). Schema operations live on the database
+(:meth:`~AsyncDatabaseMixin.acreate_tables`,
+:meth:`~AsyncDatabaseMixin.adrop_tables`). Query-builder methods
+(``select()``, ``where()``, and the rest) only build SQL - they perform no
+I/O and need no async variant. The database helpers (``db.get``,
+``db.list``, etc.) accept any query as an argument.
+
+Classes derived from ``db.Model`` get these methods automatically when
+``db`` is an async database. To declare an explicit base class, subclass
+:class:`AsyncModel` (or mix :class:`AsyncModelMixin` into your own base):
+
+.. code-block:: python
+
+   from playhouse.pwasyncio import AsyncModel, AsyncSqliteDatabase
+
+   db = AsyncSqliteDatabase('app.db')
+
+   class BaseModel(AsyncModel):
+       class Meta:
+           database = db
+
+.. note::
+   :py:class:`DatabaseProxy` hands out the synchronous base class from its
+   ``Model`` property even when later initialized to an async database -
+   proxy users should subclass :class:`AsyncModel` with
+   ``Meta.database = proxy``.
+
+Related objects follow three rules. Rows selected with a join or with
+:meth:`~AsyncDatabaseMixin.aprefetch` expose their relations as plain
+attribute access - no await needed. For a one-off lazy load, use
+``await obj.afetch(Model.field)``, which runs the query on the event loop
+and caches the result on the instance. And if you are calling ``afetch()``
+in a loop, you wanted :meth:`~AsyncDatabaseMixin.aprefetch`.
 
 ``db.run()`` - general-purpose entry point
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -166,6 +231,15 @@ For single-query operations, the async helpers are more direct:
    # Raw SQL:
    cursor = await db.aexecute_sql('SELECT 1')
    print(cursor.fetchall())   # [(1,)]
+
+.. note::
+   Choosing between ``db.list()`` and ``db.iterate()``: ``list()`` buffers
+   the full result set, and it is safe to await other queries while looping
+   over the result. ``iterate()`` streams rows using server-side cursors
+   where available - it holds the task's connection while open (an
+   interleaved query on the same connection raises ``InterfaceError`` after
+   a short grace period), and on Postgres the driver opens a transaction
+   for the duration of the cursor.
 
 Transactions
 ^^^^^^^^^^^^^
@@ -313,7 +387,16 @@ object has not been populated. Outside a greenlet context, this raises ``Missing
    print(tweet.user.name)
    # MissingGreenletBridge: Attempted query outside greenlet runner.
 
-Fix by selecting the related model in the original query:
+Fix with an explicit async fetch, which also caches the related instance so
+subsequent plain attribute access is free:
+
+.. code-block:: python
+
+   user = await tweet.afetch(Tweet.user)
+   print(user.name)
+   print(tweet.user.name)   # OK - cached, no query.
+
+Or by selecting the related model in the original query:
 
 .. code-block:: python
 
@@ -327,8 +410,11 @@ Or by wrapping the access in ``db.run()``:
 
    name = await db.run(lambda: tweet.user.name)
 
-The safest approach is to disable lazy-loading on your foreign-key fields and
-enforce selecting relations via explicit joins.
+For strict codebases, disable lazy-loading on the foreign-key field
+(``lazy_load=False``) and enforce selecting relations via explicit joins;
+attribute access then returns the column value rather than performing a
+query, and ``afetch()`` on such a field raises ``ValueError`` rather than
+guessing.
 
 .. code-block:: python
 
@@ -384,6 +470,56 @@ relations were eagerly loaded:
 
 Any code that triggers a database query must execute via either ``db.run()`` or
 one of the async helper methods.
+
+Tasks spawned inside a transaction
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Connections are task-local. A task spawned with ``asyncio.gather()`` or
+``asyncio.create_task()`` inside an ``async with db.atomic()`` block
+acquires its *own* connection and therefore runs **outside** the
+transaction: its writes commit (or fail) independently and are not rolled
+back with the parent. This is by design - it is what makes concurrent
+tasks safe from interleaving each other's transactions - but it means
+transactional work must stay within a single task:
+
+.. code-block:: python
+
+   async with db.atomic():
+       await asyncio.gather(
+           User.acreate(name='b'),      # Own connection, NOT in the
+           User.acreate(name='c'))      # transaction - commits even if the
+                                        # parent block rolls back.
+       await User.acreate(name='a')     # In the transaction.
+
+Beware of lock interplay on top of the transaction semantics: on a
+single-writer database like SQLite, a task that gathers write-tasks *after*
+the parent transaction has itself written will deadlock until the busy
+timeout - the children block on the parent's write lock while the parent
+awaits the children. In-memory SQLite databases are stricter still: they
+use a single connection, so any task gathered while the parent holds the
+connection will wait for the full ``acquire_timeout`` and then raise. If
+concurrent tasks are part of the design, keep transactions short and
+prefer Postgres, or structure the work so tasks do not overlap an open
+write transaction.
+
+Design note: why not ``await User.select()``?
+---------------------------------------------
+
+Queries are deliberately not awaitable. Making every query object awaitable
+flips ``inspect.isawaitable(query)`` to ``True`` in every installation,
+including purely synchronous ones, and parts of the ecosystem dispatch on
+exactly such checks (template engines that auto-await attribute access,
+ASGI frameworks that duck-type async iterables) - the blast radius extends
+well beyond async users. A forgotten ``await`` on a custom awaitable is
+also silent: Python's "coroutine was never awaited" warning applies only to
+real coroutines, so an unawaited ``User.insert(...)`` would simply never
+execute, without a sound. The ``a``-prefixed methods are ordinary
+coroutines - forget the ``await`` and Python itself warns you. Django's
+async ORM reached the same conclusion (DEP 0009).
+
+This is a current position, not a permanent one. Adding awaitable queries
+later is fully backward-compatible with everything described on this page;
+if real-world usage demonstrates the need, the door is open.
 
 API Reference
 -------------
@@ -576,6 +712,17 @@ API Reference
          query = Tweet.select(Tweet, User).join(User).where(Tweet.id == 123)
          tweet = await db.get(query)
          print(tweet.user.username, '->', tweet.content)
+
+   .. method:: first(query, n=1)
+      :async:
+
+      :param Query query: a Select query.
+      :param int n: number of rows.
+
+      Execute a SELECT query and return the first row, or ``None`` if the
+      result is empty. With ``n > 1``, return up to the first ``n`` rows as
+      a list. Like the synchronous :meth:`SelectBase.first`, a LIMIT is
+      applied to the query.
 
    .. method:: list(query)
       :async:
@@ -784,6 +931,74 @@ API Reference
       already fetched (call ``.fetchall()`` synchronously). For result
       streaming, see :meth:`~AsyncDatabaseMixin.iterate`.
 
+   .. attribute:: Model
+
+      Property which returns a base model class bound to this database,
+      including the async model methods (see :class:`AsyncModelMixin`).
+      Analogous to :attr:`Database.Model`.
+
+.. class:: AsyncModelMixin()
+
+   Mixin providing ``a``-prefixed coroutine counterparts of the
+   :class:`Model` methods that read or write rows. Every method is a thin
+   delegation: the synchronous implementation runs inside the greenlet
+   bridge, so behaviors like ``only_save_dirty``, composite keys,
+   :py:meth:`~Model.get_or_create`'s integrity-error recovery and
+   ``playhouse.signals`` hooks all apply unchanged.
+
+   The model must be bound to an async database (e.g.
+   :class:`AsyncSqliteDatabase`); calling an async model method on a model
+   bound to a synchronous database raises ``InterfaceError``.
+
+   Classmethods: ``acreate``, ``aget``, ``aget_or_none``, ``aget_by_id``,
+   ``aget_or_create``, ``aset_by_id``, ``adelete_by_id``, ``abulk_create``,
+   ``abulk_update``. Each accepts the same arguments and returns the same
+   values as its synchronous counterpart.
+
+   .. method:: asave(force_insert=False, only=None)
+      :async:
+
+      Coroutine counterpart of :py:meth:`Model.save`. Returns the number of
+      rows modified (or ``False`` for a no-op save when ``only_save_dirty``
+      is enabled).
+
+   .. method:: adelete_instance(recursive=False, delete_nullable=False)
+      :async:
+
+      Coroutine counterpart of :py:meth:`Model.delete_instance`.
+
+   .. method:: afetch(field)
+      :async:
+
+      :param field: a :class:`ForeignKeyField` on this model (or its name).
+
+      Explicitly resolve a lazy foreign-key relation. If the related object
+      is already loaded (via a join, :meth:`~AsyncDatabaseMixin.aprefetch`,
+      or a prior ``afetch()``), it is returned immediately with no query.
+      Otherwise the related row is fetched on the event loop and cached on
+      the instance, so subsequent plain attribute access is free.
+
+      Raises ``ValueError`` for non-foreign-key fields, and for fields
+      declared with ``lazy_load=False`` (fetch those explicitly, e.g.
+      ``await Rel.aget_by_id(obj.rel_id)``). A nullable, unset foreign key
+      resolves to ``None``. For fetching relations in bulk, use
+      :meth:`~AsyncDatabaseMixin.aprefetch`.
+
+      .. code-block:: python
+
+         tweet = await Tweet.aget_by_id(tweet_id)
+         user = await tweet.afetch(Tweet.user)
+
+.. class:: AsyncModel()
+
+   ``Model`` subclass with :class:`AsyncModelMixin` applied - a convenient
+   explicit base class:
+
+   .. code-block:: python
+
+      class BaseModel(AsyncModel):
+          class Meta:
+              database = db
 
 .. class:: AsyncSqliteDatabase(database, **kwargs)
 
