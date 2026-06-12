@@ -9,6 +9,7 @@ import unittest
 from unittest.mock import Mock, AsyncMock, MagicMock, patch
 
 from peewee import *
+from playhouse import signals
 from playhouse.pwasyncio import *
 from playhouse.pwasyncio import _State, _ConnectionState, _lazy_cursor_iter
 from .base import MYSQL_PARAMS
@@ -46,6 +47,39 @@ class UniqueModel(Model):
     name = CharField(unique=True)
 
 
+# Models using the async model-method mixin.
+
+class AUser(AsyncModelMixin, Model):
+    username = CharField()
+
+class ATweet(AsyncModelMixin, Model):
+    user = ForeignKeyField(AUser, backref='tweets')
+    editor = ForeignKeyField(AUser, backref='edited', null=True)
+    message = TextField()
+
+class ANoLazy(AsyncModelMixin, Model):
+    user = ForeignKeyField(AUser, backref='nolazy', lazy_load=False)
+    message = TextField()
+
+class AUnique(AsyncModelMixin, Model):
+    name = CharField(unique=True)
+
+class AComposite(AsyncModelMixin, Model):
+    first = CharField()
+    last = CharField()
+    data = TextField(default='')
+    class Meta:
+        primary_key = CompositeKey('first', 'last')
+
+class ADirty(AsyncModelMixin, Model):
+    name = CharField()
+    class Meta:
+        only_save_dirty = True
+
+class ASignal(AsyncModelMixin, signals.Model):
+    name = CharField()
+
+
 class TestGreenletSpawn(unittest.IsolatedAsyncioTestCase):
     async def test_simple_function(self):
         result = await greenlet_spawn(lambda x, y: x + y, 5, 3)
@@ -80,6 +114,13 @@ class TestGreenletSpawn(unittest.IsolatedAsyncioTestCase):
     def test_await_outside_greenlet(self):
         with self.assertRaises(MissingGreenletBridge):
             await_(Mock())
+
+    def test_await_outside_greenlet_hint(self):
+        with self.assertRaises(MissingGreenletBridge) as ctx:
+            await_(Mock())
+        msg = str(ctx.exception)
+        self.assertIn('db.run', msg)
+        self.assertIn('afetch', msg)
 
     def test_await_outside_greenlet_closes_coroutine(self):
         async def coro():
@@ -688,7 +729,8 @@ class TestTaskLifecycle(unittest.IsolatedAsyncioTestCase):
 
 class IntegrationTests(object):
     db_path = None
-    models = [TestModel, User, Tweet, UniqueModel]
+    models = [TestModel, User, Tweet, UniqueModel, AUser, ATweet, ANoLazy,
+              AUnique, AComposite, ADirty, ASignal]
 
     def get_database(self):
         with tempfile.NamedTemporaryFile(delete=False) as f:
@@ -748,6 +790,292 @@ class IntegrationTests(object):
                 for i in range(n):
                     TestModel.create(name=f'item{i:02d}', value=i * 10)
         await self.db.run(_seed)
+
+    async def test_amodel_create_get(self):
+        u = await AUser.acreate(username='u1')
+        self.assertIsNotNone(u.id)
+
+        ug = await AUser.aget(AUser.username == 'u1')
+        self.assertEqual(ug.id, u.id)
+        ug = await AUser.aget(username='u1')
+        self.assertEqual(ug.id, u.id)
+        ug = await AUser.aget_by_id(u.id)
+        self.assertEqual(ug.username, 'u1')
+
+        self.assertIsNone(await AUser.aget_or_none(AUser.username == 'ux'))
+        with self.assertRaises(AUser.DoesNotExist):
+            await AUser.aget(AUser.username == 'ux')
+
+    async def test_amodel_save_update_delete(self):
+        u = await AUser.acreate(username='u1')
+        u.username = 'u2'
+        self.assertEqual(await u.asave(), 1)
+        self.assertEqual((await AUser.aget_by_id(u.id)).username, 'u2')
+
+        await AUser.aset_by_id(u.id, {'username': 'u3'})
+        self.assertEqual((await AUser.aget_by_id(u.id)).username, 'u3')
+
+        self.assertEqual(await u.adelete_instance(), 1)
+        self.assertIsNone(await AUser.aget_or_none(AUser.id == u.id))
+
+        u2 = await AUser.acreate(username='u4')
+        await AUser.adelete_by_id(u2.id)
+        self.assertIsNone(await AUser.aget_or_none(AUser.id == u2.id))
+
+    async def test_amodel_get_or_create(self):
+        o1, created = await AUnique.aget_or_create(name='k')
+        self.assertTrue(created)
+        o2, created = await AUnique.aget_or_create(name='k')
+        self.assertFalse(created)
+        self.assertEqual(o1.id, o2.id)
+
+    async def test_aget_or_create_race(self):
+        # Core's IntegrityError race-recovery, exercised from two tasks on
+        # two pool connections.
+        async def attempt():
+            return await AUnique.aget_or_create(name='race')
+        (o1, c1), (o2, c2) = await asyncio.gather(attempt(), attempt())
+        self.assertEqual(sorted([c1, c2]), [False, True])
+        self.assertEqual(o1.id, o2.id)
+
+    async def test_abulk_create_update(self):
+        users = [AUser(username='b%s' % i) for i in range(5)]
+        await AUser.abulk_create(users, 2)
+        q = AUser.select().where(AUser.username.startswith('b'))
+        self.assertEqual(await self.db.count(q), 5)
+
+        if self.driver == 'postgresql':
+            return  # bulk_update incompatible with asyncpg (documented).
+
+        objs = await self.db.list(q.order_by(AUser.username))
+        for o in objs:
+            o.username += 'x'
+        await AUser.abulk_update(objs, [AUser.username], 2)
+        names = [u.username for u in
+                 await self.db.list(q.order_by(AUser.username))]
+        self.assertEqual(names, ['b0x', 'b1x', 'b2x', 'b3x', 'b4x'])
+
+    async def test_asave_composite_key(self):
+        c = AComposite(first='a', last='b', data='x')
+        self.assertEqual(await c.asave(force_insert=True), 1)
+        c.data = 'y'
+        self.assertEqual(await c.asave(), 1)
+        cg = await AComposite.aget(AComposite.first == 'a',
+                                   AComposite.last == 'b')
+        self.assertEqual(cg.data, 'y')
+
+    async def test_asave_only_save_dirty(self):
+        d = await ADirty.acreate(name='d1')
+        self.assertFalse(await d.asave())  # No dirty fields -> False.
+        d.name = 'd2'
+        self.assertEqual(await d.asave(), 1)
+        self.assertEqual((await ADirty.aget_by_id(d.id)).name, 'd2')
+
+    async def test_signals_inside_bridge(self):
+        accum = []
+        def pre_save(sender, instance, created):
+            accum.append(('pre_save', created))
+        def post_save(sender, instance, created):
+            accum.append(('post_save', created))
+        def pre_delete(sender, instance):
+            accum.append(('pre_delete',))
+        def post_delete(sender, instance):
+            accum.append(('post_delete',))
+
+        signals.pre_save.connect(pre_save, sender=ASignal)
+        signals.post_save.connect(post_save, sender=ASignal)
+        signals.pre_delete.connect(pre_delete, sender=ASignal)
+        signals.post_delete.connect(post_delete, sender=ASignal)
+        try:
+            s = ASignal(name='s1')
+            await s.asave()
+            await s.adelete_instance()
+        finally:
+            signals.pre_save.disconnect(pre_save, sender=ASignal)
+            signals.post_save.disconnect(post_save, sender=ASignal)
+            signals.pre_delete.disconnect(pre_delete, sender=ASignal)
+            signals.post_delete.disconnect(post_delete, sender=ASignal)
+
+        self.assertEqual(accum, [
+            ('pre_save', True), ('post_save', True),
+            ('pre_delete',), ('post_delete',)])
+
+    async def test_afetch(self):
+        u = await AUser.acreate(username='af')
+        t_id = (await ATweet.acreate(user=u, message='m')).id
+
+        t = await ATweet.aget_by_id(t_id)
+        self.assertNotIn('user', t.__rel__)
+        rel = await t.afetch(ATweet.user)
+        self.assertEqual(rel.id, u.id)
+        self.assertIn('user', t.__rel__)
+        self.assertIs(t.user, rel)  # Plain access is now cache-hit.
+
+        # String forms resolve via _meta.combined: name and column name.
+        t2 = await ATweet.aget_by_id(t_id)
+        self.assertEqual((await t2.afetch('user')).id, u.id)
+        t3 = await ATweet.aget_by_id(t_id)
+        self.assertEqual((await t3.afetch('user_id')).id, u.id)
+
+        with self.assertRaises(ValueError):
+            await t.afetch(ATweet.message)  # Non-FK field.
+        with self.assertRaises(KeyError):
+            await t.afetch('nope')  # Unknown name, core parity.
+
+        # Nullable FK, not set -> None.
+        self.assertIsNone(await t.afetch(ATweet.editor))
+
+    async def test_afetch_cache_hit_no_bridge(self):
+        u = await AUser.acreate(username='af2')
+        await ATweet.acreate(user=u, message='m2')
+
+        t = await self.db.get(
+            ATweet.select(ATweet, AUser).join(AUser, on=ATweet.user))
+        self.assertIn('user', t.__rel__)
+
+        # Swap in a database lacking `run` to prove no bridge is used.
+        real_db = ATweet._meta.database
+        ATweet._meta.database = Mock(spec=[])
+        try:
+            rel = await t.afetch(ATweet.user)
+        finally:
+            ATweet._meta.database = real_db
+        self.assertEqual(rel.username, 'af2')
+
+    async def test_afetch_after_aprefetch(self):
+        u = await AUser.acreate(username='af3')
+        await ATweet.acreate(user=u, message='m3')
+
+        users = await self.db.aprefetch(
+            AUser.select().where(AUser.username == 'af3'), ATweet.select())
+        tweet = users[0].tweets[0]
+        self.assertIn('user', tweet.__rel__)
+
+        real_db = ATweet._meta.database
+        ATweet._meta.database = Mock(spec=[])
+        try:
+            rel = await tweet.afetch(ATweet.user)
+        finally:
+            ATweet._meta.database = real_db
+        self.assertEqual(rel.id, u.id)
+
+    async def test_afetch_lazy_load_false(self):
+        u = await AUser.acreate(username='nl')
+        n = await ANoLazy.acreate(user=u, message='x')
+
+        ng = await ANoLazy.aget_by_id(n.id)
+        with self.assertRaises(ValueError) as ctx:
+            await ng.afetch(ANoLazy.user)
+        self.assertIn('lazy_load', str(ctx.exception))
+        self.assertEqual((await AUser.aget_by_id(ng.user)).id, u.id)
+
+    async def test_afetch_missing_rel(self):
+        if self.driver != 'sqlite':
+            self.skipTest('FK constraints enforced on this backend')
+        # Same task -> same connection, so the pragma applies to the insert.
+        await self.db.aexecute_sql('PRAGMA foreign_keys=0')
+        try:
+            await self.db.aexecute(ATweet.insert(user=99999,
+                                                 message='orphan'))
+        finally:
+            await self.db.aexecute_sql('PRAGMA foreign_keys=1')
+        t = await ATweet.aget(ATweet.message == 'orphan')
+        with self.assertRaises(AUser.DoesNotExist):
+            await t.afetch(ATweet.user)
+
+    async def test_db_model_property(self):
+        base = self.db.Model
+        self.assertTrue(issubclass(base, AsyncModel))
+        self.assertIs(base, self.db.Model)  # Cached.
+
+        DynModel = type('DynModel', (base,), {'name': CharField()})
+        await self.db.acreate_tables([DynModel])
+        try:
+            obj = await DynModel.acreate(name='dyn')
+            got = await DynModel.aget(DynModel.name == 'dyn')
+            self.assertEqual(got.id, obj.id)
+        finally:
+            await self.db.adrop_tables([DynModel])
+
+    async def test_amodel_sync_db_raises(self):
+        sync_db = SqliteDatabase(':memory:')
+        class SyncBound(AsyncModelMixin, Model):
+            name = CharField()
+            class Meta:
+                database = sync_db
+        with self.assertRaises(InterfaceError) as ctx:
+            await SyncBound.acreate(name='x')
+        self.assertIn('Async database', str(ctx.exception))
+
+    async def test_amodel_unbound_raises(self):
+        class Unbound(AsyncModelMixin, Model):
+            name = CharField()
+            class Meta:
+                database = None
+        with self.assertRaises(InterfaceError) as ctx:
+            await Unbound.acreate(name='x')
+        self.assertIn('not bound', str(ctx.exception))
+
+    async def test_amodel_proxy(self):
+        proxy = DatabaseProxy()
+        class PModel(AsyncModelMixin, Model):
+            name = CharField()
+            class Meta:
+                database = proxy
+
+        with self.assertRaises(InterfaceError):
+            await PModel.acreate(name='x')  # Uninitialized proxy.
+
+        proxy.initialize(self.db)
+        await self.db.acreate_tables([PModel])
+        try:
+            p = await PModel.acreate(name='x')
+            self.assertEqual((await PModel.aget_by_id(p.id)).name, 'x')
+        finally:
+            await self.db.adrop_tables([PModel])
+
+    async def test_gather_inside_atomic(self):
+        # Tasks spawned inside a transaction get their own connections and run
+        # OUTSIDE the transaction.
+        conn_ids = []
+        async def child(i):
+            conn_ids.append(id(self.db._state._current()))
+            await AUser.acreate(username='child%s' % i)
+
+        class Abort(Exception):
+            pass
+
+        parent_state = []
+        try:
+            async with self.db.atomic():
+                parent_state.append(id(self.db._state._current()))
+                await asyncio.gather(child(1), child(2))
+                raise Abort()
+        except Abort:
+            pass
+
+        # Children used distinct connections, not the parent's...
+        self.assertEqual(len(set(conn_ids)), 2)
+        self.assertNotIn(parent_state[0], conn_ids)
+        # ...so their writes survived the parent's rollback.
+        q = AUser.select().where(AUser.username.startswith('child'))
+        self.assertEqual(await self.db.count(q), 2)
+
+    async def test_query_outside_bridge_hint(self):
+        with self.assertRaises(MissingGreenletBridge) as ctx:
+            list(TestModel.select())
+        msg = str(ctx.exception)
+        self.assertTrue(msg.startswith(
+            'Attempted query outside greenlet runner: SELECT'))
+        self.assertIn('db.run', msg)
+        self.assertIn('afetch', msg)
+
+    async def test_db_first(self):
+        self.assertIsNone(await self.db.first(TestModel.select()))
+        await self.seed(3)
+        first = await self.db.first(
+            TestModel.select().order_by(TestModel.value))
+        self.assertEqual(first.name, 'item00')
 
     async def test_pool_created_on_connect(self):
         await self.db.aclose()
