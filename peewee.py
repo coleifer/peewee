@@ -382,11 +382,6 @@ SNAKE_CASE_STEP2 = re.compile('([a-z0-9])_*([A-Z])')
 IDENTIFIER_RE = re.compile(r'[A-Za-z_][A-Za-z0-9_]*')
 
 # Helper functions that are used in various parts of the codebase.
-MODEL_BASE = '_metaclass_helper_'
-
-def with_metaclass(meta, base=object):
-    return meta(MODEL_BASE, (base,), {})
-
 def merge_dict(source, overrides):
     merged = source.copy()
     if overrides:
@@ -7362,7 +7357,8 @@ class ModelBase(type):
                        'table_settings', 'strict_tables'])
 
     def __new__(cls, name, bases, attrs, **kwargs):
-        if name == MODEL_BASE or bases[0].__name__ == MODEL_BASE:
+        # Skip processing for the base Model class, which has no model parent.
+        if not any(isinstance(b, ModelBase) for b in bases):
             return super(ModelBase, cls).__new__(cls, name, bases, attrs,
                                                  **kwargs)
 
@@ -7505,7 +7501,7 @@ class _BoundModelsContext(object):
                        _exclude=set(self.models))
 
 
-class Model(with_metaclass(ModelBase, Node)):
+class Model(Node, metaclass=ModelBase):
     def __init__(self, *args, **kwargs):
         if kwargs.pop('__no_default__', None):
             self.__data__ = {}
