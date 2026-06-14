@@ -145,6 +145,49 @@ The ``db.atomic()`` wrapper is important: it ensures that the rollback on
 
 .. _top-item-per-group:
 
+.. _eager-loading:
+
+Eager-loading for a list view
+-----------------------------
+
+List views - a page of rows, each shown with some related data - are where the
+N+1 problem usually creeps in. Loading the page together with its related rows
+via :meth:`~ModelSelect.with_related` keeps the work to one query per
+relationship, no matter how many rows are on the page:
+
+.. code-block:: python
+
+   # One page of users, each with all of their tweets, in two queries.
+   query = (User
+            .select()
+            .order_by(User.username)
+            .paginate(1, 20)
+            .with_related(Load(User.tweets)))
+
+   for user in query:
+       print(user.username)
+       for tweet in user.tweets:  # No query issued here; user.tweets is a list.
+           print('  ', tweet.content)
+
+The load fires however the rows are consumed - ``get()``, ``first()``, indexing
+and ``len()`` all trigger it, not only iteration.
+
+When the parent query is paginated, prefer the ``JOIN`` strategy: MySQL cannot
+use ``LIMIT`` inside an ``IN``-subquery, and a join sidesteps that.
+
+.. code-block:: python
+
+   query = (User
+            .select()
+            .paginate(1, 20)
+            .with_related(Load(User.tweets, strategy=PREFETCH_TYPE.JOIN)))
+
+To walk deeper - users, their tweets, then each tweet's favorites - nest hops
+with ``.then()``; to pull several relationships off each user at once, pass
+multiple :class:`Load` nodes. Both keep the per-relationship query count. See
+:ref:`relationships` for the full tree form.
+
+
 Top Item Per Group
 ------------------
 
@@ -227,6 +270,24 @@ timestamp (newest first), then filter the outer query to the top N ranks:
             .select(ranked.c.content, ranked.c.username)
             .from_(ranked)
             .where(ranked.c.rnk <= 3))
+
+Top-N as related objects
+^^^^^^^^^^^^^^^^^^^^^^^^^
+
+The form above returns a flat result set. To attach each user's top *N* tweets
+to the user object instead, use :meth:`~ModelSelect.with_related` with a
+per-parent limit; it builds an equivalent ranked CTE internally:
+
+.. code-block:: python
+
+   query = User.select().with_related(
+       Load(User.tweets)
+       .order_by(Tweet.created_date.desc())
+       .limit(3, per_parent=True))
+
+   for user in query:
+       for tweet in user.tweets:  # At most three, newest first.
+           print(user.username, tweet.content)
 
 Postgresql - lateral joins
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^

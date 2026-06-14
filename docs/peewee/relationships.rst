@@ -1072,6 +1072,16 @@ and ``.then()`` nests one hop inside another:
        for tweet in user.tweets:
            print(user.username, tweet.content, len(tweet.favorites))
 
+``with_related`` accepts more than one :class:`Load`, so several independent
+branches can hang off the same parent in a single call:
+
+.. code-block:: python
+
+   # Each user's tweets and (separately) the tweets they have favorited:
+   query = User.select().with_related(
+       Load(User.tweets),
+       Load(User.favorites))
+
 Each :class:`Load` carries its own modifiers, applied to that hop alone:
 
 .. code-block:: python
