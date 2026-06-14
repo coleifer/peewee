@@ -15,6 +15,7 @@ from .results import *
 from .schema import *
 from .sql import *
 from .transactions import *
+from .with_related_tests import *
 
 # Extensions.
 try:

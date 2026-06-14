@@ -1,0 +1,343 @@
+"""
+Tests for Select.with_related() and the Load relationship load-tree.
+
+Covers both prefetch strategies (WHERE and JOIN), the per-hop modifiers
+(where/order_by/limit), per-parent windowed limits, multi-FK disambiguation,
+self-referential loads, composite primary keys, and that the load fires on
+every materialization path (iter/get/first/index/len), not just iteration.
+"""
+import sqlite3
+
+from peewee import *
+
+from .base import ModelTestCase
+from .base import TestModel
+from .base import get_in_memory_db
+from .base import skip_unless
+
+
+WINDOW_FUNCTIONS = sqlite3.sqlite_version_info >= (3, 25)
+
+
+class User(TestModel):
+    username = TextField()
+
+
+class Tweet(TestModel):
+    user = ForeignKeyField(User, backref='tweets')
+    content = TextField()
+    published = BooleanField(default=True)
+    timestamp = IntegerField(default=0)
+
+
+class Reaction(TestModel):
+    name = TextField()
+
+
+class Favorite(TestModel):
+    tweet = ForeignKeyField(Tweet, backref='favorites')
+    reaction = ForeignKeyField(Reaction, backref='favorites')
+
+
+class Message(TestModel):
+    sender = ForeignKeyField(User, backref='sent')
+    recipient = ForeignKeyField(User, backref='received')
+    body = TextField()
+
+
+class Folder(TestModel):
+    name = TextField()
+    parent = ForeignKeyField('self', backref='children', null=True)
+
+
+class Group(TestModel):
+    name = TextField()
+
+
+class Tag(TestModel):
+    group = ForeignKeyField(Group, backref='tags')
+    name = TextField()
+    rank = IntegerField(default=0)
+
+    class Meta:
+        primary_key = CompositeKey('group', 'name')
+
+
+class TestWithRelated(ModelTestCase):
+    database = get_in_memory_db()
+    requires = [User, Reaction, Tweet, Favorite]
+
+    def setUp(self):
+        super(TestWithRelated, self).setUp()
+        data = (
+            ('huey', (('meow', 3, True), ('purr', 1, True), ('hiss', 2, False))),
+            ('mickey', (('woof', 5, True), ('bark', 4, True))),
+            ('zaizee', ()))
+        tweets = {}
+        for username, rows in data:
+            user = User.create(username=username)
+            for content, ts, published in rows:
+                tweets[content] = Tweet.create(user=user, content=content,
+                                               timestamp=ts, published=published)
+        like = Reaction.create(name='like')
+        love = Reaction.create(name='love')
+        Favorite.create(tweet=tweets['meow'], reaction=like)
+        Favorite.create(tweet=tweets['meow'], reaction=love)
+        Favorite.create(tweet=tweets['woof'], reaction=like)
+
+    def test_backref(self):
+        for pt in PREFETCH_TYPE.values():
+            with self.assertQueryCount(2):
+                query = (User
+                         .select()
+                         .order_by(User.username)
+                         .with_related(Load(User.tweets, strategy=pt)))
+                accum = [(u.username, sorted(t.content for t in u.tweets))
+                         for u in query]
+            self.assertEqual(accum, [
+                ('huey', ['hiss', 'meow', 'purr']),
+                ('mickey', ['bark', 'woof']),
+                ('zaizee', [])])
+
+    def test_forward_fk(self):
+        for pt in PREFETCH_TYPE.values():
+            with self.assertQueryCount(2):
+                query = (Tweet
+                         .select()
+                         .order_by(Tweet.content)
+                         .with_related(Load(Tweet.user, strategy=pt)))
+                accum = [(t.content, t.user.username) for t in query]
+            self.assertEqual(accum, [
+                ('bark', 'mickey'), ('hiss', 'huey'), ('meow', 'huey'),
+                ('purr', 'huey'), ('woof', 'mickey')])
+
+    def test_chain(self):
+        for pt in PREFETCH_TYPE.values():
+            with self.assertQueryCount(4):
+                query = (User
+                         .select()
+                         .order_by(User.username)
+                         .with_related(
+                             Load(User.tweets, strategy=pt).then(
+                                 Load(Tweet.favorites, strategy=pt).then(
+                                     Load(Favorite.reaction, strategy=pt)))))
+                accum = []
+                for user in query:
+                    for tweet in sorted(user.tweets, key=lambda t: t.content):
+                        accum.append((
+                            user.username, tweet.content,
+                            sorted(f.reaction.name for f in tweet.favorites)))
+            self.assertEqual(accum, [
+                ('huey', 'hiss', []),
+                ('huey', 'meow', ['like', 'love']),
+                ('huey', 'purr', []),
+                ('mickey', 'bark', []),
+                ('mickey', 'woof', ['like'])])
+
+    def test_where_and_order_by(self):
+        for pt in PREFETCH_TYPE.values():
+            with self.assertQueryCount(2):
+                query = (User
+                         .select()
+                         .where(User.username == 'huey')
+                         .with_related(
+                             Load(User.tweets, strategy=pt)
+                             .where(Tweet.published == True)
+                             .order_by(Tweet.timestamp.desc())))
+                huey, = list(query)
+            self.assertEqual([t.content for t in huey.tweets], ['meow', 'purr'])
+
+    def test_where_accumulates(self):
+        # Chained .where() must AND, not overwrite, like every other where().
+        query = (User
+                 .select()
+                 .where(User.username == 'huey')
+                 .with_related(
+                     Load(User.tweets)
+                     .where(Tweet.content != 'meow')
+                     .where(Tweet.content != 'purr')))
+        huey, = list(query)
+        self.assertEqual([t.content for t in huey.tweets], ['hiss'])
+
+    def test_loads_on_every_access_path(self):
+        # The load must fire regardless of how rows are materialized -- not just
+        # iteration. get/first/index/len all go through execute().
+        def huey_tweets(user):
+            return sorted(t.content for t in user.tweets)
+
+        with self.assertQueryCount(2):
+            user = (User.select().where(User.username == 'huey')
+                    .with_related(Load(User.tweets)).get())
+            self.assertEqual(huey_tweets(user), ['hiss', 'meow', 'purr'])
+
+        with self.assertQueryCount(2):
+            user = (User.select().where(User.username == 'huey')
+                    .with_related(Load(User.tweets)).first())
+            self.assertEqual(huey_tweets(user), ['hiss', 'meow', 'purr'])
+
+        query = (User.select().order_by(User.username)
+                 .with_related(Load(User.tweets)))
+        self.assertEqual(huey_tweets(query[0]), ['hiss', 'meow', 'purr'])
+
+        query = (User.select().order_by(User.username)
+                 .with_related(Load(User.tweets)))
+        self.assertEqual(len(query), 3)
+        self.assertEqual(huey_tweets(query[0]), ['hiss', 'meow', 'purr'])
+
+    def test_load_requires_relationship(self):
+        self.assertRaises(ValueError, Load, User.username)
+
+
+class TestWithRelatedMultiFK(ModelTestCase):
+    database = get_in_memory_db()
+    requires = [User, Message]
+
+    def setUp(self):
+        super(TestWithRelatedMultiFK, self).setUp()
+        huey = User.create(username='huey')
+        mickey = User.create(username='mickey')
+        Message.create(sender=huey, recipient=mickey, body='to mickey')
+        Message.create(sender=mickey, recipient=huey, body='to huey')
+
+    def test_only_named_relationship_loaded(self):
+        # Two FKs to User; loading one backref must not populate the sibling
+        # or cross-contaminate it.
+        for pt in PREFETCH_TYPE.values():
+            with self.assertQueryCount(2):
+                query = (User
+                         .select()
+                         .order_by(User.username)
+                         .with_related(Load(User.received, strategy=pt)))
+                users = {u.username: u for u in query}
+            self.assertEqual([m.body for m in users['huey'].received],
+                             ['to huey'])
+            self.assertEqual([m.body for m in users['mickey'].received],
+                             ['to mickey'])
+            self.assertIn('received', users['huey'].__dict__)
+            self.assertNotIn('sent', users['huey'].__dict__)
+
+
+class TestWithRelatedSelfRef(ModelTestCase):
+    database = get_in_memory_db()
+    requires = [Folder]
+
+    def setUp(self):
+        super(TestWithRelatedSelfRef, self).setUp()
+        a = Folder.create(name='a')
+        b = Folder.create(name='b')
+        a1 = Folder.create(name='a1', parent=a)
+        Folder.create(name='a2', parent=a)
+        Folder.create(name='a1x', parent=a1)
+
+    def test_self_ref_two_levels(self):
+        for pt in PREFETCH_TYPE.values():
+            with self.assertQueryCount(3):
+                query = (Folder
+                         .select()
+                         .where(Folder.parent.is_null())
+                         .order_by(Folder.name)
+                         .with_related(
+                             Load(Folder.children, strategy=pt).then(
+                                 Load(Folder.children, strategy=pt))))
+                tree = {}
+                for root in query:
+                    tree[root.name] = {
+                        child.name: sorted(g.name for g in child.children)
+                        for child in root.children}
+            self.assertEqual(tree, {
+                'a': {'a1': ['a1x'], 'a2': []},
+                'b': {}})
+
+
+class TestWithRelatedLimit(ModelTestCase):
+    database = get_in_memory_db()
+    requires = [User, Reaction, Tweet, Favorite]
+
+    def setUp(self):
+        super(TestWithRelatedLimit, self).setUp()
+        huey = User.create(username='huey')
+        mickey = User.create(username='mickey')
+        self.tweets = {}
+        for i, content in enumerate(['h0', 'h1', 'h2', 'h3']):
+            self.tweets[content] = Tweet.create(user=huey, content=content,
+                                                timestamp=i)
+        for i, content in enumerate(['m0', 'm1']):
+            self.tweets[content] = Tweet.create(user=mickey, content=content,
+                                                timestamp=i)
+
+    def test_global_limit(self):
+        # One LIMIT across the whole hop: N rows total, not per parent.
+        for pt in PREFETCH_TYPE.values():
+            query = (User
+                     .select()
+                     .order_by(User.username)
+                     .with_related(
+                         Load(User.tweets, strategy=pt)
+                         .order_by(Tweet.timestamp)
+                         .limit(2)))
+            total = sum(len(user.tweets) for user in query)
+            self.assertEqual(total, 2)
+
+    @skip_unless(WINDOW_FUNCTIONS, 'requires sqlite >= 3.25 for window fns')
+    def test_per_parent_limit(self):
+        for pt in PREFETCH_TYPE.values():
+            with self.assertQueryCount(2):
+                query = (User
+                         .select()
+                         .order_by(User.username)
+                         .with_related(
+                             Load(User.tweets, strategy=pt)
+                             .order_by(Tweet.timestamp.desc())
+                             .limit(2, per_parent=True)))
+                got = {u.username: sorted(t.content for t in u.tweets)
+                       for u in query}
+            self.assertEqual(got, {'huey': ['h2', 'h3'], 'mickey': ['m0', 'm1']})
+
+    @skip_unless(WINDOW_FUNCTIONS, 'requires sqlite >= 3.25 for window fns')
+    def test_per_parent_limit_with_children(self):
+        # A child hop hangs off a windowed (CTE) hop: the parent query embedded
+        # for the grandchildren still carries its WITH clause.
+        Reaction.create(name='like')
+        Favorite.create(tweet=self.tweets['h3'], reaction=Reaction.get())
+        for pt in PREFETCH_TYPE.values():
+            with self.assertQueryCount(3):
+                query = (User
+                         .select()
+                         .where(User.username == 'huey')
+                         .with_related(
+                             Load(User.tweets, strategy=pt)
+                             .order_by(Tweet.timestamp.desc())
+                             .limit(2, per_parent=True)
+                             .then(Load(Tweet.favorites, strategy=pt))))
+                huey, = list(query)
+                loaded = {t.content: [f.reaction_id for f in t.favorites]
+                          for t in huey.tweets}
+            self.assertEqual(sorted(loaded), ['h2', 'h3'])
+            self.assertEqual(loaded['h3'], [1])
+            self.assertEqual(loaded['h2'], [])
+
+
+@skip_unless(WINDOW_FUNCTIONS, 'requires sqlite >= 3.25 for window fns')
+class TestWithRelatedCompositeKey(ModelTestCase):
+    database = get_in_memory_db()
+    requires = [Group, Tag]
+
+    def setUp(self):
+        super(TestWithRelatedCompositeKey, self).setUp()
+        group = Group.create(name='g')
+        for i, name in enumerate(['t0', 't1', 't2']):
+            Tag.create(group=group, name=name, rank=i)
+
+    def test_per_parent_limit_composite_pk(self):
+        # The windowed join-back must handle a composite primary key.
+        for pt in PREFETCH_TYPE.values():
+            with self.assertQueryCount(2):
+                query = (Group
+                         .select()
+                         .with_related(
+                             Load(Group.tags, strategy=pt)
+                             .order_by(Tag.rank.desc())
+                             .limit(2, per_parent=True)))
+                group, = list(query)
+                names = sorted(t.name for t in group.tags)
+            self.assertEqual(names, ['t1', 't2'])
