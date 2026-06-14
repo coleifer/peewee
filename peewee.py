@@ -120,6 +120,7 @@ __all__ = [
     'IPField',
     'JOIN',
     'JSONField',
+    'Load',
     'ManyToManyField',
     'Model',
     'ModelIndex',
@@ -8123,6 +8124,8 @@ class ModelRaw(_ModelQueryHelper, RawQuery):
 
 
 class BaseModelSelect(_ModelQueryHelper):
+    _load_tree = None
+
     def union_all(self, rhs):
         return ModelCompoundSelectQuery(self.model, self, 'UNION ALL', rhs)
     __add__ = union_all
@@ -8144,8 +8147,23 @@ class BaseModelSelect(_ModelQueryHelper):
             self.execute()
         return iter(self._cursor_wrapper)
 
+    def _execute(self, database):
+        # Resolve with_related() here rather than in __iter__ so the load fires
+        # once on whatever first materializes the rows. get/first/[n]/len/list
+        # all funnel through execute().
+        first_run = self._cursor_wrapper is None
+        cursor_wrapper = super(BaseModelSelect, self)._execute(database)
+        if first_run and self._load_tree:
+            loads, self._load_tree = self._load_tree, None
+            _load_related(list(cursor_wrapper), self, loads)
+        return cursor_wrapper
+
     def prefetch(self, *subqueries, **kwargs):
         return prefetch(self, *subqueries, **kwargs)
+
+    @Node.copy
+    def with_related(self, *loads):
+        self._load_tree = loads
 
     def get(self, database=None):
         clone = self.paginate(1, 1)
@@ -9049,6 +9067,32 @@ class PrefetchQuery(collections.namedtuple('_PrefetchQuery', (
                 id_map[key].append(instance)
 
 
+def _relate_children(query, parent_query, pairs, strategy):
+    """Restrict a one-to-many child query to rows whose foreign key matches a
+    parent in parent_query. pairs are (child_fk, parent_key) field tuples."""
+    if strategy == PREFETCH_TYPE.JOIN:
+        keys = {pk for _, pk in pairs}
+        on = reduce(operator.or_, [getattr(parent_query.c, pk.column_name) == fk
+                                   for fk, pk in pairs])
+        return query.distinct().join(parent_query.select(*keys), on=on)
+    expr = reduce(operator.or_, [fk << parent_query.select(pk)
+                                 for fk, pk in pairs])
+    return query.where(expr)
+
+
+def _relate_parent(query, parent_query, pairs, strategy):
+    """Restrict a many-to-one query to the rows referenced by parent_query.
+    pairs are (child_ref, parent_fk) field tuples."""
+    if strategy == PREFETCH_TYPE.JOIN:
+        fks = [fk for _, fk in pairs]
+        on = reduce(operator.or_, [ref == getattr(parent_query.c, fk.column_name)
+                                   for ref, fk in pairs])
+        return query.distinct().join(parent_query.select(*fks), on=on)
+    expr = reduce(operator.or_, [ref << parent_query.select(fk)
+                                 for ref, fk in pairs])
+    return query.where(expr)
+
+
 def prefetch_add_subquery(sq, subqueries, prefetch_type):
     fixed_queries = [PrefetchQuery(sq)]
     for i, subquery in enumerate(subqueries):
@@ -9085,42 +9129,13 @@ def prefetch_add_subquery(sq, subqueries, prefetch_type):
         dest = (target_model,) if target_model else None
 
         if fks:
-            if prefetch_type == PREFETCH_TYPE.WHERE:
-                expr = reduce(operator.or_, [
-                    (fk << last_query.select(pk))
-                    for (fk, pk) in zip(fks, pks)])
-                subquery = subquery.where(expr)
-            elif prefetch_type == PREFETCH_TYPE.JOIN:
-                expr = []
-                select_pks = set()
-                for fk, pk in zip(fks, pks):
-                    expr.append(getattr(last_query.c, pk.column_name) == fk)
-                    select_pks.add(pk)
-                subquery = subquery.distinct().join(
-                    last_query.select(*select_pks),
-                    on=reduce(operator.or_, expr))
+            subquery = _relate_children(subquery, last_query,
+                                        list(zip(fks, pks)), prefetch_type)
             fixed_queries.append(PrefetchQuery(subquery, fks, False, dest))
         elif backrefs:
-            expr = []
-            fields = []
-            for backref in backrefs:
-                rel_field = getattr(subquery_model, backref.rel_field.name)
-                fk_field = getattr(last_obj, backref.name)
-                fields.append((rel_field, fk_field))
-
-            if prefetch_type == PREFETCH_TYPE.WHERE:
-                for rel_field, fk_field in fields:
-                    expr.append(rel_field << last_query.select(fk_field))
-                subquery = subquery.where(reduce(operator.or_, expr))
-            elif prefetch_type == PREFETCH_TYPE.JOIN:
-                select_fks = []
-                for rel_field, fk_field in fields:
-                    select_fks.append(fk_field)
-                    target = getattr(last_query.c, fk_field.column_name)
-                    expr.append(rel_field == target)
-                subquery = subquery.distinct().join(
-                    last_query.select(*select_fks),
-                    on=reduce(operator.or_, expr))
+            pairs = [(getattr(subquery_model, backref.rel_field.name),
+                      getattr(last_obj, backref.name)) for backref in backrefs]
+            subquery = _relate_parent(subquery, last_query, pairs, prefetch_type)
             fixed_queries.append(PrefetchQuery(subquery, backrefs, True, dest))
 
     return fixed_queries
@@ -9155,3 +9170,123 @@ def prefetch(sq, *subqueries, **kwargs):
                     rel.populate_instance(instance, deps[rel.model])
 
     return list(pq.query)
+
+
+def _bucket(child_query, fields, is_backref, children, parents):
+    """Assign fetched children back onto parents using PrefetchQuery's keyed
+    mapping (the same store/populate prefetch uses)."""
+    pq = PrefetchQuery(child_query, fields=fields, is_backref=is_backref)
+    id_map = {}
+    for child in children:
+        pq.store_instance(child, id_map)
+    for parent in parents:
+        pq.populate_instance(parent, id_map)
+
+
+class Load(Node):
+    """A relationship to eagerly load via Select.with_related()."""
+
+    def __init__(self, rel, strategy=PREFETCH_TYPE.WHERE):
+        self._field, self._is_backref = self._resolve(rel)
+        self._strategy = strategy
+        self._where = None
+        self._order_by = None
+        self._limit = None
+        self._per_parent = False
+        self._children = ()
+
+    @staticmethod
+    def _resolve(rel):
+        if isinstance(rel, BackrefAccessor):
+            return rel.field, True
+        if isinstance(rel, ForeignKeyField):
+            return rel, False
+        raise ValueError('Load() expects a foreign-key or backref reference, '
+                         'got %r.' % (rel,))
+
+    @Node.copy
+    def where(self, *exprs):
+        if self._where is not None:
+            exprs = (self._where,) + exprs
+        self._where = reduce(operator.and_, exprs)
+
+    @Node.copy
+    def order_by(self, *fields):
+        self._order_by = fields
+
+    @Node.copy
+    def limit(self, value, per_parent=False):
+        # per_parent takes the top-N for each parent (windowed CTE); otherwise
+        # one LIMIT applies to the whole hop (N rows total).
+        self._limit = value
+        self._per_parent = per_parent
+
+    @Node.copy
+    def then(self, *children):
+        self._children = self._children + tuple(children)
+
+    def _base(self, rel_model):
+        query = rel_model.select()
+        if self._where is not None:
+            query = query.where(self._where)
+        if self._order_by is not None:
+            query = query.order_by(*self._order_by)
+        return query
+
+    def _run(self, parents, parent_query):
+        field = self._field
+        if self._is_backref:
+            rel_model = field.model
+            if self._per_parent and self._limit is not None:
+                child_query = self._windowed(rel_model, parent_query)
+            else:
+                child_query = _relate_children(
+                    self._base(rel_model), parent_query,
+                    [(field, field.rel_field)], self._strategy)
+                if self._limit is not None:
+                    child_query = child_query.limit(self._limit)
+            children = list(child_query)
+            _bucket(child_query, [field], False, children, parents)
+        else:
+            rel_model = field.rel_model
+            child_query = _relate_parent(
+                self._base(rel_model), parent_query,
+                [(field.rel_field, field)], self._strategy)
+            children = list(child_query)
+            _bucket(child_query, [field], True, children, parents)
+        return children, child_query
+
+    def _windowed(self, rel_model, parent_query):
+        # Rank each parent's children in a CTE and keep the first N. Hydration
+        # joins back to the real table so rows are full model instances, and
+        # the WITH stays on the outermost query where peewee emits it.
+        field = self._field
+        pks = rel_model._meta.get_primary_keys()
+        rn = (fn.ROW_NUMBER()
+              .over(partition_by=[field], order_by=list(self._order_by or pks))
+              .alias('_rn'))
+        inner = rel_model.select(*pks, rn)
+        if self._where is not None:
+            inner = inner.where(self._where)
+        cte = _relate_children(inner, parent_query, [(field, field.rel_field)],
+                               self._strategy).cte('_load_ranked')
+        on = reduce(operator.and_,
+                    [pk == getattr(cte.c, pk.column_name) for pk in pks])
+        query = (rel_model.select().join(cte, on=on)
+                 .where(cte.c._rn <= self._limit)
+                 .with_cte(cte))
+        if self._order_by is not None:
+            query = query.order_by(*self._order_by)
+        return query
+
+
+def _load_related(parents, parent_query, loads):
+    # Walk the tree top-down: each hop runs one query against the related
+    # model, filtered against parent_query (an IN-subquery or a JOIN), and
+    # buckets the rows onto the parents already fetched.
+    if not parents:
+        return
+    for node in loads:
+        children, child_query = node._run(parents, parent_query)
+        if node._children:
+            _load_related(children, child_query, node._children)
