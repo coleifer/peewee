@@ -1132,14 +1132,19 @@ class AsyncPostgresqlDatabase(AsyncDatabaseMixin, PostgresqlDatabase):
 
     async def _pool_release(self, conn):
         if conn and conn.conn:
-            if conn.conn.is_in_transaction():
-                # Roll back any transaction left open, e.g. by a dead task -
-                # otherwise asyncpg's pool reset logs a noisy warning.
-                try:
+            # Roll back any transaction left open, e.g. by a dead task. asyncpg
+            # records the started transaction in conn._top_xact; rolling back
+            # through it clears that bookkeeping. A raw "ROLLBACK" only resets
+            # the server and leaves _top_xact set, so the pool's own reset would
+            # still log "Resetting connection with an active transaction".
+            top_xact = getattr(conn.conn, '_top_xact', None)
+            try:
+                if top_xact is not None:
+                    await top_xact.rollback()
+                elif conn.conn.is_in_transaction():
                     await conn.conn.execute('ROLLBACK')
-                except Exception:
-                    logger.warning('Error rolling back connection',
-                                   exc_info=True)
+            except Exception:
+                logger.warning('Error rolling back connection', exc_info=True)
             await self._pool.release(conn.conn)
 
     async def _pool_close(self):
