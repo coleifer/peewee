@@ -2753,6 +2753,35 @@ Model
          # Favorite will be attached to User (via Favorite.user), not to Tweet.
          query = prefetch(users, tweets, (favorites, User))
 
+   .. method:: with_related(*loads)
+
+      :param loads: One or more :class:`Load` nodes describing the
+          relationships to eagerly load.
+      :return: the query; related rows are loaded when it is executed.
+
+      Eagerly load related objects described by a tree of :class:`Load` nodes.
+      This is a declarative, nestable form of :meth:`prefetch`: each
+      :class:`Load` names one relationship hop and carries its own
+      ``where``/``order_by``/``limit`` modifiers, and ``Load.then()`` nests a
+      child load beneath it.
+
+      .. code-block:: python
+
+         query = User.select().with_related(
+             Load(User.tweets)
+             .order_by(Tweet.timestamp.desc())
+             .then(Load(Tweet.favorites)))
+
+         for user in query:
+             for tweet in user.tweets:
+                 print(user.username, tweet.content, len(tweet.favorites))
+
+      The related rows are loaded once, when the query is first executed -
+      whether by iteration, :py:meth:`get`, ``first()``, indexing or ``len()``.
+
+      See :class:`Load` for the per-hop options, and :ref:`relationships` for
+      a fuller discussion of joins and prefetching.
+
 
 .. class:: DoesNotExist
 
@@ -6429,6 +6458,50 @@ Queries
    necessary to be sure that the foreign-key/primary-key of any
    related models are selected, so that the related objects can be
    mapped correctly.
+
+
+.. class:: Load(rel[, strategy=PREFETCH_TYPE.WHERE])
+
+   :param rel: A foreign-key field (``Load(Tweet.user)``) or a back-reference
+       (``Load(User.tweets)``) naming the relationship to load.
+   :param strategy: How to filter the hop against its parents, one of
+       ``PREFETCH_TYPE.WHERE`` (an ``IN``-subquery, the default) or
+       ``PREFETCH_TYPE.JOIN`` (a join against the parent query). ``JOIN`` is
+       preferable when the parent query is paginated or the set of parents is
+       large.
+
+   A node in the load tree passed to :meth:`ModelSelect.with_related`. Each
+   ``Load`` describes one relationship hop. The methods below each return a new
+   ``Load`` rather than mutating in place, so they chain.
+
+   .. method:: where(*exprs)
+
+      Restrict the rows loaded for this hop. Repeated calls are combined with
+      ``AND``.
+
+   .. method:: order_by(*fields)
+
+      Order the rows loaded for this hop.
+
+   .. method:: limit(n[, per_parent=False])
+
+      Limit the rows loaded for this hop. By default ``n`` is a single limit on
+      the whole hop (``n`` rows in total, as with :func:`prefetch`). With
+      ``per_parent=True`` it keeps the first ``n`` rows for *each* parent using
+      a window function, which requires SQLite 3.25+, PostgreSQL or MySQL 8.
+
+   .. method:: then(*loads)
+
+      Nest one or more child :class:`Load` nodes beneath this hop.
+
+   .. code-block:: python
+
+      # huey's three most-recent tweets, each with its favorites, in 3 queries:
+      query = User.select().where(User.username == 'huey').with_related(
+          Load(User.tweets)
+          .order_by(Tweet.timestamp.desc())
+          .limit(3, per_parent=True)
+          .then(Load(Tweet.favorites)))
 
 
 Query-builder Internals

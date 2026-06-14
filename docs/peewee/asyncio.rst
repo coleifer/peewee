@@ -898,6 +898,16 @@ API Reference
              for tweet in user.tweets:
                  print('    ', tweet.content)
 
+      The declarative :meth:`~ModelSelect.with_related` form has no separate
+      async method - it resolves when the query is materialized, so run it over
+      the bridge with :meth:`~AsyncDatabaseMixin.list`:
+
+      .. code-block:: python
+
+         query = User.select().with_related(Load(User.tweets))
+         for user in await db.list(query):
+             ...
+
    .. method:: atomic()
 
       Return an async-aware atomic context manager. Supports both

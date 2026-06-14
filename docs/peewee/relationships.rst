@@ -1054,6 +1054,68 @@ and other modifiers independently:
 The filter on ``Tweet`` applies only to the prefetched tweets; it does not
 affect which users are returned.
 
+Declarative loads with ``with_related``
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+:meth:`~ModelSelect.with_related` is a tree-shaped form of prefetch. Where
+:func:`prefetch` takes a flat list of subqueries and infers how they connect,
+``with_related`` names each relationship explicitly with a :class:`Load` node,
+and ``.then()`` nests one hop inside another:
+
+.. code-block:: python
+
+   query = User.select().with_related(
+       Load(User.tweets).then(
+           Load(Tweet.favorites)))
+
+   for user in query:
+       for tweet in user.tweets:
+           print(user.username, tweet.content, len(tweet.favorites))
+
+Each :class:`Load` carries its own modifiers, applied to that hop alone:
+
+.. code-block:: python
+
+   query = User.select().with_related(
+       Load(User.tweets)
+       .where(Tweet.content != 'hiss')
+       .order_by(Tweet.timestamp.desc()))
+
+Because every hop names a specific foreign key, ``with_related`` never needs the
+``(query, target_model)`` disambiguation that :func:`prefetch` uses for models
+with more than one foreign key to the same table.
+
+**Top-N per parent.** Unlike a flat prefetch, a hop can limit the rows fetched
+*for each parent*. ``limit(n, per_parent=True)`` keeps the first ``n`` rows of
+every parent's children, using a window function:
+
+.. code-block:: python
+
+   # The two most-recent tweets for each user, in one query:
+   query = User.select().with_related(
+       Load(User.tweets)
+       .order_by(Tweet.timestamp.desc())
+       .limit(2, per_parent=True))
+
+A plain ``limit(n)`` (without ``per_parent``) instead applies one ``LIMIT`` to
+the whole hop, returning ``n`` rows in total - the same as :func:`prefetch`.
+Per-parent limits require window-function support (SQLite 3.25+, PostgreSQL,
+MySQL 8).
+
+**Choosing a strategy.** By default each hop filters its children with an
+``IN``-subquery (``PREFETCH_TYPE.WHERE``). Pass ``strategy=PREFETCH_TYPE.JOIN``
+to join against the parent query instead - the better choice when the parent
+query is paginated (MySQL cannot use ``LIMIT`` inside an ``IN``-subquery) or
+when the set of parents is very large:
+
+.. code-block:: python
+
+   Load(User.tweets, strategy=PREFETCH_TYPE.JOIN)
+
+``with_related`` and :func:`prefetch` share the same execution engine. Reach for
+``with_related`` when you want a nested load tree, per-hop modifiers, or
+per-parent limits; use :func:`prefetch` for the flat form.
+
 Choosing between joins and prefetch
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
@@ -1071,10 +1133,11 @@ Use **prefetch** when:
 * Nesting more than one level of related data (users -> tweets -> favorites).
 
 .. note::
-   ``LIMIT`` on the outer query of a :func:`prefetch` call works as
-   expected. Limiting the *inner* queries (the prefetched tables) is not
-   directly supported and requires a manual approach - see
-   :ref:`top-n-per-group` in the recipes document for techniques.
+   ``LIMIT`` on the outer query of a :func:`prefetch` call works as expected.
+   :func:`prefetch` itself cannot limit the *inner* (prefetched) queries per
+   parent; for top-N-per-parent use :meth:`~ModelSelect.with_related` with
+   ``limit(n, per_parent=True)`` (see above), or :ref:`top-n-per-group` for the
+   underlying technique.
 
 .. seealso::
-   :func:`prefetch` API reference.
+   :func:`prefetch` and :meth:`~ModelSelect.with_related` API reference.
