@@ -9172,10 +9172,10 @@ def prefetch(sq, *subqueries, **kwargs):
     return list(pq.query)
 
 
-def _bucket(child_query, fields, is_backref, children, parents):
+def _bucket(child_query, field, is_backref, children, parents):
     """Assign fetched children back onto parents using PrefetchQuery's keyed
     mapping (the same store/populate prefetch uses)."""
-    pq = PrefetchQuery(child_query, fields=fields, is_backref=is_backref)
+    pq = PrefetchQuery(child_query, fields=[field], is_backref=is_backref)
     id_map = {}
     for child in children:
         pq.store_instance(child, id_map)
@@ -9246,14 +9246,14 @@ class Load(Node):
                 if self._limit is not None:
                     child_query = child_query.limit(self._limit)
             children = list(child_query)
-            _bucket(child_query, [field], False, children, parents)
+            _bucket(child_query, field, False, children, parents)
         else:
             rel_model = field.rel_model
             child_query = _relate_parent(
                 self._base(rel_model), parent_query,
                 [(field.rel_field, field)], self._strategy)
             children = list(child_query)
-            _bucket(child_query, [field], True, children, parents)
+            _bucket(child_query, field, True, children, parents)
         return children, child_query
 
     def _windowed(self, rel_model, parent_query):

@@ -12,11 +12,13 @@ from peewee import *
 
 from .base import ModelTestCase
 from .base import TestModel
-from .base import get_in_memory_db
+from .base import IS_MYSQL
+from .base import IS_SQLITE
+from .base import skip_if
 from .base import skip_unless
 
 
-WINDOW_FUNCTIONS = sqlite3.sqlite_version_info >= (3, 25)
+NO_WINDOW_FUNCTIONS = IS_SQLITE and sqlite3.sqlite_version_info < (3, 25)
 
 
 class User(TestModel):
@@ -56,7 +58,7 @@ class Group(TestModel):
 
 class Tag(TestModel):
     group = ForeignKeyField(Group, backref='tags')
-    name = TextField()
+    name = CharField(max_length=255)
     rank = IntegerField(default=0)
 
     class Meta:
@@ -64,7 +66,6 @@ class Tag(TestModel):
 
 
 class TestWithRelated(ModelTestCase):
-    database = get_in_memory_db()
     requires = [User, Reaction, Tweet, Favorite]
 
     def setUp(self):
@@ -159,6 +160,7 @@ class TestWithRelated(ModelTestCase):
         huey, = list(query)
         self.assertEqual([t.content for t in huey.tweets], ['hiss'])
 
+    @skip_if(IS_MYSQL)
     def test_loads_on_every_access_path(self):
         # The load must fire regardless of how rows are materialized -- not just
         # iteration. get/first/index/len all go through execute().
@@ -189,7 +191,6 @@ class TestWithRelated(ModelTestCase):
 
 
 class TestWithRelatedMultiFK(ModelTestCase):
-    database = get_in_memory_db()
     requires = [User, Message]
 
     def setUp(self):
@@ -218,7 +219,6 @@ class TestWithRelatedMultiFK(ModelTestCase):
 
 
 class TestWithRelatedSelfRef(ModelTestCase):
-    database = get_in_memory_db()
     requires = [Folder]
 
     def setUp(self):
@@ -250,7 +250,6 @@ class TestWithRelatedSelfRef(ModelTestCase):
 
 
 class TestWithRelatedLimit(ModelTestCase):
-    database = get_in_memory_db()
     requires = [User, Reaction, Tweet, Favorite]
 
     def setUp(self):
@@ -278,7 +277,7 @@ class TestWithRelatedLimit(ModelTestCase):
             total = sum(len(user.tweets) for user in query)
             self.assertEqual(total, 2)
 
-    @skip_unless(WINDOW_FUNCTIONS, 'requires sqlite >= 3.25 for window fns')
+    @skip_if(NO_WINDOW_FUNCTIONS, 'requires sqlite >= 3.25 for window fns')
     def test_per_parent_limit(self):
         for pt in PREFETCH_TYPE.values():
             with self.assertQueryCount(2):
@@ -293,7 +292,7 @@ class TestWithRelatedLimit(ModelTestCase):
                        for u in query}
             self.assertEqual(got, {'huey': ['h2', 'h3'], 'mickey': ['m0', 'm1']})
 
-    @skip_unless(WINDOW_FUNCTIONS, 'requires sqlite >= 3.25 for window fns')
+    @skip_if(NO_WINDOW_FUNCTIONS, 'requires sqlite >= 3.25 for window fns')
     def test_per_parent_limit_with_children(self):
         # A child hop hangs off a windowed (CTE) hop: the parent query embedded
         # for the grandchildren still carries its WITH clause.
@@ -317,9 +316,8 @@ class TestWithRelatedLimit(ModelTestCase):
             self.assertEqual(loaded['h2'], [])
 
 
-@skip_unless(WINDOW_FUNCTIONS, 'requires sqlite >= 3.25 for window fns')
+@skip_if(NO_WINDOW_FUNCTIONS, 'requires sqlite >= 3.25 for window fns')
 class TestWithRelatedCompositeKey(ModelTestCase):
-    database = get_in_memory_db()
     requires = [Group, Tag]
 
     def setUp(self):
