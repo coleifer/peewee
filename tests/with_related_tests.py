@@ -100,6 +100,35 @@ class TestWithRelated(ModelTestCase):
                 ('mickey', ['bark', 'woof']),
                 ('zaizee', [])])
 
+    def test_materialize(self):
+        # materialize=True embeds the parents' keys as a literal IN-list rather
+        # than a parent subquery; the result is identical.
+        with self.assertQueryCount(2):
+            query = (User
+                     .select()
+                     .order_by(User.username)
+                     .with_related(Load(User.tweets, materialize=True)))
+            accum = [(u.username, sorted(t.content for t in u.tweets))
+                     for u in query]
+        self.assertEqual(accum, [
+            ('huey', ['hiss', 'meow', 'purr']),
+            ('mickey', ['bark', 'woof']),
+            ('zaizee', [])])
+        child_sql = self.history[-1].msg[0]
+        self.assertEqual(child_sql.count('SELECT'), 1)  # value-list, no subquery
+
+    def test_materialize_forward_fk(self):
+        with self.assertQueryCount(2):
+            query = (Tweet
+                     .select()
+                     .order_by(Tweet.content)
+                     .with_related(Load(Tweet.user, materialize=True)))
+            accum = [(t.content, t.user.username) for t in query]
+        self.assertEqual(accum, [
+            ('bark', 'mickey'), ('hiss', 'huey'), ('meow', 'huey'),
+            ('purr', 'huey'), ('woof', 'mickey')])
+        self.assertEqual(self.history[-1].msg[0].count('SELECT'), 1)
+
     def test_forward_fk(self):
         for pt in PREFETCH_TYPE.values():
             with self.assertQueryCount(2):
@@ -291,6 +320,23 @@ class TestWithRelatedLimit(ModelTestCase):
                 got = {u.username: sorted(t.content for t in u.tweets)
                        for u in query}
             self.assertEqual(got, {'huey': ['h2', 'h3'], 'mickey': ['m0', 'm1']})
+
+    @skip_if(NO_WINDOW_FUNCTIONS, 'requires sqlite >= 3.25 for window fns')
+    def test_per_parent_limit_materialize(self):
+        # Windowed top-N with materialized keys: same result, but the CTE
+        # filters on a value-list rather than a parent subquery.
+        with self.assertQueryCount(2):
+            query = (User
+                     .select()
+                     .order_by(User.username)
+                     .with_related(
+                         Load(User.tweets, materialize=True)
+                         .order_by(Tweet.timestamp.desc())
+                         .limit(2, per_parent=True)))
+            got = {u.username: sorted(t.content for t in u.tweets)
+                   for u in query}
+        self.assertEqual(got, {'huey': ['h2', 'h3'], 'mickey': ['m0', 'm1']})
+        self.assertNotIn('IN (SELECT', self.history[-1].msg[0])
 
     @skip_if(NO_WINDOW_FUNCTIONS, 'requires sqlite >= 3.25 for window fns')
     def test_per_parent_limit_with_children(self):

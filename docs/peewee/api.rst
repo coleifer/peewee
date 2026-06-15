@@ -6460,7 +6460,7 @@ Queries
    mapped correctly.
 
 
-.. class:: Load(rel[, strategy=PREFETCH_TYPE.WHERE])
+.. class:: Load(rel[, strategy=PREFETCH_TYPE.WHERE[, materialize=False]])
 
    :param rel: A foreign-key field (``Load(Tweet.user)``) or a back-reference
        (``Load(User.tweets)``) naming the relationship to load.
@@ -6469,6 +6469,11 @@ Queries
        ``PREFETCH_TYPE.JOIN`` (a join against the parent query). ``JOIN`` is
        preferable when the parent query is paginated or the set of parents is
        large.
+   :param materialize: When true, embed the parents' already-fetched keys as a
+       literal ``IN``-list instead of a subquery. This avoids re-evaluating the
+       parent query and is paginate-safe, but the number of keys is bounded by
+       the backend's bind-parameter limit, so use it only for hops with a modest
+       number of parents. Overrides ``strategy``.
 
    A node in the load tree passed to :meth:`ModelSelect.with_related`. Each
    ``Load`` describes one relationship hop. The methods below each return a new

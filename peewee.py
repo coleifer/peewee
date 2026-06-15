@@ -9180,9 +9180,10 @@ def _bucket(child_query, field, is_backref, children, parents):
 
 
 class Load(Node):
-    def __init__(self, rel, strategy=PREFETCH_TYPE.WHERE):
+    def __init__(self, rel, strategy=PREFETCH_TYPE.WHERE, materialize=False):
         self._field, self._is_backref = self._resolve(rel)
         self._strategy = strategy
+        self._materialize = materialize
         self._where = None
         self._order_by = None
         self._limit = None
@@ -9227,30 +9228,58 @@ class Load(Node):
             query = query.order_by(*self._order_by)
         return query
 
+    @staticmethod
+    def _distinct(parents, get_key):
+        keys, seen = [], set()
+        for parent in parents:
+            key = get_key(parent)
+            if key is not None and key not in seen:
+                seen.add(key)
+                keys.append(key)
+        return keys
+
+    def _link_children(self, query, parent_query, parents):
+        # materialize=True turns the parents' (in-memory) keys into a literal
+        # IN-list: no subquery, no re-evaluation, but bounded by the backend's
+        # bind-parameter limit. Otherwise embed the parent query (IN or JOIN).
+        field = self._field
+        if self._materialize:
+            keys = self._distinct(parents,
+                                  lambda p: getattr(p, field.rel_field.name))
+            return query.where(field << keys)
+        return _relate_children(query, parent_query, [(field, field.rel_field)],
+                                self._strategy)
+
+    def _link_parent(self, query, parent_query, parents):
+        field = self._field
+        if self._materialize:
+            keys = self._distinct(parents, lambda p: p.__data__.get(field.name))
+            return query.where(field.rel_field << keys)
+        return _relate_parent(query, parent_query, [(field.rel_field, field)],
+                              self._strategy)
+
     def _run(self, parents, parent_query):
         field = self._field
         if self._is_backref:
             rel_model = field.model
             if self._per_parent and self._limit is not None:
-                child_query = self._windowed(rel_model, parent_query)
+                child_query = self._windowed(rel_model, parent_query, parents)
             else:
-                child_query = _relate_children(
-                    self._base(rel_model), parent_query,
-                    [(field, field.rel_field)], self._strategy)
+                child_query = self._link_children(self._base(rel_model),
+                                                  parent_query, parents)
                 if self._limit is not None:
                     child_query = child_query.limit(self._limit)
             children = list(child_query)
             _bucket(child_query, field, False, children, parents)
         else:
             rel_model = field.rel_model
-            child_query = _relate_parent(
-                self._base(rel_model), parent_query,
-                [(field.rel_field, field)], self._strategy)
+            child_query = self._link_parent(self._base(rel_model),
+                                            parent_query, parents)
             children = list(child_query)
             _bucket(child_query, field, True, children, parents)
         return children, child_query
 
-    def _windowed(self, rel_model, parent_query):
+    def _windowed(self, rel_model, parent_query, parents):
         # Rank each parent's children in a CTE and keep the first N. Hydration
         # joins back to the real table so rows are full model instances, and
         # the WITH stays on the outermost query where peewee emits it.
@@ -9262,8 +9291,7 @@ class Load(Node):
         inner = rel_model.select(*pks, rn)
         if self._where is not None:
             inner = inner.where(self._where)
-        cte = _relate_children(inner, parent_query, [(field, field.rel_field)],
-                               self._strategy).cte('_load_ranked')
+        cte = self._link_children(inner, parent_query, parents).cte('_load_ranked')
         on = reduce(operator.and_,
                     [pk == getattr(cte.c, pk.column_name) for pk in pks])
         query = (rel_model.select().join(cte, on=on)
