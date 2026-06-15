@@ -6464,20 +6464,17 @@ Queries
 
    :param rel: A foreign-key field (``Load(Tweet.user)``) or a back-reference
        (``Load(User.tweets)``) naming the relationship to load.
-   :param strategy: How to filter the hop against its parents, one of
-       ``PREFETCH_TYPE.WHERE`` (an ``IN``-subquery, the default) or
-       ``PREFETCH_TYPE.JOIN`` (a join against the parent query). ``JOIN`` is
-       preferable when the parent query is paginated or the set of parents is
-       large.
-   :param materialize: When true, embed the parents' already-fetched keys as a
-       literal ``IN``-list instead of a subquery. This avoids re-evaluating the
-       parent query and is paginate-safe, but the number of keys is bounded by
-       the backend's bind-parameter limit, so use it only for hops with a modest
-       number of parents. Overrides ``strategy``.
+   :param strategy: How each hop is filtered against its parents:
+       ``PREFETCH_TYPE.WHERE`` (an ``IN`` subquery, the default) or
+       ``PREFETCH_TYPE.JOIN`` (a join against the parent query). Use ``JOIN``
+       for paginated or very large parent queries.
+   :param materialize: Filter using the parents' keys as a literal ``IN`` list
+       rather than a subquery. Avoids re-running the parent query, but is bounded
+       by the backend's bind-parameter limit. Overrides ``strategy``.
 
-   A node in the load tree passed to :meth:`ModelSelect.with_related`. Each
-   ``Load`` describes one relationship hop. The methods below each return a new
-   ``Load`` rather than mutating in place, so they chain.
+   A node in the load tree passed to :meth:`ModelSelect.with_related`, describing
+   one relationship hop. The ``where``, ``order_by``, ``limit`` and ``then``
+   methods return a new ``Load`` and may be chained.
 
    .. method:: where(*exprs)
 
