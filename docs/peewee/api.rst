@@ -2757,7 +2757,7 @@ Model
 
       :param loads: One or more :class:`Load` nodes describing the
           relationships to eagerly load.
-      :return: the query; related rows are loaded when it is executed.
+      :return: the query. Related rows are loaded when it is executed.
 
       Eagerly load related objects described by a tree of :class:`Load` nodes.
       This is a declarative, nestable form of :meth:`prefetch`: each

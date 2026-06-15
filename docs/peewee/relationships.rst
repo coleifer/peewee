@@ -1095,9 +1095,8 @@ Because every hop names a specific foreign key, ``with_related`` never needs the
 ``(query, target_model)`` disambiguation that :func:`prefetch` uses for models
 with more than one foreign key to the same table.
 
-**Top-N per parent.** Unlike a flat prefetch, a hop can limit the rows fetched
-*for each parent*. ``limit(n, per_parent=True)`` keeps the first ``n`` rows of
-every parent's children, using a window function:
+A hop can limit the rows fetched per parent. ``limit(n, per_parent=True)`` keeps
+the first ``n`` rows of each parent's children, using a window function:
 
 .. code-block:: python
 
@@ -1112,19 +1111,18 @@ the whole hop, returning ``n`` rows in total - the same as :func:`prefetch`.
 Per-parent limits require window-function support (SQLite 3.25+, PostgreSQL,
 MySQL 8).
 
-**Choosing a strategy.** By default each hop filters its children with an
-``IN``-subquery (``PREFETCH_TYPE.WHERE``). Pass ``strategy=PREFETCH_TYPE.JOIN``
-to join against the parent query instead - the better choice when the parent
-query is paginated (MySQL cannot use ``LIMIT`` inside an ``IN``-subquery) or
-when the set of parents is very large:
+By default each hop filters its children with an ``IN`` subquery
+(``PREFETCH_TYPE.WHERE``). ``strategy=PREFETCH_TYPE.JOIN`` joins against the
+parent query instead. Use it for paginated parents (MySQL cannot put ``LIMIT``
+inside an ``IN`` subquery) or very large parent sets:
 
 .. code-block:: python
 
    Load(User.tweets, strategy=PREFETCH_TYPE.JOIN)
 
-``with_related`` and :func:`prefetch` share the same execution engine. Reach for
-``with_related`` when you want a nested load tree, per-hop modifiers, or
-per-parent limits; use :func:`prefetch` for the flat form.
+``with_related`` and :func:`prefetch` share the same execution engine.
+``with_related`` adds the nested load tree, the per-hop modifiers, and per-parent
+limits. :func:`prefetch` is the flat-list form.
 
 Choosing between joins and prefetch
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -1145,8 +1143,8 @@ Use **prefetch** when:
 .. note::
    ``LIMIT`` on the outer query of a :func:`prefetch` call works as expected.
    :func:`prefetch` itself cannot limit the *inner* (prefetched) queries per
-   parent; for top-N-per-parent use :meth:`~ModelSelect.with_related` with
-   ``limit(n, per_parent=True)`` (see above), or :ref:`top-n-per-group` for the
+   parent. For top-N-per-parent, use :meth:`~ModelSelect.with_related` with
+   ``limit(n, per_parent=True)`` (above), or :ref:`top-n-per-group` for the
    underlying technique.
 
 .. seealso::

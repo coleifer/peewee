@@ -166,14 +166,14 @@ relationship, no matter how many rows are on the page:
 
    for user in query:
        print(user.username)
-       for tweet in user.tweets:  # No query issued here; user.tweets is a list.
+       for tweet in user.tweets:  # user.tweets is already a list - no query.
            print('  ', tweet.content)
 
-The load fires however the rows are consumed - ``get()``, ``first()``, indexing
-and ``len()`` all trigger it, not only iteration.
+The load fires on first execution, whatever triggers it - iteration, ``get()``,
+``first()``, indexing or ``len()``.
 
-When the parent query is paginated, prefer the ``JOIN`` strategy: MySQL cannot
-use ``LIMIT`` inside an ``IN``-subquery, and a join sidesteps that.
+A paginated parent query needs the ``JOIN`` strategy. MySQL cannot use ``LIMIT``
+inside an ``IN`` subquery, and a join avoids that.
 
 .. code-block:: python
 
@@ -183,7 +183,7 @@ use ``LIMIT`` inside an ``IN``-subquery, and a join sidesteps that.
             .with_related(Load(User.tweets, strategy=PREFETCH_TYPE.JOIN)))
 
 To walk deeper - users, their tweets, then each tweet's favorites - nest hops
-with ``.then()``; to pull several relationships off each user at once, pass
+with ``.then()``. To pull several relationships off each user at once, pass
 multiple :class:`Load` nodes. Both keep the per-relationship query count. See
 :ref:`relationships` for the full tree form.
 
@@ -276,7 +276,7 @@ Top-N as related objects
 
 The form above returns a flat result set. To attach each user's top *N* tweets
 to the user object instead, use :meth:`~ModelSelect.with_related` with a
-per-parent limit; it builds an equivalent ranked CTE internally:
+per-parent limit. It builds an equivalent ranked CTE internally:
 
 .. code-block:: python
 
