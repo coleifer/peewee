@@ -9192,6 +9192,8 @@ class Load(Node):
 
     @staticmethod
     def _resolve(rel):
+        if isinstance(rel, FieldAlias):  # Tweet.alias().user -> Tweet.user.
+            rel = rel.field
         if isinstance(rel, BackrefAccessor):
             return rel.field, True
         elif isinstance(rel, ForeignKeyField):

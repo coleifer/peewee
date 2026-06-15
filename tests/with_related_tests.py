@@ -218,6 +218,36 @@ class TestWithRelated(ModelTestCase):
     def test_load_requires_relationship(self):
         self.assertRaises(ValueError, Load, User.username)
 
+    def test_load_accepts_model_alias(self):
+        # A model alias on the Load reference is accepted and normalized to the
+        # base relationship -- the alias has no role in with_related.
+        self.assertIs(Load(Tweet.alias().user)._field, Tweet.user)
+        self.assertIs(Load(User.alias().tweets)._field, Tweet.user)
+
+        # Forward FK via alias: used to raise "no such column"; now resolves.
+        with self.assertQueryCount(2):
+            query = (Tweet
+                     .select()
+                     .order_by(Tweet.content)
+                     .with_related(Load(Tweet.alias().user)))
+            forward = [(t.content, t.user.username) for t in query]
+        self.assertEqual(forward, [
+            ('bark', 'mickey'), ('hiss', 'huey'), ('meow', 'huey'),
+            ('purr', 'huey'), ('woof', 'mickey')])
+
+        # Backref via alias: was already inert; still loads correctly.
+        with self.assertQueryCount(2):
+            query = (User
+                     .select()
+                     .order_by(User.username)
+                     .with_related(Load(User.alias().tweets)))
+            backref = [(u.username, sorted(t.content for t in u.tweets))
+                       for u in query]
+        self.assertEqual(backref, [
+            ('huey', ['hiss', 'meow', 'purr']),
+            ('mickey', ['bark', 'woof']),
+            ('zaizee', [])])
+
 
 class TestWithRelatedMultiFK(ModelTestCase):
     requires = [User, Message]
