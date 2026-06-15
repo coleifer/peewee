@@ -8148,9 +8148,7 @@ class BaseModelSelect(_ModelQueryHelper):
         return iter(self._cursor_wrapper)
 
     def _execute(self, database):
-        # Resolve with_related() here rather than in __iter__ so the load fires
-        # once on whatever first materializes the rows. get/first/[n]/len/list
-        # all funnel through execute().
+        # Resolve with_related() here when the rows are first materialized.
         first_run = self._cursor_wrapper is None
         cursor_wrapper = super(BaseModelSelect, self)._execute(database)
         if first_run and self._load_tree:
@@ -9173,8 +9171,6 @@ def prefetch(sq, *subqueries, **kwargs):
 
 
 def _bucket(child_query, field, is_backref, children, parents):
-    """Assign fetched children back onto parents using PrefetchQuery's keyed
-    mapping (the same store/populate prefetch uses)."""
     pq = PrefetchQuery(child_query, fields=[field], is_backref=is_backref)
     id_map = {}
     for child in children:
@@ -9184,8 +9180,6 @@ def _bucket(child_query, field, is_backref, children, parents):
 
 
 class Load(Node):
-    """A relationship to eagerly load via Select.with_related()."""
-
     def __init__(self, rel, strategy=PREFETCH_TYPE.WHERE):
         self._field, self._is_backref = self._resolve(rel)
         self._strategy = strategy
@@ -9199,10 +9193,10 @@ class Load(Node):
     def _resolve(rel):
         if isinstance(rel, BackrefAccessor):
             return rel.field, True
-        if isinstance(rel, ForeignKeyField):
+        elif isinstance(rel, ForeignKeyField):
             return rel, False
         raise ValueError('Load() expects a foreign-key or backref reference, '
-                         'got %r.' % (rel,))
+                         'got %r.' % rel)
 
     @Node.copy
     def where(self, *exprs):
