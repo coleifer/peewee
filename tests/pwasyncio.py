@@ -15,6 +15,7 @@ from playhouse.pwasyncio import *
 from playhouse.pwasyncio import _State, _ConnectionState, _lazy_cursor_iter
 from .base import MYSQL_PARAMS
 from .base import PSQL_PARAMS
+from .base import IS_MARIADB
 from .base import IS_MYSQL
 from .base import IS_POSTGRESQL
 
@@ -2186,7 +2187,8 @@ class TestPostgresqlIntegration(IntegrationTests, unittest.IsolatedAsyncioTestCa
 @unittest.skipUnless(aiomysql, 'aiomysql not installed')
 class TestMySQLIntegration(IntegrationTests, unittest.IsolatedAsyncioTestCase):
     def get_database(self):
-        return AsyncMySQLDatabase('peewee_test', **MYSQL_PARAMS)
+        return AsyncMySQLDatabase('peewee_test', mariadb=IS_MARIADB,
+                                  **MYSQL_PARAMS)
 
 
 if __name__ == '__main__':
