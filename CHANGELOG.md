@@ -7,6 +7,8 @@ https://github.com/coleifer/peewee/releases
 
 ## master
 
+* Ensure new JSONField can be inherited, #3052
+
 [View commits](https://github.com/coleifer/peewee/compare/4.0.8...master)
 
 ## 4.0.8

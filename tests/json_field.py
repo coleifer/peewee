@@ -459,6 +459,39 @@ class TestDeferredDatabase(ModelTestCase):
 
 
 @skip_if(SKIP_PATHS, 'requires SQLite 3.38 or non-SQLite backend')
+class TestInheritedJSONField(ModelTestCase):
+    requires = []
+
+    def test_inherit_json_field(self):
+        # JSONField stores a db-specific helper instance w/a db ref. Attempting
+        # to deepcopy (during inheritance) travels the graph down to the
+        # database instance's locks and connection local, which failed.
+        class JIBase(TestModel):
+            data = JSONField(null=True)
+
+        class JIChild(JIBase):
+            extra = JSONField(null=True)
+
+        # The inherited field is an independent copy, re-bound to the child.
+        self.assertIsNot(JIChild.data, JIBase.data)
+        self.assertIsNotNone(JIChild.data._helper)
+        self.assertIs(JIChild._meta.database, db)
+
+        JIChild.create_table()
+        try:
+            JIChild.create(data={'a': 1}, extra=[1, 2])
+            row = JIChild.select().first()
+            self.assertEqual(row.data, {'a': 1})
+            self.assertEqual(row.extra, [1, 2])
+        finally:
+            JIChild.drop_table()
+
+    def test_database_not_deepcopied(self):
+        from copy import deepcopy
+        self.assertIs(deepcopy(db), db)
+
+
+@skip_if(SKIP_PATHS, 'requires SQLite 3.38 or non-SQLite backend')
 class TestNullSemantics(ModelTestCase):
     requires = [JM]
 

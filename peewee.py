@@ -3641,6 +3641,12 @@ class Database(_callable_context_manager):
         self.connect_params.update(kwargs)
         self.deferred = not bool(database)
 
+    def __deepcopy__(self, memo):
+        # Databases are shared and hold un-copyable state (locks, thread-local
+        # connections). Reached via deepcopy of an inherited field that caches a
+        # db reference, e.g. JSONField's helper. Keep the same db.
+        return self
+
     def __enter__(self):
         if self.is_closed():
             self.connect()
