@@ -7,17 +7,19 @@ https://github.com/coleifer/peewee/releases
 
 ## master
 
+[View commits](https://github.com/coleifer/peewee/compare/4.1.0...master)
+
+## 4.1.0
+
 * Unfortunately, the new JSONField did not play nice w/MySQL when query was
   generated *before* a conn was opened. We were trying to do some introspection
   on the server version, but I've decided instead to make `mariadb=` be a
   database param, per @alisonatwork's suggestion, with the default being
   "MySQL" flavored JSON. Refs #3053
 * `JSONField` containment (`contains`, `contained_by`) no longer wraps its
-  argument in `CAST` / `JSON_COMPACT` on MySQL/MariaDB - `JSON_CONTAINS` parses
-  the value itself - and now json-encodes scalars, so e.g.
-  `data["tags"].contains("x")` matches a string array element, #3053.
+  argument in `CAST` / `JSON_COMPACT` on MySQL/MariaDB, #3053.
 
-[View commits](https://github.com/coleifer/peewee/compare/4.0.9...master)
+[View commits](https://github.com/coleifer/peewee/compare/4.0.9...4.1.0)
 
 ## 4.0.9
 
