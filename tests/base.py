@@ -136,6 +136,7 @@ IS_MYSQL_ADVANCED_FEATURES = False
 IS_MYSQL_JSON = False
 IS_ORACLE_MYSQL = False
 IS_MARIADB = False
+IS_MYSQL_JSON_OVERLAPS = False
 if IS_MYSQL:
     db.connect()
     server_info = db.server_version
@@ -152,6 +153,8 @@ if IS_MYSQL:
     # for both servers must be told which it is talking to.
     IS_MARIADB = server_info[0] >= 10
     db.mariadb = IS_MARIADB
+    IS_MYSQL_JSON_OVERLAPS = (server_info >= (10, 9) if IS_MARIADB
+                              else server_info >= (8, 0, 17))
     db.close()
     if not IS_MYSQL_ADVANCED_FEATURES:
         logger.warning('MySQL too old to test certain advanced features.')

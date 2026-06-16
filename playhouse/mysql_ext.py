@@ -9,14 +9,18 @@ try:
 except ImportError:
     mariadb = None
 
+from peewee import Expression
 from peewee import ImproperlyConfigured
 from peewee import Insert
 from peewee import JSONField
+from peewee import JSONPath
 from peewee import MySQLDatabase
 from peewee import Node
 from peewee import NodeList
+from peewee import OP
 from peewee import SQL
 from peewee import TextField
+from peewee import Value
 from peewee import fn
 from playhouse.pool import _PooledMySQLDatabase
 
@@ -99,3 +103,23 @@ def Match(columns, expr, modifier=None):
         match = fn.MATCH(columns)  # Single column / field.
     args = expr if modifier is None else NodeList((expr, SQL(modifier)))
     return NodeList((match, fn.AGAINST(args)))
+
+
+class _MySQLJSONPath(JSONPath):
+    def contains_any(self, value):
+        f = self._field
+        lhs = fn.json_extract(f, f._helper._path(self._keys))
+        rhs = Value(f._dumps(value), converter=False)
+        return Expression(fn.JSON_OVERLAPS(lhs, rhs), OP.EQ, 1)
+
+
+class MySQLJSONField(JSONField):
+    def contains_any(self, value):
+        rhs = Value(self._dumps(value), converter=False)
+        return Expression(fn.JSON_OVERLAPS(self, rhs), OP.EQ, 1)
+
+    def __getitem__(self, key):
+        return _MySQLJSONPath(self, (key,))
+
+    def path(self, *keys):
+        return _MySQLJSONPath(self, keys)

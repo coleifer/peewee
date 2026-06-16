@@ -3,8 +3,10 @@ import datetime
 from peewee import *
 from playhouse.mysql_ext import JSONField
 from playhouse.mysql_ext import Match
+from playhouse.mysql_ext import MySQLJSONField
 
 from .base import IS_MYSQL_JSON
+from .base import IS_MYSQL_JSON_OVERLAPS
 from .base import ModelDatabaseTestCase
 from .base import ModelTestCase
 from .base import TestModel
@@ -115,3 +117,33 @@ class TestMatchExpression(ModelDatabaseTestCase):
             'FROM "person" AS "t1" '
             'WHERE MATCH("t1"."first", "t1"."last") '
             'AGAINST(? IN BOOLEAN MODE)'), ['huey AND zaizee'])
+
+
+class OM(TestModel):
+    data = MySQLJSONField()
+
+
+@requires_mysql
+@skip_unless(IS_MYSQL_JSON_OVERLAPS,
+             'requires JSON_OVERLAPS (MySQL 8.0.17+ / MariaDB 10.9+)')
+class TestMySQLJSONOverlaps(ModelTestCase):
+    requires = [OM]
+
+    def setUp(self):
+        super(TestMySQLJSONOverlaps, self).setUp()
+        OM.create(data=['python', 'orm'])
+        OM.create(data=['rust', 'go'])
+        OM.create(data=[1, 2, 3])
+        OM.create(data={'tags': ['python', 'rust']})
+
+    def test_contains_any(self):
+        q = OM.select().where(OM.data.contains_any(['python', 'java']))
+        self.assertEqual(q.count(), 1)
+
+    def test_contains_any_numbers(self):
+        q = OM.select().where(OM.data.contains_any([2, 99]))
+        self.assertEqual(q.count(), 1)
+
+    def test_contains_any_path(self):
+        q = OM.select().where(OM.data['tags'].contains_any(['python']))
+        self.assertEqual(q.count(), 1)
