@@ -780,6 +780,63 @@ or drop down to ``fn.*`` directly:
    # MySQL / MariaDB
    Doc.update(data=fn.JSON_SET(Doc.data, '$.count', 99)).execute()
 
+.. _json-field-divergences:
+
+Backend divergences at a glance
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+The API is portable but the underlying engines disagree on edge cases.
+This table collects every documented divergence in one place.
+
+.. list-table::
+   :header-rows: 1
+   :widths: 22 26 26 26
+
+   * - Operation
+     - SQLite
+     - PostgreSQL
+     - MySQL / MariaDB
+   * - ``update()`` merge
+     - Deep merge (``json_patch``, RFC-7396).
+     - Shallow concat (``||``). Nested objects replaced wholesale.
+     - Deep merge (``JSON_MERGE_PATCH``, RFC-7396).
+   * - ``update({'k': None})``
+     - Deletes key ``k``.
+     - Stores JSON ``null`` at ``k``.
+     - Deletes key ``k``.
+   * - ``set()`` / ``insert()`` with missing parent keys
+     - Creates the full key chain.
+     - Silent no-op (parent must exist).
+     - Silent no-op (parent must exist).
+   * - ``append()`` on a non-array object
+     - Silent no-op.
+     - Inserts a literal ``"-1"`` key.
+     - Wraps the object into an array, then appends.
+   * - ``append()`` on a non-array scalar
+     - Silent no-op.
+     - Silent no-op.
+     - Wraps the scalar into an array, then appends.
+   * - ``length()`` on a non-array
+     - Returns ``0``.
+     - Raises an error.
+     - Returns object key count (or ``1`` for scalars).
+   * - Default-mode ordering (``>``, ``<``, etc.)
+     - Lexicographic (text compare).
+     - Typed (numeric values compare numerically).
+     - MySQL: typed. MariaDB: lexicographic.
+   * - ``contains()`` / ``has_key()`` / etc.
+     - ``NotImplementedError``.
+     - Supported (``@>``, ``?``, ``?&``, ``?|``).
+     - Supported (``JSON_CONTAINS``, ``JSON_CONTAINS_PATH``).
+   * - ``is_null()`` on a stored JSON ``null``
+     - Matches (treated as absent).
+     - Matches (treated as absent).
+     - Does **not** match (extraction yields the string ``'null'``).
+
+Use :meth:`~JSONPath.as_int` / :meth:`~JSONPath.as_float` for portable
+numeric ordering, and only call ``append()`` / ``length()`` on values you
+know are arrays.
+
 .. _json-field-backend-specific:
 
 Backend-specific Modules
