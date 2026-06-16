@@ -8,6 +8,7 @@ from .base import IS_MYSQL
 from .base import IS_ORACLE_MYSQL
 from .base import IS_POSTGRESQL
 from .base import IS_SQLITE
+from .base import BaseTestCase
 from .base import ModelTestCase
 from .base import TestModel
 from .base import db
@@ -717,6 +718,38 @@ class TestSQLShapes(ModelTestCase):
             lower = sql.lower()
             self.assertIn('json_unquote', lower)
             self.assertIn('json_extract', lower)
+
+
+class TestMySQLJSONStaticFlavor(BaseTestCase):
+    def _select_sql(self, mariadb, build):
+        flavor_db = MySQLDatabase('peewee_test', mariadb=mariadb)
+
+        class M(TestModel):
+            data = JSONField()
+            class Meta:
+                database = flavor_db
+
+        self.assertIsNone(flavor_db.server_version)  # Never connected.
+        sql, _ = M.select().where(build(M)).sql()
+        return sql
+
+    def test_value_marking_is_static(self):
+        path_eq = lambda M: M.data['k'] == 'v'
+        mysql_sql = self._select_sql(False, path_eq)
+        self.assertIn('CAST(', mysql_sql)
+        self.assertNotIn('JSON_COMPACT', mysql_sql)
+
+        maria_sql = self._select_sql(True, path_eq)
+        self.assertIn('JSON_COMPACT(', maria_sql)
+        self.assertNotIn('CAST(', maria_sql)
+
+    def test_contains_needs_no_marker(self):
+        contains = lambda M: M.data.contains({'k': 'v'})
+        shapes = set(self._select_sql(m, contains) for m in (False, True))
+        self.assertEqual(len(shapes), 1)
+        only = shapes.pop()
+        self.assertNotIn('JSON_COMPACT', only)
+        self.assertNotIn('CAST(', only)
 
 
 class TestBulkUpdate(ModelTestCase):

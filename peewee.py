@@ -3336,33 +3336,17 @@ class PostgresqlJSONMethods(BaseJSONMethods):
         lhs = self.extract(field, keys)
         return Expression(lhs, '?|', AsIs(list(key_list), False))
 
-class _MySQLJSONValue(ColumnBase):
-    # MySQL and MariaDB share no SQL for json-marking a value: MariaDB
-    # needs JSON_COMPACT (it has no CAST AS JSON), MySQL needs CAST (it has
-    # no JSON_COMPACT). Flavor is keyed off the server version when the SQL
-    # is generated, as it is unknown until connected (assume MariaDB).
-    def __init__(self, database, node, compact=True):
-        super(_MySQLJSONValue, self).__init__()
-        self.database = database
-        self.node = node
-        self.compact = compact  # Normalize w/JSON_COMPACT (MariaDB only)?
-
-    def __sql__(self, ctx):
-        version = self.database.server_version
-        if version and version[0] < 10:  # MySQL reports 5.x / 8.x / 9.x.
-            return ctx.sql(Cast(self.node, 'JSON'))
-        return ctx.sql(fn.JSON_COMPACT(self.node) if self.compact
-                       else self.node)
-
 class MySQLJSONMethods(BaseJSONMethods):
     def _as_json(self, node, compact=True):
-        return _MySQLJSONValue(self.database, node, compact)
+        # MySQL and MariaDB have diff ways of indicating a value is JSON.
+        if self.database.mariadb:
+            return fn.JSON_COMPACT(node) if compact else node
+        return Cast(node, 'JSON')
 
     def make_value_wrapper(self, dumps):
-        # Raw json-encoded str on MariaDB; MySQL gets a CAST to json.
         def wrapper(value):
-            return self._as_json(
-                Value(dumps(value), converter=False), compact=False)
+            return self._as_json(Value(dumps(value), converter=False),
+                                 compact=False)
         return wrapper
 
     def extract(self, field, keys):
@@ -3380,13 +3364,14 @@ class MySQLJSONMethods(BaseJSONMethods):
         return {'int': 'SIGNED', 'float': 'DOUBLE'}[t]
 
     def _json_value(self, field, value):
-        # Sending json-encoded text only works for scalars: containers and
-        # the json 'null' must be marked as documents (MySQL treats SQL
-        # NULL in json_set() as "delete this path").
+        # Value for JSON_SET, etc. Need to apply wrapping in order to ensure
+        # objects/arrays/null are CAST as JSON and not strings.
         if value is None or isinstance(value, (dict, list)):
-            return self._as_json(
-                Value(field._dumps(value), converter=False))
+            return self._as_json(Value(field._dumps(value), converter=False))
         return Value(value, converter=False)
+
+    def _contains_value(self, field, value):
+        return Value(field._dumps(value), converter=False)
 
     def compare_value(self, field, value):
         # Mark the rhs as json so comparison against extract() works - raw
@@ -3431,14 +3416,14 @@ class MySQLJSONMethods(BaseJSONMethods):
         # JSON_CONTAINS returns 0/1; wrap in `= 1` so it composes cleanly in
         # boolean contexts (NOT, AND, etc.).
         path_args = (self._path(keys),) if keys else ()
-        call = fn.JSON_CONTAINS(field, self._json_value(field, value),
+        call = fn.JSON_CONTAINS(field, self._contains_value(field, value),
                                 *path_args)
         return Expression(call, OP.EQ, 1)
 
     def contained_by(self, field, keys, value):
         # Args flipped: is `value` a superset of (sub-extract of) field?
         lhs = self.extract(field, keys) if keys else field
-        call = fn.JSON_CONTAINS(self._json_value(field, value), lhs)
+        call = fn.JSON_CONTAINS(self._contains_value(field, value), lhs)
         return Expression(call, OP.EQ, 1)
 
     def has_key(self, field, keys, key):
@@ -4767,6 +4752,7 @@ class MySQLDatabase(Database):
     param = '%s'
     quote = '``'
     json_methods = MySQLJSONMethods
+    mariadb = False  # JSON value-marking flavor: JSON_COMPACT vs CAST AS JSON.
 
     compound_select_parentheses = CSQ_PARENTHESES_UNNESTED
     for_update = True
@@ -4776,7 +4762,9 @@ class MySQLDatabase(Database):
     safe_drop_index = False
     sql_mode = 'PIPES_AS_CONCAT'
 
-    def init(self, database, **kwargs):
+    def init(self, database, mariadb=None, **kwargs):
+        if mariadb is not None:
+            self.mariadb = mariadb
         params = {
             'charset': 'utf8',
             'sql_mode': self.sql_mode,

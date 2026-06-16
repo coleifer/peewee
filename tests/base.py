@@ -135,6 +135,7 @@ IS_SQLITE_9 = IS_SQLITE and sqlite3.sqlite_version_info >= (3, 9)
 IS_MYSQL_ADVANCED_FEATURES = False
 IS_MYSQL_JSON = False
 IS_ORACLE_MYSQL = False
+IS_MARIADB = False
 if IS_MYSQL:
     db.connect()
     server_info = db.server_version
@@ -146,6 +147,11 @@ if IS_MYSQL:
         # Needs actual MySQL - not MariaDB.
         IS_MYSQL_JSON = True
     IS_ORACLE_MYSQL = server_info[0] < 10  # MariaDB reports >= 10.
+    # The JSON value-marking flavor is now a static property of the database
+    # rather than probed from the connection, so the plain MySQLDatabase used
+    # for both servers must be told which it is talking to.
+    IS_MARIADB = server_info[0] >= 10
+    db.mariadb = IS_MARIADB
     db.close()
     if not IS_MYSQL_ADVANCED_FEATURES:
         logger.warning('MySQL too old to test certain advanced features.')

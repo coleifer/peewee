@@ -1184,9 +1184,13 @@ Database
       isolation level (if unspecified, the connection default will be used).
 
 
-.. class:: MySQLDatabase(database, **kwargs)
+.. class:: MySQLDatabase(database, mariadb=None, **kwargs)
 
    MySQL database implementation.
+
+   :param bool mariadb: Ensure proper SQL generation on MariaDB, which has some
+       quirks (notably :class:`JSONField`). Default behavior is to use
+       MySQL-flavor.
 
    Example:
 

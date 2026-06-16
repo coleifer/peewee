@@ -46,6 +46,8 @@ class PooledMySQLConnectorDatabase(_PooledMySQLDatabase,
 
 
 class MariaDBConnectorDatabase(MySQLDatabase):
+    mariadb = True
+
     def _connect(self):
         if mariadb is None:
             raise ImproperlyConfigured('mariadb connector not installed!')
