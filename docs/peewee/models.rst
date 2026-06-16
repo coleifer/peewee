@@ -611,6 +611,12 @@ For typed comparisons, ordering, or string operators on a path, see
 :ref:`typed access <json-field-typed-access>` and :ref:`text mode <json-field-text-mode>`
 below.
 
+.. note::
+   MariaDB users will need to specify ``MySQLDatabase(..., mariadb=True)`` in
+   order to use :class:`JSONField`. MariaDB and MySQL's JSON behavior is wildly
+   divergent, so this flag is needed to ensure the MariaDB-flavored JSON SQL is
+   emitted.
+
 .. _json-field-null-semantics:
 
 NULL semantics

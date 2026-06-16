@@ -44,25 +44,6 @@ Peewee provides alternate drivers for MySQL through ``playhouse.mysql_ext``.
    Connection-pooling variant of :class:`MariaDBConnectorDatabase`.
 
 
-MySQL-specific helpers:
-
-.. class:: JSONField()
-
-   Extends :class:`TextField` with transparent JSON encoding/decoding.
-
-   .. note::
-      MySQL and MariaDB use different SQL to mark a value as JSON
-      (``CAST(... AS JSON)`` vs ``JSON_COMPACT(...)``). This is a static
-      property of the database, not detected from the connection, so when
-      connecting to MariaDB through the core :class:`MySQLDatabase` you must
-      pass ``mariadb=True``, e.g. ``MySQLDatabase('my_db', mariadb=True)``.
-      :class:`MariaDBConnectorDatabase` sets this for you.
-
-   .. method:: extract(path)
-
-      Extract a value from a JSON document at the given JSON path
-      (e.g. ``'$.key'``).
-
 .. function:: Match(columns, expr, modifier=None)
 
    Helper for MySQL full-text search using ``MATCH ... AGAINST`` syntax.
