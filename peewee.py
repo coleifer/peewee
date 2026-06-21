@@ -8148,13 +8148,18 @@ class BaseModelSelect(_ModelQueryHelper):
         return iter(self._cursor_wrapper)
 
     def _execute(self, database):
-        # Resolve with_related() here when the rows are first materialized.
         first_run = self._cursor_wrapper is None
         cursor_wrapper = super(BaseModelSelect, self)._execute(database)
         if first_run and self._load_tree:
-            loads, self._load_tree = self._load_tree, None
-            _load_related(list(cursor_wrapper), self, loads)
+            if self._row_type in (None, ROW.MODEL):
+                _load_related(list(cursor_wrapper), self, self._load_tree)
         return cursor_wrapper
+
+    def iterator(self, database=None):
+        if self._load_tree:
+            raise ValueError(
+                'with_related() is incompatible with iterator().')
+        return super(BaseModelSelect, self).iterator(database)
 
     def prefetch(self, *subqueries, **kwargs):
         return prefetch(self, *subqueries, **kwargs)

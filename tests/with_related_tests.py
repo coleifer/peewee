@@ -350,6 +350,26 @@ class TestWithRelated(ModelTestCase):
                     self.assertEqual(fav.dirty_fields, [])
                     self.assertEqual(fav.reaction.dirty_fields, [])
 
+    def test_exists_and_scalar_ignore_load_tree(self):
+        query = User.select().with_related(Load(User.tweets))
+        self.assertTrue(query.exists())
+        self.assertEqual(query.scalar(), 1)
+
+    def test_iterator_raises_with_load_tree(self):
+        query = User.select().with_related(Load(User.tweets))
+        self.assertRaises(ValueError, query.iterator)
+
+    def test_re_execution_preserves_load(self):
+        # After the query has been executed once, get()/first() must still
+        # eagerly load related rows on the fresh instances they return.
+        query = (User.select().where(User.username == 'huey')
+                 .with_related(Load(User.tweets)))
+        list(query)
+        with self.assertQueryCount(2):
+            user = query.first()
+            self.assertEqual(sorted(t.content for t in user.tweets),
+                             ['hiss', 'meow', 'purr'])
+
 
 class TestWithRelatedMultiFK(ModelTestCase):
     requires = [User, Message]
