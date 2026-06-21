@@ -56,6 +56,15 @@ class Tag(TestModel):
         primary_key = CompositeKey('group', 'name')
 
 
+class Package(TestModel):
+    barcode = TextField(unique=True)
+
+
+class PackageItem(TestModel):
+    name = TextField()
+    package = ForeignKeyField(Package, backref='items', field=Package.barcode)
+
+
 class TestWithRelated(ModelTestCase):
     requires = [User, Reaction, Tweet, Favorite]
 
@@ -257,6 +266,90 @@ class TestWithRelated(ModelTestCase):
             ('mickey', ['bark', 'woof']),
             ('zaizee', [])])
 
+    def test_then_multiple_children(self):
+        # A single .then() with two children forks the load: each child row
+        # gets both branches populated (here a backref and a forward fk
+        # hanging off the same tweet).
+        for pt in PREFETCH_TYPE.values():
+            spec = Load(User.tweets, strategy=pt).then(
+                Load(Tweet.favorites, strategy=pt),
+                Load(Tweet.user, strategy=pt))
+            with self.assertQueryCount(4):
+                query = (User
+                         .select()
+                         .where(User.username == 'huey')
+                         .with_related(spec))
+                huey, = list(query)
+                fav_counts = {t.content: len(t.favorites) for t in huey.tweets}
+                owners = set(t.user.username for t in huey.tweets)
+            self.assertEqual(fav_counts, {'meow': 2, 'purr': 0, 'hiss': 0})
+            self.assertEqual(owners, {'huey'})
+
+    def test_aggregate_parent(self):
+        # An aggregated/grouped parent query loads, and its computed column
+        # survives - the load runs against the already-materialized instances.
+        for pt in PREFETCH_TYPE.values():
+            people = (User
+                      .select(User, fn.COUNT(Tweet.id).alias('tweet_count'))
+                      .join(Tweet, JOIN.LEFT_OUTER)
+                      .group_by(User)
+                      .order_by(User.username))
+            with self.assertQueryCount(2):
+                query = people.with_related(Load(User.tweets, strategy=pt))
+                got = {u.username: (u.tweet_count,
+                                    sorted(t.content for t in u.tweets))
+                       for u in query}
+            self.assertEqual(got, {
+                'huey': (3, ['hiss', 'meow', 'purr']),
+                'mickey': (2, ['bark', 'woof']),
+                'zaizee': (0, [])})
+
+    def test_parent_query_with_join(self):
+        # The parent query carries its own join and selected parent columns;
+        # the JOIN strategy re-embeds it as a subquery, which must still work.
+        for pt in PREFETCH_TYPE.values():
+            base = (Tweet
+                    .select(Tweet, User)
+                    .join(User)
+                    .order_by(Tweet.content))
+            with self.assertQueryCount(2):
+                query = base.with_related(Load(Tweet.favorites, strategy=pt))
+                got = {t.content: (t.user.username, len(t.favorites))
+                       for t in query}
+            self.assertEqual(got, {
+                'bark': ('mickey', 0), 'hiss': ('huey', 0),
+                'meow': ('huey', 2), 'purr': ('huey', 0),
+                'woof': ('mickey', 1)})
+
+    def test_no_queries_after_load(self):
+        # Once the load has fired, re-iterating the cached query and walking
+        # the loaded relations issues no further queries.
+        query = (User
+                 .select()
+                 .order_by(User.username)
+                 .with_related(Load(User.tweets).then(Load(Tweet.favorites))))
+        list(query)  # Trigger the load.
+        with self.assertQueryCount(0):
+            accum = [(u.username, t.content, len(t.favorites))
+                     for u in query for t in u.tweets]
+        self.assertEqual(len(accum), 5)
+
+    def test_loaded_instances_not_dirty(self):
+        # Eagerly-loaded instances come back clean, like prefetch() - including
+        # the parent of a forward-fk hop, whose fk setattr must not leave it
+        # falsely dirty (Favorite below is the parent of Load(Favorite.reaction)).
+        query = User.select().with_related(
+            Load(User.tweets).then(
+                Load(Tweet.favorites).then(
+                    Load(Favorite.reaction))))
+        for user in query:
+            self.assertEqual(user.dirty_fields, [])
+            for tweet in user.tweets:
+                self.assertEqual(tweet.dirty_fields, [])
+                for fav in tweet.favorites:
+                    self.assertEqual(fav.dirty_fields, [])
+                    self.assertEqual(fav.reaction.dirty_fields, [])
+
 
 class TestWithRelatedMultiFK(ModelTestCase):
     requires = [User, Message]
@@ -284,6 +377,26 @@ class TestWithRelatedMultiFK(ModelTestCase):
                              ['to mickey'])
             self.assertIn('received', users['huey'].__dict__)
             self.assertNotIn('sent', users['huey'].__dict__)
+
+    def test_multiple_top_level_loads(self):
+        # Two independent Load nodes in one with_related() call: both backrefs
+        # to User are populated, neither leaks into the other.
+        for pt in PREFETCH_TYPE.values():
+            with self.assertQueryCount(3):
+                query = (User
+                         .select()
+                         .order_by(User.username)
+                         .with_related(Load(User.sent, strategy=pt),
+                                       Load(User.received, strategy=pt)))
+                users = {u.username: u for u in query}
+            self.assertEqual([m.body for m in users['huey'].sent],
+                             ['to mickey'])
+            self.assertEqual([m.body for m in users['huey'].received],
+                             ['to huey'])
+            self.assertEqual([m.body for m in users['mickey'].sent],
+                             ['to huey'])
+            self.assertEqual([m.body for m in users['mickey'].received],
+                             ['to mickey'])
 
 
 class TestWithRelatedSelfRef(ModelTestCase):
@@ -315,6 +428,20 @@ class TestWithRelatedSelfRef(ModelTestCase):
             self.assertEqual(tree, {
                 'a': {'a1': ['a1x'], 'a2': []},
                 'b': {}})
+
+    def test_forward_fk_null_parent(self):
+        # Forward-fk load where some rows have a null fk: the null-parent rows
+        # simply get no parent attached, and nothing errors.
+        for pt in PREFETCH_TYPE.values():
+            with self.assertQueryCount(2):
+                query = (Folder
+                         .select()
+                         .order_by(Folder.name)
+                         .with_related(Load(Folder.parent, strategy=pt)))
+                got = {f.name: (f.parent.name if f.parent is not None else None)
+                       for f in query}
+            self.assertEqual(got, {
+                'a': None, 'a1': 'a', 'a1x': 'a1', 'a2': 'a', 'b': None})
 
 
 class TestWithRelatedLimit(ModelTestCase):
@@ -426,3 +553,58 @@ class TestWithRelatedCompositeKey(ModelTestCase):
                 group, = list(query)
                 names = sorted(t.name for t in group.tags)
             self.assertEqual(names, ['t1', 't2'])
+
+
+class TestWithRelatedNonPKFK(ModelTestCase):
+    requires = [Package, PackageItem]
+
+    def setUp(self):
+        super(TestWithRelatedNonPKFK, self).setUp()
+        data = (('101', ('a', 'b')),
+                ('102', ()),
+                ('104', ('a', 'b', 'c')))
+        for barcode, items in data:
+            Package.create(barcode=barcode)
+            for name in items:
+                PackageItem.create(package=barcode, name=name)
+
+    def test_backref_non_pk_fk(self):
+        # The fk targets Package.barcode, not the pk; bucketing keys on
+        # rel_field, so this exercises a different path than a pk-based fk.
+        for pt in PREFETCH_TYPE.values():
+            with self.assertQueryCount(2):
+                query = (Package
+                         .select()
+                         .order_by(Package.barcode)
+                         .with_related(Load(Package.items, strategy=pt)))
+                got = {p.barcode: sorted(i.name for i in p.items)
+                       for p in query}
+            self.assertEqual(got, {
+                '101': ['a', 'b'], '102': [], '104': ['a', 'b', 'c']})
+
+    def test_backref_non_pk_fk_materialize(self):
+        with self.assertQueryCount(2):
+            query = (Package
+                     .select()
+                     .order_by(Package.barcode)
+                     .with_related(Load(Package.items, materialize=True)))
+            got = {p.barcode: sorted(i.name for i in p.items) for p in query}
+        self.assertEqual(got, {
+            '101': ['a', 'b'], '102': [], '104': ['a', 'b', 'c']})
+        # The IN-list is built from barcodes (the rel_field), not pks.
+        sql, params = self.history[-1].msg
+        self.assertEqual(sql.count('SELECT'), 1)
+        self.assertEqual(sorted(params), ['101', '102', '104'])
+
+    def test_forward_non_pk_fk(self):
+        for pt in PREFETCH_TYPE.values():
+            with self.assertQueryCount(2):
+                query = (PackageItem
+                         .select()
+                         .order_by(PackageItem.name, PackageItem.id)
+                         .with_related(Load(PackageItem.package, strategy=pt)))
+                got = sorted((i.name, i.package.barcode) for i in query)
+            self.assertEqual(got, [
+                ('a', '101'), ('a', '104'),
+                ('b', '101'), ('b', '104'),
+                ('c', '104')])

@@ -549,6 +549,13 @@ class TestPrefetch(ModelTestCase):
                     for item in note.items:
                         self.assertEqual(item.dirty_fields, [])
 
+            # Forward-fk population (note.person) must also leave the row clean;
+            # the fk setattr would otherwise mark it dirty.
+            notes = prefetch(Note.select(), Person.select(), prefetch_type=pt)
+            for note in notes:
+                self.assertEqual(note.dirty_fields, [])
+                self.assertEqual(note.person.dirty_fields, [])
+
 
 # ===========================================================================
 # Multi-reference prefetch (complex FK graphs)

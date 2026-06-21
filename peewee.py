@@ -9044,6 +9044,9 @@ class PrefetchQuery(collections.namedtuple('_PrefetchQuery', (
                 key = (field, identifier)
                 if key in id_map:
                     setattr(instance, field.name, id_map[key])
+                    # setattr marks the fk dirty, but it isn't - it's the value
+                    # we just loaded. Clear it so the row reflects db state.
+                    instance._dirty.discard(field.name)
         else:
             for field, attname in self.field_to_name:
                 identifier = instance.__data__[field.rel_field.name]
