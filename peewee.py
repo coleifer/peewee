@@ -4195,7 +4195,7 @@ class SqliteDatabase(Database):
 
         self._attached[name] = filename
         if not self.is_closed():
-            self.execute_sql('ATTACH DATABASE "%s" AS "%s"' % (filename, name))
+            self.execute_sql('ATTACH DATABASE ? AS ?', (filename, name))
         return True
 
     def detach(self, name):
@@ -4204,7 +4204,7 @@ class SqliteDatabase(Database):
 
         del self._attached[name]
         if not self.is_closed():
-            self.execute_sql('DETACH DATABASE "%s"' % name)
+            self.execute_sql('DETACH DATABASE ?', (name,))
         return True
 
     def last_insert_id(self, cursor, query_type=None):
