@@ -16,7 +16,8 @@ By the end of this document you will understand:
 * What the N+1 problem is and how to recognise it.
 * How to write joins, including multi-table and self-referential joins.
 * How many-to-many relationships are modelled.
-* When to use :func:`prefetch` instead of a join.
+* When to use eager loading (:meth:`~ModelSelect.with_related`) instead of a
+  join.
 
 
 Model Definitions
@@ -260,9 +261,9 @@ The same problem can occur when iterating over back-references:
            print('  ', tweet.content)
 
    # Better:
-   for user in User.select().prefetch(Tweet):
+   for user in User.select().with_related(Load(User.tweets)):
        print(user.username)
-       for tweet in user.tweets:  # Pre-fetched, no additional query.
+       for tweet in user.tweets:  # Eager-loaded, no additional query.
            print('  ', tweet.content)
 
 Peewee provides two complementary tools for avoiding N+1 queries:
@@ -270,9 +271,11 @@ Peewee provides two complementary tools for avoiding N+1 queries:
 * **Joins** - combine rows from multiple tables in a single ``SELECT``. Best
   when traversing a foreign key *toward* its target (many-to-one direction),
   for example fetching tweets with their authors.
-* **Prefetch** - issue one query per table and stitch the results together in
-  Python. Best when traversing a back-reference (one-to-many direction), for
-  example fetching users with all their tweets.
+* **Eager loading** - issue one query per table and stitch the results together
+  in Python. Best when traversing a back-reference (one-to-many direction), for
+  example fetching users with all their tweets. The declarative form is
+  :meth:`~ModelSelect.with_related`; :func:`prefetch` is the older flat-list
+  form.
 
 Both are covered in the sections below. The choice between them depends on the
 shape of the query.
@@ -978,66 +981,175 @@ requires no extra columns and complex querying is not needed.
 
 .. _prefetch:
 
-Avoiding N+1 with Prefetch
---------------------------
+Avoiding N+1 with eager loading
+-------------------------------
 
 Joins solve the N+1 problem when traversing from the *many* side toward the
-*one* side - for example, fetching tweets with their authors. Each tweet has
+*one* side, for example fetching tweets with their authors. Each tweet has
 exactly one author, so a join produces exactly one result row per tweet.
 
 The situation is different when traversing from the *one* side toward the
-*many* side - for example, fetching users *with all their tweets*. A join in
-this direction produces one result row *per tweet*, which means users with
-multiple tweets appear multiple times in the result set. Deduplicating those
-rows in application code is awkward and error-prone.
+*many* side, for example fetching users *with all their tweets*. A join in this
+direction produces one result row *per tweet*, which means users with multiple
+tweets appear multiple times in the result set. Deduplicating those rows in
+application code is awkward and error-prone.
 
-:func:`prefetch` solves this by issuing one query per table, then stitching
-the results together in Python. Instead of *O(n)* queries for *n* rows, we will
-do *O(k)* queries for *k* tables:
+Eager loading solves this by issuing one query per table, then stitching the
+results together in Python. Instead of *O(n)* queries for *n* rows, we do
+*O(k)* queries for *k* tables. Peewee has two APIs for this:
+
+* :meth:`~ModelSelect.with_related` with :class:`Load` nodes: the declarative,
+  nestable form, recommended for new code.
+* :func:`prefetch`: the older flat-list form, kept for backwards compatibility.
+
+They share one execution engine and the same load strategies, and differ only
+in how the load is expressed.
+
+Eager loading with with_related
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+:meth:`~ModelSelect.with_related` attaches related rows to a query. Each
+relationship is named by a :class:`Load` node, and the loads run when the query
+is first executed:
 
 .. code-block:: python
 
    # Two queries total, regardless of how many users or tweets there are:
    # SELECT * FROM user
    # SELECT * FROM tweet WHERE user_id IN (...)
+   query = User.select().with_related(Load(User.tweets))
+
+   for user in query:
+       print(user.username)
+       for tweet in user.tweets:  # No additional query, user.tweets is a list.
+           print(f'  {tweet.content}')
+
+``Load`` accepts a back-reference (``Load(User.tweets)``, the one-to-many
+direction) or a foreign key (``Load(Tweet.user)``, the many-to-one direction).
+The rows are loaded once, when the query is first executed, whether by
+iteration, ``get()``, ``first()``, indexing or ``len()``.
+
+``Load.then()`` nests one hop inside another, so a load can span more than two
+tables. To fetch users, their tweets, and the favorites on each tweet in three
+queries:
+
+.. code-block:: python
+
+   query = User.select().with_related(
+       Load(User.tweets).then(
+           Load(Tweet.favorites)))
+
+   for user in query:
+       for tweet in user.tweets:
+           print(f'{user.username}: {tweet.content} '
+                 f'({len(tweet.favorites)} favorites)')
+
+``with_related`` accepts more than one :class:`Load`, so several independent
+branches can hang off the same parent in a single call:
+
+.. code-block:: python
+
+   # Each user's tweets and (separately) the tweets they have favorited:
+   query = User.select().with_related(
+       Load(User.tweets),
+       Load(User.favorites))
+
+Because every hop names a specific foreign key, ``with_related`` never needs to
+disambiguate between two relationships to the same table.
+
+Per-hop modifiers
+^^^^^^^^^^^^^^^^^
+
+Each :class:`Load` carries its own ``where``, ``order_by`` and ``limit``,
+applied to that hop alone and not to the outer query:
+
+.. code-block:: python
+
+   query = User.select().with_related(
+       Load(User.tweets)
+       .where(Tweet.content != 'hiss')
+       .order_by(Tweet.timestamp.desc()))
+
+A hop can also limit the rows fetched per parent. ``limit(n, per_parent=True)``
+keeps the first ``n`` rows of each parent's children, using a window function:
+
+.. code-block:: python
+
+   # The two most-recent tweets for each user, in one query:
+   query = User.select().with_related(
+       Load(User.tweets)
+       .order_by(Tweet.timestamp.desc())
+       .limit(2, per_parent=True))
+
+A plain ``limit(n)`` (without ``per_parent``) instead applies one ``LIMIT`` to
+the whole hop, returning ``n`` rows in total, the same as :func:`prefetch`.
+Per-parent limits require window-function support (SQLite 3.25+, PostgreSQL,
+MySQL 8).
+
+.. _prefetch-strategy:
+
+Load strategy and materialize
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Each hop has to restrict its children to the rows belonging to the parents
+already fetched. The ``strategy`` argument controls how. It applies to both
+``with_related`` and :func:`prefetch` (where it is spelled as the
+``prefetch_type`` keyword):
+
+* ``PREFETCH_TYPE.WHERE`` (the default) filters with an ``IN`` subquery, of the
+  form ``... WHERE user_id IN (SELECT id FROM user ...)``. The parent query is
+  embedded and re-evaluated by the database.
+* ``PREFETCH_TYPE.JOIN`` filters by joining the child table against the parent
+  query. Use it for paginated parents (MySQL cannot put ``LIMIT`` inside an
+  ``IN`` subquery) or very large parent sets.
+
+.. code-block:: python
+
+   query = User.select().paginate(1, 20).with_related(
+       Load(User.tweets, strategy=PREFETCH_TYPE.JOIN))
+
+The ``materialize`` flag on :class:`Load` takes a third approach. Instead of
+embedding the parent query, it reads the parent keys already held in memory and
+sends them as a literal ``IN`` list. This avoids re-running the parent query at
+all, at the cost of one bind parameter per key, so it is bounded by the
+backend's parameter limit. It overrides ``strategy``:
+
+.. code-block:: python
+
+   # No parent subquery; the user ids are sent inline.
+   query = User.select().with_related(Load(User.tweets, materialize=True))
+
+Legacy: prefetch
+^^^^^^^^^^^^^^^^
+
+:func:`prefetch` is the original eager-loading API. It takes a flat list of
+queries and infers how they connect from the foreign keys between them. It is
+still supported, but :meth:`~ModelSelect.with_related` is preferred for new
+code.
+
+.. code-block:: python
+
    users = User.select().prefetch(Tweet)
 
    # Equivalent to above.
    users = prefetch(User.select(), Tweet.select())
 
-   for user in users:
-       print(user.username)
-       for tweet in user.tweets:  # No additional query, user.tweets is a list.
-           print(f'  {tweet.content}')
-
-The models passed to :func:`prefetch` must be linked by foreign keys.
-Peewee infers the relationships and assigns the prefetched rows to the
-appropriate back-reference attribute on each instance.
-
-Prefetch can span more than two tables. To fetch users, their tweets, and the
-favorites on each tweet in three queries:
-
-.. code-block:: python
-
+   # Three tables, three queries.
    users = prefetch(User.select(), Tweet.select(), Favorite.select())
 
-   for user in users:
-       for tweet in user.tweets:
-           print(f'{user.username}: {tweet.content} '
-                 f'({len(tweet.favorites)} favorites)')
+The models passed to :func:`prefetch` must be linked by foreign keys. Peewee
+infers the relationships and assigns the prefetched rows to the appropriate
+back-reference attribute on each instance.
 
-When a subquery relates to more than one previously-listed query - for
-example, a ``Favorite`` that has foreign keys to both ``User`` and ``Tweet`` -
-pass a ``(query, target_model)`` tuple to disambiguate which relationship
-to follow:
+When a subquery relates to more than one previously-listed query (for example a
+``Favorite`` that has foreign keys to both ``User`` and ``Tweet``), pass a
+``(query, target_model)`` tuple to choose which relationship to follow. This is
+the disambiguation that ``with_related`` avoids by naming each foreign key:
 
 .. code-block:: python
 
    # Fetch favorites via User, not via Tweet.
    query = prefetch(users, tweets, (favorites, User))
-
-Filtering prefetched rows
-^^^^^^^^^^^^^^^^^^^^^^^^^
 
 Both the outer query and the prefetch subqueries can carry ``WHERE`` clauses
 and other modifiers independently:
@@ -1052,80 +1164,12 @@ and other modifiers independently:
    )
 
 The filter on ``Tweet`` applies only to the prefetched tweets; it does not
-affect which users are returned.
+affect which users are returned. ``prefetch`` accepts the same strategies as
+``with_related`` through its ``prefetch_type`` keyword (see
+:ref:`prefetch-strategy`).
 
-Declarative loads with ``with_related``
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-
-:meth:`~ModelSelect.with_related` is a tree-shaped form of prefetch. Where
-:func:`prefetch` takes a flat list of subqueries and infers how they connect,
-``with_related`` names each relationship explicitly with a :class:`Load` node,
-and ``.then()`` nests one hop inside another:
-
-.. code-block:: python
-
-   query = User.select().with_related(
-       Load(User.tweets).then(
-           Load(Tweet.favorites)))
-
-   for user in query:
-       for tweet in user.tweets:
-           print(user.username, tweet.content, len(tweet.favorites))
-
-``with_related`` accepts more than one :class:`Load`, so several independent
-branches can hang off the same parent in a single call:
-
-.. code-block:: python
-
-   # Each user's tweets and (separately) the tweets they have favorited:
-   query = User.select().with_related(
-       Load(User.tweets),
-       Load(User.favorites))
-
-Each :class:`Load` carries its own modifiers, applied to that hop alone:
-
-.. code-block:: python
-
-   query = User.select().with_related(
-       Load(User.tweets)
-       .where(Tweet.content != 'hiss')
-       .order_by(Tweet.timestamp.desc()))
-
-Because every hop names a specific foreign key, ``with_related`` never needs the
-``(query, target_model)`` disambiguation that :func:`prefetch` uses for models
-with more than one foreign key to the same table.
-
-A hop can limit the rows fetched per parent. ``limit(n, per_parent=True)`` keeps
-the first ``n`` rows of each parent's children, using a window function:
-
-.. code-block:: python
-
-   # The two most-recent tweets for each user, in one query:
-   query = User.select().with_related(
-       Load(User.tweets)
-       .order_by(Tweet.timestamp.desc())
-       .limit(2, per_parent=True))
-
-A plain ``limit(n)`` (without ``per_parent``) instead applies one ``LIMIT`` to
-the whole hop, returning ``n`` rows in total - the same as :func:`prefetch`.
-Per-parent limits require window-function support (SQLite 3.25+, PostgreSQL,
-MySQL 8).
-
-By default each hop filters its children with an ``IN`` subquery
-(``PREFETCH_TYPE.WHERE``). ``strategy=PREFETCH_TYPE.JOIN`` joins against the
-parent query instead. Use it for paginated parents (MySQL cannot put ``LIMIT``
-inside an ``IN`` subquery) or very large parent sets:
-
-.. code-block:: python
-
-   Load(User.tweets, strategy=PREFETCH_TYPE.JOIN)
-
-``with_related`` and :func:`prefetch` share the same execution engine.
-``with_related`` adds the nested load tree, the per-hop modifiers, and per-parent
-limits. :func:`prefetch` is the flat-list form.
-
-Choosing between joins and prefetch
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Choosing between joins and eager loading
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 Use a **join** when:
 
@@ -1134,18 +1178,18 @@ Use a **join** when:
   starts with "h").
 * Only a subset of related fields is needed.
 
-Use **prefetch** when:
+Use **eager loading** when:
 
 * Traversing from the one side to the many side (user -> all their tweets).
 * The full set of related rows is needed for each parent row.
 * Nesting more than one level of related data (users -> tweets -> favorites).
 
 .. note::
-   ``LIMIT`` on the outer query of a :func:`prefetch` call works as expected.
-   :func:`prefetch` itself cannot limit the *inner* (prefetched) queries per
-   parent. For top-N-per-parent, use :meth:`~ModelSelect.with_related` with
+   ``LIMIT`` on the outer query works as expected. :func:`prefetch` itself
+   cannot limit the *inner* (prefetched) queries per parent. For
+   top-N-per-parent, use :meth:`~ModelSelect.with_related` with
    ``limit(n, per_parent=True)`` (above), or :ref:`top-n-per-group` for the
    underlying technique.
 
 .. seealso::
-   :func:`prefetch` and :meth:`~ModelSelect.with_related` API reference.
+   :meth:`~ModelSelect.with_related` and :func:`prefetch` API reference.

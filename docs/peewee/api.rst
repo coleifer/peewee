@@ -2716,6 +2716,11 @@ Model
 
       Execute the query, prefetching the given additional resources.
 
+      .. note::
+         :meth:`with_related` is the declarative, nestable form and is preferred
+         for new code. ``prefetch`` is the flat-list form, kept for
+         compatibility.
+
       Prefetch type may be one of:
 
       * ``PREFETCH_TYPE.WHERE``
@@ -6423,6 +6428,11 @@ Queries
    tables when a 1-to-many relationship exists. The prefetch type changes how
    the subqueries are constructed which may be desirable depending on the
    database engine in use.
+
+   .. note::
+      :meth:`ModelSelect.with_related` is the declarative, nestable form and is
+      preferred for new code. ``prefetch`` is the flat-list form, kept for
+      compatibility.
 
    Prefetch type may be one of:
 

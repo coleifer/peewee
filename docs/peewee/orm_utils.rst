@@ -445,14 +445,14 @@ Back-references work the same way, but the schema must be wrapped in
 
 .. note::
    As with foreign keys, accessing a back-reference triggers a query. Use
-   :py:meth:`~ModelSelect.prefetch` to load the collection up front:
+   :py:meth:`~ModelSelect.with_related` to load the collection up front:
 
    .. code-block:: python
 
       users = (User
                .select()
                .where(User.id == 123)
-               .prefetch(Tweet))
+               .with_related(Load(User.tweets)))
 
       data = UserDetail.model_validate(users[0])  # No additional query.
 

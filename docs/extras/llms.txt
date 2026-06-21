@@ -13,7 +13,7 @@
 - [Quickstart](https://docs.peewee-orm.com/en/latest/peewee/quickstart.html): models, connecting, basic CRUD.
 - [Models and fields](https://docs.peewee-orm.com/en/latest/peewee/models.html): field types, Meta options, indexes, constraints.
 - [Querying](https://docs.peewee-orm.com/en/latest/peewee/querying.html): select, insert, update, delete, joins, aggregates.
-- [Relationships and joins](https://docs.peewee-orm.com/en/latest/peewee/relationships.html): foreign keys, backrefs, prefetch, N+1 avoidance.
+- [Relationships and joins](https://docs.peewee-orm.com/en/latest/peewee/relationships.html): foreign keys, backrefs, eager loading (with_related/Load, prefetch), N+1 avoidance.
 - [Async support](https://docs.peewee-orm.com/en/latest/peewee/asyncio.html): built-in asyncio via playhouse.pwasyncio - async databases, a-prefixed model methods, query.aexecute(), db.run().
 - [Databases](https://docs.peewee-orm.com/en/latest/peewee/database.html): connection management, SQLite/MySQL/Postgres/CockroachDB configuration.
 - [Transactions](https://docs.peewee-orm.com/en/latest/peewee/transactions.html): atomic blocks, nesting, savepoints.
