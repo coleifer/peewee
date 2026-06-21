@@ -1,14 +1,5 @@
-"""
-Tests for Select.with_related() and the Load relationship load-tree.
-
-Covers both prefetch strategies (WHERE and JOIN), the per-hop modifiers
-(where/order_by/limit), per-parent windowed limits, multi-FK disambiguation,
-self-referential loads, composite primary keys, and that the load fires on
-every materialization path (iter/get/first/index/len), not just iteration.
-"""
-import sqlite3
-
 from peewee import *
+from peewee import sqlite3
 
 from .base import ModelTestCase
 from .base import TestModel
@@ -71,20 +62,27 @@ class TestWithRelated(ModelTestCase):
     def setUp(self):
         super(TestWithRelated, self).setUp()
         data = (
-            ('huey', (('meow', 3, True), ('purr', 1, True), ('hiss', 2, False))),
-            ('mickey', (('woof', 5, True), ('bark', 4, True))),
+            ('huey', (
+                ('meow', 3, True),
+                ('purr', 1, True),
+                ('hiss', 2, False))),
+            ('mickey', (
+                ('woof', 5, True),
+                ('bark', 4, True))),
             ('zaizee', ()))
         tweets = {}
-        for username, rows in data:
-            user = User.create(username=username)
-            for content, ts, published in rows:
-                tweets[content] = Tweet.create(user=user, content=content,
-                                               timestamp=ts, published=published)
-        like = Reaction.create(name='like')
-        love = Reaction.create(name='love')
-        Favorite.create(tweet=tweets['meow'], reaction=like)
-        Favorite.create(tweet=tweets['meow'], reaction=love)
-        Favorite.create(tweet=tweets['woof'], reaction=like)
+        with self.database.atomic():
+            for username, rows in data:
+                user = User.create(username=username)
+                for content, ts, published in rows:
+                    tweets[content] = Tweet.create(user=user, content=content,
+                                                   timestamp=ts,
+                                                   published=published)
+            like = Reaction.create(name='like')
+            love = Reaction.create(name='love')
+            Favorite.create(tweet=tweets['meow'], reaction=like)
+            Favorite.create(tweet=tweets['meow'], reaction=love)
+            Favorite.create(tweet=tweets['woof'], reaction=like)
 
     def test_backref(self):
         for pt in PREFETCH_TYPE.values():
@@ -101,9 +99,11 @@ class TestWithRelated(ModelTestCase):
                 ('zaizee', [])])
 
     def test_materialize(self):
+        uids = [u.id for u in User.select().order_by(User.id)]
+
         # materialize=True embeds the parents' keys as a literal IN-list rather
         # than a parent subquery; the result is identical.
-        with self.assertQueryCount(2):
+        with self.assertQueryCount(2) as qh:
             query = (User
                      .select()
                      .order_by(User.username)
@@ -114,10 +114,14 @@ class TestWithRelated(ModelTestCase):
             ('huey', ['hiss', 'meow', 'purr']),
             ('mickey', ['bark', 'woof']),
             ('zaizee', [])])
-        child_sql = self.history[-1].msg[0]
-        self.assertEqual(child_sql.count('SELECT'), 1)  # value-list, no subquery
+
+        sql, params = self.history[-1].msg
+        self.assertEqual(sql.count('SELECT'), 1)
+        self.assertEqual(sorted(params), uids)
 
     def test_materialize_forward_fk(self):
+        tids = set(t.user_id for t in Tweet.select())
+
         with self.assertQueryCount(2):
             query = (Tweet
                      .select()
@@ -127,7 +131,10 @@ class TestWithRelated(ModelTestCase):
         self.assertEqual(accum, [
             ('bark', 'mickey'), ('hiss', 'huey'), ('meow', 'huey'),
             ('purr', 'huey'), ('woof', 'mickey')])
-        self.assertEqual(self.history[-1].msg[0].count('SELECT'), 1)
+
+        sql, params = self.history[-1].msg
+        self.assertEqual(sql.count('SELECT'), 1)
+        self.assertEqual(sorted(params), sorted(tids))
 
     def test_forward_fk(self):
         for pt in PREFETCH_TYPE.values():
@@ -143,14 +150,14 @@ class TestWithRelated(ModelTestCase):
 
     def test_chain(self):
         for pt in PREFETCH_TYPE.values():
+            chain = Load(User.tweets, strategy=pt).then(
+                Load(Tweet.favorites, strategy=pt).then(
+                    Load(Favorite.reaction, strategy=pt)))
             with self.assertQueryCount(4):
                 query = (User
                          .select()
                          .order_by(User.username)
-                         .with_related(
-                             Load(User.tweets, strategy=pt).then(
-                                 Load(Tweet.favorites, strategy=pt).then(
-                                     Load(Favorite.reaction, strategy=pt)))))
+                         .with_related(chain))
                 accum = []
                 for user in query:
                     for tweet in sorted(user.tweets, key=lambda t: t.content):
@@ -166,16 +173,18 @@ class TestWithRelated(ModelTestCase):
 
     def test_where_and_order_by(self):
         for pt in PREFETCH_TYPE.values():
+            spec = (Load(User.tweets, strategy=pt)
+                    .where(Tweet.published == True)
+                    .order_by(Tweet.timestamp.desc()))
             with self.assertQueryCount(2):
                 query = (User
                          .select()
                          .where(User.username == 'huey')
-                         .with_related(
-                             Load(User.tweets, strategy=pt)
-                             .where(Tweet.published == True)
-                             .order_by(Tweet.timestamp.desc())))
+                         .with_related(spec))
                 huey, = list(query)
-            self.assertEqual([t.content for t in huey.tweets], ['meow', 'purr'])
+
+            self.assertEqual([t.content for t in huey.tweets],
+                             ['meow', 'purr'])
 
     def test_where_accumulates(self):
         # Chained .where() must AND, not overwrite, like every other where().
@@ -191,8 +200,8 @@ class TestWithRelated(ModelTestCase):
 
     @skip_if(IS_MYSQL)
     def test_loads_on_every_access_path(self):
-        # The load must fire regardless of how rows are materialized -- not just
-        # iteration. get/first/index/len all go through execute().
+        # The load must fire regardless of how rows are materialized - not
+        # just iteration. get/first/index/len all go through execute().
         def huey_tweets(user):
             return sorted(t.content for t in user.tweets)
 
@@ -349,7 +358,9 @@ class TestWithRelatedLimit(ModelTestCase):
                              .limit(2, per_parent=True)))
                 got = {u.username: sorted(t.content for t in u.tweets)
                        for u in query}
-            self.assertEqual(got, {'huey': ['h2', 'h3'], 'mickey': ['m0', 'm1']})
+            self.assertEqual(got, {
+                'huey': ['h2', 'h3'],
+                'mickey': ['m0', 'm1']})
 
     @skip_if(NO_WINDOW_FUNCTIONS, 'requires sqlite >= 3.25 for window fns')
     def test_per_parent_limit_materialize(self):

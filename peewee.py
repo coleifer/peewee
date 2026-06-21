@@ -9249,13 +9249,15 @@ class Load(Node):
             keys = self._distinct(parents,
                                   lambda p: getattr(p, field.rel_field.name))
             return query.where(field << keys)
-        return _relate_children(query, parent_query, [(field, field.rel_field)],
+        return _relate_children(query, parent_query,
+                                [(field, field.rel_field)],
                                 self._strategy)
 
     def _link_parent(self, query, parent_query, parents):
         field = self._field
         if self._materialize:
-            keys = self._distinct(parents, lambda p: p.__data__.get(field.name))
+            keys = self._distinct(parents,
+                                  lambda p: p.__data__.get(field.name))
             return query.where(field.rel_field << keys)
         return _relate_parent(query, parent_query, [(field.rel_field, field)],
                               self._strategy)
@@ -9293,7 +9295,8 @@ class Load(Node):
         inner = rel_model.select(*pks, rn)
         if self._where is not None:
             inner = inner.where(self._where)
-        cte = self._link_children(inner, parent_query, parents).cte('_load_ranked')
+        cte = (self._link_children(inner, parent_query, parents)
+               .cte('_load_ranked'))
         on = reduce(operator.and_,
                     [pk == getattr(cte.c, pk.column_name) for pk in pks])
         query = (rel_model.select().join(cte, on=on)
