@@ -57,7 +57,9 @@ class Tag(TestModel):
 
 
 class Package(TestModel):
-    barcode = TextField(unique=True)
+    # CharField (VARCHAR), not TextField: MySQL/MariaDB can't target a TEXT
+    # column with a foreign key.
+    barcode = CharField(unique=True)
 
 
 class PackageItem(TestModel):
@@ -373,6 +375,7 @@ class TestWithRelated(ModelTestCase):
         query = User.select().with_related(Load(User.tweets))
         self.assertRaises(ValueError, query.iterator)
 
+    @skip_if(IS_MYSQL)  # first() limits the parent; MySQL can't LIMIT in IN().
     def test_re_execution_preserves_load(self):
         rel = Load(User.tweets,
                    Tweet.select().where(Tweet.content.in_(['hiss', 'purr'])))
