@@ -360,15 +360,29 @@ class TestWithRelated(ModelTestCase):
         self.assertRaises(ValueError, query.iterator)
 
     def test_re_execution_preserves_load(self):
-        # After the query has been executed once, get()/first() must still
-        # eagerly load related rows on the fresh instances they return.
+        rel = Load(User.tweets).where(Tweet.content.in_(['hiss', 'purr']))
+
         query = (User.select().where(User.username == 'huey')
-                 .with_related(Load(User.tweets)))
-        list(query)
+                 .with_related(rel))
+        list(query)  # First execution + load.
         with self.assertQueryCount(2):
-            user = query.first()
+            user = query.first()  # Re-execution: parent reload + related load.
+        with self.assertQueryCount(0):
             self.assertEqual(sorted(t.content for t in user.tweets),
-                             ['hiss', 'meow', 'purr'])
+                             ['hiss', 'purr'])
+
+    def test_objects_eagerly_loads(self):
+        # .objects() yields model instances, so the load must fire; only
+        # tuple/dict/namedtuple rows are skipped.
+        query = (User.select().order_by(User.username)
+                 .with_related(Load(User.tweets)).objects())
+        with self.assertQueryCount(2):
+            accum = [(u.username, sorted(t.content for t in u.tweets))
+                     for u in query]
+        self.assertEqual(accum, [
+            ('huey', ['hiss', 'meow', 'purr']),
+            ('mickey', ['bark', 'woof']),
+            ('zaizee', [])])
 
 
 class TestWithRelatedMultiFK(ModelTestCase):

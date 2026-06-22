@@ -8151,7 +8151,7 @@ class BaseModelSelect(_ModelQueryHelper):
         first_run = self._cursor_wrapper is None
         cursor_wrapper = super(BaseModelSelect, self)._execute(database)
         if first_run and self._load_tree:
-            if self._row_type in (None, ROW.MODEL):
+            if self._row_type not in (ROW.TUPLE, ROW.DICT, ROW.NAMED_TUPLE):
                 _load_related(list(cursor_wrapper), self, self._load_tree)
         return cursor_wrapper
 
