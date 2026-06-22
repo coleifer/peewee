@@ -1009,7 +1009,7 @@ Eager loading with with_related
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 :meth:`~ModelSelect.with_related` attaches related rows to a query. Each
-relationship is named by a :class:`Load` node, and the loads run when the query
+relationship is named by a :class:`Load` node, which runs when the query
 is first executed:
 
 .. code-block:: python
@@ -1029,7 +1029,7 @@ direction) or a foreign key (``Load(Tweet.user)``, the many-to-one direction).
 The rows are loaded once, when the query is first executed, whether by
 iteration, ``get()``, ``first()``, indexing or ``len()``.
 
-``Load.then()`` nests one relation inside another, so a load can span over two
+:meth:`Load.then` nests one relation inside another, so a load can span over two
 tables. To fetch users, their tweets, and the favorites on each tweet in three
 queries:
 
@@ -1044,8 +1044,8 @@ queries:
            print(f'{user.username}: {tweet.content} '
                  f'({len(tweet.favorites)} favorites)')
 
-``with_related`` accepts more than one :class:`Load`, so several independent
-branches can hang off the same parent in a single call:
+:meth:`~ModelSelect.with_related` accepts more than one :class:`Load`, so
+several independent branches can hang off the same parent in a single call:
 
 .. code-block:: python
 
@@ -1054,15 +1054,10 @@ branches can hang off the same parent in a single call:
        Load(User.tweets),
        Load(User.favorites))
 
-Because every relation names a specific foreign key, ``with_related`` never has to
-disambiguate between two relationships to the same table.
-
 Per-relation query
 ^^^^^^^^^^^^^^^^^^
 
-A second argument gives the relation its own query: an ordinary select over the
-related model, built however you like. The rows it returns are the ones
-attached to each parent:
+:class:`Load` accepts a query as the second parameter.
 
 .. code-block:: python
 
@@ -1071,12 +1066,11 @@ attached to each parent:
              .order_by(Tweet.timestamp.desc()))
    query = User.select().with_related(Load(User.tweets, recent))
 
-Because it is a real query it can join other tables and select from them;
-the joined rows come back attached, fetched in the same round trip:
+Because it is a real query it can join other tables and select from them:
 
 .. code-block:: python
 
-   # Each tweet's favorites, each with its reaction already loaded:
+   # Each tweet's favorites, with the reaction FK already loaded:
    favorites = Favorite.select(Favorite, Reaction).join(Reaction)
    query = Tweet.select().with_related(Load(Tweet.favorites, favorites))
 
@@ -1096,7 +1090,7 @@ relation query's ``order_by``:
        Load(User.tweets, tweets, per_parent=2))
 
 A plain ``query.limit(n)`` instead applies one ``LIMIT`` to the whole relation,
-returning ``n`` rows in total, the same as :func:`prefetch`. Per-parent limits
+returning ``n`` rows in total (the same as :func:`prefetch`). Per-parent limits
 require window-function support (SQLite 3.25+, PostgreSQL, MySQL 8).
 
 .. _prefetch-strategy:
@@ -1106,8 +1100,7 @@ Load strategy and materialize
 
 Each relation has to restrict its children to the rows belonging to the parents
 already fetched. The ``strategy`` argument controls how. It applies to both
-``with_related`` and :func:`prefetch` (where it is spelled as the
-``prefetch_type`` keyword):
+:meth:`~ModelSelect.with_related` and :func:`prefetch`:
 
 * ``PREFETCH_TYPE.WHERE`` (the default) filters with an ``IN`` subquery, of the
   form ``... WHERE user_id IN (SELECT id FROM user ...)``. The parent query is
@@ -1118,8 +1111,8 @@ already fetched. The ``strategy`` argument controls how. It applies to both
 
 .. code-block:: python
 
-   query = User.select().paginate(1, 20).with_related(
-       Load(User.tweets, strategy=PREFETCH_TYPE.JOIN))
+   tweets = Load(User.tweets, strategy=PREFETCH_TYPE.JOIN)
+   query = User.select().paginate(1, 20).with_related(tweets)
 
 The ``materialize`` flag on :class:`Load` takes a third approach. Instead of
 embedding the parent query, it reads the parent keys already held in memory and
@@ -1130,7 +1123,8 @@ backend's parameter limit. It overrides ``strategy``:
 .. code-block:: python
 
    # No parent subquery; the user ids are sent inline.
-   query = User.select().with_related(Load(User.tweets, materialize=True))
+   tweets = Load(User.tweets, materialize=True)
+   query = User.select().with_related(tweets)
 
 Legacy: prefetch
 ^^^^^^^^^^^^^^^^
@@ -1198,11 +1192,9 @@ Use **eager loading** when:
 * Nesting more than one level of related data (users -> tweets -> favorites).
 
 .. note::
-   ``LIMIT`` on the outer query works as expected. :func:`prefetch` itself
-   cannot limit the *inner* (prefetched) queries per parent. For
-   top-N-per-parent, use :meth:`~ModelSelect.with_related` with
-   ``per_parent=n`` (above), or :ref:`top-n-per-group` for the
-   underlying technique.
+   ``LIMIT`` on the outer query works as expected. For top-N-per-parent, use
+   :meth:`~ModelSelect.with_related` with ``per_parent=n`` (above), or
+   :ref:`top-n-per-group` for the underlying technique.
 
 .. seealso::
    :meth:`~ModelSelect.with_related` and :func:`prefetch` API reference.
