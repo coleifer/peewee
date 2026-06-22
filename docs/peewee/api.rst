@@ -2719,7 +2719,11 @@ Model
       .. note::
          :meth:`with_related` is the declarative, nestable form and is preferred
          for new code. ``prefetch`` is the flat-list form, kept for
-         compatibility.
+         compatibility. Minimal example of using :meth:`with_related`:
+
+         .. code-block:: python
+
+            query = User.select().with_related(Load(User.tweets))
 
       Prefetch type may be one of:
 
@@ -2767,14 +2771,19 @@ Model
       Eagerly load related objects described by a tree of :class:`Load` nodes.
       This is a declarative, nestable form of :meth:`prefetch`: each
       :class:`Load` names one relationship and supplies an ordinary query to
-      fetch it, and ``Load.then()`` nests a child load beneath it.
+      fetch it. ``Load.then()`` is used to chain nested fetches.
 
       .. code-block:: python
 
-         query = User.select().with_related(
-             Load(User.tweets, Tweet.select().order_by(Tweet.timestamp.desc()))
-             .then(Load(Tweet.favorites)))
+         # For each user, load their tweets (ordered newest-to-oldest), and for
+         # each Tweet, load associated Favorites.
+         rels = (Load(User.tweets,
+                      Tweet.select().order_by(Tweet.timestamp.desc()))
+                 .then(Load(Tweet.favorites)))
 
+         query = User.select().with_related(rels)
+
+         # Avoids N+1 problem - tweets and favorites are efficiently loaded.
          for user in query:
              for tweet in user.tweets:
                  print(user.username, tweet.content, len(tweet.favorites))
@@ -6430,7 +6439,11 @@ Queries
    .. note::
       :meth:`ModelSelect.with_related` is the declarative, nestable form and is
       preferred for new code. ``prefetch`` is the flat-list form, kept for
-      compatibility.
+      compatibility. Minimal example of using :meth:`with_related`:
+
+      .. code-block:: python
+
+         query = User.select().with_related(Load(User.tweets))
 
    Prefetch type may be one of:
 
@@ -6473,8 +6486,7 @@ Queries
    :param rel: A foreign-key field (``Load(Tweet.user)``) or a back-reference
        (``Load(User.tweets)``) naming the relationship to load.
    :param query: An ordinary query used to fetch this relation's rows. It must
-       select from the related model; build it however you like, and any joined
-       rows come back attached. Defaults to a bare select over the related
+       select from the related model. Defaults to a bare select over the related
        model.
    :param strategy: How each relation is filtered against its parents:
        ``PREFETCH_TYPE.WHERE`` (an ``IN`` subquery, the default) or
@@ -6490,7 +6502,7 @@ Queries
 
    A node in the load tree passed to :meth:`ModelSelect.with_related`, describing
    one relationship. The filtering, ordering and limiting for a relation live on
-   its ``query``; ``then`` nests a child load and may be chained.
+   its ``query``. :meth:`Load.then` nests additional relation(s) and may be chained.
 
    .. method:: then(*loads)
 
@@ -6498,11 +6510,18 @@ Queries
 
    .. code-block:: python
 
-      # huey's three most-recent tweets, each with its favorites, in 3 queries:
-      tweets = Tweet.select().order_by(Tweet.timestamp.desc())
-      query = User.select().where(User.username == 'huey').with_related(
-          Load(User.tweets, tweets, per_parent=3)
-          .then(Load(Tweet.favorites)))
+      # For each user, load their tweets (ordered newest-to-oldest), and for
+      # each Tweet, load associated Favorites.
+      rels = (Load(User.tweets,
+                   Tweet.select().order_by(Tweet.timestamp.desc()))
+              .then(Load(Tweet.favorites)))
+
+      query = User.select().with_related(rels)
+
+      # Avoids N+1 problem - tweets and favorites are efficiently loaded.
+      for user in query:
+          for tweet in user.tweets:
+              print(user.username, tweet.content, len(tweet.favorites))
 
 
 Query-builder Internals
