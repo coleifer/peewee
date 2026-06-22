@@ -182,30 +182,43 @@ class TestWithRelated(ModelTestCase):
 
     def test_where_and_order_by(self):
         for pt in PREFETCH_TYPE.values():
-            spec = (Load(User.tweets, strategy=pt)
-                    .where(Tweet.published == True)
-                    .order_by(Tweet.timestamp.desc()))
+            tweets = (Tweet.select().where(Tweet.published == True)
+                      .order_by(Tweet.timestamp.desc()))
             with self.assertQueryCount(2):
                 query = (User
                          .select()
                          .where(User.username == 'huey')
-                         .with_related(spec))
+                         .with_related(Load(User.tweets, tweets, strategy=pt)))
                 huey, = list(query)
 
             self.assertEqual([t.content for t in huey.tweets],
                              ['meow', 'purr'])
 
-    def test_where_accumulates(self):
-        # Chained .where() must AND, not overwrite, like every other where().
+    def test_query_filters_apply(self):
+        # Filters on the hop's query restrict the rows loaded for that hop.
+        tweets = (Tweet.select()
+                  .where(Tweet.content != 'meow')
+                  .where(Tweet.content != 'purr'))
         query = (User
                  .select()
                  .where(User.username == 'huey')
-                 .with_related(
-                     Load(User.tweets)
-                     .where(Tweet.content != 'meow')
-                     .where(Tweet.content != 'purr')))
+                 .with_related(Load(User.tweets, tweets)))
         huey, = list(query)
         self.assertEqual([t.content for t in huey.tweets], ['hiss'])
+
+    def test_query_with_joined_source(self):
+        # The hop query may join and select from multiple sources; the joined
+        # rows come back attached (DB-side), with no extra query per child.
+        for pt in PREFETCH_TYPE.values():
+            favorites = (Favorite.select(Favorite, Reaction).join(Reaction)
+                         .where(Reaction.name == 'like'))
+            with self.assertQueryCount(2):
+                query = (Tweet.select().where(Tweet.content == 'meow')
+                         .with_related(Load(Tweet.favorites, favorites,
+                                            strategy=pt)))
+                meow, = list(query)
+                reactions = [f.reaction.name for f in meow.favorites]
+            self.assertEqual(reactions, ['like'])
 
     @skip_if(IS_MYSQL)
     def test_loads_on_every_access_path(self):
@@ -337,7 +350,8 @@ class TestWithRelated(ModelTestCase):
     def test_loaded_instances_not_dirty(self):
         # Eagerly-loaded instances come back clean, like prefetch() - including
         # the parent of a forward-fk hop, whose fk setattr must not leave it
-        # falsely dirty (Favorite below is the parent of Load(Favorite.reaction)).
+        # falsely dirty (Favorite below is the parent of
+        # Load(Favorite.reaction)).
         query = User.select().with_related(
             Load(User.tweets).then(
                 Load(Tweet.favorites).then(
@@ -360,7 +374,8 @@ class TestWithRelated(ModelTestCase):
         self.assertRaises(ValueError, query.iterator)
 
     def test_re_execution_preserves_load(self):
-        rel = Load(User.tweets).where(Tweet.content.in_(['hiss', 'purr']))
+        rel = Load(User.tweets,
+                   Tweet.select().where(Tweet.content.in_(['hiss', 'purr'])))
 
         query = (User.select().where(User.username == 'huey')
                  .with_related(rel))
@@ -472,10 +487,15 @@ class TestWithRelatedSelfRef(ModelTestCase):
                          .select()
                          .order_by(Folder.name)
                          .with_related(Load(Folder.parent, strategy=pt)))
-                got = {f.name: (f.parent.name if f.parent is not None else None)
-                       for f in query}
+                got = {
+                    f.name: (f.parent.name if f.parent is not None else None)
+                    for f in query}
             self.assertEqual(got, {
-                'a': None, 'a1': 'a', 'a1x': 'a1', 'a2': 'a', 'b': None})
+                'a': None,
+                'a1': 'a',
+                'a1x': 'a1',
+                'a2': 'a',
+                'b': None})
 
 
 class TestWithRelatedLimit(ModelTestCase):
@@ -494,29 +514,28 @@ class TestWithRelatedLimit(ModelTestCase):
                                                 timestamp=i)
 
     def test_global_limit(self):
-        # One LIMIT across the whole hop: N rows total, not per parent.
+        # One LIMIT across the whole hop: N rows total, not per parent. The
+        # global limit lives on the hop query itself.
         for pt in PREFETCH_TYPE.values():
+            tweets = Tweet.select().order_by(Tweet.timestamp).limit(2)
             query = (User
                      .select()
                      .order_by(User.username)
-                     .with_related(
-                         Load(User.tweets, strategy=pt)
-                         .order_by(Tweet.timestamp)
-                         .limit(2)))
+                     .with_related(Load(User.tweets, tweets, strategy=pt)))
             total = sum(len(user.tweets) for user in query)
             self.assertEqual(total, 2)
 
     @skip_if(NO_WINDOW_FUNCTIONS, 'requires sqlite >= 3.25 for window fns')
     def test_per_parent_limit(self):
         for pt in PREFETCH_TYPE.values():
+            tweets = Tweet.select().order_by(Tweet.timestamp.desc())
             with self.assertQueryCount(2):
                 query = (User
                          .select()
                          .order_by(User.username)
                          .with_related(
-                             Load(User.tweets, strategy=pt)
-                             .order_by(Tweet.timestamp.desc())
-                             .limit(2, per_parent=True)))
+                             Load(User.tweets, tweets, strategy=pt,
+                                  per_parent=2)))
                 got = {u.username: sorted(t.content for t in u.tweets)
                        for u in query}
             self.assertEqual(got, {
@@ -527,14 +546,14 @@ class TestWithRelatedLimit(ModelTestCase):
     def test_per_parent_limit_materialize(self):
         # Windowed top-N with materialized keys: same result, but the CTE
         # filters on a value-list rather than a parent subquery.
+        tweets = Tweet.select().order_by(Tweet.timestamp.desc())
         with self.assertQueryCount(2):
             query = (User
                      .select()
                      .order_by(User.username)
                      .with_related(
-                         Load(User.tweets, materialize=True)
-                         .order_by(Tweet.timestamp.desc())
-                         .limit(2, per_parent=True)))
+                         Load(User.tweets, tweets, materialize=True,
+                              per_parent=2)))
             got = {u.username: sorted(t.content for t in u.tweets)
                    for u in query}
         self.assertEqual(got, {'huey': ['h2', 'h3'], 'mickey': ['m0', 'm1']})
@@ -547,14 +566,14 @@ class TestWithRelatedLimit(ModelTestCase):
         Reaction.create(name='like')
         Favorite.create(tweet=self.tweets['h3'], reaction=Reaction.get())
         for pt in PREFETCH_TYPE.values():
+            tweets = Tweet.select().order_by(Tweet.timestamp.desc())
             with self.assertQueryCount(3):
                 query = (User
                          .select()
                          .where(User.username == 'huey')
                          .with_related(
-                             Load(User.tweets, strategy=pt)
-                             .order_by(Tweet.timestamp.desc())
-                             .limit(2, per_parent=True)
+                             Load(User.tweets, tweets, strategy=pt,
+                                  per_parent=2)
                              .then(Load(Tweet.favorites, strategy=pt))))
                 huey, = list(query)
                 loaded = {t.content: [f.reaction_id for f in t.favorites]
@@ -577,13 +596,13 @@ class TestWithRelatedCompositeKey(ModelTestCase):
     def test_per_parent_limit_composite_pk(self):
         # The windowed join-back must handle a composite primary key.
         for pt in PREFETCH_TYPE.values():
+            tags = Tag.select().order_by(Tag.rank.desc())
             with self.assertQueryCount(2):
                 query = (Group
                          .select()
                          .with_related(
-                             Load(Group.tags, strategy=pt)
-                             .order_by(Tag.rank.desc())
-                             .limit(2, per_parent=True)))
+                             Load(Group.tags, tags, strategy=pt,
+                                  per_parent=2)))
                 group, = list(query)
                 names = sorted(t.name for t in group.tags)
             self.assertEqual(names, ['t1', 't2'])

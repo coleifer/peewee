@@ -9188,14 +9188,18 @@ def _bucket(child_query, field, is_backref, children, parents):
 
 
 class Load(Node):
-    def __init__(self, rel, strategy=PREFETCH_TYPE.WHERE, materialize=False):
+    def __init__(self, rel, query=None, strategy=PREFETCH_TYPE.WHERE,
+                 materialize=False, per_parent=None):
         self._field, self._is_backref = self._resolve(rel)
+        rel_model = (self._field.model if self._is_backref
+                     else self._field.rel_model)
+        if query is not None and query.model is not rel_model:
+            raise ValueError('Load() query must select from %s, got %s.' %
+                             (rel_model, query.model))
+        self._query = query
         self._strategy = strategy
         self._materialize = materialize
-        self._where = None
-        self._order_by = None
-        self._limit = None
-        self._per_parent = False
+        self._per_parent = per_parent
         self._children = ()
 
     @staticmethod
@@ -9210,33 +9214,14 @@ class Load(Node):
                          'got %r.' % rel)
 
     @Node.copy
-    def where(self, *exprs):
-        if self._where is not None:
-            exprs = (self._where,) + exprs
-        self._where = reduce(operator.and_, exprs)
-
-    @Node.copy
-    def order_by(self, *fields):
-        self._order_by = fields
-
-    @Node.copy
-    def limit(self, value, per_parent=False):
-        # per_parent takes the top-N for each parent (windowed CTE); otherwise
-        # one LIMIT applies to the whole hop (N rows total).
-        self._limit = value
-        self._per_parent = per_parent
-
-    @Node.copy
     def then(self, *children):
         self._children = self._children + tuple(children)
 
     def _base(self, rel_model):
-        query = rel_model.select()
-        if self._where is not None:
-            query = query.where(self._where)
-        if self._order_by is not None:
-            query = query.order_by(*self._order_by)
-        return query
+        # The hop's filtering/ordering/limit live on the supplied query, so the
+        # full query builder (joins, group_by, distinct, multi-source selects)
+        # is available; default to an unfiltered select over the related model.
+        return self._query if self._query is not None else rel_model.select()
 
     @staticmethod
     def _distinct(parents, get_key):
@@ -9274,13 +9259,11 @@ class Load(Node):
         field = self._field
         if self._is_backref:
             rel_model = field.model
-            if self._per_parent and self._limit is not None:
-                child_query = self._windowed(rel_model, parent_query, parents)
+            if self._per_parent is not None:
+                child_query = self._windowed(parent_query, parents)
             else:
                 child_query = self._link_children(self._base(rel_model),
                                                   parent_query, parents)
-                if self._limit is not None:
-                    child_query = child_query.limit(self._limit)
             children = list(child_query)
             _bucket(child_query, field, False, children, parents)
         else:
@@ -9291,27 +9274,28 @@ class Load(Node):
             _bucket(child_query, field, True, children, parents)
         return children, child_query
 
-    def _windowed(self, rel_model, parent_query, parents):
-        # Rank each parent's children in a CTE and keep the first N. Hydration
-        # joins back to the real table so rows are full model instances, and
-        # the WITH stays on the outermost query where peewee emits it.
+    def _windowed(self, parent_query, parents):
+        # Rank each parent's children in a CTE and keep the first N per parent.
+        # The window owns the ordering (read off the hop query); hydration joins
+        # back to the real table so rows are full model instances, and the WITH
+        # stays on the outermost query where peewee emits it.
         field = self._field
+        rel_model = field.model
+        base = self._base(rel_model)
         pks = rel_model._meta.get_primary_keys()
         rn = (fn.ROW_NUMBER()
-              .over(partition_by=[field], order_by=list(self._order_by or pks))
+              .over(partition_by=[field], order_by=list(base._order_by or pks))
               .alias('_rn'))
-        inner = rel_model.select(*pks, rn)
-        if self._where is not None:
-            inner = inner.where(self._where)
+        inner = base.select(*pks, rn).order_by().limit(None)
         cte = (self._link_children(inner, parent_query, parents)
                .cte('_load_ranked'))
         on = reduce(operator.and_,
                     [pk == getattr(cte.c, pk.column_name) for pk in pks])
         query = (rel_model.select().join(cte, on=on)
-                 .where(cte.c._rn <= self._limit)
+                 .where(cte.c._rn <= self._per_parent)
                  .with_cte(cte))
-        if self._order_by is not None:
-            query = query.order_by(*self._order_by)
+        if base._order_by:
+            query = query.order_by(*base._order_by)
         return query
 
 
