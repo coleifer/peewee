@@ -9276,17 +9276,22 @@ class Load(Node):
 
     def _windowed(self, parent_query, parents):
         # Rank each parent's children in a CTE and keep the first N per parent.
-        # The window owns the ordering (read off the hop query); hydration joins
-        # back to the real table so rows are full model instances, and the WITH
-        # stays on the outermost query where peewee emits it.
+        # The window owns the ordering (read off the hop query); hydration
+        # joins back to the real table so rows are full model instances, and
+        # the WITH stays on the outermost query where peewee emits it.
         field = self._field
         rel_model = field.model
         base = self._base(rel_model)
         pks = rel_model._meta.get_primary_keys()
+        order = list(base._order_by or pks)
         rn = (fn.ROW_NUMBER()
-              .over(partition_by=[field], order_by=list(base._order_by or pks))
+              .over(partition_by=[field], order_by=order)
               .alias('_rn'))
-        inner = base.select(*pks, rn).order_by().limit(None)
+        # Collapse any row-multiplying join on the hop query to one row per
+        # child before ranking, else ROW_NUMBER counts a child once per match.
+        group = [field] + [n.unwrap() for n in order]
+        inner = (base.select(*pks, rn).order_by().limit(None)
+                 .group_by(*pks, *group))
         cte = (self._link_children(inner, parent_query, parents)
                .cte('_load_ranked'))
         on = reduce(operator.and_,

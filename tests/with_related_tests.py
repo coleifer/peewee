@@ -585,6 +585,78 @@ class TestWithRelatedLimit(ModelTestCase):
             self.assertEqual(loaded['h3'], [1])
             self.assertEqual(loaded['h2'], [])
 
+    def _fan_out_h3(self):
+        # Every tweet gets a favorite (join drops nothing); h3 gets two so a
+        # one-to-many join multiplies it.
+        like = Reaction.create(name='like')
+        for content in ['h0', 'h1', 'h2', 'h3']:
+            Favorite.create(tweet=self.tweets[content], reaction=like)
+        Favorite.create(tweet=self.tweets['h3'], reaction=like)
+
+    @skip_if(NO_WINDOW_FUNCTIONS, 'requires sqlite >= 3.25 for window fns')
+    def test_per_parent_limit_one_to_many_join(self):
+        # Fanout must collapse to one row per child before ranking: top-2
+        # newest is exactly h2, h3, each once (not duplicated h3).
+        self._fan_out_h3()
+        hop = Tweet.select().join(Favorite).order_by(Tweet.timestamp.desc())
+        for pt in PREFETCH_TYPE.values():
+            query = (User
+                     .select()
+                     .where(User.username == 'huey')
+                     .with_related(Load(User.tweets, hop, strategy=pt,
+                                        per_parent=2)))
+            huey, = list(query)
+            self.assertEqual(sorted(t.content for t in huey.tweets),
+                             ['h2', 'h3'])
+            self.assertEqual(len(set(id(t) for t in huey.tweets)), 2)
+
+    @skip_if(NO_WINDOW_FUNCTIONS, 'requires sqlite >= 3.25 for window fns')
+    def test_per_parent_limit_fanout_materialize(self):
+        # The collapse also holds on the materialized (literal IN-list) path.
+        self._fan_out_h3()
+        hop = Tweet.select().join(Favorite).order_by(Tweet.timestamp.desc())
+        query = (User
+                 .select()
+                 .where(User.username == 'huey')
+                 .with_related(Load(User.tweets, hop, materialize=True,
+                                    per_parent=2)))
+        huey, = list(query)
+        self.assertEqual(sorted(t.content for t in huey.tweets), ['h2', 'h3'])
+        self.assertNotIn('IN (SELECT', self.history[-1].msg[0])
+
+    @skip_if(NO_WINDOW_FUNCTIONS, 'requires sqlite >= 3.25 for window fns')
+    def test_per_parent_limit_fanout_with_children(self):
+        # Collapsed windowed parents must still drive a nested child load.
+        self._fan_out_h3()
+        hop = Tweet.select().join(Favorite).order_by(Tweet.timestamp.desc())
+        for pt in PREFETCH_TYPE.values():
+            with self.assertQueryCount(3):
+                query = (User
+                         .select()
+                         .where(User.username == 'huey')
+                         .with_related(
+                             Load(User.tweets, hop, strategy=pt, per_parent=2)
+                             .then(Load(Tweet.favorites, strategy=pt))))
+                huey, = list(query)
+                favs = {t.content: len(t.favorites) for t in huey.tweets}
+            self.assertEqual(favs, {'h2': 1, 'h3': 2})
+
+    @skip_if(NO_WINDOW_FUNCTIONS, 'requires sqlite >= 3.25 for window fns')
+    def test_per_parent_limit_join_no_fanout(self):
+        # A many-to-one join does not multiply rows, so the collapse is a no-op.
+        hop = Tweet.select().join(User).order_by(Tweet.timestamp.desc())
+        for pt in PREFETCH_TYPE.values():
+            query = (User
+                     .select()
+                     .order_by(User.username)
+                     .with_related(Load(User.tweets, hop, strategy=pt,
+                                        per_parent=2)))
+            got = {u.username: sorted(t.content for t in u.tweets)
+                   for u in query}
+            self.assertEqual(got, {
+                'huey': ['h2', 'h3'],
+                'mickey': ['m0', 'm1']})
+
 
 @skip_if(NO_WINDOW_FUNCTIONS, 'requires sqlite >= 3.25 for window fns')
 class TestWithRelatedCompositeKey(ModelTestCase):
