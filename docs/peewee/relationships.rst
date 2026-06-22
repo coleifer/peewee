@@ -1029,7 +1029,7 @@ direction) or a foreign key (``Load(Tweet.user)``, the many-to-one direction).
 The rows are loaded once, when the query is first executed, whether by
 iteration, ``get()``, ``first()``, indexing or ``len()``.
 
-``Load.then()`` nests one hop inside another, so a load can span more than two
+``Load.then()`` nests one relation inside another, so a load can span over two
 tables. To fetch users, their tweets, and the favorites on each tweet in three
 queries:
 
@@ -1054,13 +1054,13 @@ branches can hang off the same parent in a single call:
        Load(User.tweets),
        Load(User.favorites))
 
-Because every hop names a specific foreign key, ``with_related`` never needs to
+Because every relation names a specific foreign key, ``with_related`` never has to
 disambiguate between two relationships to the same table.
 
-Per-hop query
-^^^^^^^^^^^^^
+Per-relation query
+^^^^^^^^^^^^^^^^^^
 
-A second argument gives the hop its own query: an ordinary select over the
+A second argument gives the relation its own query: an ordinary select over the
 related model, built however you like. The rows it returns are the ones
 attached to each parent:
 
@@ -1071,7 +1071,7 @@ attached to each parent:
              .order_by(Tweet.timestamp.desc()))
    query = User.select().with_related(Load(User.tweets, recent))
 
-Because the hop is a real query it can join other tables and select from them;
+Because it is a real query it can join other tables and select from them;
 the joined rows come back attached, fetched in the same round trip:
 
 .. code-block:: python
@@ -1084,9 +1084,9 @@ the joined rows come back attached, fetched in the same round trip:
        for fav in tweet.favorites:
            print(tweet.content, fav.reaction.name)  # No extra query.
 
-A hop can limit the rows fetched per parent with ``per_parent=n``: it keeps the
-first ``n`` of each parent's children using a window function, ranked by the hop
-query's ``order_by``:
+A relation can limit the rows fetched per parent with ``per_parent=n``: it keeps
+the first ``n`` of each parent's children using a window function, ranked by the
+relation query's ``order_by``:
 
 .. code-block:: python
 
@@ -1095,7 +1095,7 @@ query's ``order_by``:
    query = User.select().with_related(
        Load(User.tweets, tweets, per_parent=2))
 
-A plain ``query.limit(n)`` instead applies one ``LIMIT`` to the whole hop,
+A plain ``query.limit(n)`` instead applies one ``LIMIT`` to the whole relation,
 returning ``n`` rows in total, the same as :func:`prefetch`. Per-parent limits
 require window-function support (SQLite 3.25+, PostgreSQL, MySQL 8).
 
@@ -1104,7 +1104,7 @@ require window-function support (SQLite 3.25+, PostgreSQL, MySQL 8).
 Load strategy and materialize
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Each hop has to restrict its children to the rows belonging to the parents
+Each relation has to restrict its children to the rows belonging to the parents
 already fetched. The ``strategy`` argument controls how. It applies to both
 ``with_related`` and :func:`prefetch` (where it is spelled as the
 ``prefetch_type`` keyword):

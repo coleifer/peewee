@@ -9218,9 +9218,7 @@ class Load(Node):
         self._children = self._children + tuple(children)
 
     def _base(self, rel_model):
-        # The hop's filtering/ordering/limit live on the supplied query, so the
-        # full query builder (joins, group_by, distinct, multi-source selects)
-        # is available; default to an unfiltered select over the related model.
+        # Modifiers (where/order/limit/joins) ride on the supplied query.
         return self._query if self._query is not None else rel_model.select()
 
     @staticmethod
@@ -9234,9 +9232,7 @@ class Load(Node):
         return keys
 
     def _link_children(self, query, parent_query, parents):
-        # materialize=True turns the parents' (in-memory) keys into a literal
-        # IN-list: no subquery, no re-evaluation, but bounded by the backend's
-        # bind-parameter limit. Otherwise embed the parent query (IN or JOIN).
+        # materialize: use the parents' in-memory keys, not a subquery.
         field = self._field
         if self._materialize:
             keys = self._distinct(parents,
@@ -9256,6 +9252,7 @@ class Load(Node):
                               self._strategy)
 
     def _run(self, parents, parent_query, depth=0):
+        # _bucket's is_backref is the storage side, opposite self._is_backref.
         field = self._field
         if self._is_backref:
             rel_model = field.model
@@ -9275,28 +9272,24 @@ class Load(Node):
         return children, child_query
 
     def _windowed(self, parent_query, parents, depth=0):
-        # Rank each parent's children in a CTE and keep the first N per parent.
-        # The window (inside the CTE, where the hop's joins live) owns the
-        # ordering; the outer hydration joins back for full instances and
-        # orders by the rank, so the hop order survives without re-referencing
-        # the hop's joins.
+        # Top-N children per parent via a ranking CTE; the outer joins back for
+        # full rows and orders by rank, so the relation's joins stay inside.
         field = self._field
         rel_model = field.model
         base = self._base(rel_model)
         if base._group_by is not None:
             raise ValueError('per_parent is not supported with a grouped or '
-                             'aggregate hop query.')
+                             'aggregate relation query.')
         pks = rel_model._meta.get_primary_keys()
         order = list(base._order_by or pks)
         rn = (fn.ROW_NUMBER()
               .over(partition_by=[field], order_by=order)
               .alias('_rn'))
-        # Collapse any row-multiplying join on the hop query to one row per
-        # child before ranking, else ROW_NUMBER counts a child once per match.
+        # Collapse row-multiplying joins to one row per child before ranking.
         group = [field] + [n.unwrap() for n in order]
         inner = (base.select(*pks, rn).order_by().limit(None).offset(None)
                  .group_by(*pks, *group))
-        # Name is unique per depth so a nested windowed parent does not collide.
+        # Unique name per depth so a nested windowed parent doesn't collide.
         cte = (self._link_children(inner, parent_query, parents)
                .cte('_load_ranked_%d' % depth))
         on = reduce(operator.and_,
@@ -9308,9 +9301,7 @@ class Load(Node):
 
 
 def _load_related(parents, parent_query, loads, depth=0):
-    # Walk the tree top-down: each hop runs one query against the related
-    # model, filtered against parent_query (an IN-subquery or a JOIN), and
-    # buckets the rows onto the parents already fetched.
+    # Walk the tree top-down: one query per relation, bucketed onto its parents.
     if not parents:
         return
     for node in loads:

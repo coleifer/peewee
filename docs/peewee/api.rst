@@ -2766,7 +2766,7 @@ Model
 
       Eagerly load related objects described by a tree of :class:`Load` nodes.
       This is a declarative, nestable form of :meth:`prefetch`: each
-      :class:`Load` names one relationship hop and supplies an ordinary query to
+      :class:`Load` names one relationship and supplies an ordinary query to
       fetch it, and ``Load.then()`` nests a child load beneath it.
 
       .. code-block:: python
@@ -2782,7 +2782,7 @@ Model
       The related rows are loaded once, when the query is first executed -
       whether by iteration, :py:meth:`get`, ``first()``, indexing or ``len()``.
 
-      See :class:`Load` for the per-hop options, and :ref:`relationships` for
+      See :class:`Load` for the per-relation options, and :ref:`relationships` for
       a fuller discussion of joins and prefetching.
 
 
@@ -6472,11 +6472,11 @@ Queries
 
    :param rel: A foreign-key field (``Load(Tweet.user)``) or a back-reference
        (``Load(User.tweets)``) naming the relationship to load.
-   :param query: An ordinary query used to fetch this hop's rows. It must
+   :param query: An ordinary query used to fetch this relation's rows. It must
        select from the related model; build it however you like, and any joined
        rows come back attached. Defaults to a bare select over the related
        model.
-   :param strategy: How each hop is filtered against its parents:
+   :param strategy: How each relation is filtered against its parents:
        ``PREFETCH_TYPE.WHERE`` (an ``IN`` subquery, the default) or
        ``PREFETCH_TYPE.JOIN`` (a join against the parent query). Use ``JOIN``
        for paginated or very large parent queries.
@@ -6484,17 +6484,17 @@ Queries
        rather than a subquery. Avoids re-running the parent query, but is bounded
        by the backend's bind-parameter limit. Overrides ``strategy``.
    :param per_parent: Keep the first ``n`` rows for *each* parent (top-N-per-
-       parent), ranked by the hop query's ``order_by`` with a window function.
-       Requires SQLite 3.25+, PostgreSQL or MySQL 8. A plain ``query.limit(n)``
-       instead caps the whole hop at ``n`` rows total.
+       parent), ranked by the relation query's ``order_by`` with a window
+       function. Requires SQLite 3.25+, PostgreSQL or MySQL 8. A plain
+       ``query.limit(n)`` instead caps the whole relation at ``n`` rows total.
 
    A node in the load tree passed to :meth:`ModelSelect.with_related`, describing
-   one relationship hop. The filtering, ordering and limiting for a hop live on
+   one relationship. The filtering, ordering and limiting for a relation live on
    its ``query``; ``then`` nests a child load and may be chained.
 
    .. method:: then(*loads)
 
-      Nest one or more child :class:`Load` nodes beneath this hop.
+      Nest one or more child :class:`Load` nodes beneath this relation.
 
    .. code-block:: python
 

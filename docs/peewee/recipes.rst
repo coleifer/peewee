@@ -182,7 +182,7 @@ inside an ``IN`` subquery, and a join avoids that.
             .paginate(1, 20)
             .with_related(Load(User.tweets, strategy=PREFETCH_TYPE.JOIN)))
 
-To walk deeper - users, their tweets, then each tweet's favorites - nest hops
+To walk deeper - users, their tweets, then each tweet's favorites - nest loads
 with ``.then()``. To pull several relationships off each user at once, pass
 multiple :class:`Load` nodes. Both keep the per-relationship query count. See
 :ref:`relationships` for the full tree form.
