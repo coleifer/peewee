@@ -1057,34 +1057,47 @@ branches can hang off the same parent in a single call:
 Because every hop names a specific foreign key, ``with_related`` never needs to
 disambiguate between two relationships to the same table.
 
-Per-hop modifiers
-^^^^^^^^^^^^^^^^^
+Per-hop query
+^^^^^^^^^^^^^
 
-Each :class:`Load` carries its own ``where``, ``order_by`` and ``limit``,
-applied to that hop alone and not to the outer query:
+A second argument gives the hop its own query: an ordinary select over the
+related model, built however you like. The rows it returns are the ones
+attached to each parent:
 
 .. code-block:: python
 
-   query = User.select().with_related(
-       Load(User.tweets)
-       .where(Tweet.content != 'hiss')
-       .order_by(Tweet.timestamp.desc()))
+   recent = (Tweet.select()
+             .where(Tweet.content != 'hiss')
+             .order_by(Tweet.timestamp.desc()))
+   query = User.select().with_related(Load(User.tweets, recent))
 
-A hop can also limit the rows fetched per parent. ``limit(n, per_parent=True)``
-keeps the first ``n`` rows of each parent's children, using a window function:
+Because the hop is a real query it can join other tables and select from them;
+the joined rows come back attached, fetched in the same round trip:
+
+.. code-block:: python
+
+   # Each tweet's favorites, each with its reaction already loaded:
+   favorites = Favorite.select(Favorite, Reaction).join(Reaction)
+   query = Tweet.select().with_related(Load(Tweet.favorites, favorites))
+
+   for tweet in query:
+       for fav in tweet.favorites:
+           print(tweet.content, fav.reaction.name)  # No extra query.
+
+A hop can limit the rows fetched per parent with ``per_parent=n``: it keeps the
+first ``n`` of each parent's children using a window function, ranked by the hop
+query's ``order_by``:
 
 .. code-block:: python
 
    # The two most-recent tweets for each user, in one query:
+   tweets = Tweet.select().order_by(Tweet.timestamp.desc())
    query = User.select().with_related(
-       Load(User.tweets)
-       .order_by(Tweet.timestamp.desc())
-       .limit(2, per_parent=True))
+       Load(User.tweets, tweets, per_parent=2))
 
-A plain ``limit(n)`` (without ``per_parent``) instead applies one ``LIMIT`` to
-the whole hop, returning ``n`` rows in total, the same as :func:`prefetch`.
-Per-parent limits require window-function support (SQLite 3.25+, PostgreSQL,
-MySQL 8).
+A plain ``query.limit(n)`` instead applies one ``LIMIT`` to the whole hop,
+returning ``n`` rows in total, the same as :func:`prefetch`. Per-parent limits
+require window-function support (SQLite 3.25+, PostgreSQL, MySQL 8).
 
 .. _prefetch-strategy:
 
@@ -1188,7 +1201,7 @@ Use **eager loading** when:
    ``LIMIT`` on the outer query works as expected. :func:`prefetch` itself
    cannot limit the *inner* (prefetched) queries per parent. For
    top-N-per-parent, use :meth:`~ModelSelect.with_related` with
-   ``limit(n, per_parent=True)`` (above), or :ref:`top-n-per-group` for the
+   ``per_parent=n`` (above), or :ref:`top-n-per-group` for the
    underlying technique.
 
 .. seealso::

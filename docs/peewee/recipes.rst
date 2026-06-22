@@ -280,10 +280,9 @@ per-parent limit. It builds an equivalent ranked CTE internally:
 
 .. code-block:: python
 
+   tweets = Tweet.select().order_by(Tweet.created_date.desc())
    query = User.select().with_related(
-       Load(User.tweets)
-       .order_by(Tweet.created_date.desc())
-       .limit(3, per_parent=True))
+       Load(User.tweets, tweets, per_parent=3))
 
    for user in query:
        for tweet in user.tweets:  # At most three, newest first.

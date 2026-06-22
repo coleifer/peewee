@@ -2766,15 +2766,13 @@ Model
 
       Eagerly load related objects described by a tree of :class:`Load` nodes.
       This is a declarative, nestable form of :meth:`prefetch`: each
-      :class:`Load` names one relationship hop and carries its own
-      ``where``/``order_by``/``limit`` modifiers, and ``Load.then()`` nests a
-      child load beneath it.
+      :class:`Load` names one relationship hop and supplies an ordinary query to
+      fetch it, and ``Load.then()`` nests a child load beneath it.
 
       .. code-block:: python
 
          query = User.select().with_related(
-             Load(User.tweets)
-             .order_by(Tweet.timestamp.desc())
+             Load(User.tweets, Tweet.select().order_by(Tweet.timestamp.desc()))
              .then(Load(Tweet.favorites)))
 
          for user in query:
@@ -6470,10 +6468,14 @@ Queries
    mapped correctly.
 
 
-.. class:: Load(rel[, strategy=PREFETCH_TYPE.WHERE[, materialize=False]])
+.. class:: Load(rel[, query=None[, strategy=PREFETCH_TYPE.WHERE[, materialize=False[, per_parent=None]]]])
 
    :param rel: A foreign-key field (``Load(Tweet.user)``) or a back-reference
        (``Load(User.tweets)``) naming the relationship to load.
+   :param query: An ordinary query used to fetch this hop's rows. It must
+       select from the related model; build it however you like, and any joined
+       rows come back attached. Defaults to a bare select over the related
+       model.
    :param strategy: How each hop is filtered against its parents:
        ``PREFETCH_TYPE.WHERE`` (an ``IN`` subquery, the default) or
        ``PREFETCH_TYPE.JOIN`` (a join against the parent query). Use ``JOIN``
@@ -6481,26 +6483,14 @@ Queries
    :param materialize: Filter using the parents' keys as a literal ``IN`` list
        rather than a subquery. Avoids re-running the parent query, but is bounded
        by the backend's bind-parameter limit. Overrides ``strategy``.
+   :param per_parent: Keep the first ``n`` rows for *each* parent (top-N-per-
+       parent), ranked by the hop query's ``order_by`` with a window function.
+       Requires SQLite 3.25+, PostgreSQL or MySQL 8. A plain ``query.limit(n)``
+       instead caps the whole hop at ``n`` rows total.
 
    A node in the load tree passed to :meth:`ModelSelect.with_related`, describing
-   one relationship hop. The ``where``, ``order_by``, ``limit`` and ``then``
-   methods return a new ``Load`` and may be chained.
-
-   .. method:: where(*exprs)
-
-      Restrict the rows loaded for this hop. Repeated calls are combined with
-      ``AND``.
-
-   .. method:: order_by(*fields)
-
-      Order the rows loaded for this hop.
-
-   .. method:: limit(n[, per_parent=False])
-
-      Limit the rows loaded for this hop. By default ``n`` is a single limit on
-      the whole hop (``n`` rows in total, as with :func:`prefetch`). With
-      ``per_parent=True`` it keeps the first ``n`` rows for *each* parent using
-      a window function, which requires SQLite 3.25+, PostgreSQL or MySQL 8.
+   one relationship hop. The filtering, ordering and limiting for a hop live on
+   its ``query``; ``then`` nests a child load and may be chained.
 
    .. method:: then(*loads)
 
@@ -6509,10 +6499,9 @@ Queries
    .. code-block:: python
 
       # huey's three most-recent tweets, each with its favorites, in 3 queries:
+      tweets = Tweet.select().order_by(Tweet.timestamp.desc())
       query = User.select().where(User.username == 'huey').with_related(
-          Load(User.tweets)
-          .order_by(Tweet.timestamp.desc())
-          .limit(3, per_parent=True)
+          Load(User.tweets, tweets, per_parent=3)
           .then(Load(Tweet.favorites)))
 
 
