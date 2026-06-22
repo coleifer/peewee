@@ -300,6 +300,28 @@ class TestWithRelated(ModelTestCase):
             self.assertEqual(fav_counts, {'meow': 2, 'purr': 0, 'hiss': 0})
             self.assertEqual(owners, {'huey'})
 
+    def test_branching_asymmetric_depth(self):
+        # A-(B, C-D): each tweet forks into favorites>reaction (depth 2) and
+        # its author (depth 1); the unequal branches populate independently.
+        for pt in PREFETCH_TYPE.values():
+            spec = Load(User.tweets, strategy=pt).then(
+                Load(Tweet.favorites, strategy=pt).then(
+                    Load(Favorite.reaction, strategy=pt)),
+                Load(Tweet.user, strategy=pt))
+            with self.assertQueryCount(5):
+                query = (User
+                         .select()
+                         .where(User.username == 'huey')
+                         .with_related(spec))
+                huey, = list(query)
+                got = {t.content: (sorted(f.reaction.name for f in t.favorites),
+                                   t.user.username)
+                       for t in huey.tweets}
+            self.assertEqual(got, {
+                'meow': (['like', 'love'], 'huey'),
+                'purr': ([], 'huey'),
+                'hiss': ([], 'huey')})
+
     def test_aggregate_parent(self):
         # An aggregated/grouped parent query loads, and its computed column
         # survives - the load runs against the already-materialized instances.
@@ -656,6 +678,58 @@ class TestWithRelatedLimit(ModelTestCase):
             self.assertEqual(got, {
                 'huey': ['h2', 'h3'],
                 'mickey': ['m0', 'm1']})
+
+    @skip_if(NO_WINDOW_FUNCTIONS, 'requires sqlite >= 3.25 for window fns')
+    def test_two_level_per_parent(self):
+        # per_parent at both hops: top-2 newest tweets per user, then top-1
+        # favorite per tweet.
+        like = Reaction.create(name='like')
+        love = Reaction.create(name='love')
+        Favorite.create(tweet=self.tweets['h3'], reaction=like)
+        Favorite.create(tweet=self.tweets['h3'], reaction=love)
+        Favorite.create(tweet=self.tweets['h2'], reaction=like)
+        for pt in PREFETCH_TYPE.values():
+            spec = (Load(User.tweets,
+                         Tweet.select().order_by(Tweet.timestamp.desc()),
+                         strategy=pt, per_parent=2)
+                    .then(Load(Tweet.favorites,
+                               Favorite.select().order_by(Favorite.id.desc()),
+                               strategy=pt, per_parent=1)))
+            with self.assertQueryCount(3):
+                query = (User
+                         .select()
+                         .where(User.username == 'huey')
+                         .with_related(spec))
+                huey, = list(query)
+                got = {t.content: [f.reaction_id for f in t.favorites]
+                       for t in huey.tweets}
+            self.assertEqual(sorted(got), ['h2', 'h3'])
+            self.assertEqual(got['h3'], [love.id])  # top-1 favorite by id desc
+            self.assertEqual(got['h2'], [like.id])
+
+    @skip_if(NO_WINDOW_FUNCTIONS, 'requires sqlite >= 3.25 for window fns')
+    def test_branch_windowed_and_plain_children(self):
+        # A windowed child and a plain child hang off the same parent hop.
+        like = Reaction.create(name='like')
+        for content in ['h0', 'h1', 'h2', 'h3']:
+            Favorite.create(tweet=self.tweets[content], reaction=like)
+        for pt in PREFETCH_TYPE.values():
+            spec = Load(User.tweets, strategy=pt).then(
+                Load(Tweet.favorites,
+                     Favorite.select().order_by(Favorite.id.desc()),
+                     strategy=pt, per_parent=1),
+                Load(Tweet.user, strategy=pt))
+            with self.assertQueryCount(4):
+                query = (User
+                         .select()
+                         .where(User.username == 'huey')
+                         .with_related(spec))
+                huey, = list(query)
+                got = {t.content: (len(t.favorites), t.user.username)
+                       for t in huey.tweets}
+            self.assertEqual(got, {
+                'h0': (1, 'huey'), 'h1': (1, 'huey'),
+                'h2': (1, 'huey'), 'h3': (1, 'huey')})
 
 
 @skip_if(NO_WINDOW_FUNCTIONS, 'requires sqlite >= 3.25 for window fns')
