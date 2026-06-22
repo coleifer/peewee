@@ -731,6 +731,68 @@ class TestWithRelatedLimit(ModelTestCase):
                 'h0': (1, 'huey'), 'h1': (1, 'huey'),
                 'h2': (1, 'huey'), 'h3': (1, 'huey')})
 
+    @skip_if(NO_WINDOW_FUNCTIONS, 'requires sqlite >= 3.25 for window fns')
+    def test_per_parent_order_by_joined_column(self):
+        # Ranking by a (many-to-one) joined column: the window lives in the CTE
+        # which has the join; the outer orders by rank, not the joined column.
+        a = Reaction.create(name='aaa')
+        b = Reaction.create(name='bbb')
+        c = Reaction.create(name='ccc')
+        t0 = self.tweets['h0']
+        for r in (b, a, c):
+            Favorite.create(tweet=t0, reaction=r)
+        for pt in PREFETCH_TYPE.values():
+            hop = Favorite.select().join(Reaction).order_by(Reaction.name.desc())
+            query = (Tweet
+                     .select()
+                     .where(Tweet.content == 'h0')
+                     .with_related(Load(Tweet.favorites, hop, strategy=pt,
+                                        per_parent=2)))
+            tweet, = list(query)
+            # top-2 by reaction name desc (ccc, bbb), in that order.
+            self.assertEqual([f.reaction_id for f in tweet.favorites],
+                             [c.id, b.id])
+
+    @skip_if(NO_WINDOW_FUNCTIONS, 'requires sqlite >= 3.25 for window fns')
+    def test_per_parent_offset_on_hop_ignored(self):
+        # A hop offset must not leak into the ranking CTE (limit is cleared, so
+        # offset must be too) - top-2 newest stays h2, h3.
+        hop = Tweet.select().order_by(Tweet.timestamp.desc()).offset(1)
+        query = (User
+                 .select()
+                 .where(User.username == 'huey')
+                 .with_related(Load(User.tweets, hop, per_parent=2)))
+        huey, = list(query)
+        self.assertEqual(sorted(t.content for t in huey.tweets), ['h2', 'h3'])
+
+    @skip_if(NO_WINDOW_FUNCTIONS, 'requires sqlite >= 3.25 for window fns')
+    def test_two_level_per_parent_distinct_cte_names(self):
+        # Nested windowed hops must use distinct CTE names, else the embedded
+        # parent CTE collides with the child's on some backends.
+        Reaction.create(name='like')
+        Favorite.create(tweet=self.tweets['h3'], reaction=Reaction.get())
+        spec = (Load(User.tweets,
+                     Tweet.select().order_by(Tweet.timestamp.desc()),
+                     per_parent=2)
+                .then(Load(Tweet.favorites,
+                           Favorite.select().order_by(Favorite.id.desc()),
+                           per_parent=1)))
+        query = (User.select().where(User.username == 'huey')
+                 .with_related(spec))
+        list(query)
+        sql = self.history[-1].msg[0]
+        self.assertIn('_load_ranked_0', sql)
+        self.assertIn('_load_ranked_1', sql)
+        self.assertNotIn('"_load_ranked"', sql)  # no bare, collision-prone name
+
+    def test_per_parent_grouped_hop_rejected(self):
+        # per_parent over a grouped/aggregate hop is unsupported (the collapse
+        # group-by would have to include the aggregate); reject it clearly.
+        hop = (Tweet.select().join(Favorite).group_by(Tweet)
+               .order_by(fn.COUNT(Favorite.id).desc()))
+        query = User.select().with_related(Load(User.tweets, hop, per_parent=2))
+        self.assertRaises(ValueError, list, query)
+
 
 @skip_if(NO_WINDOW_FUNCTIONS, 'requires sqlite >= 3.25 for window fns')
 class TestWithRelatedCompositeKey(ModelTestCase):
