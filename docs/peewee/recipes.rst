@@ -180,13 +180,13 @@ page, whatever the page size:
            print(f'  {tweet.content} - favorited by: {likers or "nobody"}')
 
    # Prints:
-   # huey
-   #   purr - favorited by: mickey, zaizee
-   #   hiss - favorited by: nobody
-   # mickey
-   #   whine - favorited by: huey
-   #   woof - favorited by: nobody
-   # zaizee
+   # alice
+   #   alice-3 - favorited by: bob, carol
+   #   alice-2 - favorited by: nobody
+   # bob
+   #   bob-2 - favorited by: alice
+   #   bob-1 - favorited by: nobody
+   # carol
 
 The ``JOIN`` strategy matters once the parent is paginated: MySQL cannot put a
 ``LIMIT`` inside an ``IN`` subquery, so the child is joined against the parent

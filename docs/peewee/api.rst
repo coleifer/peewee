@@ -233,7 +233,7 @@ Database
 
       .. code-block:: python
 
-         query = User.insert({'username': 'Huey'})
+         query = User.insert({'username': 'Alice'})
          db.execute(query)  # Equivalent to query.execute()
 
    .. method:: last_insert_id(cursor, query_type=None)
@@ -290,18 +290,18 @@ Database
       .. code-block:: python
 
           with db.atomic() as txn:
-              User.create(username='mickey')
+              User.create(username='bob')
               txn.commit()  # Changes are saved and a new transaction begins.
 
-              User.create(username='huey')
-              txn.rollback()  # "huey" will not be saved.
+              User.create(username='alice')
+              txn.rollback()  # "alice" will not be saved.
 
-              User.create(username='zaizee')
+              User.create(username='carol')
 
           # Print the usernames of all users.
           print([u.username for u in User.select()])
 
-          # Prints ["mickey", "zaizee"]
+          # Prints ["bob", "carol"]
 
       If an unhandled exception occurs in the block, the block is rolled-back
       and the exception propagates.
@@ -324,12 +324,12 @@ Database
       .. code-block:: python
 
          with db.transaction() as txn:
-             User.create(username='mickey')
+             User.create(username='bob')
              txn.commit()         # Commit now; a new transaction begins.
-             User.create(username='huey')
-             txn.rollback()       # Roll back huey; a new transaction begins.
-             User.create(username='zaizee')
-         # zaizee is committed when the block exits.
+             User.create(username='alice')
+             txn.rollback()       # Roll back alice; a new transaction begins.
+             User.create(username='carol')
+         # carol is committed when the block exits.
 
       Transactions can be committed or rolled-back within the wrapped block.
       If this occurs, a new transaction is begun.
@@ -352,14 +352,14 @@ Database
 
          with db.transaction() as txn:
              with db.savepoint() as sp:
-                 User.create(username='mickey')
+                 User.create(username='bob')
 
              with db.savepoint() as sp2:
-                 User.create(username='zaizee')
-                 sp2.rollback()  # "zaizee" is not saved.
-                 User.create(username='huey')
+                 User.create(username='carol')
+                 sp2.rollback()  # "carol" is not saved.
+                 User.create(username='alice')
 
-         # mickey and huey were created.
+         # bob and alice were created.
 
       Savepoints can be committed or rolled-back within the wrapped block.
       If this occurs, a new savepoint is begun.
@@ -1537,7 +1537,7 @@ Model
 
           Person.insert_many([
               {'first_name': 'Peewee', 'last_name': 'Herman'},
-              {'first_name': 'Huey'},  # Missing "last_name"!
+              {'first_name': 'Alice'},  # Missing "last_name"!
           ]).execute()
 
       Example of inserting multiple Users:
@@ -1546,8 +1546,8 @@ Model
 
          data = [
              ('charlie', True),
-             ('huey', False),
-             ('zaizee', False)]
+             ('alice', False),
+             ('carol', False)]
          query = User.insert_many(data, fields=[User.username, User.is_admin])
          query.execute()
 
@@ -1557,8 +1557,8 @@ Model
 
          data = [
              {'username': 'charlie', 'is_admin': True},
-             {'username': 'huey', 'is_admin': False},
-             {'username': 'zaizee', 'is_admin': False}]
+             {'username': 'alice', 'is_admin': False},
+             {'username': 'carol', 'is_admin': False}]
 
          # Insert new rows.
          User.insert_many(data).execute()
@@ -1569,7 +1569,7 @@ Model
       .. code-block:: python
 
          def get_usernames():
-             for username in ['charlie', 'huey', 'peewee']:
+             for username in ['charlie', 'alice', 'peewee']:
                  yield {'username': username}
          User.insert_many(get_usernames()).execute()
 
@@ -1638,11 +1638,11 @@ Model
              last_login = DateTimeField(null=True)
 
          # Insert, or replace the entire existing row.
-         User.replace(username='huey', last_login=datetime.datetime.now()).execute()
+         User.replace(username='alice', last_login=datetime.datetime.now()).execute()
 
          # Equivalent using insert():
          (User
-          .insert(username='huey', last_login=datetime.datetime.now())
+          .insert(username='alice', last_login=datetime.datetime.now())
           .on_conflict_replace()
           .execute())
 
@@ -2789,11 +2789,11 @@ Model
                  print(user.username, tweet.content, len(tweet.favorites))
 
          # Prints (tweets newest-first, with each tweet's favorite count):
-         # huey purr 2
-         # huey hiss 0
-         # huey meow 1
-         # mickey whine 1
-         # mickey woof 0
+         # alice alice-3 2
+         # alice alice-2 0
+         # alice alice-1 1
+         # bob bob-2 1
+         # bob bob-1 0
 
       The related rows are loaded once, when the query is first executed -
       whether by iteration, :py:meth:`get`, ``first()``, indexing or ``len()``.
@@ -3615,7 +3615,7 @@ Fields
 
       .. code-block:: python
 
-         Doc.data['name'].as_text() == 'huey'
+         Doc.data['name'].as_text() == 'alice'
          Doc.data['name'].as_text().ilike('h%')
 
       Pattern-matching operators (:meth:`like`, :meth:`ilike`,
@@ -3662,9 +3662,9 @@ Fields
 
       .. code-block:: python
 
-         Doc.select().where(Doc.data['name'] == 'huey')
+         Doc.select().where(Doc.data['name'] == 'alice')
          Doc.select().where(Doc.data['count'] == 42)
-         Doc.select().where(Doc.data['profile'] == {'fb': 'huey.cat'})
+         Doc.select().where(Doc.data['profile'] == {'fb': 'alice.cat'})
 
       In ``.as_text()`` mode the right-hand side is compared as plain text.
 
@@ -3710,7 +3710,7 @@ Fields
 
       .. code-block:: python
 
-         Doc.select().where(Doc.data['name'].in_(['huey', 'mickey']))
+         Doc.select().where(Doc.data['name'].in_(['alice', 'bob']))
 
    .. method:: __lt__
                __le__
@@ -4066,12 +4066,12 @@ Fields
 
    .. code-block:: python
 
-      # List the courses that "Huey" is enrolled in:
+      # List the courses that "Alice" is enrolled in:
       courses = (Course
                  .select()
                  .join(StudentCourse)
                  .join(Student)
-                 .where(Student.name == 'Huey'))
+                 .where(Student.name == 'Alice'))
       for course in courses:
           print(course.name)
 
@@ -4115,13 +4115,13 @@ Fields
 
    .. code-block:: pycon
 
-      >>> huey = Student.get(Student.name == 'huey')
-      >>> [course.name for course in huey.courses]
+      >>> alice = Student.get(Student.name == 'alice')
+      >>> [course.name for course in alice.courses]
       ['English 101', 'CS 101']
 
       >>> engl_101 = Course.get(Course.name == 'English 101')
       >>> [student.name for student in engl_101.students]
-      ['Huey', 'Mickey', 'Zaizee']
+      ['Alice', 'Bob', 'Carol']
 
    To add new relationships between objects, you can either assign the objects
    directly to the ``ManyToManyField`` attribute, or call the
@@ -4131,8 +4131,8 @@ Fields
 
    .. code-block:: pycon
 
-      >>> huey.courses = Course.select().where(Course.name.contains('english'))
-      >>> for course in huey.courses.order_by(Course.name):
+      >>> alice.courses = Course.select().where(Course.name.contains('english'))
+      >>> for course in alice.courses.order_by(Course.name):
       ...     print(course.name)
       English 101
       English 151
@@ -4141,8 +4141,8 @@ Fields
 
       >>> cs_101 = Course.get(Course.name == 'CS 101')
       >>> cs_151 = Course.get(Course.name == 'CS 151')
-      >>> huey.courses.add([cs_101, cs_151])
-      >>> [course.name for course in huey.courses.order_by(Course.name)]
+      >>> alice.courses.add([cs_101, cs_151])
+      >>> [course.name for course in alice.courses.order_by(Course.name)]
       ['CS 101', 'CS151', 'English 101', 'English 151', 'English 201',
        'English 221']
 
@@ -4151,9 +4151,9 @@ Fields
 
    .. code-block:: pycon
 
-      >>> huey.courses.remove(Course.select().where(Course.name.contains('2'))
+      >>> alice.courses.remove(Course.select().where(Course.name.contains('2'))
       2
-      >>> [course.name for course in huey.courses.order_by(Course.name)]
+      >>> [course.name for course in alice.courses.order_by(Course.name)]
       ['CS 101', 'CS151', 'English 101', 'English 151']
 
    To remove all relationships from a collection, you can use the
@@ -4188,19 +4188,19 @@ Fields
 
       .. code-block:: python
 
-         # Huey needs to enroll in a bunch of courses, including all
+         # Alice needs to enroll in a bunch of courses, including all
          # the English classes, and a couple Comp-Sci classes.
-         huey = Student.get(Student.name == 'Huey')
+         alice = Student.get(Student.name == 'Alice')
 
          # We can add all the objects represented by a query.
          english_courses = Course.select().where(
              Course.name.contains('english'))
-         huey.courses.add(english_courses)
+         alice.courses.add(english_courses)
 
          # We can also add lists of individual objects.
          cs101 = Course.get(Course.name == 'CS 101')
          cs151 = Course.get(Course.name == 'CS 151')
-         huey.courses.add([cs101, cs151])
+         alice.courses.add([cs101, cs151])
 
    .. method:: remove(value)
 
@@ -4215,17 +4215,17 @@ Fields
 
       .. code-block:: python
 
-         # Huey is currently enrolled in a lot of english classes
+         # Alice is currently enrolled in a lot of english classes
          # as well as some Comp-Sci. He is changing majors, so we
          # will remove all his courses.
          english_courses = Course.select().where(
              Course.name.contains('english'))
-         huey.courses.remove(english_courses)
+         alice.courses.remove(english_courses)
 
-         # Remove the two Comp-Sci classes Huey is enrolled in.
+         # Remove the two Comp-Sci classes Alice is enrolled in.
          cs101 = Course.get(Course.name == 'CS 101')
          cs151 = Course.get(Course.name == 'CS 151')
-         huey.courses.remove([cs101, cs151])
+         alice.courses.remove([cs101, cs151])
 
    .. method:: clear()
 
@@ -5247,9 +5247,9 @@ Query-builder
              print(user.username, user.tweet_ids)
 
          # e.g.,
-         # huey [1, 4, 5, 7]
-         # mickey [2, 3, 6]
-         # zaizee []
+         # alice [1, 4, 5, 7]
+         # bob [2, 3, 6]
+         # carol []
 
 .. function:: fn()
 
@@ -6255,9 +6255,9 @@ Queries
       .. code-block:: python
 
          # Update multiple users in a single query.
-         data = [('huey', True),
-                 ('mickey', False),
-                 ('zaizee', True)]
+         data = [('alice', True),
+                 ('bob', False),
+                 ('carol', True)]
          vl = ValuesList(data, columns=('username', 'is_admin'), alias='vl')
 
          # Here we'll update the "is_admin" status of the above users,
@@ -6273,7 +6273,7 @@ Queries
 
          UPDATE "users" SET "is_admin" = "vl"."is_admin"
          FROM (
-             VALUES ('huey', t), ('mickey', f), ('zaizee', t))
+             VALUES ('alice', t), ('bob', f), ('carol', t))
              AS "vl"("username", "is_admin")
          WHERE ("users"."username" = "vl"."username")
 
@@ -6295,7 +6295,7 @@ Queries
 
       User = Table('users')
 
-      query = User.insert({User.c.username: 'huey'})
+      query = User.insert({User.c.username: 'alice'})
       query.execute(database)
 
    .. method:: as_rowcount(as_rowcount=True)
@@ -6531,11 +6531,11 @@ Queries
               print(user.username, tweet.content, len(tweet.favorites))
 
       # Prints (tweets newest-first, with each tweet's favorite count):
-      # huey purr 2
-      # huey hiss 0
-      # huey meow 1
-      # mickey whine 1
-      # mickey woof 0
+      # alice alice-3 2
+      # alice alice-2 0
+      # alice alice-1 1
+      # bob bob-2 1
+      # bob bob-1 0
 
    ``per_parent`` keeps only the first *n* rows of each parent, ranked by the
    relation query's ``order_by`` (a window function, so one query for the hop):
@@ -6551,9 +6551,9 @@ Queries
           print(user.username, [t.content for t in user.tweets])
 
       # Prints:
-      # huey ['purr', 'hiss']
-      # mickey ['whine', 'woof']
-      # zaizee []
+      # alice ['alice-3', 'alice-2']
+      # bob ['bob-2', 'bob-1']
+      # carol []
 
 
 Query-builder Internals

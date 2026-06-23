@@ -62,13 +62,13 @@ The following helper populates test data that the examples below will query:
 
        users = {
            name: User.create(username=name)
-           for name in ('huey', 'mickey', 'zaizee')
+           for name in ('alice', 'bob', 'carol')
        }
 
        tweet_data = {
-           'huey':   ('meow', 'hiss', 'purr'),
-           'mickey': ('woof', 'whine'),
-           'zaizee': (),
+           'alice':   ('alice-1', 'alice-2', 'alice-3'),
+           'bob': ('bob-1', 'bob-2'),
+           'carol': (),
        }
        tweets = {}
        for username, contents in tweet_data.items():
@@ -77,13 +77,13 @@ The following helper populates test data that the examples below will query:
                    user=users[username],
                    content=content)
 
-       # huey favorites mickey's "whine",
-       # mickey favorites huey's "purr",
-       # zaizee favorites huey's "meow" and "purr".
+       # alice favorites bob's "bob-2",
+       # bob favorites alice's "alice-3",
+       # carol favorites alice's "alice-1" and "alice-3".
        favorite_data = (
-           ('huey',   ['whine']),
-           ('mickey', ['purr']),
-           ('zaizee', ['meow', 'purr']),
+           ('alice', ['bob-2']),
+           ('bob',   ['alice-3']),
+           ('carol', ['alice-1', 'alice-3']),
        )
        for username, contents in favorite_data:
            for content in contents:
@@ -94,12 +94,12 @@ This gives the following data:
 ========= ============= ==================
 User      Tweet         Favorited by
 ========= ============= ==================
-huey      meow          zaizee
-huey      hiss
-huey      purr          mickey, zaizee
-mickey    woof
-mickey    whine         huey
-zaizee    (no tweets)
+alice     alice-1       carol
+alice     alice-2
+alice     alice-3       bob, carol
+bob       bob-1
+bob       bob-2         alice
+carol     (no tweets)
 ========= ============= ==================
 
 .. note::
@@ -124,11 +124,11 @@ resolves that ID into a full model instance on access.
 
 .. code-block:: python
 
-   tweet = Tweet.get(Tweet.content == 'meow')
+   tweet = Tweet.get(Tweet.content == 'alice-1')
 
    # Accessing .user resolves the foreign key - Peewee issues a SELECT
    # query to fetch the related User row.
-   print(tweet.user.username)  # 'huey'
+   print(tweet.user.username)  # 'alice'
 
    # Accessing .user_id returns the raw integer stored in the column,
    # without issuing any query.
@@ -181,26 +181,26 @@ In the example schema, ``Tweet.user`` is a foreign key to ``User``. The
 
 .. code-block:: pycon
 
-   >>> huey = User.get(User.username == 'huey')
+   >>> alice = User.get(User.username == 'alice')
 
-   >>> huey.tweets  # back-reference is a Select query.
+   >>> alice.tweets  # back-reference is a Select query.
    <peewee.ModelSelect object at 0x...>
 
-   >>> for tweet in huey.tweets:
+   >>> for tweet in alice.tweets:
    ...     print(tweet.content)
-   meow
-   hiss
-   purr
+   alice-1
+   alice-2
+   alice-3
 
-Taking a closer look at ``huey.tweets``, we can see that it is just a simple
+Taking a closer look at ``alice.tweets``, we can see that it is just a simple
 pre-filtered ``SELECT`` query:
 
 .. code-block:: pycon
 
-   >>> huey.tweets
+   >>> alice.tweets
    <peewee.ModelSelect at 0x7f0483931fd0>
 
-   >>> huey.tweets.sql()
+   >>> alice.tweets.sql()
    ('SELECT "t1"."id", "t1"."content", "t1"."timestamp", "t1"."user_id"
      FROM "tweet" AS "t1" WHERE ("t1"."user_id" = ?)', [1])
 
@@ -209,7 +209,7 @@ filtered, ordered, and chained:
 
 .. code-block:: python
 
-   recent = (huey.tweets
+   recent = (alice.tweets
              .order_by(Tweet.timestamp.desc())
              .limit(2))
 
@@ -322,12 +322,12 @@ The following code is equivalent to the prevoius example:
    query = (Tweet
             .select()
             .join(User, on=(Tweet.user == User.id))
-            .where(User.username == 'huey'))
+            .where(User.username == 'alice'))
 
 Simple joins
 ^^^^^^^^^^^^
 
-To fetch all of huey's tweets, join from ``Tweet`` to ``User`` and filter on
+To fetch all of alice's tweets, join from ``Tweet`` to ``User`` and filter on
 the username:
 
 .. code-block:: python
@@ -335,7 +335,7 @@ the username:
    query = (Tweet
             .select()
             .join(User)
-            .where(User.username == 'huey'))
+            .where(User.username == 'alice'))
 
    for tweet in query:
        print(tweet.content)
@@ -348,15 +348,15 @@ the two models. To explicitly specify the join predicate use ``on=``:
    query = (Tweet
             .select()
             .join(User, on=(Tweet.user == User.id))
-            .where(User.username == 'huey'))
+            .where(User.username == 'alice'))
 
 If a ``User`` instance is already available, the back-reference is simpler and
 equivalent for straightforward cases:
 
 .. code-block:: python
 
-   huey = User.get(User.username == 'huey')
-   for tweet in huey.tweets:
+   alice = User.get(User.username == 'alice')
+   for tweet in alice.tweets:
        print(tweet.content)
 
 The join is the better choice when filtering or joining further. The
@@ -391,7 +391,7 @@ Switching join context
 When a query needs to branch - joining from one model to two different models
 - the join context must be reset manually using :meth:`~ModelSelect.switch`.
 
-To find all tweets by huey and how many times each has been favorited:
+To find all tweets by alice and how many times each has been favorited:
 
 .. code-block:: python
 
@@ -403,7 +403,7 @@ To find all tweets by huey and how many times each has been favorited:
             .join(User)
             .switch(Tweet)
             .join(Favorite, JOIN.LEFT_OUTER)
-            .where(User.username == 'huey')
+            .where(User.username == 'alice')
             .group_by(Tweet.content))
 
    for tweet in query:
@@ -426,7 +426,7 @@ written equivalently as:
             .select(Tweet.content, fn.COUNT(Favorite.id).alias('fav_count'))
             .join_from(Tweet, User)
             .join_from(Tweet, Favorite, JOIN.LEFT_OUTER)
-            .where(User.username == 'huey')
+            .where(User.username == 'alice')
             .group_by(Tweet.content))
 
 ``join_from(A, B)`` is equivalent to ``switch(A).join(B)`` and is often more
@@ -450,11 +450,11 @@ corresponding attributes.
        # No additional query is issued.
        print(tweet.user.username, '->', tweet.content)
 
-   # huey -> meow
-   # huey -> hiss
-   # huey -> purr
-   # mickey -> woof
-   # mickey -> whine
+   # alice -> alice-1
+   # alice -> alice-2
+   # alice -> alice-3
+   # bob -> bob-1
+   # bob -> bob-2
 
 To make it a bit more obvious that it's doing the correct thing, we can ask
 Peewee to return the rows as dictionaries.
@@ -469,11 +469,11 @@ Peewee to return the rows as dictionaries.
    for row in query:
        print(row)
 
-   # {'content': 'meow', 'username': 'huey'}
-   # {'content': 'hiss', 'username': 'huey'}
-   # {'content': 'purr', 'username': 'huey'}
-   # {'content': 'woof', 'username': 'mickey'}
-   # {'content': 'whine', 'username': 'mickey'}
+   # {'content': 'alice-1', 'username': 'alice'}
+   # {'content': 'alice-2', 'username': 'alice'}
+   # {'content': 'alice-3', 'username': 'alice'}
+   # {'content': 'bob-1', 'username': 'bob'}
+   # {'content': 'bob-2', 'username': 'bob'}
 
 Compare these queries to the N+1 version: here, only one query is executed
 regardless of how many tweets are returned.
@@ -505,7 +505,7 @@ nesting them in a sub-object, append ``.objects()``:
        # username is now an attribute on tweet directly.
        print(tweet.username, '->', tweet.content)
 
-   # huey -> meow
+   # alice -> alice-1
 
 See :ref:`row-types` for the different ways Peewee can return rows.
 
@@ -550,10 +550,10 @@ selected and reconstructed the model graph:
    for fav in query:
        print(fav.user.username, 'liked', fav.tweet.content, 'by', fav.tweet.user.username)
 
-   # huey liked whine by mickey
-   # mickey liked purr by huey
-   # zaizee liked meow by huey
-   # zaizee liked purr by huey
+   # alice liked bob-2 by bob
+   # bob liked alice-3 by alice
+   # carol liked alice-1 by alice
+   # carol liked alice-3 by alice
 
 .. _join-subquery:
 
@@ -610,8 +610,8 @@ Iterating over the query, we can see each user and their latest tweet.
    for tweet in query:
        print(tweet.user.username, '->', tweet.content)
 
-   # huey -> purr
-   # mickey -> whine
+   # alice -> alice-3
+   # bob -> bob-2
 
 There are a couple things you may not have seen before in the code we used to
 create the query in this section:
@@ -682,8 +682,8 @@ each user:
    for tweet in query:
        print(tweet.user.username, '->', tweet.content)
 
-   # huey -> purr
-   # mickey -> whine
+   # alice -> alice-3
+   # bob -> bob-2
 
 .. note::
    For more information about using CTEs, including information on writing
@@ -708,25 +708,25 @@ users:
        class Meta:
            indexes = ((('from_user', 'to_user'), True),)
 
-To find everyone that ``huey`` follows:
+To find everyone that ``alice`` follows:
 
 .. code-block:: python
 
-   huey = User.get(User.username == 'huey')
+   alice = User.get(User.username == 'alice')
 
    following = (User
                 .select()
                 .join(Relationship, on=Relationship.to_user)
-                .where(Relationship.from_user == huey))
+                .where(Relationship.from_user == alice))
 
-To find everyone who follows ``huey``:
+To find everyone who follows ``alice``:
 
 .. code-block:: python
 
    followers = (User
                 .select()
                 .join(Relationship, on=Relationship.from_user)
-                .where(Relationship.to_user == huey))
+                .where(Relationship.to_user == alice))
 
 Passing the field instance to ``on=`` tells Peewee which foreign key column to
 use for the join.
@@ -748,7 +748,7 @@ exists between them, by supplying an explicit join predicate as an expression:
                   attr='log')
             .where(
                 (ActivityLog.activity_type == 'login') &
-                (User.username == 'huey')))
+                (User.username == 'alice')))
 
    for user in query:
        print(user.username, '->', user.log.description)
@@ -900,12 +900,12 @@ To query all courses a given student is enrolled in:
 
 .. code-block:: python
 
-   huey = Student.get(Student.name == 'Huey')
+   alice = Student.get(Student.name == 'Alice')
 
    courses = (Course
               .select()
               .join(Enrollment)
-              .where(Enrollment.student == huey)
+              .where(Enrollment.student == alice)
               .order_by(Course.title))
 
    for course in courses:
@@ -954,18 +954,18 @@ requires no extra columns and complex querying is not needed.
 
    db.create_tables([Student, Course, Enrollment])
 
-   huey = Student.create(name='Huey')
+   alice = Student.create(name='Alice')
    cs101 = Course.create(title='CS 101')
 
    # Adding and removing relationships:
-   huey.courses.add(cs101)
-   huey.courses.add(Course.select().where(Course.title.contains('Math')))
+   alice.courses.add(cs101)
+   alice.courses.add(Course.select().where(Course.title.contains('Math')))
 
-   cs101.students.remove(huey)
+   cs101.students.remove(alice)
    cs101.students.clear()   # Removes all students from this course.
 
    # Querying through the field:
-   for course in huey.courses.order_by(Course.title):
+   for course in alice.courses.order_by(Course.title):
        print(course.title)
 
 .. warning::
@@ -1025,14 +1025,14 @@ is first executed:
            print(f'  {tweet.content}')
 
    # Prints:
-   # huey
-   #   meow
-   #   hiss
-   #   purr
-   # mickey
-   #   woof
-   #   whine
-   # zaizee
+   # alice
+   #   alice-1
+   #   alice-2
+   #   alice-3
+   # bob
+   #   bob-1
+   #   bob-2
+   # carol
 
 ``Load`` accepts a back-reference (``Load(User.tweets)``, the one-to-many
 direction) or a foreign key (``Load(Tweet.user)``, the many-to-one direction).
@@ -1055,11 +1055,11 @@ queries:
                  f'({len(tweet.favorites)} favorites)')
 
    # Prints:
-   # huey: meow (1 favorites)
-   # huey: hiss (0 favorites)
-   # huey: purr (2 favorites)
-   # mickey: woof (0 favorites)
-   # mickey: whine (1 favorites)
+   # alice: alice-1 (1 favorites)
+   # alice: alice-2 (0 favorites)
+   # alice: alice-3 (2 favorites)
+   # bob: bob-1 (0 favorites)
+   # bob: bob-2 (1 favorites)
 
 :meth:`~ModelSelect.with_related` accepts more than one :class:`Load`, so
 several independent branches can hang off the same parent in a single call:
@@ -1079,7 +1079,7 @@ Per-relation query
 .. code-block:: python
 
    recent = (Tweet.select()
-             .where(Tweet.content != 'hiss')
+             .where(Tweet.content != 'alice-2')
              .order_by(Tweet.timestamp.desc()))
    query = User.select().with_related(Load(User.tweets, recent))
 
@@ -1087,9 +1087,9 @@ Per-relation query
        print(user.username, [t.content for t in user.tweets])
 
    # Prints:
-   # huey ['purr', 'meow']
-   # mickey ['whine', 'woof']
-   # zaizee []
+   # alice ['alice-3', 'alice-1']
+   # bob ['bob-2', 'bob-1']
+   # carol []
 
 Because it is a real query it can join other tables and select from them:
 
@@ -1104,10 +1104,10 @@ Because it is a real query it can join other tables and select from them:
            print(tweet.content, fav.user.username)  # No extra query.
 
    # Prints:
-   # meow zaizee
-   # purr mickey
-   # purr zaizee
-   # whine huey
+   # alice-1 carol
+   # alice-3 bob
+   # alice-3 carol
+   # bob-2 alice
 
 A relation can limit the rows fetched per parent with ``per_parent=n``: it keeps
 the first ``n`` of each parent's children using a window function, ranked by the
@@ -1124,9 +1124,9 @@ relation query's ``order_by``:
        print(user.username, [t.content for t in user.tweets])
 
    # Prints:
-   # huey ['purr', 'hiss']
-   # mickey ['whine', 'woof']
-   # zaizee []
+   # alice ['alice-3', 'alice-2']
+   # bob ['bob-2', 'bob-1']
+   # carol []
 
 A plain ``query.limit(n)`` instead applies one ``LIMIT`` to the whole relation,
 returning ``n`` rows in total (the same as :func:`prefetch`). Per-parent limits
