@@ -381,8 +381,8 @@ Join context
 
 Peewee tracks a *join context*: the model from which the next ``join()`` call
 will depart. At the start of a query the join context is the model being
-selected from. Each call to ``join()`` moves the join context to the model just
-joined.
+selected from, and each call to ``join()`` moves the context to the model just
+joined. Chaining joins therefore walks a path through related models:
 
 .. code-block:: python
 
@@ -393,67 +393,18 @@ joined.
             .join(User)  # Joins Tweet -> User.
             .where(User.username == 'alice'))
 
-When joining through multiple tables in a chain, this is usually what you want.
-When joining from one model to two different models, the join context needs to
-be reset explicitly using :meth:`~ModelSelect.switch` or :meth:`~ModelSelect.join_from`.
-
-For example, suppose we want to join on the Favorite.user instead of Tweet.user:
-
-.. code-block:: python
-
-   # Get all the tweets that alice has favorited.
-   query = (Favorite
-            .select()
-            .join(Tweet)  # Joins Favorite -> Tweet.
-            .switch(Favorite)
-            .join(User)  # Joins Favorite -> User.
-            .where(User.username == 'alice'))
-
-Alternately, we can be explicit and specify both sides of the join:
+A chain is usually what you want. When a query needs to join from one model to
+*two* different models, the context must be reset back to the branch point using
+:meth:`~ModelSelect.switch`. To find all of alice's tweets and how many times
+each has been favorited, we join ``Tweet -> User`` and ``Tweet -> Favorite``,
+switching back to ``Tweet`` in between:
 
 .. code-block:: python
 
-   # Get all the tweets that alice has favorited.
-   query = (Favorite
-            .select()
-            .join_from(Favorite, Tweet)
-            .join_from(Favorite, User)
-            .where(User.username == 'alice'))
-
-Note that we did not specify the join predicate (the ``ON`` clause) in the
-above examples. Peewee will automatically infer the join predicate using the
-foreign keys defined on the models. If only one foreign key exists between two
-models, no additional specification is required. If multiple foreign keys
-exist, the relevant one must be specified explicitly.
-
-Example of explicitly specifying predicate:
-
-.. code-block:: python
-   :emphasize-lines: 3, 4
-
-   query = (Favorite
-            .select()
-            .join_from(Favorite, Tweet, on=(Favorite.tweet == Tweet.id))
-            .join_from(Favorite, User, on=(Favorite.user == User.id))
-            .where(User.username == 'alice'))
-
-Switching join context
-^^^^^^^^^^^^^^^^^^^^^^
-
-When a query needs to join from one model to two different models, the join
-context must be reset using :meth:`~ModelSelect.switch`.
-
-To find all tweets by alice and how many times each has been favorited:
-
-.. code-block:: python
-
-   # Context: Tweet -> join -> User (context is now User)
-   # switch(Tweet) resets context to Tweet
-   # -> join -> Favorite (context is now Favorite)
    query = (Tweet
             .select(Tweet.content, fn.COUNT(Favorite.id).alias('fav_count'))
             .join(User)
-            .switch(Tweet)
+            .switch(Tweet)  # Reset context to Tweet.
             .join(Favorite, JOIN.LEFT_OUTER)
             .where(User.username == 'alice')
             .group_by(Tweet.content))
@@ -462,15 +413,11 @@ To find all tweets by alice and how many times each has been favorited:
        print(f'{tweet.content}: favorited {tweet.fav_count} times')
 
 Without the call to ``.switch(Tweet)``, Peewee would attempt to join from
-``User`` to ``Favorite`` using ``Favorite.user``, which would produce
-incorrect results.
+``User`` to ``Favorite`` using ``Favorite.user``, producing incorrect results.
 
-Using ``join_from``
-^^^^^^^^^^^^^^^^^^^
-
-:meth:`~ModelSelect.join_from` is an alternative to ``switch().join()`` that
-makes the join source explicit in a single call. The above query can be
-written equivalently as:
+:meth:`~ModelSelect.join_from` is a more explicit alternative that names the
+join's source model directly, so no ``switch()`` is needed. ``join_from(A, B)``
+is equivalent to ``switch(A).join(B)``:
 
 .. code-block:: python
 
@@ -480,9 +427,6 @@ written equivalently as:
             .join_from(Tweet, Favorite, JOIN.LEFT_OUTER)
             .where(User.username == 'alice')
             .group_by(Tweet.content))
-
-``join_from(A, B)`` is equivalent to ``switch(A).join(B)`` and is often more
-readable when a query branches across several paths.
 
 Selecting columns from joined models
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
