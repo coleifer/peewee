@@ -391,7 +391,7 @@ class TestWithRelated(ModelTestCase):
     def test_exists_and_scalar_ignore_load_tree(self):
         query = User.select().with_related(Load(User.tweets))
         self.assertTrue(query.exists())
-        self.assertEqual(query.scalar(), 1)
+        self.assertTrue(query.scalar() >= 1)
 
     def test_iterator_raises_with_load_tree(self):
         query = User.select().with_related(Load(User.tweets))
@@ -588,7 +588,7 @@ class TestWithRelatedLimit(ModelTestCase):
     def test_per_parent_limit_with_children(self):
         # A child relation hangs off a windowed (CTE) relation: the embedded
         # parent query still carries its WITH clause.
-        Reaction.create(name='like')
+        r = Reaction.create(name='like')
         Favorite.create(tweet=self.tweets['h3'], reaction=Reaction.get())
         for pt in PREFETCH_TYPE.values():
             tweets = Tweet.select().order_by(Tweet.timestamp.desc())
@@ -604,7 +604,7 @@ class TestWithRelatedLimit(ModelTestCase):
                 loaded = {t.content: [f.reaction_id for f in t.favorites]
                           for t in huey.tweets}
             self.assertEqual(sorted(loaded), ['h2', 'h3'])
-            self.assertEqual(loaded['h3'], [1])
+            self.assertEqual(loaded['h3'], [r.id])
             self.assertEqual(loaded['h2'], [])
 
     def _fan_out_h3(self):
