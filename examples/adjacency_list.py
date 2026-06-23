@@ -47,12 +47,11 @@ import logging; logger = logging.getLogger('peewee')
 logger.addHandler(logging.StreamHandler())
 logger.setLevel(logging.DEBUG)
 
-C = Node.alias('c')
-G = Node.alias('g')
-GG = Node.alias('gg')
-GGG = Node.alias('ggg')
-
 roots = Node.select().where(Node.parent.is_null())
-pf = prefetch(roots, C, (G, C), (GG, G), (GGG, GG))
-for root in pf:
+q = roots.with_related(
+    Load(Node.children).then(
+        Load(Node.children).then(
+            Load(Node.children).then(
+                Load(Node.children)))))
+for root in q:
     print(root.dump())
