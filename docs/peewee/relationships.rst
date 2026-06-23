@@ -210,7 +210,7 @@ pre-filtered ``SELECT`` query:
 .. code-block:: pycon
 
    >>> alice.tweets.sql()
-   ('SELECT "t1"."id", "t1"."content", "t1"."timestamp", "t1"."user_id"
+   ('SELECT "t1"."id", "t1"."user_id", "t1"."content", "t1"."timestamp"
      FROM "tweet" AS "t1" WHERE ("t1"."user_id" = ?)', [1])
 
 A back-reference behaves like any other :class:`Select` query and can be
@@ -395,8 +395,7 @@ joined.
 
 When joining through multiple tables in a chain, this is usually what you want.
 When joining from one model to two different models, the join context needs to
-be reset explicitly using :meth:`~ModelSelect.switch` or :meth:`~ModelSelect.join_from`
-(used in the previous example).
+be reset explicitly using :meth:`~ModelSelect.switch` or :meth:`~ModelSelect.join_from`.
 
 For example, suppose we want to join on the Favorite.user instead of Tweet.user:
 
