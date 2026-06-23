@@ -2788,6 +2788,13 @@ Model
              for tweet in user.tweets:
                  print(user.username, tweet.content, len(tweet.favorites))
 
+         # Prints (tweets newest-first, with each tweet's favorite count):
+         # huey purr 2
+         # huey hiss 0
+         # huey meow 1
+         # mickey whine 1
+         # mickey woof 0
+
       The related rows are loaded once, when the query is first executed -
       whether by iteration, :py:meth:`get`, ``first()``, indexing or ``len()``.
 
@@ -6522,6 +6529,31 @@ Queries
       for user in query:
           for tweet in user.tweets:
               print(user.username, tweet.content, len(tweet.favorites))
+
+      # Prints (tweets newest-first, with each tweet's favorite count):
+      # huey purr 2
+      # huey hiss 0
+      # huey meow 1
+      # mickey whine 1
+      # mickey woof 0
+
+   ``per_parent`` keeps only the first *n* rows of each parent, ranked by the
+   relation query's ``order_by`` (a window function, so one query for the hop):
+
+   .. code-block:: python
+
+      # Each user's two most-recent tweets:
+      tweets = Tweet.select().order_by(Tweet.timestamp.desc())
+      query = User.select().with_related(
+          Load(User.tweets, tweets, per_parent=2))
+
+      for user in query:
+          print(user.username, [t.content for t in user.tweets])
+
+      # Prints:
+      # huey ['purr', 'hiss']
+      # mickey ['whine', 'woof']
+      # zaizee []
 
 
 Query-builder Internals

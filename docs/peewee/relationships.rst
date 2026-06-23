@@ -1024,6 +1024,16 @@ is first executed:
        for tweet in user.tweets:  # No additional query, user.tweets is a list.
            print(f'  {tweet.content}')
 
+   # Prints:
+   # huey
+   #   meow
+   #   hiss
+   #   purr
+   # mickey
+   #   woof
+   #   whine
+   # zaizee
+
 ``Load`` accepts a back-reference (``Load(User.tweets)``, the one-to-many
 direction) or a foreign key (``Load(Tweet.user)``, the many-to-one direction).
 The rows are loaded once, when the query is first executed, whether by
@@ -1043,6 +1053,13 @@ queries:
        for tweet in user.tweets:
            print(f'{user.username}: {tweet.content} '
                  f'({len(tweet.favorites)} favorites)')
+
+   # Prints:
+   # huey: meow (1 favorites)
+   # huey: hiss (0 favorites)
+   # huey: purr (2 favorites)
+   # mickey: woof (0 favorites)
+   # mickey: whine (1 favorites)
 
 :meth:`~ModelSelect.with_related` accepts more than one :class:`Load`, so
 several independent branches can hang off the same parent in a single call:
@@ -1066,17 +1083,31 @@ Per-relation query
              .order_by(Tweet.timestamp.desc()))
    query = User.select().with_related(Load(User.tweets, recent))
 
+   for user in query:
+       print(user.username, [t.content for t in user.tweets])
+
+   # Prints:
+   # huey ['purr', 'meow']
+   # mickey ['whine', 'woof']
+   # zaizee []
+
 Because it is a real query it can join other tables and select from them:
 
 .. code-block:: python
 
-   # Each tweet's favorites, with the reaction FK already loaded:
-   favorites = Favorite.select(Favorite, Reaction).join(Reaction)
+   # Each tweet's favorites, with the favoriting user already loaded:
+   favorites = Favorite.select(Favorite, User).join(User)
    query = Tweet.select().with_related(Load(Tweet.favorites, favorites))
 
    for tweet in query:
        for fav in tweet.favorites:
-           print(tweet.content, fav.reaction.name)  # No extra query.
+           print(tweet.content, fav.user.username)  # No extra query.
+
+   # Prints:
+   # meow zaizee
+   # purr mickey
+   # purr zaizee
+   # whine huey
 
 A relation can limit the rows fetched per parent with ``per_parent=n``: it keeps
 the first ``n`` of each parent's children using a window function, ranked by the
@@ -1088,6 +1119,14 @@ relation query's ``order_by``:
    tweets = Tweet.select().order_by(Tweet.timestamp.desc())
    query = User.select().with_related(
        Load(User.tweets, tweets, per_parent=2))
+
+   for user in query:
+       print(user.username, [t.content for t in user.tweets])
+
+   # Prints:
+   # huey ['purr', 'hiss']
+   # mickey ['whine', 'woof']
+   # zaizee []
 
 A plain ``query.limit(n)`` instead applies one ``LIMIT`` to the whole relation,
 returning ``n`` rows in total (the same as :func:`prefetch`). Per-parent limits

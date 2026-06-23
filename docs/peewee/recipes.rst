@@ -150,42 +150,49 @@ The ``db.atomic()`` wrapper is important: it ensures that the rollback on
 Eager-loading for a list view
 -----------------------------
 
-List views - a page of rows, each shown with some related data - are where the
-N+1 problem usually creeps in. Loading the page together with its related rows
-via :meth:`~ModelSelect.with_related` keeps the work to one query per
-relationship, no matter how many rows are on the page:
+List views - a page of rows, each shown with related data - are where the N+1
+problem creeps in. :meth:`~ModelSelect.with_related` loads the page and its
+related rows in a fixed number of queries, no matter how many rows are shown.
+
+This fetches a page of users, each with their two most-recent tweets, and for
+each tweet the favorites with the favoriting user - three queries for the whole
+page, whatever the page size:
 
 .. code-block:: python
 
-   # One page of users, each with all of their tweets, in two queries.
+   recent = Tweet.select().order_by(Tweet.timestamp.desc())
+   favorites = Favorite.select(Favorite, User).join(User)
+
    query = (User
             .select()
             .order_by(User.username)
             .paginate(1, 20)
-            .with_related(Load(User.tweets)))
+            .with_related(
+                Load(User.tweets, recent,
+                     strategy=PREFETCH_TYPE.JOIN, per_parent=2)
+                .then(Load(Tweet.favorites, favorites,
+                           strategy=PREFETCH_TYPE.JOIN))))
 
    for user in query:
        print(user.username)
-       for tweet in user.tweets:  # user.tweets is already a list - no query.
-           print('  ', tweet.content)
+       for tweet in user.tweets:
+           likers = ', '.join(f.user.username for f in tweet.favorites)
+           print(f'  {tweet.content} - favorited by: {likers or "nobody"}')
 
-The load fires on first execution, whatever triggers it - iteration, ``get()``,
-``first()``, indexing or ``len()``.
+   # Prints:
+   # huey
+   #   purr - favorited by: mickey, zaizee
+   #   hiss - favorited by: nobody
+   # mickey
+   #   whine - favorited by: huey
+   #   woof - favorited by: nobody
+   # zaizee
 
-A paginated parent query needs the ``JOIN`` strategy. MySQL cannot use ``LIMIT``
-inside an ``IN`` subquery, and a join avoids that.
-
-.. code-block:: python
-
-   query = (User
-            .select()
-            .paginate(1, 20)
-            .with_related(Load(User.tweets, strategy=PREFETCH_TYPE.JOIN)))
-
-To walk deeper - users, their tweets, then each tweet's favorites - nest loads
-with ``.then()``. To pull several relationships off each user at once, pass
-multiple :class:`Load` nodes. Both keep the per-relationship query count. See
-:ref:`relationships` for the full tree form.
+The ``JOIN`` strategy matters once the parent is paginated: MySQL cannot put a
+``LIMIT`` inside an ``IN`` subquery, so the child is joined against the parent
+query instead. The load fires on first execution - iteration, ``get()``,
+``first()``, indexing or ``len()``. See :ref:`relationships` for the building
+blocks (nesting, per-relation queries, ``per_parent``, strategies).
 
 
 Top Item Per Group
