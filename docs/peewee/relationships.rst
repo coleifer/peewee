@@ -1150,8 +1150,9 @@ already fetched. The ``strategy`` argument controls how. It applies to both
   form ``... WHERE user_id IN (SELECT id FROM user ...)``. The parent query is
   embedded and re-evaluated by the database.
 * ``PREFETCH_TYPE.JOIN`` filters by joining the child table against the parent
-  query. Use it for paginated parents (MySQL cannot put ``LIMIT`` inside an
-  ``IN`` subquery) or very large parent sets.
+  query as a derived table. Use it when the parent is paginated: MySQL and
+  MariaDB reject a ``LIMIT`` inside an ``IN`` subquery, but accept it in a
+  derived table.
 
 .. code-block:: python
 
@@ -1166,7 +1167,7 @@ backend's parameter limit. It overrides ``strategy``:
 
 .. code-block:: python
 
-   # No parent subquery; the user ids are sent inline.
+   # No parent subquery, the user ids are sent inline.
    tweets = Load(User.tweets, materialize=True)
    query = User.select().with_related(tweets)
 
@@ -1214,7 +1215,7 @@ and other modifiers independently:
        Tweet.select().where(Tweet.timestamp >= one_week_ago),
    )
 
-The filter on ``Tweet`` applies only to the prefetched tweets; it does not
+The filter on ``Tweet`` applies only to the prefetched tweets, it does not
 affect which users are returned. ``prefetch`` accepts the same strategies as
 ``with_related`` through its ``prefetch_type`` keyword (see
 :ref:`prefetch-strategy`).

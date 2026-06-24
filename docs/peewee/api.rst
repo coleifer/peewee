@@ -181,7 +181,7 @@ Database
       .. code-block:: python
 
          with db.connection_context():
-             # Connection is open; no implicit transaction.
+             # Connection is open, no implicit transaction.
              results = User.select()
 
       Decorator:
@@ -325,9 +325,9 @@ Database
 
          with db.transaction() as txn:
              User.create(username='bob')
-             txn.commit()         # Commit now; a new transaction begins.
+             txn.commit()         # Commit now, a new transaction begins.
              User.create(username='alice')
-             txn.rollback()       # Roll back alice; a new transaction begins.
+             txn.rollback()       # Roll back alice, a new transaction begins.
              User.create(username='carol')
          # carol is committed when the block exits.
 
@@ -1256,7 +1256,7 @@ Database
    of :meth:`Database.atomic`. Users do not instantiate ``_transaction`` directly.
 
    A ``_transaction`` can be used as a context manager or as a decorator.
-   On clean exit, the wrapped block is committed; on an unhandled
+   On clean exit, the wrapped block is committed. On an unhandled
    exception, it is rolled back and the exception re-raised. Nested
    ``_transaction`` blocks share the outermost transaction - inner
    ``__enter__`` / ``__exit__`` pushes and pops a stack entry but does
@@ -3542,7 +3542,7 @@ Fields
                has_any_keys(key_list)
 
       JSON structural containment and key-existence predicates. Postgresql
-      uses ``@>`` / ``<@`` / ``?`` / ``?&`` / ``?|``; MySQL / MariaDB use
+      uses ``@>`` / ``<@`` / ``?`` / ``?&`` / ``?|``. MySQL / MariaDB use
       ``JSON_CONTAINS`` / ``JSON_CONTAINS_PATH``. **Not supported on
       SQLite** - calling any of these on a SQLite-backed model raises
       :class:`peewee.NotSupportedError`.
@@ -3558,10 +3558,10 @@ Fields
    :meth:`update` has intentionally **divergent semantics across backends**:
 
    * **SQLite, MySQL, MariaDB** - RFC-7396 deep merge via ``json_patch`` /
-     ``JSON_MERGE_PATCH``. Nested objects are merged recursively;
+     ``JSON_MERGE_PATCH``. Nested objects are merged recursively.
      ``null`` values **delete** the key.
    * **Postgresql** - shallow concat via the ``||`` operator. Top-level
-     keys are overwritten; **nested objects are replaced wholesale**;
+     keys are overwritten, **nested objects are replaced wholesale**,
      ``null`` is stored as JSON null and does **not** delete the key.
 
    Example:
@@ -3573,9 +3573,9 @@ Fields
                                        'nested': {'b': 99}})).execute()
 
       # SQLite / MySQL / MariaDB:
-      #   {'nested': {'a': 1, 'b': 99}}      ('k' deleted; nested merged)
+      #   {'nested': {'a': 1, 'b': 99}}      ('k' deleted, nested merged)
       # Postgresql:
-      #   {'k': None, 'nested': {'b': 99}}   ('k' kept as null; nested overwritten)
+      #   {'k': None, 'nested': {'b': 99}}   ('k' kept as null, nested overwritten)
 
 
 .. class:: JSONPath
@@ -3623,8 +3623,7 @@ Fields
       :meth:`iregexp`) automatically apply ``as_text()`` so calling them on
       a path does the right thing without needing ``.as_text()`` explicitly.
       :meth:`contains` is **not** among them - on a path it performs JSON
-      structural containment; for a substring test use
-      ``.as_text().contains(...)``.
+      structural containment. For a substring test use ``.as_text().contains(...)``.
 
    .. _json-field-typed-access:
 
@@ -3723,7 +3722,7 @@ Fields
 
       * **Postgresql** - structural ``jsonb`` ordering (type class then value).
       * **MySQL** - JSON-typed comparison rules.
-      * **SQLite and MariaDB** - text comparison of the json-encoded value;
+      * **SQLite and MariaDB** - text comparison of the json-encoded value.
         ``'10' > '2'`` is lexicographic, **which is rarely what you want**.
 
       For portable strict-numeric ordering, use :meth:`as_int` or
@@ -3777,7 +3776,7 @@ Fields
 
       Return an UPDATE-clause expression that writes ``value`` at this path.
       Uses ``json_set`` / ``jsonb_set`` / ``JSON_SET`` per backend. Existing
-      values are replaced; ``value=None`` writes JSON ``null`` (not SQL
+      values are replaced, ``value=None`` writes JSON ``null`` (not SQL
       NULL):
 
       .. code-block:: python
@@ -3798,7 +3797,7 @@ Fields
       Return an UPDATE-clause expression that writes ``value`` at this path
       **only if the path is currently absent**. A stored JSON ``null``
       counts as "present" and is not overwritten. Uses ``json_insert`` on
-      SQLite and ``JSON_INSERT`` on MySQL / MariaDB; emulated on Postgresql
+      SQLite and ``JSON_INSERT`` on MySQL / MariaDB, emulated on Postgresql
       via ``CASE WHEN (field #> '{k}') IS NULL THEN jsonb_set(...) ELSE field
       END`` (correct because ``#>`` returns SQL ``NULL`` for absent keys
       and jsonb ``'null'`` for stored JSON nulls).
@@ -3817,7 +3816,7 @@ Fields
 
       .. code-block:: python
 
-         # Update existing counters; leave rows without one untouched.
+         # Update existing counters. Leave rows without one untouched.
          Doc.update(data=Doc.data['count'].replace(99)).execute()
 
    .. method:: append(value)
@@ -3887,7 +3886,7 @@ Fields
                has_any_keys(key_list)
 
       Test whether the value at this path is an object containing the given
-      key(s). Postgresql uses the ``?`` / ``?&`` / ``?|`` operators; MySQL /
+      key(s). Postgresql uses the ``?`` / ``?&`` / ``?|`` operators, MySQL /
       MariaDB use ``JSON_CONTAINS_PATH``. Not supported on SQLite.
 
       .. code-block:: python
@@ -6495,13 +6494,16 @@ Queries
    :param query: An ordinary query used to fetch this relation's rows. It must
        select from the related model. Defaults to a bare select over the related
        model.
-   :param strategy: How each relation is filtered against its parents:
-       ``PREFETCH_TYPE.WHERE`` (an ``IN`` subquery, the default) or
-       ``PREFETCH_TYPE.JOIN`` (a join against the parent query). Use ``JOIN``
-       for paginated or very large parent queries.
-   :param materialize: Filter using the parents' keys as a literal ``IN`` list
-       rather than a subquery. Avoids re-running the parent query, but is bounded
-       by the backend's bind-parameter limit. Overrides ``strategy``.
+   :param strategy: How each relation is filtered against the parents already
+       fetched. ``PREFETCH_TYPE.WHERE`` (the default) embeds the parent query as
+       an ``IN`` subquery. ``PREFETCH_TYPE.JOIN`` joins the relation against the
+       parent query as a derived table. The two are equivalent except when the
+       parent query is limited (see below).
+   :param materialize: Filter on the parent keys already held in memory, sent as
+       a literal ``IN`` list, rather than embedding the parent query as a
+       subquery. Avoids re-running the parent query, but sends one bind parameter
+       per key, so it is bounded by the backend's parameter limit. Overrides
+       ``strategy`` (see below).
    :param per_parent: Keep the first ``n`` rows for *each* parent (top-N-per-
        parent), ranked by the relation query's ``order_by`` with a window
        function. Requires SQLite 3.25+, PostgreSQL or MySQL 8. A plain
@@ -6536,6 +6538,53 @@ Queries
       # alice alice-1 1
       # bob bob-2 1
       # bob bob-1 0
+
+   ``strategy`` controls how a relation restricts itself to the parents already
+   fetched. Under the default ``WHERE`` strategy the parent query is embedded as
+   a subquery, so a ``LIMIT`` on the parent lands *inside* the ``IN`` clause:
+
+   .. code-block:: python
+
+      query = User.select().paginate(1, 20).with_related(Load(User.tweets))
+
+   .. code-block:: sql
+
+      SELECT * FROM "tweet"
+      WHERE "user_id" IN (SELECT "id" FROM "user" LIMIT 20 OFFSET 0)
+
+   MySQL and MariaDB reject ``LIMIT`` inside an ``IN`` subquery. ``JOIN`` puts
+   the parent query in the FROM-clause as a derived table, which they accept:
+
+   .. code-block:: python
+
+      tweets = Load(User.tweets, strategy=PREFETCH_TYPE.JOIN)
+      query = User.select().paginate(1, 20).with_related(tweets)
+
+   .. code-block:: sql
+
+      SELECT DISTINCT "tweet".* FROM "tweet"
+      INNER JOIN (SELECT "id" FROM "user" LIMIT 20 OFFSET 0) AS "u"
+          ON ("u"."id" = "tweet"."user_id")
+
+   On SQLite and PostgreSQL both forms run, so the default is fine. ``JOIN`` is
+   needed when paginating a parent query on MySQL or MariaDB.
+
+   ``materialize=True`` takes a third approach: it skips the parent subquery and
+   reuses the parent keys already in memory, sending them inline. The relation
+   then runs as a standalone query:
+
+   .. code-block:: python
+
+      query = User.select().with_related(Load(User.tweets, materialize=True))
+
+   .. code-block:: sql
+
+      -- The relation reuses the parent rows' ids as bound parameters:
+      SELECT * FROM "tweet" WHERE "user_id" IN (1, 2, 3)
+
+   This avoids re-evaluating the parent query, but sends one parameter per
+   parent key, so it suits an expensive parent query returning a bounded number
+   of rows. A large parent set will exceed the backend's parameter limit.
 
    ``per_parent`` keeps only the first *n* rows of each parent, ranked by the
    relation query's ``order_by`` (a window function, so one query for the hop):
