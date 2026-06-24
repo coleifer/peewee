@@ -1,7 +1,7 @@
 import threading
 
 from peewee import *
-from peewee import Alias
+from peewee import Alias, Field
 from peewee import CompoundSelectQuery
 from peewee import Metadata
 from peewee import callable_
@@ -76,7 +76,9 @@ def model_to_dict(model, recurse=True, backrefs=False, only=None,
             continue
 
         field_data = model.__data__.get(field.name)
-        if isinstance(field, ForeignKeyField) and recurse:
+        if isinstance(field_data, int) and field.lazy_load is False:
+            data[field.column_name] = field_data
+        elif isinstance(field, ForeignKeyField) and recurse:
             if field_data is not None:
                 rel_obj = getattr(model, field.name)
                 field_data = model_to_dict(
