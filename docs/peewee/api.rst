@@ -6584,7 +6584,7 @@ Queries
    of rows. A large parent set will exceed the backend's parameter limit.
 
    ``per_parent`` keeps only the first *n* rows of each parent, ranked by the
-   relation query's ``order_by`` (a window function, so one query for the hop):
+   relation query's ``order_by`` (a window function, so one query for the relation):
 
    .. code-block:: python
 

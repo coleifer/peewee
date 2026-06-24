@@ -39,7 +39,7 @@ class LP(TestModel):
     name = CharField()
 
 class LC(TestModel):
-    name = CharField(primary_key='True')
+    name = CharField(primary_key=True)
     parent = ForeignKeyField(LP, lazy_load=False)
 
 class Owner(TestModel):
