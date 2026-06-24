@@ -35,6 +35,13 @@ class TweetTag(TestModel):
     class Meta:
         primary_key = CompositeKey('tweet', 'tag')
 
+class LP(TestModel):
+    name = CharField()
+
+class LC(TestModel):
+    name = CharField(primary_key='True')
+    parent = ForeignKeyField(LP, lazy_load=False)
+
 class Owner(TestModel):
     name = TextField()
 
@@ -185,6 +192,18 @@ class TestModelToDict(ModelTestCase):
                 'content': 't0',
                 'tweettag_set': [],
                 'user': {'id': self.user.id, 'username': 'peewee'}})
+
+    @requires_models(LP, LC)
+    def test_no_lazy_load(self):
+        lp = LP.create(name='lp')
+        l1 = LC.create(name='l1', parent=lp)
+        l2 = LC.create(name='l2', parent=lp.id)
+
+        with self.assertQueryCount(0):
+            self.assertEqual(model_to_dict(l1, recurse=True), {
+                'name': 'l1', 'parent': lp.id})
+            self.assertEqual(model_to_dict(l2, recurse=True), {
+                'name': 'l2', 'parent': lp.id})
 
     @requires_models(Category)
     def test_recursive_fk(self):

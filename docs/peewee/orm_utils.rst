@@ -30,7 +30,8 @@ Model Serialization
    Convert a model instance to a dictionary.
 
    :param bool recurse: Follow foreign keys and include the related object
-       as a nested dict (default: ``True``).
+       as a nested dict (default: ``True``). Foreign keys defined with
+       ``lazy_load=False`` will not be traversed.
    :param bool backrefs: Follow back-references and include related
        collections as nested lists of dicts.
    :param only: A list or set of field instances to include exclusively.

@@ -76,7 +76,7 @@ def model_to_dict(model, recurse=True, backrefs=False, only=None,
             continue
 
         field_data = model.__data__.get(field.name)
-        if isinstance(field, ForeignKeyField) and recurse:
+        if isinstance(field, ForeignKeyField) and recurse and field.lazy_load:
             if field_data is not None:
                 rel_obj = getattr(model, field.name)
                 field_data = model_to_dict(

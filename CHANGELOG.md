@@ -7,13 +7,15 @@ https://github.com/coleifer/peewee/releases
 
 ## master
 
-* Add `MySQLJSONField` (`playhouse.mysql_ext`) with `contains_any()` for the
-  `JSON_OVERLAPS`/"match any" counterpart to `contains` for JSON arrays.
 * New declarative API for pre-fetching related instances (`Load()`). See
   [documentation](https://docs.peewee-orm.com/en/latest/peewee/relationships.html#avoiding-n-1-with-eager-loading).
   This replaces `prefetch()`, is more flexible and also supports options for
   applying a row limit to sub-results, and a strategy that materializes the ID
   list (in addition to SELECT IN and JOIN strategies).
+* Add `MySQLJSONField` (`playhouse.mysql_ext`) with `contains_any()` for the
+  `JSON_OVERLAPS`/"match any" counterpart to `contains` for JSON arrays.
+* Do not traverse foreign-key fields where `lazy_load=False` when serializing
+  recursively with `model_to_dict()`, #3055.
 
 [View commits](https://github.com/coleifer/peewee/compare/4.1.0...master)
 
