@@ -6487,7 +6487,7 @@ Queries
    mapped correctly.
 
 
-.. class:: Load(rel[, query=None[, strategy=PREFETCH_TYPE.WHERE[, materialize=False[, per_parent=None]]]])
+.. class:: Load(rel[, query=None[, strategy=PREFETCH_TYPE.WHERE[, per_parent=None]]])
 
    :param rel: A foreign-key field (``Load(Tweet.user)``) or a back-reference
        (``Load(User.tweets)``) naming the relationship to load.
@@ -6497,13 +6497,9 @@ Queries
    :param strategy: How each relation is filtered against the parents already
        fetched. ``PREFETCH_TYPE.WHERE`` (the default) embeds the parent query as
        an ``IN`` subquery. ``PREFETCH_TYPE.JOIN`` joins the relation against the
-       parent query as a derived table. The two are equivalent except when the
-       parent query is limited (see below).
-   :param materialize: Filter on the parent keys already held in memory, sent as
-       a literal ``IN`` list, rather than embedding the parent query as a
-       subquery. Avoids re-running the parent query, but sends one bind parameter
-       per key, so it is bounded by the backend's parameter limit. Overrides
-       ``strategy`` (see below).
+       parent query as a derived table. ``PREFETCH_TYPE.MATERIALIZE`` filters on
+       the parent keys already held in memory, sent as a literal ``IN`` list with
+       no parent subquery. See the worked examples below.
    :param per_parent: Keep the first ``n`` rows for *each* parent (top-N-per-
        parent), ranked by the relation query's ``order_by`` with a window
        function. Requires SQLite 3.25+, PostgreSQL or MySQL 8. A plain
@@ -6569,13 +6565,14 @@ Queries
    On SQLite and PostgreSQL both forms run, so the default is fine. ``JOIN`` is
    needed when paginating a parent query on MySQL or MariaDB.
 
-   ``materialize=True`` takes a third approach: it skips the parent subquery and
-   reuses the parent keys already in memory, sending them inline. The relation
-   then runs as a standalone query:
+   ``PREFETCH_TYPE.MATERIALIZE`` takes a third approach: it skips the parent
+   subquery and reuses the parent keys already in memory, sending them inline.
+   The relation then runs as a standalone query:
 
    .. code-block:: python
 
-      query = User.select().with_related(Load(User.tweets, materialize=True))
+      query = User.select().with_related(
+          Load(User.tweets, strategy=PREFETCH_TYPE.MATERIALIZE))
 
    .. code-block:: sql
 

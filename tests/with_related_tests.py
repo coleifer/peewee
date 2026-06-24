@@ -112,13 +112,13 @@ class TestWithRelated(ModelTestCase):
     def test_materialize(self):
         uids = [u.id for u in User.select().order_by(User.id)]
 
-        # materialize=True embeds the parents' keys as a literal IN-list rather
-        # than a parent subquery; the result is identical.
+        # MATERIALIZE filters on the parents' in-memory keys (a literal IN-list)
+        # rather than a parent subquery. The loaded result is identical.
         with self.assertQueryCount(2) as qh:
             query = (User
                      .select()
                      .order_by(User.username)
-                     .with_related(Load(User.tweets, materialize=True)))
+                     .with_related(Load(User.tweets, strategy=PREFETCH_TYPE.MATERIALIZE)))
             accum = [(u.username, sorted(t.content for t in u.tweets))
                      for u in query]
         self.assertEqual(accum, [
@@ -137,7 +137,7 @@ class TestWithRelated(ModelTestCase):
             query = (Tweet
                      .select()
                      .order_by(Tweet.content)
-                     .with_related(Load(Tweet.user, materialize=True)))
+                     .with_related(Load(Tweet.user, strategy=PREFETCH_TYPE.MATERIALIZE)))
             accum = [(t.content, t.user.username) for t in query]
         self.assertEqual(accum, [
             ('bark', 'mickey'), ('hiss', 'huey'), ('meow', 'huey'),
@@ -577,7 +577,7 @@ class TestWithRelatedLimit(ModelTestCase):
                      .select()
                      .order_by(User.username)
                      .with_related(
-                         Load(User.tweets, tweets, materialize=True,
+                         Load(User.tweets, tweets, strategy=PREFETCH_TYPE.MATERIALIZE,
                               per_parent=2)))
             got = {u.username: sorted(t.content for t in u.tweets)
                    for u in query}
@@ -640,7 +640,7 @@ class TestWithRelatedLimit(ModelTestCase):
         query = (User
                  .select()
                  .where(User.username == 'huey')
-                 .with_related(Load(User.tweets, tweets, materialize=True,
+                 .with_related(Load(User.tweets, tweets, strategy=PREFETCH_TYPE.MATERIALIZE,
                                     per_parent=2)))
         huey, = list(query)
         self.assertEqual(sorted(t.content for t in huey.tweets), ['h2', 'h3'])
@@ -682,8 +682,8 @@ class TestWithRelatedLimit(ModelTestCase):
 
     @skip_if(NO_WINDOW_FUNCTIONS, 'requires sqlite >= 3.25 for window fns')
     def test_two_level_per_parent(self):
-        # per_parent at both relations: top-2 newest tweets per user, then top-1
-        # favorite per tweet.
+        # per_parent at both relations: top-2 newest tweets per user, then
+        # top-1 favorite per tweet.
         like = Reaction.create(name='like')
         love = Reaction.create(name='love')
         Favorite.create(tweet=self.tweets['h3'], reaction=like)
@@ -854,7 +854,8 @@ class TestWithRelatedNonPKFK(ModelTestCase):
             query = (Package
                      .select()
                      .order_by(Package.barcode)
-                     .with_related(Load(Package.items, materialize=True)))
+                     .with_related(Load(Package.items,
+                                        strategy=PREFETCH_TYPE.MATERIALIZE)))
             got = {p.barcode: sorted(i.name for i in p.items) for p in query}
         self.assertEqual(got, {
             '101': ['a', 'b'], '102': [], '104': ['a', 'b', 'c']})

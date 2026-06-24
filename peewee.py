@@ -359,7 +359,8 @@ ROW = attrdict(
 # Query type to use with prefetch
 PREFETCH_TYPE = attrdict(
     WHERE=1,
-    JOIN=2)
+    JOIN=2,
+    MATERIALIZE=3)
 
 SCOPE_NORMAL = 1
 SCOPE_SOURCE = 2
@@ -9153,6 +9154,10 @@ def prefetch(sq, *subqueries, **kwargs):
     prefetch_type = kwargs.pop('prefetch_type', PREFETCH_TYPE.WHERE)
     if kwargs:
         raise ValueError('Unrecognized arguments: %s' % kwargs)
+    if prefetch_type == PREFETCH_TYPE.MATERIALIZE:
+        raise ValueError('PREFETCH_TYPE.MATERIALIZE is not supported by '
+                         'prefetch(). Use Model.select().with_related() with '
+                         'a Load() node instead.')
 
     fixed_queries = prefetch_add_subquery(sq, subqueries, prefetch_type)
     deps = {}
@@ -9189,7 +9194,7 @@ def _bucket(child_query, field, is_backref, children, parents):
 
 class Load(Node):
     def __init__(self, rel, query=None, strategy=PREFETCH_TYPE.WHERE,
-                 materialize=False, per_parent=None):
+                 per_parent=None):
         self._field, self._is_backref = self._resolve(rel)
         rel_model = (self._field.model if self._is_backref
                      else self._field.rel_model)
@@ -9198,7 +9203,6 @@ class Load(Node):
                              (rel_model, query.model))
         self._query = query
         self._strategy = strategy
-        self._materialize = materialize
         self._per_parent = per_parent
         self._children = ()
 
@@ -9232,9 +9236,9 @@ class Load(Node):
         return keys
 
     def _link_children(self, query, parent_query, parents):
-        # materialize: use the parents' in-memory keys, not a subquery.
+        # MATERIALIZE: use the parents' in-memory keys, not a subquery.
         field = self._field
-        if self._materialize:
+        if self._strategy == PREFETCH_TYPE.MATERIALIZE:
             keys = self._distinct(parents,
                                   lambda p: getattr(p, field.rel_field.name))
             return query.where(field << keys)
@@ -9244,7 +9248,7 @@ class Load(Node):
 
     def _link_parent(self, query, parent_query, parents):
         field = self._field
-        if self._materialize:
+        if self._strategy == PREFETCH_TYPE.MATERIALIZE:
             keys = self._distinct(parents,
                                   lambda p: p.__data__.get(field.name))
             return query.where(field.rel_field << keys)
@@ -9301,7 +9305,7 @@ class Load(Node):
 
 
 def _load_related(parents, parent_query, loads, depth=0):
-    # Walk the tree top-down: one query per relation, bucketed onto its parents.
+    # Walk the tree top-down: one query per relation, bucketed onto parents.
     if not parents:
         return
     for node in loads:

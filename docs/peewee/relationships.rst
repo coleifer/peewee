@@ -1143,8 +1143,7 @@ Load strategy and materialize
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 Each relation has to restrict its children to the rows belonging to the parents
-already fetched. The ``strategy`` argument controls how. It applies to both
-:meth:`~ModelSelect.with_related` and :func:`prefetch`:
+already fetched. The ``strategy`` argument controls how:
 
 * ``PREFETCH_TYPE.WHERE`` (the default) filters with an ``IN`` subquery, of the
   form ``... WHERE user_id IN (SELECT id FROM user ...)``. The parent query is
@@ -1153,22 +1152,24 @@ already fetched. The ``strategy`` argument controls how. It applies to both
   query as a derived table. Use it when the parent is paginated: MySQL and
   MariaDB reject a ``LIMIT`` inside an ``IN`` subquery, but accept it in a
   derived table.
+* ``PREFETCH_TYPE.MATERIALIZE`` reads the parent keys already held in memory and
+  sends them as a literal ``IN`` list. This avoids re-running the parent query
+  at all, at the cost of one bind parameter per key, so it is bounded by the
+  backend's parameter limit.
+
+``WHERE`` and ``JOIN`` embed the parent query, so they work with both
+:meth:`~ModelSelect.with_related` and :func:`prefetch`. ``MATERIALIZE`` reads
+keys from already-fetched parent instances, which only
+:meth:`~ModelSelect.with_related` holds, so :func:`prefetch` rejects it.
 
 .. code-block:: python
 
+   # JOIN: required to paginate the parent query on MySQL or MariaDB.
    tweets = Load(User.tweets, strategy=PREFETCH_TYPE.JOIN)
    query = User.select().paginate(1, 20).with_related(tweets)
 
-The ``materialize`` flag on :class:`Load` takes a third approach. Instead of
-embedding the parent query, it reads the parent keys already held in memory and
-sends them as a literal ``IN`` list. This avoids re-running the parent query at
-all, at the cost of one bind parameter per key, so it is bounded by the
-backend's parameter limit. It overrides ``strategy``:
-
-.. code-block:: python
-
-   # No parent subquery, the user ids are sent inline.
-   tweets = Load(User.tweets, materialize=True)
+   # MATERIALIZE: the user ids are sent inline, with no parent subquery.
+   tweets = Load(User.tweets, strategy=PREFETCH_TYPE.MATERIALIZE)
    query = User.select().with_related(tweets)
 
 Legacy: prefetch
@@ -1216,9 +1217,8 @@ and other modifiers independently:
    )
 
 The filter on ``Tweet`` applies only to the prefetched tweets, it does not
-affect which users are returned. ``prefetch`` accepts the same strategies as
-``with_related`` through its ``prefetch_type`` keyword (see
-:ref:`prefetch-strategy`).
+affect which users are returned. ``prefetch`` accepts the ``WHERE`` and ``JOIN``
+strategies through its ``prefetch_type`` keyword (see :ref:`prefetch-strategy`).
 
 Choosing between joins and eager loading
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^

@@ -18,6 +18,12 @@ from .base import ModelTestCase
 from .base import TestModel
 
 
+# prefetch() supports the strategies that embed the parent as a subquery.
+# MATERIALIZE is excluded - it reads keys from already-fetched parents, which
+# only with_related() holds.
+SUBQUERY_PREFETCH_TYPES = (PREFETCH_TYPE.WHERE, PREFETCH_TYPE.JOIN)
+
+
 # ---------------------------------------------------------------------------
 # Module-local models for core prefetch tests.
 # NOTE: Person, Note, Category, etc. here are intentionally different from
@@ -123,7 +129,7 @@ class TestPrefetch(ModelTestCase):
         return accum
 
     def test_prefetch_simple(self):
-        for pt in PREFETCH_TYPE.values():
+        for pt in SUBQUERY_PREFETCH_TYPES:
             with self.assertQueryCount(3):
                 people = Person.select().order_by(Person.name)
                 query = people.prefetch(Note, NoteItem, prefetch_type=pt)
@@ -141,7 +147,7 @@ class TestPrefetch(ModelTestCase):
             ])
 
     def test_prefetch_filter(self):
-        for pt in PREFETCH_TYPE.values():
+        for pt in SUBQUERY_PREFETCH_TYPES:
             with self.assertQueryCount(3):
                 people = Person.select().order_by(Person.name)
                 notes = (Note
@@ -158,7 +164,7 @@ class TestPrefetch(ModelTestCase):
                 ])
 
     def test_prefetch_reverse(self):
-        for pt in PREFETCH_TYPE.values():
+        for pt in SUBQUERY_PREFETCH_TYPES:
             with self.assertQueryCount(2):
                 people = Person.select().order_by(Person.name)
                 notes = Note.select().order_by(Note.content)
@@ -172,7 +178,7 @@ class TestPrefetch(ModelTestCase):
                     ('woof', 'mickey')])
 
     def test_prefetch_reverse_with_parent_join(self):
-        for pt in PREFETCH_TYPE.values():
+        for pt in SUBQUERY_PREFETCH_TYPES:
             with self.assertQueryCount(2):
                 notes = (Note
                          .select(Note, Person)
@@ -193,7 +199,7 @@ class TestPrefetch(ModelTestCase):
                 ])
 
     def test_prefetch_multi_depth(self):
-        for pt in PREFETCH_TYPE.values():
+        for pt in SUBQUERY_PREFETCH_TYPES:
             people = Person.select().order_by(Person.name)
             notes = Note.select().order_by(Note.content)
             items = NoteItem.select().order_by(NoteItem.content)
@@ -235,7 +241,7 @@ class TestPrefetch(ModelTestCase):
             ])
 
     def test_prefetch_multi_depth_no_join(self):
-        for pt in PREFETCH_TYPE.values():
+        for pt in SUBQUERY_PREFETCH_TYPES:
             LikePerson = Person.alias()
             people = Person.select().order_by(Person.name)
             notes = Note.select().order_by(Note.content)
@@ -267,7 +273,7 @@ class TestPrefetch(ModelTestCase):
             ])
 
     def test_prefetch_with_group_by(self):
-        for pt in PREFETCH_TYPE.values():
+        for pt in SUBQUERY_PREFETCH_TYPES:
             people = (Person
                       .select(Person, fn.COUNT(Note.id).alias('note_count'))
                       .join(Note, JOIN.LEFT_OUTER)
@@ -304,7 +310,7 @@ class TestPrefetch(ModelTestCase):
             for i in range(2):
                 cc('%s-%s' % (p.name, i + 1), p)
 
-        for pt in PREFETCH_TYPE.values():
+        for pt in SUBQUERY_PREFETCH_TYPES:
             Child = Category.alias('child')
             with self.assertQueryCount(2):
                 query = prefetch(Category.select().order_by(Category.id),
@@ -349,7 +355,7 @@ class TestPrefetch(ModelTestCase):
             for child_tree in children:
                 stack.insert(0, (node, child_tree))
 
-        for pt in PREFETCH_TYPE.values():
+        for pt in SUBQUERY_PREFETCH_TYPES:
             C = Category.alias('c')
             G = Category.alias('g')
             GG = Category.alias('gg')
@@ -374,7 +380,7 @@ class TestPrefetch(ModelTestCase):
                     person=Person.get(Person.name == 'zaizee'))
         NoteAlias = Note.alias('na')
 
-        for pt in PREFETCH_TYPE.values():
+        for pt in SUBQUERY_PREFETCH_TYPES:
             with self.assertQueryCount(3):
                 people = Person.select().order_by(Person.name)
                 notes = Note.select().order_by(Note.content)
@@ -417,7 +423,7 @@ class TestPrefetch(ModelTestCase):
             for relationship, value in zip(attr, values):
                 self.assertEqual(relationship.__data__, value)
 
-        for pt in PREFETCH_TYPE.values():
+        for pt in SUBQUERY_PREFETCH_TYPES:
             with self.assertQueryCount(2):
                 people = Person.select().order_by(Person.name)
                 relationships = Relationship.select().order_by(Relationship.id)
@@ -459,7 +465,7 @@ class TestPrefetch(ModelTestCase):
             self.assertEqual([r.to_person.name for r in p.relationships], ns)
 
         # Use prefetch to go Person -> Relationship <- Person (PA).
-        for pt in PREFETCH_TYPE.values():
+        for pt in SUBQUERY_PREFETCH_TYPES:
             with self.assertQueryCount(3):
                 people = (Person
                           .select()
@@ -495,7 +501,7 @@ class TestPrefetch(ModelTestCase):
         Like.create(note=Note.get(Note.content == 'woof'),
                     person=Person.get(Person.name == 'zaizee'))
 
-        for pt in PREFETCH_TYPE.values():
+        for pt in SUBQUERY_PREFETCH_TYPES:
             with self.assertQueryCount(3):
                 people = Person.select().order_by(Person.name)
                 notes = Note.select().order_by(Note.content)
@@ -527,7 +533,7 @@ class TestPrefetch(ModelTestCase):
             for item in items:
                 PackageItem.create(package=barcode, name=item)
 
-        for pt in PREFETCH_TYPE.values():
+        for pt in SUBQUERY_PREFETCH_TYPES:
             packages = Package.select().order_by(Package.barcode)
             items = PackageItem.select().order_by(PackageItem.name)
 
@@ -539,7 +545,7 @@ class TestPrefetch(ModelTestCase):
                                      list(items))
 
     def test_prefetch_mark_dirty_regression(self):
-        for pt in PREFETCH_TYPE.values():
+        for pt in SUBQUERY_PREFETCH_TYPES:
             people = Person.select().order_by(Person.name)
             query = people.prefetch(Note, NoteItem, prefetch_type=pt)
             for person in query:
@@ -752,3 +758,10 @@ class TestPrefetchErrorPaths(ModelTestCase):
         result = prefetch(query)
         # Should return the query itself (not wrapped).
         self.assertIs(result, query)
+
+    def test_prefetch_materialize_unsupported(self):
+        # MATERIALIZE reads keys from already-fetched parents, which the legacy
+        # prefetch() engine never holds. It is a with_related()-only strategy.
+        with self.assertRaisesRegex(ValueError, 'MATERIALIZE'):
+            prefetch(Person.select(), Note,
+                     prefetch_type=PREFETCH_TYPE.MATERIALIZE)

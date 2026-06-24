@@ -159,7 +159,7 @@ class TestManyToMany(ModelTestCase):
 
     def test_prefetch_notes(self):
         self._set_data()
-        for pt in PREFETCH_TYPE.values():
+        for pt in (PREFETCH_TYPE.WHERE, PREFETCH_TYPE.JOIN):
             with self.assertQueryCount(3):
                 gargie, huey, mickey, zaizee = prefetch(
                     User.select().order_by(User.username),
@@ -176,7 +176,7 @@ class TestManyToMany(ModelTestCase):
 
     def test_prefetch_users(self):
         self._set_data()
-        for pt in PREFETCH_TYPE.values():
+        for pt in (PREFETCH_TYPE.WHERE, PREFETCH_TYPE.JOIN):
             with self.assertQueryCount(3):
                 n1, n2, n3, n4, n5 = prefetch(
                     Note.select().order_by(Note.text),
