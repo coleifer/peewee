@@ -343,66 +343,6 @@ instead of dependency injection.
        user = await User.acreate(name=name)
        return {'id': user.id, 'name': user.name}
 
-Synchronous FastAPI
-^^^^^^^^^^^^^^^^^^^
-
-If you are using synchronous endpoints with FastAPI, you can use the
-synchronous Peewee database implementations. Here is the above "Full Example"
-implemented using sync Peewee:
-
-.. code-block:: python
-
-   from fastapi import Depends, FastAPI, HTTPException
-   from contextlib import asynccontextmanager
-   from peewee import *
-   from playhouse.pydantic_utils import to_pydantic
-
-   db = PostgresqlDatabase('peewee_test')
-
-   class User(Model):
-       name = CharField(verbose_name='Full Name', help_text='Display name')
-       email = CharField(unique=True)
-       status = IntegerField(default=1, choices=(
-           (1, 'Active'),
-           (2, 'Inactive'),
-           (3, 'Deleted')))
-
-       class Meta:
-           database = db
-
-   # Generate pydantic schemas suitable for create and responses.
-   UserCreate = to_pydantic(User, model_name='UserCreate')
-   UserResponse = to_pydantic(User, exclude_autofield=False, model_name='UserResponse')
-
-   def get_db():
-       with db.connection_context():
-           yield db
-
-   @asynccontextmanager
-   async def lifespan(app):
-       with db:
-           db.create_tables([User])
-       yield
-
-   app = FastAPI(lifespan=lifespan)
-
-   @app.get('/users', response_model=list[UserResponse])
-   def list_users(database=Depends(get_db)):
-       rows = User.select().dicts()
-       return [UserResponse(**row) for row in rows]
-
-   @app.post('/users', response_model=UserResponse)
-   def create_user(data: UserCreate, database=Depends(get_db)):
-       user = User.create(**data.model_dump())
-       return UserResponse.model_validate(user)
-
-   @app.get('/users/{user_id}', response_model=UserResponse)
-   def get_user(user_id: int, database=Depends(get_db)):
-       try:
-           user = User.get(User.id == user_id)
-       except User.DoesNotExist:
-           raise HTTPException(status_code=404, detail='User not found')
-       return UserResponse.model_validate(user)
 
 .. seealso:: :ref:`pydantic`
 
