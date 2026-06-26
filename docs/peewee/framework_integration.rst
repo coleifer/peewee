@@ -278,7 +278,7 @@ The following is a minimal example demonstrating:
    from playhouse.pwasyncio import *
 
 
-   db = AsyncPostgresqlDatabase('peewee_test', host='10.8.0.1', user='postgres')
+   db = AsyncPostgresqlDatabase('peewee_test')
 
    async def get_db():
        async with db:
@@ -297,41 +297,52 @@ The following is a minimal example demonstrating:
    async def list_users(db=Depends(get_db)):
        return await db.list(User.select().dicts())
 
-Middleware and startup hooks
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Middleware
+^^^^^^^^^^
 
-The following example demonstrates how to use middleware and startup hooks
-instead of dependency injection.
+Connections can also be managed with middleware instead of a dependency. Use a
+plain ASGI middleware - a class implementing ``__call__`` - and **not**
+``@app.middleware('http')``. The latter is Starlette's ``BaseHTTPMiddleware``,
+which runs the endpoint in a *separate task* from the middleware; because
+peewee's async connections are task-local, a connection opened there would not
+be the one the endpoint uses. A plain ASGI middleware shares the request task,
+so the connection it opens is the connection the endpoint sees.
 
-* Ensure connection is opened and closed for each request.
-* Create tables/resources when app server starts.
-* Shut-down connection pool when app server exits.
+Startup and shutdown are handled by ``lifespan`` (create tables when the server
+starts, shut the pool down on exit).
 
 .. code-block:: python
 
+   from contextlib import asynccontextmanager
    from fastapi import FastAPI
    from peewee import *
-   from playhouse.pwasyncio import *
+   from playhouse.pwasyncio import AsyncPostgresqlDatabase
 
 
-   app = FastAPI()
+   db = AsyncPostgresqlDatabase('peewee_test')
 
-   db = AsyncPostgresqlDatabase('peewee_test', host='10.8.0.1', user='postgres')
+   class PeeweeConnectionMiddleware:
+       def __init__(self, app, database):
+           self.app = app
+           self.database = database
 
-   @app.middleware('http')
-   async def database_connection(request, call_next):
-       async with db:  # Obtain connection from connection pool.
-           response = await call_next(request)
-       return response
+       async def __call__(self, scope, receive, send):
+           if scope['type'] != 'http':
+               # Pass lifespan / websocket scopes through untouched.
+               await self.app(scope, receive, send)
+               return
+           async with self.database:  # Acquire a pooled connection for the task.
+               await self.app(scope, receive, send)
 
-   @app.on_event('startup')
-   async def on_startup():
+   @asynccontextmanager
+   async def lifespan(app):
        async with db:
-           await db.acreate_tables([Model1, Model2, Model3, ...])
-
-   @app.on_event('shutdown')
-   async def on_shutdown():
+           await db.acreate_tables([User])
+       yield
        await db.close_pool()
+
+   app = FastAPI(lifespan=lifespan)
+   app.add_middleware(PeeweeConnectionMiddleware, database=db)
 
    # Async queries.
    @app.get('/users')
@@ -339,12 +350,79 @@ instead of dependency injection.
        return await db.list(User.select().dicts())
 
    @app.post('/users')
-   async def create_user(name: str):
-       user = await User.acreate(name=name)
+   async def create_user(name: str, email: str):
+       user = await User.acreate(name=name, email=email)
        return {'id': user.id, 'name': user.name}
 
 
 .. seealso:: :ref:`pydantic`
+
+.. _starlette:
+
+Starlette
+---------
+
+Starlette is the ASGI toolkit FastAPI is built on. It has no dependency-injection
+system, so connections are managed with a plain ASGI middleware (which shares the
+request task) plus a ``lifespan`` handler for startup and shutdown. As with
+FastAPI, do **not** use ``BaseHTTPMiddleware`` for this - it runs the endpoint in
+a separate task, and peewee's async connections are task-local, so the connection
+would not reach the endpoint.
+
+.. code-block:: python
+
+   from contextlib import asynccontextmanager
+   from starlette.applications import Starlette
+   from starlette.middleware import Middleware
+   from starlette.responses import JSONResponse
+   from starlette.routing import Route
+   from peewee import *
+   from playhouse.pwasyncio import AsyncPostgresqlDatabase
+
+
+   db = AsyncPostgresqlDatabase('peewee_test')
+
+   class User(db.Model):
+       name = CharField()
+       email = CharField(unique=True)
+
+   class PeeweeConnectionMiddleware:
+       def __init__(self, app, database):
+           self.app = app
+           self.database = database
+
+       async def __call__(self, scope, receive, send):
+           if scope['type'] != 'http':
+               # Pass lifespan / websocket scopes through untouched.
+               await self.app(scope, receive, send)
+               return
+           async with self.database:  # Acquire a pooled connection for the task.
+               await self.app(scope, receive, send)
+
+   async def list_users(request):
+       return JSONResponse(await db.list(User.select().dicts()))
+
+   async def create_user(request):
+       data = await request.json()
+       user = await User.acreate(**data)
+       return JSONResponse({'id': user.id, 'name': user.name})
+
+   @asynccontextmanager
+   async def lifespan(app):
+       async with db:
+           await db.acreate_tables([User])
+       yield
+       await db.close_pool()
+
+   app = Starlette(
+       lifespan=lifespan,
+       routes=[
+           Route('/users', list_users, methods=['GET']),
+           Route('/users', create_user, methods=['POST']),
+       ],
+       middleware=[Middleware(PeeweeConnectionMiddleware, database=db)])
+
+.. seealso:: :ref:`pwasyncio`
 
 Django
 ------

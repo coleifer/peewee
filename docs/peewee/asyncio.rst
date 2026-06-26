@@ -1078,13 +1078,13 @@ API Reference
 
       See :meth:`Model.delete_by_id`
 
-   .. method:: bulk_create(model_list, batch_size=None)
+   .. method:: abulk_create(model_list, batch_size=None)
       :async:
       :classmethod:
 
       See :meth:`Model.bulk_create`
 
-   .. method:: bulk_update(model_list, fields, batch_size=None)
+   .. method:: abulk_update(model_list, fields, batch_size=None)
       :async:
       :classmethod:
 
