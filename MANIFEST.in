@@ -8,5 +8,6 @@ include tests.py
 include playhouse/*.c
 include playhouse/*.pyx
 include playhouse/README.md
+recursive-include peewee-stubs *.pyi
 recursive-include examples *
 recursive-include docs *

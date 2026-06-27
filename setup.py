@@ -33,6 +33,7 @@ else:
 
 setup(
     name='peewee',
-    packages=['playhouse'],
+    packages=['playhouse', 'peewee-stubs'],
     py_modules=['peewee', 'pwiz'],
+    package_data={'peewee-stubs': ['*.pyi']},
     ext_modules=ext_modules)

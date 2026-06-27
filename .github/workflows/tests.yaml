@@ -95,3 +95,21 @@ jobs:
           PGHOST: 127.0.0.1
           PGPASSWORD: peewee
         run: python runtests.py -A
+
+  stubs:
+    name: stub checks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - run: pip install mypy typing_extensions
+      - name: stubtest
+        env:
+          MYPYPATH: .
+        run: python -m mypy.stubtest peewee --allowlist typecheck/stubtest_allowlist.txt
+      - name: type test cases
+        env:
+          MYPYPATH: .
+        run: mypy --config-file typecheck/mypy.ini typecheck/check_fields.py

@@ -37,7 +37,7 @@ aiomysql = ["aiomysql", "greenlet"]
 asyncpg = ["asyncpg ", "greenlet"]
 
 [tool.setuptools]
-packages = ["playhouse"]
+# packages declared in setup.py: the -stubs dir names have hyphens, rejected here.
 py-modules = ["peewee", "pwiz"]
 exclude-package-data = {"playhouse" = ["*.pyx"]}
 
