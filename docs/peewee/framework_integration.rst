@@ -375,17 +375,11 @@ task-local (so the connection would not be used in the endpoint).
    from contextlib import asynccontextmanager
    from starlette.applications import Starlette
    from starlette.middleware import Middleware
-   from starlette.responses import JSONResponse
-   from starlette.routing import Route
    from peewee import *
    from playhouse.pwasyncio import AsyncPostgresqlDatabase
 
 
    db = AsyncPostgresqlDatabase('peewee_test')
-
-   class User(db.Model):
-       name = CharField()
-       email = CharField(unique=True)
 
    class PeeweeConnectionMiddleware:
        def __init__(self, app, database):
@@ -400,28 +394,61 @@ task-local (so the connection would not be used in the endpoint).
            async with self.database:  # Acquire a pooled connection for the task.
                await self.app(scope, receive, send)
 
-   async def list_users(request):
-       return JSONResponse(await db.list(User.select().dicts()))
-
-   async def create_user(request):
-       data = await request.json()
-       user = await User.acreate(**data)
-       return JSONResponse({'id': user.id, 'name': user.name})
-
    @asynccontextmanager
    async def lifespan(app):
+       # Optionally create tables idempotently at startup.
        async with db:
-           await db.acreate_tables([User])
+           await db.acreate_tables([...])
+
        yield
        await db.close_pool()
 
    app = Starlette(
        lifespan=lifespan,
        routes=[
-           Route('/users', list_users, methods=['GET']),
-           Route('/users', create_user, methods=['POST']),
+           ...  # Your routes, etc.
        ],
        middleware=[Middleware(PeeweeConnectionMiddleware, database=db)])
+
+.. seealso:: :ref:`pwasyncio`
+
+.. _quart:
+
+Quart
+-----
+
+Quart is an async, Flask-compatible framework. Use the same request hooks as
+:ref:`flask`, but ``async`` and with the async connection methods.
+
+.. code-block:: python
+
+   from quart import Quart
+   from peewee import *
+   from playhouse.pwasyncio import AsyncPostgresqlDatabase
+
+
+   db = AsyncPostgresqlDatabase('peewee_test')
+
+   app = Quart(__name__)
+
+   @app.before_serving
+   async def _create_tables():
+       # Optionally create tables idempotently at startup.
+       async with db:
+           await db.acreate_tables([...])
+
+   @app.after_serving
+   async def _close_pool():
+       await db.close_pool()
+
+   @app.before_request
+   async def _db_connect():
+       await db.aconnect()
+
+   @app.teardown_request
+   async def _db_close(exc):
+       if not db.is_closed():
+           await db.aclose()
 
 .. seealso:: :ref:`pwasyncio`
 
