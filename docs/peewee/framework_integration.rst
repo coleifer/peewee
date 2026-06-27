@@ -452,6 +452,91 @@ Quart is an async, Flask-compatible framework. Use the same request hooks as
 
 .. seealso:: :ref:`pwasyncio`
 
+.. _litestar:
+
+Litestar
+--------
+
+Litestar is an ASGI framework. The same plain ASGI middleware used for
+:ref:`starlette` applies (register it with ``DefineMiddleware``):
+
+.. code-block:: python
+
+   from contextlib import asynccontextmanager
+   from litestar import Litestar
+   from litestar.middleware import DefineMiddleware
+   from peewee import *
+   from playhouse.pwasyncio import AsyncPostgresqlDatabase
+
+
+   db = AsyncPostgresqlDatabase('peewee_test')
+
+   class PeeweeConnectionMiddleware:
+       def __init__(self, app, database):
+           self.app = app
+           self.database = database
+
+       async def __call__(self, scope, receive, send):
+           if scope['type'] != 'http':
+               # Pass lifespan / websocket scopes through untouched.
+               await self.app(scope, receive, send)
+               return
+           async with self.database:  # Acquire a pooled connection for the task.
+               await self.app(scope, receive, send)
+
+   @asynccontextmanager
+   async def lifespan(app):
+       # Optionally create tables idempotently at startup.
+       async with db:
+           await db.acreate_tables([...])
+
+       yield
+       await db.close_pool()
+
+   app = Litestar(
+       route_handlers=[...],  # Your handlers, etc.
+       middleware=[DefineMiddleware(PeeweeConnectionMiddleware, database=db)],
+       lifespan=[lifespan])
+
+.. seealso:: :ref:`pwasyncio`
+
+.. _aiohttp:
+
+aiohttp
+-------
+
+aiohttp has its own server (neither WSGI nor ASGI). Use ``@web.middleware`` to
+open the connection per-task.
+
+.. code-block:: python
+
+   from aiohttp import web
+   from peewee import *
+   from playhouse.pwasyncio import AsyncPostgresqlDatabase
+
+
+   db = AsyncPostgresqlDatabase('peewee_test')
+
+   @web.middleware
+   async def db_middleware(request, handler):
+       async with db:  # Acquire a pooled connection for the task.
+           return await handler(request)
+
+   async def on_startup(app):
+       # Optionally create tables idempotently at startup.
+       async with db:
+           await db.acreate_tables([...])
+
+   async def on_cleanup(app):
+       await db.close_pool()
+
+   app = web.Application(middlewares=[db_middleware])
+   app.on_startup.append(on_startup)
+   app.on_cleanup.append(on_cleanup)
+   app.add_routes([...])  # Your routes, etc.
+
+.. seealso:: :ref:`pwasyncio`
+
 Django
 ------
 
