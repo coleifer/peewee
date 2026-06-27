@@ -301,12 +301,14 @@ Middleware
 ^^^^^^^^^^
 
 Connections can also be managed with middleware instead of a dependency. Use a
-plain ASGI middleware - a class implementing ``__call__`` - and **not**
-``@app.middleware('http')``. The latter is Starlette's ``BaseHTTPMiddleware``,
-which runs the endpoint in a *separate task* from the middleware; because
+plain ASGI middleware (a class implementing ``__call__``) and not
+``@app.middleware('http')``. The latter uses Starlette's ``BaseHTTPMiddleware``,
+which runs the endpoint in a *separate task* from the middleware task. Because
 peewee's async connections are task-local, a connection opened there would not
-be the one the endpoint uses. A plain ASGI middleware shares the request task,
-so the connection it opens is the connection the endpoint sees.
+be the one the endpoint uses.
+
+Use a plain ASGI middleware shares the request task, so the db connection
+opened in the middleware is the same one the endpoint sees.
 
 Startup and shutdown are handled by ``lifespan`` (create tables when the server
 starts, shut the pool down on exit).
@@ -362,12 +364,11 @@ starts, shut the pool down on exit).
 Starlette
 ---------
 
-Starlette is the ASGI toolkit FastAPI is built on. It has no dependency-injection
-system, so connections are managed with a plain ASGI middleware (which shares the
-request task) plus a ``lifespan`` handler for startup and shutdown. As with
-FastAPI, do **not** use ``BaseHTTPMiddleware`` for this - it runs the endpoint in
-a separate task, and peewee's async connections are task-local, so the connection
-would not reach the endpoint.
+Starlette is the ASGI toolkit FastAPI is built on. Connections are managed with
+a plain ASGI middleware (which shares the request task) plus a ``lifespan``
+handler for startup and shutdown. Do not use ``BaseHTTPMiddleware`` for this as
+it runs the endpoint in a separate task, and peewee's async connections are
+task-local (so the connection would not be used in the endpoint).
 
 .. code-block:: python
 
