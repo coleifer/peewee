@@ -608,8 +608,7 @@ structure:
 3. Find the hook that runs after every request (success and error both).
 4. Call ``db.close()`` there if the connection is open.
 
-Any WSGI or ASGI middleware that wraps the application callable can also
-manage this:
+Any WSGI middleware that wraps the application callable can also manage this:
 
 .. code-block:: python
 
@@ -628,3 +627,8 @@ manage this:
 
    # Wrap your WSGI app:
    application = PeeweeMiddleware(application, db)
+
+This is a synchronous pattern. An async (:ref:`pwasyncio`) database is driven by
+an ASGI middleware instead - ``db.connect()`` and ``db.close()`` only work inside
+the async bridge. See the ``PeeweeConnectionMiddleware`` in the :ref:`fastapi`
+and :ref:`starlette` sections for examples.
