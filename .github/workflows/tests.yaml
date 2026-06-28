@@ -113,7 +113,7 @@ jobs:
         run: python -m mypy.stubtest peewee --allowlist stubtest_allowlist.txt
       - name: mypy
         working-directory: typecheck
-        run: mypy check_fields.py
+        run: mypy check_stub.py
       - name: pyright
         working-directory: typecheck
-        run: pyright check_fields.py
+        run: pyright check_stub.py
