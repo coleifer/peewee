@@ -104,12 +104,16 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.13"
-      - run: pip install mypy typing_extensions
+      - run: NO_SQLITE=1 pip install . mypy pyright ty typing_extensions
+      # Fail loudly if a packaging change ever drops the stub from the wheel.
+      - name: verify stub is packaged
+        run: python -c "import os,sysconfig;p=os.path.join(sysconfig.get_path('purelib'),'peewee-stubs','__init__.pyi');assert os.path.exists(p),p;print('stub installed at',p)"
       - name: stubtest
-        env:
-          MYPYPATH: .
-        run: python -m mypy.stubtest peewee --allowlist typecheck/stubtest_allowlist.txt
-      - name: type test cases
-        env:
-          MYPYPATH: .
-        run: mypy --config-file typecheck/mypy.ini typecheck/check_fields.py
+        working-directory: typecheck
+        run: python -m mypy.stubtest peewee --allowlist stubtest_allowlist.txt
+      - name: mypy
+        working-directory: typecheck
+        run: mypy check_fields.py
+      - name: pyright
+        working-directory: typecheck
+        run: pyright check_fields.py
