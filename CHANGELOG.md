@@ -7,6 +7,10 @@ https://github.com/coleifer/peewee/releases
 
 ## master
 
+[View commits](https://github.com/coleifer/peewee/compare/4.1.1...master)
+
+## 4.1.1
+
 * New declarative API for pre-fetching related instances (`Load()`). See
   [documentation](https://docs.peewee-orm.com/en/latest/peewee/relationships.html#avoiding-n-1-with-eager-loading).
   This replaces `prefetch()`, is more flexible and also supports options for
@@ -18,7 +22,7 @@ https://github.com/coleifer/peewee/releases
   recursively with `model_to_dict()`, #3055.
 * Add vendored typeshed stub with improvements.
 
-[View commits](https://github.com/coleifer/peewee/compare/4.1.0...master)
+[View commits](https://github.com/coleifer/peewee/compare/4.1.0...4.1.1)
 
 ## 4.1.0
 
