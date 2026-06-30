@@ -7,6 +7,9 @@ https://github.com/coleifer/peewee/releases
 
 ## master
 
+* Ensure quotes escaped in SQLite introspection methods, thanks @greymoth-jp
+  for reporting and the initial patch.
+
 [View commits](https://github.com/coleifer/peewee/compare/4.1.1...master)
 
 ## 4.1.1
