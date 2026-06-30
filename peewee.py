@@ -163,6 +163,9 @@ def reraise(tp, value, tb=None):
         raise value.with_traceback(tb)
     raise value
 
+def qesc(s):
+    return s.replace('"', '""')
+
 # Other compat issues.
 if sys.version_info < (3, 12):
     utcfromtimestamp = datetime.datetime.utcfromtimestamp
@@ -4238,19 +4241,19 @@ class SqliteDatabase(Database):
             return self.execute_sql('ROLLBACK')
 
     def get_tables(self, schema=None):
-        schema = (schema or 'main').replace('"', '""')
+        schema = qesc(schema or 'main')
         cursor = self.execute_sql('SELECT name FROM "%s".sqlite_master WHERE '
                                   'type=? ORDER BY name' % schema, ('table',))
         return [row for row, in cursor.fetchall()]
 
     def get_views(self, schema=None):
-        schema = (schema or 'main').replace('"', '""')
+        schema = qesc(schema or 'main')
         sql = ('SELECT name, sql FROM "%s".sqlite_master WHERE type=? '
                'ORDER BY name') % schema
         return [ViewMetadata(*row) for row in self.execute_sql(sql, ('view',))]
 
     def get_indexes(self, table, schema=None):
-        schema = (schema or 'main').replace('"', '""')
+        schema = qesc(schema or 'main')
         query = ('SELECT name, sql FROM "%s".sqlite_master '
                  'WHERE tbl_name = ? AND type = ? ORDER BY name') % schema
         cursor = self.execute_sql(query, (table, 'index'))
@@ -4259,7 +4262,7 @@ class SqliteDatabase(Database):
         # Determine which indexes have a unique constraint.
         unique_indexes = set()
         cursor = self.execute_sql('PRAGMA "%s".index_list("%s")' %
-                                  (schema, table))
+                                  (schema, qesc(table)))
         for row in cursor.fetchall():
             name = row[1]
             is_unique = int(row[2]) == 1
@@ -4270,7 +4273,7 @@ class SqliteDatabase(Database):
         index_columns = {}
         for index_name in sorted(index_to_sql):
             cursor = self.execute_sql('PRAGMA "%s".index_info("%s")' %
-                                      (schema, index_name))
+                                      (schema, qesc(index_name)))
             index_columns[index_name] = [row[2] for row in cursor.fetchall()]
 
         return [
@@ -4283,22 +4286,22 @@ class SqliteDatabase(Database):
             for name in sorted(index_to_sql)]
 
     def get_columns(self, table, schema=None):
-        schema = (schema or 'main').replace('"', '""')
+        schema = qesc(schema or 'main')
         cursor = self.execute_sql('PRAGMA "%s".table_info("%s")' %
-                                  (schema, table))
+                                  (schema, qesc(table)))
         return [ColumnMetadata(r[1], r[2], not r[3], bool(r[5]), table, r[4])
                 for r in cursor.fetchall()]
 
     def get_primary_keys(self, table, schema=None):
-        schema = (schema or 'main').replace('"', '""')
+        schema = qesc(schema or 'main')
         cursor = self.execute_sql('PRAGMA "%s".table_info("%s")' %
-                                  (schema, table))
+                                  (schema, qesc(table)))
         return [row[1] for row in filter(lambda r: r[-1], cursor.fetchall())]
 
     def get_foreign_keys(self, table, schema=None):
-        schema = (schema or 'main').replace('"', '""')
+        schema = qesc(schema or 'main')
         cursor = self.execute_sql('PRAGMA "%s".foreign_key_list("%s")' %
-                                  (schema, table))
+                                  (schema, qesc(table)))
         return [ForeignKeyMetadata(row[3], row[2], row[4], table)
                 for row in cursor.fetchall()]
 

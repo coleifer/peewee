@@ -44,6 +44,7 @@ from .base import get_sqlite_db
 from .base import new_connection
 from .base import requires_models
 from .base import requires_postgresql
+from .base import requires_sqlite
 from .base import slow_test
 from .base_models import Category
 from .base_models import Person
@@ -418,6 +419,12 @@ class ViewTest(TestModel):
         table_name = 'viewtest'
 
 
+class QT(TestModel):
+    data = TextField(column_name='da"ta', index=True)
+    class Meta:
+        table_name = 'q"""t'
+
+
 class TestIntrospection(ModelTestCase):
     requires = [Category, User, UniqueModel, IndexedModel, Person]
 
@@ -575,6 +582,20 @@ class TestIntrospection(ModelTestCase):
                 for fk in foreign_keys]
         self.assertEqual(data, [
             ('parent_id', 'category', 'name', 'category')])
+
+    @requires_sqlite
+    @requires_models(QT)
+    def test_quoted_name(self):
+        cols = self.database.get_columns('q"""t')
+        self.assertEqual([c.name for c in cols], ['id', 'da"ta'])
+        self.assertEqual([c.table for c in cols], ['q"""t', 'q"""t'])
+
+        self.assertEqual(self.database.get_primary_keys('q"""t'), ['id'])
+        self.assertEqual(self.database.get_foreign_keys('q"""t'), [])
+
+        idx, = self.database.get_indexes('q"""t')
+        self.assertEqual(idx.name, 'q"""t_data')
+        self.assertEqual(idx.columns, ['da"ta'])
 
 
 # ===========================================================================
