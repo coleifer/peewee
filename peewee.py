@@ -4259,7 +4259,7 @@ class SqliteDatabase(Database):
         # Determine which indexes have a unique constraint.
         unique_indexes = set()
         cursor = self.execute_sql('PRAGMA "%s".index_list("%s")' %
-                                  (schema, table))
+                                  (schema, table.replace('"', '""')))
         for row in cursor.fetchall():
             name = row[1]
             is_unique = int(row[2]) == 1
@@ -4285,20 +4285,20 @@ class SqliteDatabase(Database):
     def get_columns(self, table, schema=None):
         schema = (schema or 'main').replace('"', '""')
         cursor = self.execute_sql('PRAGMA "%s".table_info("%s")' %
-                                  (schema, table))
+                                  (schema, table.replace('"', '""')))
         return [ColumnMetadata(r[1], r[2], not r[3], bool(r[5]), table, r[4])
                 for r in cursor.fetchall()]
 
     def get_primary_keys(self, table, schema=None):
         schema = (schema or 'main').replace('"', '""')
         cursor = self.execute_sql('PRAGMA "%s".table_info("%s")' %
-                                  (schema, table))
+                                  (schema, table.replace('"', '""')))
         return [row[1] for row in filter(lambda r: r[-1], cursor.fetchall())]
 
     def get_foreign_keys(self, table, schema=None):
         schema = (schema or 'main').replace('"', '""')
         cursor = self.execute_sql('PRAGMA "%s".foreign_key_list("%s")' %
-                                  (schema, table))
+                                  (schema, table.replace('"', '""')))
         return [ForeignKeyMetadata(row[3], row[2], row[4], table)
                 for row in cursor.fetchall()]
 

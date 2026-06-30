@@ -44,6 +44,7 @@ from .base import get_sqlite_db
 from .base import new_connection
 from .base import requires_models
 from .base import requires_postgresql
+from .base import requires_sqlite
 from .base import slow_test
 from .base_models import Category
 from .base_models import Person
@@ -575,6 +576,30 @@ class TestIntrospection(ModelTestCase):
                 for fk in foreign_keys]
         self.assertEqual(data, [
             ('parent_id', 'category', 'name', 'category')])
+
+    @requires_sqlite
+    def test_introspect_quoted_table_name(self):
+        # The table name is interpolated into the PRAGMA introspection
+        # statements, so an embedded double-quote must be escaped just like the
+        # schema name is in these same methods (and the table name is in the
+        # MySQL introspection). Without escaping the quote breaks out of the
+        # identifier and the PRAGMA fails with a syntax error.
+        self.database.execute_sql(
+            'CREATE TABLE "tbl""q" ("id" INTEGER NOT NULL PRIMARY KEY, '
+            '"v" TEXT)')
+        self.database.execute_sql('CREATE INDEX "tbl_q_v" ON "tbl""q" ("v")')
+        try:
+            columns = self.database.get_columns('tbl"q')
+            self.assertEqual([c.name for c in columns], ['id', 'v'])
+
+            self.assertEqual(self.database.get_primary_keys('tbl"q'), ['id'])
+
+            indexes = self.database.get_indexes('tbl"q')
+            self.assertEqual([i.name for i in indexes], ['tbl_q_v'])
+
+            self.assertEqual(self.database.get_foreign_keys('tbl"q'), [])
+        finally:
+            self.database.execute_sql('DROP TABLE "tbl""q"')
 
 
 # ===========================================================================
