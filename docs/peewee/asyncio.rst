@@ -959,7 +959,7 @@ API Reference
       The declarative :meth:`~ModelSelect.with_related` form should be
       preferred for all new code, and needs no separate async method - it
       resolves when the query is materialized, so run it over the bridge with
-      :meth:`~AsyncDatabaseMixin.list` or :meth:`~ModelSelect.aexecute`:
+      :meth:`~AsyncDatabaseMixin.list` or :meth:`~BaseQuery.aexecute`:
 
       .. code-block:: python
 
