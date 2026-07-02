@@ -8151,13 +8151,20 @@ class BaseModelSelect(_ModelQueryHelper):
             self.execute()
         return iter(self._cursor_wrapper)
 
+    def _model_rows(self):
+        # Hydration and bucketing require model-instance rows.
+        if self._row_type in (None, ROW.MODEL):
+            return True
+        return (self._row_type == ROW.CONSTRUCTOR and
+                isinstance(self._constructor, type) and
+                issubclass(self._constructor, Model))
+
     def _execute(self, database):
         first_run = self._cursor_wrapper is None
         cursor_wrapper = super(BaseModelSelect, self)._execute(database)
-        if first_run and self._load_tree:
-            if self._row_type not in (ROW.TUPLE, ROW.DICT, ROW.NAMED_TUPLE):
-                _load_related(list(cursor_wrapper), self, self._load_tree,
-                              database=database)
+        if first_run and self._load_tree and self._model_rows():
+            _load_related(list(cursor_wrapper), self, self._load_tree,
+                          database=database)
         return cursor_wrapper
 
     def iterator(self, database=None):
@@ -8171,7 +8178,9 @@ class BaseModelSelect(_ModelQueryHelper):
 
     @Node.copy
     def with_related(self, *loads):
-        self._load_tree = loads
+        # Accept fk/backref references, wrap w/Load().
+        self._load_tree = tuple(l if isinstance(l, Load) else Load(l)
+                                for l in loads)
 
     def get(self, database=None):
         clone = self.paginate(1, 1)
@@ -8241,14 +8250,19 @@ class ModelSelect(BaseModelSelect, Select):
 
     def clone(self):
         clone = super(ModelSelect, self).clone()
-        clone._joins = dict(clone._joins)
+        # Copy the join lists too, or joining on a clone that departs from an
+        # already-joined model appends into the original's join list.
+        clone._joins = {src: list(joins) for src, joins
+                        in clone._joins.items()}
         return clone
 
     def select(self, *fields_or_models):
         if fields_or_models or not self._is_default:
-            self._is_default = False
             fields = _normalize_model_select(fields_or_models)
-            return super(ModelSelect, self).select(*fields)
+            # Flag the clone, not the receiver, as having a projection.
+            clone = super(ModelSelect, self).select(*fields)
+            clone._is_default = False
+            return clone
         return self
 
     def select_extend(self, *columns):
@@ -9078,15 +9092,24 @@ class PrefetchQuery(collections.namedtuple('_PrefetchQuery', (
                 id_map[key].append(instance)
 
 
+def _parent_keys(parent_query, cols):
+    sub = parent_query.select(*cols)
+    # MySQL rejects LIMIT directly inside IN so move it into a derived table.
+    if parent_query._limit is not None or parent_query._offset is not None:
+        sub = sub.alias('_limited')
+        return Select((sub,), [getattr(sub.c, c.column_name) for c in cols])
+    return sub
+
+
 def _relate_children(query, parent_query, pairs, strategy):
     """Restrict a one-to-many child query to rows whose foreign key matches a
     parent in parent_query. pairs are (child_fk, parent_key) field tuples."""
     if strategy == PREFETCH_TYPE.JOIN:
-        keys = {pk for _, pk in pairs}
-        on = reduce(operator.or_, [getattr(parent_query.c, pk.column_name) == fk
+        sub = _parent_keys(parent_query, {pk for _, pk in pairs})
+        on = reduce(operator.or_, [getattr(sub.c, pk.column_name) == fk
                                    for fk, pk in pairs])
-        return query.distinct().join(parent_query.select(*keys), on=on)
-    expr = reduce(operator.or_, [fk << parent_query.select(pk)
+        return query.distinct().join(sub, on=on)
+    expr = reduce(operator.or_, [fk << _parent_keys(parent_query, (pk,))
                                  for fk, pk in pairs])
     return query.where(expr)
 
@@ -9095,11 +9118,11 @@ def _relate_parent(query, parent_query, pairs, strategy):
     """Restrict a many-to-one query to the rows referenced by parent_query.
     pairs are (child_ref, parent_fk) field tuples."""
     if strategy == PREFETCH_TYPE.JOIN:
-        fks = [fk for _, fk in pairs]
-        on = reduce(operator.or_, [ref == getattr(parent_query.c, fk.column_name)
+        sub = _parent_keys(parent_query, [fk for _, fk in pairs])
+        on = reduce(operator.or_, [ref == getattr(sub.c, fk.column_name)
                                    for ref, fk in pairs])
-        return query.distinct().join(parent_query.select(*fks), on=on)
-    expr = reduce(operator.or_, [ref << parent_query.select(fk)
+        return query.distinct().join(sub, on=on)
+    expr = reduce(operator.or_, [ref << _parent_keys(parent_query, (fk,))
                                  for ref, fk in pairs])
     return query.where(expr)
 
@@ -9162,6 +9185,8 @@ def prefetch(sq, *subqueries, **kwargs):
         raise ValueError('PREFETCH_TYPE.MATERIALIZE is not supported by '
                          'prefetch(). Use Model.select().with_related() with '
                          'a Load() node instead.')
+    elif prefetch_type not in PREFETCH_TYPE.values():
+        raise ValueError('prefetch_type must be a PREFETCH_TYPE value.')
 
     fixed_queries = prefetch_add_subquery(sq, subqueries, prefetch_type)
     deps = {}
@@ -9187,13 +9212,30 @@ def prefetch(sq, *subqueries, **kwargs):
     return list(pq.query)
 
 
-def _bucket(child_query, field, is_backref, children, parents):
-    pq = PrefetchQuery(child_query, fields=[field], is_backref=is_backref)
-    id_map = {}
-    for child in children:
-        pq.store_instance(child, id_map)
-    for parent in parents:
-        pq.populate_instance(parent, id_map)
+def _bucket(field, is_backref, children, parents):
+    # Single-relation bucketing on the raw fk/key values writes __rel__ and
+    # backref lists directly, skipping descriptor and dirty tracking.
+    name, rel_name = field.name, field.rel_field.name
+    if is_backref:
+        # children are the referenced rows, parents carry the fk.
+        id_map = {}
+        for child in children:
+            id_map[child.__data__[rel_name]] = child
+        for parent in parents:
+            key = parent.__data__[name]
+            if key in id_map:
+                parent.__rel__[name] = id_map[key]
+    else:
+        # children carry the fk, parents get backref lists.
+        buckets = {}
+        for child in children:
+            buckets.setdefault(child.__data__[name], []).append(child)
+        backref = field.backref
+        for parent in parents:
+            rel = buckets.get(parent.__data__[rel_name], [])
+            for inst in rel:
+                inst.__rel__[name] = parent
+            setattr(parent, backref, rel)
 
 
 class Load(Node):
@@ -9205,6 +9247,11 @@ class Load(Node):
         if query is not None and query.model is not rel_model:
             raise ValueError('Load() query must select from %s, got %s.' %
                              (rel_model, query.model))
+        if query is not None and not query._model_rows():
+            raise ValueError('Load() query must return model instances, not '
+                             'dicts/tuples/namedtuples.')
+        if strategy not in PREFETCH_TYPE.values():
+            raise ValueError('Load() strategy must be a PREFETCH_TYPE value.')
         self._query = query
         self._strategy = strategy
         self._per_parent = per_parent
@@ -9223,7 +9270,8 @@ class Load(Node):
 
     @Node.copy
     def then(self, *children):
-        self._children = self._children + tuple(children)
+        self._children = self._children + tuple(
+            c if isinstance(c, Load) else Load(c) for c in children)
 
     def _base(self, rel_model):
         # Modifiers (where/order/limit/joins) ride on the supplied query.
@@ -9275,7 +9323,7 @@ class Load(Node):
                                             parent_query, parents)
         # The whole tree runs on the database the parent ran against.
         children = list(child_query.execute(database))
-        _bucket(child_query, field, not self._is_backref, children, parents)
+        _bucket(field, not self._is_backref, children, parents)
         return children, child_query
 
     @staticmethod
@@ -9284,14 +9332,16 @@ class Load(Node):
         # join cannot rank one child twice.
         o = term if isinstance(term, Ordering) else Asc(term)
         node = o.node.unwrap()
-        if isinstance(node, SQL) or node is field or \
-           any(node is pk for pk in pks):
+        if isinstance(node, SQL):
+            raise ValueError('per_parent cannot rank by a SQL() literal, '
+                             'order by a field or expression instead.')
+        if node is field or any(node is pk for pk in pks):
             return term
         agg = fn.MAX(node) if 'DESC' in o.direction.upper() else fn.MIN(node)
         return Ordering(agg, o.direction, o.collation, o.nulls)
 
     def _windowed(self, parent_query, parents, depth=0):
-        # Top-N children per parent via a ranking CTE; the outer joins back for
+        # Top-N children per parent via a ranking CTE. The outer joins back for
         # full rows and orders by rank, so the relation's joins stay inside.
         field = self._field
         rel_model = field.model
@@ -9313,7 +9363,13 @@ class Load(Node):
                .cte('_load_ranked_%d' % depth))
         on = reduce(operator.and_,
                     [pk == getattr(cte.c, pk.column_name) for pk in pks])
-        return (rel_model.select().join(cte, on=on)
+        # A custom projection keeps the relation's joins so selected
+        # instances ride along; a row-multiplying projection multiplies.
+        if base._is_default:
+            outer = rel_model.select()
+        else:
+            outer = base.limit(None).offset(None).switch(rel_model)
+        return (outer.join(cte, on=on)
                 .where(cte.c._rn <= self._per_parent)
                 .with_cte(cte)
                 .order_by(cte.c._rn))

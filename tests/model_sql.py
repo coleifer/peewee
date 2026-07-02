@@ -1869,6 +1869,34 @@ class TestQueryCloning(BaseTestCase):
             content = TextField()
         self._do_test_clone(User, Tweet)
 
+    def test_clone_join_metadata(self):
+        class User(TestModel):
+            username = TextField()
+        class Tweet(TestModel):
+            user = ForeignKeyField(User, backref='tweets')
+        class Favorite(TestModel):
+            user = ForeignKeyField(User, backref='favorites')
+            tweet = ForeignKeyField(Tweet, backref='favorites')
+
+        # Joining on a clone, departing from an already-joined model, must
+        # not append into the original query's join metadata.
+        query = Favorite.select().join(User)
+        clone = query.where(Favorite.id > 0).switch(Favorite).join(Tweet)
+        self.assertEqual([d for d, _, _, _ in query._joins[Favorite]],
+                         [User])
+        self.assertEqual([d for d, _, _, _ in clone._joins[Favorite]],
+                         [User, Tweet])
+
+    def test_select_preserves_is_default(self):
+        class User(TestModel):
+            username = TextField()
+
+        # Re-projecting flags the clone, not the receiver.
+        query = User.select()
+        clone = query.select(User.id)
+        self.assertTrue(query._is_default)
+        self.assertFalse(clone._is_default)
+
     def _do_test_clone(self, User, Tweet):
         query = Tweet.select(Tweet.id)
         base_sql = 'SELECT "t1"."id" FROM "tweet" AS "t1"'

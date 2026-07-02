@@ -160,6 +160,90 @@ class TestWithRelated(ModelTestCase):
                 ('bark', 'mickey'), ('hiss', 'huey'), ('meow', 'huey'),
                 ('purr', 'huey'), ('woof', 'mickey')])
 
+    def test_forward_fk_relation_filters_parent(self):
+        # The relation query excludes some referenced rows; those parents
+        # simply are not attached (no error, lazy fallback preserved).
+        others = User.select().where(User.username != 'huey')
+        for pt in PREFETCH_TYPE.values():
+            query = (Tweet
+                     .select()
+                     .order_by(Tweet.content)
+                     .with_related(Load(Tweet.user, others, strategy=pt)))
+            got = [(t.content, t.__rel__.get('user')) for t in query]
+            self.assertEqual(
+                [(c, u.username if u else None) for c, u in got],
+                [('bark', 'mickey'), ('hiss', None), ('meow', None),
+                 ('purr', None), ('woof', 'mickey')])
+
+    def test_duplicate_parent_rows_hydrated(self):
+        # A join-fanned parent query yields the same user twice as distinct
+        # instances; each gets its own backref list.
+        for pt in PREFETCH_TYPE.values():
+            query = (User
+                     .select(User)
+                     .join(Tweet)
+                     .where(Tweet.content << ['meow', 'purr'])
+                     .with_related(Load(User.tweets, strategy=pt)))
+            rows = list(query)
+            self.assertEqual([u.username for u in rows], ['huey', 'huey'])
+            for u in rows:
+                self.assertEqual(sorted(t.content for t in u.tweets),
+                                 ['hiss', 'meow', 'purr'])
+
+    def test_limited_parent_subquery(self):
+        # MySQL rejects LIMIT directly inside an IN subquery; a limited
+        # parent hides behind a derived table (harmless elsewhere).
+        for pt in PREFETCH_TYPE.values():
+            with self.assertQueryCount(2):
+                query = (User
+                         .select()
+                         .order_by(User.username)
+                         .paginate(1, 2)
+                         .with_related(Load(User.tweets, strategy=pt)))
+                accum = [(u.username, sorted(t.content for t in u.tweets))
+                         for u in query]
+            self.assertEqual(accum, [
+                ('huey', ['hiss', 'meow', 'purr']),
+                ('mickey', ['bark', 'woof'])])
+            if pt == PREFETCH_TYPE.WHERE:
+                sql = self.history[-1].msg[0]
+                idx = sql.index('FROM (SELECT')
+                self.assertNotIn('LIMIT', sql[:idx])
+                self.assertIn('LIMIT', sql[idx:])
+
+    def test_get_with_load_tree(self):
+        # get() paginates the parent; the load survives the implicit LIMIT.
+        for pt in PREFETCH_TYPE.values():
+            user = (User
+                    .select()
+                    .order_by(User.username)
+                    .with_related(Load(User.tweets, strategy=pt))
+                    .get())
+            self.assertEqual(user.username, 'huey')
+            self.assertEqual(sorted(t.content for t in user.tweets),
+                             ['hiss', 'meow', 'purr'])
+
+    def test_limited_parent_offset_only(self):
+        # OFFSET without LIMIT also hides behind the derived table.
+        for pt in PREFETCH_TYPE.values():
+            query = (User
+                     .select()
+                     .order_by(User.username)
+                     .offset(1)
+                     .with_related(Load(User.tweets, strategy=pt)))
+            got = [(u.username, len(u.tweets)) for u in query]
+            self.assertEqual(got, [('mickey', 2), ('zaizee', 0)])
+
+    def test_limited_parent_forward_fk(self):
+        for pt in PREFETCH_TYPE.values():
+            query = (Tweet
+                     .select()
+                     .order_by(Tweet.content)
+                     .limit(2)
+                     .with_related(Load(Tweet.user, strategy=pt)))
+            got = [(t.content, t.user.username) for t in query]
+            self.assertEqual(got, [('bark', 'mickey'), ('hiss', 'huey')])
+
     def test_chain(self):
         for pt in PREFETCH_TYPE.values():
             chain = Load(User.tweets, strategy=pt).then(
@@ -250,21 +334,79 @@ class TestWithRelated(ModelTestCase):
         self.assertEqual(huey_tweets(query[0]), ['hiss', 'meow', 'purr'])
 
     def test_explicit_database_propagates(self):
-        # The load tree runs on the database the parent ran against, so an
-        # explicit execute(db) cannot stitch children from another database.
+        # The whole load tree runs on the database the parent ran against,
+        # so an explicit execute(db) cannot stitch rows from another db.
         alt = get_in_memory_db()
-        with alt.bind_ctx([User, Tweet]):
-            alt.create_tables([User, Tweet])
+        with alt.bind_ctx([User, Reaction, Tweet, Favorite]):
+            alt.create_tables([User, Reaction, Tweet, Favorite])
             u = User.create(username='alt-user')
-            Tweet.create(user=u, content='alt-tweet')
+            r = Reaction.create(name='alt-like')
+            t1 = Tweet.create(user=u, content='alt-t1', timestamp=1)
+            t2 = Tweet.create(user=u, content='alt-t2', timestamp=2)
+            Favorite.create(tweet=t2, reaction=r)
 
-        query = User.select().with_related(Load(User.tweets))
-        rows = list(query.execute(alt))
-        got = [(u.username, [t.content for t in u.tweets]) for u in rows]
-        self.assertEqual(got, [('alt-user', ['alt-tweet'])])
+        for pt in PREFETCH_TYPE.values():
+            spec = Load(User.tweets, strategy=pt).then(
+                Load(Tweet.favorites, strategy=pt))
+            rows = list(User.select().with_related(spec).execute(alt))
+            got = [(u.username,
+                    [(t.content, len(t.favorites))
+                     for t in sorted(u.tweets, key=lambda t: t.content)])
+                   for u in rows]
+            self.assertEqual(got, [
+                ('alt-user', [('alt-t1', 0), ('alt-t2', 1)])])
+
+        if not NO_WINDOW_FUNCTIONS:
+            newest = Tweet.select().order_by(Tweet.timestamp.desc())
+            rows = list(User.select().with_related(
+                Load(User.tweets, newest, per_parent=1)).execute(alt))
+            got = [(u.username, [t.content for t in u.tweets]) for u in rows]
+            self.assertEqual(got, [('alt-user', ['alt-t2'])])
 
     def test_load_requires_relationship(self):
         self.assertRaises(ValueError, Load, User.username)
+
+    def test_bare_relation_arguments(self):
+        # Bare fk/backref references auto-wrap in Load(); junk fails at call
+        # time instead of deep inside execution.
+        with self.assertQueryCount(2):
+            query = (User
+                     .select()
+                     .order_by(User.username)
+                     .with_related(User.tweets))
+            accum = [(u.username, len(u.tweets)) for u in query]
+        self.assertEqual(accum, [('huey', 3), ('mickey', 2), ('zaizee', 0)])
+
+        with self.assertQueryCount(3):
+            query = (User
+                     .select()
+                     .where(User.username == 'huey')
+                     .with_related(Load(User.tweets).then(Tweet.favorites)))
+            huey, = list(query)
+            favs = {t.content: len(t.favorites) for t in huey.tweets}
+        self.assertEqual(favs, {'meow': 2, 'purr': 0, 'hiss': 0})
+
+        with self.assertQueryCount(2):
+            query = (Tweet
+                     .select()
+                     .order_by(Tweet.content)
+                     .with_related(Tweet.user))
+            accum = [(t.content, t.user.username) for t in query]
+        self.assertEqual(accum, [
+            ('bark', 'mickey'), ('hiss', 'huey'), ('meow', 'huey'),
+            ('purr', 'huey'), ('woof', 'mickey')])
+
+        self.assertRaises(ValueError,
+                          User.select().with_related, User.username)
+        self.assertRaises(ValueError, Load(User.tweets).then, Tweet.content)
+
+    def test_load_validates_kwargs(self):
+        # Invalid strategy/per_parent values fail at construction instead of
+        # silently running WHERE semantics or disabling the limit.
+        self.assertRaises(ValueError, Load, User.tweets, strategy='join')
+        Load(User.tweets, strategy=PREFETCH_TYPE.JOIN, per_parent=2)
+        self.assertRaises(ValueError, prefetch, User.select(), Tweet.select(),
+                          prefetch_type='join')
 
     def test_load_accepts_model_alias(self):
         # A model alias on the Load reference is accepted and normalized to the
@@ -466,6 +608,22 @@ class TestWithRelated(ModelTestCase):
             ('huey', ['hiss', 'meow', 'purr']),
             ('mickey', ['bark', 'woof']),
             ('zaizee', [])])
+
+    def test_non_model_constructor_skips_load(self):
+        # objects(non-model) rows have no __data__ to bucket on; skip the
+        # load like the other non-model row types instead of crashing.
+        query = (User.select().order_by(User.username)
+                 .with_related(Load(User.tweets)).objects(dict))
+        self.assertEqual([row['username'] for row in query],
+                         ['huey', 'mickey', 'zaizee'])
+
+    def test_load_rejects_non_model_relation_query(self):
+        self.assertRaises(ValueError, Load, User.tweets,
+                          Tweet.select().dicts())
+        self.assertRaises(ValueError, Load, User.tweets,
+                          Tweet.select().tuples())
+        self.assertRaises(ValueError, Load, User.tweets,
+                          Tweet.select().objects(dict))
 
 
 class TestWithRelatedMultiFK(ModelTestCase):
@@ -747,10 +905,9 @@ class TestWithRelatedLimit(ModelTestCase):
         huey, = list(query)
         self.assertEqual([t.content for t in huey.tweets], ['h0', 'h1'])
 
-    @skip_if(NO_WINDOW_FUNCTIONS, 'requires sqlite >= 3.25 for window fns')
-    def test_per_parent_order_by_sql_literal(self):
-        # A SQL() literal order term must stay out of the GROUP BY, where its
-        # direction keyword is a syntax error.
+    def test_per_parent_order_by_sql_literal_rejected(self):
+        # A literal cannot be grouped or aggregated into the ranking, so its
+        # ordering would be backend-defined; reject it.
         query = (User
                  .select()
                  .where(User.username == 'huey')
@@ -758,6 +915,58 @@ class TestWithRelatedLimit(ModelTestCase):
                      User.tweets,
                      Tweet.select().order_by(SQL('timestamp DESC')),
                      per_parent=2)))
+        self.assertRaises(ValueError, list, query)
+
+    @skip_if(NO_WINDOW_FUNCTIONS, 'requires sqlite >= 3.25 for window fns')
+    def test_per_parent_alias_parent(self):
+        # Aliased parent + windowed relation: the ranking CTE links against
+        # the alias.
+        UA = User.alias('ua')
+        tweets = Tweet.select().order_by(Tweet.timestamp.desc())
+        for pt in PREFETCH_TYPE.values():
+            query = (UA
+                     .select()
+                     .order_by(UA.username)
+                     .with_related(Load(User.tweets, tweets, strategy=pt,
+                                        per_parent=2)))
+            got = {u.username: [t.content for t in u.tweets] for u in query}
+            self.assertEqual(got, {
+                'huey': ['h3', 'h2'], 'mickey': ['m1', 'm0']})
+
+    @skip_if(NO_WINDOW_FUNCTIONS, 'requires sqlite >= 3.25 for window fns')
+    def test_per_parent_order_multi_term(self):
+        # Mixed order terms: the fanned column aggregates, the same-table
+        # tiebreaker rides along.
+        self._fan_out_h3()
+        tweets = (Tweet.select().join(Favorite)
+                  .order_by(Favorite.id.desc(), Tweet.timestamp))
+        query = (User
+                 .select()
+                 .where(User.username == 'huey')
+                 .with_related(Load(User.tweets, tweets, per_parent=2)))
+        huey, = list(query)
+        self.assertEqual([t.content for t in huey.tweets], ['h3', 'h2'])
+
+    @skip_if(NO_WINDOW_FUNCTIONS, 'requires sqlite >= 3.25 for window fns')
+    def test_per_parent_order_by_expression(self):
+        # An expression order term aggregates like a plain column.
+        tweets = Tweet.select().order_by(Tweet.timestamp * -1)
+        query = (User
+                 .select()
+                 .where(User.username == 'huey')
+                 .with_related(Load(User.tweets, tweets, per_parent=2)))
+        huey, = list(query)
+        self.assertEqual([t.content for t in huey.tweets], ['h3', 'h2'])
+
+    @skip_if(NO_WINDOW_FUNCTIONS, 'requires sqlite >= 3.25 for window fns')
+    def test_per_parent_order_nulls_preserved(self):
+        # nulls= ordering survives the MIN/MAX aggregation rewrite.
+        tweets = Tweet.select().order_by(
+            fn.NULLIF(Tweet.content, 'h3').desc(nulls='first'))
+        query = (User
+                 .select()
+                 .where(User.username == 'huey')
+                 .with_related(Load(User.tweets, tweets, per_parent=2)))
         huey, = list(query)
         self.assertEqual([t.content for t in huey.tweets], ['h3', 'h2'])
 
@@ -883,6 +1092,49 @@ class TestWithRelatedLimit(ModelTestCase):
         self.assertIn('_load_ranked_0', sql)
         self.assertIn('_load_ranked_1', sql)
         self.assertNotIn('"_load_ranked"', sql)  # bare name would collide
+
+    @skip_if(NO_WINDOW_FUNCTIONS, 'requires sqlite >= 3.25 for window fns')
+    def test_per_parent_custom_projection(self):
+        # Same-model computed columns ride the outer re-select: the windowed
+        # path returns what the plain path returns.
+        rel = (Tweet
+               .select(Tweet, fn.LENGTH(Tweet.content).alias('clen'))
+               .order_by(Tweet.timestamp.desc()))
+        plain = (User
+                 .select()
+                 .where(User.username == 'huey')
+                 .with_related(Load(User.tweets, rel)))
+        huey, = list(plain)
+        expected = [(t.content, t.clen) for t in huey.tweets][:2]
+        for pt in PREFETCH_TYPE.values():
+            query = (User
+                     .select()
+                     .where(User.username == 'huey')
+                     .with_related(Load(User.tweets, rel, strategy=pt,
+                                        per_parent=2)))
+            huey, = list(query)
+            self.assertEqual([(t.content, t.clen) for t in huey.tweets],
+                             expected)
+
+    @skip_if(NO_WINDOW_FUNCTIONS, 'requires sqlite >= 3.25 for window fns')
+    def test_per_parent_projection_to_one_join(self):
+        # A to-one join cannot multiply rows, so the outer keeps the join
+        # and the selected instances hydrate for free.
+        self._fan_out_h3()
+        favorites = (Favorite
+                     .select(Favorite, Reaction)
+                     .join(Reaction)
+                     .order_by(Favorite.id.desc()))
+        for pt in PREFETCH_TYPE.values():
+            with self.assertQueryCount(2):
+                query = (Tweet
+                         .select()
+                         .where(Tweet.content == 'h3')
+                         .with_related(Load(Tweet.favorites, favorites,
+                                            strategy=pt, per_parent=1)))
+                t, = list(query)
+                names = [f.reaction.name for f in t.favorites]
+            self.assertEqual(names, ['like'])
 
     def test_per_parent_grouped_relation_rejected(self):
         # per_parent over a grouped/aggregate relation is unsupported (the
