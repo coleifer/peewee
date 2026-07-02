@@ -8156,7 +8156,8 @@ class BaseModelSelect(_ModelQueryHelper):
         cursor_wrapper = super(BaseModelSelect, self)._execute(database)
         if first_run and self._load_tree:
             if self._row_type not in (ROW.TUPLE, ROW.DICT, ROW.NAMED_TUPLE):
-                _load_related(list(cursor_wrapper), self, self._load_tree)
+                _load_related(list(cursor_wrapper), self, self._load_tree,
+                              database=database)
         return cursor_wrapper
 
     def iterator(self, database=None):
@@ -9245,8 +9246,10 @@ class Load(Node):
             keys = self._distinct(parents,
                                   lambda p: getattr(p, field.rel_field.name))
             return query.where(field << keys)
-        return _relate_children(query, parent_query,
-                                [(field, field.rel_field)],
+        # Resolve the key on parent_query.model so aliased parents render
+        # against their alias.
+        pk = getattr(parent_query.model, field.rel_field.name)
+        return _relate_children(query, parent_query, [(field, pk)],
                                 self._strategy)
 
     def _link_parent(self, query, parent_query, parents):
@@ -9255,28 +9258,37 @@ class Load(Node):
             keys = self._distinct(parents,
                                   lambda p: p.__data__.get(field.name))
             return query.where(field.rel_field << keys)
-        return _relate_parent(query, parent_query, [(field.rel_field, field)],
+        fk = getattr(parent_query.model, field.name)
+        return _relate_parent(query, parent_query, [(field.rel_field, fk)],
                               self._strategy)
 
-    def _run(self, parents, parent_query, depth=0):
-        # _bucket's is_backref is the storage side, opposite self._is_backref.
+    def _run(self, parents, parent_query, depth=0, database=None):
         field = self._field
         if self._is_backref:
-            rel_model = field.model
             if self._per_parent is not None:
                 child_query = self._windowed(parent_query, parents, depth)
             else:
-                child_query = self._link_children(self._base(rel_model),
+                child_query = self._link_children(self._base(field.model),
                                                   parent_query, parents)
-            children = list(child_query)
-            _bucket(child_query, field, False, children, parents)
         else:
-            rel_model = field.rel_model
-            child_query = self._link_parent(self._base(rel_model),
+            child_query = self._link_parent(self._base(field.rel_model),
                                             parent_query, parents)
-            children = list(child_query)
-            _bucket(child_query, field, True, children, parents)
+        # The whole tree runs on the database the parent ran against.
+        children = list(child_query.execute(database))
+        _bucket(child_query, field, not self._is_backref, children, parents)
         return children, child_query
+
+    @staticmethod
+    def _rank_term(term, pks, field):
+        # Aggregate non-grouped order terms (MIN asc / MAX desc) so a to-many
+        # join cannot rank one child twice.
+        o = term if isinstance(term, Ordering) else Asc(term)
+        node = o.node.unwrap()
+        if isinstance(node, SQL) or node is field or \
+           any(node is pk for pk in pks):
+            return term
+        agg = fn.MAX(node) if 'DESC' in o.direction.upper() else fn.MIN(node)
+        return Ordering(agg, o.direction, o.collation, o.nulls)
 
     def _windowed(self, parent_query, parents, depth=0):
         # Top-N children per parent via a ranking CTE; the outer joins back for
@@ -9288,14 +9300,14 @@ class Load(Node):
             raise ValueError('per_parent is not supported with a grouped or '
                              'aggregate relation query.')
         pks = rel_model._meta.get_primary_keys()
-        order = list(base._order_by or pks)
+        order = [self._rank_term(o, pks, field)
+                 for o in (base._order_by or pks)]
         rn = (fn.ROW_NUMBER()
               .over(partition_by=[field], order_by=order)
               .alias('_rn'))
         # Collapse row-multiplying joins to one row per child before ranking.
-        group = [field] + [n.unwrap() for n in order]
         inner = (base.select(*pks, rn).order_by().limit(None).offset(None)
-                 .group_by(*pks, *group))
+                 .group_by(*pks, field))
         # Unique name per depth so a nested windowed parent doesn't collide.
         cte = (self._link_children(inner, parent_query, parents)
                .cte('_load_ranked_%d' % depth))
@@ -9307,11 +9319,13 @@ class Load(Node):
                 .order_by(cte.c._rn))
 
 
-def _load_related(parents, parent_query, loads, depth=0):
+def _load_related(parents, parent_query, loads, depth=0, database=None):
     # Walk the tree top-down: one query per relation, bucketed onto parents.
     if not parents:
         return
     for node in loads:
-        children, child_query = node._run(parents, parent_query, depth)
+        children, child_query = node._run(parents, parent_query, depth,
+                                          database)
         if node._children:
-            _load_related(children, child_query, node._children, depth + 1)
+            _load_related(children, child_query, node._children, depth + 1,
+                          database)

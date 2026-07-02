@@ -629,6 +629,9 @@ class FetchManyCursor(object):
 
 class ServerSideQuery(Node):
     def __init__(self, query, array_size=None):
+        if getattr(query, '_load_tree', None):
+            raise ValueError('with_related() is incompatible with '
+                             'ServerSide().')
         self.query = query
         self.array_size = array_size
         self._cursor_wrapper = None

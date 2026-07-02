@@ -3,6 +3,7 @@ from peewee import sqlite3
 
 from .base import ModelTestCase
 from .base import TestModel
+from .base import get_in_memory_db
 from .base import IS_MYSQL
 from .base import IS_SQLITE
 from .base import skip_if
@@ -248,6 +249,20 @@ class TestWithRelated(ModelTestCase):
         self.assertEqual(len(query), 3)
         self.assertEqual(huey_tweets(query[0]), ['hiss', 'meow', 'purr'])
 
+    def test_explicit_database_propagates(self):
+        # The load tree runs on the database the parent ran against, so an
+        # explicit execute(db) cannot stitch children from another database.
+        alt = get_in_memory_db()
+        with alt.bind_ctx([User, Tweet]):
+            alt.create_tables([User, Tweet])
+            u = User.create(username='alt-user')
+            Tweet.create(user=u, content='alt-tweet')
+
+        query = User.select().with_related(Load(User.tweets))
+        rows = list(query.execute(alt))
+        got = [(u.username, [t.content for t in u.tweets]) for u in rows]
+        self.assertEqual(got, [('alt-user', ['alt-tweet'])])
+
     def test_load_requires_relationship(self):
         self.assertRaises(ValueError, Load, User.username)
 
@@ -280,6 +295,34 @@ class TestWithRelated(ModelTestCase):
             ('huey', ['hiss', 'meow', 'purr']),
             ('mickey', ['bark', 'woof']),
             ('zaizee', [])])
+
+    def test_alias_parent_query(self):
+        # Parent query selects from an alias: the parent-side key must render
+        # against the alias, not the base table.
+        for pt in PREFETCH_TYPE.values():
+            UA = User.alias('ua')
+            with self.assertQueryCount(2):
+                query = (UA
+                         .select()
+                         .order_by(UA.username)
+                         .with_related(Load(User.tweets, strategy=pt)))
+                backref = [(u.username, sorted(t.content for t in u.tweets))
+                           for u in query]
+            self.assertEqual(backref, [
+                ('huey', ['hiss', 'meow', 'purr']),
+                ('mickey', ['bark', 'woof']),
+                ('zaizee', [])])
+
+            TA = Tweet.alias('ta')
+            with self.assertQueryCount(2):
+                query = (TA
+                         .select()
+                         .order_by(TA.content)
+                         .with_related(Load(Tweet.user, strategy=pt)))
+                forward = [(t.content, t.user.username) for t in query]
+            self.assertEqual(forward, [
+                ('bark', 'mickey'), ('hiss', 'huey'), ('meow', 'huey'),
+                ('purr', 'huey'), ('woof', 'mickey')])
 
     def test_then_multiple_children(self):
         # A single .then() with two children forks the load: each child row
@@ -503,6 +546,22 @@ class TestWithRelatedSelfRef(ModelTestCase):
                 'a': {'a1': ['a1x'], 'a2': []},
                 'b': {}})
 
+    def test_self_ref_alias_parent(self):
+        # Self-referential alias parent: without alias-aware linking the
+        # parent subquery correlates against the child query itself and
+        # every backref silently comes back empty.
+        FA = Folder.alias()
+        for pt in PREFETCH_TYPE.values():
+            with self.assertQueryCount(2):
+                query = (FA
+                         .select()
+                         .where(FA.parent.is_null())
+                         .order_by(FA.name)
+                         .with_related(Load(Folder.children, strategy=pt)))
+                got = {f.name: sorted(c.name for c in f.children)
+                       for f in query}
+            self.assertEqual(got, {'a': ['a1', 'a2'], 'b': []})
+
     def test_forward_fk_null_parent(self):
         # Forward-fk load where some rows have a null fk: the null-parent rows
         # simply get no parent attached, and nothing errors.
@@ -663,6 +722,44 @@ class TestWithRelatedLimit(ModelTestCase):
                 huey, = list(query)
                 favs = {t.content: len(t.favorites) for t in huey.tweets}
             self.assertEqual(favs, {'h2': 1, 'h3': 2})
+
+    @skip_if(NO_WINDOW_FUNCTIONS, 'requires sqlite >= 3.25 for window fns')
+    def test_per_parent_order_by_fanned_column(self):
+        # Ranking BY the fanning column: h3's two favorites hold the highest
+        # ids, so without aggregation h3 ranks twice and evicts h2.
+        self._fan_out_h3()
+        tweets = Tweet.select().join(Favorite).order_by(Favorite.id.desc())
+        for pt in PREFETCH_TYPE.values():
+            query = (User
+                     .select()
+                     .where(User.username == 'huey')
+                     .with_related(Load(User.tweets, tweets, strategy=pt,
+                                        per_parent=2)))
+            huey, = list(query)
+            self.assertEqual([t.content for t in huey.tweets], ['h3', 'h2'])
+
+        # Ascending ranks by the oldest matching row instead.
+        tweets = Tweet.select().join(Favorite).order_by(Favorite.id)
+        query = (User
+                 .select()
+                 .where(User.username == 'huey')
+                 .with_related(Load(User.tweets, tweets, per_parent=2)))
+        huey, = list(query)
+        self.assertEqual([t.content for t in huey.tweets], ['h0', 'h1'])
+
+    @skip_if(NO_WINDOW_FUNCTIONS, 'requires sqlite >= 3.25 for window fns')
+    def test_per_parent_order_by_sql_literal(self):
+        # A SQL() literal order term must stay out of the GROUP BY, where its
+        # direction keyword is a syntax error.
+        query = (User
+                 .select()
+                 .where(User.username == 'huey')
+                 .with_related(Load(
+                     User.tweets,
+                     Tweet.select().order_by(SQL('timestamp DESC')),
+                     per_parent=2)))
+        huey, = list(query)
+        self.assertEqual([t.content for t in huey.tweets], ['h3', 'h2'])
 
     @skip_if(NO_WINDOW_FUNCTIONS, 'requires sqlite >= 3.25 for window fns')
     def test_per_parent_limit_join_no_fanout(self):
