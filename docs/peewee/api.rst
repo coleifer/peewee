@@ -2764,8 +2764,9 @@ Model
 
    .. method:: with_related(*loads)
 
-      :param loads: One or more :class:`Load` nodes describing the
-          relationships to eagerly load.
+      :param loads: One or more :class:`Load` nodes, or foreign-key /
+          back-reference fields (wrapped in a :class:`Load` implicitly),
+          describing the relationships to eagerly load.
       :return: the query. Related rows are loaded when it is executed.
 
       Eagerly load related objects described by a tree of :class:`Load` nodes.
@@ -2797,6 +2798,7 @@ Model
 
       The related rows are loaded once, when the query is first executed -
       whether by iteration, :py:meth:`get`, ``first()``, indexing or ``len()``.
+      The relation queries run against the same database as the parent query.
 
       See :class:`Load` for the per-relation options, and :ref:`relationships` for
       a fuller discussion of joins and prefetching.
@@ -6492,7 +6494,7 @@ Queries
    :param rel: A foreign-key field (``Load(Tweet.user)``) or a back-reference
        (``Load(User.tweets)``) naming the relationship to load.
    :param query: An ordinary query used to fetch this relation's rows. It must
-       select from the related model. Defaults to a bare select over the related
+       select from the related model. Defaults to a select over the related
        model.
    :param strategy: How each relation is filtered against the parents already
        fetched. ``PREFETCH_TYPE.WHERE`` (the default) embeds the parent query as
@@ -6511,7 +6513,8 @@ Queries
 
    .. method:: then(*loads)
 
-      Nest one or more child :class:`Load` nodes beneath this relation.
+      Nest one or more child :class:`Load` nodes (or foreign-key / back-reference
+      fields) beneath this relation.
 
    .. code-block:: python
 
@@ -6536,8 +6539,8 @@ Queries
       # bob bob-1 0
 
    ``strategy`` controls how a relation restricts itself to the parents already
-   fetched. Under the default ``WHERE`` strategy the parent query is embedded as
-   a subquery, so a ``LIMIT`` on the parent lands *inside* the ``IN`` clause:
+   fetched. The default ``WHERE`` strategy embeds the parent query in an ``IN``
+   subquery (a limited or paginated parent is wrapped as a derived table):
 
    .. code-block:: python
 
@@ -6546,24 +6549,23 @@ Queries
    .. code-block:: sql
 
       SELECT * FROM "tweet"
-      WHERE "user_id" IN (SELECT "id" FROM "user" LIMIT 20 OFFSET 0)
+      WHERE "user_id" IN (
+          SELECT "_limited"."id"
+          FROM (SELECT "id" FROM "user" LIMIT 20 OFFSET 0) AS "_limited")
 
-   MySQL and MariaDB reject ``LIMIT`` inside an ``IN`` subquery. ``JOIN`` puts
-   the parent query in the FROM-clause as a derived table, which they accept:
+   ``JOIN`` instead joins the relation against the parent query as a derived
+   table. It returns the same rows and only the query shape differs:
 
    .. code-block:: python
 
       tweets = Load(User.tweets, strategy=PREFETCH_TYPE.JOIN)
-      query = User.select().paginate(1, 20).with_related(tweets)
+      query = User.select().with_related(tweets)
 
    .. code-block:: sql
 
       SELECT DISTINCT "tweet".* FROM "tweet"
-      INNER JOIN (SELECT "id" FROM "user" LIMIT 20 OFFSET 0) AS "u"
+      INNER JOIN (SELECT "id" FROM "user") AS "u"
           ON ("u"."id" = "tweet"."user_id")
-
-   On SQLite and PostgreSQL both forms run, so the default is fine. ``JOIN`` is
-   needed when paginating a parent query on MySQL or MariaDB.
 
    ``PREFETCH_TYPE.MATERIALIZE`` takes a third approach: it skips the parent
    subquery and reuses the parent keys already in memory, sending them inline.
@@ -6600,6 +6602,12 @@ Queries
       # alice ['alice-3', 'alice-2']
       # bob ['bob-2', 'bob-1']
       # carol []
+
+   The relation query may filter, order and join as usual. Its ``order_by``
+   defines the ranking. Ordering by a column reached through a to-many join
+   ranks each child by its lowest (ascending) or highest (descending) matching
+   value. A custom query is preserved (joins included), so instances
+   selected from a to-one join hydrate without extra queries.
 
 
 Query-builder Internals

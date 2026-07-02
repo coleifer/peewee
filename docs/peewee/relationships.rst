@@ -1149,9 +1149,8 @@ already fetched. The ``strategy`` argument controls how:
   form ``... WHERE user_id IN (SELECT id FROM user ...)``. The parent query is
   embedded and re-evaluated by the database.
 * ``PREFETCH_TYPE.JOIN`` filters by joining the child table against the parent
-  query as a derived table. Use it when the parent is paginated: MySQL and
-  MariaDB reject a ``LIMIT`` inside an ``IN`` subquery, but accept it in a
-  derived table.
+  query as a derived table. It returns the same rows as ``WHERE``, only the
+  query shape differs.
 * ``PREFETCH_TYPE.MATERIALIZE`` reads the parent keys already held in memory and
   sends them as a literal ``IN`` list. This avoids re-running the parent query
   at all, at the cost of one bind parameter per key, so it is bounded by the
@@ -1164,9 +1163,9 @@ keys from already-fetched parent instances, which only
 
 .. code-block:: python
 
-   # JOIN: required to paginate the parent query on MySQL or MariaDB.
+   # JOIN: filter via a join against the parent query.
    tweets = Load(User.tweets, strategy=PREFETCH_TYPE.JOIN)
-   query = User.select().paginate(1, 20).with_related(tweets)
+   query = User.select().with_related(tweets)
 
    # MATERIALIZE: the user ids are sent inline, with no parent subquery.
    tweets = Load(User.tweets, strategy=PREFETCH_TYPE.MATERIALIZE)
