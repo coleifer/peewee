@@ -183,6 +183,7 @@ def make_index_name(table_name, columns):
 class SchemaMigrator(object):
     explicit_create_foreign_key = False
     explicit_delete_foreign_key = False
+    transaction_ddl = True
 
     def __init__(self, database):
         self.database = database
@@ -349,6 +350,14 @@ class SchemaMigrator(object):
 
         return operations
 
+    def get_foreign_key_constraint(self, table, column_name):
+        for fk in self.database.get_foreign_keys(table):
+            if fk.column == column_name and fk.name:
+                return fk.name
+        raise AttributeError(
+            'Unable to find foreign key constraint for '
+            '"%s" on table "%s".' % (column_name, table))
+
     @operation
     def drop_foreign_key_constraint(self, table, column_name):
         raise NotImplementedError
@@ -502,9 +511,19 @@ class PostgresqlMigrator(SchemaMigrator):
 
         return operations
 
+    @operation
+    def drop_foreign_key_constraint(self, table, column_name):
+        fk_constraint = self.get_foreign_key_constraint(table, column_name)
+        return (self
+                ._alter_table(self.make_context(), table)
+                .literal(' DROP CONSTRAINT ')
+                .sql(Entity(fk_constraint)))
+
+
 
 class CockroachDBMigrator(PostgresqlMigrator):
     explicit_create_foreign_key = True
+    transactional_ddl = False
 
     def add_inline_fk_sql(self, ctx, field):
         pass
@@ -556,6 +575,7 @@ class MySQLColumn(namedtuple('_Column', ('name', 'definition', 'null', 'pk',
 class MySQLMigrator(SchemaMigrator):
     explicit_create_foreign_key = True
     explicit_delete_foreign_key = True
+    transactional_ddl = False
 
     def _alter_column(self, ctx, table, column):
         return (self
@@ -581,23 +601,6 @@ class MySQLMigrator(SchemaMigrator):
             if column.name == column_name:
                 return column
         return False
-
-    def get_foreign_key_constraint(self, table, column_name):
-        cursor = self.database.execute_sql(
-            ('SELECT constraint_name '
-             'FROM information_schema.key_column_usage WHERE '
-             'table_schema = DATABASE() AND '
-             'table_name = %s AND '
-             'column_name = %s AND '
-             'referenced_table_name IS NOT NULL AND '
-             'referenced_column_name IS NOT NULL;'),
-            (table, column_name))
-        result = cursor.fetchone()
-        if not result:
-            raise AttributeError(
-                'Unable to find foreign key constraint for '
-                '"%s" on table "%s".' % (column_name, table))
-        return result[0]
 
     @operation
     def drop_foreign_key_constraint(self, table, column_name):
