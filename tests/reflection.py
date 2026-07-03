@@ -398,7 +398,7 @@ class TestReflection(BaseReflectionTestCase):
                 ('f1', ('f1 = BigIntegerField(index=True)',
                         'f1 = IntegerField(index=True)')),
                 ('f2', ('f2 = BlobField()', 'f2 = TextField()')),
-                ('f4', 'f4 = CharField()'),
+                ('f4', 'f4 = CharField(max_length=50)'),
                 ('f5', 'f5 = DateField()'),
                 ('f6', 'f6 = DateTimeField()'),
                 ('f7', 'f7 = DecimalField()'),
@@ -435,7 +435,7 @@ class TestReflection(BaseReflectionTestCase):
                 ('_name', '_name = CharField()'),
             )),
             ('category', (
-                ('name', 'name = CharField()'),
+                ('name', 'name = CharField(max_length=10)'),
                 ('parent_id', 'parent = ForeignKeyField('
                  "column_name='parent_id', field='id', model='self', "
                  'null=True)'),
