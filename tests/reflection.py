@@ -8,6 +8,9 @@ from playhouse.reflection import *
 
 from .base import IS_CRDB
 from .base import IS_CYSQLITE
+from .base import IS_MYSQL
+from .base import IS_POSTGRESQL
+from .base import IS_SQLITE
 from .base import IS_SQLITE_OLD
 from .base import ModelTestCase
 from .base import TestModel
@@ -657,3 +660,108 @@ class TestInteractiveHelpers(ModelTestCase):
             ('key', 'TEXT'),
             ('timestamp', 'DATETIME'),
             ('metadata', 'TEXT')])
+
+
+class Facets(TestModel):
+    char50 = CharField(max_length=50)
+    dec = DecimalField(max_digits=10, decimal_places=2)
+    truthy = BooleanField()
+    blob = BlobField()
+    dbl = DoubleField()
+    small = SmallIntegerField()
+    timestamp = DateTimeField(index=True)
+
+
+class FacetParent(TestModel):
+    name = CharField(default='')
+
+class FacetChild(TestModel):
+    parent = ForeignKeyField(FacetParent, backref='kids',
+                             on_delete='CASCADE', on_update='CASCADE')
+
+
+@skip_if(IS_CRDB)
+class TestReflectionFacets(BaseReflectionTestCase):
+    requires = [Facets, FacetParent, FacetChild]
+
+    def test_field_type_parameters(self):
+        models = self.introspector.generate_models()
+        F = models[Facets._meta.table_name]
+        self.assertEqual(F.char50.max_length, 50)
+        self.assertEqual(F.dec.max_digits, 10)
+        self.assertEqual(F.dec.decimal_places, 2)
+
+    def test_field_classes(self):
+        models = self.introspector.generate_models()
+        F = models[Facets._meta.table_name]
+        if IS_SQLITE:
+            # Truthy/small are stored with INTEGER affinity, dbl as REAL.
+            expected = (IntegerField, BlobField, FloatField, IntegerField)
+        else:
+            expected = (BooleanField, BlobField, DoubleField,
+                        SmallIntegerField)
+        for name, field_class in zip(('truthy', 'blob', 'dbl', 'small'),
+                                     expected):
+            self.assertTrue(type(getattr(F, name)) is field_class,
+                            '%s: %s' % (name, type(getattr(F, name))))
+
+    def test_reserved_word_index(self):
+        models = self.introspector.generate_models()
+        F = models[Facets._meta.table_name]
+        self.assertTrue(F.timestamp.index)
+        self.assertTrue(type(F.timestamp) is DateTimeField)
+
+    def test_fk_actions(self):
+        models = self.introspector.generate_models()
+        C = models[FacetChild._meta.table_name]
+        fk = C._meta.columns['parent_id']
+        self.assertEqual(fk.on_delete, 'CASCADE')
+        self.assertEqual(fk.on_update, 'CASCADE')
+
+    def test_int_pk_not_promoted(self):
+        self.database.execute_sql('DROP TABLE IF EXISTS facet_intpk')
+        self.database.execute_sql(
+            'CREATE TABLE facet_intpk ('
+            'id INTEGER NOT NULL PRIMARY KEY, data TEXT)')
+        try:
+            models = self.introspector.generate_models(
+                table_names=['facet_intpk'])
+            pk = models['facet_intpk']._meta.primary_key
+            if IS_SQLITE:
+                # An INTEGER pk is a rowid alias, i.e. auto-incrementing.
+                self.assertTrue(isinstance(pk, AutoField))
+            else:
+                self.assertFalse(isinstance(pk, AutoField))
+                self.assertTrue(pk.primary_key)
+        finally:
+            self.database.execute_sql('DROP TABLE facet_intpk')
+
+    @skip_if(IS_MYSQL, 'mysql does not support partial indexes')
+    def test_partial_index_skipped(self):
+        table = Facets._meta.table_name
+        self.database.execute_sql(
+            'CREATE INDEX facets_partial ON %s (char50) WHERE dec > 0'
+            % table)
+        try:
+            metadata = self.introspector.introspect(table_names=[table])
+            column = metadata.columns[table]['char50']
+            self.assertFalse(column.index)
+            unhandled = metadata.unhandled_indexes(table)
+            self.assertEqual([idx.name for idx in unhandled],
+                             ['facets_partial'])
+        finally:
+            self.database.execute_sql('DROP INDEX facets_partial')
+
+    @skip_if(IS_MYSQL, 'mysql functional indexes are not reflected')
+    def test_expression_index_skipped(self):
+        table = Facets._meta.table_name
+        self.database.execute_sql(
+            'CREATE INDEX facets_expr ON %s (LOWER(char50))' % table)
+        try:
+            metadata = self.introspector.introspect(table_names=[table])
+            self.assertFalse(metadata.columns[table]['char50'].index)
+            unhandled = metadata.unhandled_indexes(table)
+            self.assertEqual([idx.name for idx in unhandled],
+                             ['facets_expr'])
+        finally:
+            self.database.execute_sql('DROP INDEX facets_expr')

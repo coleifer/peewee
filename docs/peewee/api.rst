@@ -541,6 +541,11 @@ Database
 
       Return a list of :class:`ColumnMetadata` tuples.
 
+      The ``full_type`` attribute carries the parameterized column type,
+      e.g. ``character varying(50)``, where ``data_type`` retains the
+      backend's bare type name. ``identity`` indicates auto-incrementing
+      columns (serial / identity / auto_increment / sqlite rowid alias).
+
       Example:
 
       .. code-block:: python
@@ -552,14 +557,18 @@ Database
               null=False,
               primary_key=True,
               table='entry',
-              default=None),
+              default=None,
+              full_type='INTEGER',
+              identity=True),
           ColumnMetadata(
               name='title',
               data_type='TEXT',
               null=False,
               primary_key=False,
               table='entry',
-              default=None),
+              default=None,
+              full_type='TEXT',
+              identity=False),
           ...]
 
    .. method:: get_primary_keys(table, schema=None)
@@ -584,6 +593,11 @@ Database
       Return a list of :class:`ForeignKeyMetadata` tuples for keys present
       on the table.
 
+      The ``name`` attribute is the constraint name (``None`` on SQLite). The
+      ``on_delete`` and ``on_update`` are the referential actions, with
+      undeclared actions reported as the backend's no-op default (``NO ACTION``
+      or ``RESTRICT``).
+
       Example:
 
       .. code-block:: python
@@ -593,7 +607,10 @@ Database
               column='entry_id',
               dest_table='entry',
               dest_column='id',
-              table='entrytag'),
+              table='entrytag',
+              name='entrytag_entry_id_fkey',
+              on_delete='NO ACTION',
+              on_update='NO ACTION'),
           ...]
 
    .. method:: get_views(schema=None)

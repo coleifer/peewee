@@ -664,7 +664,8 @@ class TestSchemaMigration(ModelTestCase):
         _, tag = self.database.get_columns('tag')
         # name, type, null?, primary-key?, table, default.
         data_type = 'TEXT' if IS_SQLITE else 'text'
-        self.assertEqual(tag, ('tag', data_type, False, False, 'tag', None))
+        self.assertEqual(tag, ('tag', data_type, False, False, 'tag', None,
+                               data_type, False))
 
         # Convert date to datetime.
         field = DateTimeField()
@@ -681,12 +682,13 @@ class TestSchemaMigration(ModelTestCase):
         migrate(self.migrator.alter_column_type('tag', 'tag', field, cast))
         _, tag = self.database.get_columns('tag')
         if IS_SQLITE:
-            data_type = 'INTEGER'
+            d1 = d2 = 'INTEGER'
         elif IS_MYSQL:
-            data_type = 'int'
+            d1, d2 = 'int', 'int(11)'
         else:
-            data_type = 'integer'
-        self.assertEqual(tag, ('tag', data_type, False, False, 'tag', None))
+            d1 = d2 = 'integer'
+        self.assertEqual(tag, ('tag', d1, False, False, 'tag', None,
+                               d2, False))
 
     @requires_sqlite
     def test_valid_column_required(self):
