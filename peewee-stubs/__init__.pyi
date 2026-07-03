@@ -753,12 +753,17 @@ class ColumnMetadata(NamedTuple):
     primary_key: Incomplete
     table: Incomplete
     default: Incomplete
+    full_type: str | None = ...
+    identity: bool = ...
 
 class ForeignKeyMetadata(NamedTuple):
     column: Incomplete
     dest_table: Incomplete
     dest_column: Incomplete
     table: Incomplete
+    name: str | None = ...
+    on_delete: str | None = ...
+    on_update: str | None = ...
 
 class ViewMetadata(NamedTuple):
     name: Incomplete

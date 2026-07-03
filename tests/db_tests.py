@@ -33,6 +33,7 @@ from .base import BaseTestCase
 from .base import DatabaseTestCase
 from .base import IS_CRDB
 from .base import IS_MYSQL
+from .base import IS_MYSQL_ADVANCED_FEATURES
 from .base import IS_ORACLE_MYSQL
 from .base import IS_POSTGRESQL
 from .base import IS_SQLITE
@@ -43,8 +44,10 @@ from .base import get_in_memory_db
 from .base import get_sqlite_db
 from .base import new_connection
 from .base import requires_models
+from .base import requires_mysql
 from .base import requires_postgresql
 from .base import requires_sqlite
+from .base import skip_if
 from .base import slow_test
 from .base_models import Category
 from .base_models import Person
@@ -424,6 +427,21 @@ class QT(TestModel):
     class Meta:
         table_name = 'q"""t'
 
+class ColMeta(TestModel):
+    name = CharField(max_length=50)
+    value = DecimalField(max_digits=10, decimal_places=2, null=True)
+    active = BooleanField(default=True)
+    notes = TextField(null=True)
+    created = DateTimeField(constraints=[SQL('DEFAULT CURRENT_TIMESTAMP')])
+
+class FKParent(TestModel):
+    name = CharField(default='')
+
+class FKChild(TestModel):
+    parent = ForeignKeyField(FKParent, backref='children',
+                             on_delete='CASCADE', on_update='CASCADE')
+    parent2 = ForeignKeyField(FKParent, backref='children2', null=True)
+
 
 class TestIntrospection(ModelTestCase):
     requires = [Category, User, UniqueModel, IndexedModel, Person]
@@ -582,6 +600,90 @@ class TestIntrospection(ModelTestCase):
                 for fk in foreign_keys]
         self.assertEqual(data, [
             ('parent_id', 'category', 'name', 'category')])
+
+    @skip_if(IS_CRDB, 'crdb reflection extensions verified separately')
+    @requires_models(ColMeta)
+    def test_get_columns_full_type(self):
+        cols = {c.name: c for c in self.database.get_columns('col_meta')}
+        self.assertTrue(cols['id'].identity)
+        for name in ('name', 'value', 'active', 'notes', 'created'):
+            self.assertFalse(cols[name].identity)
+
+        if IS_SQLITE:
+            expected = {'name': 'VARCHAR(50)', 'value': 'DECIMAL(10, 2)',
+                        'active': 'INTEGER', 'notes': 'TEXT'}
+        elif IS_MYSQL:
+            expected = {'name': 'varchar(50)', 'value': 'decimal(10,2)',
+                        'active': 'tinyint(1)', 'notes': 'text'}
+        else:
+            expected = {'name': 'character varying(50)',
+                        'value': 'numeric(10,2)', 'active': 'boolean',
+                        'notes': 'text'}
+        for name, full_type in expected.items():
+            self.assertEqual(cols[name].full_type, full_type)
+
+        # The data_type vocabulary is unchanged.
+        if IS_SQLITE:
+            self.assertEqual(cols['name'].data_type, 'VARCHAR(50)')
+        elif IS_MYSQL:
+            self.assertEqual(cols['name'].data_type, 'varchar')
+        else:
+            self.assertEqual(cols['name'].data_type, 'character varying')
+
+    @skip_if(IS_CRDB, 'crdb reflection extensions verified separately')
+    @requires_models(ColMeta)
+    def test_get_columns_defaults(self):
+        cols = {c.name: c for c in self.database.get_columns('col_meta')}
+        self.assertIsNone(cols['name'].default)
+        self.assertIsNone(cols['notes'].default)
+        created = cols['created'].default
+        # MariaDB reports current_timestamp(), others CURRENT_TIMESTAMP.
+        self.assertTrue(created.lower().startswith('current_timestamp'))
+
+    @skip_if(IS_CRDB, 'crdb reflection extensions verified separately')
+    @requires_models(FKParent, FKChild)
+    def test_get_foreign_keys_extended(self):
+        table = FKChild._meta.table_name
+        fks = {fk.column: fk for fk in self.database.get_foreign_keys(table)}
+        self.assertEqual(sorted(fks), ['parent2_id', 'parent_id'])
+
+        fk = fks['parent_id']
+        self.assertEqual(fk.dest_table, FKParent._meta.table_name)
+        self.assertEqual(fk.dest_column, 'id')
+        self.assertEqual(fk.on_delete, 'CASCADE')
+        self.assertEqual(fk.on_update, 'CASCADE')
+
+        # Undeclared actions surface as the backend's no-op default.
+        fk2 = fks['parent2_id']
+        self.assertIn(fk2.on_delete, ('NO ACTION', 'RESTRICT'))
+        self.assertIn(fk2.on_update, ('NO ACTION', 'RESTRICT'))
+
+        if IS_SQLITE:
+            self.assertIsNone(fk.name)
+        else:
+            self.assertTrue(fk.name)
+
+    def test_get_indexes_sql(self):
+        indexes = {i.name: i
+                   for i in self.database.get_indexes('unique_model')}
+        idx = indexes['unique_model_name']
+        if IS_MYSQL:
+            self.assertIsNone(idx.sql)
+        else:
+            self.assertTrue('unique_model' in idx.sql.lower())
+
+    @requires_mysql
+    def test_schema_argument_honored(self):
+        # The schema argument was previously ignored.
+        tables = self.database.get_tables(schema='peewee_test')
+        self.assertEqual(tables, self.database.get_tables())
+        self.assertEqual(self.database.get_tables(schema='fake_schema_z'), [])
+
+        table = UniqueModel._meta.table_name
+        names = [c.name for c in self.database.get_columns(table)]
+        names2 = [c.name for c in
+                  self.database.get_columns(table, schema='peewee_test')]
+        self.assertEqual(names, names2)
 
     @requires_sqlite
     @requires_models(QT)

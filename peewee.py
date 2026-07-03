@@ -166,6 +166,12 @@ def reraise(tp, value, tb=None):
 def qesc(s):
     return s.replace('"', '""')
 
+def unqesc(part):
+    part = part.strip()
+    if re.match(r'^"(?:[^"]|"")*"$', part):
+        return part[1:-1].replace('""', '"')
+    return part
+
 # Other compat issues.
 if sys.version_info < (3, 12):
     utcfromtimestamp = datetime.datetime.utcfromtimestamp
@@ -3512,10 +3518,12 @@ IndexMetadata = collections.namedtuple(
     ('name', 'sql', 'columns', 'unique', 'table'))
 ColumnMetadata = collections.namedtuple(
     'ColumnMetadata',
-    ('name', 'data_type', 'null', 'primary_key', 'table', 'default'))
+    ('name', 'data_type', 'null', 'primary_key', 'table', 'default',
+     'full_type', 'identity'), defaults=(None, False))
 ForeignKeyMetadata = collections.namedtuple(
     'ForeignKeyMetadata',
-    ('column', 'dest_table', 'dest_column', 'table'))
+    ('column', 'dest_table', 'dest_column', 'table', 'name', 'on_delete',
+     'on_update'), defaults=(None, None, None))
 ViewMetadata = collections.namedtuple('ViewMetadata', ('name', 'sql'))
 
 
@@ -4287,10 +4295,13 @@ class SqliteDatabase(Database):
 
     def get_columns(self, table, schema=None):
         schema = qesc(schema or 'main')
-        cursor = self.execute_sql('PRAGMA "%s".table_info("%s")' %
-                                  (schema, qesc(table)))
-        return [ColumnMetadata(r[1], r[2], not r[3], bool(r[5]), table, r[4])
-                for r in cursor.fetchall()]
+        rows = self.execute_sql('PRAGMA "%s".table_info("%s")' %
+                                (schema, qesc(table))).fetchall()
+        pks = [r for r in rows if r[5]]
+        is_rowid = len(pks) == 1 and (pks[0][2] or '').upper() == 'INTEGER'
+        return [ColumnMetadata(r[1], r[2], not r[3], bool(r[5]), table, r[4],
+                               r[2], bool(r[5]) and is_rowid)
+                for r in rows]
 
     def get_primary_keys(self, table, schema=None):
         schema = qesc(schema or 'main')
@@ -4302,7 +4313,8 @@ class SqliteDatabase(Database):
         schema = qesc(schema or 'main')
         cursor = self.execute_sql('PRAGMA "%s".foreign_key_list("%s")' %
                                   (schema, qesc(table)))
-        return [ForeignKeyMetadata(row[3], row[2], row[4], table)
+        return [ForeignKeyMetadata(row[3], row[2], row[4], table, None,
+                                   row[6], row[5])
                 for row in cursor.fetchall()]
 
     def get_binary_type(self):
@@ -4616,20 +4628,35 @@ class PostgresqlDatabase(Database):
             WHERE t.relname = %s AND t.relkind = %s AND n.nspname = %s
             ORDER BY idx.indisunique DESC, i.relname;"""
         cursor = self.execute_sql(query, (table, 'r', schema or 'public'))
-        return [IndexMetadata(name, sql.rstrip(' ;'), columns.split(','),
-                              is_unique, table)
-                for name, sql, is_unique, columns in cursor.fetchall()]
+        unesc = lambda cols: [unqesc(c) for c in cols.split(',')]
+        return [IndexMetadata(name, sql.rstrip(' ;'), unesc(cols), unique,
+                              table)
+                for name, sql, unique, cols in cursor.fetchall()]
 
     def get_columns(self, table, schema=None):
         query = """
-            SELECT column_name, is_nullable, data_type, column_default
-            FROM information_schema.columns
-            WHERE table_name = %s AND table_schema = %s
-            ORDER BY ordinal_position"""
+            SELECT c.column_name, c.is_nullable, c.data_type,
+                c.column_default,
+                pg_catalog.format_type(a.atttypid, a.atttypmod),
+                c.is_identity
+            FROM information_schema.columns AS c
+            INNER JOIN pg_catalog.pg_namespace AS n
+                ON (n.nspname = c.table_schema)
+            INNER JOIN pg_catalog.pg_class AS t
+                ON (t.relname = c.table_name AND t.relnamespace = n.oid)
+            INNER JOIN pg_catalog.pg_attribute AS a
+                ON (a.attrelid = t.oid AND a.attname = c.column_name)
+            WHERE c.table_name = %s AND c.table_schema = %s
+                AND NOT a.attisdropped
+            ORDER BY c.ordinal_position"""
         cursor = self.execute_sql(query, (table, schema or 'public'))
         pks = set(self.get_primary_keys(table, schema))
-        return [ColumnMetadata(name, dt, null == 'YES', name in pks, table, df)
-                for name, null, dt, df in cursor.fetchall()]
+        def is_ident(ident, df):
+            return ident == 'YES' or (df or '').startswith(
+                ('nextval(', 'unique_rowid('))
+        return [ColumnMetadata(name, dt, null == 'YES', name in pks, table,
+                               df, ft, is_ident(ident, df))
+                for name, null, dt, df, ft, ident in cursor.fetchall()]
 
     def get_primary_keys(self, table, schema=None):
         query = """
@@ -4650,7 +4677,8 @@ class PostgresqlDatabase(Database):
     def get_foreign_keys(self, table, schema=None):
         sql = """
             SELECT DISTINCT
-                kcu.column_name, ccu.table_name, ccu.column_name
+                kcu.column_name, ccu.table_name, ccu.column_name,
+                tc.constraint_name, rc.delete_rule, rc.update_rule
             FROM information_schema.table_constraints AS tc
             JOIN information_schema.key_column_usage AS kcu
                 ON (tc.constraint_name = kcu.constraint_name AND
@@ -4660,12 +4688,16 @@ class PostgresqlDatabase(Database):
             JOIN information_schema.constraint_column_usage AS ccu
                 ON (ccu.constraint_name = tc.constraint_name AND
                     ccu.constraint_schema = tc.constraint_schema)
+            JOIN information_schema.referential_constraints AS rc
+                ON (rc.constraint_name = tc.constraint_name AND
+                    rc.constraint_schema = tc.constraint_schema)
             WHERE
                 tc.constraint_type = 'FOREIGN KEY' AND
                 tc.table_name = %s AND
                 tc.table_schema = %s"""
         cursor = self.execute_sql(sql, (table, schema or 'public'))
-        return [ForeignKeyMetadata(row[0], row[1], row[2], table)
+        return [ForeignKeyMetadata(row[0], row[1], row[2], table, row[3],
+                                   row[4], row[5])
                 for row in cursor.fetchall()]
 
     def sequence_exists(self, sequence):
@@ -4836,20 +4868,28 @@ class MySQLDatabase(Database):
 
     def get_tables(self, schema=None):
         query = ('SELECT table_name FROM information_schema.tables '
-                 'WHERE table_schema = DATABASE() AND table_type != %s '
-                 'ORDER BY table_name')
-        return [table for table, in self.execute_sql(query, ('VIEW',))]
+                 'WHERE table_schema = COALESCE(%s, DATABASE()) '
+                 'AND table_type != %s ORDER BY table_name')
+        return [table for table, in self.execute_sql(query, (schema, 'VIEW'))]
 
     def get_views(self, schema=None):
         query = ('SELECT table_name, view_definition '
                  'FROM information_schema.views '
-                 'WHERE table_schema = DATABASE() ORDER BY table_name')
-        cursor = self.execute_sql(query)
+                 'WHERE table_schema = COALESCE(%s, DATABASE()) '
+                 'ORDER BY table_name')
+        cursor = self.execute_sql(query, (schema,))
         return [ViewMetadata(*row) for row in cursor.fetchall()]
+
+    def _show_index_target(self, table, schema):
+        table = table.replace('`', '``')
+        if schema:
+            return '`%s`.`%s`' % (schema.replace('`', '``'), table)
+        return '`%s`' % table
 
     def get_indexes(self, table, schema=None):
         table = table.replace('`', '``')
-        cursor = self.execute_sql('SHOW INDEX FROM `%s`' % table)
+        cursor = self.execute_sql('SHOW INDEX FROM %s' %
+                                  self._show_index_target(table, schema))
         unique = set()
         indexes = {}
         for row in cursor.fetchall():
@@ -4862,33 +4902,49 @@ class MySQLDatabase(Database):
 
     def get_columns(self, table, schema=None):
         sql = """
-            SELECT column_name, is_nullable, data_type, column_default
+            SELECT column_name, is_nullable, data_type, column_default,
+                column_type, extra
             FROM information_schema.columns
-            WHERE table_name = %s AND table_schema = DATABASE()
+            WHERE table_name = %s AND table_schema = COALESCE(%s, DATABASE())
             ORDER BY ordinal_position"""
-        cursor = self.execute_sql(sql, (table,))
-        pks = set(self.get_primary_keys(table))
-        return [ColumnMetadata(name, dt, null == 'YES', name in pks, table, df)
-                for name, null, dt, df in cursor.fetchall()]
+        cursor = self.execute_sql(sql, (table, schema))
+        pks = set(self.get_primary_keys(table, schema))
+        accum = []
+        for name, null, dt, df, ft, extra in cursor.fetchall():
+            null = null == 'YES'
+            # MariaDB reports the literal string NULL for nullable columns
+            # that have no default.
+            if null and df == 'NULL':
+                df = None
+            accum.append(ColumnMetadata(
+                name, dt, null, name in pks, table, df, ft,
+                'auto_increment' in (extra or '')))
+        return accum
 
     def get_primary_keys(self, table, schema=None):
-        table = table.replace('`', '``')
-        cursor = self.execute_sql('SHOW INDEX FROM `%s`' % table)
+        cursor = self.execute_sql('SHOW INDEX FROM %s' %
+                                  self._show_index_target(table, schema))
         return [row[4] for row in
                 filter(lambda row: row[2] == 'PRIMARY', cursor.fetchall())]
 
     def get_foreign_keys(self, table, schema=None):
         query = """
-            SELECT column_name, referenced_table_name, referenced_column_name
-            FROM information_schema.key_column_usage
-            WHERE table_name = %s
-                AND table_schema = DATABASE()
-                AND referenced_table_name IS NOT NULL
-                AND referenced_column_name IS NOT NULL"""
-        cursor = self.execute_sql(query, (table,))
-        return [
-            ForeignKeyMetadata(column, dest_table, dest_column, table)
-            for column, dest_table, dest_column in cursor.fetchall()]
+            SELECT kcu.column_name, kcu.referenced_table_name,
+                kcu.referenced_column_name, kcu.constraint_name,
+                rc.delete_rule, rc.update_rule
+            FROM information_schema.key_column_usage AS kcu
+            INNER JOIN information_schema.referential_constraints AS rc
+                ON (rc.constraint_schema = kcu.constraint_schema AND
+                    rc.constraint_name = kcu.constraint_name AND
+                    rc.table_name = kcu.table_name)
+            WHERE kcu.table_name = %s
+                AND kcu.table_schema = COALESCE(%s, DATABASE())
+                AND kcu.referenced_table_name IS NOT NULL
+                AND kcu.referenced_column_name IS NOT NULL"""
+        cursor = self.execute_sql(query, (table, schema))
+        return [ForeignKeyMetadata(row[0], row[1], row[2], table, row[3],
+                                   row[4], row[5])
+                for row in cursor.fetchall()]
 
     def get_binary_type(self):
         return mysql.Binary
