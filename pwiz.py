@@ -135,6 +135,13 @@ def print_models(introspector, tables=None, preserve_order=False,
             print('        primary_key = CompositeKey(%s)' % pk_list)
         elif not primary_keys:
             print('        primary_key = False')
+
+        unhandled = database.unhandled_indexes(table)
+        if unhandled:
+            print('        # Unhandled indexes (partial or expression):')
+            for index in unhandled:
+                print('        # %s' % (index.sql or index.name))
+
         print('')
 
         seen.add(table)
