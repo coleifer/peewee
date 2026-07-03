@@ -183,7 +183,7 @@ def make_index_name(table_name, columns):
 class SchemaMigrator(object):
     explicit_create_foreign_key = False
     explicit_delete_foreign_key = False
-    transaction_ddl = True
+    transactional_ddl = True
 
     def __init__(self, database):
         self.database = database
