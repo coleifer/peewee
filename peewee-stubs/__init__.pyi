@@ -1502,6 +1502,7 @@ class TimestampField(BigIntegerField[_V]):
     resolution: Incomplete
     ticks_to_microsecond: Incomplete
     utc: Incomplete
+    formats: Incomplete
 
     @overload
     def __new__(cls, *args: Any, null: Literal[True], **kwargs: Unpack[_FieldKwargs]) -> TimestampField[datetime | None]: ...
