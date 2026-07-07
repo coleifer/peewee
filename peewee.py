@@ -6060,6 +6060,15 @@ class TimestampField(BigIntegerField):
     # Support second -> microsecond resolution.
     valid_resolutions = [10**i for i in range(7)]
 
+    # Allow str formatted when converting.
+    formats = [
+        '%Y-%m-%d %H:%M:%S.%f',
+        '%Y-%m-%d %H:%M:%S',
+        '%Y-%m-%d %H:%M:%S.%f%z',
+        '%Y-%m-%d %H:%M:%S%z',
+        '%Y-%m-%d',
+    ]
+
     def __init__(self, *args, **kwargs):
         self.resolution = kwargs.pop('resolution', None)
 
@@ -6093,8 +6102,9 @@ class TimestampField(BigIntegerField):
         return datetime.datetime.fromtimestamp(ts)
 
     def get_timestamp(self, value):
-        if self.utc:
-            # If utc-mode is on, then we assume all naive datetimes are in UTC.
+        if self.utc or value.tzinfo is not None:
+            # Aware datetimes denote an unambiguous instant; naive datetimes in
+            # utc-mode are assumed to already be UTC.
             return calendar.timegm(value.utctimetuple())
         else:
             return time.mktime(value.timetuple())
@@ -6102,6 +6112,9 @@ class TimestampField(BigIntegerField):
     def db_value(self, value):
         if value is None:
             return
+
+        if isinstance(value, str):
+            value = format_date_time(value, self.formats)
 
         if isinstance(value, datetime.datetime):
             pass
