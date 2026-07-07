@@ -9,6 +9,7 @@ https://github.com/coleifer/peewee/releases
 
 * Ensure quotes escaped in SQLite introspection methods, thanks @greymoth-jp
   for reporting and the initial patch.
+* Allow TimestampField to accept an iso-formatted str.
 
 [View commits](https://github.com/coleifer/peewee/compare/4.1.1...master)
 
