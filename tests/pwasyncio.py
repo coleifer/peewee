@@ -1,5 +1,6 @@
 import asyncio
 import collections
+import contextlib
 import contextvars
 import glob
 import inspect
@@ -80,6 +81,10 @@ class ADirty(AsyncModelMixin, Model):
 
 class ASignal(AsyncModelMixin, signals.Model):
     name = CharField()
+
+# Core (cross-backend) JSONField. Bound per-test via IntegrationTests helper.
+class JSONM(Model):
+    data = JSONField(null=True)
 
 
 class TestGreenletSpawn(unittest.IsolatedAsyncioTestCase):
@@ -2075,24 +2080,110 @@ class IntegrationTests(object):
         await self.create_record('after')
         await self.assertCount(2)
 
-    async def test_json_field(self):
-        class JsonModel(Model):
-            data = JSONField(null=True)
+    @contextlib.asynccontextmanager
+    async def _json_model(self):
+        # Bind the core JSONField model to the active async db and manage its
+        # table. Skips where JSON is unsupported (e.g. ancient SQLite).
         try:
-            JsonModel._meta.set_database(self.db)
+            JSONM._meta.set_database(self.db)
         except NotSupportedError:
-            self.skipTest('sqlite too old for JSONField')
-
-        await self.db.acreate_tables([JsonModel])
+            self.skipTest('JSONField not supported on this backend')
+        await self.db.adrop_tables([JSONM])
+        await self.db.acreate_tables([JSONM])
         try:
-            await self.db.run(JsonModel.create, data={'k': 'v', 'n': 5})
-            row = await self.db.get(JsonModel.select())
-            self.assertEqual(row.data, {'k': 'v', 'n': 5})
-            n = await self.db.count(
-                JsonModel.select().where(JsonModel.data['k'] == 'v'))
-            self.assertEqual(n, 1)
+            yield JSONM
         finally:
-            await self.db.adrop_tables([JsonModel])
+            await self.db.adrop_tables([JSONM])
+
+    async def test_json_field(self):
+        # Round-trips on every async backend: nested objects, arrays, unicode,
+        # quotes, and a top-level array document.
+        async with self._json_model() as M:
+            payload = {'k': 'v', 'n': 5, 'nested': {'a': [1, 2, 3]},
+                       'q': "O'Brien", 'u': 'café 日本語'}
+            o = await self.db.run(M.create, data=payload)
+            row = await self.db.get(M.select().where(M.id == o.id))
+            self.assertEqual(row.data, payload)
+
+            o2 = await self.db.run(M.create, data=[1, 'two', {'three': 3}])
+            row2 = await self.db.get(M.select().where(M.id == o2.id))
+            self.assertEqual(row2.data, [1, 'two', {'three': 3}])
+
+    async def test_json_extract(self):
+        # Path extraction, casts, and path comparisons in WHERE.
+        async with self._json_model() as M:
+            o = await self.db.run(M.create, data={
+                'a': {'b': {'c': 42}}, 'arr': [10, 20, 30], 's': 'hi'})
+
+            async def val(expr):
+                return await self.db.scalar(M.select(expr).where(M.id == o.id))
+
+            self.assertEqual(await val(M.data['a']['b']['c']), 42)
+            self.assertEqual(await val(M.data.path('a', 'b', 'c')), 42)
+            self.assertEqual(await val(M.data['arr'][1]), 20)
+            self.assertEqual(await val(M.data['s'].as_text()), 'hi')
+            as_int = await val(M.data['a']['b']['c'].as_int())
+            self.assertEqual(as_int, 42)
+            self.assertIsInstance(as_int, int)
+
+            async def count(expr):
+                return await self.db.count(M.select().where(expr))
+
+            self.assertEqual(await count(M.data['s'] == 'hi'), 1)
+            self.assertEqual(await count(M.data['a']['b']['c'] == 42), 1)
+            self.assertEqual(await count(M.data['s'] != 'nope'), 1)
+            # == None catches SQL NULL, a missing key, and stored JSON null.
+            self.assertEqual(await count(M.data['missing'] == None), 1)
+
+    async def test_json_mutations(self):
+        # set/append/remove/length/update all read back the mutated document.
+        async with self._json_model() as M:
+            async def data_of(oid):
+                row = await self.db.get(M.select().where(M.id == oid))
+                return row.data
+
+            o = await self.db.run(M.create, data={'a': {'b': 1}})
+            await self.db.aexecute(M.update(data=M.data['a']['b'].set(99))
+                                   .where(M.id == o.id))
+            self.assertEqual((await data_of(o.id))['a']['b'], 99)
+
+            o = await self.db.run(M.create, data={'arr': [1, 2]})
+            await self.db.aexecute(M.update(data=M.data['arr'].append(3))
+                                   .where(M.id == o.id))
+            self.assertEqual(await self.db.scalar(
+                M.select(M.data['arr'].length()).where(M.id == o.id)), 3)
+            self.assertEqual((await data_of(o.id))['arr'], [1, 2, 3])
+
+            o = await self.db.run(M.create, data={'keep': 1, 'drop': 2})
+            await self.db.aexecute(M.update(data=M.data['drop'].remove())
+                                   .where(M.id == o.id))
+            self.assertEqual(await data_of(o.id), {'keep': 1})
+
+            # A disjoint-key merge agrees across PG's `||` and MySQL/SQLite's
+            # RFC-7396 patch.
+            o = await self.db.run(M.create, data={'a': 1})
+            await self.db.aexecute(M.update(data=M.data.update({'b': 2}))
+                                   .where(M.id == o.id))
+            self.assertEqual(await data_of(o.id), {'a': 1, 'b': 2})
+
+    async def test_json_containment(self):
+        # Containment / key-existence predicates: PostgreSQL + MySQL only.
+        if self.driver == 'sqlite':
+            self.skipTest('SQLite JSON1 has no containment/key operators')
+        async with self._json_model() as M:
+            await self.db.run(M.create,
+                              data={'k': 'v', 'tags': ['a', 'b'], 'n': 5})
+
+            async def count(expr):
+                return await self.db.count(M.select().where(expr))
+
+            self.assertEqual(await count(M.data.contains({'k': 'v'})), 1)
+            self.assertEqual(await count(M.data.contained_by(
+                {'k': 'v', 'tags': ['a', 'b'], 'n': 5, 'x': 0})), 1)
+            self.assertEqual(await count(M.data.has_key('k')), 1)
+            self.assertEqual(await count(M.data.has_keys(['k', 'n'])), 1)
+            self.assertEqual(await count(M.data.has_any_keys(['zzz', 'n'])), 1)
+            self.assertEqual(await count(M.data.has_key('absent')), 0)
 
     async def test_sync_query_outside_bridge(self):
         with self.assertRaises(MissingGreenletBridge):
@@ -2181,6 +2272,31 @@ class TestPostgresqlIntegration(IntegrationTests, unittest.IsolatedAsyncioTestCa
         # The connection is not stuck inside an aborted transaction.
         self.assertFalse(self.db._state.conn.conn.is_in_transaction())
         await self.assertCount(2)
+
+    async def test_json_field_jsonb(self):
+        # Core JSONField maps to a real jsonb column on Postgres; values with
+        # %s/%% survive asyncpg placeholder translation (they ride as bound
+        # params); and jsonb decodes through the server-side cursor.
+        async with self._json_model() as M:
+            r = await self.db.aexecute_sql(
+                'SELECT data_type FROM information_schema.columns '
+                'WHERE table_name = %s AND column_name = %s',
+                (M._meta.table_name, 'data'))
+            self.assertEqual(r.fetchone()[0], 'jsonb')
+
+            payload = {'fmt': 'up 5%s vs 3%% last %s', 'q': 'a"b\\c'}
+            o = await self.db.run(M.create, data=payload)
+            row = await self.db.get(M.select().where(M.id == o.id))
+            self.assertEqual(row.data, payload)
+
+            async with self.db.atomic():
+                await self.db.run(M.create, data={'seed': 'A'})
+                await self.db.run(M.create, data={'seed': 'B'})
+                seeds = sorted([obj.data['seed'] async for obj in
+                                self.db.iterate(M.select()
+                                .where(M.data.has_key('seed'))
+                                .order_by(M.id))])
+            self.assertEqual(seeds, ['A', 'B'])
 
 
 @unittest.skipIf(not IS_MYSQL, 'skipping mysql test')
