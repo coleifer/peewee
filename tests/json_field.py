@@ -1028,14 +1028,14 @@ class TestDocumentedDivergences(ModelTestCase):
         self.assertEqual(n, 1)
 
 
-# JSON containment / key checks. Native operators on PG and MySQL/MariaDB;
-# NotSupportedError on SQLite.
-@skip_if(IS_SQLITE, 'no native JSON containment/key operators on SQLite')
-class TestContainmentAndKeys(ModelTestCase):
+# JSON containment (@> / <@). Native on PG and MySQL/MariaDB; SQLite has no
+# operator (recursive containment would need a UDF).
+@skip_if(IS_SQLITE, 'no native JSON containment operator on SQLite')
+class TestContainment(ModelTestCase):
     requires = [JM]
 
     def setUp(self):
-        super(TestContainmentAndKeys, self).setUp()
+        super(TestContainment, self).setUp()
         JM.create(data={'k': 'v', 'tags': ['python', 'orm'],
                         'meta': {'env': 'prod', 'region': 'us'}})
         JM.create(data={'k': 'v', 'tags': ['rust']})
@@ -1061,6 +1061,24 @@ class TestContainmentAndKeys(ModelTestCase):
         q = JM.select().where(JM.data.contained_by(bigger))
         # Row 1 fits inside `bigger`; rows 2 and 3 don't.
         self.assertEqual(q.count(), 1)
+
+    def test_contained_by_on_path(self):
+        q = JM.select().where(
+            JM.data['tags'].contained_by(['python', 'orm', 'sql']))
+        self.assertEqual(q.count(), 1)
+
+
+# Key-existence predicates are portable to every backend: PG (?/?&/?|),
+# MySQL/MariaDB (JSON_CONTAINS_PATH), and SQLite (json_type() IS NOT NULL).
+class TestKeyExistence(ModelTestCase):
+    requires = [JM]
+
+    def setUp(self):
+        super(TestKeyExistence, self).setUp()
+        JM.create(data={'k': 'v', 'tags': ['python', 'orm'],
+                        'meta': {'env': 'prod', 'region': 'us'}})
+        JM.create(data={'k': 'v', 'tags': ['rust']})
+        JM.create(data={'k': 'other'})
 
     def test_has_key(self):
         q = JM.select().where(JM.data.has_key('meta'))
@@ -1088,13 +1106,8 @@ class TestContainmentAndKeys(ModelTestCase):
         q = JM.select().where(JM.data['meta'].has_any_keys(['nope', 'env']))
         self.assertEqual(q.count(), 1)
 
-    def test_contained_by_on_path(self):
-        q = JM.select().where(
-            JM.data['tags'].contained_by(['python', 'orm', 'sql']))
-        self.assertEqual(q.count(), 1)
 
-
-# SQLite users get a loud error on the non-portable ops.
+# SQLite has no native @>/<@ containment operator.
 @skip_if(not IS_SQLITE, 'SQLite-only')
 class TestSqliteNotSupported(ModelTestCase):
     requires = [JM]
@@ -1103,6 +1116,6 @@ class TestSqliteNotSupported(ModelTestCase):
         with self.assertRaisesCtx(NotImplementedError):
             JM.data.contains({'k': 'v'})
 
-    def test_has_key_raises(self):
+    def test_contained_by_raises(self):
         with self.assertRaisesCtx(NotImplementedError):
-            JM.data.has_key('k')
+            JM.data.contained_by({'k': 'v'})

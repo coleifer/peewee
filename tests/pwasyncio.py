@@ -2166,10 +2166,31 @@ class IntegrationTests(object):
                                    .where(M.id == o.id))
             self.assertEqual(await data_of(o.id), {'a': 1, 'b': 2})
 
+    async def test_json_has_key(self):
+        # Key-existence predicates run on every async backend (SQLite via
+        # json_type, MySQL via JSON_CONTAINS_PATH, PG via ?/?&/?|).
+        async with self._json_model() as M:
+            await self.db.run(M.create,
+                              data={'k': 'v', 'tags': ['a', 'b'], 'n': 5})
+            await self.db.run(M.create, data={'meta': {'x': 1}})
+
+            async def count(expr):
+                return await self.db.count(M.select().where(expr))
+
+            self.assertEqual(await count(M.data.has_key('k')), 1)
+            self.assertEqual(await count(M.data.has_key('absent')), 0)
+            self.assertEqual(await count(M.data.has_keys(['k', 'n'])), 1)
+            self.assertEqual(await count(M.data.has_keys(['k', 'absent'])), 0)
+            self.assertEqual(await count(M.data.has_any_keys(['zzz', 'n'])), 1)
+            self.assertEqual(await count(M.data.has_any_keys(['y', 'z'])), 0)
+            # Key existence under a nested path prefix.
+            self.assertEqual(await count(M.data['meta'].has_key('x')), 1)
+
     async def test_json_containment(self):
-        # Containment / key-existence predicates: PostgreSQL + MySQL only.
+        # @> / <@ need recursive structural containment: PostgreSQL + MySQL
+        # (SQLite pending a UDF).
         if self.driver == 'sqlite':
-            self.skipTest('SQLite JSON1 has no containment/key operators')
+            self.skipTest('SQLite JSON1 has no @>/<@ containment operator')
         async with self._json_model() as M:
             await self.db.run(M.create,
                               data={'k': 'v', 'tags': ['a', 'b'], 'n': 5})
@@ -2178,12 +2199,9 @@ class IntegrationTests(object):
                 return await self.db.count(M.select().where(expr))
 
             self.assertEqual(await count(M.data.contains({'k': 'v'})), 1)
+            self.assertEqual(await count(M.data.contains({'tags': ['a']})), 1)
             self.assertEqual(await count(M.data.contained_by(
                 {'k': 'v', 'tags': ['a', 'b'], 'n': 5, 'x': 0})), 1)
-            self.assertEqual(await count(M.data.has_key('k')), 1)
-            self.assertEqual(await count(M.data.has_keys(['k', 'n'])), 1)
-            self.assertEqual(await count(M.data.has_any_keys(['zzz', 'n'])), 1)
-            self.assertEqual(await count(M.data.has_key('absent')), 0)
 
     async def test_sync_query_outside_bridge(self):
         with self.assertRaises(MissingGreenletBridge):

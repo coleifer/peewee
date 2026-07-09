@@ -3233,6 +3233,21 @@ class SqliteJSONMethods(BaseJSONMethods):
         # RFC-7396 merge patch. Null values delete keys.
         return fn.json_patch(field, fn.json(field._dumps(value)))
 
+    def has_key(self, field, keys, key):
+        # json_type() is NULL only when the path selects nothing, so it
+        # doubles as a key-existence test (a stored JSON null still has a
+        # type). Matches MySQL's object-key semantics.
+        path = self._path(tuple(keys) + (key,))
+        return Expression(fn.json_type(field, path), OP.IS_NOT, None)
+
+    def has_keys(self, field, keys, key_list):
+        return reduce(operator.and_,
+                      [self.has_key(field, keys, k) for k in key_list])
+
+    def has_any_keys(self, field, keys, key_list):
+        return reduce(operator.or_,
+                      [self.has_key(field, keys, k) for k in key_list])
+
 class PostgresqlJSONMethods(BaseJSONMethods):
     def make_value_wrapper(self, dumps):
         db = self.database
