@@ -824,10 +824,14 @@ This table collects every documented divergence in one place.
      - Lexicographic (text compare).
      - Typed (numeric values compare numerically).
      - MySQL: typed. MariaDB: lexicographic.
-   * - ``contains()`` / ``has_key()`` / etc.
-     - ``NotImplementedError``.
-     - Supported (``@>``, ``?``, ``?&``, ``?|``).
-     - Supported (``JSON_CONTAINS``, ``JSON_CONTAINS_PATH``).
+   * - ``has_key()`` / ``has_keys()`` / ``has_any_keys()``
+     - Supported (``json_type() IS NOT NULL`` per key).
+     - Supported (``?`` / ``?&`` / ``?|``).
+     - Supported (``JSON_CONTAINS_PATH``).
+   * - ``contains()`` / ``contained_by()``
+     - ``NotImplementedError`` (no recursive containment operator).
+     - Supported (``@>`` / ``<@``).
+     - Supported (``JSON_CONTAINS``).
    * - ``is_null()`` on a stored JSON ``null``
      - Matches (treated as absent).
      - Matches (treated as absent).
