@@ -9,8 +9,8 @@ document describes how to add hooks to your web app to ensure the database
 connection is handled properly.
 
 These steps will ensure that regardless of whether you're using a simple
-:class:`SqliteDatabase` or a :class:`PooledPostgresqlDatabase`, peewee will
-handle the connections correctly.
+:class:`SqliteDatabase` or a :class:`~playhouse.pool.PooledPostgresqlDatabase`,
+peewee will handle the connections correctly.
 
 The pattern is always the same:
 
@@ -280,6 +280,9 @@ The following is a minimal example demonstrating:
 
    db = AsyncPostgresqlDatabase('peewee_test')
 
+   class User(db.Model):
+       name = TextField()
+
    async def get_db():
        async with db:
            yield db
@@ -307,7 +310,7 @@ which runs the endpoint in a *separate task* from the middleware task. Because
 peewee's async connections are task-local, a connection opened there would not
 be the one the endpoint uses.
 
-Use a plain ASGI middleware shares the request task, so the db connection
+A plain ASGI middleware shares the request task, so the db connection
 opened in the middleware is the same one the endpoint sees.
 
 Startup and shutdown are handled by ``lifespan`` (create tables when the server
@@ -322,6 +325,10 @@ starts, shut the pool down on exit).
 
 
    db = AsyncPostgresqlDatabase('peewee_test')
+
+   class User(db.Model):
+       name = TextField()
+       email = TextField()
 
    class PeeweeConnectionMiddleware:
        def __init__(self, app, database):
@@ -619,6 +626,7 @@ Set up a custom ``Request`` factory:
 
 .. code-block:: python
 
+   from pyramid.config import Configurator
    from pyramid.request import Request
    from peewee import *
 
@@ -638,6 +646,7 @@ Set up a custom ``Request`` factory:
    def main(global_settings, **settings):
        config = Configurator(settings=settings)
        config.set_request_factory(MyRequest)
+       return config.make_wsgi_app()
 
 Sanic
 -----

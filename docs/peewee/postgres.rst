@@ -137,7 +137,7 @@ BinaryJSONField and JSONField
 
    Extends :class:`JSONField` for the ``jsonb`` type.
 
-   By default BinaryJSONField will use a GiST index. To disable this,
+   By default BinaryJSONField will use a GIN index. To disable this,
    initialize the field with ``index=False``.
 
    .. method:: as_json()
@@ -614,7 +614,7 @@ HStoreField API
 
 .. class:: HStoreField()
 
-   By default ``HStoreField`` will use a *GiST* index. To disable this,
+   By default ``HStoreField`` will use a *GIN* index. To disable this,
    initialize the field with ``index=False``.
 
    .. method:: __getitem__(key)

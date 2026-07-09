@@ -143,8 +143,6 @@ The ``db.atomic()`` wrapper is important: it ensures that the rollback on
 ``IntegrityError`` affects only this operation, not any surrounding transaction.
 
 
-.. _top-item-per-group:
-
 .. _eager-loading:
 
 Eager-loading for a list view
@@ -190,6 +188,8 @@ The load fires on first execution - iteration, ``get()``, ``first()``,
 indexing or ``len()``. See :ref:`relationships` for the building blocks
 (nesting, per-relation queries, ``per_parent``, strategies).
 
+
+.. _top-item-per-group:
 
 Top Item Per Group
 ------------------

@@ -808,8 +808,9 @@ For joins performed by :meth:`~ModelSelect.join`:
   direction uses the FK field's name, and the backref direction uses the
   destination model's ``_meta.name`` (typically the lowercase class name).
 * If the join has no resolvable foreign key (for example, joining on an
-  arbitrary expression, a :class:`Table`, or a subquery), you must supply
-  ``attr=`` to name the attachment point - see below.
+  arbitrary expression, a :class:`Table`, or a subquery), the destination's
+  default name is used: the model's ``_meta.name``, or the alias / table
+  name for non-model sources. Supply ``attr=`` to override - see below.
 
 Overriding with ``attr=``
 ^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -826,17 +827,19 @@ attribute name used to attach the joined instance:
    for tweet in query:
        print(tweet.author.username)  # Instead of tweet.user.
 
-``attr`` is required when joining to a :class:`Table`, a subquery, or any
-source for which Peewee cannot resolve a foreign key (see
-:ref:`joining without a foreign key <joining-without-fk>`). It is also
-required in the rare case that a join's inferred name would collide with
-the ``<fk>_id`` name of an aliased foreign key, in which case passing
-``attr`` equal to that ``<fk>_id`` name raises :exc:`ValueError`.
+``attr`` is optional everywhere. Joins without a resolvable foreign key
+(a :class:`Table`, a subquery, an arbitrary expression) attach at the
+destination's default name, and ``attr`` overrides it (see
+:ref:`joining without a foreign key <joining-without-fk>`). One collision
+is rejected: aliasing a join's ``on`` expression with the ``<fk>_id``
+column name of a foreign key, e.g.
+``on=(Tweet.user == User.id).alias('user_id')``, raises
+:exc:`ValueError`, as that attribute holds the raw column value.
 
 Directing computed columns with ``bind_to``
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-When a :class:`SELECT` includes a computed or aliased column whose logical
+When a ``SELECT`` includes a computed or aliased column whose logical
 owner is one of the joined sources, use :meth:`~ColumnBase.bind_to` to tell
 Peewee which source the column belongs to. The column is then attached to
 the corresponding instance in the reconstructed graph:
@@ -1000,8 +1003,9 @@ for *k* tables. Peewee has two APIs for this:
   nestable form, recommended for new code.
 * :func:`prefetch`: the older flat-list form, kept for backwards compatibility.
 
-They share one execution engine and the same load strategies, and differ only
-in how the load is expressed.
+They share one execution engine and differ mainly in how the load is
+expressed. :func:`prefetch` supports the ``WHERE`` and ``JOIN`` strategies
+but rejects ``MATERIALIZE``, which is with_related-only.
 
 Eager loading with with_related
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^

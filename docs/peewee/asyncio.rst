@@ -206,7 +206,7 @@ take an ``a`` prefix:
 * :meth:`~AsyncModelMixin.acreate`
 * :meth:`~AsyncModelMixin.aget` / :meth:`~AsyncModelMixin.aget_or_none` / :meth:`~AsyncModelMixin.aget_by_id`
 * :meth:`~AsyncModelMixin.aget_or_create`
-* :meth:`~AsyncModelMixin.adelete_by_id`
+* :meth:`~AsyncModelMixin.adelete_by_id` / :meth:`~AsyncModelMixin.aset_by_id`
 * :meth:`~AsyncModelMixin.abulk_create` / :meth:`~AsyncModelMixin.abulk_update`
 * :meth:`~AsyncModelMixin.afetch` (for fetching lazy-load foreign-keys)
 
@@ -293,7 +293,7 @@ For selects, ``await query.aexecute()`` is interchangeable with
 ``await db.list(query)`` for iteration - ``aexecute()`` returns the
 buffered result wrapper while ``list()`` returns a plain list. When in
 doubt, prefer ``query.aexecute()`` and use ``db.list()`` when you want a
-plain list. The ``db.iterate()`` provides streaming results using server-side
+plain list. ``db.iterate()`` provides streaming results using server-side
 cursors where available.
 
 ``aexecute()`` is the only async method on queries. Aggregates and other
@@ -778,17 +778,8 @@ API Reference
       :async:
 
       Async database context, acquiring a connection for the current task for
-      the duration of the wrapped block.
-
-      .. code-block:: python
-
-         db = AsyncSqliteDatabase(':memory:')
-
-         async with db:
-             # Connection is obtained from the pool and used for this task.
-             await db.acreate_tables([User, Tweet])
-
-         # Context block exits, connection is released back to pool.
+      the duration of the wrapped block. See the example under
+      :meth:`~AsyncDatabaseMixin.aconnect`.
 
    .. method:: aexecute(query)
       :async:
@@ -1068,7 +1059,7 @@ API Reference
 
       :param str sql: SQL query to execute.
       :param tuple params: Optional query parameters.
-      :returns: A :class:`CursorAdapter` instance.
+      :returns: A ``CursorAdapter`` instance.
 
       Execute SQL asynchronously. Returns a cursor-like object whose rows are
       already fetched (call ``.fetchall()`` synchronously). For result
@@ -1140,6 +1131,12 @@ API Reference
       :classmethod:
 
       See :meth:`Model.delete_by_id`
+
+   .. method:: aset_by_id(key, value)
+      :async:
+      :classmethod:
+
+      See :meth:`Model.set_by_id`
 
    .. method:: abulk_create(model_list, batch_size=None)
       :async:

@@ -81,6 +81,19 @@ Database
       Type of quotation-mark(s) to use to denote entities such as tables or
       columns, specified as ``'<open quote><close quote>'``.
 
+   .. attribute:: Model
+
+      Property which returns a base :class:`Model` class bound to this
+      database, created on first access. Subclassing ``db.Model`` removes
+      the need to declare ``Meta.database`` on each model:
+
+      .. code-block:: python
+
+         db = SqliteDatabase('app.db')
+
+         class User(db.Model):
+             username = TextField()
+
    .. method:: init(database, **kwargs)
 
       :param str database: Database name or filename for SQLite.
@@ -3512,8 +3525,10 @@ Fields
       Equality on the full document. The right-hand side is serialized
       through ``dumps`` and compared structurally on Postgresql (``jsonb =
       jsonb``) and MySQL (native ``JSON`` comparison). On SQLite and
-      MariaDB the comparison is a byte-compare of the stored JSON text
-      (SQLite canonicalizes both sides via ``json()``).
+      MariaDB the comparison is a byte-compare of the stored JSON text.
+      On SQLite, peewee canonicalizes values it writes and the right-hand
+      side via ``json()`` - JSON written to the table by other tools is
+      compared as stored.
 
       .. code-block:: python
 
@@ -3587,7 +3602,8 @@ Fields
 
 .. warning::
 
-   :meth:`update` has intentionally **divergent semantics across backends**:
+   :meth:`JSONField.update` has intentionally **divergent semantics across
+   backends**:
 
    * **SQLite, MySQL, MariaDB** - RFC-7396 deep merge via ``json_patch`` /
      ``JSON_MERGE_PATCH``. Nested objects are merged recursively.
@@ -3654,8 +3670,9 @@ Fields
       :meth:`startswith`, :meth:`endswith`, :meth:`regexp`,
       :meth:`iregexp`) automatically apply ``as_text()`` so calling them on
       a path does the right thing without needing ``.as_text()`` explicitly.
-      :meth:`contains` is **not** among them - on a path it performs JSON
-      structural containment. For a substring test use ``.as_text().contains(...)``.
+      :meth:`contains` is **not** among them - on a default-mode path it
+      performs JSON structural containment. In text mode it is a substring
+      match, so for a substring test use ``.as_text().contains(...)``.
 
    .. _json-field-typed-access:
 
@@ -3774,7 +3791,9 @@ Fields
                iregexp(rhs)
 
       Pattern-matching operators. Each automatically applies ``as_text()``
-      to the path before comparing.
+      to the path before comparing. On SQLite, ``regexp()`` and
+      ``iregexp()`` require the database be created with
+      ``regexp_function=True``.
 
       .. code-block:: python
 
@@ -3795,6 +3814,7 @@ Fields
 
       JSON structural containment - ``@>`` on Postgresql, ``JSON_CONTAINS``
       on MySQL / MariaDB, and a full-scan ``_pw_json_contains`` UDF on SQLite.
+      On a text-mode path (``.as_text()``) it is a substring ``LIKE`` instead.
 
       .. code-block:: python
 
@@ -3875,6 +3895,15 @@ Fields
            ``{"a": {"b": 1}}`` becomes ``{"a": {"b": 1, "-1": "x"}}``.
 
          Use only on values you know are arrays.
+
+      .. warning::
+
+         Appending at a path that does not exist at all also diverges.
+         SQLite creates a new single-element array. Postgresql and MySQL
+         leave the document unchanged. On MariaDB ``JSON_ARRAY_APPEND``
+         returns SQL NULL for a missing path, so the update **overwrites
+         the entire column with NULL**. If the key may be missing,
+         initialize the array with :meth:`set` first.
 
    .. method:: remove()
 

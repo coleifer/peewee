@@ -120,10 +120,13 @@ Thread-Safe Database Swapping
 
 .. class:: ThreadSafeDatabaseMetadata()
 
-   Model :class:`Metadata` implementation that enables the ``database``
-   attribute to safely changed in a multi-threaded application. Use this when
-   your application may swap the active database (e.g. primary / read replica)
-   at runtime across threads:
+   Model :class:`Metadata` implementation that stores the ``database``
+   attribute in a thread-local, so the active database can be swapped safely
+   at runtime in a multi-threaded application (e.g. primary / read replica).
+
+   Each model class carries its own metadata instance, so the swap targets
+   the model(s) being queried. Assigning on an abstract base class is a
+   no-op for its subclasses.
 
    .. code-block:: python
 
@@ -137,8 +140,16 @@ Thread-Safe Database Swapping
                database = primary
                model_metadata_class = ThreadSafeDatabaseMetadata
 
-       # Safe to do at runtime from any thread:
-       BaseModel._meta.database = replica
+       class User(BaseModel):
+           username = TextField()
+
+       # Safe to do at runtime from any thread. Other threads continue
+       # to see the database they had bound.
+       replica.bind([User])
+
+       # Or scoped to a block:
+       with primary.bind_ctx([User]):
+           ...
 
 .. _pydantic:
 
@@ -598,7 +609,7 @@ This query is equivalent to the following SQL:
 
    SELECT "t1"."id", "t1"."start", "t1"."end"
    FROM "interval" AS t1
-   WHERE ((abs("t1"."end" - "t1"."start") / 2) < 3)
+   WHERE ((ABS("t1"."end" - "t1"."start") / 2) < 3)
 
 .. class:: hybrid_property(fget, fset=None, fdel=None, expr=None)
 
@@ -646,7 +657,7 @@ This query is equivalent to the following SQL:
       FROM "interval" AS t1
       WHERE (
           (("t1"."end" - "t1"."start") > 6) AND
-          ((abs("t1"."end" - "t1"."start") / 2) >= 3)
+          ((ABS("t1"."end" - "t1"."start") / 2) >= 3)
       )
 
 .. class:: hybrid_method(func, expr=None)
@@ -680,7 +691,7 @@ This query is equivalent to the following SQL:
 
       SELECT "t1"."id", "t1"."start", "t1"."end"
       FROM "interval" AS t1
-      WHERE (("t1"."start" <= 2) AND (2 < "t1"."end"))
+      WHERE (("t1"."start" <= 2) AND ("t1"."end" > 2))
 
 
 .. _kv:
@@ -721,7 +732,7 @@ database instance.
    :param Field key_field: Field for the key. Defaults to
        :class:`CharField`. Must specify ``primary_key=True``.
    :param Field value_field: Field for the value. Defaults to
-       :class:`PickleField`.
+       :class:`~playhouse.fields.PickleField`.
    :param bool ordered: Return keys in sorted order when iterating.
    :param Database database: Database to use. Defaults to an in-memory
        SQLite database.
@@ -739,12 +750,12 @@ database instance.
 
       .. code-block:: python
 
-         kv = KeyValue()
-         kv.update(k1='v1', k2='v2')
+         KV = KeyValue()
+         KV.update(k1='v1', k2='v2')
 
-         'k1' in kv  # True
+         'k1' in KV  # True
 
-         'kx' in kv  # False
+         'kx' in KV  # False
 
          (KV.key < 'k2') in KV  # True
          (KV.key > 'k2') in KV  # False
@@ -796,6 +807,7 @@ database instance.
    .. method:: __delitem__(expr)
 
       :param expr: a single key or an expression.
+      :raises: ``KeyError`` if single key given and not found.
 
       Delete the given key. If an expression is given, delete all keys that
       match the expression.
@@ -952,12 +964,14 @@ Or connect manually:
 
    pre_delete.connect(on_delete, sender=MyModel)
 
-Disconnect by name or reference:
+Disconnect by name or reference. The ``(name, sender)`` pair identifies the
+receiver, so a handler connected with a ``sender`` must be disconnected with
+the same ``sender``:
 
 .. code-block:: python
 
-   post_save.disconnect(name='project.cache_buster')
-   pre_delete.disconnect(on_delete)
+   post_save.disconnect(name='project.cache_buster', sender=MyModel)
+   pre_delete.disconnect(on_delete, sender=MyModel)
 
 Signal callback signature:
 
@@ -1005,13 +1019,13 @@ Signal callback signature:
 
          post_save.disconnect(name='project.cache_buster')
 
-    .. method:: send(instance, *args, **kwargs)
+   .. method:: send(instance, *args, **kwargs)
 
-       :param instance: a model instance
+      :param instance: a model instance
 
-       Iterates over the receivers and will call them in the order in which
-       they were connected. If the receiver specified a sender, it will only
-       be called if the instance is an instance of the sender.
+      Iterates over the receivers and will call them in the order in which
+      they were connected. If the receiver specified a sender, it will only
+      be called if the instance is an instance of the sender.
 
 
 .. _dataset:
@@ -1084,7 +1098,7 @@ Transactions:
        users.insert(name='Charlie')
 
        with db.transaction() as nested_txn:
-           table.update(name='Charlie', favorite_orm='sqlalchemy', columns=['name'])
+           users.update(name='Charlie', age=3, columns=['name'])
 
            nested_txn.rollback()  # JK.
 
@@ -1096,17 +1110,19 @@ Introspection:
    # ['new_table', 'user']
 
    print(db['user'].columns)
-   # ['id', 'age', 'name', 'active', 'admin', 'favorite_orm']
+   # ['id', 'name', 'age', 'active', 'admin']
 
    print(len(db['user']))
    # 2
 
 
-.. class:: DataSet(url, **kwargs)
+.. class:: DataSet(url, include_views=False, **kwargs)
 
    :param url: :ref:`db-url` or a :class:`Database` instance.
+   :param bool include_views: Expose database views as tables.
    :param kwargs: additional keyword arguments passed to
-       :meth:`Introspector.generate_models` when introspecting the db.
+       :meth:`~playhouse.reflection.Introspector.generate_models` when
+       introspecting the db.
 
    .. attribute:: tables
 
@@ -1117,11 +1133,10 @@ Introspection:
       Return a :class:`Table` for the given name. Creates the table if
       it doesn't exist.
 
-   .. method:: query(sql, params=None, commit=True)
+   .. method:: query(sql, params=None)
 
       :param str sql: A SQL query.
       :param list params: Optional parameters for the query.
-      :param bool commit: Whether the query should be committed upon execution.
       :return: A database cursor.
 
       Execute the provided query against the database.
@@ -1132,7 +1147,7 @@ Introspection:
 
    .. method:: freeze(query, format='csv', filename=None, file_obj=None, encoding='utf8', iso8601_datetimes=False, base64_bytes=False, **kwargs)
 
-      :param query: A :class:`SelectQuery`, generated using :meth:`~Table.all` or `~Table.find`.
+      :param query: A :class:`SelectQuery`, generated using :meth:`~Table.all` or :meth:`~Table.find`.
       :param format: Output format. By default, *csv* and *json* are supported.
       :param filename: Filename to write output to.
       :param file_obj: File-like object to write output to.
@@ -1150,7 +1165,7 @@ Introspection:
       :param format: Input format. By default, *csv* and *json* are supported.
       :param filename: Filename to read data from.
       :param file_obj: File-like object to read data from.
-      :param bool strict: Whether to store values for columns that do not already exist on the table.
+      :param bool strict: Skip values for columns that do not already exist on the table.
       :param str encoding: File encoding.
       :param bool iso8601_datetimes: Decode datetimes and dates from ISO 8601 format.
       :param bool base64_bytes: Decode BLOB field-data from base64. By default hex
@@ -1237,7 +1252,7 @@ Introspection:
       :param format: Input format. By default, *csv* and *json* are supported.
       :param filename: Filename to read data from.
       :param file_obj: File-like object to read data from.
-      :param bool strict: Whether to store values for columns that do not already exist on the table.
+      :param bool strict: Skip values for columns that do not already exist on the table.
       :param str encoding: File encoding.
       :param bool iso8601_datetimes: Decode datetimes and dates from ISO 8601 format.
       :param bool base64_bytes: Decode BLOB field-data from base64. By default hex
@@ -1354,7 +1369,7 @@ Configuration via dict or a :class:`Database` instance directly:
 
 .. code-block:: python
 
-   # Dictionary-based (uses playhouse.db_url under the hood):
+   # Dictionary-based ('engine' is the import path of the database class):
    app.config['DATABASE'] = {
        'name': 'my_app',
        'engine': 'playhouse.pool.PooledPostgresqlDatabase',
@@ -1372,12 +1387,15 @@ Excluding routes from connection management:
 
    app.config['FLASKDB_EXCLUDED_ROUTES'] = ('health_check', 'static')
 
-.. class:: FlaskDB(app=None, database=None)
+.. class:: FlaskDB(app=None, database=None, model_class=Model, excluded_routes=None)
 
    :param app: Flask application instance (optional; use ``init_app()`` for
        the factory pattern).
    :param database: A database URL string, configuration dictionary, or a
        :class:`Database` instance.
+   :param model_class: Base model class to use for the :attr:`Model` property.
+   :param excluded_routes: Route names to exclude from per-request connection
+       management. Also configurable via ``FLASKDB_EXCLUDED_ROUTES``.
 
    .. attribute:: database
 
@@ -1412,7 +1430,7 @@ Query Helpers
                Post.slug == slug)
            return render_template('post_detail.html', post=post)
 
-.. function:: object_list(template_name, query, context_variable='object_list', paginate_by=20, page_var='page', check_bounds=True, **kwargs)
+.. function:: object_list(template_name, query, context_variable='object_list', paginate_by=20, page_var='page', page=None, check_bounds=True, **kwargs)
 
    Paginate a query and render a template with the results.
 
@@ -1422,6 +1440,7 @@ Query Helpers
        objects (default: ``'object_list'``).
    :param int paginate_by: Items per page.
    :param str page_var: GET parameter name for the page number.
+   :param int page: Page number, overriding the GET parameter.
    :param bool check_bounds: Return 404 for invalid page numbers.
    :param kwargs: Extra template context variables.
 
@@ -1440,11 +1459,12 @@ Query Helpers
                query=Post.select().where(Post.published == True),
                paginate_by=10)
 
-.. class:: PaginatedQuery(query_or_model, paginate_by, page_var='page', check_bounds=False)
+.. class:: PaginatedQuery(query_or_model, paginate_by, page_var='page', page=None, check_bounds=False)
 
    :param query_or_model: Either a :class:`Model` or a :class:`SelectQuery` instance containing the collection of records you wish to paginate.
    :param paginate_by: Number of objects per-page.
    :param page_var: The name of the ``GET`` argument which contains the page.
+   :param page: Page number, overriding the ``GET`` argument.
    :param check_bounds: Whether to check that the given page is a valid page. If ``check_bounds`` is ``True`` and an invalid page is specified, then a 404 will be returned.
 
    Helper class to perform pagination based on ``GET`` arguments.
