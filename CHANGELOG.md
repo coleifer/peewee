@@ -10,6 +10,12 @@ https://github.com/coleifer/peewee/releases
 * Ensure quotes escaped in SQLite introspection methods, thanks @greymoth-jp
   for reporting and the initial patch.
 * Allow TimestampField to accept an iso-formatted str.
+* Add key-existence predicates (`has_key`, `has_keys`, `has_any_keys`) to the
+  core `JSONField` on SQLite, implemented with `json_type()`.
+* Add containment predicates (`contains`, `contained_by`) to the core
+  `JSONField` on SQLite via a registered `_pw_json_contains` UDF that emulates
+  Postgres' `@>` semantics (structural, level-aligned). The core `JSONField`
+  now has full predicate parity across SQLite, Postgres, and MySQL/MariaDB.
 
 [View commits](https://github.com/coleifer/peewee/compare/4.1.1...master)
 
