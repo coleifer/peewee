@@ -1028,9 +1028,8 @@ class TestDocumentedDivergences(ModelTestCase):
         self.assertEqual(n, 1)
 
 
-# JSON containment (@> / <@). Native on PG and MySQL/MariaDB; SQLite has no
-# operator (recursive containment would need a UDF).
-@skip_if(IS_SQLITE, 'no native JSON containment operator on SQLite')
+# JSON structural containment (@> / <@). Native on PG and MySQL/MariaDB;
+# emulated on SQLite via the _pw_json_contains() UDF.
 class TestContainment(ModelTestCase):
     requires = [JM]
 
@@ -1066,6 +1065,32 @@ class TestContainment(ModelTestCase):
         q = JM.select().where(
             JM.data['tags'].contained_by(['python', 'orm', 'sql']))
         self.assertEqual(q.count(), 1)
+
+    def test_contains_scalar_in_array(self):
+        # Array containment matches a bare scalar element (PG/MySQL parity).
+        q = JM.select().where(JM.data['tags'].contains('python'))
+        self.assertEqual(q.count(), 1)
+
+    def test_contains_bool_not_int(self):
+        # JSON true/false must not be matched by 1/0, or vice versa.
+        JM.create(data={'flag': True, 'n': 1})
+        self.assertEqual(
+            JM.select().where(JM.data.contains({'flag': True})).count(), 1)
+        self.assertEqual(
+            JM.select().where(JM.data.contains({'flag': 1})).count(), 0)
+        self.assertEqual(
+            JM.select().where(JM.data.contains({'n': True})).count(), 0)
+
+    @skip_if(IS_MYSQL, 'MySQL/MariaDB use looser recursive containment')
+    def test_contains_level_aligned(self):
+        # PG and SQLite match containment level-by-level: a scalar in the
+        # needle only matches a top-level array element, so a value buried in
+        # a nested array does not count (recursive descent would flip these).
+        JM.create(data={'nested': [1, 2, [1, 3]]})
+        self.assertEqual(
+            JM.select().where(JM.data['nested'].contains([3])).count(), 0)
+        self.assertEqual(
+            JM.select().where(JM.data['nested'].contains([[1, 3]])).count(), 1)
 
 
 # Key-existence predicates are portable to every backend: PG (?/?&/?|),
@@ -1105,17 +1130,3 @@ class TestKeyExistence(ModelTestCase):
     def test_has_any_keys_on_path(self):
         q = JM.select().where(JM.data['meta'].has_any_keys(['nope', 'env']))
         self.assertEqual(q.count(), 1)
-
-
-# SQLite has no native @>/<@ containment operator.
-@skip_if(not IS_SQLITE, 'SQLite-only')
-class TestSqliteNotSupported(ModelTestCase):
-    requires = [JM]
-
-    def test_contains_raises(self):
-        with self.assertRaisesCtx(NotImplementedError):
-            JM.data.contains({'k': 'v'})
-
-    def test_contained_by_raises(self):
-        with self.assertRaisesCtx(NotImplementedError):
-            JM.data.contained_by({'k': 'v'})

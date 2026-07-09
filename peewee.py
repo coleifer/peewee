@@ -257,6 +257,34 @@ def _sqlite_regexp(regex, value):
         return False
     return re.search(regex, value) is not None
 
+def _json_scalar_eq(a, b):
+    return a is b if (isinstance(a, bool) or isinstance(b, bool)) else a == b
+
+def _json_array_has(a, y):
+    if isinstance(y, (dict, list)):
+        return any(_json_document_contains(x, y, False) for x in a)
+    return any(not isinstance(x, (dict, list)) and _json_scalar_eq(x, y)
+               for x in a)
+
+def _json_document_contains(a, b, top=True):
+    if isinstance(b, dict):
+        return isinstance(a, dict) and all(
+            k in a and _json_document_contains(a[k], v, False)
+            for k, v in b.items())
+    if isinstance(b, list):
+        return isinstance(a, list) and all(_json_array_has(a, y) for y in b)
+    if top and isinstance(a, list):  # scalar-in-array exception: top-level only
+        return _json_array_has(a, b)
+    return not isinstance(a, (dict, list)) and _json_scalar_eq(a, b)
+
+def _sqlite_json_contains(haystack, needle):
+    try:
+        h = json.loads(haystack)
+        n = json.loads(needle)
+    except (TypeError, ValueError):
+        return None
+    return 1 if _json_document_contains(h, n) else 0
+
 
 def __deprecated__(s):
     warnings.warn(s, DeprecationWarning)
@@ -3233,6 +3261,20 @@ class SqliteJSONMethods(BaseJSONMethods):
         # RFC-7396 merge patch. Null values delete keys.
         return fn.json_patch(field, fn.json(field._dumps(value)))
 
+    def _contains_value(self, field, value):
+        return Value(field._dumps(value), converter=False)
+
+    def contains(self, field, keys, value):
+        # _pw_json_contains() is a registered UDF - a per-row full scan, no index.
+        call = fn._pw_json_contains(self.extract(field, keys),
+                                    self._contains_value(field, value))
+        return Expression(call, OP.EQ, 1)
+
+    def contained_by(self, field, keys, value):
+        call = fn._pw_json_contains(self._contains_value(field, value),
+                                    self.extract(field, keys))
+        return Expression(call, OP.EQ, 1)
+
     def has_key(self, field, keys, key):
         # json_type() is NULL only when the path selects nothing, so it
         # doubles as a key-existence test (a stored JSON null still has a
@@ -4017,6 +4059,7 @@ class SqliteDatabase(Database):
         self.nulls_ordering = self.server_version >= (3, 30, 0)
         self.register_function(_sqlite_date_part, 'date_part', 2)
         self.register_function(_sqlite_date_trunc, 'date_trunc', 2)
+        self.register_function(_sqlite_json_contains, '_pw_json_contains', 2)
         if regexp_function:
             self.register_function(_sqlite_regexp, 'regexp', 2)
         if rank_functions:

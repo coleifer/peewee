@@ -3575,9 +3575,11 @@ Fields
                contained_by(value)
 
       JSON structural containment. Postgresql uses ``@>`` / ``<@``, MySQL /
-      MariaDB use ``JSON_CONTAINS``. **Not supported on SQLite** - calling
-      either on a SQLite-backed model raises :class:`NotImplementedError`
-      (SQLite's JSON1 has no recursive containment operator).
+      MariaDB use ``JSON_CONTAINS``. SQLite's JSON1 has no containment
+      operator, so it is emulated with a registered UDF
+      (``_pw_json_contains``) that deserializes and compares each candidate
+      row. That means **no index can be used - it is a full table scan**, so
+      prefer Postgresql or MySQL for containment queries over large tables.
 
       .. code-block:: python
 
@@ -3792,7 +3794,7 @@ Fields
    .. method:: contains(rhs)
 
       JSON structural containment - ``@>`` on Postgresql, ``JSON_CONTAINS``
-      on MySQL / MariaDB. Raises :class:`NotImplementedError` on SQLite.
+      on MySQL / MariaDB, and a full-scan ``_pw_json_contains`` UDF on SQLite.
 
       .. code-block:: python
 
@@ -3904,7 +3906,8 @@ Fields
 
       Inverse of :meth:`contains` - test whether the value at this path is a
       subset of ``value``. Postgresql ``<@``, MySQL / MariaDB
-      ``JSON_CONTAINS(value, lhs)``. Not supported on SQLite.
+      ``JSON_CONTAINS(value, lhs)``, SQLite the ``_pw_json_contains`` UDF
+      (full scan).
 
       .. code-block:: python
 

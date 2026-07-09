@@ -2187,10 +2187,8 @@ class IntegrationTests(object):
             self.assertEqual(await count(M.data['meta'].has_key('x')), 1)
 
     async def test_json_containment(self):
-        # @> / <@ need recursive structural containment: PostgreSQL + MySQL
-        # (SQLite pending a UDF).
-        if self.driver == 'sqlite':
-            self.skipTest('SQLite JSON1 has no @>/<@ containment operator')
+        # @> / <@ on every async backend: PostgreSQL, MySQL, and SQLite (via
+        # the _pw_json_contains UDF loaded onto each connection).
         async with self._json_model() as M:
             await self.db.run(M.create,
                               data={'k': 'v', 'tags': ['a', 'b'], 'n': 5})

@@ -829,7 +829,7 @@ This table collects every documented divergence in one place.
      - Supported (``?`` / ``?&`` / ``?|``).
      - Supported (``JSON_CONTAINS_PATH``).
    * - ``contains()`` / ``contained_by()``
-     - ``NotImplementedError`` (no recursive containment operator).
+     - Emulated by a UDF (full scan, no index).
      - Supported (``@>`` / ``<@``).
      - Supported (``JSON_CONTAINS``).
    * - ``is_null()`` on a stored JSON ``null``
