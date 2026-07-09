@@ -7,6 +7,10 @@ https://github.com/coleifer/peewee/releases
 
 ## master
 
+[View commits](https://github.com/coleifer/peewee/compare/4.1.2...master)
+
+## 4.1.1
+
 * Ensure quotes escaped in SQLite introspection methods, thanks @greymoth-jp
   for reporting and the initial patch.
 * Allow TimestampField to accept an iso-formatted str.
@@ -17,7 +21,7 @@ https://github.com/coleifer/peewee/releases
   Postgres' `@>` semantics (structural, level-aligned). The core `JSONField`
   now has full predicate parity across SQLite, Postgres, and MySQL/MariaDB.
 
-[View commits](https://github.com/coleifer/peewee/compare/4.1.1...master)
+[View commits](https://github.com/coleifer/peewee/compare/4.1.1...4.1.2)
 
 ## 4.1.1
 
