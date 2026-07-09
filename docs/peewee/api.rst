@@ -3554,23 +3554,34 @@ Fields
 
          Doc.update(data=Doc.data.update({'new_field': 1})).execute()
 
-   .. method:: contains(value)
-               contained_by(value)
-               has_key(key)
+   .. method:: has_key(key)
                has_keys(key_list)
                has_any_keys(key_list)
 
-      JSON structural containment and key-existence predicates. Postgresql
-      uses ``@>`` / ``<@`` / ``?`` / ``?&`` / ``?|``. MySQL / MariaDB use
-      ``JSON_CONTAINS`` / ``JSON_CONTAINS_PATH``. **Not supported on
-      SQLite** - calling any of these on a SQLite-backed model raises
-      :class:`peewee.NotSupportedError`.
+      Key-existence predicates, supported on **every** backend. Postgresql
+      uses ``?`` / ``?&`` / ``?|``, MySQL / MariaDB use ``JSON_CONTAINS_PATH``,
+      and SQLite tests ``json_type(field, path) IS NOT NULL`` per key. These
+      check for object-key existence; note that Postgresql's ``?`` *also*
+      matches a string against the elements of a top-level array, which the
+      MySQL and SQLite emulations do not.
+
+      .. code-block:: python
+
+         Doc.select().where(Doc.data.has_key('email'))
+         Doc.select().where(Doc.data.has_keys(['env', 'region']))
+         Doc.select().where(Doc.data.has_any_keys(['admin', 'staff']))
+
+   .. method:: contains(value)
+               contained_by(value)
+
+      JSON structural containment. Postgresql uses ``@>`` / ``<@``, MySQL /
+      MariaDB use ``JSON_CONTAINS``. **Not supported on SQLite** - calling
+      either on a SQLite-backed model raises :class:`NotImplementedError`
+      (SQLite's JSON1 has no recursive containment operator).
 
       .. code-block:: python
 
          Doc.select().where(Doc.data.contains({'env': 'prod'}))
-         Doc.select().where(Doc.data.has_key('email'))
-         Doc.select().where(Doc.data.has_keys(['env', 'region']))
 
 .. warning::
 
@@ -3905,8 +3916,9 @@ Fields
                has_any_keys(key_list)
 
       Test whether the value at this path is an object containing the given
-      key(s). Postgresql uses the ``?`` / ``?&`` / ``?|`` operators, MySQL /
-      MariaDB use ``JSON_CONTAINS_PATH``. Not supported on SQLite.
+      key(s). Supported on all backends: Postgresql uses the ``?`` / ``?&`` /
+      ``?|`` operators, MySQL / MariaDB use ``JSON_CONTAINS_PATH``, and SQLite
+      tests ``json_type()`` per key.
 
       .. code-block:: python
 
