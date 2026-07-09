@@ -113,8 +113,9 @@ class KeyValue(object):
             self.upsert(expr, value)
 
     def __delitem__(self, expr):
-        converted, _ = self.convert_expression(expr)
-        self.model.delete().where(converted).execute()
+        converted, is_single = self.convert_expression(expr)
+        if not self.model.delete().where(converted).execute() and is_single:
+            raise KeyError(expr)
 
     def __iter__(self):
         return iter(self.query().execute())
