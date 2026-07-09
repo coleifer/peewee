@@ -4,6 +4,7 @@ from peewee import *
 from peewee import sqlite3
 
 from .base import IS_CRDB
+from .base import IS_MARIADB
 from .base import IS_MYSQL
 from .base import IS_ORACLE_MYSQL
 from .base import IS_POSTGRESQL
@@ -674,6 +675,13 @@ class TestAsTextDeep(ModelTestCase):
             q = JM.select().where(JM.data['name'].contains('apple'))
             self.assertEqual(q.count(), 1)
 
+    def test_as_text_contains_substring(self):
+        # Text-mode contains is a substring LIKE on every backend.
+        q = JM.select().where(JM.data['name'].as_text().contains('err'))
+        self.assertEqual(q.count(), 1)  # cherry.
+        q = JM.select().where(JM.data['name'].as_text().contains('errr'))
+        self.assertEqual(q.count(), 0)
+
 
 class TestSQLShapes(ModelTestCase):
     requires = [JM]
@@ -998,6 +1006,19 @@ class TestDocumentedDivergences(ModelTestCase):
             self.assertEqual(data, {'a': [1, 'x']})  # Wrapped.
         else:
             self.assertEqual(data, {'a': 1})  # No-op on SQLite and PG.
+
+    def test_append_missing_path(self):
+        JM.create(data={})
+        JM.update(data=JM.data['tags'].append('x')).execute()
+        data = JM.select().get().data
+        if IS_SQLITE:
+            self.assertEqual(data, {'tags': ['x']})  # Array is created.
+        elif IS_MARIADB:
+            # JSON_ARRAY_APPEND returns SQL NULL for a missing path, which
+            # nulls the whole column. Documented footgun.
+            self.assertIsNone(data)
+        else:
+            self.assertEqual(data, {})  # Ignored on PG and MySQL.
 
     def test_length_non_array(self):
         JM.create(data={'k': {'a': 1, 'b': 2}})
