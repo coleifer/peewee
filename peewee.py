@@ -6309,7 +6309,6 @@ class JSONPath(ColumnBase):
         return self._in_helper(OP.NOT_IN, rhs)
 
     def _cmp(self, op, rhs):
-        # Make RHS canonical for structural compare.
         if self._as_text or isinstance(rhs, Node):
             return Expression(self, op, rhs)
         return Expression(self, op, self._compare_value(rhs))
@@ -6340,6 +6339,8 @@ class JSONPath(ColumnBase):
         return ColumnBase.endswith(self.as_text(True), rhs)
 
     def contains(self, rhs):
+        if self._as_text:
+            return ColumnBase.contains(self, rhs)
         return self._field._helper.contains(self._field, self._keys, rhs)
 
     def set(self, value):
