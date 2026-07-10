@@ -13,8 +13,6 @@ def callable_(c: object) -> TypeIs[Callable[..., object]]: ...
 
 multi_types: tuple[type[Incomplete], ...]
 
-def reraise(tp: Unused, value: BaseException, tb: TracebackType | None = None) -> NoReturn: ...
-
 _T = TypeVar("_T")
 _VT = TypeVar("_VT")
 _F = TypeVar("_F", bound=Callable[..., Any])
@@ -288,13 +286,11 @@ class ColumnBase(Node):
     def __add__(self, rhs: Any) -> Expression: ...
     __sub__: ClassVar[Callable[[Self, Any], Expression]]
     __mul__: ClassVar[Callable[[Self, Any], Expression]]
-    __div__: ClassVar[Callable[[Self, Any], Expression]]
     __truediv__: ClassVar[Callable[[Self, Any], Expression]]
     __xor__: ClassVar[Callable[[Self, Any], Expression]]
     def __radd__(self, rhs: Any) -> Expression: ...
     __rsub__: ClassVar[Callable[[Self, Any], Expression]]
     __rmul__: ClassVar[Callable[[Self, Any], Expression]]
-    __rdiv__: ClassVar[Callable[[Self, Any], Expression]]
     __rtruediv__: ClassVar[Callable[[Self, Any], Expression]]
     __rand__: ClassVar[Callable[[Self, Any], Expression]]
     __ror__: ClassVar[Callable[[Self, Any], Expression]]
@@ -642,7 +638,7 @@ class Select(SelectBase):
         **kwargs,
     ) -> None: ...
     def clone(self) -> Self: ...
-    def columns(self, *columns, **kwargs) -> Self: ...
+    def columns(self, *columns) -> Self: ...
     select = columns
     def select_extend(self, *columns) -> Self: ...
 
@@ -1199,7 +1195,6 @@ class Field(ColumnBase, Generic[_V]):
     auto_increment: bool
     default_index_type: Incomplete
     field_type: ClassVar[str]
-    unpack: bool
     null: Incomplete
     index: Incomplete
     unique: Incomplete
@@ -1806,7 +1801,6 @@ class ModelBase(type):
     def __contains__(self, key) -> bool: ...
     def __len__(self) -> int: ...
     def __bool__(self) -> bool: ...
-    def __nonzero__(self) -> bool: ...
     def __sql__(self, ctx): ...
 
 class _BoundModelsContext(_callable_context_manager):
@@ -2041,7 +2035,6 @@ class ModelCursorWrapper(BaseModelCursorWrapper):
     dicts: bool
     def __init__(self, cursor, model, select, from_list, joins, dicts: bool = False) -> None: ...
     key_to_constructor: Incomplete
-    src_is_dest: dict[Incomplete, Incomplete]
     src_to_dest: list[tuple[Incomplete, Incomplete, Incomplete, bool, Incomplete, bool]]
     column_keys: list[Incomplete]
     def initialize(self) -> None: ...
@@ -2058,7 +2051,7 @@ class _PrefetchQuery(NamedTuple):
 
 class PrefetchQuery(_PrefetchQuery):
     def __new__(
-        cls, query, fields=None, is_backref: bool | None = None, rel_models=None, field_to_name=None, model=None
+        cls, query, fields=None, is_backref: bool | None = None, rel_models=None, field_to_name=None
     ) -> Self: ...
     def populate_instance(self, instance, id_map) -> None: ...
     def store_instance(self, instance, id_map) -> None: ...

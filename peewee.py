@@ -158,11 +158,6 @@ logger.addHandler(logging.NullHandler())
 callable_ = lambda c: isinstance(c, Callable)
 multi_types = (list, tuple, frozenset, set, range, types.GeneratorType)
 
-def reraise(tp, value, tb=None):
-    if value.__traceback__ is not tb:
-        raise value.with_traceback(tb)
-    raise value
-
 def qesc(s):
     return s.replace('"', '""')
 
@@ -1061,8 +1056,8 @@ class Table(_HashableSource, BaseTable):
     def update(self, update=None, **kwargs):
         if kwargs:
             update = {} if update is None else update
+            src = self if self._columns else self.c
             for key, value in kwargs.items():
-                src = self if self._columns else self.c
                 update[getattr(src, key)] = value
         return Update(self, update=update)
 
@@ -1256,12 +1251,12 @@ class ColumnBase(Node):
     __add__ = _e(OP.ADD)
     __sub__ = _e(OP.SUB)
     __mul__ = _e(OP.MUL)
-    __div__ = __truediv__ = _e(OP.DIV)
+    __truediv__ = _e(OP.DIV)
     __xor__ = _e(OP.XOR)
     __radd__ = _e(OP.ADD, inv=True)
     __rsub__ = _e(OP.SUB, inv=True)
     __rmul__ = _e(OP.MUL, inv=True)
-    __rdiv__ = __rtruediv__ = _e(OP.DIV, inv=True)
+    __rtruediv__ = _e(OP.DIV, inv=True)
     __rand__ = _e(OP.AND, inv=True)
     __ror__ = _e(OP.OR, inv=True)
     __rxor__ = _e(OP.XOR, inv=True)
@@ -2119,23 +2114,19 @@ class BaseQuery(Node):
     @Node.copy
     def dicts(self, as_dict=True):
         self._row_type = ROW.DICT if as_dict else None
-        return self
 
     @Node.copy
     def tuples(self, as_tuple=True):
         self._row_type = ROW.TUPLE if as_tuple else None
-        return self
 
     @Node.copy
     def namedtuples(self, as_namedtuple=True):
         self._row_type = ROW.NAMED_TUPLE if as_namedtuple else None
-        return self
 
     @Node.copy
     def objects(self, constructor=None):
         self._row_type = ROW.CONSTRUCTOR if constructor else None
         self._constructor = constructor
-        return self
 
     def _get_cursor_wrapper(self, cursor):
         row_type = self._row_type or self.default_row_type
@@ -2420,9 +2411,6 @@ class CompoundSelectQuery(SelectBase):
         query = Select((self.limit(1),), (SQL('1'),)).bind(database)
         return bool(query.scalar())
 
-    def _get_query_key(self):
-        return (self.lhs.get_query_key(), self.rhs.get_query_key())
-
     def _wrap_parens(self, ctx, subq):
         csq_setting = ctx.state.compound_select_parentheses
 
@@ -2501,7 +2489,7 @@ class Select(SelectBase):
         return clone
 
     @Node.copy
-    def columns(self, *columns, **kwargs):
+    def columns(self, *columns):
         self._returning = columns
     select = columns
 
@@ -2584,9 +2572,6 @@ class Select(SelectBase):
     @Node.copy
     def lateral(self, lateral=True):
         self._lateral = lateral
-
-    def _get_query_key(self):
-        return self._alias
 
     def __sql_selection__(self, ctx, is_subquery=False):
         return ctx.sql(CommaNodeList(self._returning))
@@ -3551,7 +3536,7 @@ class ExceptionWrapper(object):
         if exc_type.__name__ in self.exceptions:
             new_type = self.exceptions[exc_type.__name__]
             exc_args = exc_value.args
-            reraise(new_type, new_type(exc_value, *exc_args), traceback)
+            raise new_type(exc_value, *exc_args).with_traceback(traceback)
 
 
 EXCEPTIONS = {
@@ -4086,9 +4071,6 @@ class SqliteDatabase(Database):
         self._timeout = timeout
         super(SqliteDatabase, self).init(database, **kwargs)
 
-    def _set_server_version(self, conn):
-        pass
-
     def _connect(self):
         if sqlite3 is None:
             raise ImproperlyConfigured('SQLite driver not installed!')
@@ -4399,7 +4381,7 @@ class SqliteDatabase(Database):
                              'to preserve or update.')
 
         action = oc._action.lower() if oc._action else ''
-        if action and action not in ('nothing', 'update', ''):
+        if action and action not in ('nothing', 'update'):
             return
 
         if action == 'nothing':
@@ -5038,7 +5020,7 @@ class MySQLDatabase(Database):
             # depending on the MySQL server version. MySQL and MariaDB prior to
             # 10.3.3 use "VALUES", while MariaDB 10.3.3+ use "VALUE".
             version = self.server_version or (0,)
-            if version[0] >= 10 and version >= (10, 3, 3):
+            if version >= (10, 3, 3):
                 VALUE_FN = fn.VALUE
             else:
                 VALUE_FN = fn.VALUES
@@ -5487,7 +5469,6 @@ class Field(ColumnBase):
     auto_increment = False
     default_index_type = None
     field_type = 'DEFAULT'
-    unpack = True
 
     def __init__(self, null=False, index=False, unique=False, column_name=None,
                  default=None, primary_key=False, constraints=None,
@@ -5861,17 +5842,6 @@ class BigBitFieldData(object):
     def __len__(self):
         return len(self._buffer)
 
-    def _get_compatible_data(self, other):
-        if isinstance(other, BigBitFieldData):
-            data = other._buffer
-        elif isinstance(other, (bytes, bytearray, memoryview)):
-            data = other
-        else:
-            raise ValueError('Incompatible data-type')
-        diff = len(data) - len(self)
-        if diff > 0: self._buffer.extend(b'\x00' * diff)
-        return data
-
     def _bitwise_op(self, other, op):
         if isinstance(other, BigBitFieldData):
             data = other._buffer
@@ -5989,14 +5959,14 @@ def _date_part(date_part):
         return self.model._meta.database.extract_date(date_part, self)
     return dec
 
-# fromisoformat() is C-implemented and ~10x faster than strptime. Available
-# since 3.7; pre-3.11 is strict about the separator and rejects 'Z'.
-_fromisoformat = getattr(datetime.datetime, 'fromisoformat', None)
+# fromisoformat() is C-implemented and ~10x faster than strptime. Pre-3.11 it
+# is strict about the separator and rejects 'Z'.
+_fromisoformat = datetime.datetime.fromisoformat
 
 
 def format_date_time(value, formats, post_process=None):
     post_process = post_process or (lambda x: x)
-    if _fromisoformat is not None and value:
+    if value:
         s = value
         if len(s) > 10 and s[10] == ' ':
             s = s[:10] + 'T' + s[11:]
@@ -6748,9 +6718,6 @@ class ManyToManyField(MetaField):
         self._prevent_unsaved = prevent_unsaved
         self._is_backref = _is_backref
 
-    def _get_descriptor(self):
-        return ManyToManyFieldAccessor(self)
-
     def bind(self, model, name, set_attribute=True):
         if isinstance(self._through_model, DeferredThroughModel):
             self._through_model.set_field(model, self, name)
@@ -7198,7 +7165,6 @@ class Metadata(object):
 
         self.defaults = {}
         self._default_by_name = {}
-        self._default_dict = {}
         self._default_callables = {}
         self._default_callable_list = []
 
@@ -7363,7 +7329,6 @@ class Metadata(object):
                     self._default_callable_list.append((field.name,
                                                         field.default))
                 else:
-                    self._default_dict[field] = field.default
                     self._default_by_name[field.name] = field.default
         else:
             field.bind(self.model, field_name, set_attribute)
@@ -7396,7 +7361,6 @@ class Metadata(object):
                         self._default_callable_list.pop(i)
                         break
             else:
-                self._default_dict.pop(original, None)
                 self._default_by_name.pop(original.name, None)
 
         if isinstance(original, ForeignKeyField):
@@ -7567,7 +7531,7 @@ class ModelBase(type):
             cls._meta.add_field(name, field)
 
         # Create a repr and error class before finalizing.
-        if hasattr(cls, '__str__') and '__repr__' not in attrs:
+        if '__repr__' not in attrs:
             setattr(cls, '__repr__', lambda self: '<%s: %s>' % (
                 cls.__name__, self.__str__()))
 
@@ -7607,7 +7571,6 @@ class ModelBase(type):
     def __len__(self):
         return self.select().count()
     def __bool__(self): return True
-    __nonzero__ = __bool__  # Python 2.
 
     def __sql__(self, ctx):
         return ctx.sql(self._meta.table)
@@ -8482,7 +8445,7 @@ class ModelSelect(BaseModelSelect, Select):
             constructor = dict
             attr = attr or dest._alias
             if not attr and isinstance(dest, Table):
-                attr = attr or dest.__name__
+                attr = dest.__name__
 
         return (on, attr, constructor)
 
@@ -8658,7 +8621,6 @@ class ModelSelect(BaseModelSelect, Select):
                     # Apply values from the DQ object.
                     if piece._negated:
                         expression = Negated(expression)
-                    #expression._alias = piece._alias
                     setattr(curr, side, expression)
                 else:
                     q.append(piece)
@@ -9013,10 +8975,8 @@ class ModelCursorWrapper(BaseModelCursorWrapper):
             self.key_to_constructor = {self.model: (dict, False)}
         else:
             self.key_to_constructor = {self.model: (self.model, True)}
-        self.src_is_dest = {}
         self.src_to_dest = []
         accum = collections.deque(self.from_list)
-        dests = set()
 
         while accum:
             curr = accum.popleft()
@@ -9046,7 +9006,6 @@ class ModelCursorWrapper(BaseModelCursorWrapper):
                         join_type,
                         join_type.endswith('OUTER')))
 
-                    dests.add(key)
                     accum.append(key)
 
         # Ensure that we accommodate everything selected.
@@ -9056,11 +9015,6 @@ class ModelCursorWrapper(BaseModelCursorWrapper):
                     self.key_to_constructor[src] = (src, True)
                 elif isinstance(src, ModelAlias):
                     self.key_to_constructor[src] = (src.model, True)
-
-        # Indicate which sources are also dests.
-        for src, _, dest, _, _, _ in self.src_to_dest:
-            self.src_is_dest[src] = src in dests and (dest in selected_src
-                                                      or src in selected_src)
 
         self.column_keys = []
         for idx, node in enumerate(select):
@@ -9180,7 +9134,7 @@ class ModelCursorWrapper(BaseModelCursorWrapper):
 class PrefetchQuery(collections.namedtuple('_PrefetchQuery', (
     'query', 'fields', 'is_backref', 'rel_models', 'field_to_name', 'model'))):
     def __new__(cls, query, fields=None, is_backref=None, rel_models=None,
-                field_to_name=None, model=None):
+                field_to_name=None):
         if fields:
             if is_backref:
                 if rel_models is None:

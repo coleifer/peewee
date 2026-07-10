@@ -13,6 +13,9 @@ https://github.com/coleifer/peewee/releases
 * Fix `Ordering.collate()` dropping the `nulls=` ordering.
 * Fix double-escaping of backticks in MySQL `get_indexes()`.
 * Honor the `windows=` parameter of the `Select` constructor.
+* Remove vestigial Python 2 compat (`reraise()`, `__div__`, `__nonzero__`)
+  and assorted dead internal code.
+* `Select.columns()` no longer accepts and ignores keyword arguments.
 
 [View commits](https://github.com/coleifer/peewee/compare/4.1.2...master)
 

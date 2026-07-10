@@ -165,7 +165,6 @@ class JSONBPath(JSONPath):
 
 class JSONField(TextField):
     field_type = 'TEXT'
-    unpack = False
     Path = JSONPath
 
     def __init__(self, json_dumps=None, json_loads=None, **kwargs):
