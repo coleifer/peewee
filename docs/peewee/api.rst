@@ -2718,10 +2718,15 @@ Model
       * ``ne`` - not equals
       * ``lt``, ``lte`` - less-than, less-than or equal-to
       * ``gt``, ``gte`` - greater-than, greater-than or equal-to
-      * ``in`` - IN set of values
-      * ``is`` - IS (e.g. IS NULL).
+      * ``in``, ``not_in`` - IN and NOT IN set of values
+      * ``is``, ``is_not`` - IS and IS NOT (e.g. IS NULL)
+      * ``is_null`` - IS NULL if value is True, IS NOT NULL if False
       * ``like``, ``ilike`` - LIKE and ILIKE (case-insensitive)
-      * ``regexp`` - regular expression match
+      * ``regexp``, ``iregexp`` - regular expression match
+      * ``contains``, ``startswith``, ``endswith`` - case-insensitive
+        substring, prefix or suffix search. Wildcards in the value are
+        escaped, matching the corresponding :py:class:`ColumnBase` methods.
+      * ``between`` - BETWEEN low AND high, value must be a 2-tuple
 
       Examples:
 
@@ -2729,6 +2734,10 @@ Model
 
          # Get all tweets by user with username="peewee".
          q = Tweet.filter(user__username='peewee')
+
+         # Case-insensitive search of tweet content. Special characters in
+         # the search string ("%", "_") are escaped automatically.
+         q = Tweet.filter(content__contains='sql')
 
          # Get all posts that are draft or published, and written after 2023.
          q = Post.filter(

@@ -342,11 +342,18 @@ DJANGO_MAP = attrdict({
     'gte': operator.ge,
     'ne': operator.ne,
     'in': operator.lshift,
+    'not_in': lambda l, r: l.not_in(r),
     'is': lambda l, r: Expression(l, OP.IS, r),
     'is_not': lambda l, r: Expression(l, OP.IS_NOT, r),
     'like': lambda l, r: Expression(l, OP.LIKE, r),
     'ilike': lambda l, r: Expression(l, OP.ILIKE, r),
     'regexp': lambda l, r: Expression(l, OP.REGEXP, r),
+    'iregexp': lambda l, r: l.iregexp(r),
+    'contains': lambda l, r: l.contains(r),
+    'startswith': lambda l, r: l.startswith(r),
+    'endswith': lambda l, r: l.endswith(r),
+    'between': lambda l, r: l.between(*r),
+    'is_null': lambda l, r: l.is_null(r),
 })
 
 #: Mapping of field type to the data-type supported by the database. Databases

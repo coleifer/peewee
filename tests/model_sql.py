@@ -308,6 +308,57 @@ class TestModelSQL(ModelDatabaseTestCase):
             'WHERE ((("t1"."id" = ?) OR ("t1"."id" = ?)) AND '
             '("t1"."username" IN (?, ?)))'), [1, 2, 'foo', 'bar'])
 
+    def test_filter_lookups(self):
+        # One entry per DJANGO_MAP lookup, asserting the generated SQL. The
+        # exhaustive LIKE-escaping matrix lives in tests/sql.py.
+        for filters, clause, params in (
+                ({'id__eq': 3}, '("t1"."id" = ?)', [3]),
+                ({'id__ne': 3}, '("t1"."id" != ?)', [3]),
+                ({'id__lt': 3}, '("t1"."id" < ?)', [3]),
+                ({'id__lte': 3}, '("t1"."id" <= ?)', [3]),
+                ({'id__gt': 3}, '("t1"."id" > ?)', [3]),
+                ({'id__gte': 3}, '("t1"."id" >= ?)', [3]),
+                ({'id__in': [1, 2]}, '("t1"."id" IN (?, ?))', [1, 2]),
+                ({'id__not_in': [1, 2]}, '("t1"."id" NOT IN (?, ?))', [1, 2]),
+                ({'id__between': (2, 4)}, '("t1"."id" BETWEEN ? AND ?)',
+                 [2, 4]),
+                ({'username': None}, '("t1"."username" IS NULL)', []),
+                ({'username__is': None}, '("t1"."username" IS NULL)', []),
+                ({'username__is_not': None},
+                 '("t1"."username" IS NOT NULL)', []),
+                ({'username__is_null': True},
+                 '("t1"."username" IS NULL)', []),
+                ({'username__is_null': False},
+                 '("t1"."username" IS NOT NULL)', []),
+                ({'username__like': 'x%'}, '("t1"."username" LIKE ?)',
+                 ['x%']),
+                ({'username__ilike': 'x%'}, '("t1"."username" ILIKE ?)',
+                 ['x%']),
+                ({'username__regexp': '^x'}, '("t1"."username" REGEXP ?)',
+                 ['^x']),
+                ({'username__iregexp': '^x'}, '("t1"."username" IREGEXP ?)',
+                 ['^x']),
+                ({'username__contains': 'xy'}, '("t1"."username" ILIKE ?)',
+                 ['%xy%']),
+                ({'username__startswith': 'xy'}, '("t1"."username" ILIKE ?)',
+                 ['xy%']),
+                ({'username__endswith': 'xy'}, '("t1"."username" ILIKE ?)',
+                 ['%xy']),
+                ({'username__contains': 'x%y'},
+                 '("t1"."username" ILIKE ? ESCAPE ?)', ['%x\\%y%', '\\'])):
+            query = User.filter(**filters)
+            self.assertSQL(query, (
+                'SELECT "t1"."id", "t1"."username" FROM "users" AS "t1" '
+                'WHERE %s' % clause), params)
+
+        # Method-based lookups compose with negation and fk traversal.
+        query = Tweet.select(Tweet.content).filter(
+            ~DQ(user__username__startswith='hu'))
+        self.assertSQL(query, (
+            'SELECT "t1"."content" FROM "tweet" AS "t1" '
+            'INNER JOIN "users" AS "t2" ON ("t1"."user_id" = "t2"."id") '
+            'WHERE NOT ("t2"."username" ILIKE ?)'), ['hu%'])
+
     def test_filter_expressions(self):
         query = User.filter(
             DQ(username__in=['huey', 'zaizee']) |
