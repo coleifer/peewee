@@ -1216,16 +1216,12 @@ Partial indexes, indexes with expressions, and more complex indexes can use the
    Article.add_index(idx)
 
 .. note::
-   SQLite does not support parameterized ``CREATE INDEX`` queries. Partial
-   indexes and expression indexes on SQLite must be written using
-   :class:`SQL`:
+   SQLite prohibits bound parameters in ``CREATE INDEX``, so peewee inlines
+   any values used by a partial or expression index as literals when
+   generating the index SQL for SQLite.
 
-   .. code-block:: python
-
-      Article.add_index(SQL('CREATE INDEX ... WHERE status = 1'))
-
-If the above is cumbersome, you can also pass a :class:`SQL` instance to
-``Meta.indexes``:
+For full control, you can also declare an index as a raw :class:`SQL`
+instance in ``Meta.indexes``:
 
 .. code-block:: python
 

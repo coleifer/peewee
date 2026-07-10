@@ -16,6 +16,8 @@ https://github.com/coleifer/peewee/releases
 * Remove vestigial Python 2 compat (`reraise()`, `__div__`, `__nonzero__`)
   and assorted dead internal code.
 * `Select.columns()` no longer accepts and ignores keyword arguments.
+* Remove unused `Metadata.get_rel_for_model()` and the ordering-comparison
+  operators on Table/CTE/select sources.
 
 [View commits](https://github.com/coleifer/peewee/compare/4.1.2...master)
 

@@ -672,9 +672,8 @@ def ServerSide(query, array_size=None):
 
 class _empty_object(object):
     __slots__ = ()
-    def __nonzero__(self):
+    def __bool__(self):
         return False
-    __bool__ = __nonzero__
 
 
 class Psycopg2ExtAdapter(Psycopg2Adapter):

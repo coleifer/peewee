@@ -920,15 +920,6 @@ class _HashableSource(object):
             return self._hash != other._hash
         return Expression(self, OP.NE, other)
 
-    def _e(op):
-        def inner(self, rhs):
-            return Expression(self, op, rhs)
-        return inner
-    __lt__ = _e(OP.LT)
-    __le__ = _e(OP.LTE)
-    __gt__ = _e(OP.GT)
-    __ge__ = _e(OP.GTE)
-
 
 def __bind_database__(meth):
     @wraps(meth)
@@ -6093,15 +6084,7 @@ def _timestamp_date_part(date_part):
 class TimestampField(BigIntegerField):
     # Support second -> microsecond resolution.
     valid_resolutions = [10**i for i in range(7)]
-
-    # Allow str formatted when converting.
-    formats = [
-        '%Y-%m-%d %H:%M:%S.%f',
-        '%Y-%m-%d %H:%M:%S',
-        '%Y-%m-%d %H:%M:%S.%f%z',
-        '%Y-%m-%d %H:%M:%S%z',
-        '%Y-%m-%d',
-    ]
+    formats = DateTimeField.formats
 
     def __init__(self, *args, **kwargs):
         self.resolution = kwargs.pop('resolution', None)
@@ -7296,13 +7279,6 @@ class Metadata(object):
     def _update_sorted_fields(self):
         self.sorted_fields = list(self._sorted_field_list)
         self.sorted_field_names = [f.name for f in self.sorted_fields]
-
-    def get_rel_for_model(self, model):
-        if isinstance(model, ModelAlias):
-            model = model.model
-        forwardrefs = self.model_refs.get(model, [])
-        backrefs = self.model_backrefs.get(model, [])
-        return (forwardrefs, backrefs)
 
     def add_field(self, field_name, field, set_attribute=True):
         if field_name in self.fields:
@@ -8958,11 +8934,10 @@ class ModelObjectCursorWrapper(ModelDictCursorWrapper):
 
 
 class ModelCursorWrapper(BaseModelCursorWrapper):
-    def __init__(self, cursor, model, select, from_list, joins, dicts=False):
+    def __init__(self, cursor, model, select, from_list, joins):
         super(ModelCursorWrapper, self).__init__(cursor, model, select)
         self.from_list = from_list
         self.joins = joins
-        self.dicts = dicts
 
     def initialize(self):
         super(ModelCursorWrapper, self).initialize()
@@ -8971,10 +8946,7 @@ class ModelCursorWrapper(BaseModelCursorWrapper):
         select = self.select
         columns = [make_identifier(c) for c in self.columns]
 
-        if self.dicts:
-            self.key_to_constructor = {self.model: (dict, False)}
-        else:
-            self.key_to_constructor = {self.model: (self.model, True)}
+        self.key_to_constructor = {self.model: (self.model, True)}
         self.src_to_dest = []
         accum = collections.deque(self.from_list)
 
@@ -8988,21 +8960,16 @@ class ModelCursorWrapper(BaseModelCursorWrapper):
             if curr not in self.joins:
                 continue
 
-            is_dict = isinstance(curr, dict)
             for key, attr, constructor, join_type in self.joins[curr]:
-                if self.dicts:
-                    constructor = dict
-
                 if key not in self.key_to_constructor:
                     self.key_to_constructor[key] = (constructor,
                                                     is_model(constructor))
 
-                    # (src, attr, dest, is_dict, join_type, is outer?).
+                    # (src, attr, dest, join_type, is outer?).
                     self.src_to_dest.append((
                         curr,
                         attr,
                         key,
-                        is_dict or self.dicts,
                         join_type,
                         join_type.endswith('OUTER')))
 
@@ -9051,7 +9018,7 @@ class ModelCursorWrapper(BaseModelCursorWrapper):
 
         # Pre-compute join-graph reachability.
         self._dest_reachable = {}
-        for (src, attr, dest, is_dict, join_type, _) in self.src_to_dest:
+        for _, _, dest, _, _ in self.src_to_dest:
             if dest not in self.joins:
                 continue
             reachable = set()
@@ -9095,7 +9062,7 @@ class ModelCursorWrapper(BaseModelCursorWrapper):
                 setattr(instance, column, value)
 
         # Need to do some analysis on the joins before this.
-        for (src, attr, dest, _, _, is_outer) in self.src_to_dest:
+        for (src, attr, dest, _, is_outer) in self.src_to_dest:
             instance = objects.get(src)
             joined_instance = objects.get(dest)
             if joined_instance is None and dest not in objects:
