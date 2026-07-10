@@ -1542,7 +1542,7 @@ class Ordering(WrappedNode):
                              '"last", got: %s' % nulls)
 
     def collate(self, collation=None):
-        return Ordering(self.node, self.direction, collation)
+        return Ordering(self.node, self.direction, collation, self.nulls)
 
     def _null_ordering_case(self, nulls):
         if nulls.lower() == 'last':
@@ -2481,7 +2481,7 @@ class Select(SelectBase):
         self._returning = columns
         self._group_by = group_by
         self._having = having
-        self._windows = None
+        self._windows = windows or None
         self._for_update = for_update
         self._lateral = lateral
 
@@ -4952,7 +4952,6 @@ class MySQLDatabase(Database):
         return '`%s`' % table
 
     def get_indexes(self, table, schema=None):
-        table = table.replace('`', '``')
         cursor = self.execute_sql('SHOW INDEX FROM %s' %
                                   self._show_index_target(table, schema))
         unique = set()
@@ -7064,7 +7063,7 @@ class SchemaManager(object):
                 index = index.safe(False)
             elif index._safe != safe:
                 index = index.safe(safe)
-            if isinstance(self._database, SqliteDatabase):
+            if isinstance(self.database, SqliteDatabase):
                 # Ensure we do not use value placeholders with Sqlite, as they
                 # are not supported.
                 index = ValueLiterals(index)
@@ -9142,7 +9141,7 @@ class ModelCursorWrapper(BaseModelCursorWrapper):
                 setattr(instance, column, value)
 
         # Need to do some analysis on the joins before this.
-        for (src, attr, dest, is_dict, _, is_outer) in self.src_to_dest:
+        for (src, attr, dest, _, _, is_outer) in self.src_to_dest:
             instance = objects.get(src)
             joined_instance = objects.get(dest)
             if joined_instance is None and dest not in objects:
@@ -9166,7 +9165,7 @@ class ModelCursorWrapper(BaseModelCursorWrapper):
             if src not in set_keys and dest not in set_keys and is_outer:
                 continue
 
-            if is_dict:
+            if isinstance(instance, dict):
                 instance[attr] = joined_instance
             else:
                 setattr(instance, attr, joined_instance)

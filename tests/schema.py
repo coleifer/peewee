@@ -282,7 +282,7 @@ class TestModelDDL(ModelDatabaseTestCase):
         self.assertIndexes(Taxonomy, [
             ('CREATE INDEX "taxonomy_name_class" ON "taxonomy" ('
              'LOWER("name") varchar_pattern_ops, "name_class") '
-             'WHERE ("name_class" = ?)', ['scientific name']),
+             'WHERE ("name_class" = \'scientific name\')', []),
         ])
 
     def test_add_index_with_fields(self):
@@ -346,8 +346,8 @@ class TestModelDDL(ModelDatabaseTestCase):
         self.assertIndexes(C, [
             ('CREATE UNIQUE INDEX "c_key" ON "c" ("key") '
              'NULLS DISTINCT '
-             'WHERE (LOWER(SUBSTR("key", ?, ?)) = ?)',
-             [1, 1, 'c']),
+             'WHERE (LOWER(SUBSTR("key", 1, 1)) = \'c\')',
+             []),
         ])
 
     def test_legacy_model_table_and_indexes(self):
@@ -676,6 +676,20 @@ class TestModelDDL(ModelDatabaseTestCase):
             '"a123456789012345678901234567890", '
             '"b123456789012345678901234567890", '
             '"c123456789012345678901234567890")'), [])
+
+    def test_index_value_literals_unbound(self):
+        # Sqlite index values inline even when the model is never bind()-ed.
+        class KV(TestModel):
+            key = CharField()
+            status = IntegerField()
+            class Meta:
+                database = self.database
+
+        KV.add_index(KV.index(KV.key, where=(KV.status == 1)))
+        self.assertIndexes(KV, [
+            ('CREATE INDEX "kv_key" ON "kv" ("key") WHERE ("status" = 1)',
+             []),
+        ])
 
     def test_fk_non_pk_ddl(self):
         class A(Model):

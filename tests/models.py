@@ -1007,6 +1007,29 @@ class TestModelAPIs(ModelTestCase):
                 ('purr', {'username': 'huey'}),
                 ('woof', {'username': 'mickey'})])
 
+    @requires_models(User, Tweet)
+    def test_join_to_dict_nested(self):
+        # Join whose source is itself a dict-hydrated (non-model) source.
+        huey = self.add_user('huey')
+        mickey = self.add_user('mickey')
+        self.add_tweets(huey, 'meow')
+        self.add_tweets(mickey, 'woof')
+
+        TQ = Select((Tweet,), (Tweet.id, Tweet.user, Tweet.content))
+        UQ = Select((User,), (User.id, User.username))
+        with self.assertQueryCount(1):
+            query = (Tweet
+                     .select(Tweet.id, TQ.c.content, UQ.c.username)
+                     .join(TQ, on=(Tweet.id == TQ.c.id), attr='t')
+                     .join_from(TQ, UQ, on=(TQ.c.user_id == UQ.c.id),
+                                attr='u')
+                     .order_by(Tweet.id))
+            rows = [(t.t['content'], t.t['u']) for t in query]
+
+        self.assertEqual(rows, [
+            ('meow', {'username': 'huey'}),
+            ('woof', {'username': 'mickey'})])
+
     @requires_models(User, Tweet, Favorite)
     def test_multi_join(self):
         u1 = User.create(username='u1')

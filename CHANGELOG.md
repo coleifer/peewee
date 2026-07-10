@@ -9,6 +9,10 @@ https://github.com/coleifer/peewee/releases
 
 * Add django-style filter lookups: `contains`, `startswith`, `endswith`,
   `between`, `is_null`, `not_in` and `iregexp`.
+* Fix SQLite index value inlining so it also applies properly.
+* Fix `Ordering.collate()` dropping the `nulls=` ordering.
+* Fix double-escaping of backticks in MySQL `get_indexes()`.
+* Honor the `windows=` parameter of the `Select` constructor.
 
 [View commits](https://github.com/coleifer/peewee/compare/4.1.2...master)
 

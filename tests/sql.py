@@ -1256,6 +1256,19 @@ class TestSelectQuery(BaseTestCase):
             'ORDER BY CASE WHEN ("t1"."ts" IS NULL) THEN ? ELSE ? END, '
             '"t1"."ts" DESC'), [0, 1], nulls_ordering=False)
 
+    def test_order_by_nulls_collate(self):
+        query = (User
+                 .select(User.c.username)
+                 .order_by(User.c.ts.desc(nulls='LAST').collate('NOCASE')))
+        self.assertSQL(query, (
+            'SELECT "t1"."username" FROM "users" AS "t1" '
+            'ORDER BY "t1"."ts" DESC COLLATE NOCASE NULLS LAST'), [],
+            nulls_ordering=True)
+        self.assertSQL(query, (
+            'SELECT "t1"."username" FROM "users" AS "t1" '
+            'ORDER BY CASE WHEN ("t1"."ts" IS NULL) THEN ? ELSE ? END, '
+            '"t1"."ts" DESC COLLATE NOCASE'), [1, 0], nulls_ordering=False)
+
     def test_ordering_invalid_nulls_error(self):
         self.assertRaises(ValueError, Ordering, User.c.id, 'ASC',
                           nulls='middle')
@@ -1963,6 +1976,13 @@ class TestWindowFunctions(BaseTestCase):
             'SELECT SUM("t1"."val") OVER "w" FROM "users" AS "t1" '
             'WINDOW "w" AS (ORDER BY "t1"."id" '
             'GROUPS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW)'))
+
+    def test_window_constructor_arg(self):
+        w = Window(order_by=[User.c.id])
+        query = Select((User,), (fn.RANK().over(w),), windows=[w])
+        self.assertSQL(query, (
+            'SELECT RANK() OVER "w" FROM "users" AS "t1" '
+            'WINDOW "w" AS (ORDER BY "t1"."id")'))
 
     def test_window_exclude_with_string(self):
         w = Window(order_by=[User.c.id],
