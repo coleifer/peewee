@@ -2155,7 +2155,10 @@ class BaseQuery(Node):
         return await database.run(self.execute, database)
 
     def _execute(self, database):
-        raise NotImplementedError
+        if self._cursor_wrapper is None:
+            cursor = database.execute(self)
+            self._cursor_wrapper = self._get_cursor_wrapper(cursor)
+        return self._cursor_wrapper
 
     def iterator(self, database=None):
         return iter(self.execute(database).iterator())
@@ -2201,12 +2204,6 @@ class RawQuery(BaseQuery):
             for param in self._params:
                 ctx.value(param, add_param=False)
         return ctx
-
-    def _execute(self, database):
-        if self._cursor_wrapper is None:
-            cursor = database.execute(self)
-            self._cursor_wrapper = self._get_cursor_wrapper(cursor)
-        return self._cursor_wrapper
 
 
 class Query(BaseQuery):
@@ -2321,12 +2318,6 @@ class SelectQuery(Query):
 class SelectBase(_HashableSource, Source, SelectQuery):
     def _get_hash(self):
         return hash((self.__class__, self._alias or id(self)))
-
-    def _execute(self, database):
-        if self._cursor_wrapper is None:
-            cursor = database.execute(self)
-            self._cursor_wrapper = self._get_cursor_wrapper(cursor)
-        return self._cursor_wrapper
 
     @database_required
     def peek(self, database, n=1):
@@ -2669,10 +2660,7 @@ class _WriteQuery(Query):
         return self.handle_result(database, cursor)
 
     def execute_returning(self, database):
-        if self._cursor_wrapper is None:
-            cursor = database.execute(self)
-            self._cursor_wrapper = self._get_cursor_wrapper(cursor)
-        return self._cursor_wrapper
+        return super(_WriteQuery, self)._execute(database)
 
     def handle_result(self, database, cursor):
         if self._return_cursor:
@@ -3123,6 +3111,9 @@ class BaseJSONMethods(object):
         # Canonicalize a value for comparison with the field or a path.
         return field.db_value(value)
 
+    def _contains_value(self, field, value):
+        return Value(field._dumps(value), converter=False)
+
     @staticmethod
     def _path(keys, suffix=''):
         parts = ['$']
@@ -3243,9 +3234,6 @@ class SqliteJSONMethods(BaseJSONMethods):
     def update(self, field, value):
         # RFC-7396 merge patch. Null values delete keys.
         return fn.json_patch(field, fn.json(field._dumps(value)))
-
-    def _contains_value(self, field, value):
-        return Value(field._dumps(value), converter=False)
 
     def contains(self, field, keys, value):
         # _pw_json_contains() is a registered UDF - a per-row full scan, no index.
@@ -3420,9 +3408,6 @@ class MySQLJSONMethods(BaseJSONMethods):
         if value is None or isinstance(value, (dict, list)):
             return self._as_json(Value(field._dumps(value), converter=False))
         return Value(value, converter=False)
-
-    def _contains_value(self, field, value):
-        return Value(field._dumps(value), converter=False)
 
     def compare_value(self, field, value):
         # Mark the rhs as json so comparison against extract() works - raw
@@ -3860,7 +3845,10 @@ class Database(_callable_context_manager):
         return cursor.lastrowid
 
     def rows_affected(self, cursor):
-        return cursor.rowcount
+        try:
+            return cursor.rowcount
+        except AttributeError:
+            return cursor.cursor.rowcount  # This was a RETURNING query.
 
     def default_values_insert(self, ctx):
         return ctx.literal('DEFAULT VALUES')
@@ -4268,12 +4256,6 @@ class SqliteDatabase(Database):
                 pass
         return cursor
 
-    def rows_affected(self, cursor):
-        try:
-            return cursor.rowcount
-        except AttributeError:
-            return cursor.cursor.rowcount  # This was a RETURNING query.
-
     def begin(self, lock_type=None):
         statement = 'BEGIN %s' % lock_type if lock_type else 'BEGIN'
         self.execute_sql(statement)
@@ -4616,12 +4598,6 @@ class PostgresqlDatabase(Database):
             return cursor if query_type != Insert.SIMPLE else cursor[0][0]
         except (IndexError, KeyError, TypeError):
             pass
-
-    def rows_affected(self, cursor):
-        try:
-            return cursor.rowcount
-        except AttributeError:
-            return cursor.cursor.rowcount
 
     def begin(self, isolation_level=None):
         if self.is_closed():
