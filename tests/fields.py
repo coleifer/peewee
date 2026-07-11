@@ -519,6 +519,9 @@ class TSR(TestModel):
 class TestTimestampField(ModelTestCase):
     requires = [TSModel]
 
+    def local_to_utc(self, dt):
+        return dt.astimezone(datetime.timezone.utc).replace(tzinfo=None)
+
     @requires_models(TSR)
     def test_timestamp_field_resolutions(self):
         dt = datetime.datetime(2018, 3, 1, 3, 3, 7).replace(microsecond=123456)
@@ -576,7 +579,7 @@ class TestTimestampField(ModelTestCase):
         self.assertEqual(ts_db.ts_ms, dt.replace(microsecond=31000))
         self.assertEqual(ts_db.ts_us, dt)
 
-        utc_dt = TimestampField().local_to_utc(dt)
+        utc_dt = self.local_to_utc(dt).replace(microsecond=0)
         self.assertEqual(ts_db.ts_u, utc_dt)
 
         # Verify we can query using a timestamp.
@@ -610,7 +613,7 @@ class TestTimestampField(ModelTestCase):
 
     def test_timestamp_field_parts(self):
         dt = datetime.datetime(2019, 1, 2, 3, 4, 5)
-        dt_utc = TimestampField().local_to_utc(dt)
+        dt_utc = self.local_to_utc(dt)
         ts = TSModel.create(ts_s=dt, ts_us=dt, ts_ms=dt, ts_u=dt_utc)
 
         fields = (TSModel.ts_s, TSModel.ts_us, TSModel.ts_ms, TSModel.ts_u)
@@ -640,7 +643,7 @@ class TestTimestampField(ModelTestCase):
 
     def test_timestamp_field_from_ts(self):
         dt = datetime.datetime(2019, 1, 2, 3, 4, 5)
-        dt_utc = TimestampField().local_to_utc(dt)
+        dt_utc = self.local_to_utc(dt)
 
         ts = TSModel.create(ts_s=dt, ts_us=dt, ts_ms=dt, ts_u=dt_utc)
         query = TSModel.select(

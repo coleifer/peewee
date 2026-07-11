@@ -6079,21 +6079,6 @@ class TimestampField(BigIntegerField):
         kwargs.setdefault('default', dflt)
         super(TimestampField, self).__init__(*args, **kwargs)
 
-    def local_to_utc(self, dt):
-        # Convert naive local datetime into naive UTC, e.g.:
-        # 2019-03-01T12:00:00 (local=US/Central) -> 2019-03-01T18:00:00.
-        # 2019-05-01T12:00:00 (local=US/Central) -> 2019-05-01T17:00:00.
-        # 2019-03-01T12:00:00 (local=UTC)        -> 2019-03-01T12:00:00.
-        return datetime.datetime(*time.gmtime(time.mktime(dt.timetuple()))[:6])
-
-    def utc_to_local(self, dt):
-        # Convert a naive UTC datetime into local time, e.g.:
-        # 2019-03-01T18:00:00 (local=US/Central) -> 2019-03-01T12:00:00.
-        # 2019-05-01T17:00:00 (local=US/Central) -> 2019-05-01T12:00:00.
-        # 2019-03-01T12:00:00 (local=UTC)        -> 2019-03-01T12:00:00.
-        ts = calendar.timegm(dt.utctimetuple())
-        return datetime.datetime.fromtimestamp(ts)
-
     def get_timestamp(self, value):
         if self.utc or value.tzinfo is not None:
             # Aware datetimes denote an unambiguous instant; naive datetimes in
