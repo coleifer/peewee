@@ -8933,11 +8933,13 @@ class ModelCursorWrapper(BaseModelCursorWrapper):
                     self.key_to_constructor[key] = (constructor,
                                                     is_model(constructor))
 
-                    # (src, attr, dest, join_type, is outer?).
+                    src_ctor = self.key_to_constructor.get(curr)
+                    # (src, attr, dest, src is dict?, join type, is outer?).
                     self.src_to_dest.append((
                         curr,
                         attr,
                         key,
+                        src_ctor is not None and not src_ctor[1],
                         join_type,
                         join_type.endswith('OUTER')))
 
@@ -8986,7 +8988,7 @@ class ModelCursorWrapper(BaseModelCursorWrapper):
 
         # Pre-compute join-graph reachability.
         self._dest_reachable = {}
-        for _, _, dest, _, _ in self.src_to_dest:
+        for _, _, dest, _, _, _ in self.src_to_dest:
             if dest not in self.joins:
                 continue
             reachable = set()
@@ -9030,7 +9032,7 @@ class ModelCursorWrapper(BaseModelCursorWrapper):
                 setattr(instance, column, value)
 
         # Need to do some analysis on the joins before this.
-        for (src, attr, dest, _, is_outer) in self.src_to_dest:
+        for (src, attr, dest, is_dict, _, is_outer) in self.src_to_dest:
             instance = objects.get(src)
             joined_instance = objects.get(dest)
             if joined_instance is None and dest not in objects:
@@ -9054,7 +9056,7 @@ class ModelCursorWrapper(BaseModelCursorWrapper):
             if src not in set_keys and dest not in set_keys and is_outer:
                 continue
 
-            if isinstance(instance, dict):
+            if is_dict:
                 instance[attr] = joined_instance
             else:
                 setattr(instance, attr, joined_instance)
