@@ -80,6 +80,15 @@ https://github.com/coleifer/peewee/releases
   schema-per-tenant layouts) no longer collide in field-keyed registries such
   as backrefs; redefining or re-importing a model in place still replaces
   its entries.
+* Fix `UnboundLocalError` when joining from a model-less source to a model,
+  e.g. `join_from(cte, SomeModel, on=...)`; the joined instance is stored in
+  the source's row dict, keyed by the model name.
+* `BlobField`, `CompressedField` and the `sqlite_udf.gzip()` function encode
+  `str` values using utf-8 instead of `raw_unicode_escape`. Behavior change
+  for non-ASCII strings: characters
+  above the latin-1 range are no longer mangled into literal escape
+  sequences, but blobs written from non-ASCII strings by earlier versions
+  will not compare equal to newly-written ones.
 
 [View commits](https://github.com/coleifer/peewee/compare/4.1.2...master)
 

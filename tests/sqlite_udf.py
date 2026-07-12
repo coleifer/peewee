@@ -270,6 +270,7 @@ class TestScalarFunctions(BaseTestUDF):
             data = (
                 'a',
                 'a' * 1024,
+                'caf\xe9 ☃',
                 randstr(1024),
                 randstr(4096),
                 randstr(1024 * 64))

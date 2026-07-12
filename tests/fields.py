@@ -822,6 +822,19 @@ class TestBlobField(ModelTestCase):
             data = bytes(data)
         self.assertEqual(data, b'\xff\x01')
 
+    def test_blob_field_str(self):
+        # Strings are encoded to bytes using utf8.
+        b = BlobModel.create(data='caf\xe9 ☃')
+        b_db = BlobModel.get(BlobModel.data == 'caf\xe9 ☃')
+        self.assertEqual(b.id, b_db.id)
+
+        data = b_db.data
+        if isinstance(data, memoryview):
+            data = data.tobytes()
+        elif not isinstance(data, bytes):
+            data = bytes(data)
+        self.assertEqual(data.decode('utf8'), 'caf\xe9 ☃')
+
     def test_blob_on_proxy(self):
         db = Proxy()
         class NewBlobModel(Model):

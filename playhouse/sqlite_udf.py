@@ -171,7 +171,7 @@ def file_read(filename):
 @udf(HELPER)
 def gzip(data, compression=9):
     if isinstance(data, str):
-        data = bytes(data.encode('raw_unicode_escape'))
+        data = data.encode('utf8')
     return zlib.compress(data, compression)
 
 @udf(HELPER)

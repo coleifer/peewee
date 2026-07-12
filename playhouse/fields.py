@@ -39,7 +39,7 @@ class CompressedField(BlobField):
     def db_value(self, value):
         if value is not None:
             if isinstance(value, str):
-                value = value.encode('raw_unicode_escape')
+                value = value.encode('utf8')
             return self._constructor(
                 self.compress(value, self.compression_level))
 

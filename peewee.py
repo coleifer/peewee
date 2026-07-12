@@ -5729,7 +5729,7 @@ class BlobField(FieldDatabaseHook, Field):
 
     def db_value(self, value):
         if isinstance(value, str):
-            value = value.encode('raw_unicode_escape')
+            value = value.encode('utf8')
         if isinstance(value, bytes):
             return self._constructor(value)
         return value

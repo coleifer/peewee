@@ -40,6 +40,11 @@ class TestCompressedField(ModelTestCase):
         # Ensure that the data actually was compressed.
         self.assertTrue(len(obj['data']) < 1024)
 
+    def test_compressed_field_str(self):
+        Comp.create(data='caf\xe9 ☃', key='s')
+        s_db = Comp.get(Comp.key == 's')
+        self.assertEqual(s_db.data.decode('utf8'), 'caf\xe9 ☃')
+
 
 class TestPickleField(ModelTestCase):
     requires = [Pickled]
