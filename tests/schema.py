@@ -691,6 +691,22 @@ class TestModelDDL(ModelDatabaseTestCase):
              []),
         ])
 
+    def test_index_value_literals_proxy(self):
+        # Sqlite index values inline behind a DatabaseProxy.
+        proxy = DatabaseProxy()
+        class KVP(TestModel):
+            key = CharField()
+            status = IntegerField()
+            class Meta:
+                database = proxy
+
+        proxy.initialize(self.database)
+        KVP.add_index(KVP.index(KVP.key, where=(KVP.status == 1)))
+        self.assertIndexes(KVP, [
+            ('CREATE INDEX "kvp_key" ON "kvp" ("key") WHERE ("status" = 1)',
+             []),
+        ])
+
     def test_fk_non_pk_ddl(self):
         class A(Model):
             cf = CharField(max_length=100, unique=True)

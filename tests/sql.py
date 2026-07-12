@@ -1273,6 +1273,22 @@ class TestSelectQuery(BaseTestCase):
         self.assertRaises(ValueError, Ordering, User.c.id, 'ASC',
                           nulls='middle')
 
+    def test_subquery_ordering_comparisons(self):
+        subq = (Tweet
+                .select(fn.COUNT(Tweet.c.id))
+                .where(Tweet.c.user_id == User.c.id))
+        query = User.select(User.c.username).where(subq >= 2)
+        self.assertSQL(query, (
+            'SELECT "t1"."username" FROM "users" AS "t1" '
+            'WHERE ((SELECT COUNT("t2"."id") FROM "tweets" AS "t2" '
+            'WHERE ("t2"."user_id" = "t1"."id")) >= ?)'), [2])
+
+        query = User.select(User.c.username).where(2 < subq)
+        self.assertSQL(query, (
+            'SELECT "t1"."username" FROM "users" AS "t1" '
+            'WHERE ((SELECT COUNT("t2"."id") FROM "tweets" AS "t2" '
+            'WHERE ("t2"."user_id" = "t1"."id")) > ?)'), [2])
+
     def test_coalesce(self):
         Sample = Table('sample', ('counter', 'value'))
         query = (Sample
@@ -1983,6 +1999,11 @@ class TestWindowFunctions(BaseTestCase):
         self.assertSQL(query, (
             'SELECT RANK() OVER "w" FROM "users" AS "t1" '
             'WINDOW "w" AS (ORDER BY "t1"."id")'))
+
+    def test_window_constructor_arg_non_sequence(self):
+        w = Window(order_by=[User.c.id])
+        self.assertRaises(TypeError, Select, (User,), (fn.RANK().over(w),),
+                          windows=w)
 
     def test_window_exclude_with_string(self):
         w = Window(order_by=[User.c.id],

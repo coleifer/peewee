@@ -920,6 +920,15 @@ class _HashableSource(object):
             return self._hash != other._hash
         return Expression(self, OP.NE, other)
 
+    def _e(op):
+        def inner(self, rhs):
+            return Expression(self, op, rhs)
+        return inner
+    __lt__ = _e(OP.LT)
+    __le__ = _e(OP.LTE)
+    __gt__ = _e(OP.GT)
+    __ge__ = _e(OP.GTE)
+
 
 def __bind_database__(meth):
     @wraps(meth)
@@ -1527,8 +1536,9 @@ class Ordering(WrappedNode):
             raise ValueError('Ordering nulls= parameter must be "first" or '
                              '"last", got: %s' % nulls)
 
+    @Node.copy
     def collate(self, collation=None):
-        return Ordering(self.node, self.direction, collation, self.nulls)
+        self.collation = collation
 
     def _null_ordering_case(self, nulls):
         if nulls.lower() == 'last':
@@ -2451,7 +2461,7 @@ class Select(SelectBase):
         self._returning = columns
         self._group_by = group_by
         self._having = having
-        self._windows = windows or None
+        self._windows = tuple(windows) if windows else None
         self._for_update = for_update
         self._lateral = lateral
 
@@ -3406,7 +3416,7 @@ class MySQLJSONMethods(BaseJSONMethods):
         # Value for JSON_SET, etc. Need to apply wrapping in order to ensure
         # objects/arrays/null are CAST as JSON and not strings.
         if value is None or isinstance(value, (dict, list)):
-            return self._as_json(Value(field._dumps(value), converter=False))
+            return self._as_json(self._contains_value(field, value))
         return Value(value, converter=False)
 
     def compare_value(self, field, value):
@@ -3414,7 +3424,7 @@ class MySQLJSONMethods(BaseJSONMethods):
         # dumps() text matches neither flavor.
         if value is None or isinstance(value, Node):
             return value
-        return self._as_json(Value(field._dumps(value), converter=False))
+        return self._as_json(self._contains_value(field, value))
 
     def set(self, field, keys, value):
         return fn.JSON_SET(field, self._path(keys),
@@ -3611,6 +3621,7 @@ class Database(_callable_context_manager):
     for_update = False
     index_schema_prefix = False
     index_using_precedes_table = False
+    index_value_literals = False
     limit_max = None
     nulls_ordering = False
     returning_clause = False
@@ -3796,6 +3807,23 @@ class Database(_callable_context_manager):
     def conflict_update(self, on_conflict, query):
         raise NotImplementedError
 
+    def _conflict_update_items(self, on_conflict, query, qualify):
+        items = []
+        for k, v in on_conflict._update.items():
+            if not isinstance(v, Node):
+                # Attempt to resolve string field-names to their respective
+                # field object, to apply data-type conversions.
+                if isinstance(k, str):
+                    k = getattr(query.table, k)
+                if isinstance(k, Field):
+                    v = k.to_value(v)
+                else:
+                    v = Value(v, unpack=False)
+            elif qualify:
+                v = QualifiedNames(v)
+            items.append(NodeList((ensure_entity(k), SQL('='), v)))
+        return items
+
     def _build_on_conflict_update(self, on_conflict, query):
         if on_conflict._conflict_target:
             stmt = SQL('ON CONFLICT')
@@ -3821,19 +3849,8 @@ class Database(_callable_context_manager):
                 updates.append(expression)
 
         if on_conflict._update:
-            for k, v in on_conflict._update.items():
-                if not isinstance(v, Node):
-                    # Attempt to resolve string field-names to their respective
-                    # field object, to apply data-type conversions.
-                    if isinstance(k, str):
-                        k = getattr(query.table, k)
-                    if isinstance(k, Field):
-                        v = k.to_value(v)
-                    else:
-                        v = Value(v, unpack=False)
-                else:
-                    v = QualifiedNames(v)
-                updates.append(NodeList((ensure_entity(k), SQL('='), v)))
+            updates.extend(self._conflict_update_items(on_conflict, query,
+                                                       qualify=True))
 
         parts = [stmt, target, SQL('DO UPDATE SET'), CommaNodeList(updates)]
         if on_conflict._where:
@@ -4007,6 +4024,7 @@ class SqliteDatabase(Database):
         'LIKE': 'GLOB',
         'ILIKE': 'LIKE'}
     index_schema_prefix = True
+    index_value_literals = True
     limit_max = -1
     server_version = __sqlite_version__
     truncate_table = False
@@ -5001,17 +5019,8 @@ class MySQLDatabase(Database):
                 updates.append(expression)
 
         if on_conflict._update:
-            for k, v in on_conflict._update.items():
-                if not isinstance(v, Node):
-                    # Attempt to resolve string field-names to their respective
-                    # field object, to apply data-type conversions.
-                    if isinstance(k, str):
-                        k = getattr(query.table, k)
-                    if isinstance(k, Field):
-                        v = k.to_value(v)
-                    else:
-                        v = Value(v, unpack=False)
-                updates.append(NodeList((ensure_entity(k), SQL('='), v)))
+            updates.extend(self._conflict_update_items(on_conflict, query,
+                                                       qualify=False))
 
         if updates:
             return NodeList((SQL('ON DUPLICATE KEY UPDATE'),
@@ -6060,7 +6069,7 @@ def _timestamp_date_part(date_part):
 class TimestampField(BigIntegerField):
     # Support second -> microsecond resolution.
     valid_resolutions = [10**i for i in range(7)]
-    formats = DateTimeField.formats
+    formats = list(DateTimeField.formats)
 
     def __init__(self, *args, **kwargs):
         self.resolution = kwargs.pop('resolution', None)
@@ -6974,7 +6983,7 @@ class SchemaManager(object):
                 index = index.safe(False)
             elif index._safe != safe:
                 index = index.safe(safe)
-            if isinstance(self.database, SqliteDatabase):
+            if self.database.index_value_literals:
                 # Ensure we do not use value placeholders with Sqlite, as they
                 # are not supported.
                 index = ValueLiterals(index)
@@ -7109,7 +7118,6 @@ class Metadata(object):
 
         self.defaults = {}
         self._default_by_name = {}
-        self._default_callables = {}
         self._default_callable_list = []
 
         self.name = model.__name__.lower()
@@ -7262,7 +7270,6 @@ class Metadata(object):
                 # This optimization helps speed up model instance construction.
                 self.defaults[field] = field.default
                 if callable_(field.default):
-                    self._default_callables[field] = field.default
                     self._default_callable_list.append((field.name,
                                                         field.default))
                 else:
@@ -7292,7 +7299,7 @@ class Metadata(object):
 
         if original.default is not None:
             del self.defaults[original]
-            if self._default_callables.pop(original, None):
+            if callable_(original.default):
                 for i, (name, _) in enumerate(self._default_callable_list):
                     if name == field_name:
                         self._default_callable_list.pop(i)

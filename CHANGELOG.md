@@ -9,15 +9,17 @@ https://github.com/coleifer/peewee/releases
 
 * Add django-style filter lookups: `contains`, `startswith`, `endswith`,
   `between`, `is_null`, `not_in` and `iregexp`.
-* Fix SQLite index value inlining so it also applies properly.
+* Fix SQLite index value inlining to apply when the database is bound via
+  model `Meta` or a `DatabaseProxy`, gated by the new
+  `Database.index_value_literals` feature toggle.
 * Fix `Ordering.collate()` dropping the `nulls=` ordering.
 * Fix double-escaping of backticks in MySQL `get_indexes()`.
 * Honor the `windows=` parameter of the `Select` constructor.
 * Remove vestigial Python 2 compat (`reraise()`, `__div__`, `__nonzero__`)
   and assorted dead internal code.
+* Remove `TimestampField.local_to_utc()` and `TimestampField.utc_to_local()`.
 * `Select.columns()` no longer accepts and ignores keyword arguments.
-* Remove unused `Metadata.get_rel_for_model()` and the ordering-comparison
-  operators on Table/CTE/select sources.
+* Remove unused `Metadata.get_rel_for_model()`.
 
 [View commits](https://github.com/coleifer/peewee/compare/4.1.2...master)
 

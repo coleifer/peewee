@@ -522,6 +522,10 @@ class TestTimestampField(ModelTestCase):
     def local_to_utc(self, dt):
         return dt.astimezone(datetime.timezone.utc).replace(tzinfo=None)
 
+    def test_formats_not_shared(self):
+        self.assertIsNot(TimestampField.formats, DateTimeField.formats)
+        self.assertEqual(TimestampField.formats, DateTimeField.formats)
+
     @requires_models(TSR)
     def test_timestamp_field_resolutions(self):
         dt = datetime.datetime(2018, 3, 1, 3, 3, 7).replace(microsecond=123456)
