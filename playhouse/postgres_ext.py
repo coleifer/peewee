@@ -681,19 +681,11 @@ class Psycopg2ExtAdapter(Psycopg2Adapter):
     def register_hstore(self, conn):
         register_hstore(conn)
 
-    def server_side_cursor(self, conn):
-        # psycopg2 does not allow us to use these in autocommit, even if we ARE
-        # inside a transaction - so specify withhold (not desirable!).
-        return conn.cursor(name=str(uuid.uuid1()), withhold=True)
-
 
 class Psycopg3ExtAdapter(Psycopg3Adapter):
     def register_hstore(self, conn):
         info = TypeInfo.fetch(conn, 'hstore')
         register_hstore_pg3(info, conn)
-
-    def server_side_cursor(self, conn):
-        return conn.cursor(name=str(uuid.uuid1()), withhold=True)
 
 
 class PostgresqlExtDatabase(PostgresqlDatabase):

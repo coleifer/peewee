@@ -4423,6 +4423,11 @@ class _BasePsycopgAdapter(object):
             return self.isolation_levels[isolation_level]
         return isolation_level
 
+    def server_side_cursor(self, conn):
+        # psycopg2/3 do not allow us to use these in autocommit, even if we ARE
+        # inside a transaction - so specify withhold (not desirable!).
+        return conn.cursor(name=str(uuid.uuid1()), withhold=True)
+
 
 class Psycopg2Adapter(_BasePsycopgAdapter):
     isolation_levels = {
