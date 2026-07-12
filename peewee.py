@@ -5564,7 +5564,7 @@ class IntegerField(Field):
     def adapt(self, value):
         try:
             return int(value)
-        except (ValueError, TypeError):
+        except (ValueError, TypeError, OverflowError):
             return value
 
 
@@ -5614,7 +5614,7 @@ class FloatField(Field):
     def adapt(self, value):
         try:
             return float(value)
-        except (ValueError, TypeError):
+        except (ValueError, TypeError, OverflowError):
             return value
 
 
