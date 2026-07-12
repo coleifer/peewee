@@ -260,7 +260,9 @@ def _path_array(parts):
 class _JsonLookupBase(_LookupNode):
     def __init__(self, node, parts, as_json=False):
         super(_JsonLookupBase, self).__init__(node, parts)
-        self._jsonb = getattr(node, '_json_type', 'jsonb') == 'jsonb'
+        # Propagated so that chained lookups resolve the correct flavor.
+        self._json_datatype = getattr(node, '_json_datatype', 'jsonb')
+        self._jsonb = self._json_datatype == 'jsonb'
         self._as_json = as_json
 
     def clone(self):
@@ -425,6 +427,11 @@ class JSONField(FieldDatabaseHook, Field):
     def __init__(self, dumps=None, **kwargs):
         self._dumps = dumps
         super(JSONField, self).__init__(**kwargs)
+
+    def ddl_datatype(self, ctx):
+        # The core postgres backend maps the JSON field-type to JSONB; these
+        # fields declare their column type explicitly.
+        return SQL(self.field_type)
 
     def _db_hook(self, database):
         if database is None or not hasattr(database, '_adapter'):
