@@ -8404,6 +8404,12 @@ class ModelSelect(BaseModelSelect, Select):
             attr = attr or dest._alias
             if not attr and isinstance(dest, Table):
                 attr = dest.__name__
+        elif dest_model:
+            # Joining from a model-less source (subquery, CTE, table) to a
+            # model, e.g. join_from(cte, SomeModel, on=...).
+            self._join_ctx = dest
+            constructor = dest_model
+            attr = attr or dest_model._meta.name
 
         return (on, attr, constructor)
 

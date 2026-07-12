@@ -1244,6 +1244,35 @@ class TestModelAPIs(ModelTestCase):
             self.assertEqual([t.content for t in query],
                              ['meow', 'purr', 'hiss'])
 
+    @skip_if(IS_SQLITE_OLD or (IS_MYSQL and not IS_MYSQL_ADVANCED_FEATURES))
+    @requires_models(User, Tweet)
+    def test_join_from_cte_to_model(self):
+        self._create_user_tweets()
+
+        cte = (Tweet
+               .select(Tweet.user.alias('uid'), fn.COUNT(Tweet.id).alias('ct'))
+               .group_by(Tweet.user)
+               .cte('tweet_ct'))
+
+        with self.assertQueryCount(1):
+            # Join from the CTE to a model: the joined instance is stored in
+            # the CTE's row dict, keyed by the model name.
+            query = (Tweet
+                     .select(Tweet.content, cte.c.ct, User.username)
+                     .join(cte, on=(Tweet.user == cte.c.uid))
+                     .join_from(cte, User, on=(cte.c.uid == User.id))
+                     .with_cte(cte)
+                     .order_by(Tweet.content))
+            rows = [(t.content, t.tweet_ct['ct'], t.tweet_ct['user'].username)
+                    for t in query]
+
+        self.assertEqual(rows, [
+            ('grr', 2, 'mickey'),
+            ('hiss', 3, 'huey'),
+            ('meow', 3, 'huey'),
+            ('purr', 3, 'huey'),
+            ('woof', 2, 'mickey')])
+
     @skip_if(IS_MYSQL)  # MariaDB does not support LIMIT in subqueries!
     @requires_models(User)
     def test_subquery_emulate_window(self):
