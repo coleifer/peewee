@@ -7,7 +7,14 @@ https://github.com/coleifer/peewee/releases
 
 ## master
 
-[View commits](https://github.com/coleifer/peewee/compare/4.2.0...master)
+[View commits](https://github.com/coleifer/peewee/compare/4.2.1...master)
+
+## 4.2.1
+
+Can't ship a stub that's not complete. Missed moving server_side_cursor()
+helper into the core psycopg helper.
+
+[View commits](https://github.com/coleifer/peewee/compare/4.2.0...4.2.1)
 
 ## 4.2.0
 
