@@ -997,7 +997,9 @@ Database
       :param int num_params: Number of parameters the function accepts, or
           -1 for any number.
 
-      Register a user-defined window function, requires SQLite >= 3.25.0.
+      Register a user-defined window function, requires SQLite >= 3.25.0
+      and Python 3.11+ (or a ``pysqlite3`` build with window-function
+      support).
 
       The window function will be registered each time a new connection is
       opened. Additionally, if a connection is already open, the window

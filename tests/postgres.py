@@ -1200,6 +1200,20 @@ class TestAutocommitIntegration(ModelTestCase):
         self.assertEqual(KX.select().count(), 1)
 
 
+class TestTableInsertReturning(DatabaseTestCase):
+    database = db_loader('postgres')
+
+    def test_plain_table_insert_returning_pk(self):
+        self.database.execute_sql('drop table if exists t_pkstr')
+        self.database.execute_sql(
+            'create table t_pkstr (id serial primary key, x text)')
+        tbl = (Table('t_pkstr', ('id', 'x'), primary_key='id')
+               .bind(self.database))
+        self.assertEqual(tbl.insert({tbl.x: 'foo'}).execute(), 1)
+        self.assertEqual(tbl.insert({tbl.x: 'bar'}).execute(), 2)
+        self.database.execute_sql('drop table t_pkstr')
+
+
 class TestPostgresIsolationLevel(DatabaseTestCase):
     # The integer constants differ between psycopg2 and psycopg3, so specify
     # the level as a string and resolve via the adapter.

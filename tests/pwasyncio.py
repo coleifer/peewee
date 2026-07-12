@@ -2325,3 +2325,13 @@ class TestMySQLIntegration(IntegrationTests, unittest.IsolatedAsyncioTestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+class TestConnectErrorTranslation(unittest.IsolatedAsyncioTestCase):
+    async def test_sqlite_connect_error_translated(self):
+        db = AsyncSqliteDatabase('/peewee-nonexistent/foo.db')
+        try:
+            with self.assertRaises(OperationalError):
+                await db.aconnect()
+        finally:
+            await db.close_pool()

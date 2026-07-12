@@ -1875,7 +1875,7 @@ class _InFunction(Node):
         self.in_function = in_function
 
     def __sql__(self, ctx):
-        with ctx(in_function=self.in_function):
+        with ctx(in_function=self.in_function, function_arg_count=0):
             return ctx.sql(self.node)
 
 
@@ -2948,7 +2948,8 @@ class Insert(_WriteQuery):
     def _execute(self, database):
         if self._returning is None and database.returning_clause \
            and self.table._primary_key:
-            self._returning = (self.table._primary_key,)
+            self._returning = (self.table.primary_key,)
+            self._row_type = ROW.TUPLE
         try:
             return super(Insert, self)._execute(database)
         except self.DefaultValuesException:
@@ -6792,6 +6793,10 @@ class CompositeKey(MetaField):
             setattr(instance, self.field_names[idx], field_value)
 
     def __eq__(self, other):
+        if isinstance(other, str) or (isinstance(other, (list, tuple)) and
+                                      len(other) != len(self.field_names)):
+            raise ValueError('The length of the value must equal the number '
+                             'of columns of the composite primary key.')
         expressions = [(self.model._meta.fields[field] == value)
                        for field, value in zip(self.field_names, other)]
         return reduce(operator.and_, expressions)
@@ -7899,14 +7904,15 @@ class Model(Node, metaclass=ModelBase):
                             .where(node))
                 if not fk.null or search_nullable:
                     queries.setdefault(rel_model, []).append((node, fk))
-                    if fk.null and exclude_null_children:
-                        # Do not process additional children of this node, but
-                        # include it in the list of dependencies.
-                        seen.add(rel_model)
-                    else:
+                    # A nullable child will be updated rather than deleted, so
+                    # its children do not need to be visited - but do not mark
+                    # it seen, as it may also be reachable (and deleted) via a
+                    # non-nullable path, in which case its children must be
+                    # processed.
+                    if not (fk.null and exclude_null_children):
                         stack.append((rel_model, subquery))
 
-        for m in reversed(sort_models(seen)):
+        for m in reversed(sort_models(list(queries))):
             for sq, q in queries.get(m, ()):
                 yield sq, q
 

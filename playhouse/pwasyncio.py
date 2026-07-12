@@ -257,10 +257,12 @@ class AsyncDatabaseMixin(object):
     async def _acquire_conn_async(self):
         async with self._pool_lock:
             if self._pool is None:
-                self._pool = await self._create_pool_async()
+                with __exception_wrapper__:
+                    self._pool = await self._create_pool_async()
 
         try:
-            conn = await self._pool_acquire()
+            with __exception_wrapper__:
+                conn = await self._pool_acquire()
         except asyncio.TimeoutError:
             raise OperationalError(
                 'Timed out acquiring connection from pool '

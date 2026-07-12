@@ -56,6 +56,16 @@ https://github.com/coleifer/peewee/releases
 * Remove dead code and unused imports throughout `playhouse`; remove the
   broken, unused `get_current_url`/`get_next_url` helpers from
   `flask_utils`.
+* Fix `delete_instance(recursive=True)` failing to cascade to the children
+  of a model reachable through both nullable and non-nullable foreign-keys.
+* Fix subqueries losing their parentheses when used as a CASE value inside
+  a single-argument function call, e.g. `fn.SUM(Case(...))`.
+* Fix plain-`Table` inserts on returning-clause databases binding the
+  primary-key name as a parameter and returning None instead of the new id.
+* `CompositeKey` comparisons raise `ValueError` when the value's length does
+  not match the key, rather than silently matching on a prefix.
+* Async: connection-acquisition errors are translated to peewee exception
+  types, matching query execution.
 
 [View commits](https://github.com/coleifer/peewee/compare/4.1.2...master)
 

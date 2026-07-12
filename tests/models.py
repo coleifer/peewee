@@ -2063,6 +2063,55 @@ class TestSaveNoData(ModelTestCase):
         self.assertEqual(t5_db.val, 1)
 
 
+class TestCompositeKeyGuard(ModelTestCase):
+    database = get_in_memory_db()
+    requires = [CPK]
+
+    def test_composite_key_length_guard(self):
+        CPK.create(key='a', value=1, extra=1)
+        CPK.create(key='a', value=2, extra=2)
+
+        row = CPK.get_by_id(('a', 1))
+        self.assertEqual(row.extra, 1)
+
+        self.assertRaises(ValueError, CPK.get_by_id, ('a',))
+        self.assertRaises(ValueError, CPK.delete_by_id, ('a',))
+        self.assertRaises(ValueError, lambda: CPK._meta.primary_key == 'ab')
+        self.assertEqual(CPK.select().count(), 2)
+
+
+class RDA(TestModel): pass
+
+class RDC(TestModel):
+    a = ForeignKeyField(RDA)
+
+class RDB(TestModel):
+    a = ForeignKeyField(RDA, null=True)
+    c = ForeignKeyField(RDC)
+
+class RDD(TestModel):
+    b = ForeignKeyField(RDB)
+
+
+class TestDeleteRecursiveNullableChain(ModelTestCase):
+    database = get_in_memory_db()
+    requires = [RDA, RDC, RDB, RDD]
+
+    def test_delete_recursive_nullable_chain(self):
+        # RDB is reachable from RDA via its own nullable FK (updated to NULL)
+        # and via the non-nullable chain RDA -> RDC -> RDB (deleted). Its
+        # child RDD must also be deleted.
+        a = RDA.create()
+        c = RDC.create(a=a)
+        b = RDB.create(a=a, c=c)
+        RDD.create(b=b)
+
+        a.delete_instance(recursive=True)
+        self.assertEqual(RDC.select().count(), 0)
+        self.assertEqual(RDB.select().count(), 0)
+        self.assertEqual(RDD.select().count(), 0)
+
+
 class TestDeleteInstance(ModelTestCase):
     database = get_in_memory_db()
     requires = [User, Account, Tweet, Favorite, Relationship]

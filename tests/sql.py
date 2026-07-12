@@ -1301,6 +1301,15 @@ class TestSelectQuery(BaseTestCase):
             'WHERE ((SELECT COUNT("t2"."id") FROM "tweets" AS "t2" '
             'WHERE ("t2"."user_id" = "t1"."id")) > ?)'), [2])
 
+    def test_case_subquery_in_function(self):
+        subq = User.select(fn.MAX(User.c.id))
+        query = User.select(
+            fn.SUM(Case(None, ((User.c.id > 0, subq),), 0)))
+        self.assertSQL(query, (
+            'SELECT SUM(CASE WHEN ("t1"."id" > ?) '
+            'THEN (SELECT MAX("t1"."id") FROM "users" AS "t1") '
+            'ELSE ? END) FROM "users" AS "t1"'), [0, 0])
+
     def test_coalesce(self):
         Sample = Table('sample', ('counter', 'value'))
         query = (Sample
