@@ -973,6 +973,8 @@ class _BasePsycopgAdapter:
     @overload
     def isolation_level_str(self, isolation_level: _T) -> _T: ...
 
+    def server_side_cursor(self, conn): ...
+
 class Psycopg2Adapter(_BasePsycopgAdapter):
     json_type: Incomplete
     jsonb_type: Incomplete
