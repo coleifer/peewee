@@ -2929,6 +2929,30 @@ class TestModelConversionRegression(ModelTestCase):
 
 
 class TestFieldAccessorEdgeCases(BaseTestCase):
+    def test_field_hash_distinguishes_tables(self):
+        class Customer(TestModel): pass
+
+        def make_order(table, backref):
+            meta = type('Meta', (), {'table_name': table})
+            return type('Order', (TestModel,), {
+                'Meta': meta,
+                'customer': ForeignKeyField(Customer, backref=backref)})
+
+        make_order('order_a', 'orders_a')
+        make_order('order_b', 'orders_b')
+        self.assertEqual(len(Customer._meta.backrefs), 2)
+
+        def make_order_schema(schema, backref):
+            meta = type('Meta', (), {'table_name': 'order_s',
+                                     'schema': schema})
+            return type('Order', (TestModel,), {
+                'Meta': meta,
+                'customer': ForeignKeyField(Customer, backref=backref)})
+
+        make_order_schema('s1', 'orders_s1')
+        make_order_schema('s2', 'orders_s2')
+        self.assertEqual(len(Customer._meta.backrefs), 4)
+
     def test_field_accessor_missing_key(self):
         u = User()
         u.__data__ = {}

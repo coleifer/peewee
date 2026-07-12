@@ -5484,7 +5484,9 @@ class Field(ColumnBase):
         self._sort_key = (self.primary_key and 1 or 2), self._order
 
     def __hash__(self):
-        return hash(self.name + '.' + self.model.__name__)
+        # Coexisting same-named models are distinguished by their tables.
+        return hash((self.model._meta.schema, self.model._meta.table_name,
+                     self.name))
 
     def __repr__(self):
         if hasattr(self, 'model') and getattr(self, 'name', None):

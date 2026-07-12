@@ -75,6 +75,11 @@ https://github.com/coleifer/peewee/releases
   now follows the field's declared datatype.
 * Unaliased expressions in join queries now hydrate using the same cleaned
   attribute name as flat queries (e.g. `COUNT` rather than `COUNT(1`).
+* `Field.__hash__` is keyed on the model's schema and table-name rather than
+  its class name, so same-named model classes (factories, separate modules,
+  schema-per-tenant layouts) no longer collide in field-keyed registries such
+  as backrefs; redefining or re-importing a model in place still replaces
+  its entries.
 
 [View commits](https://github.com/coleifer/peewee/compare/4.1.2...master)
 
