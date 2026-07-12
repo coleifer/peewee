@@ -338,11 +338,11 @@ BinaryJSONField and JSONField
       .. code-block:: python
 
          # Replace an existing key (or create it if missing).
-         Event.update(data=Event.data['result'].set({'success': True})) \\
+         Event.update(data=Event.data['result'].set({'success': True})) \
               .execute()
 
          # Set a deeply nested key.
-         Event.update(data=Event.data['metadata']['author'].set('alice')) \\
+         Event.update(data=Event.data['metadata']['author'].set('alice')) \
               .execute()
 
    .. method:: replace(value)
@@ -354,7 +354,7 @@ BinaryJSONField and JSONField
       .. code-block:: python
 
          # Updates only rows where data['result'] already exists.
-         Event.update(data=Event.data['result'].replace({'ok': True})) \\
+         Event.update(data=Event.data['result'].replace({'ok': True})) \
               .execute()
 
    .. method:: insert(value)
@@ -366,7 +366,7 @@ BinaryJSONField and JSONField
       .. code-block:: python
 
          # Add a "created_at" timestamp only on rows that don't already have one.
-         Event.update(data=Event.data['created_at'].insert(timestamp)) \\
+         Event.update(data=Event.data['created_at'].insert(timestamp)) \
               .execute()
 
    .. method:: append(value)
@@ -394,7 +394,7 @@ BinaryJSONField and JSONField
 
          # Merge new keys into a nested object, existing 'success' is
          # overwritten if present in `value`.
-         Event.update(data=Event.data['result'].update({'ok': True})) \\
+         Event.update(data=Event.data['result'].update({'ok': True})) \
               .execute()
 
          # Field-level form: merge into the root object.

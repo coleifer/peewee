@@ -1,23 +1,17 @@
 import json
 import re
-import sys
-import warnings
 
 from peewee import *
 from peewee import ColumnBase
 from peewee import EnclosedNodeList
 from peewee import Entity
 from peewee import Expression
-from peewee import Insert
 from peewee import Node
 from peewee import NodeList
 from peewee import OP
 from peewee import VirtualField
 from peewee import merge_dict
 from peewee import sqlite3
-from playhouse.sqlite_udf import JSON
-from playhouse.sqlite_udf import RANK
-from playhouse.sqlite_udf import register_udf_groups
 
 
 
@@ -383,7 +377,6 @@ class BaseFTSModel(VirtualModel):
         content = options.get('content')
         prefix = options.get('prefix')
         tokenize = options.get('tokenize')
-        content_rowid = options.get('content_rowid')
 
         if isinstance(content, str) and content == '':
             # Special-case content-less full-text search tables.
@@ -392,9 +385,6 @@ class BaseFTSModel(VirtualModel):
             # Special-case to ensure fields are fully-qualified.
             options['content'] = Entity(content.model._meta.table_name,
                                         content.column_name)
-
-        if content_rowid is not None:
-            options['content_rowid'] = content_rowid
 
         if prefix:
             if isinstance(prefix, (list, tuple)):

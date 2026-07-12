@@ -59,6 +59,16 @@ class TestSignals(ModelTestCase):
         self.assertEqual(len(state), 2)
         self.assertEqual(state[-1], (A, a, a.id, False))
 
+    def test_save_positional_force_insert(self):
+        state = []
+        @signals.post_save()
+        def post_save(sender, instance, created):
+            state.append(created)
+
+        a = A(id=10, a='x')
+        a.save(True)
+        self.assertEqual(state, [True])
+
     def test_pre_delete(self):
         state = []
         @signals.pre_delete()

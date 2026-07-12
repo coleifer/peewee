@@ -12,6 +12,7 @@ except ImportError:
 from peewee import Expression
 from peewee import ImproperlyConfigured
 from peewee import Insert
+from peewee import InterfaceError
 from peewee import JSONField
 from peewee import JSONPath
 from peewee import MySQLDatabase
@@ -83,7 +84,7 @@ class MariaDBConnectorDatabase(MySQLDatabase):
         elif query_type == Insert.SIMPLE:
             try:
                 return cursor[0][0]
-            except (AttributeError, IndexError):
+            except (AttributeError, IndexError, TypeError):
                 return cursor.lastrowid
         return cursor
 

@@ -1161,8 +1161,20 @@ class Bits(TestModel):
     data = BigBitField()
 
 
+class NullBits(TestModel):
+    data = BigBitField(null=True)
+
+
 class TestBitFields(ModelTestCase):
     requires = [Bits]
+
+    @requires_models(NullBits)
+    def test_bigbit_field_null(self):
+        nb = NullBits.create(data=None)
+        nb.data = None
+        nb.save()
+        query = NullBits.select().where(NullBits.data.is_null())
+        self.assertEqual([x.id for x in query], [nb.id])
 
     def test_bit_field_update(self):
         def assertFlags(expected):

@@ -298,6 +298,20 @@ class TestModelToDict(ModelTestCase):
             }])
 
     @requires_models(Student, Course, StudentCourse)
+    def test_manytomany_only_exclude(self):
+        s = Student.create(name='huey')
+        c = Course.create(name='math')
+        StudentCourse.create(student=s, course=c)
+
+        data = model_to_dict(s, manytomany=True, exclude=[Student.courses])
+        self.assertTrue('courses' not in data)
+
+        data = model_to_dict(s, manytomany=True,
+                             only=[Student.name, Student.courses])
+        self.assertTrue('courses' in data)
+        self.assertEqual(data['name'], 'huey')
+
+    @requires_models(Student, Course, StudentCourse)
     def test_manytomany_deferred(self):
         data = (
             ('s1', ('ca', 'cb', 'cc')),

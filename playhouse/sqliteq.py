@@ -1,7 +1,5 @@
 import logging
-import weakref
 from queue import Queue
-from threading import local as thread_local
 from threading import Event
 from threading import Lock
 from threading import Thread
@@ -10,7 +8,6 @@ try:
     import gevent
     from gevent import Greenlet as GThread
     from gevent.event import Event as GEvent
-    from gevent.local import local as greenlet_local
     from gevent.queue import Queue as GQueue
 except ImportError:
     GThread = GQueue = GEvent = None
@@ -294,7 +291,7 @@ class SqliteQueueDatabase(SqliteDatabase):
             elif op is QUERY:
                 obj.set_result(None, ShutdownException())
 
-            return True
+        return True
 
     def is_stopped(self):
         with self._qlock:

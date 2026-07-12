@@ -1207,6 +1207,11 @@ class TestPostgresIsolationLevel(DatabaseTestCase):
         conn = self.database.connection()
         self.assertEqual(conn.isolation_level, 3)
 
+        with self.database.atomic():
+            curs = self.database.execute_sql(
+                'show transaction isolation level')
+            self.assertEqual(curs.fetchone()[0], 'serializable')
+
         conn.set_isolation_level(2)
         self.assertEqual(conn.isolation_level, 2)
         self.database.close()

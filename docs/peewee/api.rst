@@ -2220,10 +2220,12 @@ Model
          # Or even specify a SQL query directly:
          Article.add_index(SQL('CREATE INDEX ...'))
 
-   .. method:: dependencies(search_nullable=False)
+   .. method:: dependencies(search_nullable=True, exclude_null_children=False)
 
-      :param bool search_nullable: Search models related via a nullable
-          foreign key
+      :param bool search_nullable: Follow dependencies reachable via nullable
+          foreign keys (enabled by default).
+      :param bool exclude_null_children: Do not descend into the dependencies
+          of models reached via a nullable foreign key.
       :rtype: Generator expression yielding queries and foreign key fields.
 
       Generate a list of queries of dependent models. Yields a 2-tuple
@@ -2967,10 +2969,11 @@ Fields
                  if value is not None:
                      return pickle.loads(value)
 
-   .. method:: coerce(value)
+   .. method:: adapt(value)
 
       This method is a shorthand that is used, by default, by both
-      :meth:`~Field.db_value` and :meth:`~Field.python_value`.
+      :meth:`~Field.db_value` and :meth:`~Field.python_value` to coerce the
+      value to the field's underlying data-type.
 
       :param value: arbitrary data from app or backend
       :rtype: python data type
@@ -3968,9 +3971,9 @@ Fields
          Doc.select().where(Doc.data.has_any_keys(['admin', 'staff']))
 
 
-.. class:: BareField(coerce=None, **kwargs)
+.. class:: BareField(adapt=None, **kwargs)
 
-   :param coerce: Optional function to use for converting raw values into a
+   :param adapt: Optional function to use for converting raw values into a
        specific format.
 
    Field class that does not specify a data-type (**SQLite-only**).

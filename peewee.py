@@ -1173,12 +1173,14 @@ class CTE(_HashableSource, Source):
 
     def union_all(self, rhs):
         clone = self._query.clone()
-        return CTE(self._alias, clone + rhs, self._recursive, self._columns)
+        return CTE(self._alias, clone + rhs, self._recursive, self._columns,
+                   self._materialized)
     __add__ = union_all
 
     def union(self, rhs):
         clone = self._query.clone()
-        return CTE(self._alias, clone | rhs, self._recursive, self._columns)
+        return CTE(self._alias, clone | rhs, self._recursive, self._columns,
+                   self._materialized)
     __or__ = union
 
     def __sql__(self, ctx):
@@ -1543,10 +1545,8 @@ class Ordering(WrappedNode):
     def _null_ordering_case(self, nulls):
         if nulls.lower() == 'last':
             ifnull, notnull = 1, 0
-        elif nulls.lower() == 'first':
-            ifnull, notnull = 0, 1
         else:
-            raise ValueError('unsupported value for nulls= ordering.')
+            ifnull, notnull = 0, 1
         return Case(None, ((self.node.is_null(), ifnull),), notnull)
 
     def __sql__(self, ctx):
@@ -2373,7 +2373,7 @@ class SelectBase(_HashableSource, Source, SelectQuery):
         clone = self.columns(SQL('1'))
         clone._limit = 1
         clone._offset = None
-        return bool(clone.scalar())
+        return bool(clone.scalar(database))
 
     @database_required
     def get(self, database):
@@ -4509,6 +4509,8 @@ class Psycopg3Adapter(_BasePsycopgAdapter):
         return psycopg.Binary
 
     def connect(self, db, **params):
+        if db._encoding:
+            params.setdefault('client_encoding', db._encoding)
         if db.database.startswith('postgresql://'):
             params.setdefault('conninfo', db.database)
         else:
@@ -4620,6 +4622,8 @@ class PostgresqlDatabase(Database):
     def begin(self, isolation_level=None):
         if self.is_closed():
             self.connect()
+        if isolation_level is None:
+            isolation_level = self._isolation_level
         if isolation_level:
             txn_type = self._adapter.isolation_level_str(isolation_level)
             stmt = 'BEGIN TRANSACTION ISOLATION LEVEL %s' % txn_type
@@ -5212,7 +5216,7 @@ class CursorWrapper(object):
                 self.fill_cache(stop)
             return self.row_cache[item]
         elif isinstance(item, int):
-            self.fill_cache(item if item > 0 else 0)
+            self.fill_cache(item + 1 if item >= 0 else 0)
             return self.row_cache[item]
         else:
             raise ValueError('CursorWrapper only supports integer and slice '
@@ -5856,7 +5860,9 @@ class BigBitFieldAccessor(FieldAccessor):
             return self.field
         return BigBitFieldData(instance, self.name)
     def __set__(self, instance, value):
-        if isinstance(value, memoryview):
+        if value is None:
+            pass
+        elif isinstance(value, memoryview):
             value = value.tobytes()
         elif isinstance(value, bytearray):
             value = bytes(value)
@@ -6625,7 +6631,7 @@ class ManyToManyFieldAccessor(FieldAccessor):
 
     def __get__(self, instance, instance_type=None, force_query=False):
         if instance is not None:
-            if not force_query and self.src_fk.backref != '+':
+            if not force_query and self.src_fk.backref not in ('+', '!'):
                 backref = getattr(instance, self.src_fk.backref)
                 if isinstance(backref, list):
                     return [getattr(obj, self.dest_fk.name) for obj in backref]
@@ -8870,7 +8876,7 @@ class ModelNamedTupleCursorWrapper(ModelTupleCursorWrapper):
     def initialize(self):
         super(ModelNamedTupleCursorWrapper, self).initialize()
         identifiers = self.dedupe_columns(self.columns)
-        self.impl = collections.namedtuple('Row', identifiers)
+        self.impl = collections.namedtuple('Row', identifiers, rename=True)
         self.constructor = lambda row: self.impl(*row)
 
 

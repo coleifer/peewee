@@ -8,11 +8,9 @@ from typing import get_origin
 from peewee import AutoField
 from peewee import BackrefAccessor
 from peewee import ForeignKeyField
-from peewee import Model
 from peewee import Node
 from playhouse.reflection import FieldTypeMap
 
-from pydantic import BaseModel
 from pydantic import ConfigDict
 from pydantic import Field
 from pydantic import create_model

@@ -248,7 +248,7 @@ class PooledDatabase(object):
 
 class _PooledMySQLDatabase(PooledDatabase):
     def _is_closed(self, conn):
-        if self.server_version[0] == 8:
+        if self.server_version[0] >= 8:
             args = ()
         else:
             args = (False,)

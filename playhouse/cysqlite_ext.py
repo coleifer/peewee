@@ -207,7 +207,7 @@ class CySqliteDatabase(SqliteDatabase):
         if fn is None:
             self._progress = None
         else:
-            self._progress = (fn, mask)
+            self._progress = (fn, n)
         if not self.is_closed():
             args = (None,) if fn is None else self._progress
             self.connection().progress(*args)
@@ -231,7 +231,7 @@ class CySqliteDatabase(SqliteDatabase):
 
     def blob_open(self, table, column, rowid, read_only=False, dbname=None):
         return self.connection().blob_open(table, column, rowid, read_only,
-                                           db_name)
+                                           dbname)
 
     def backup(self, destination, pages=None, name=None, progress=None,
                src_name=None):
@@ -290,6 +290,3 @@ class PooledCySqliteDatabase(_PooledSqliteDatabase, CySqliteDatabase):
 
 
 OP.MATCH = 'MATCH'
-
-def _sqlite_regexp(regex, value):
-    return re.search(regex, value) is not None

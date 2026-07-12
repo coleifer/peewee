@@ -28,7 +28,6 @@ class CompressedField(BlobField):
         if compress_module is None:
             raise ValueError('Missing library required for %s.' % algorithm)
 
-        self.algorithm = algorithm
         self.compress = compress_module.compress
         self.decompress = compress_module.decompress
         super(CompressedField, self).__init__(*args, **kwargs)
@@ -39,6 +38,8 @@ class CompressedField(BlobField):
 
     def db_value(self, value):
         if value is not None:
+            if isinstance(value, str):
+                value = value.encode('raw_unicode_escape')
             return self._constructor(
                 self.compress(value, self.compression_level))
 

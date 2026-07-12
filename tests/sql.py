@@ -729,6 +729,18 @@ class TestSelectQuery(BaseTestCase):
                 'SELECT "user_ids"."id" FROM "user_ids" '
                 'WHERE ("user_ids"."id" < ?)') % clause, [10])
 
+    def test_materialize_cte_union(self):
+        for method, clause in (('union_all', 'UNION ALL'), ('union', 'UNION')):
+            base = User.select(User.c.id).cte('u', materialized=True)
+            cte = getattr(base, method)(User.select(User.c.id))
+            query = cte.select_from(cte.c.id)
+            self.assertSQL(query, (
+                'WITH "u" AS MATERIALIZED ('
+                'SELECT "t1"."id" FROM "users" AS "t1" '
+                '%s '
+                'SELECT "t2"."id" FROM "users" AS "t2") '
+                'SELECT "u"."id" FROM "u"') % clause, [])
+
     def test_cte_union_distinct(self):
         # CTE.union() produces UNION (distinct) instead of UNION ALL.
         base = User.select(User.c.id).where(User.c.id == 1)

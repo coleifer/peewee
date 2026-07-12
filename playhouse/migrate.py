@@ -126,7 +126,6 @@ from peewee import Node
 from peewee import NodeList
 from peewee import OP
 from peewee import callable_
-from peewee import sort_models
 from peewee import sqlite3
 from peewee import _truncate_constraint_name
 try:
@@ -707,11 +706,6 @@ class SqliteMigrator(SchemaMigrator):
     column_name_re = re.compile(r'''["`']?([\w]+)''')
     fk_re = re.compile(r'FOREIGN KEY\s+\("?([\w]+)"?\)\s+', re.I)
 
-    def _get_column_names(self, table):
-        quoted = table.replace('"', '""')
-        res = self.database.execute_sql('select * from "%s" limit 1' % quoted)
-        return [item[0] for item in res.description]
-
     def _get_create_table(self, table):
         res = self.database.execute_sql(
             ('select name, sql from sqlite_master '
@@ -892,7 +886,6 @@ class SqliteMigrator(SchemaMigrator):
                 r'\g<1>%s\1' % new_name,
                 column_def,
                 count=1)
-            return column_def.replace(column_name, new_name)
         return self._update_column(table, old_name, _rename)
 
     @operation

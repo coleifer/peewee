@@ -3372,6 +3372,18 @@ class TestExistsIntegration(ModelTestCase):
         self.assertFalse(
             User.select().where(User.username == 'nobody').exists())
 
+    @requires_models(User)
+    def test_exists_database_arg(self):
+        User.create(username='huey')
+        query = User.select().where(User.username == 'huey')
+        self.assertTrue(query.exists(self.database))
+
+        alt_db = get_in_memory_db()
+        with alt_db.bind_ctx([User], False, False):
+            User.create_table()
+        self.assertFalse(query.exists(alt_db))
+        alt_db.close()
+
 
 class VL(TestModel):
     n = IntegerField()

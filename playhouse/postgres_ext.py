@@ -670,12 +670,6 @@ def ServerSide(query, array_size=None):
         yield row
 
 
-class _empty_object(object):
-    __slots__ = ()
-    def __bool__(self):
-        return False
-
-
 class Psycopg2ExtAdapter(Psycopg2Adapter):
     def register_hstore(self, conn):
         register_hstore(conn)
@@ -692,7 +686,7 @@ class Psycopg3ExtAdapter(Psycopg3Adapter):
         register_hstore_pg3(info, conn)
 
     def server_side_cursor(self, conn):
-        return conn.cursor(name=str(uuid.uuid1()))
+        return conn.cursor(name=str(uuid.uuid1()), withhold=True)
 
 
 class PostgresqlExtDatabase(PostgresqlDatabase):

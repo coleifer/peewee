@@ -2278,7 +2278,7 @@ Available functions
 
    The time is not adjusted in any way, the timezone is simply removed.
 
-.. function:: humandelta(nseconds, glue=', ')
+.. function:: human_delta(nseconds, glue=', ')
 
    :param int nseconds: Number of seconds, total, in timedelta.
    :param str glue: Fragment to join values.
@@ -2306,35 +2306,6 @@ Available functions
    :returns: Duration from smallest to largest value in list, in seconds.
 
    *Aggregate*: duration from the smallest to the largest value, in seconds.
-
-.. function:: date_series(start, stop, step_seconds=86400)
-
-   :param datetime start: Start datetime
-   :param datetime stop: Stop datetime
-   :param int step_seconds: Number of seconds comprising a step.
-
-   *Table-value function*: returns rows consisting of the date/+time values
-   encountered iterating from start to stop, ``step_seconds`` at a time.
-
-   Additionally, if start does not have a time component and step_seconds is
-   greater-than-or-equal-to one day (86400 seconds), the values returned will
-   be dates. Conversely, if start does not have a date component, values will
-   be returned as times. Otherwise values are returned as datetimes.
-
-   Example:
-
-   .. code-block:: sql
-
-       SELECT * FROM date_series('2017-01-28', '2017-02-02');
-
-       value
-       -----
-       2017-01-28
-       2017-01-29
-       2017-01-30
-       2017-01-31
-       2017-02-01
-       2017-02-02
 
 **FILE**
 
@@ -2490,23 +2461,3 @@ Available functions
 
    .. note:: Only available if you compiled the ``_sqlite_udf`` extension.
 
-.. function:: regex_search(regex, search_string)
-
-   :param str regex: Regular expression
-   :param str search_string: String to search for instances of regex.
-
-   *Table-value function*: searches a string for substrings that match
-   the provided ``regex``. Returns rows for each match found.
-
-   Example:
-
-   .. code-block:: python
-
-      SELECT * FROM regex_search('\w+', 'extract words, ignore! symbols');
-
-      value
-      -----
-      extract
-      words
-      ignore
-      symbols

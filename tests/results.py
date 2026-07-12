@@ -101,6 +101,18 @@ class TestCursorWrapper(ModelTestCase):
             self.assertEqual(query[2].username, '2')
             self.assertRaises(StopIteration, next, it)
 
+    def test_cursor_getitem(self):
+        for i in range(5): User.create(username=str(i))
+
+        with self.assertQueryCount(1):
+            cursor = User.select().order_by(User.username).execute()
+            self.assertEqual(cursor[2].username, '2')
+            self.assertEqual(len(cursor.row_cache), 3)
+            self.assertEqual(cursor[0].username, '0')
+            self.assertEqual(len(cursor.row_cache), 3)
+            self.assertEqual(cursor[4].username, '4')
+            self.assertEqual(cursor[-1].username, '4')
+
     def test_iterator(self):
         for i in range(3): User.create(username=str(i))
 
@@ -169,6 +181,13 @@ class TestRowTypes(ModelTestCase):
             else:
                 accum.append(expr)
         return User.select(*accum).order_by(User.username)
+
+    def test_namedtuples_non_identifier(self):
+        User.create(username='u1')
+        query = User.select(User.username, SQL('1')).namedtuples()
+        row, = list(query)
+        self.assertEqual(row.username, 'u1')
+        self.assertEqual(row[1], 1)
 
     def test_namedtuples(self):
         User.create(username='u1')

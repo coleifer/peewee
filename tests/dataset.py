@@ -614,6 +614,26 @@ class TestDataSet(ModelTestCase):
             {'id': 4, 'name': None, 'foo': None, 'bar': None},
         ])
 
+    def test_import_csv_no_header(self):
+        table = self.dataset['people']
+        table.insert(name='charlie')
+        buf = StringIO()
+        writer = csv.writer(buf)
+        writer.writerow(['10', 'nuggie'])
+        buf.seek(0)
+        count = self.dataset.thaw('people', 'csv', file_obj=buf, header=False)
+        self.assertEqual(count, 1)
+        row, = [r for r in self.dataset['people'].all() if r['id'] == 10]
+        self.assertEqual(row['name'], 'nuggie')
+
+    def test_self_referential_fk(self):
+        self.dataset._database.execute_sql(
+            'CREATE TABLE selfref ('
+            'id INTEGER PRIMARY KEY, '
+            'parent_id INTEGER REFERENCES selfref (id))')
+        table = self.dataset['selfref']
+        self.assertTrue('parent_id' in table.columns)
+
     def test_import_csv(self):
         table = self.dataset['people']
         table.insert(name='charlie')

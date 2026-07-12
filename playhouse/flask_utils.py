@@ -81,18 +81,6 @@ def object_list(template_name, query, context_variable='object_list',
         page=paginated_query.get_page(),
         **kwargs)
 
-def get_current_url():
-    if not request.query_string:
-        return request.path
-    return '%s?%s' % (request.path, request.query_string)
-
-def get_next_url(default='/'):
-    if request.args.get('next'):
-        return request.args['next']
-    elif request.form.get('next'):
-        return request.form['next']
-    return default
-
 class FlaskDB(object):
     """
     Convenience wrapper for configuring a Peewee database for use with a Flask

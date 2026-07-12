@@ -1,19 +1,13 @@
 import collections
-import datetime
 import heapq
 import json
 import math
 import os
 import random
-import re
 import struct
-import sys
 import threading
 import zlib
-try:
-    from urllib.parse import urlparse
-except ImportError:
-    from urlparse import urlparse
+from urllib.parse import urlparse
 
 
 SQLITE_DATETIME_FORMATS = (

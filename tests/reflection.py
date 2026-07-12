@@ -389,6 +389,23 @@ class TestReflection(BaseReflectionTestCase):
         category = nugget['category']
         self.assertEqual(category.name, 'category')
 
+    def test_fk_on_delete_update(self):
+        self.database.execute_sql(
+            'CREATE TABLE odu ('
+            'id INTEGER PRIMARY KEY, '
+            'rel_model_id INTEGER, '
+            'FOREIGN KEY (rel_model_id) REFERENCES rel_model (id) '
+            'ON DELETE CASCADE ON UPDATE SET NULL)')
+        try:
+            (columns, primary_keys, foreign_keys, model_names,
+             indexes) = self.introspector.introspect()
+            params = columns['odu']['rel_model_id'].get_field_parameters()
+            self.assertEqual(params.get('on_delete'), "'CASCADE'")
+            self.assertEqual(params.get('on_update'), "'SET NULL'")
+            self.assertNotIn('attr', params)
+        finally:
+            self.database.execute_sql('DROP TABLE odu')
+
     def test_get_field(self):
         (columns,
          primary_keys,

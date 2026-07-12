@@ -18,11 +18,9 @@ from playhouse.reflection import Introspector
 class DataSet(object):
     def __init__(self, url, include_views=False, **kwargs):
         if isinstance(url, Database):
-            self._url = None
             self._database = url
             self._database_path = self._database.database
         else:
-            self._url = url
             parse_result = urlparse(url)
             self._database_path = parse_result.path[1:]
 
@@ -118,6 +116,7 @@ class DataSet(object):
             for fk_meta in self._database.get_foreign_keys(table):
                 dest = fk_meta.dest_table
                 if dest not in seen:
+                    seen.add(dest)
                     stack.append(dest)
                     accum.append(dest)
         return accum
@@ -168,7 +167,7 @@ class DataSet(object):
     def thaw(self, table, format='csv', filename=None, file_obj=None,
              strict=False, encoding='utf8', iso8601_datetimes=False,
              base64_bytes=False, **kwargs):
-        self._check_arguments(filename, file_obj, format, self._export_formats)
+        self._check_arguments(filename, file_obj, format, self._import_formats)
         if filename:
             file_obj = open(filename, 'r', encoding=encoding)
 
@@ -411,7 +410,7 @@ class Importer(object):
         self.base64_bytes = base64_bytes
 
         model = self.table.model_class
-        self.columns = model._meta.columns
+        self.columns = dict(model._meta.columns)
         self.columns.update(model._meta.fields)
 
     def load(self, file_obj):
@@ -467,7 +466,8 @@ class CSVImporter(Importer):
                 if key in self.columns or not self.strict:
                     header_fields.append((idx, key, self.columns.get(key)))
         else:
-            for idx, field in enumerate(self.model._meta.sorted_fields):
+            fields = self.table.model_class._meta.sorted_fields
+            for idx, field in enumerate(fields):
                 header_fields.append((idx, field.name, field))
 
         if not header_fields:

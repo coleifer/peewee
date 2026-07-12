@@ -53,7 +53,7 @@ def model_to_dict(model, recurse=True, backrefs=False, only=None,
 
     if manytomany:
         for name, m2m in model._meta.manytomany.items():
-            if should_skip(name):
+            if should_skip(m2m):
                 continue
 
             exclude.update((m2m, m2m.rel_model._meta.manytomany[m2m.backref]))
@@ -295,7 +295,7 @@ def resolve_multimodel_query(query, key='_model_identifier'):
         model_class = curr.model
         name = model_class._meta.table_name
         mapping[name] = model_class
-        curr._returning.append(Value(name).alias(key))
+        curr._returning = tuple(curr._returning) + (Value(name).alias(key),)
 
     def wrapped_iterator():
         for row in query.dicts().iterator():

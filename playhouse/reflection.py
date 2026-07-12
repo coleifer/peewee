@@ -11,7 +11,6 @@ from peewee import *
 from peewee import _StringField
 from peewee import _query_val_transform
 from peewee import CommaNodeList
-from peewee import SCOPE_VALUES
 from peewee import make_snake_case
 try:
     from playhouse import mysql_ext
@@ -129,7 +128,7 @@ class Column(object):
             for attr in ('on_delete', 'on_update'):
                 value = getattr(fk, attr, None) if fk else None
                 if value and value not in ('NO ACTION', 'RESTRICT'):
-                    params['attr'] = "'%s'" % value
+                    params[attr] = "'%s'" % value
 
         # Handle indexes on column.
         if not self.is_primary_key():
@@ -431,11 +430,6 @@ class MySQLMetadata(Metadata):
         'year': IntegerField,
     }
     extension_import = 'from playhouse.mysql_ext import *'
-
-    def __init__(self, database, **kwargs):
-        if 'password' in kwargs:
-            kwargs['passwd'] = kwargs.pop('password')
-        super(MySQLMetadata, self).__init__(database, **kwargs)
 
     def get_column_types(self, table, schema=None):
         column_types = {}

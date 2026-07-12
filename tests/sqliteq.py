@@ -151,6 +151,11 @@ class BaseTestQueueDatabase(object):
 
         self.database.stop()
 
+    def test_stop_returns_true(self):
+        self.database.start()
+        User.create(name='a')
+        self.assertTrue(self.database.stop())
+
     def test_restart(self):
         self.database.start()
         User.create(name='a')

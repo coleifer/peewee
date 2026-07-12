@@ -689,6 +689,16 @@ class TestPooledDatabase(BaseTestCase):
         self.assertEqual(db._connections, [])
         self.assertEqual(list(db._in_use.keys()), [3])
 
+    def test_mysql_is_closed_version_gate(self):
+        # MariaDB-style drivers have an argument-less ping().
+        class NoArgPing(object):
+            def ping(self): pass
+
+        db = PooledMySQLDatabase(None)
+        for version in ((8, 0, 0), (11, 8, 0)):
+            db.server_version = version
+            self.assertFalse(db._is_closed(NoArgPing()))
+
     def test_init_updates_pool_parameters(self):
         # The init() method should allow updating pool parameters after
         # initial construction.

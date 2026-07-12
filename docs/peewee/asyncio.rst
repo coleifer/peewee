@@ -1230,9 +1230,9 @@ API Reference
    Async MySQL / MariaDB database implementation.
 
    Uses ``aiomysql`` and the driver's native connection pool. The server
-   version - used, e.g., to distinguish MySQL from MariaDB when generating
-   :class:`JSONField` SQL - is detected when the first connection is
-   acquired.
+   version is detected when the first connection is acquired. When connecting
+   to MariaDB, pass ``mariadb=True`` so that :class:`JSONField` SQL is
+   generated using MariaDB-compatible syntax.
 
    Inherits from :class:`AsyncDatabaseMixin` and :class:`MySQLDatabase`.
 

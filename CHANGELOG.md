@@ -20,6 +20,42 @@ https://github.com/coleifer/peewee/releases
 * Remove `TimestampField.local_to_utc()` and `TimestampField.utc_to_local()`.
 * `Select.columns()` no longer accepts and ignores keyword arguments.
 * Remove unused `Metadata.get_rel_for_model()`.
+* Fix `SelectBase.exists()` ignoring its `database` argument.
+* Fix `CursorWrapper` indexing: `cursor[n]` raised IndexError for uncached
+  rows and `cursor[0]` fetched the entire result set.
+* Fix `.namedtuples()` crashing on selected columns that are not valid
+  Python identifiers.
+* Preserve `materialized=` when compounding CTEs via `union()`/`union_all()`.
+* Fix `PostgresqlDatabase(isolation_level=...)` having no effect on
+  transactions; previously only `atomic(isolation_level=...)` worked.
+* Apply the `encoding` parameter when connecting with psycopg3.
+* Allow assigning `None` to a nullable `BigBitField`.
+* Fix `ManyToManyField` reads when the through-model foreign keys use the
+  `'!'` backref sentinel.
+* Fix connection pooling with the `mariadb` connector - pooled connections
+  were discarded on every checkout.
+* Fix `NameError` raising `InterfaceError` in the `mysql_ext` connector
+  classes; catch `TypeError` in MariaDB `last_insert_id()`.
+* Fix `sqliteq` `stop()` to drain the write queue and return True.
+* Fix apsw aggregate registration binding every name to the last-registered
+  aggregate class.
+* Fix two `NameError`s in `cysqlite_ext`: `blob_open()` and `progress()`.
+* Fix pwiz emitting an invalid `attr=` keyword instead of
+  `on_delete`/`on_update` for reflected foreign keys.
+* Fix `dataset`: infinite loop on self-referential foreign keys, crash on
+  headerless CSV import, `thaw()` validating against export rather than
+  import formats, and the importer mutating live model metadata.
+* Fix `model_to_dict` to honor `only=`/`exclude=` for many-to-many fields;
+  fix `resolve_multimodel_query` on queries with narrowed selections.
+* Fix `signals.Model.save(True)` reporting `created=False` when
+  `force_insert` is passed positionally.
+* Fix `CompressedField` crashing on `str` values.
+* Fix psycopg3 server-side cursors (missing `withhold`) and CockroachDB
+  `run_transaction` retry detection under psycopg3.
+* Async queries are now logged to the `peewee` logger.
+* Remove dead code and unused imports throughout `playhouse`; remove the
+  broken, unused `get_current_url`/`get_next_url` helpers from
+  `flask_utils`.
 
 [View commits](https://github.com/coleifer/peewee/compare/4.1.2...master)
 

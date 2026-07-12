@@ -1,15 +1,11 @@
 import functools
 import re
-import sys
 
 from peewee import *
 from peewee import _atomic
 from peewee import _manual
-from peewee import ColumnMetadata  # (name, data_type, null, primary_key, table, default)
 from peewee import EnclosedNodeList
 from peewee import Entity
-from peewee import ForeignKeyMetadata  # (column, dest_table, dest_column, table).
-from peewee import IndexMetadata
 from peewee import NodeList
 from playhouse.pool import _PooledPostgresqlDatabase
 try:
@@ -58,8 +54,6 @@ class CockroachDatabase(PostgresqlDatabase):
     field_types.update({
         'BLOB': 'BYTES',
     })
-
-    release_after_rollback = True
 
     def __init__(self, database, *args, **kwargs):
         # Unless a DSN or database connection-url were specified, provide
@@ -208,7 +202,9 @@ def run_transaction(db, callback, max_attempts=None, system_time=None,
                 db.execute_sql('RELEASE SAVEPOINT cockroach_restart')
                 return result
             except OperationalError as exc:
-                if exc.orig.pgcode == '40001':
+                code = (getattr(exc.orig, 'pgcode', None) or
+                        getattr(exc.orig, 'sqlstate', None))
+                if code == '40001':
                     max_attempts -= 1
                     db.execute_sql('ROLLBACK TO SAVEPOINT cockroach_restart')
                     continue
