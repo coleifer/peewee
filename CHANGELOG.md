@@ -9,9 +9,9 @@ https://github.com/coleifer/peewee/releases
 
 * Add django-style filter lookups: `contains`, `startswith`, `endswith`,
   `between`, `is_null`, `not_in` and `iregexp`.
-* Fix SQLite index value inlining to apply when the database is bound via
-  model `Meta` or a `DatabaseProxy`, gated by the new
-  `Database.index_value_literals` feature toggle.
+* Fix SQLite index value inlining to apply properly.
+* Fix `PostgresqlDatabase(isolation_level=...)` having no effect on
+  transactions. Previously only `atomic(isolation_level=...)` worked.
 * Fix `Ordering.collate()` dropping the `nulls=` ordering.
 * Fix double-escaping of backticks in MySQL `get_indexes()`.
 * Honor the `windows=` parameter of the `Select` constructor.
@@ -26,26 +26,20 @@ https://github.com/coleifer/peewee/releases
 * Fix `.namedtuples()` crashing on selected columns that are not valid
   Python identifiers.
 * Preserve `materialized=` when compounding CTEs via `union()`/`union_all()`.
-* Fix `PostgresqlDatabase(isolation_level=...)` having no effect on
-  transactions; previously only `atomic(isolation_level=...)` worked.
-* Apply the `encoding` parameter when connecting with psycopg3.
-* Allow assigning `None` to a nullable `BigBitField`.
 * Fix `ManyToManyField` reads when the through-model foreign keys use the
   `'!'` backref sentinel.
 * Fix connection pooling with the `mariadb` connector - pooled connections
   were discarded on every checkout.
-* Fix `NameError` raising `InterfaceError` in the `mysql_ext` connector
-  classes; catch `TypeError` in MariaDB `last_insert_id()`.
 * Fix `sqliteq` `stop()` to drain the write queue and return True.
 * Fix apsw aggregate registration binding every name to the last-registered
   aggregate class.
 * Fix two `NameError`s in `cysqlite_ext`: `blob_open()` and `progress()`.
 * Fix pwiz emitting an invalid `attr=` keyword instead of
   `on_delete`/`on_update` for reflected foreign keys.
-* Fix `dataset`: infinite loop on self-referential foreign keys, crash on
+* Fix `dataset` infinite loop on self-referential foreign keys, crash on
   headerless CSV import, `thaw()` validating against export rather than
   import formats, and the importer mutating live model metadata.
-* Fix `model_to_dict` to honor `only=`/`exclude=` for many-to-many fields;
+* Fix `model_to_dict` to honor `only=`/`exclude=` for many-to-many fields,
   fix `resolve_multimodel_query` on queries with narrowed selections.
 * Fix `signals.Model.save(True)` reporting `created=False` when
   `force_insert` is passed positionally.
