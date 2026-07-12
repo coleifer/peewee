@@ -8081,7 +8081,7 @@ class ModelAlias(Node):
 class FieldAlias(Field):
     def __init__(self, source, field):
         self.source = source
-        self.model = source.model
+        self.model = source
         self.field = field
 
     @classmethod
