@@ -1201,11 +1201,14 @@ class TestAutocommitIntegration(ModelTestCase):
 
 
 class TestPostgresIsolationLevel(DatabaseTestCase):
-    database = db_loader('postgres', isolation_level=3)  # SERIALIZABLE.
+    # The integer constants differ between psycopg2 and psycopg3, so specify
+    # the level as a string and resolve via the adapter.
+    database = db_loader('postgres', isolation_level='SERIALIZABLE')
 
     def test_isolation_level(self):
+        serializable = self.database._isolation_level
         conn = self.database.connection()
-        self.assertEqual(conn.isolation_level, 3)
+        self.assertEqual(conn.isolation_level, serializable)
 
         with self.database.atomic():
             curs = self.database.execute_sql(
@@ -1217,7 +1220,7 @@ class TestPostgresIsolationLevel(DatabaseTestCase):
         self.database.close()
 
         conn = self.database.connection()
-        self.assertEqual(conn.isolation_level, 3)
+        self.assertEqual(conn.isolation_level, serializable)
         self.database.close()
 
         self.database.set_isolation_level(2)
