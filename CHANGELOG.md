@@ -7,6 +7,10 @@ https://github.com/coleifer/peewee/releases
 
 ## master
 
+[View commits](https://github.com/coleifer/peewee/compare/4.2.0...master)
+
+## 4.2.0
+
 * Add django-style filter lookups: `contains`, `startswith`, `endswith`,
   `between`, `is_null`, `not_in` and `iregexp`.
 * Fix SQLite index value inlining to apply properly.
@@ -84,7 +88,7 @@ https://github.com/coleifer/peewee/releases
   sequences, but blobs written from non-ASCII strings by earlier versions
   will not compare equal to newly-written ones.
 
-[View commits](https://github.com/coleifer/peewee/compare/4.1.2...master)
+[View commits](https://github.com/coleifer/peewee/compare/4.1.2...4.2.0)
 
 ## 4.1.2
 
