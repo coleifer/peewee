@@ -110,6 +110,18 @@ class TestWithRelated(ModelTestCase):
                 ('mickey', ['bark', 'woof']),
                 ('zaizee', [])])
 
+    def test_fk_alias_parent(self):
+        TA = Tweet.alias('ta')
+        with self.assertQueryCount(2):
+            query = (TA.select()
+                     .order_by(TA.content)
+                     .with_related(Load(TA.user,
+                                        strategy=PREFETCH_TYPE.MATERIALIZE)))
+            accum = [(t.content, t.user.username) for t in query]
+        self.assertEqual(accum, [
+            ('bark', 'mickey'), ('hiss', 'huey'), ('meow', 'huey'),
+            ('purr', 'huey'), ('woof', 'mickey')])
+
     def test_materialize(self):
         uids = [u.id for u in User.select().order_by(User.id)]
 

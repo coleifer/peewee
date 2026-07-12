@@ -66,6 +66,13 @@ https://github.com/coleifer/peewee/releases
   not match the key, rather than silently matching on a prefix.
 * Async: connection-acquisition errors are translated to peewee exception
   types, matching query execution.
+* Fix `FieldAlias.model` to reference the model alias rather than the aliased
+  model; alias-rooted join queries no longer construct and discard a spurious
+  instance of the aliased model for every result row.
+* Fix `playhouse.postgres_ext.JSONField` creating `jsonb` columns after the
+  core postgres backend began mapping the JSON field-type to JSONB; its DDL
+  is `json` again, and json-vs-jsonb function selection for chained lookups
+  now follows the field's declared datatype.
 
 [View commits](https://github.com/coleifer/peewee/compare/4.1.2...master)
 

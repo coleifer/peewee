@@ -1030,6 +1030,23 @@ class TestModelAPIs(ModelTestCase):
             ('meow', {'username': 'huey'}),
             ('woof', {'username': 'mickey'})])
 
+    @requires_models(User, Tweet)
+    def test_alias_query_constructors(self):
+        huey = self.add_user('huey')
+        self.add_tweets(huey, 'meow')
+
+        TA = Tweet.alias('ta')
+        query = (TA.select(TA, User)
+                 .join(User, on=(TA.user == User.id))
+                 .order_by(TA.content))
+        with self.assertQueryCount(1):
+            cursor = query.execute()
+            rows = [(t.content, t.user.username) for t in cursor]
+
+        self.assertEqual(rows, [('meow', 'huey')])
+        # The aliased model must not get a spurious constructor entry.
+        self.assertTrue(Tweet not in cursor.key_to_constructor)
+
     @requires_models(User, Tweet, Favorite)
     def test_multi_join(self):
         u1 = User.create(username='u1')

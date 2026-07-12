@@ -17,11 +17,7 @@ from peewee import sqlite3
 
 FTS3_MATCHINFO = 'pcx'
 FTS4_MATCHINFO = 'pcnalx'
-if sqlite3 is not None:
-    FTS_VERSION = 4 if sqlite3.sqlite_version_info[:3] >= (3, 7, 4) else 3
-else:
-    FTS_VERSION = 3
-
+FTS_VERSION = 4
 FTS5_MIN_SQLITE_VERSION = (3, 9, 0)
 
 
@@ -401,9 +397,8 @@ class BaseFTSModel(VirtualModel):
 
 class FTSModel(BaseFTSModel):
     """
-    VirtualModel class for creating tables that use either the FTS3 or FTS4
-    search extensions. Peewee automatically determines which version of the
-    FTS extension is supported and will use FTS4 if possible.
+    VirtualModel class for creating tables that use the FTS4 search
+    extension. To use FTS3, set ``Meta.extension_module = 'FTS3'``.
     """
     # FTS3/4 uses "docid" in the same way a normal table uses "rowid".
     docid = DocIDField()

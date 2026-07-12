@@ -1200,6 +1200,41 @@ class TestAutocommitIntegration(ModelTestCase):
         self.assertEqual(KX.select().count(), 1)
 
 
+class JDoc(TestModel):
+    data = JSONField()
+
+class JBDoc(TestModel):
+    data = BinaryJSONField()
+
+
+class TestJsonColumnTypes(ModelTestCase):
+    database = db_loader('postgres')
+    requires = [JDoc, JBDoc]
+
+    def test_json_column_types(self):
+        jdoc, jbdoc = JDoc._meta.table_name, JBDoc._meta.table_name
+        curs = self.database.execute_sql(
+            'select table_name, data_type from information_schema.columns '
+            'where column_name = %s and table_name in (%s, %s)',
+            ('data', jdoc, jbdoc))
+        self.assertEqual(dict(curs.fetchall()),
+                         {jdoc: 'json', jbdoc: 'jsonb'})
+
+    def test_json_function_flavors(self):
+        JDoc.create(data=[1, 2, 3])
+        JBDoc.create(data=[1, 2, 3])
+        self.assertEqual(JDoc.select(JDoc.data.length()).scalar(), 3)
+        self.assertEqual(JBDoc.select(JBDoc.data.length()).scalar(), 3)
+
+    def test_json_lookup_flavor(self):
+        JDoc.create(data={'items': [1, 2]})
+        self.assertEqual(
+            JDoc.select(JDoc.data['items'].length()).scalar(), 2)
+        JBDoc.create(data={'items': [1, 2, 3]})
+        self.assertEqual(
+            JBDoc.select(JBDoc.data['items'].length()).scalar(), 3)
+
+
 class TestTableInsertReturning(DatabaseTestCase):
     database = db_loader('postgres')
 
