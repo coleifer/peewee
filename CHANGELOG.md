@@ -73,6 +73,8 @@ https://github.com/coleifer/peewee/releases
   core postgres backend began mapping the JSON field-type to JSONB; its DDL
   is `json` again, and json-vs-jsonb function selection for chained lookups
   now follows the field's declared datatype.
+* Unaliased expressions in join queries now hydrate using the same cleaned
+  attribute name as flat queries (e.g. `COUNT` rather than `COUNT(1`).
 
 [View commits](https://github.com/coleifer/peewee/compare/4.1.2...master)
 

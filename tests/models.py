@@ -1047,6 +1047,27 @@ class TestModelAPIs(ModelTestCase):
         # The aliased model must not get a spurious constructor entry.
         self.assertTrue(Tweet not in cursor.key_to_constructor)
 
+    @requires_sqlite
+    @requires_models(User, Tweet)
+    def test_join_expression_attribute_name(self):
+        huey = self.add_user('huey')
+        self.add_tweets(huey, 'meow', 'purr')
+
+        # Unaliased expressions hydrate with the same cleaned attribute name
+        # in join queries as in flat queries.
+        flat = (User
+                .select(User.username, fn.COUNT(SQL('1')))
+                .group_by(User.username))
+        row, = flat
+        self.assertEqual(row.COUNT, 1)
+
+        query = (User
+                 .select(User.username, fn.COUNT(SQL('1')))
+                 .join(Tweet, JOIN.LEFT_OUTER)
+                 .group_by(User.username))
+        row, = query
+        self.assertEqual(row.COUNT, 2)
+
     @requires_models(User, Tweet, Favorite)
     def test_multi_join(self):
         u1 = User.create(username='u1')

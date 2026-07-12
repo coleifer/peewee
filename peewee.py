@@ -9031,7 +9031,6 @@ class ModelCursorWrapper(BaseModelCursorWrapper):
             # Get the instance corresponding to the selected column/value,
             # falling back to the "root" model instance.
             instance = objects.get(key, default_instance)
-            column = self.columns[idx]
             value = row[idx]
             if value is not None:
                 set_keys.add(key)
