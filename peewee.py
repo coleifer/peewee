@@ -8971,7 +8971,7 @@ class ModelCursorWrapper(BaseModelCursorWrapper):
                         key,
                         src_ctor is not None and not src_ctor[1],
                         join_type,
-                        join_type.endswith('OUTER')))
+                        'LEFT' in join_type or 'FULL' in join_type))
 
                     accum.append(key)
 

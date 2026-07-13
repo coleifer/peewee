@@ -952,6 +952,25 @@ class TestModelAPIs(ModelTestCase):
                 ('House Party', 'House', 'Topeka'),
                 ('Nowhere Party', 'Nowhere', None)])
 
+    @requires_models(User, Tweet)
+    def test_join_outer_no_related(self):
+        huey = self.add_user('huey')
+        self.add_tweets(huey, 'meow', 'purr')
+        self.add_user('zaizee')  # No tweets.
+
+        with self.assertQueryCount(1):
+            query = (User
+                     .select(User, Tweet)
+                     .join(Tweet, JOIN.LEFT_OUTER)
+                     .order_by(User.username, Tweet.content))
+            # The tweet-less user must hydrate as tweet=None, not raise.
+            accum = [(u.username, u.tweet.content if u.tweet is not None
+                      else None) for u in query]
+        self.assertEqual(accum, [
+            ('huey', 'meow'),
+            ('huey', 'purr'),
+            ('zaizee', None)])
+
     @requires_models(Relationship, Person)
     def test_join_same_model_twice(self):
         d = datetime.date(2010, 1, 1)

@@ -17,6 +17,10 @@ https://github.com/coleifer/peewee/releases
 * Fix `namedtuples()` on a query-builder (`Table`) query raising `ValueError`
   when a column name is not a valid identifier. The plain
   `NamedTupleCursorWrapper` now passes `rename=True`, matching the model path.
+* Fix outer joins in a joined model graph not hydrating a missing related
+  object as `None`, so accessing the attribute raised `AttributeError`. The
+  outer-join test had regressed to `endswith('OUTER')` (never true). It now
+  also recognizes `FULL JOIN` and `LEFT JOIN LATERAL`.
 
 [View commits](https://github.com/coleifer/peewee/compare/4.2.1...master)
 

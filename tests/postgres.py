@@ -1377,6 +1377,22 @@ class TestPostgresLateralJoin(ModelTestCase):
             ('c', None)])
 
     @requires_models(User, Tweet)
+    def test_full_join_no_related(self):
+        self.create_data()
+
+        query = (User
+                 .select(User, Tweet)
+                 .join(Tweet, JOIN.FULL, on=(Tweet.user == User.id))
+                 .order_by(User.username, Tweet.content))
+        # "FULL JOIN" nulls the tweet side for the tweet-less user ("c").
+        accum = [(u.username, u.tweet.content if u.tweet is not None else None)
+                 for u in query]
+        self.assertEqual(accum, [
+            ('a', 'a1'), ('a', 'a10'), ('a', 'a2'),
+            ('b', 'b3'), ('b', 'b4'), ('b', 'b7'),
+            ('c', None)])
+
+    @requires_models(User, Tweet)
     def test_lateral_helper(self):
         self.create_data()
 
