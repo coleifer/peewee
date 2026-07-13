@@ -2543,6 +2543,7 @@ class Select(SelectBase):
     def distinct(self, *columns):
         if len(columns) == 1 and (columns[0] is True or columns[0] is False):
             self._simple_distinct = columns[0]
+            self._distinct = None
         else:
             self._simple_distinct = False
             self._distinct = columns

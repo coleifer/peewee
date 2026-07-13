@@ -24,6 +24,9 @@ https://github.com/coleifer/peewee/releases
 * Fix `ModelSelect.select_extend()` mutating its receiver's default-projection
   flag, so a base `Model.select()` reused as a subquery stopped collapsing to
   its primary key. It now flags the returned clone, matching `select()`.
+* Fix `distinct(True)` and `distinct(False)` not clearing a prior
+  `distinct(*columns)`, so the query kept rendering `DISTINCT ON (...)` instead
+  of a plain `DISTINCT` or no distinct at all.
 
 [View commits](https://github.com/coleifer/peewee/compare/4.2.1...master)
 

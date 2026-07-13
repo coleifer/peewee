@@ -227,6 +227,25 @@ class TestModelSQL(ModelDatabaseTestCase):
             '"t1"."id", "t1"."username" '
             'FROM "users" AS "t1"'), [])
 
+    def test_distinct_toggle(self):
+        base = User.select().distinct(User.username)
+        on_sql = ('SELECT DISTINCT ON ("t1"."username") '
+                  '"t1"."id", "t1"."username" FROM "users" AS "t1"')
+        self.assertSQL(base, on_sql, [])
+
+        # distinct(False) clears a prior distinct(cols).
+        self.assertSQL(base.distinct(False),
+                       'SELECT "t1"."id", "t1"."username" '
+                       'FROM "users" AS "t1"', [])
+
+        # distinct(True) replaces DISTINCT ON with a plain DISTINCT.
+        self.assertSQL(base.distinct(True),
+                       'SELECT DISTINCT "t1"."id", "t1"."username" '
+                       'FROM "users" AS "t1"', [])
+
+        # The receiver is left untouched.
+        self.assertSQL(base, on_sql, [])
+
     def test_string_expression_concat_chain(self):
         class P(TestModel):
             first = CharField()

@@ -2496,6 +2496,23 @@ class TestSelectFeatures(BaseTestCase):
         self.assertSQL(query,
                        'SELECT DISTINCT "t1"."name" FROM "person" AS "t1"', [])
 
+    def test_distinct_toggle(self):
+        base = Person.select(Person.name).distinct(Person.name)
+        on_sql = ('SELECT DISTINCT ON ("t1"."name") "t1"."name" '
+                  'FROM "person" AS "t1"')
+        self.assertSQL(base, on_sql, [])
+
+        # distinct(False) clears a prior distinct(cols).
+        self.assertSQL(base.distinct(False),
+                       'SELECT "t1"."name" FROM "person" AS "t1"', [])
+
+        # distinct(True) replaces DISTINCT ON with a plain DISTINCT.
+        self.assertSQL(base.distinct(True),
+                       'SELECT DISTINCT "t1"."name" FROM "person" AS "t1"', [])
+
+        # The receiver is left untouched.
+        self.assertSQL(base, on_sql, [])
+
     def test_distinct_count(self):
         query = Person.select(fn.COUNT(Person.name.distinct()))
         self.assertSQL(query, (
