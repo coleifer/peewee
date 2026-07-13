@@ -4658,10 +4658,10 @@ class PostgresqlDatabase(Database):
         query = """
             SELECT
                 i.relname, idxs.indexdef, idx.indisunique,
-                array_to_string(ARRAY(
+                ARRAY(
                     SELECT pg_get_indexdef(idx.indexrelid, k + 1, TRUE)
                     FROM generate_subscripts(idx.indkey, 1) AS k
-                    ORDER BY k), ',')
+                    ORDER BY k)
             FROM pg_catalog.pg_class AS t
             INNER JOIN pg_catalog.pg_namespace AS n ON t.relnamespace = n.oid
             INNER JOIN pg_catalog.pg_index AS idx ON t.oid = idx.indrelid
@@ -4673,7 +4673,7 @@ class PostgresqlDatabase(Database):
             WHERE t.relname = %s AND t.relkind = %s AND n.nspname = %s
             ORDER BY idx.indisunique DESC, i.relname;"""
         cursor = self.execute_sql(query, (table, 'r', schema or 'public'))
-        unesc = lambda cols: [unqesc(c) for c in cols.split(',')]
+        unesc = lambda cols: [unqesc(c) for c in cols]
         return [IndexMetadata(name, sql.rstrip(' ;'), unesc(cols), unique,
                               table)
                 for name, sql, unique, cols in cursor.fetchall()]

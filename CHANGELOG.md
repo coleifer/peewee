@@ -27,6 +27,10 @@ https://github.com/coleifer/peewee/releases
 * Fix `distinct(True)` and `distinct(False)` not clearing a prior
   `distinct(*columns)`, so the query kept rendering `DISTINCT ON (...)` instead
   of a plain `DISTINCT` or no distinct at all.
+* Fix Postgres `get_indexes()` shredding an expression index whose key contains
+  a comma, e.g. `COALESCE(a, 0)` split into two bogus columns. It joined the
+  per-key definitions into a comma-delimited string and split on the comma. It
+  now reads the key array directly.
 
 [View commits](https://github.com/coleifer/peewee/compare/4.2.1...master)
 

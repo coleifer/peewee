@@ -491,6 +491,25 @@ class TestIntrospection(ModelTestCase):
             ('person_dob', ['dob'], False),
             ('person_first_last', ['first', 'last'], True)])
 
+    @requires_postgresql
+    def test_get_indexes_expression(self):
+        self.database.execute_sql('DROP TABLE IF EXISTS idx_expr')
+        self.database.execute_sql('CREATE TABLE idx_expr (a INTEGER, b INTEGER)')
+        try:
+            # A functional-index key whose expression contains a comma must not
+            # be split into bogus columns.
+            self.database.execute_sql(
+                'CREATE INDEX idx_expr_ce ON idx_expr (COALESCE(a, 0), b)')
+            idx, = [i for i in self.database.get_indexes('idx_expr')
+                    if i.name == 'idx_expr_ce']
+            self.assertEqual(len(idx.columns), 2)
+            self.assertIn('b', idx.columns)
+            expr, = [c for c in idx.columns if c != 'b']
+            self.assertIn(',', expr)
+            self.assertIn('COALESCE', expr.upper())
+        finally:
+            self.database.execute_sql('DROP TABLE idx_expr')
+
     def test_get_columns(self):
         columns = self.database.get_columns('indexed_model')
         data = [(c.name, c.null, c.primary_key, c.table)
