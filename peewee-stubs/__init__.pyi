@@ -542,6 +542,7 @@ class DQ(ColumnBase):
 Tuple: Incomplete
 
 class QualifiedNames(WrappedNode):
+    def __init__(self, node, scope=SCOPE_COLUMN) -> None: ...
     def __sql__(self, ctx): ...
 
 class OnConflict(Node):
