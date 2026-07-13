@@ -7,6 +7,11 @@ https://github.com/coleifer/peewee/releases
 
 ## master
 
+* Change `Field.__hash__` again... fml. Use `(model_cls, field name)`.
+* Fix `Metadata.remove_ref()` removing the wrong foreign-key when a model
+  has multiple foreign-keys to the same target, as `list.remove()` matched
+  the first entry via the overloaded `Field.__eq__`.
+
 [View commits](https://github.com/coleifer/peewee/compare/4.2.1...master)
 
 ## 4.2.1

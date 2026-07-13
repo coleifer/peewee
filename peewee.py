@@ -5489,9 +5489,8 @@ class Field(ColumnBase):
         self._sort_key = (self.primary_key and 1 or 2), self._order
 
     def __hash__(self):
-        # Coexisting same-named models are distinguished by their tables.
-        return hash((self.model._meta.schema, self.model._meta.table_name,
-                     self.name))
+        # Same-named models are distinguished by class identity, not table.
+        return hash((self.model, self.name))
 
     def __repr__(self):
         if hasattr(self, 'model') and getattr(self, 'name', None):
@@ -7218,9 +7217,12 @@ class Metadata(object):
     def remove_ref(self, field):
         rel = field.rel_model
         del self.refs[field]
-        self.model_refs[rel].remove(field)
+        self.model_refs[rel] = [f for f in self.model_refs[rel]
+                                if f is not field]
         del rel._meta.backrefs[field]
-        rel._meta.model_backrefs[self.model].remove(field)
+        model_backrefs = rel._meta.model_backrefs
+        model_backrefs[self.model] = [f for f in model_backrefs[self.model]
+                                      if f is not field]
 
     def add_manytomany(self, field):
         self.manytomany[field.name] = field

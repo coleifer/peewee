@@ -2966,6 +2966,39 @@ class TestFieldAccessorEdgeCases(BaseTestCase):
         make_order_schema('s2', 'orders_s2')
         self.assertEqual(len(Customer._meta.backrefs), 4)
 
+    def test_field_hash_stable_after_schema_change(self):
+        class Reg(TestModel):
+            amount = IntegerField(default=0)
+        class Ref(TestModel):
+            reg = ForeignKeyField(Reg, backref='refs')
+
+        fk = Ref._meta.fields['reg']
+        self.assertIn(fk, Ref._meta.refs)
+        self.assertIn(fk, Reg._meta.backrefs)
+
+        Ref._meta.schema = 'tenant1'
+        Ref._meta.set_table_name('ref_2')
+        self.assertIn(fk, Ref._meta.refs)
+        self.assertIn(fk, Reg._meta.backrefs)
+
+        Reg._meta.remove_field('amount')
+        Ref._meta.remove_field('reg')
+
+    def test_remove_ref_multiple_fks_same_target(self):
+        class Person(TestModel):
+            name = CharField()
+        class Note(TestModel):
+            author = ForeignKeyField(Person, backref='authored')
+            editor = ForeignKeyField(Person, backref='edited')
+
+        self.assertEqual([f.name for f in Note._meta.model_refs[Person]],
+                         ['author', 'editor'])
+        Note._meta.remove_field('editor')
+        self.assertEqual([f.name for f in Note._meta.model_refs[Person]],
+                         ['author'])
+        self.assertEqual([f.name for f in Person._meta.model_backrefs[Note]],
+                         ['author'])
+
     def test_field_accessor_missing_key(self):
         u = User()
         u.__data__ = {}
