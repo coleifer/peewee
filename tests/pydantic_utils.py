@@ -4,6 +4,7 @@ import datetime
 import decimal
 import uuid
 from typing import List
+from typing import Literal
 
 from peewee import *
 from playhouse.pydantic_utils import to_pydantic
@@ -492,6 +493,45 @@ class TestMisc(BasePydanticTestCase):
         for bad_key in ('tweets', User, Tweet.content):
             with self.assertRaises(ValueError):
                 to_pydantic(User, relationships={bad_key: List[TweetSchema]})
+
+    def test_filter_by_field_objects(self):
+        # exclude= / include= accept field objects and back-references, the
+        # same currency as relationships=.
+        S = to_pydantic(User, exclude={User.age, User.bio})
+        self.assertNotIn('age', S.model_fields)
+        self.assertNotIn('bio', S.model_fields)
+
+        S = to_pydantic(User, include=[User.name, User.status])
+        self.assertEqual(set(S.model_fields), {'name', 'status'})
+
+        # A bare (non-collection) field object is accepted.
+        S = to_pydantic(User, exclude=User.age)
+        self.assertNotIn('age', S.model_fields)
+
+        # A foreign key object matches the emitted column name.
+        S = to_pydantic(Tweet, exclude=Tweet.user)
+        self.assertEqual(set(S.model_fields), {'content', 'created'})
+
+        # A back-reference object honors exclude=.
+        S = to_pydantic(User, exclude=User.tweets,
+                        relationships={User.tweets: List[to_pydantic(Tweet)]})
+        self.assertNotIn('tweets', S.model_fields)
+
+    def test_filter_by_bad_type(self):
+        with self.assertRaises(ValueError):
+            to_pydantic(User, exclude={123})
+
+    def test_choices_iterable_not_exhausted(self):
+        # A one-shot iterable of choices must survive being read for both the
+        # Literal type and the description.
+        class HasChoices(TestModel):
+            kind = CharField(choices=((v, v.upper()) for v in ('a', 'b')))
+
+        S = to_pydantic(HasChoices)
+        f = S.model_fields['kind']
+        self.assertEqual(f.annotation, Literal['a', 'b'])
+        self.assertIn("'a' = A", f.description)
+        self.assertIn("'b' = B", f.description)
 
     def test_relationships_filtering(self):
         class TweetSchema(BaseModel):

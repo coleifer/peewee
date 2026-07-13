@@ -7,6 +7,7 @@ from typing import get_origin
 
 from peewee import AutoField
 from peewee import BackrefAccessor
+from peewee import Field as PeeweeField
 from peewee import ForeignKeyField
 from peewee import Node
 from playhouse.reflection import FieldTypeMap
@@ -31,11 +32,29 @@ def get_field_type(field):
         return Any
     return FieldTypeMap.get(field.field_type, Any)
 
+def _field_names(value):
+    if value is None:
+        return None
+    if isinstance(value, (str, PeeweeField, BackrefAccessor)):
+        value = (value,)
+    names = set()
+    for item in value:
+        if isinstance(item, BackrefAccessor):
+            names.add(item.field.backref)
+        elif isinstance(item, PeeweeField):
+            names.add(item.name)
+        elif isinstance(item, str):
+            names.add(item)
+        else:
+            raise ValueError('exclude/include entries must be field names, '
+                             'field objects or back-references, got: %r'
+                             % (item,))
+    return names
+
 def to_pydantic(model_cls, exclude=None, include=None, exclude_autofield=True,
                 model_name=None, relationships=None, base_model=None):
-    exclude = {exclude} if isinstance(exclude, str) else set(exclude or ())
-    if include is not None:
-        include = {include} if isinstance(include, str) else set(include)
+    exclude = _field_names(exclude) or set()
+    include = _field_names(include)
     relationships = relationships or {}
     fields = {}
 
@@ -85,7 +104,7 @@ def to_pydantic(model_cls, exclude=None, include=None, exclude_autofield=True,
             name = field.column_name
 
         python_type = get_field_type(field)
-        choices = field.choices
+        choices = list(field.choices) if field.choices else None
         if choices:
             python_type = choices_to_literal(choices)
 
@@ -130,8 +149,7 @@ def to_pydantic(model_cls, exclude=None, include=None, exclude_autofield=True,
 
     model_name = model_name or ('%sSchema' % model_cls.__name__)
 
-    kwargs = {}
-    kwargs.update(fields)
+    kwargs = dict(fields)
 
     if base_model is not None:
         class Base(base_model, from_attributes=True):
