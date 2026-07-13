@@ -2007,19 +2007,20 @@ Tuple = lambda *a: EnclosedNodeList(a)
 
 
 class QualifiedNames(WrappedNode):
+    def __init__(self, node, scope=SCOPE_COLUMN):
+        super(QualifiedNames, self).__init__(node)
+        self._scope = scope
+
     def __sql__(self, ctx):
-        with ctx.scope_column():
+        with ctx(scope=self._scope):
             return ctx.sql(self.node)
 
 
 def qualify_names(node):
-    # Search a node heirarchy to ensure that any column-like objects are
-    # referenced using fully-qualified names.
-    if isinstance(node, Expression):
-        return node.__class__(qualify_names(node.lhs), node.op,
-                              qualify_names(node.rhs), node.flat)
-    elif isinstance(node, ColumnBase):
-        return QualifiedNames(node)
+    # SCOPE_NORMAL, not SCOPE_COLUMN, so a nested subquery renders in full
+    # rather than collapsing to its alias.
+    if isinstance(node, ColumnBase):
+        return QualifiedNames(node, SCOPE_NORMAL)
     return node
 
 
@@ -2941,7 +2942,8 @@ class Insert(_WriteQuery):
             if self._on_conflict is not None:
                 update = self._on_conflict.get_conflict_update(ctx, self)
                 if update is not None:
-                    ctx.literal(' ').sql(update)
+                    with ctx(subquery=True):
+                        ctx.literal(' ').sql(update)
 
             return self.apply_returning(ctx)
 
@@ -3821,7 +3823,7 @@ class Database(_callable_context_manager):
                 else:
                     v = Value(v, unpack=False)
             elif qualify:
-                v = QualifiedNames(v)
+                v = qualify_names(v)
             items.append(NodeList((ensure_entity(k), SQL('='), v)))
         return items
 
@@ -3855,7 +3857,7 @@ class Database(_callable_context_manager):
 
         parts = [stmt, target, SQL('DO UPDATE SET'), CommaNodeList(updates)]
         if on_conflict._where:
-            parts.extend((SQL('WHERE'), QualifiedNames(on_conflict._where)))
+            parts.extend((SQL('WHERE'), qualify_names(on_conflict._where)))
 
         return NodeList(parts)
 

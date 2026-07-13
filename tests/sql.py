@@ -1687,6 +1687,37 @@ class TestUpdateQuery(BaseTestCase):
             'WHERE ("t1"."user_id" = "users"."id")) '
             'WHERE ("users"."last_tweet_id" IS NULL)'), [])
 
+    def test_update_value_subquery_in_function(self):
+        subquery = (Tweet
+                    .select(fn.MAX(Tweet.c.id))
+                    .where(Tweet.c.user_id == User.c.id))
+        query = User.update({User.c.last_tweet_id: fn.COALESCE(subquery, 0)})
+        self.assertSQL(query, (
+            'UPDATE "users" SET "last_tweet_id" = COALESCE('
+            '(SELECT MAX("t1"."id") FROM "tweets" AS "t1" '
+            'WHERE ("t1"."user_id" = "users"."id")), ?)'), [0])
+
+        query = User.update({User.c.last_tweet_id:
+                             Case(None, ((User.c.id > 0, subquery),), 0)})
+        self.assertSQL(query, (
+            'UPDATE "users" SET "last_tweet_id" = CASE '
+            'WHEN ("users"."id" > ?) THEN '
+            '(SELECT MAX("t1"."id") FROM "tweets" AS "t1" '
+            'WHERE ("t1"."user_id" = "users"."id")) ELSE ? END'), [0, 0])
+
+        query = User.update(
+            {User.c.last_tweet_id: fn.COALESCE(subquery, 0) + 1})
+        self.assertSQL(query, (
+            'UPDATE "users" SET "last_tweet_id" = (COALESCE('
+            '(SELECT MAX("t1"."id") FROM "tweets" AS "t1" '
+            'WHERE ("t1"."user_id" = "users"."id")), ?) + ?)'), [0, 1])
+
+        query = User.update({User.c.last_tweet_id: Cast(subquery, 'int')})
+        self.assertSQL(query, (
+            'UPDATE "users" SET "last_tweet_id" = CAST('
+            '(SELECT MAX("t1"."id") FROM "tweets" AS "t1" '
+            'WHERE ("t1"."user_id" = "users"."id")) AS int)'), [])
+
     def test_update_from_cte(self):
         cte = (Tweet
                .select(Tweet.c.user_id, fn.COUNT(Tweet.c.id).alias('ct'))
@@ -2652,6 +2683,20 @@ class TestOnConflictSqlite(BaseTestCase):
         with self.assertRaisesCtx(ValueError):
             self.database.get_sql_context().parse(query)
 
+    def test_conflict_update_subquery_in_function(self):
+        KV = Table('kv', ('key', 'value', 'extra'), _database=self.database)
+        Stat = Table('stat', _database=self.database)
+        subq = Stat.select(fn.MAX(Stat.c.n))
+        query = (KV.insert(key='k1', value='v1', extra=1)
+                 .on_conflict(conflict_target=(KV.key,),
+                              update={KV.extra: fn.COALESCE(subq, 0)}))
+        self.assertSQL(query, (
+            'INSERT INTO "kv" ("extra", "key", "value") VALUES (?, ?, ?) '
+            'ON CONFLICT ("key") DO UPDATE '
+            'SET "extra" = COALESCE('
+            '(SELECT MAX("t1"."n") FROM "stat" AS "t1"), ?)'),
+            [1, 'k1', 'v1', 0])
+
 
 class TestOnConflictMySQL(BaseTestCase):
     database = MySQLDatabase(None)
@@ -2748,6 +2793,20 @@ class TestOnConflictPostgresql(BaseTestCase):
             'ON CONFLICT ("key", "value") DO UPDATE '
             'SET "extra" = (EXCLUDED."extra" + ?) '
             'WHERE (EXCLUDED."extra" < "kv"."extra")'), [1, 'k1', 'v1', 2])
+
+    def test_conflict_update_subquery_in_function(self):
+        KV = Table('kv', ('key', 'value', 'extra'), _database=self.database)
+        Stat = Table('stat', _database=self.database)
+        subq = Stat.select(fn.MAX(Stat.c.n))
+        query = (KV.insert(key='k1', value='v1', extra=1)
+                 .on_conflict(conflict_target=(KV.key,),
+                              update={KV.extra: fn.COALESCE(subq, 0)}))
+        self.assertSQL(query, (
+            'INSERT INTO "kv" ("extra", "key", "value") VALUES (?, ?, ?) '
+            'ON CONFLICT ("key") DO UPDATE '
+            'SET "extra" = COALESCE('
+            '(SELECT MAX("t1"."n") FROM "stat" AS "t1"), ?)'),
+            [1, 'k1', 'v1', 0])
 
     def test_conflict_target_or_constraint(self):
         KV = Table('kv', ('key', 'value', 'extra'), _database=self.database)

@@ -1031,6 +1031,21 @@ class TestModelSQL(ModelDatabaseTestCase):
             'GROUP BY "t1"."user_id" '
             'HAVING (COUNT("t1"."id") > ?)))'), [100, 100])
 
+    def test_update_subquery_in_function(self):
+        class U(TestModel):
+            username = TextField()
+            flood_count = IntegerField()
+
+        class T(TestModel):
+            user = ForeignKeyField(U)
+
+        subq = T.select(fn.MAX(T.id)).where(T.user == U.id)
+        query = U.update({U.flood_count: fn.COALESCE(subq, 0)})
+        self.assertSQL(query, (
+            'UPDATE "u" SET "flood_count" = COALESCE('
+            '(SELECT MAX("t1"."id") FROM "t" AS "t1" '
+            'WHERE ("t1"."user_id" = "u"."id")), ?)'), [0])
+
     def test_update_from(self):
         class SalesPerson(TestModel):
             first = TextField()
@@ -1517,6 +1532,17 @@ class TestOnConflictSQL(ModelDatabaseTestCase):
             'ON CONFLICT ("a") '
             'DO UPDATE SET "b" = ("oc_test"."b" + ?) '
             'RETURNING "oc_test"."id"'), ['foo', 1, 0, 2])
+
+    def test_atomic_update_subquery_in_function(self):
+        subq = OCTest.select(fn.MAX(OCTest.b))
+        query = OCTest.insert(a='foo', b=1).on_conflict(
+            conflict_target=(OCTest.a,),
+            update={OCTest.b: fn.COALESCE(subq, 0)})
+        self.assertSQL(query, (
+            'INSERT INTO "oc_test" ("a", "b", "c") VALUES (?, ?, ?) '
+            'ON CONFLICT ("a") DO UPDATE SET "b" = COALESCE('
+            '(SELECT MAX("oc_test"."b") FROM "oc_test" AS "oc_test"), ?) '
+            'RETURNING "oc_test"."id"'), ['foo', 1, 0, 0])
 
     def test_on_conflict_do_nothing(self):
         query = OCTest.insert(a='foo', b=1).on_conflict(action='IGNORE')

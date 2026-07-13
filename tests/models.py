@@ -6435,6 +6435,15 @@ class TestUpdateIntegrationRegressions(ModelTestCase):
         self.assertEqual(list(query.clone()), [(0, 0.), (1, 1.), (2, 2.),
                                                (3, 3.)])
 
+    def test_update_subquery_in_function(self):
+        # A subquery nested inside a function used as a SET value must render
+        # the subquery in full, not collapse to its alias.
+        n_users = User.select(fn.COUNT(User.id))
+        Sample.update(counter=fn.COALESCE(n_users, 0)).execute()
+        counters = [c for c, in
+                    Sample.select(Sample.counter).order_by(Sample.id).tuples()]
+        self.assertEqual(counters, [3, 3, 3, 3])
+
 
 class MGProject(TestModel):
     name = TextField()
