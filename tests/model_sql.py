@@ -1762,6 +1762,22 @@ class TestModelCompoundSelect(BaseTestCase):
             'SELECT "t2"."alpha" FROM "alpha" AS "t2" UNION '
             'SELECT "t3"."alpha" FROM "alpha" AS "t3"'), [])
 
+    def test_correlated_subquery(self):
+        # A model-level compound used as a correlated subquery reuses the outer
+        # model's alias ("t1") in every branch, rather than assigning the
+        # correlated outer source a phantom new alias in the right-hand branch.
+        lhs = Beta.select(Beta.beta).where(Beta.beta == Alpha.alpha)
+        rhs = Gamma.select(Gamma.gamma).where(Gamma.gamma == Alpha.alpha)
+        query = Alpha.select(Alpha.alpha).where(Alpha.alpha.in_(lhs | rhs))
+        self.assertSQL(query, (
+            'SELECT "t1"."alpha" FROM "alpha" AS "t1" '
+            'WHERE ("t1"."alpha" IN ('
+            'SELECT "t2"."beta" FROM "beta" AS "t2" '
+            'WHERE ("t2"."beta" = "t1"."alpha") '
+            'UNION '
+            'SELECT "t3"."gamma" FROM "gamma" AS "t3" '
+            'WHERE ("t3"."gamma" = "t1"."alpha")))'), [])
+
     def test_where(self):
         q1 = Alpha.select(Alpha.alpha).where(Alpha.alpha < 2)
         q2 = Alpha.select(Alpha.alpha).where(Alpha.alpha > 5)

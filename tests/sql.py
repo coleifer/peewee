@@ -1111,6 +1111,97 @@ class TestSelectQuery(BaseTestCase):
             'SELECT "t3"."col_b" AS "foo" FROM "b" AS "t3") AS "t1" '
             'GROUP BY "t1"."foo"'), [])
 
+    def test_compound_self_union_aliases(self):
+        # A source used independently in multiple branches of a compound gets a
+        # fresh alias per branch (the branches are not correlated).
+        Reg = Table('register', ('id', 'value'))
+        q1 = Reg.select(Reg.value).where(Reg.value < 2)
+        q2 = Reg.select(Reg.value).where(Reg.value > 8)
+        q3 = Reg.select(Reg.value).where(Reg.value == 5)
+        self.assertSQL((q1 | q2), (
+            'SELECT "t1"."value" FROM "register" AS "t1" '
+            'WHERE ("t1"."value" < ?) '
+            'UNION '
+            'SELECT "t2"."value" FROM "register" AS "t2" '
+            'WHERE ("t2"."value" > ?)'), [2, 8])
+        self.assertSQL((q1 | q2 | q3), (
+            'SELECT "t1"."value" FROM "register" AS "t1" '
+            'WHERE ("t1"."value" < ?) '
+            'UNION '
+            'SELECT "t2"."value" FROM "register" AS "t2" '
+            'WHERE ("t2"."value" > ?) '
+            'UNION '
+            'SELECT "t3"."value" FROM "register" AS "t3" '
+            'WHERE ("t3"."value" = ?)'), [2, 8, 5])
+
+    def test_correlated_compound_subquery(self):
+        # A compound (UNION/INTERSECT/EXCEPT) used as a correlated subquery
+        # must reference the outer table by its existing alias in *every*
+        # branch. The right-hand branch renders in a fresh alias scope;
+        # regression test for it assigning the correlated outer source a
+        # phantom new alias instead of reusing the outer "t1".
+        Product = Table('product', ('id', 'name'))
+        SaleA = Table('sale_a', ('id', 'pid', 'amt'))
+        SaleB = Table('sale_b', ('id', 'pid', 'amt'))
+        lhs = SaleA.select(SaleA.pid).where(SaleA.pid == Product.id)
+        rhs = SaleB.select(SaleB.pid).where(SaleB.pid == Product.id)
+
+        for combine, keyword in (
+                (lambda a, b: a | b, 'UNION'),
+                (lambda a, b: a.union_all(b), 'UNION ALL'),
+                (lambda a, b: a & b, 'INTERSECT'),
+                (lambda a, b: a - b, 'EXCEPT')):
+            query = Product.select(Product.name).where(
+                Product.id.in_(combine(lhs, rhs)))
+            self.assertSQL(query, (
+                'SELECT "t1"."name" FROM "product" AS "t1" '
+                'WHERE ("t1"."id" IN ('
+                'SELECT "t2"."pid" FROM "sale_a" AS "t2" '
+                'WHERE ("t2"."pid" = "t1"."id") '
+                '%s '
+                'SELECT "t3"."pid" FROM "sale_b" AS "t3" '
+                'WHERE ("t3"."pid" = "t1"."id")))' % keyword), [])
+
+    def test_correlated_compound_subquery_nested(self):
+        Product = Table('product', ('id', 'name'))
+        SaleA = Table('sale_a', ('id', 'pid', 'amt'))
+        SaleB = Table('sale_b', ('id', 'pid', 'amt'))
+        SaleC = Table('sale_c', ('id', 'pid', 'amt'))
+        a = SaleA.select(SaleA.pid).where(SaleA.pid == Product.id)
+        b = SaleB.select(SaleB.pid).where(SaleB.pid == Product.id)
+        c = SaleC.select(SaleC.pid).where(SaleC.pid == Product.id)
+
+        # Left- and right-associative nesting correlate identically: the outer
+        # alias "t1" is reused in all three branches.
+        expected = (
+            'SELECT "t1"."name" FROM "product" AS "t1" '
+            'WHERE ("t1"."id" IN ('
+            'SELECT "t2"."pid" FROM "sale_a" AS "t2" '
+            'WHERE ("t2"."pid" = "t1"."id") UNION '
+            'SELECT "t3"."pid" FROM "sale_b" AS "t3" '
+            'WHERE ("t3"."pid" = "t1"."id") UNION '
+            'SELECT "t4"."pid" FROM "sale_c" AS "t4" '
+            'WHERE ("t4"."pid" = "t1"."id")))')
+        self.assertSQL(
+            Product.select(Product.name).where(Product.id.in_((a | b) | c)),
+            expected, [])
+        self.assertSQL(
+            Product.select(Product.name).where(Product.id.in_(a | (b | c))),
+            expected, [])
+
+        # Non-correlated left branch, correlated right branch: the right branch
+        # still resolves the outer alias while the left keeps its own.
+        plain = SaleA.select(SaleA.amt)
+        corr = SaleB.select(SaleB.amt).where(SaleB.pid == Product.id)
+        self.assertSQL(
+            Product.select(Product.name).where(Product.id.in_(plain | corr)), (
+                'SELECT "t1"."name" FROM "product" AS "t1" '
+                'WHERE ("t1"."id" IN ('
+                'SELECT "t2"."amt" FROM "sale_a" AS "t2" '
+                'UNION '
+                'SELECT "t3"."amt" FROM "sale_b" AS "t3" '
+                'WHERE ("t3"."pid" = "t1"."id")))'), [])
+
     def test_union_with_order_and_limit(self):
         q1 = User.select(User.c.username).where(User.c.id < 5)
         q2 = User.select(User.c.username).where(User.c.id > 95)

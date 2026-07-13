@@ -2431,12 +2431,24 @@ class CompoundSelectQuery(SelectBase):
 
         outer_parens = ctx.subquery or (ctx.scope == SCOPE_SOURCE)
         with ctx(parentheses=outer_parens):
+            # Snapshot the aliases assigned by the enclosing scope before
+            # rendering either side. A correlated reference from the right-hand
+            # query must resolve to one of these outer aliases; otherwise the
+            # right-hand query's fresh alias scope assigns the outer source a
+            # new, dangling alias. The left-hand query shares the enclosing
+            # scope, so only the right-hand query needs the seed.
+            outer_aliases = dict(ctx.alias_manager.mapping)
+
             # Should the left-hand query be wrapped in parentheses?
             lhs_parens = self._wrap_parens(ctx, self.lhs)
             with ctx.scope_normal(parentheses=lhs_parens, subquery=False):
                 ctx.sql(self.lhs)
             ctx.literal(' %s ' % self.op)
             with ctx.push_alias():
+                # Seed with only the outer aliases (not the left-hand query's
+                # own sources) so the right-hand query's own sources still
+                # receive fresh aliases.
+                ctx.alias_manager.mapping.update(outer_aliases)
                 # Should the right-hand query be wrapped in parentheses?
                 rhs_parens = self._wrap_parens(ctx, self.rhs)
                 with ctx.scope_normal(parentheses=rhs_parens, subquery=False):

@@ -9,6 +9,13 @@ https://github.com/coleifer/peewee/releases
 
 [View commits](https://github.com/coleifer/peewee/compare/4.2.2...master)
 
+* Fix a compound select (`UNION`/`INTERSECT`/`EXCEPT`) used as a correlated
+  subquery emitting a phantom alias for the correlated outer table in every
+  branch but the left-most, producing invalid SQL (e.g. `no such column:
+  t4.id`). The right-hand branch renders in a fresh alias scope that no longer
+  resolved the outer source's existing alias; it now inherits the enclosing
+  scope's aliases while still assigning fresh aliases to its own sources.
+
 ## 4.2.2
 
 * Change `Field.__hash__` again... fml. Use `(model_cls, field name)`.

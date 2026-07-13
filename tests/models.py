@@ -1425,6 +1425,46 @@ class TestModelAPIs(ModelTestCase):
         self.assertEqual([row.value for row in c2], [0, 1, 5, 8, 9])
         self.assertEqual(c2.count(), 5)
 
+    @requires_models(User, Tweet, Favorite)
+    def test_correlated_compound_subquery(self):
+        # A compound (UNION) used as a correlated subquery must resolve the
+        # outer model's alias in every branch; before the fix the right-hand
+        # branch emitted a phantom alias and the query failed at execution.
+        users = {n: User.create(username=n) for n in ('u1', 'u2', 'u3', 'u4')}
+        tweet = Tweet.create(user=users['u1'], content='hello')
+        Favorite.create(user=users['u2'], tweet=tweet)
+        Favorite.create(user=users['u3'], tweet=tweet)
+
+        tweeted = Tweet.select(Tweet.user).where(Tweet.user == User.id)
+        favorited = Favorite.select(Favorite.user).where(
+            Favorite.user == User.id)
+        query = (User
+                 .select()
+                 .where(User.id.in_(tweeted | favorited))
+                 .order_by(User.username))
+        self.assertSQL(query, (
+            'SELECT "t1"."id", "t1"."username" FROM "users" AS "t1" '
+            'WHERE ("t1"."id" IN ('
+            'SELECT "t2"."user_id" FROM "tweet" AS "t2" '
+            'WHERE ("t2"."user_id" = "t1"."id") '
+            'UNION '
+            'SELECT "t3"."user_id" FROM "favorite" AS "t3" '
+            'WHERE ("t3"."user_id" = "t1"."id"))) '
+            'ORDER BY "t1"."username"'), [])
+
+        # u1 tweeted, u2/u3 favorited, u4 did neither.
+        self.assertEqual([u.username for u in query], ['u1', 'u2', 'u3'])
+
+        # A branch that independently re-queries the *outer* model reuses the
+        # outer alias (standard same-table scope shadowing) and still executes.
+        others = User.select(User.id).where(User.username == 'u4')
+        shadowed = (User
+                    .select()
+                    .where(User.id.in_(tweeted | favorited | others))
+                    .order_by(User.username))
+        self.assertEqual([u.username for u in shadowed],
+                         ['u1', 'u2', 'u3', 'u4'])
+
     @requires_models(User, Tweet)
     def test_union_column_resolution(self):
         u1 = User.create(id=1, username='u1')
