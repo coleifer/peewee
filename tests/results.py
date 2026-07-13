@@ -430,6 +430,13 @@ class TestQueryExecution(DatabaseTestCase):
             {'content': 'meow', 'username': 'huey'},
             {'content': 'purr', 'username': 'huey'}])
 
+    def test_namedtuples_non_identifier(self):
+        self.create_user_tweets('huey')
+        query = QUser.select(QUser.username, SQL('1')).namedtuples()
+        row, = list(query)
+        self.assertEqual(row.username, 'huey')
+        self.assertEqual(row[1], 1)
+
     def test_select_peek_first(self):
         huey_id = self.create_user_tweets('huey', 'meow', 'purr', 'hiss')
         query = QTweet.select(QTweet.content).order_by(QTweet.id)

@@ -5318,7 +5318,8 @@ class NamedTupleCursorWrapper(CursorWrapper):
     def initialize(self):
         identifiers = self.dedupe_columns(
             [col_spec[0] for col_spec in self.cursor.description])
-        self.tuple_class = collections.namedtuple('Row', identifiers)
+        self.tuple_class = collections.namedtuple('Row', identifiers,
+                                                  rename=True)
 
     def process_row(self, row):
         return self.tuple_class(*row)
