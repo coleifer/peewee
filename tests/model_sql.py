@@ -736,6 +736,28 @@ class TestModelSQL(ModelDatabaseTestCase):
             'INSERT INTO "person" ("first", "last") VALUES (?, ?)'),
             ['huey', 'cat'])
 
+    def test_insert_empty_applies_defaults(self):
+        class Dflt(TestModel):
+            a = IntegerField(default=3)
+            b = CharField(default='x')
+            class Meta:
+                database = self.database
+
+        # An empty insert applies python-side defaults, matching a partial
+        # insert, instead of falling back to DEFAULT VALUES.
+        for query in (Dflt.insert(), Dflt.insert({})):
+            self.assertSQL(query,
+                           'INSERT INTO "dflt" ("a", "b") VALUES (?, ?)',
+                           [3, 'x'])
+
+        # A model with no python-side defaults still uses DEFAULT VALUES.
+        class NoDflt(TestModel):
+            c = IntegerField(null=True)
+            class Meta:
+                database = self.database
+        self.assertSQL(NoDflt.insert(),
+                       'INSERT INTO "no_dflt" DEFAULT VALUES', [])
+
     def test_replace(self):
         query = (Person
                  .replace({Person.first: 'huey',

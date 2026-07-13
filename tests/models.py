@@ -1759,9 +1759,14 @@ class TestRaw(ModelTestCase):
             self.assertEqual([u.username for u in query], [])
 
 
+class DefaultOnly(TestModel):
+    a = IntegerField(default=3)
+    b = CharField(default='x')
+
+
 class TestDefaultValues(ModelTestCase):
     database = get_in_memory_db()
-    requires = [Sample, SampleMeta]
+    requires = [Sample, SampleMeta, DefaultOnly]
 
     def test_default_present_on_insert(self):
         # Although value is not specified, it has a default, which is included
@@ -1785,6 +1790,13 @@ class TestDefaultValues(ModelTestCase):
         self.assertSQL(query, (
             'INSERT INTO "sample" ("counter", "value") '
             'VALUES (?, ?), (?, ?)'), [0, 1.0, 1, 2.0])
+
+    def test_empty_insert_lands_defaults(self):
+        # An empty insert applies python-side defaults, matching a partial
+        # insert, rather than emitting DEFAULT VALUES and dropping them.
+        rowid = DefaultOnly.insert({}).execute()
+        obj = DefaultOnly.get_by_id(rowid)
+        self.assertEqual((obj.a, obj.b), (3, 'x'))
 
     def test_default_present_on_create(self):
         s = Sample.create(counter=3)

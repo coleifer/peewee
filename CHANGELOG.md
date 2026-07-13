@@ -31,6 +31,10 @@ https://github.com/coleifer/peewee/releases
   a comma, e.g. `COALESCE(a, 0)` split into two bogus columns. It joined the
   per-key definitions into a comma-delimited string and split on the comma. It
   now reads the key array directly.
+* Fix an empty insert (`Model.insert()`, `insert({})`) emitting `DEFAULT VALUES`
+  and dropping python-side field defaults, inconsistent with a partial insert
+  which backfills them. A model with no python defaults still uses `DEFAULT
+  VALUES`.
 
 [View commits](https://github.com/coleifer/peewee/compare/4.2.1...master)
 

@@ -2777,7 +2777,7 @@ class Insert(_WriteQuery):
                              else None)
 
     def _simple_insert(self, ctx):
-        if not self._insert:
+        if not self._insert and not self.get_default_data():
             raise self.DefaultValuesException('Error: no data to insert.')
         return self._generate_insert((self._insert,), ctx)
 
