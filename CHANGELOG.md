@@ -21,6 +21,9 @@ https://github.com/coleifer/peewee/releases
   object as `None`, so accessing the attribute raised `AttributeError`. The
   outer-join test had regressed to `endswith('OUTER')` (never true). It now
   also recognizes `FULL JOIN` and `LEFT JOIN LATERAL`.
+* Fix `ModelSelect.select_extend()` mutating its receiver's default-projection
+  flag, so a base `Model.select()` reused as a subquery stopped collapsing to
+  its primary key. It now flags the returned clone, matching `select()`.
 
 [View commits](https://github.com/coleifer/peewee/compare/4.2.1...master)
 

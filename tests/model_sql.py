@@ -1974,6 +1974,15 @@ class TestQueryCloning(BaseTestCase):
         self.assertTrue(query._is_default)
         self.assertFalse(clone._is_default)
 
+        # Extending the projection likewise flags the clone, so the default
+        # receiver still collapses to its primary key as a subquery.
+        ext = query.select_extend(User.username)
+        self.assertTrue(query._is_default)
+        self.assertFalse(ext._is_default)
+        self.assertSQL(User.select(User.id).where(User.id.in_(query)), (
+            'SELECT "t1"."id" FROM "user" AS "t1" '
+            'WHERE ("t1"."id" IN (SELECT "t1"."id" FROM "user" AS "t1"))'), [])
+
     def _do_test_clone(self, User, Tweet):
         query = Tweet.select(Tweet.id)
         base_sql = 'SELECT "t1"."id" FROM "tweet" AS "t1"'

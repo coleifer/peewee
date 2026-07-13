@@ -8331,9 +8331,11 @@ class ModelSelect(BaseModelSelect, Select):
         return self
 
     def select_extend(self, *columns):
-        self._is_default = False
         fields = _normalize_model_select(columns)
-        return super(ModelSelect, self).select_extend(*fields)
+        # Flag the clone, not the receiver, as having a projection.
+        clone = super(ModelSelect, self).select_extend(*fields)
+        clone._is_default = False
+        return clone
 
     def switch(self, ctx=None):
         self._join_ctx = self.model if ctx is None else ctx
