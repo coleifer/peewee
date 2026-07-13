@@ -11,6 +11,9 @@ https://github.com/coleifer/peewee/releases
 * Fix `Metadata.remove_ref()` removing the wrong foreign-key when a model
   has multiple foreign-keys to the same target, as `list.remove()` matched
   the first entry via the overloaded `Field.__eq__`.
+* Fix a scalar subquery nested inside a function, `Case` or `Cast` collapsing
+  to its alias in an `UPDATE ... SET` value and in `ON CONFLICT DO UPDATE`,
+  as `qualify_names()` wrapped the value at `SCOPE_COLUMN`.
 
 [View commits](https://github.com/coleifer/peewee/compare/4.2.1...master)
 
