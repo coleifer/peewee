@@ -7181,32 +7181,46 @@ class TestDefaultSelectAsSource(ModelTestCase):
 
     def test_source_subquery_executes(self):
         huey = User.create(username='huey')
+        zaizee = User.create(username='zaizee')
         Tweet.create(user=huey, content='meow')
+        Tweet.create(user=zaizee, content='hiss')
 
         # An unnamed User.select() joined as a table used to return only the
-        # primary key, so reading username raised "no such column". Now it
-        # returns every column.
+        # primary key, so reading username raised "no such column". Now every
+        # column comes back and the joined row rebuilds onto the foreign key
+        # attribute the same as a plain model join. The query count stays at
+        # one, proving the joined user is populated and not lazy-loaded.
         src = User.select()
         query = (Tweet
                  .select(Tweet.content, src.c.username)
                  .join(src, on=(Tweet.user == src.c.id))
                  .order_by(Tweet.content))
-        self.assertEqual(list(query.dicts()),
-                         [{'content': 'meow', 'username': 'huey'}])
+        with self.assertQueryCount(1):
+            rows = list(query)
+            self.assertEqual([(t.content, t.user.username) for t in rows],
+                             [('hiss', 'zaizee'), ('meow', 'huey')])
 
-        # A User.select().alias('u') used as a FROM table.
+        # A User.select().alias('u') used as a FROM table. The query model is
+        # User, so its columns rebuild onto the User row.
         src = User.select().alias('u')
-        query = User.select(src.c.username).from_(src).order_by(src.c.username)
-        self.assertEqual([r['username'] for r in query.dicts()], ['huey'])
+        query = (User
+                 .select(src.c.username)
+                 .from_(src)
+                 .order_by(src.c.username))
+        with self.assertQueryCount(1):
+            self.assertEqual([u.username for u in query], ['huey', 'zaizee'])
 
         # The User.alias().select() form worked before and must still work.
         UA = User.alias()
         src = UA.select()
         query = (Tweet
                  .select(Tweet.content, src.c.username)
-                 .join(src, on=(Tweet.user == src.c.id)))
-        self.assertEqual(list(query.dicts()),
-                         [{'content': 'meow', 'username': 'huey'}])
+                 .join(src, on=(Tweet.user == src.c.id))
+                 .order_by(Tweet.content))
+        with self.assertQueryCount(1):
+            rows = list(query)
+            self.assertEqual([(t.content, t.user.username) for t in rows],
+                             [('hiss', 'zaizee'), ('meow', 'huey')])
 
 
 class TestModelAliasEdgeCases(BaseTestCase):
