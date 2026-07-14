@@ -811,6 +811,38 @@ class TestSchemaMigration(ModelTestCase):
         ])
 
     @requires_sqlite
+    def test_rebuild_preserves_bare_unique(self):
+        db = self.database
+        db.execute_sql('DROP TABLE IF EXISTS "uc"')
+        db.execute_sql('CREATE TABLE "uc" ("id" INTEGER PRIMARY KEY, '
+                       '"a" TEXT, "b" TEXT, UNIQUE (a, b))')
+        try:
+            # Without the 'unique ' constraint term, the rebuild treats the
+            # bare UNIQUE (a, b) as a column and raises OperationalError.
+            migrate(self.migrator.add_not_null('uc', 'a'))
+            row = db.execute_sql('SELECT sql FROM sqlite_master '
+                                 "WHERE type='table' AND name='uc'").fetchone()
+            self.assertIn('UNIQUE', row[0].upper())
+        finally:
+            db.execute_sql('DROP TABLE IF EXISTS "uc"')
+
+    @requires_sqlite
+    def test_rebuild_substring_table_name(self):
+        db = self.database
+        db.execute_sql('DROP TABLE IF EXISTS "ab"')
+        db.execute_sql('CREATE TABLE "ab" ("id" INTEGER PRIMARY KEY, '
+                       '"x" INTEGER)')
+        try:
+            db.execute_sql('INSERT INTO "ab" ("id", "x") VALUES (1, 10)')
+            # 'ab' is a substring of "CREATE TABLE"; an unanchored rename
+            # rewrites the keyword and produces a syntax error.
+            migrate(self.migrator.add_not_null('ab', 'x'))
+            self.assertEqual(
+                db.execute_sql('SELECT "x" FROM "ab"').fetchall(), [(10,)])
+        finally:
+            db.execute_sql('DROP TABLE IF EXISTS "ab"')
+
+    @requires_sqlite
     @requires_models(IndexModel)
     def test_index_preservation(self):
         self.reset_sql_history()

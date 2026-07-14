@@ -42,6 +42,13 @@ https://github.com/coleifer/peewee/releases
   support the `jsonb`-based mutation/concatenation builders (they raise
   `ProgrammingError`), so the misleading "Postgres casts implicitly" claim was
   removed and new code is steered to the built-in `JSONField`.
+* Fix the SQLite migrator treating a bare table-level `UNIQUE (a, b)` constraint
+  as a column when rebuilding a table (`add_not_null`, `drop_column`, ...),
+  raising `no column named UNIQUE`; `unique` is now recognized as a constraint.
+* Fix the SQLite migrator's table rebuild corrupting the `CREATE TABLE` keywords
+  for a table whose name is a case-insensitive substring of them (e.g. `ab`,
+  `t`, `tab`) -- the table-name substitution is now anchored to the trailing
+  name token.
 
 ## 4.2.2
 
