@@ -2462,6 +2462,9 @@ class CompoundSelectQuery(SelectBase):
             with ctx.scope_values():
                 self._apply_ordering(ctx)
 
+        if ctx.state.in_function or (self._alias is None and (
+                ctx.state.in_expr or ctx.state.in_projection)):
+            return ctx
         return self.apply_alias(ctx)
 
 
@@ -2591,9 +2594,14 @@ class Select(SelectBase):
             ctx.literal('LATERAL ')
 
         is_subquery = ctx.subquery
+        # A real FROM/JOIN source. The SELECT-list is SCOPE_SOURCE too, but it
+        # is flagged in_projection. Value operands are SCOPE_NORMAL.
+        is_source = ctx.scope == SCOPE_SOURCE and not ctx.state.in_projection
         state = {
             'converter': None,
+            'in_expr': False,
             'in_function': False,
+            'in_projection': False,
             'parentheses': is_subquery or (ctx.scope == SCOPE_SOURCE),
             'subquery': True,
         }
@@ -2615,8 +2623,9 @@ class Select(SelectBase):
                      .sql(EnclosedNodeList(self._distinct))
                      .literal(' '))
 
-            with ctx.scope_source():
-                ctx = self.__sql_selection__(ctx, is_subquery)
+            with ctx.scope_source(in_projection=True):
+                ctx = self.__sql_selection__(ctx, is_subquery and
+                                             not is_source)
 
             if self._from_list:
                 with ctx.scope_source(parentheses=False):
@@ -2645,11 +2654,11 @@ class Select(SelectBase):
                 ctx.literal(' ')
                 ctx.sql(self._for_update)
 
-        # If the subquery is inside a function -or- we are evaluating a
-        # subquery on either side of an expression w/o an explicit alias, do
-        # not generate an alias + AS clause.
-        if ctx.state.in_function or (ctx.state.in_expr and
-                                     self._alias is None):
+        # If the subquery is inside a function, on either side of an
+        # expression, or is a SELECT-list column (not a FROM source), and has
+        # no explicit alias, do not add an alias + AS.
+        if ctx.state.in_function or (self._alias is None and (
+                ctx.state.in_expr or ctx.state.in_projection)):
             return ctx
 
         return self.apply_alias(ctx)

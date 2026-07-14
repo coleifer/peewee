@@ -581,6 +581,58 @@ class TestSelectQuery(BaseTestCase):
             'FROM "point" AS "t1" '
             'ORDER BY "t1"."x", "t1"."y"'), [])
 
+    def test_subquery_column_no_alias(self):
+        # A subquery or compound used as a bare selected column must not be
+        # given a "AS tN" name. That naming is only for a table in a FROM or
+        # JOIN. An explicit alias is still emitted. See
+        # test_subquery_in_select_expression_sql.
+        subq = Tweet.select(fn.COUNT(SQL('1'))).where(
+            Tweet.c.user_id == User.c.id)
+        query = User.select(User.c.username, subq)
+        self.assertSQL(query, (
+            'SELECT "t1"."username", (SELECT COUNT(1) FROM "tweets" AS "t2" '
+            'WHERE ("t2"."user_id" = "t1"."id")) FROM "users" AS "t1"'), [])
+
+        A = User.select(User.c.id).where(User.c.username == 'a')
+        B = User.select(User.c.id).where(User.c.username == 'b')
+        query = User.select(User.c.username, A | B)
+        self.assertSQL(query, (
+            'SELECT "t1"."username", (SELECT "t1"."id" FROM "users" AS "t1" '
+            'WHERE ("t1"."username" = ?) UNION SELECT "t1"."id" '
+            'FROM "users" AS "t1" WHERE ("t1"."username" = ?)) '
+            'FROM "users" AS "t1"'), ['a', 'b'])
+
+    def test_subquery_source_retains_alias(self):
+        # A subquery used in a FROM or JOIN does need its name. The no-name
+        # rule for columns must not reach it.
+        subq = User.select(User.c.id, User.c.username)
+        query = (Tweet
+                 .select(Tweet.c.content)
+                 .join(subq, on=(Tweet.c.user_id == subq.c.id)))
+        self.assertSQL(query, (
+            'SELECT "t1"."content" FROM "tweets" AS "t1" '
+            'INNER JOIN (SELECT "t2"."id", "t2"."username" '
+            'FROM "users" AS "t2") AS "t3" ON ("t1"."user_id" = "t3"."id")'),
+            [])
+
+    def test_derived_table_alias_in_expression(self):
+        # A query that joins an unnamed subquery and is then used inside an
+        # IN(...) must keep that subquery's "AS tN". The enclosing expression
+        # must not change how the inner query names its own tables.
+        Comment = Table('comment')
+        usub = User.select(User.c.id)
+        posts = Tweet.select(Tweet.c.id).join(
+            usub, on=(usub.c.id == Tweet.c.user_id))
+        query = (Comment
+                 .select(Comment.c.id)
+                 .where(Comment.c.tweet_id.in_(posts)))
+        self.assertSQL(query, (
+            'SELECT "t1"."id" FROM "comment" AS "t1" '
+            'WHERE ("t1"."tweet_id" IN ('
+            'SELECT "t2"."id" FROM "tweets" AS "t2" '
+            'INNER JOIN (SELECT "t3"."id" FROM "users" AS "t3") AS "t4" '
+            'ON ("t4"."id" = "t2"."user_id")))'), [])
+
     def test_select_from_subquery(self):
         subq = (User
                 .select(User.c.username,

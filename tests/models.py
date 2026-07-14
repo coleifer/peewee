@@ -7176,6 +7176,39 @@ class TestModelSelectFromSubquery(ModelTestCase):
         self.assertTrue(isinstance(query[0], User))
 
 
+class TestDefaultSelectAsSource(ModelTestCase):
+    requires = [User, Tweet]
+
+    def test_source_subquery_executes(self):
+        huey = User.create(username='huey')
+        Tweet.create(user=huey, content='meow')
+
+        # An unnamed User.select() joined as a table used to return only the
+        # primary key, so reading username raised "no such column". Now it
+        # returns every column.
+        src = User.select()
+        query = (Tweet
+                 .select(Tweet.content, src.c.username)
+                 .join(src, on=(Tweet.user == src.c.id))
+                 .order_by(Tweet.content))
+        self.assertEqual(list(query.dicts()),
+                         [{'content': 'meow', 'username': 'huey'}])
+
+        # A User.select().alias('u') used as a FROM table.
+        src = User.select().alias('u')
+        query = User.select(src.c.username).from_(src).order_by(src.c.username)
+        self.assertEqual([r['username'] for r in query.dicts()], ['huey'])
+
+        # The User.alias().select() form worked before and must still work.
+        UA = User.alias()
+        src = UA.select()
+        query = (Tweet
+                 .select(Tweet.content, src.c.username)
+                 .join(src, on=(Tweet.user == src.c.id)))
+        self.assertEqual(list(query.dicts()),
+                         [{'content': 'meow', 'username': 'huey'}])
+
+
 class TestModelAliasEdgeCases(BaseTestCase):
     def test_setattr_raises(self):
         UA = User.alias()

@@ -490,6 +490,137 @@ class TestModelSQL(ModelDatabaseTestCase):
             'SELECT "t2"."username" FROM "users" AS "t2" '
             'WHERE ("t2"."username" IN (?, ?))))'), ['foo', 'bar'])
 
+    def test_default_select_as_source(self):
+        # A plain Model.select() inside an IN(...) returns only the primary
+        # key, which is what you want when checking a foreign key. The same
+        # query used as a table to select FROM, or to JOIN against, must
+        # instead return every column, or the outer query cannot read them.
+        # User.alias().select() already returned every column everywhere.
+
+        # Used as a value: returns only the primary key.
+        UA = User.alias()
+        user_queries = (
+            User.select(),
+            User.select().alias('x'),
+            UA.select(UA.id))
+        for uq in user_queries:
+            q = (Tweet
+                 .select(Tweet.id)
+                 .where(Tweet.user.in_(uq)))
+            self.assertSQL(q, (
+                'SELECT "t1"."id" FROM "tweet" AS "t1" '
+                'WHERE ("t1"."user_id" IN ('
+                'SELECT "t2"."id" FROM "users" AS "t2"))'), [])
+
+        # Used as a value, User.alias().select() (all columns) and an explicit
+        # column list still return every column, not just the key.
+        q = Tweet.select(Tweet.id).where(Tweet.user.in_(UA.select()))
+        self.assertSQL(q, (
+            'SELECT "t1"."id" FROM "tweet" AS "t1" '
+            'WHERE ("t1"."user_id" IN ('
+            'SELECT "t2"."id", "t2"."username" FROM "users" AS "t2"))'), [])
+        q = (Tweet
+             .select(Tweet.id)
+             .where(Tweet.user.in_(User.select(User.username))))
+        self.assertSQL(q, (
+            'SELECT "t1"."id" FROM "tweet" AS "t1" '
+            'WHERE ("t1"."user_id" IN ('
+            'SELECT "t2"."username" FROM "users" AS "t2"))'), [])
+
+        # As a FROM table, all three ways of writing it return every column and
+        # get an automatic name.
+        for src in (User.select(),
+                    User.alias().select(),
+                    User.select(User.id, User.username)):
+            q = User.select(src.c.username).from_(src)
+            self.assertSQL(q, (
+                'SELECT "t1"."username" FROM ('
+                'SELECT "t2"."id", "t2"."username" FROM "users" AS "t2") '
+                'AS "t1"'), [])
+
+        # As a FROM table with an explicit .alias('xyz').
+        src = User.select().alias('xyz')
+        q = User.select(src.c.username).from_(src)
+        self.assertSQL(q, (
+            'SELECT "xyz"."username" FROM ('
+            'SELECT "t1"."id", "t1"."username" FROM "users" AS "t1") '
+            'AS "xyz"'), [])
+
+        # Joined as a table: same three, every column, automatic name.
+        for src in (User.select(),
+                    User.alias().select(),
+                    User.select(User.id, User.username)):
+            q = (Tweet
+                 .select(Tweet.content, src.c.username)
+                 .join(src, on=(Tweet.user == src.c.id)))
+            self.assertSQL(q, (
+                'SELECT "t1"."content", "t2"."username" FROM "tweet" AS "t1" '
+                'INNER JOIN (SELECT "t3"."id", "t3"."username" '
+                'FROM "users" AS "t3") AS "t2" '
+                'ON ("t1"."user_id" = "t2"."id")'), [])
+
+        # Joined as a table with an explicit .alias('u').
+        src = User.select().alias('u')
+        q = (Tweet
+             .select(Tweet.content, src.c.username)
+             .join(src, on=(Tweet.user == src.c.id)))
+        self.assertSQL(q, (
+            'SELECT "t1"."content", "u"."username" FROM "tweet" AS "t1" '
+            'INNER JOIN (SELECT "t2"."id", "t2"."username" '
+            'FROM "users" AS "t2") AS "u" '
+            'ON ("t1"."user_id" = "u"."id")'), [])
+
+    def test_subquery_as_select_column(self):
+        # A subquery used as a selected column must not be given a made-up
+        # "AS tN" name. That naming is only for a table in a FROM or JOIN. An
+        # explicit .alias() is still used.
+        cnt = Tweet.select(fn.COUNT(Tweet.id)).where(Tweet.user == User.id)
+
+        # A bare scalar subquery gets no name.
+        q = User.select(User.username, cnt)
+        self.assertSQL(q, (
+            'SELECT "t1"."username", (SELECT COUNT("t2"."id") '
+            'FROM "tweet" AS "t2" WHERE ("t2"."user_id" = "t1"."id")) '
+            'FROM "users" AS "t1"'), [])
+
+        # An explicit .alias('n') keeps that name.
+        q = User.select(User.username, cnt.alias('n'))
+        self.assertSQL(q, (
+            'SELECT "t1"."username", (SELECT COUNT("t2"."id") '
+            'FROM "tweet" AS "t2" WHERE ("t2"."user_id" = "t1"."id")) AS "n" '
+            'FROM "users" AS "t1"'), [])
+
+        # A plain Model.select() used as a column returns only the primary key
+        # (one value, as a column should) and gets no made-up name.
+        dsub = Tweet.select().where(Tweet.user == User.id)
+        q = User.select(User.username, dsub)
+        self.assertSQL(q, (
+            'SELECT "t1"."username", (SELECT "t2"."id" '
+            'FROM "tweet" AS "t2" WHERE ("t2"."user_id" = "t1"."id")) '
+            'FROM "users" AS "t1"'), [])
+
+        # The same column with an explicit .alias('c') returns the primary key
+        # under the name c.
+        dsub = Tweet.select().where(Tweet.user == User.id).alias('c')
+        q = User.select(User.username, dsub)
+        self.assertSQL(q, (
+            'SELECT "t1"."username", (SELECT "t2"."id" '
+            'FROM "tweet" AS "t2" WHERE ("t2"."user_id" = "t1"."id")) AS "c" '
+            'FROM "users" AS "t1"'), [])
+
+        # A UNION inside an expression must not get a stray "AS t2" between its
+        # closing paren and the outer name. That was a syntax error.
+        A = User.select(User.id).where(User.username == 'a')
+        B = User.select(User.id).where(User.username == 'b')
+        q = User.select(User.username, User.id.in_(A | B).alias('flag'))
+        self.assertSQL(q, (
+            'SELECT "t1"."username", ("t1"."id" IN ('
+            'SELECT "t1"."id" FROM "users" AS "t1" '
+            'WHERE ("t1"."username" = ?) UNION '
+            'SELECT "t1"."id" FROM "users" AS "t1" '
+            'WHERE ("t1"."username" = ?)'
+            ')) AS "flag" FROM "users" AS "t1"'), ['a', 'b'])
+
     def test_group_by(self):
         query = (User
                  .select(User, fn.COUNT(Tweet.id).alias('tweet_count'))
