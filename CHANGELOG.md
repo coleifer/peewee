@@ -7,7 +7,9 @@ https://github.com/coleifer/peewee/releases
 
 ## master
 
-[View commits](https://github.com/coleifer/peewee/compare/4.2.2...master)
+[View commits](https://github.com/coleifer/peewee/compare/4.2.3...master)
+
+## 4.2.3
 
 * Fix a compound select (`UNION`/`INTERSECT`/`EXCEPT`) used as a correlated
   subquery emitting a phantom alias for the correlated outer table in every
@@ -49,6 +51,8 @@ https://github.com/coleifer/peewee/releases
   for a table whose name is a case-insensitive substring of them (e.g. `ab`,
   `t`, `tab`) -- the table-name substitution is now anchored to the trailing
   name token.
+
+[View commits](https://github.com/coleifer/peewee/compare/4.2.2...4.2.3)
 
 ## 4.2.2
 
