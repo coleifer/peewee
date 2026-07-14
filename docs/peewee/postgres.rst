@@ -70,6 +70,17 @@ PostgresqlExtDatabase
 JSON Support
 ------------
 
+.. attention::
+   **For new code, prefer peewee's built-in** ``JSONField``
+   (``from peewee import JSONField``) over the ``playhouse.postgres_ext`` JSON
+   fields documented here. The built-in field maps to ``JSONB`` on Postgres,
+   presents a single API across SQLite / Postgres / MySQL, and avoids a number
+   of sharp edges in these older implementations. In particular, **avoid**
+   ``postgres_ext.JSONField`` (the text ``json`` variant): its mutation and
+   concatenation builders emit ``jsonb``-only SQL that a ``json`` column
+   rejects, and its path/key handling is weaker than the built-in field's. The
+   ``postgres_ext`` fields below are retained for backwards compatibility.
+
 Peewee provides two JSON field types for Postgresql:
 
 - :class:`BinaryJSONField` - stores JSON in the efficient binary ``jsonb``
@@ -469,22 +480,21 @@ BinaryJSONField and JSONField
 
    :param dumps: custom implementation of ``json.dumps``
 
-   Field that stores and retrieves JSON data. Supports ``__getitem__`` key
-   access for filtering and sub-object retrieval.
+   Field that stores and retrieves JSON data using the Postgres ``json`` type.
+   Supports ``__getitem__`` key access for filtering and sub-object retrieval.
 
-   Consider using the :class:`BinaryJSONField` instead as it
-   offers better performance and more powerful querying options.
+   .. warning::
+      This field is **strongly discouraged**. Prefer peewee's built-in
+      ``JSONField`` (``from peewee import JSONField``), which maps to ``JSONB``
+      on Postgres and supports the full path and mutation API correctly. If you
+      must use a ``playhouse.postgres_ext`` field, use :class:`BinaryJSONField`.
+
+      A ``json`` column supports only the read/query builders here: key and
+      ``path`` access, ``as_json``, ``length`` and ``extract``.
 
    .. method:: as_json()
 
       Deserialize and return the JSON value at the given path.
-
-   .. method:: concat(data)
-
-      Concatenate the field value with ``data``. Note this is a shallow
-      operation and does not deep-merge nested objects.
-
-      See :meth:`BinaryJSONField.concat` for example usage.
 
    .. method:: length()
 
@@ -497,27 +507,6 @@ BinaryJSONField and JSONField
       Extract the JSON data at the given path.
 
       See :meth:`BinaryJSONField.extract` for example usage.
-
-   .. method:: append(value)
-
-      Append ``value`` to the array at the document root. The lookup form
-      ``field['arr'].append(value)`` works as well for nested arrays.
-
-      See :meth:`BinaryJSONField.append` for example usage.
-
-   .. method:: update(value)
-
-      Shallow-merge ``value`` into the root object.
-
-      See :meth:`BinaryJSONField.update` for example usage and a note on
-      shallow-vs-deep merge semantics.
-
-   The lookup-level mutation builders (``set``, ``replace``, ``insert``,
-   ``append``, ``update``) are also available via ``__getitem__``, e.g.
-   ``MyModel.data['key'].set(value)``. They emit ``jsonb_set`` /
-   ``jsonb_insert`` SQL; for ``json`` columns Postgres casts implicitly on
-   ``UPDATE``. See the corresponding methods on :class:`BinaryJSONField` for
-   details.
 
 
 .. _postgres-hstore:

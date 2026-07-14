@@ -274,17 +274,17 @@ class _JsonLookupBase(_LookupNode):
 
     def concat(self, rhs):
         if not isinstance(rhs, Node):
-            rhs = self.node.json_type(rhs)
+            rhs = self._resolve_root()[0].json_type(rhs)
         return Expression(self.as_json(True), OP.CONCAT, rhs)
 
     def contains(self, other):
         if not isinstance(other, Node):
-            other = self.node.json_type(other)
+            other = self._resolve_root()[0].json_type(other)
         return Expression(self.as_json(True), JSONB_CONTAINS, other)
 
     def contained_by(self, other):
         if not isinstance(other, Node):
-            other = self.node.json_type(other)
+            other = self._resolve_root()[0].json_type(other)
         return Expression(self.as_json(True), JSONB_CONTAINED_BY, other)
 
     def contains_any(self, *keys):
@@ -303,9 +303,10 @@ class _JsonLookupBase(_LookupNode):
         return Expression(self.as_json(True), JSONB_CONTAINS_KEY, key)
 
     def remove(self):
-        parts = [str(p) if isinstance(p, int) else p for p in self.parts]
+        field, parts = self._resolve_root()
+        parts = [str(p) if isinstance(p, int) else p for p in parts]
         value = AsIs(parts, False)
-        return Expression(self.node, JSONB_PATH_REMOVE, value)
+        return Expression(field, JSONB_PATH_REMOVE, value)
 
     def length(self):
         func = fn.jsonb_array_length if self._jsonb else fn.json_array_length

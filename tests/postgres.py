@@ -650,6 +650,29 @@ class TestBinaryJsonField(BaseBinaryJsonFieldTestCase, ModelTestCase):
         assertData(['kx'], data)
         assertData(['k1', 'zz'], data)
 
+    def test_lookup_path_chain(self):
+        BJson.delete().execute()
+        BJson.create(data={'k1': {'x1': {'y1': 'z1'}, 'x2': [0, 1]}})
+
+        base = BJson.data['k1']
+        def select(expr):
+            return BJson.select(expr).tuples()[:][0][0]
+
+        # .path() chained onto a lookup resolves to the full path, rather than
+        # crashing (contains/contained_by/concat) or clobbering the whole
+        # column (remove).
+        self.assertEqual(select(base.path('x1', 'y1').remove()),
+                         {'k1': {'x1': {}, 'x2': [0, 1]}})
+        self.assertEqual(
+            BJson.select().where(base.path('x1').contains({'y1': 'z1'})).count(),
+            1)
+        self.assertEqual(
+            BJson.select().where(
+                base.path('x1').contained_by({'y1': 'z1', 'y2': 'z2'})).count(),
+            1)
+        self.assertEqual(select(base.path('x1').concat({'y2': 'z2'})),
+                         {'y1': 'z1', 'y2': 'z2'})
+
     def test_lookup_set(self):
         BJson.delete().execute()
         BJson.create(data={'a': 1, 'b': {'x': 1}})

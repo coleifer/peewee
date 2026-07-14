@@ -33,6 +33,15 @@ https://github.com/coleifer/peewee/releases
   when `add_not_null()` or `rename_column()` rebuilds the constraint, silently
   downgrading e.g. `CASCADE` to `RESTRICT`. The actions reported by
   `get_foreign_keys()` are now carried through to the rebuilt constraint.
+* Fix the legacy `postgres_ext` JSON `contains`/`contained_by`/`concat` raising
+  `AttributeError`, and `remove()` silently rewriting the entire column, when
+  applied to a `.path()`-chained lookup (e.g. `Model.data['a'].path('b')`). All
+  four now resolve the root field and full path via `_resolve_root()`, matching
+  the sibling `set`/`replace`/`insert`/`append`/`update` mutators.
+* Correct the `postgres_ext.JSONField` docs: the `json`-column field does not
+  support the `jsonb`-based mutation/concatenation builders (they raise
+  `ProgrammingError`), so the misleading "Postgres casts implicitly" claim was
+  removed and new code is steered to the built-in `JSONField`.
 
 ## 4.2.2
 
