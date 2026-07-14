@@ -1071,6 +1071,34 @@ class TestSelectQuery(BaseTestCase):
             'FROM "users" AS "t2" '
             'WHERE ("t2"."is_admin" = ?)'), ['editor', 1, 'admin', 1])
 
+    def test_compound_as_lone_function_argument(self):
+        UA = User.alias('u2')
+        A = User.select(User.c.id).where(User.c.admin == True)
+        B = UA.select(UA.c.id).where(UA.c.superuser == True)
+
+        # A compound as the only argument of a function must not add its own
+        # parentheses on top of the function's. It used to emit EXISTS((...)).
+        self.assertSQL(User.select(User.c.id).where(fn.EXISTS(A | B)), (
+            'SELECT "t1"."id" FROM "users" AS "t1" WHERE EXISTS('
+            'SELECT "t1"."id" FROM "users" AS "t1" WHERE ("t1"."admin" = ?) '
+            'UNION '
+            'SELECT "u2"."id" FROM "users" AS "u2" '
+            'WHERE ("u2"."superuser" = ?))'), [True, True])
+
+        # A plain select in the same spot already rendered single parens.
+        self.assertSQL(User.select(User.c.id).where(fn.EXISTS(A)), (
+            'SELECT "t1"."id" FROM "users" AS "t1" WHERE EXISTS('
+            'SELECT "t1"."id" FROM "users" AS "t1" '
+            'WHERE ("t1"."admin" = ?))'), [True])
+
+        # With a second argument the compound is not the lone arg, so it keeps
+        # its own parentheses as a distinct argument.
+        self.assertSQL(User.select(fn.COALESCE(A | B, 0)), (
+            'SELECT COALESCE((SELECT "t1"."id" FROM "users" AS "t1" '
+            'WHERE ("t1"."admin" = ?) UNION SELECT "u2"."id" FROM "users" '
+            'AS "u2" WHERE ("u2"."superuser" = ?)), ?) FROM "users" AS "t1"'),
+            [True, True, 0])
+
     def test_compound_parentheses_handling(self):
         admin = (User
                  .select(User.c.username, Value('admin').alias('role'))
@@ -2545,6 +2573,21 @@ class TestValuesList(BaseTestCase):
             'INNER JOIN (VALUES (?), (?)) AS "t1"("username") '
             'ON ("t2"."username" = "t1"."username") '
             'ORDER BY "t1"."username" DESC'), ['huey', 'zaizee'])
+
+    def test_values_list_in_expression(self):
+        # As an IN operand the VALUES clause needs its own parentheses. It
+        # used to render "IN VALUES (?), (?)", a syntax error.
+        query = Person.select(Person.id).where(
+            Person.id.in_(ValuesList([(1,), (2,), (3,)])))
+        self.assertSQL(query, (
+            'SELECT "t1"."id" FROM "person" AS "t1" '
+            'WHERE ("t1"."id" IN (VALUES (?), (?), (?)))'), [1, 2, 3])
+
+        query = Person.select(Person.id).where(
+            Person.id.not_in(ValuesList([(1,)])))
+        self.assertSQL(query, (
+            'SELECT "t1"."id" FROM "person" AS "t1" '
+            'WHERE ("t1"."id" NOT IN (VALUES (?)))'), [1])
 
 
 class TestCaseFunction(BaseTestCase):

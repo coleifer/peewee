@@ -1122,7 +1122,7 @@ class ValuesList(_HashableSource, BaseTable):
             ctx.alias_manager[self] = self._alias
 
         if ctx.scope == SCOPE_SOURCE or ctx.scope == SCOPE_NORMAL:
-            with ctx(parentheses=not ctx.parentheses):
+            with ctx(parentheses=(not ctx.parentheses) or ctx.state.in_expr):
                 ctx = (ctx
                        .literal('VALUES ')
                        .sql(CommaNodeList([
@@ -2431,6 +2431,8 @@ class CompoundSelectQuery(SelectBase):
         super(CompoundSelectQuery, self).__sql__(ctx)
 
         outer_parens = ctx.subquery or (ctx.scope == SCOPE_SOURCE)
+        if ctx.state.in_function and ctx.state.function_arg_count == 1:
+            outer_parens = False
         with ctx(parentheses=outer_parens):
             # Snapshot the aliases assigned by the enclosing scope before
             # rendering either side. A correlated reference from the right-hand

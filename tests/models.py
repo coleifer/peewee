@@ -3617,6 +3617,16 @@ class TestValuesListIntegration(ModelTestCase):
         self.assertEqual([(v.n, v.s) for v in vq], [
             (1, 'One'), (2, 'two'), (3, 'Three')])
 
+    def test_values_list_in_expression(self):
+        VL.insert_many(self._data).execute()
+
+        # col.in_(ValuesList(...)) used to emit "IN VALUES (...)" and raise a
+        # syntax error. It now wraps the VALUES clause in its own parens.
+        vl = ValuesList([(1,), (3,)])
+        query = VL.select().where(VL.n.in_(vl)).order_by(VL.n)
+        self.assertEqual([(v.n, v.s) for v in query],
+                         [(1, 'one'), (3, 'three')])
+
     def test_values_list(self):
         vl = ValuesList(self._data)
 
@@ -6705,6 +6715,22 @@ class TestCompoundExistsRegression(ModelTestCase):
         User.create(username='u1')
         self.assertTrue(cq.exists())
         self.assertEqual(cq.count(), 1)
+
+    def test_exists_compound_predicate(self):
+        User.create(username='u1')
+        User.create(username='u2')
+
+        UA = User.alias()
+        matches = User.select(User.id).where(User.username == 'u1')
+        empty = UA.select(UA.id).where(UA.username == 'zzz')
+
+        # fn.EXISTS() around a compound used to emit EXISTS((...)) and fail to
+        # execute. The compound is satisfied by u1, so every row qualifies.
+        query = (User
+                 .select()
+                 .where(fn.EXISTS(matches | empty))
+                 .order_by(User.username))
+        self.assertEqual([u.username for u in query], ['u1', 'u2'])
 
 
 class TestLikeColumnValue(ModelTestCase):
