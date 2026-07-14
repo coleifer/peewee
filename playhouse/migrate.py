@@ -633,7 +633,9 @@ class MySQLMigrator(SchemaMigrator):
                     table,
                     column,
                     fk_metadata.dest_table,
-                    fk_metadata.dest_column))
+                    fk_metadata.dest_column,
+                    fk_metadata.on_delete,
+                    fk_metadata.on_update))
 
     @operation
     def drop_not_null(self, table, column):
@@ -668,7 +670,9 @@ class MySQLMigrator(SchemaMigrator):
                     table,
                     new_name,
                     fk_metadata.dest_table,
-                    fk_metadata.dest_column),
+                    fk_metadata.dest_column,
+                    fk_metadata.on_delete,
+                    fk_metadata.on_update),
             ]
         else:
             return rename_ctx

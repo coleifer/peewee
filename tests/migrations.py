@@ -53,6 +53,14 @@ class Session(TestModel):
     user = ForeignKeyField(User, unique=True, backref='sessions')
     updated_at = DateField(null=True)
 
+class FKPage(TestModel):
+    user = ForeignKeyField(User, null=True, backref='fk_pages',
+                           on_delete='CASCADE', on_update='CASCADE')
+    name = CharField(null=True)
+
+    class Meta:
+        table_name = 'fk_page'
+
 class IndexModel(TestModel):
     first_name = CharField()
     last_name = CharField()
@@ -641,6 +649,27 @@ class TestSchemaMigration(ModelTestCase):
         self.assertEqual(foreign_key.column, 'huey_id')
         self.assertEqual(foreign_key.dest_column, 'id')
         self.assertEqual(foreign_key.dest_table, 'users')
+
+    @skip_unless(IS_MYSQL, 'FK ON DELETE/UPDATE reconstruction is MySQL-only')
+    @requires_models(FKPage)
+    def test_fk_actions_preserved(self):
+        def fk():
+            fks = self.database.get_foreign_keys('fk_page')
+            self.assertEqual(len(fks), 1)
+            return fks[0]
+
+        self.assertEqual((fk().on_delete, fk().on_update),
+                         ('CASCADE', 'CASCADE'))
+
+        migrate(self.migrator.add_not_null('fk_page', 'user_id'))
+        self.assertEqual((fk().on_delete, fk().on_update),
+                         ('CASCADE', 'CASCADE'))
+
+        migrate(self.migrator.rename_column('fk_page', 'user_id', 'owner_id'))
+        renamed = fk()
+        self.assertEqual(renamed.column, 'owner_id')
+        self.assertEqual((renamed.on_delete, renamed.on_update),
+                         ('CASCADE', 'CASCADE'))
 
     @requires_pglike
     @requires_models(Tag)

@@ -29,6 +29,10 @@ https://github.com/coleifer/peewee/releases
   emitting an empty projection (`SELECT  FROM ...`) instead of `SELECT *`.
 * Fix `Table.insert(select_query)` with no `columns` raising `TypeError` instead
   of rendering `INSERT INTO t SELECT ...`.
+* Fix the MySQL migrator dropping a foreign key's `ON DELETE`/`ON UPDATE` action
+  when `add_not_null()` or `rename_column()` rebuilds the constraint, silently
+  downgrading e.g. `CASCADE` to `RESTRICT`. The actions reported by
+  `get_foreign_keys()` are now carried through to the rebuilt constraint.
 
 ## 4.2.2
 
