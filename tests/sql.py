@@ -834,6 +834,15 @@ class TestSelectQuery(BaseTestCase):
             'INNER JOIN "max_order" '
             'ON ("t3"."id" = "max_order"."max_id")))'), [])
 
+    def test_cte_does_not_mutate_source(self):
+        cte = User.select(User.c.username).cte('foo')
+        query = cte.select(cte.c.username).with_cte(cte)
+        expected = ('WITH "foo" AS (SELECT "t1"."username" FROM "users" AS "t1") '
+                    'SELECT "foo"."username" FROM "foo"')
+        self.assertSQL(query, expected, [])
+        query.cte('bar')
+        self.assertSQL(query, expected, [])
+
     def test_multi_update_cte(self):
         data = [(i, 'u%sx' % i) for i in range(1, 3)]
         vl = ValuesList(data)
@@ -1654,6 +1663,14 @@ class TestInsertQuery(BaseTestCase):
             'WITH "foo" AS (SELECT "t1"."username" FROM "users" AS "t1") '
             'INSERT INTO "person" ("name") '
             'SELECT "foo"."username" FROM "foo"'), [])
+
+    def test_insert_query_no_columns(self):
+        source = User.select(User.c.username).where(User.c.admin == False)
+        query = Person.insert(source)
+        self.assertSQL(query, (
+            'INSERT INTO "person" '
+            'SELECT "t1"."username" FROM "users" AS "t1" '
+            'WHERE ("t1"."admin" = ?)'), [False])
 
     def test_insert_single_value_query(self):
         query = Person.select(Person.id).where(Person.name == 'huey')
@@ -3154,6 +3171,15 @@ class TestTableOperations(BaseTestCase):
                        'SELECT "t1"."id", "t1"."name" FROM "users" AS "t1"')
         # Dynamic column access via .c should raise.
         self.assertRaises(AttributeError, lambda: t.c.id)
+
+    def test_columnless_table_select_star(self):
+        # A table declared without columns falls back to "*", matching Source.
+        self.assertSQL(Table('reg').select(),
+                       'SELECT * FROM "reg" AS "t1"', [])
+        # A table with declared columns still expands to the column list.
+        t = Table('reg', ('id', 'value'))
+        self.assertSQL(t.select(),
+                       'SELECT "t1"."id", "t1"."value" FROM "reg" AS "t1"', [])
 
 
 # ===========================================================================

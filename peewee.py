@@ -1033,8 +1033,9 @@ class Table(_HashableSource, BaseTable):
 
     @__bind_database__
     def select(self, *columns):
-        if not columns and self._columns:
-            columns = [Column(self, column) for column in self._columns]
+        if not columns:
+            columns = ([Column(self, column) for column in self._columns]
+                       if self._columns else (SQL('*'),))
         return Select((self,), columns)
 
     @__bind_database__
@@ -1142,7 +1143,7 @@ class CTE(_HashableSource, Source):
     def __init__(self, name, query, recursive=False, columns=None,
                  materialized=None):
         self._alias = name
-        self._query = query
+        self._query = query = query.clone()
         self._recursive = recursive
         self._materialized = materialized
         if columns is not None:
@@ -2916,10 +2917,9 @@ class Insert(_WriteQuery):
             return ctx.sql(CommaNodeList(all_values))
 
     def _query_insert(self, ctx):
-        return (ctx
-                .sql(EnclosedNodeList(self._columns))
-                .literal(' ')
-                .sql(self._insert))
+        if self._columns:
+            ctx.sql(EnclosedNodeList(self._columns)).literal(' ')
+        return ctx.sql(self._insert)
 
     def _default_values(self, ctx):
         if not self._database:

@@ -21,6 +21,14 @@ https://github.com/coleifer/peewee/releases
   with the Python ranking UDF, silently mis-scoring with the Cython one), for
   FTS5, `UNINDEXED` columns were skipped even though `bm25()` weights are
   positional across all columns. The list form of `weights` was unaffected.
+* Fix `.cte()` clearing the source query's CTE list in place: converting a query
+  that carried a `with_cte(...)` clause into a CTE stripped the clause from that
+  query, so reusing it afterward referenced an undeclared CTE. The query is now
+  cloned before its CTE list is reset.
+* Fix `Table.select()` with no arguments on a `Table` declared without columns
+  emitting an empty projection (`SELECT  FROM ...`) instead of `SELECT *`.
+* Fix `Table.insert(select_query)` with no `columns` raising `TypeError` instead
+  of rendering `INSERT INTO t SELECT ...`.
 
 ## 4.2.2
 
