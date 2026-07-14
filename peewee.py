@@ -8507,7 +8507,7 @@ class ModelSelect(BaseModelSelect, Select):
                 lhs_f = lhs.field if isinstance(lhs, FieldAlias) else lhs
                 if lhs_f in fk_set:
                     to_field = lhs_f
-            elif isinstance(rhs, Field):
+            if to_field is None and isinstance(rhs, Field):
                 rhs_f = rhs.field if isinstance(rhs, FieldAlias) else rhs
                 if rhs_f in fk_set:
                     to_field = rhs_f

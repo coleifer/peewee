@@ -1000,6 +1000,25 @@ class TestModelAPIs(ModelTestCase):
             ('zaizee', 'huey'),
             ('mickey', 'huey')])
 
+    @requires_models(Relationship, Person)
+    def test_join_multi_fk_rhs_predicate(self):
+        d = datetime.date(2010, 1, 1)
+        huey = Person.create(first='huey', last='cat', dob=d)
+        zaizee = Person.create(first='zaizee', last='cat', dob=d)
+        Relationship.create(from_person=huey, to_person=zaizee)
+
+        # With two foreign keys to Person the join resolves to the key named
+        # in the predicate regardless of which side it is on. The joined row
+        # used to land on a phantom attribute when the key was on the right,
+        # which forced an N+1 reload.
+        for on in ((Relationship.to_person == Person.id),
+                   (Person.id == Relationship.to_person)):
+            with self.assertQueryCount(1):
+                rel = (Relationship
+                       .select(Relationship, Person)
+                       .join(Person, on=on))[0]
+                self.assertEqual(rel.to_person.first, 'zaizee')
+
     @requires_models(User, Tweet)
     def test_join_to_dict(self):
         huey = self.add_user('huey')
