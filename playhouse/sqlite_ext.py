@@ -468,6 +468,9 @@ class FTSModel(BaseFTSModel):
         elif isinstance(weights, dict):
             weight_args = []
             for field in cls._meta.sorted_fields:
+                # rowid/docid is not a searchable column.
+                if isinstance(field, RowIDField):
+                    continue
                 # Attempt to get the specified weight of the field by looking
                 # it up using it's field instance followed by name.
                 field_weight = weights.get(field, weights.get(field.name, 1.0))
@@ -723,7 +726,9 @@ class FTS5Model(BaseFTSModel):
         elif isinstance(weights, dict):
             weight_args = []
             for field in cls._meta.sorted_fields:
-                if isinstance(field, SearchField) and not field.unindexed:
+                # bm25() assigns weights positionally across *all* columns,
+                # including UNINDEXED columns, so they must not be skipped.
+                if isinstance(field, SearchField):
                     weight_args.append(
                         weights.get(field, weights.get(field.name, 1.0)))
             rank = fn.bm25(cls._meta.entity, *weight_args)

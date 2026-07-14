@@ -13,8 +13,14 @@ https://github.com/coleifer/peewee/releases
   subquery emitting a phantom alias for the correlated outer table in every
   branch but the left-most, producing invalid SQL (e.g. `no such column:
   t4.id`). The right-hand branch renders in a fresh alias scope that no longer
-  resolved the outer source's existing alias; it now inherits the enclosing
+  resolved the outer source's existing alias, it now inherits the enclosing
   scope's aliases while still assigning fresh aliases to its own sources.
+* Fix full-text search `weights` passed as a `dict` being mis-applied to the
+  wrong columns. For FTS3/4 the implicit `docid` primary-key was included when
+  building the weight list, shifting every column by one (raising `IndexError`
+  with the Python ranking UDF, silently mis-scoring with the Cython one), for
+  FTS5, `UNINDEXED` columns were skipped even though `bm25()` weights are
+  positional across all columns. The list form of `weights` was unaffected.
 
 ## 4.2.2
 
@@ -98,7 +104,7 @@ helper into the core psycopg helper.
 * Fix psycopg3 server-side cursors (missing `withhold`) and CockroachDB
   `run_transaction` retry detection under psycopg3.
 * Async queries are now logged to the `peewee` logger.
-* Remove dead code and unused imports throughout `playhouse`; remove the
+* Remove dead code and unused imports throughout `playhouse`, remove the
   broken, unused `get_current_url`/`get_next_url` helpers from
   `flask_utils`.
 * Fix `delete_instance(recursive=True)` failing to cascade to the children
@@ -112,10 +118,10 @@ helper into the core psycopg helper.
 * Async: connection-acquisition errors are translated to peewee exception
   types, matching query execution.
 * Fix `FieldAlias.model` to reference the model alias rather than the aliased
-  model; alias-rooted join queries no longer construct and discard a spurious
+  model, alias-rooted join queries no longer construct and discard a spurious
   instance of the aliased model for every result row.
 * Fix `playhouse.postgres_ext.JSONField` creating `jsonb` columns after the
-  core postgres backend began mapping the JSON field-type to JSONB; its DDL
+  core postgres backend began mapping the JSON field-type to JSONB, its DDL
   is `json` again, and json-vs-jsonb function selection for chained lookups
   now follows the field's declared datatype.
 * Unaliased expressions in join queries now hydrate using the same cleaned
@@ -123,10 +129,10 @@ helper into the core psycopg helper.
 * `Field.__hash__` is keyed on the model's schema and table-name rather than
   its class name, so same-named model classes (factories, separate modules,
   schema-per-tenant layouts) no longer collide in field-keyed registries such
-  as backrefs; redefining or re-importing a model in place still replaces
+  as backrefs, redefining or re-importing a model in place still replaces
   its entries.
 * Fix `UnboundLocalError` when joining from a model-less source to a model,
-  e.g. `join_from(cte, SomeModel, on=...)`; the joined instance is stored in
+  e.g. `join_from(cte, SomeModel, on=...)`, the joined instance is stored in
   the source's row dict, keyed by the model name.
 * `BlobField`, `CompressedField` and the `sqlite_udf.gzip()` function encode
   `str` values using utf-8 instead of `raw_unicode_escape`. Behavior change
@@ -190,7 +196,7 @@ helper into the core psycopg helper.
   query types, executing through the query's bound async database:
   `await User.select().aexecute()`, `await user.tweets.aexecute()`. Returns
   exactly what `execute()` returns, including result rows for DML with
-  `RETURNING`. Queries remain non-awaitable; this is an ordinary coroutine
+  `RETURNING`. Queries remain non-awaitable, this is an ordinary coroutine
   method and the only async method on queries.
 * Add async model methods to `playhouse.pwasyncio` using "a"-prefixed coroutine
   counterparts of the row-level `Model` methods (`acreate`, `aget`,

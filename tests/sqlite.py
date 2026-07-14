@@ -143,6 +143,25 @@ class FTS5Document(FTS5Model):
         options = {'tokenize': 'porter'}
 
 
+class SearchWeight(FTSModel, TestModel):
+    # FTS4 model for exercising dict-form search weights. The implicit `docid`
+    # primary-key precedes these content columns.
+    title = SearchField()
+    body = SearchField()
+    class Meta:
+        options = {'tokenize': 'porter'}
+
+
+class SearchWeight5(FTS5Model):
+    # FTS5 model with an UNINDEXED column *between* two indexed columns, so a
+    # mis-placed weight is observable in the ranking.
+    title = SearchField()
+    extra = SearchField(unindexed=True)
+    body = SearchField()
+    class Meta:
+        legacy_table_names = False
+
+
 class DT(TestModel):
     key = TextField(primary_key=True)
     d = DateTimeField()
@@ -1028,6 +1047,34 @@ class TestFullTextSearch(BaseFTSTestCase, ModelTestCase):
             (1, -0.),
             (2, 0.85)])
 
+    @requires_models(SearchWeight)
+    def test_search_dict_weights(self):
+        # Regression: the dict form of `weights` iterated *all* sorted_fields,
+        # so the docid PK prepended a phantom weight and shifted every column
+        # by one (IndexError with the Python ranking UDF, silent mis-scoring
+        # with the Cython one). It must behave exactly like the list form.
+        SearchWeight.create(title='alpha alpha', body='common words')  # docid 1
+        SearchWeight.create(title='common words', body='alpha alpha')  # docid 2
+        SearchWeight.create(title='common', body='words')              # docid 3
+
+        def results(weights):
+            return [(x.docid, round(x.score, 5)) for x in
+                    SearchWeight.search_bm25('alpha', weights=weights,
+                                             with_score=True)]
+
+        # Weighting the title 3x ranks the title match (docid 1) ahead of the
+        # body match (docid 2); the dict forms must match the list form exactly.
+        by_list = results([3., 1.])
+        self.assertEqual([docid for docid, _ in by_list], [1, 2])
+        self.assertEqual(results({SearchWeight.title: 3., SearchWeight.body: 1.}),
+                         by_list)
+        self.assertEqual(results({'title': 3., 'body': 1.}), by_list)
+
+        # Weighting the body instead flips the ranking -- proof the weights land
+        # on the intended columns rather than being shifted.
+        self.assertEqual(
+            [docid for docid, _ in results({'body': 3., 'title': 1.})], [2, 1])
+
     def test_fts_match_single_column(self):
         data = (
             ('m1c1 aaaa', 'm1c2 bbbb', 'm1c3 cccc'),
@@ -1272,6 +1319,29 @@ class TestFTS5(BaseFTSTestCase, ModelTestCase):
 
         self.assertResults(FTS5Test.search('baze OR dd'),
                            ['baze cc dd', 'bar bb cc', 'nug aa dd'])
+
+    @requires_models(SearchWeight5)
+    def test_search_dict_weights_unindexed(self):
+        # Regression: FTS5 bm25() weights are positional across *all* columns,
+        # including UNINDEXED ones. The dict form skipped unindexed columns, so
+        # with `extra` UNINDEXED between `title` and `body` a weight on `body`
+        # was mis-applied to `extra`. It must behave exactly like the list form.
+        SearchWeight5.create(title='alpha', extra='junk', body='common')  # rowid 1
+        SearchWeight5.create(title='common', extra='junk', body='alpha')  # rowid 2
+
+        def order(weights):
+            return [x.rowid for x in
+                    SearchWeight5.search_bm25('alpha', weights=weights)]
+
+        # Positional list over (title, extra, body): weighting body ranks the
+        # body match (rowid 2) first. The dict forms must match.
+        by_list = order([1., 1., 5.])
+        self.assertEqual(by_list, [2, 1])
+        self.assertEqual(order({SearchWeight5.body: 5.}), by_list)
+        self.assertEqual(order({'body': 5.}), by_list)
+        # Equal weights leave the default ordering (proof body-weighting above
+        # actually changed it).
+        self.assertEqual(order([1., 1., 1.]), [1, 2])
 
     @requires_models(FTS5Document)
     def test_fts_manual(self):
