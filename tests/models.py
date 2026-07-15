@@ -6806,14 +6806,16 @@ class TestCompoundExistsRegression(ModelTestCase):
         User.create(username='u2')
 
         UA = User.alias()
-        matches = User.select(User.id).where(User.username == 'u1')
-        empty = UA.select(UA.id).where(UA.username == 'zzz')
+        lhs = User.select(User.id).where(User.username == 'u1')
+        rhs = UA.select(UA.id).where(UA.username == 'u2')
 
-        # fn.EXISTS() around a compound used to emit EXISTS((...)) and fail to
-        # execute. The compound is satisfied by u1, so every row qualifies.
+        # fn.EXISTS() around a compound used to emit EXISTS((...)), a syntax
+        # error. Both arms match, so the compound is non-empty and every row
+        # qualifies. (An empty compound arm under EXISTS trips a SQLite 3.51.x
+        # optimizer bug, so keep both arms non-empty.)
         query = (User
                  .select()
-                 .where(fn.EXISTS(matches | empty))
+                 .where(fn.EXISTS(lhs | rhs))
                  .order_by(User.username))
         self.assertEqual([u.username for u in query], ['u1', 'u2'])
 
