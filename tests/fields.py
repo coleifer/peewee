@@ -1220,6 +1220,22 @@ class TestBitFields(ModelTestCase):
         Bits.update(flags=Bits.flags & ~(1 | 4)).execute()
         assertFlags([2, 2, 2, 2])
 
+    def test_bit_field_subtract(self):
+        # `x - y` clears bits: it means `x & ~y`, for an int or another column.
+        # __sub__ used to call a nonexistent bin_negated() and always raised.
+        for i in range(1, 5):
+            Bits.create(flags=i, status=6)  # status bits 2 and 4 set.
+
+        q = Bits.select((Bits.flags - 2).alias('x')).order_by(Bits.id)
+        self.assertEqual([b.x for b in q], [1, 0, 1, 4])
+
+        q = Bits.select((Bits.flags - Bits.status).alias('x')).order_by(Bits.id)
+        self.assertEqual([b.x for b in q], [1, 0, 1, 0])
+
+        Bits.update(flags=Bits.flags - (1 | 4)).execute()
+        self.assertEqual([b.flags for b in Bits.select().order_by(Bits.id)],
+                         [0, 2, 2, 0])
+
     def test_bit_field_auto_flag(self):
         class Bits2(TestModel):
             flags = BitField()

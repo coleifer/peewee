@@ -2929,6 +2929,21 @@ class TestWindowFunctionIntegration(ModelTestCase):
                  .tuples())
         self.assertEqual(list(query), expected)
 
+    @skip_if(IS_MYSQL or IS_CRDB or (IS_SQLITE and not IS_SQLITE_30),
+             'window frame EXCLUDE')
+    def test_frame_exclude_string(self):
+        # A raw string exclude= used to bind as a parameter (EXCLUDE ?), a
+        # syntax error at execution. It must render as literal SQL.
+        w = Window(order_by=[Sample.value],
+                   start=Window.preceding(),
+                   end=Window.following(),
+                   exclude='NO OTHERS')
+        query = (Sample
+                 .select(fn.SUM(Sample.value).over(window=w).alias('total'))
+                 .window(w))
+        # EXCLUDE NO OTHERS excludes nothing, so every frame is the full set.
+        self.assertEqual([r.total for r in query], [134] * 5)
+
     def test_mixed_ordering(self):
         s = fn.SUM(Sample.value).over(order_by=[Sample.value])
         query = (Sample

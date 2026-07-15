@@ -2256,6 +2256,20 @@ class TestWindowFunctions(BaseTestCase):
             'WINDOW "w" AS (ORDER BY "t1"."id" '
             'ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW EXCLUDE TIES)'))
 
+    def test_window_exclude_constructor_string(self):
+        # A raw string exclude= must render as literal SQL, not bind as a
+        # parameter (EXCLUDE ?). start/end and .exclude() already did this.
+        w = Window(order_by=[User.c.id],
+                   start=Window.preceding(),
+                   end=Window.CURRENT_ROW,
+                   exclude='TIES')
+        query = User.select(fn.SUM(User.c.val).over(window=w)).window(w)
+        self.assertSQL(query, (
+            'SELECT SUM("t1"."val") OVER "w" FROM "users" AS "t1" '
+            'WINDOW "w" AS (ORDER BY "t1"."id" '
+            'ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW EXCLUDE TIES)'),
+            [])
+
     def test_running_total(self):
         EventLog = Table('evtlog', ('id', 'timestamp', 'data'))
 

@@ -1463,7 +1463,7 @@ class BitwiseMixin(object):
         return self.bin_or(other)
 
     def __sub__(self, other):
-        return self.bin_and(other.bin_negated())
+        return self.bin_and(BitwiseNegated(other))
 
     def __invert__(self):
         return BitwiseNegated(self)
@@ -1768,6 +1768,8 @@ class Window(Node):
             start = SQL(start)
         if end is not None and not isinstance(end, SQL):
             end = SQL(end)
+        if isinstance(exclude, str):
+            exclude = SQL(exclude)
 
         self.partition_by = ensure_tuple(partition_by)
         self.order_by = ensure_tuple(order_by)
