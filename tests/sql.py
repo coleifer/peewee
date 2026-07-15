@@ -1478,7 +1478,7 @@ class TestSelectQuery(BaseTestCase):
                  .order_by(User.c.username.asc(collation='binary')))
         self.assertSQL(query, (
             'SELECT "t1"."username" FROM "users" AS "t1" '
-            'ORDER BY "t1"."username" ASC COLLATE binary'), [])
+            'ORDER BY "t1"."username" COLLATE binary ASC'), [])
 
     def test_order_by_nulls(self):
         query = (User
@@ -1509,12 +1509,12 @@ class TestSelectQuery(BaseTestCase):
                  .order_by(User.c.ts.desc(nulls='LAST').collate('NOCASE')))
         self.assertSQL(query, (
             'SELECT "t1"."username" FROM "users" AS "t1" '
-            'ORDER BY "t1"."ts" DESC COLLATE NOCASE NULLS LAST'), [],
+            'ORDER BY "t1"."ts" COLLATE NOCASE DESC NULLS LAST'), [],
             nulls_ordering=True)
         self.assertSQL(query, (
             'SELECT "t1"."username" FROM "users" AS "t1" '
             'ORDER BY CASE WHEN ("t1"."ts" IS NULL) THEN ? ELSE ? END, '
-            '"t1"."ts" DESC COLLATE NOCASE'), [1, 0], nulls_ordering=False)
+            '"t1"."ts" COLLATE NOCASE DESC'), [1, 0], nulls_ordering=False)
 
     def test_ordering_invalid_nulls_error(self):
         self.assertRaises(ValueError, Ordering, User.c.id, 'ASC',

@@ -1554,9 +1554,10 @@ class Ordering(WrappedNode):
         if self.nulls and not ctx.state.nulls_ordering:
             ctx.sql(self._null_ordering_case(self.nulls)).literal(', ')
 
-        ctx.sql(self.node).literal(' %s' % self.direction)
+        ctx.sql(self.node)
         if self.collation:
             ctx.literal(' COLLATE %s' % self.collation)
+        ctx.literal(' %s' % self.direction)
         if self.nulls and ctx.state.nulls_ordering:
             ctx.literal(' NULLS %s' % self.nulls)
         return ctx

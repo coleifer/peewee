@@ -1528,18 +1528,34 @@ class TestUserDefinedCallbacks(ModelTestCase):
         for i in [1, 4, 3, 5, 2]:
             Post.create(message='p%d' % i)
 
-        pq = Post.select().order_by(NodeList((Post.message, SQL('collate collate_reverse'))))
-        self.assertEqual([p.message for p in pq], ['p5', 'p4', 'p3', 'p2', 'p1'])
+        pq = Post.select().order_by(Post.message.collate('collate_reverse'))
+        self.assertEqual([p.message for p in pq],
+                         ['p5', 'p4', 'p3', 'p2', 'p1'])
+
+        pq = Post.select().order_by(
+            Post.message.asc(collation='collate_reverse'))
+        self.assertEqual([p.message for p in pq],
+                         ['p5', 'p4', 'p3', 'p2', 'p1'])
+
+        pq = Post.select().order_by(
+            Post.message.desc(collation='collate_reverse'))
+        self.assertEqual([p.message for p in pq],
+                         ['p1', 'p2', 'p3', 'p4', 'p5'])
 
     def test_collation_decorator(self):
-        posts = [Post.create(message=m) for m in ['aaa', 'Aab', 'ccc', 'Bba', 'BbB']]
-        pq = Post.select().order_by(collate_case_insensitive.collation(Post.message))
-        self.assertEqual([p.message for p in pq], [
-            'aaa',
-            'Aab',
-            'Bba',
-            'BbB',
-            'ccc'])
+        posts = [Post.create(message=m)
+                 for m in ['aaa', 'Aab', 'ccc', 'Bba', 'BbB']]
+        exprs = (
+            Post.message.collate('collate_case_insensitive'),
+            Post.message.asc(collation='collate_case_insensitive'))
+        for expr in exprs:
+            pq = Post.select().order_by(expr)
+            self.assertEqual([p.message for p in pq], [
+                'aaa',
+                'Aab',
+                'Bba',
+                'BbB',
+                'ccc'])
 
     def test_custom_function(self):
         p1 = Post.create(message='this is a test')
