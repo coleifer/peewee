@@ -78,9 +78,8 @@ recommended:
    db = PooledPostgresqlDatabase('app', host='10.8.0.1', user='postgres')
    app = Flask(__name__)
 
-   # Note that when using the pooled implementation the hooks are the exact
-   # same. Opening and closing the connection simply acquires and releases it
-   # from the pool for the lifetime of the request.
+   # With the pooled backend the hooks are identical: connect() and close()
+   # acquire and release a pooled connection per request.
    @app.before_request
    def _db_connect():
        db.connect()
@@ -122,18 +121,17 @@ examples. There are a few things to watch out for, though:
   engine configurations.
 * SQLModel uses inheritance to manage input, output and table schemas. In
   practice a single database table often requires three or four model classes,
-  e.g. ``UserBase``, ``User``, ``UserCreate`` and ``UserRead`` - all of this is
-  managed through inheritance.
+  e.g. ``UserBase``, ``User``, ``UserCreate`` and ``UserRead``.
 
-Peewee may provide a simpler experience - there is a single database to manage
-with built-in pooling, fewer implicit lazy-load gotcha's, and the Pydantic
+Peewee may provide a simpler experience: a single database to manage
+with built-in pooling, fewer implicit lazy-load gotchas, and the Pydantic
 schemas generated with :func:`~playhouse.pydantic_utils.to_pydantic` can be
 configured to include/exclude fields without inheritance. Field metadata is
 captured automatically: choice enums, default values, descriptions, titles and
 type information are captured in the JSON schema and OpenAPI docs.
 
 Peewee requires far less machinery to provide real asyncio database access, and
-of course works equally well for synchronous FastAPI endpoints.
+works equally well for synchronous FastAPI endpoints.
 
 Async Example using Pydantic
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -750,6 +748,6 @@ Any WSGI middleware that wraps the application callable can also manage this:
    application = PeeweeMiddleware(application, db)
 
 This is a synchronous pattern. An async (:ref:`pwasyncio`) database is driven by
-an ASGI middleware instead - ``db.connect()`` and ``db.close()`` only work inside
+an ASGI middleware instead. ``db.connect()`` and ``db.close()`` only work inside
 the async bridge. See the ``PeeweeConnectionMiddleware`` in the :ref:`fastapi`
 and :ref:`starlette` sections for examples.

@@ -132,7 +132,7 @@ The above is slow:
    database to parse.
 4. **Retrieving the last insert id**, which may not be necessary.
 
-You can get a significant speedup by simply wrapping this in a transaction with
+You can get a significant speedup by wrapping this in a transaction with
 :meth:`~Database.atomic`:
 
 .. code-block:: python
@@ -223,16 +223,16 @@ Python:
 
    res = (TweetArchive
           .insert_from(
-              Tweet.select(Tweet.user, Tweet.message),
-              fields=[TweetArchive.user, TweetArchive.message])
+              Tweet.select(Tweet.user, Tweet.content),
+              fields=[TweetArchive.user, TweetArchive.content])
           .execute())
 
 The above query is equivalent to the following SQL:
 
 .. code-block:: sql
 
-   INSERT INTO "tweet_archive" ("user_id", "message")
-   SELECT "user_id", "message" FROM "tweet";
+   INSERT INTO "tweet_archive" ("user_id", "content")
+   SELECT "user_id", "content" FROM "tweet";
 
 .. _updating-records:
 
@@ -491,7 +491,7 @@ Full example:
    def login(email, ip):
        rowid = (User
                 .insert({User.email: email,
-                         User.last_login: datetime.now(),
+                         User.last_login: datetime.datetime.now(),
                          User.login_count: 1,
                          User.ip_log: ip})
                 .on_conflict(
@@ -500,7 +500,7 @@ Full example:
                     conflict_target=[User.email],
 
                     # Set the "last_login" to the value we would have inserted
-                    # (our call to datetime.now()).
+                    # (our call to datetime.datetime.now()).
                     preserve=[User.last_login],
 
                     # Increment the user's login count and prepend the new IP
@@ -643,7 +643,7 @@ this in a single ``UPDATE`` query with a ``RETURNING`` clause:
             .returning(User))
 
    # Send an email to every user that was deactivated.
-   for deactivate_user in query.execute():
+   for deactivated_user in query.execute():
        send_deactivation_email(deactivated_user.email)
 
    query = (User

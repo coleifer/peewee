@@ -6,7 +6,7 @@ Recipes
 Collected patterns for common real-world problems. Each recipe assumes
 familiarity with :ref:`querying`, :ref:`writing`, and :ref:`relationships`.
 
-All examples use the following models:
+Examples build on the following base models:
 
 .. code-block:: python
 
@@ -304,18 +304,18 @@ The desired SQL is:
     SELECT * FROM
       (SELECT id, username FROM user) AS uq
        LEFT JOIN LATERAL
-      (SELECT message, created_date
+      (SELECT content, created_date
        FROM tweet
        WHERE (user_id = uq.id)
        ORDER BY created_date DESC LIMIT 3)
       AS pq ON true
 
-To accomplish this with peewee is quite straightforward:
+The peewee equivalent:
 
 .. code-block:: python
 
     subq = (Tweet
-            .select(Tweet.message, Tweet.created_date)
+            .select(Tweet.content, Tweet.created_date)
             .where(Tweet.user == User.id)
             .order_by(Tweet.created_date.desc())
             .limit(3))
@@ -338,7 +338,7 @@ can instead write:
 
     # subq is the same as the above example.
     subq = (Tweet
-            .select(Tweet.message, Tweet.created_date)
+            .select(Tweet.content, Tweet.created_date)
             .where(Tweet.user == User.id)
             .order_by(Tweet.created_date.desc())
             .limit(3))

@@ -76,10 +76,8 @@ Three things to note:
    ``BaseModel`` will automatically use the same database. This pattern avoids
    repeating the database assignment on every model class.
 
-   Model configuration is kept namespaced in a special class called ``Meta``.
-   :ref:`Meta <model-options>` configuration is passed on to subclasses, so
-   our project's models will all subclass *BaseModel*. There are
-   :ref:`many different attributes <model-options>` you can configure using *Model.Meta*.
+   Model configuration lives in a namespaced :ref:`Meta <model-options>` class,
+   which also exposes :ref:`many other attributes <model-options>` you can configure.
 
 3. Declare model classes and fields.
 
@@ -369,10 +367,10 @@ entire related object:
    tweets = (Tweet
              .select(Tweet, User)
              .join(User)
-             .order_by(Tweet.created_date.desc()))
+             .order_by(Tweet.timestamp.desc()))
 
    for tweet in tweets:
-       print(tweet.user.username, tweet.message)
+       print(tweet.user.username, tweet.content)
 
 In the example above the ``User`` data was selected efficiently. If we did not
 select the ``User``, then an **additional query** would be needed to fetch the
@@ -382,12 +380,12 @@ associated ``User`` data:
 
     tweets = (Tweet
               .select()
-              .order_by(Tweet.created_date.desc())
+              .order_by(Tweet.timestamp.desc()))
 
     for tweet in tweets:
         # WARNING: an additional query will be issued for EACH tweet
         # to fetch the associated User data.
-        print(tweet.user.username, tweet.message)
+        print(tweet.user.username, tweet.content)
 
 Sometimes you only need the associated primary key value from the foreign key
 column. Peewee allows you to access the raw foreign key value by appending
@@ -400,7 +398,7 @@ column. Peewee allows you to access the raw foreign key value by appending
    for tweet in tweets:
        # Instead of "tweet.user", we will just get the raw ID value stored
        # in the column.
-       print(tweet.user_id, tweet.message)
+       print(tweet.user_id, tweet.content)
 
 To prevent accidentally resolving a foreign-key and triggering an additional
 query, :class:`ForeignKeyField` supports an initialization paramater
@@ -414,7 +412,7 @@ query, :class:`ForeignKeyField` supports an initialization paramater
        ...
 
    for tweet in Tweet.select():
-       print(tweet.user, tweet.message)
+       print(tweet.user, tweet.content)
 
    # With lazy-load disabled, accessing tweet.user will NOT perform an extra
    # query and the user ID value is returned instead.
@@ -426,11 +424,11 @@ query, :class:`ForeignKeyField` supports an initialization paramater
    # However, if we eagerly load the related user object, then the user
    # foreign key will behave like usual:
    for tweet in Tweet.select(Tweet, User).join(User):
-       print(tweet.user.username, tweet.message)
+       print(tweet.user.username, tweet.content)
 
    # user1  tweet from user1
    # user1  another from user1
-   # user2  tweet from user1
+   # user2  tweet from user2
 
 ForeignKeyField Back-references
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -885,7 +883,7 @@ or we could use a single :class:`BitField` instead:
        is_minimized = flags.flag(4)
        is_deleted = flags.flag(8)
 
-Using these flags is quite simple:
+Using these flags:
 
 .. code-block:: pycon
 

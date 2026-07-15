@@ -62,7 +62,7 @@ Model Serialization
        # {'id': 1, 'content': 'hello', 'user': 1}
 
        model_to_dict(user, backrefs=True)
-       # {'id': 1, 'tweets': [{'id': 1, 'content': 'hello'}], 'username': 'alice'}
+       # {'id': 1, 'username': 'alice', 'tweets': [{'id': 1, 'content': 'hello'}]}
 
    .. note::
        If your use case is unusual, write a small custom function rather
@@ -300,7 +300,7 @@ When a field has ``choices`` defined, the mapped Python type above is
 the underlying field type.
 
 Because JSON fields validate as ``Any``, an explicit ``None`` is accepted by
-the schema even for ``null=False`` columns - JSON ``null`` is itself a valid
+the schema even for ``null=False`` columns. JSON ``null`` is itself a valid
 JSON value. NOT NULL is still enforced at the database layer.
 
 
@@ -334,19 +334,6 @@ API reference
        as the base class for the generated model.
    :returns: A Pydantic ``BaseModel`` subclass configured with
        ``from_attributes=True``.
-
-   Generate a Pydantic ``Model`` for the given Peewee ``model_cls``. The
-   generated model will preserve Peewee field metadata:
-
-   * ``choices`` - restrict acceptable values for field.
-   * ``default`` - provide a default value for field.
-   * ``verbose_name`` - provide a human-readable title for field.
-   * ``help_text`` - provide a human-readable description for field.
-   * ``null`` - control whether field is optional or required.
-
-   Foreign-key fields are exposed using the underlying column name, and
-   accept a scalar value **unless** you specify the schema for the relation
-   using the ``relationships`` parameter. See below for example.
 
 
 Foreign-key handling
@@ -471,7 +458,7 @@ Back-references work the same way, but the schema must be wrapped in
 .. note::
    In async applications using the :ref:`asyncio extension <pwasyncio>`,
    run validation inside the greenlet bridge unless relations were
-   preloaded - a lazy load outside ``db.run()`` raises
+   preloaded. A lazy load outside ``db.run()`` raises
    ``MissingGreenletBridge``:
    ``data = await db.run(UserDetail.model_validate, user)``.
 
@@ -578,7 +565,7 @@ On the class, SQL is generated:
    # WHERE ("end" - "start") > 5
 
    Interval.select().where(Interval.contains(2))
-   # WHERE ("start" <= 2) AND (2 < "end")
+   # WHERE ("start" <= 2) AND ("end" > 2)
 
 When the Python and SQL implementations differ, provide a separate
 ``expression`` override:
@@ -924,7 +911,7 @@ The following signals are provided:
     Called immediately after an object is deleted from the database when :meth:`Model.delete_instance`
     is used.
 ``pre_init``
-    Called when a model class is first instantiated
+    Called when a model instance is initialized.
 
 .. warning::
    Signals fire only through the high-level instance methods

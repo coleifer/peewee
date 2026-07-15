@@ -210,7 +210,7 @@ BinaryJSONField and JSONField
          # Search array by individual item:
          Event.select().where(Event.data['tags'].contains('t1'))
 
-      To test whether a **key** simply exists, use :meth:`~BinaryJSONField.has_key`:
+      To test whether a **key** exists, use :meth:`~BinaryJSONField.has_key`:
 
       .. code-block:: python
 
@@ -288,7 +288,7 @@ BinaryJSONField and JSONField
          # error=False:
          Event.select().where(Event.data['result'].contained_by({
              'success': True,
-             'error': False})
+             'error': False}))
 
          # Check that tags are subset of the popular tags (matches rename row).
          popular_tags = ['t3', 't2', 't1', 'tx', 'ty']
@@ -560,7 +560,7 @@ Example:
    Event.select().where(Event.data['type'] == 'login')
 
    # Filter by a key/value pair:
-   Event.select().where(Event.data.contains({'result': 'success'})
+   Event.select().where(Event.data.contains({'result': 'success'}))
 
    # Filter by key existence:
    Event.select().where(Event.data.exists('referrer'))
@@ -789,7 +789,18 @@ Arrays
 
       .. code-block:: python
 
-         Post.select().where(Post.tags.contains('postgresql', 'python'))
+         Post.select().where(Post.tags.contains_any('postgresql', 'sqlite'))
+
+   .. method:: contained_by(*items)
+
+      Filter rows where every element of the array is present in the given
+      values (the array is a subset).
+
+      :param items: The set of values the array must be contained by.
+
+      .. code-block:: python
+
+         Post.select().where(Post.tags.contained_by('postgresql', 'python', 'sqlite'))
 
 .. _postgres-interval:
 
@@ -968,7 +979,7 @@ For more granular control or to close the cursor explicitly:
        large_query = PageView.select().order_by(PageView.id.desc())
 
        # Rows will be fetched 1000 at-a-time, but iteration is transparent.
-       query = ServerSideQuery(query, array_size=1000)
+       query = ServerSideQuery(large_query, array_size=1000)
 
        # Read 9500 rows then close server-side cursor.
        accum = []
@@ -985,13 +996,16 @@ For more granular control or to close the cursor explicitly:
    (not psycopg3), cursors are declared ``WITH HOLD`` and must be fully
    exhausted or explicitly closed to release server resources.
 
-.. function:: ServerSide(select_query)
+.. function:: ServerSide(select_query, array_size=None)
 
    :param select_query: a :class:`SelectQuery` instance.
+   :param array_size: rows to fetch per batch (defaults to the cursor's
+       ``itersize``).
    :rtype generator:
 
-   Wrap ``select_query`` in a transaction and iterate using :meth:`~BaseQuery.iterator`
-   (disables row caching).
+   Iterate ``select_query`` using a named server-side cursor via
+   :meth:`~BaseQuery.iterator` (disables row caching). Must be run inside a
+   transaction, e.g. ``with db.atomic():``.
 
 .. _crdb:
 

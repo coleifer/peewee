@@ -253,7 +253,7 @@ The peewee migration philosophy is that tools relying on database
 introspection, versioning, and auto-detection are often fragile, brittle and
 unnecessarily complex. Migrations can be written as simple python scripts and
 executed from the command-line. Since the migrations only depend on your
-application's :class:`Database` object, migration scripts to not introduce new
+application's :class:`Database` object, migration scripts do not introduce new
 dependencies.
 
 Supported operations:
@@ -351,10 +351,10 @@ Peewee appends by default):
    # Specify table, column(s), and unique/non-unique.
    migrate(
        # Create an index on the `pub_date` column.
-       migrator.add_index('story', ('pub_date',), False),  # Normal index.
+       migrator.add_index('story', ('pub_date',), False),
 
        # Create a unique index on the category and title fields.
-       migrator.add_index('story', ('category_id', 'title'), True),  # Unique.
+       migrator.add_index('story', ('category_id', 'title'), True),
 
        # Drop the pub-date + status index.
        migrator.drop_index('story', 'story_pub_date_status'),
@@ -731,7 +731,7 @@ Command-line options:
 | ``-L`` | Use legacy table and column naming        |                         |
 +--------+-------------------------------------------+-------------------------+
 
-Valid ``-e`` values: ``sqlite``, ``mysql``, ``postgresql``.
+Valid ``-e`` values: ``sqlite``, ``mysql``, ``postgresql``, ``cockroachdb``.
 
 .. warning::
    If a password is required to access your database, you will be prompted to
@@ -747,7 +747,7 @@ Example output for a SQLite database with ``user`` and ``tweet`` tables:
 
    from peewee import *
 
-   database = SqliteDatabase('example.db', **{})
+   database = SqliteDatabase('example.db')
 
    class UnknownField(object):
        def __init__(self, *_, **__): pass
@@ -808,7 +808,8 @@ Test Utilities
 
    .. method:: get_queries()
 
-      Return a list of ``(sql, params)`` 2-tuples for each query executed.
+      Return the executed queries as a list of ``logging.LogRecord`` objects.
+      Each record's ``msg`` attribute is the ``(sql, params)`` tuple.
 
 .. function:: assert_query_count(expected, only_select=False)
 

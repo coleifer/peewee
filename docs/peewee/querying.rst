@@ -546,9 +546,8 @@ id  counter  value
 Ordered Windows
 ^^^^^^^^^^^^^^^
 
-Let's calculate a running sum of the ``value`` field. In order for it to be a
-"running" sum, we need it to be ordered, so we'll order with respect to the
-Sample's ``id`` field:
+Let's calculate a running sum of the ``value`` field. A running sum must be
+ordered, so we order with respect to the Sample's ``id`` field:
 
 .. code-block:: python
 
@@ -649,8 +648,8 @@ appropriate boundary references:
   number to indicate **all** following rows.
 
 To examine how boundaries work, we'll calculate a running total of the
-``value`` column, ordered with respect to ``id``, **but** we'll only look the
-running total of the current row and it's two preceding rows:
+``value`` column, ordered with respect to ``id``, **but** we'll only look at the
+running total of the current row and its two preceding rows:
 
 .. code-block:: python
 
@@ -671,7 +670,7 @@ running total of the current row and it's two preceding rows:
    # 2     3.    24.  -- (3 + 1 + 20)
    # 3   100    104.  -- (100 + 3 + 1)
 
-Technically we did not need to specify the ``end=Window.CURRENT`` because
+Technically we did not need to specify the ``end=Window.CURRENT_ROW`` because
 that is the default. It was shown in the example for demonstration.
 
 Let's look at another example. In this example we will calculate the "opposite"
@@ -688,6 +687,9 @@ the sum from the current row to the last row.
            order_by=[Sample.id],
            start=Window.CURRENT_ROW,
            end=Window.following()).alias('rsum'))
+
+   for sample in query:
+       print(sample.counter, sample.value, sample.rsum)
 
    # 1    10.   134.  -- (10 + 20 + 1 + 3 + 100)
    # 1    20.   124.  -- (20 + 1 + 3 + 100)
@@ -881,7 +883,7 @@ may lead to unexpected results:
    # 3         100     155.
 
 With the inclusion of the new rows we now have some rows that have duplicate
-``category`` and ``value`` values. The :attr:`~Window.RANGE` frame type
+``counter`` and ``value`` values. The :attr:`~Window.RANGE` frame type
 causes these duplicates to be evaluated together rather than separately.
 
 The more expected result can be achieved by using :attr:`~Window.ROWS` as
@@ -943,9 +945,8 @@ example:
    #  2         3        5    (1+1) + 3
    #  3         100      103  (3) + 100
 
-As you can hopefully infer, the window is grouped by its ordering term, which
-is ``(counter, value)``. We are looking at a window that extends between one
-previous group and the current group.
+The window is grouped by its ordering term, ``(counter, value)``. We are looking
+at a window that extends between one previous group and the current group.
 
 For information about the window function APIs, see:
 
@@ -967,7 +968,7 @@ Common Table Expressions
 A CTE factors out a subquery and gives it a name, making complex queries more
 readable and sometimes more efficient. CTEs also support recursion.
 
-Define a CTE with :meth:`~SelectQuery.cte` and include it with
+Define a CTE with :meth:`~Query.cte` and include it with
 :meth:`~Query.with_cte`:
 
 Simple Example

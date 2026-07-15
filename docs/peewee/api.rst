@@ -1025,10 +1025,8 @@ Database
          # Equivalent:
          Book.select().order_by(Book.title.asc(collation='reverse'))
 
-      As you might have noticed, the original ``collate_reverse`` function
-      has a special attribute called ``collation`` attached to it.  This
-      extra attribute provides a shorthand way to generate the SQL necessary
-      to use our custom collation.
+      The ``collate_reverse`` function has a ``collation`` attribute, a
+      shorthand for generating the collation SQL.
 
    .. method:: register_collation(fn, name=None)
 
@@ -1834,9 +1832,9 @@ Model
       .. code-block:: sql
 
          UPDATE "users" SET "username" = CASE "users"."id"
-             WHEN 1 THEN "u1-x"
-             WHEN 2 THEN "u2-y"
-             WHEN 3 THEN "u3-z" END
+             WHEN 1 THEN 'u1-x'
+             WHEN 2 THEN 'u2-y'
+             WHEN 3 THEN 'u3-z' END
          WHERE "users"."id" IN (1, 2, 3);
 
       If you have a large number of objects to update, it is strongly
@@ -2480,7 +2478,7 @@ Model
 
       Return an iterator that yields scalar values from the first column of
       each result row. This is the multi-row equivalent of
-      :py:meth:`~BaseQuery.scalar`.
+      :py:meth:`~ModelSelect.scalar`.
 
       Equivalent to:
 
@@ -4219,7 +4217,7 @@ Fields
       >>> cs_151 = Course.get(Course.name == 'CS 151')
       >>> alice.courses.add([cs_101, cs_151])
       >>> [course.name for course in alice.courses.order_by(Course.name)]
-      ['CS 101', 'CS151', 'English 101', 'English 151', 'English 201',
+      ['CS 101', 'CS 151', 'English 101', 'English 151', 'English 201',
        'English 221']
 
    This is quite a few courses, so let's remove the 200-level english courses.
@@ -4227,10 +4225,10 @@ Fields
 
    .. code-block:: pycon
 
-      >>> alice.courses.remove(Course.select().where(Course.name.contains('2'))
+      >>> alice.courses.remove(Course.select().where(Course.name.contains('2')))
       2
       >>> [course.name for course in alice.courses.order_by(Course.name)]
-      ['CS 101', 'CS151', 'English 101', 'English 151']
+      ['CS 101', 'CS 151', 'English 101', 'English 151']
 
    To remove all relationships from a collection, you can use the
    :meth:`~ManyToManyQuery.clear` method. Let's say that English 101 is
@@ -4635,7 +4633,7 @@ Schema Manager
 Query-builder
 -------------
 
-.. seealso: :ref:`query-builder`
+.. seealso:: :ref:`query-builder`
 
 .. class:: Node()
 
@@ -5230,7 +5228,7 @@ Query-builder
                .group_by(User.username)
                .order_by(fn.COUNT(Tweet.id).desc()))
 
-   .. method:: over(partition_by=None, order_by=None, start=None, end=None, window=None, exclude=None)
+   .. method:: over(partition_by=None, order_by=None, start=None, end=None, frame_type=None, window=None, exclude=None)
 
       :param list partition_by: List of columns to partition by.
       :param list order_by: List of columns / expressions to order window by.
@@ -6926,6 +6924,8 @@ Constants and Helpers
              primary_key
              table
              default
+             full_type
+             identity
 
 
 .. class:: ForeignKeyMetadata
@@ -6936,6 +6936,9 @@ Constants and Helpers
              dest_table
              dest_column
              table
+             name
+             on_delete
+             on_update
 
 
 .. class:: ViewMetadata

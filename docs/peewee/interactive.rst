@@ -28,7 +28,7 @@ Our terminal session might look like this:
 
 .. code-block:: pycon
 
-   >>> from peewee import SqliteDatabase
+   >>> from peewee import fn, SqliteDatabase
    >>> from playhouse.reflection import generate_models, print_model, print_table_sql
    >>>
 
@@ -42,7 +42,7 @@ keyed by the table name, with the generated model as the corresponding value:
    >>> db = SqliteDatabase('events.db')
    >>> models = generate_models(db)
    >>> list(models.items())
-   [('events', <Model: event>)]
+   [('event', <Model: event>)]
 
    >>> globals().update(models)  # Inject models into global namespace.
    >>> event
@@ -55,7 +55,7 @@ data-type, we can use the :func:`~playhouse.reflection.print_model` function:
 
    >>> print_model(event)
    event
-     id AUTO
+     id AUTO PK
      key TEXT
      timestamp DATETIME
      metadata TEXT
@@ -71,7 +71,8 @@ introspected database:
      "id" INTEGER NOT NULL PRIMARY KEY,
      "key" TEXT NOT NULL,
      "timestamp" DATETIME NOT NULL,
-     "metadata" TEXT NOT NULL)
+     "metadata" TEXT NOT NULL
+   )
 
 Now that we are familiar with the structure of the table we're working with, we
 can run some queries on the generated ``event`` model:
@@ -106,9 +107,8 @@ is a quick example:
 
 The ``events.py`` file will now be an import-able module containing a database
 instance (referencing the ``events.db``) along with model definitions for any
-tables found in the database. ``pwiz`` does some additional nice things like
-introspecting indexes and adding proper flags for ``NULL``/``NOT NULL``
-constraints, etc.
+tables found in the database. ``pwiz`` also introspects indexes and adds proper
+``NULL``/``NOT NULL`` flags.
 
 The APIs discussed in this section:
 

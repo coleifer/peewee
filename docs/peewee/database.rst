@@ -169,12 +169,12 @@ After the database name specify additional `pymysql Connection parameters
        'my_database',
        host='10.8.0.1',
        port=3306,
-       connection_timeout=5)
+       connect_timeout=5)
 
    class BaseModel(Model):
        """A base model that will use our MySQL database"""
        class Meta:
-           database = mysql_db
+           database = db
 
    class User(BaseModel):
        username = CharField()
@@ -555,7 +555,7 @@ Database connections and associated transactions are thread-safe.
 
 Peewee keeps track of the connection state using thread-local storage, making
 the Peewee :class:`Database` object safe to use with multiple threads. Each
-thread will have it's own connection, and as a result any given thread will
+thread will have its own connection, and as a result any given thread will
 only have a single connection open at a given time.
 
 Peewee's :ref:`asyncio integration <pwasyncio>` stores connection state in
@@ -634,11 +634,8 @@ Database Errors
 ---------------
 
 The Python DB-API 2.0 spec describes `several types of exceptions <https://www.python.org/dev/peps/pep-0249/#exceptions>`_.
-Because most database drivers have their own implementations of these
-exceptions, Peewee simplifies things by providing its own wrappers around any
-implementation-specific exception classes. That way, you don't need to worry
-about dealing with driver-specific exception classes, you can just use the ones
-from peewee:
+Drivers implement their own, so Peewee wraps them in a single set you can catch
+regardless of backend:
 
 * :class:`DatabaseError`
 * :class:`DataError`
@@ -712,8 +709,7 @@ Example test-case setup:
            # If we wanted, we could re-bind the models to their original
            # database here. But for tests this is probably not necessary.
 
-It is recommended to test using the same database backend used in production,
-so as to avoid any potential compatibility issues.
+Test against the same database backend as production to avoid compatibility issues.
 
 .. seealso::
    * :ref:`test-utils`
@@ -740,9 +736,9 @@ a connection in autocommit mode:
            res = self.execute_sql('SHOW TABLES;')
            return [r[0] for r in res.fetchall()]
 
-The minimum Peewee relies on from the driver is: ``Connection.commit``,
-``Connection.rollback``, ``Connection.execute``, ``Cursor.description``, and
-``Cursor.fetchone``. Everything else can be incrementally added.
+The minimum Peewee relies on from the driver is: ``Connection.cursor``,
+``Cursor.execute``, ``Cursor.description``, and ``Cursor.fetchone``. Everything
+else can be incrementally added.
 
 Other integration points on :class:`Database`:
 

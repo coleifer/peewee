@@ -67,7 +67,7 @@ If you like UML, these are the tables and relationships:
 
 .. image:: schema.jpg
 
-In order to create these models we need:
+To create these models we need:
 
 1. declare a :class:`SqliteDatabase` object
 2. declare our model classes
@@ -119,11 +119,6 @@ In order to create these models we need:
        content = TextField()
        pub_date = DateTimeField()
 
-.. note::
-   Note that we create a *BaseModel* class that simply defines what database
-   we would like to use.  All other models then extend this class and will also
-   use the correct database connection.
-
 
 Peewee supports many different :ref:`field types <fields>` which map to
 different column types commonly supported by database engines.  Conversion
@@ -140,7 +135,7 @@ allowing you to use the following in your application:
 Creating Tables
 ---------------
 
-In order to start using the models, its necessary to **create the tables**.
+To start using the models you must first **create the tables**.
 This is a one-time operation and can be done quickly using the interactive
 interpreter. We can create a small helper function to accomplish this:
 
@@ -291,11 +286,9 @@ the username is taken the database will raise an :class:`IntegrityError`.
 
    try:
        with database.atomic():
-           # Attempt to create the user. If the username is taken, due to the
-           # unique constraint, the database will raise an IntegrityError.
            user = User.create(
                username=request.form['username'],
-               password=md5(request.form['password']).hexdigest(),
+               password=md5(request.form['password'].encode('utf-8')).hexdigest(),
                email=request.form['email'],
                join_date=datetime.datetime.now())
 
@@ -326,8 +319,7 @@ Subqueries
 ----------
 
 If you are logged-in and visit the twitter homepage, you will see tweets from
-the users that you follow. In order to implement this cleanly, we can use a
-subquery:
+the users that you follow. We can implement this cleanly with a subquery:
 
 .. note::
    ``user.following()`` will automatically only select ``User.id`` when it used
@@ -360,8 +352,7 @@ This code corresponds to the following SQL query:
 Other Topics
 ------------
 
-There are a couple other neat things going on in the example app that are worth
-mentioning briefly.
+A couple other things in the example app:
 
 * Support for paginating lists of results is implemented in a simple function called
   ``object_list``. This function is used by all the views that return lists of objects.
@@ -375,17 +366,15 @@ mentioning briefly.
          kwargs[var_name] = qr.paginate(kwargs['page'])
          return render_template(template_name, **kwargs)
 
-* Simple authentication system with a ``login_required`` decorator. The first
-  function simply adds user data into the current session when a user successfully
-  logs in. The decorator ``login_required`` can be used to wrap view functions,
-  checking for whether the session is authenticated and if not redirecting to the
-  login page.
+* Simple authentication system with a ``login_required`` decorator. ``auth_user``
+  adds user data to the session on login. ``login_required`` wraps view functions,
+  redirecting to the login page when the session isn't authenticated.
 
   .. code-block:: python
 
      def auth_user(user):
          session['logged_in'] = True
-         session['user'] = user
+         session['user_id'] = user.id
          session['username'] = user.username
          flash('You are logged in as %s' % (user.username))
 

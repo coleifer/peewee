@@ -142,7 +142,7 @@ Collations
    * :meth:`SqliteDatabase.collation` - decorator.
 
 Table Functions
-   User-defined tables (requres ``cysqlite``).
+   User-defined tables (requires ``cysqlite``).
 
    * :meth:`.CySqliteDatabase.register_table_function`
    * :meth:`.CySqliteDatabase.table_function` - decorator.
@@ -208,8 +208,7 @@ User-defined aggregates must define two methods:
 Window function example
 ^^^^^^^^^^^^^^^^^^^^^^^
 
-User-defined window functions are simply aggregates with two additional
-methods:
+User-defined window functions are aggregates with two additional methods:
 
 * ``step(*values)`` - called for each row being aggregated.
 * ``inverse(*values)`` - "invert" the effect of a call to ``step(*values)``.
@@ -218,10 +217,7 @@ methods:
 
 .. code-block:: python
 
-   # Window functions are normal aggregates with two additional methods:
-   # inverse(value) - Perform the inverse of step(value).
-   # value() - Report value at current step.
-   @db.aggregate('mysum')
+   @db.window_function('mysum')
    class MySum(object):
        def __init__(self):
            self._value = 0
@@ -434,46 +430,7 @@ Usage:
       See `cysqlite docs <https://cysqlite.readthedocs.io/en/latest/api.html#tablefunction>`__ for details on
       ``TableFunction`` API.
 
-      .. code-block:: python
-
-         from cysqlite import TableFunction
-
-         @db.table_function('series')
-         class Series(TableFunction):
-             columns = ['value']
-             params = ['start', 'stop', 'step']
-
-             def initialize(self, start=0, stop=None, step=1):
-                 """
-                 Table-functions declare an initialize() method, which is
-                 called with whatever arguments the user has called the
-                 function with.
-                 """
-                 self.start = self.current = start
-                 self.stop = stop or float('Inf')
-                 self.step = step
-
-             def iterate(self, idx):
-                 """
-                 Iterate is called repeatedly by the SQLite database engine
-                 until the required number of rows has been read **or** the
-                 function raises a `StopIteration` signalling no more rows
-                 are available.
-                 """
-                 if self.current > self.stop:
-                     raise StopIteration
-
-                 ret, self.current = self.current, self.current + self.step
-                 return (ret,)
-
-         cursor = db.execute_sql('SELECT * FROM series(?, ?, ?)', (0, 5, 2))
-         for (value,) in cursor:
-             print(value)
-
-         # Prints:
-         # 0
-         # 2
-         # 4
+      For a complete example, see `Table function example`_ above.
 
    .. method:: register_table_function(klass, name)
 
@@ -1033,6 +990,12 @@ SQLite JSON
 :class:`~playhouse.sqlite_ext.JSONField` enables storing and querying JSON data
 in SQLite using the `SQLite json functions <https://sqlite.org/json1.html>`_.
 
+.. note::
+   This field is legacy, kept for backwards compatibility. New code should use
+   the cross-backend :ref:`core JSONField <json-field>`. Its one advantage is
+   the SQLite-specific :meth:`~JSONField.tree` and :meth:`~JSONField.children`
+   methods documented below.
+
 .. class:: JSONField(json_dumps=None, json_loads=None, **kwargs)
 
    :param json_dumps: Custom JSON serializer. Defaults to ``json.dumps``.
@@ -1140,7 +1103,7 @@ in SQLite using the `SQLite json functions <https://sqlite.org/json1.html>`_.
 
       # [([1, 99, 1, 1], 4), ([1, 1], 2)]
 
-   Let's add a nested value and then see how to iterate through it's contents
+   Let's add a nested value and then see how to iterate through its contents
    recursively using the :meth:`~JSONField.tree` method:
 
    .. code-block:: python
@@ -1155,13 +1118,13 @@ in SQLite using the `SQLite json functions <https://sqlite.org/json1.html>`_.
       for row in query.tuples():
           print(row)
 
-      (1, '$', {'x1': {'y1': 'z1', 'y2': 'z2'}, 'x2': [1, 2]}),
-      (1, '$.x2', [1, 2]),
-      (1, '$.x2[0]', 1),
-      (1, '$.x2[1]', 2),
-      (1, '$.x1', {'y1': 'z1', 'y2': 'z2'}),
-      (1, '$.x1.y1', 'z1'),
-      (1, '$.x1.y2', 'z2')]
+      (1, '$', '{"x1":{"y1":"z1","y2":"z2"},"x2":[1,2]}')
+      (1, '$.x1', '{"y1":"z1","y2":"z2"}')
+      (1, '$.x1.y1', 'z1')
+      (1, '$.x1.y2', 'z2')
+      (1, '$.x2', '[1,2]')
+      (1, '$.x2[0]', 1)
+      (1, '$.x2[1]', 2)
 
    The :meth:`~JSONField.tree` and :meth:`~JSONField.children` methods
    are powerful. For more information on how to utilize them, see the
@@ -1345,10 +1308,10 @@ in SQLite using the `SQLite json functions <https://sqlite.org/json1.html>`_.
           KeyData.create(key='b', data={'x1': {'y1': 'z1', 'y2': 'z2'}})
 
           # We will query the KeyData model for the key and all the
-          # top-level keys and values in it's data field.
+          # top-level keys and values in its data field.
           kd = KeyData.data.children().alias('children')
           query = (KeyData
-                   .select(kd.c.key, kd.c.value, kd.c.fullkey)
+                   .select(KeyData.key, kd.c.key, kd.c.value, kd.c.fullkey)
                    .from_(KeyData, kd)
                    .order_by(kd.c.key)
                    .tuples())
@@ -1393,10 +1356,10 @@ in SQLite using the `SQLite json functions <https://sqlite.org/json1.html>`_.
           KeyData.create(key='b', data={'x1': {'y1': 'z1', 'y2': 'z2'}})
 
           # We will query the KeyData model for the key and all the
-          # keys and values in it's data field, recursively.
+          # keys and values in its data field, recursively.
           kd = KeyData.data.tree().alias('tree')
           query = (KeyData
-                   .select(kd.c.key, kd.c.value, kd.c.fullkey)
+                   .select(KeyData.key, kd.c.key, kd.c.value, kd.c.fullkey)
                    .from_(KeyData, kd)
                    .order_by(kd.c.key)
                    .tuples())
@@ -2123,7 +2086,7 @@ has more information.
          for result in query:
              print('Result: %s' % result.title)
 
-   .. classmethod:: search(term, weights=None, with_score=False, score_alias='score')
+   .. classmethod:: search(term, weights=None, with_score=False, score_alias='score', explicit_ordering=False)
 
       :param term: Search term or expression. `FTS5 syntax documentation <https://sqlite.org/fts5.html#full_text_query_syntax>`__.
       :param weights: A list of weights for the columns, ordered with respect
@@ -2159,7 +2122,7 @@ has more information.
           for result in docs:
               print(result.title, result.search_score)
 
-   .. classmethod:: search_bm25(term, weights=None, with_score=False, score_alias='score')
+   .. classmethod:: search_bm25(term, weights=None, with_score=False, score_alias='score', explicit_ordering=False)
 
       With FTS5, :meth:`~FTS5Model.search_bm25` is identical to the
       :meth:`~FTS5Model.search` method.
@@ -2203,10 +2166,10 @@ has more information.
       Because FTS5 provides built-in support for BM25, this method is identical
       to :meth:`~FTS5Model.rank` method.
 
-   .. classmethod:: VocabModel(table_type='row'|'col'|'instance', table_name=None)
+   .. classmethod:: VocabModel(table_type='row'|'col'|'instance', table=None)
 
       :param str table_type: Either 'row', 'col' or 'instance'.
-      :param table_name: Name for the vocab table. If not specified, will be
+      :param table: Name for the vocab table. If not specified, will be
           "fts5tablename_v".
 
       Generate a model class suitable for accessing the `vocab table <http://sqlite.org/fts5.html#the_fts5vocab_virtual_table_module>`_
