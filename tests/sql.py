@@ -1416,6 +1416,42 @@ class TestSelectQuery(BaseTestCase):
             'ORDER BY "t3"."timestamp" DESC LIMIT ?) AS "t2" ON ?'),
             [1, True])
 
+    def test_lateral_helper(self):
+        # The .lateral() helper prefixes LATERAL on the source; the join type
+        # comes from .join(). Mirrors the execution test in tests/postgres.py.
+        inner = (Tweet
+                 .select(Tweet.c.content)
+                 .where(Tweet.c.user_id == User.c.id)
+                 .order_by(Tweet.c.timestamp.desc())
+                 .limit(1)
+                 .lateral())
+
+        # Default INNER join -> INNER JOIN LATERAL (...) ON true.
+        query = (User
+                 .select(User.c.username, inner.c.content)
+                 .join(inner, on=True))
+        self.assertSQL(query, (
+            'SELECT "t1"."username", "t2"."content" '
+            'FROM "users" AS "t1" '
+            'INNER JOIN LATERAL ('
+            'SELECT "t3"."content" FROM "tweets" AS "t3" '
+            'WHERE ("t3"."user_id" = "t1"."id") '
+            'ORDER BY "t3"."timestamp" DESC LIMIT ?) AS "t2" ON ?'),
+            [1, True])
+
+        # CROSS JOIN LATERAL takes no ON clause.
+        query = (User
+                 .select(User.c.username, inner.c.content)
+                 .join(inner, JOIN.CROSS))
+        self.assertSQL(query, (
+            'SELECT "t1"."username", "t2"."content" '
+            'FROM "users" AS "t1" '
+            'CROSS JOIN LATERAL ('
+            'SELECT "t3"."content" FROM "tweets" AS "t3" '
+            'WHERE ("t3"."user_id" = "t1"."id") '
+            'ORDER BY "t3"."timestamp" DESC LIMIT ?) AS "t2"'),
+            [1])
+
     def test_all_clauses(self):
         count = fn.COUNT(Tweet.c.id).alias('ct')
         query = (User

@@ -1596,7 +1596,7 @@ class TestModelAdvancedSQL(ModelDatabaseTestCase):
         self.assertSQL(query, (
             'SELECT "t1"."first", "t2"."content" '
             'FROM "person" AS "t1" '
-            'LATERAL ('
+            'JOIN LATERAL ('
             'SELECT "t3"."content" FROM "note" AS "t3" '
             'WHERE ("t3"."author_id" = "t1"."id") '
             'ORDER BY "t3"."id" DESC LIMIT ?) AS "t2" ON ?'), [2, True])

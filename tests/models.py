@@ -5306,6 +5306,33 @@ class TestLateralJoin(ModelTestCase):
             {'username': 'u2', 'content': 'u2-t3'},
             {'username': 'u2', 'content': 'u2-t2'}])
 
+    def test_join_lateral_inner(self):
+        with self.database.atomic():
+            for i in range(3):
+                u = User.create(username='u%s' % i)
+                for j in range(4):
+                    Tweet.create(user=u, content='u%s-t%s' % (i, j))
+
+        # JOIN.LATERAL is the inner lateral: JOIN LATERAL (...) ON true. It
+        # used to emit a bare, un-runnable LATERAL (...). Same result as the
+        # LEFT variant above, minus any user with no tweets.
+        TA = Tweet.alias()
+        tweets = (TA
+                  .select(TA.content)
+                  .where(TA.user == User.id)
+                  .order_by(TA.id.desc())
+                  .limit(2)
+                  .alias('pq'))
+        query = (User
+                 .select(User.username, tweets.c.content)
+                 .join(tweets, JOIN.LATERAL)
+                 .order_by(User.id, tweets.c.content.desc())
+                 .tuples())
+        self.assertEqual(list(query), [
+            ('u0', 'u0-t3'), ('u0', 'u0-t2'),
+            ('u1', 'u1-t3'), ('u1', 'u1-t2'),
+            ('u2', 'u2-t3'), ('u2', 'u2-t2')])
+
 
 # ===========================================================================
 # Bulk operations
