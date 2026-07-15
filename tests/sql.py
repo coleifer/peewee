@@ -2903,6 +2903,33 @@ class TestOnConflictSqlite(BaseTestCase):
         with self.assertRaisesCtx(ValueError):
             self.database.get_sql_context().parse(query)
 
+    def test_do_nothing_conflict_target(self):
+        KV = Table('kv', ('key', 'value', 'extra'), _database=self.database)
+
+        # No target stays a bare, catch-all clause.
+        self.assertSQL(
+            KV.insert(key='k1', value='v1', extra=1).on_conflict('nothing'),
+            ('INSERT INTO "kv" ("extra", "key", "value") VALUES (?, ?, ?) '
+             'ON CONFLICT DO NOTHING'), [1, 'k1', 'v1'])
+
+        # A target and its partial-index predicate used to be dropped for the
+        # nothing action, leaving a bare clause that ignores them.
+        self.assertSQL(
+            (KV.insert(key='k1', value='v1', extra=1)
+             .on_conflict(action='nothing',
+                          conflict_target=(KV.key, KV.value),
+                          conflict_where=(KV.extra > 1))),
+            ('INSERT INTO "kv" ("extra", "key", "value") VALUES (?, ?, ?) '
+             'ON CONFLICT ("key", "value") WHERE ("extra" > ?) DO NOTHING'),
+            [1, 'k1', 'v1', 1])
+
+        # SQLite has no named-constraint upsert, so it is rejected rather than
+        # silently ignored.
+        query = KV.insert(key='k1', value='v1', extra=1).on_conflict(
+            action='nothing', conflict_constraint='kv_uniq')
+        with self.assertRaisesCtx(ValueError):
+            self.database.get_sql_context().parse(query)
+
     def test_conflict_update_subquery_in_function(self):
         KV = Table('kv', ('key', 'value', 'extra'), _database=self.database)
         Stat = Table('stat', _database=self.database)
@@ -2990,6 +3017,31 @@ class TestOnConflictPostgresql(BaseTestCase):
         self.assertSQL(query, (
             'INSERT INTO "person" ("name") VALUES (?) '
             'ON CONFLICT DO NOTHING'), ['huey'])
+
+    def test_ignore_conflict_where(self):
+        KV = Table('kv', ('key', 'value', 'extra'), _database=self.database)
+        query = (KV.insert(key='k1', value='v1', extra=9)
+                 .on_conflict(action='nothing',
+                              conflict_target=[KV.key],
+                              conflict_where=(KV.extra > 1)))
+        # The partial-index predicate used to be dropped, leaving
+        # ON CONFLICT ("key"), which Postgres rejects for a partial index.
+        self.assertSQL(query, (
+            'INSERT INTO "kv" ("extra", "key", "value") VALUES (?, ?, ?) '
+            'ON CONFLICT ("key") WHERE ("extra" > ?) DO NOTHING'),
+            [9, 'k1', 'v1', 1])
+
+    def test_ignore_conflict_constraint(self):
+        KV = Table('kv', ('key', 'value', 'extra'), _database=self.database)
+        query = (KV.insert(key='k1', value='v1', extra=9)
+                 .on_conflict(action='nothing',
+                              conflict_constraint='kv_key_value'))
+        # The named constraint used to be dropped, leaving a bare
+        # ON CONFLICT DO NOTHING that matches any conflict.
+        self.assertSQL(query, (
+            'INSERT INTO "kv" ("extra", "key", "value") VALUES (?, ?, ?) '
+            'ON CONFLICT ON CONSTRAINT "kv_key_value" DO NOTHING'),
+            [9, 'k1', 'v1'])
 
     def test_conflict_target_required(self):
         query = Person.insert(name='huey').on_conflict(preserve=(Person.dob,))

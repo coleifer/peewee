@@ -224,6 +224,24 @@ class UKVP(TestModel):
 
 
 # ---------------------------------------------------------------------------
+# KVCon - key/value with two named unique constraints.
+#
+# Exercises ON CONFLICT ON CONSTRAINT <name>, which needs a real named
+# constraint rather than the unique index that unique=True generates. Two
+# constraints let a test name one and conflict on the other.
+# ---------------------------------------------------------------------------
+
+class KVCon(TestModel):
+    key = TextField()
+    value = IntegerField()
+
+    class Meta:
+        constraints = [
+            SQL('CONSTRAINT kvcon_key_uniq UNIQUE (key)'),
+            SQL('CONSTRAINT kvcon_value_uniq UNIQUE (value)')]
+
+
+# ---------------------------------------------------------------------------
 # DfltM - default value variants.
 #
 # Exercises three kinds of field defaults: static value (dflt1=1), callable

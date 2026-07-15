@@ -3851,21 +3851,23 @@ class Database(_callable_context_manager):
             items.append(NodeList((ensure_entity(k), SQL('='), v)))
         return items
 
-    def _build_on_conflict_update(self, on_conflict, query):
+    def _build_on_conflict_target(self, on_conflict):
         if on_conflict._conflict_target:
-            stmt = SQL('ON CONFLICT')
             target = EnclosedNodeList([
                 Entity(col) if isinstance(col, str) else col
                 for col in on_conflict._conflict_target])
             if on_conflict._conflict_where is not None:
                 target = NodeList([target, SQL('WHERE'),
                                    on_conflict._conflict_where])
-        else:
-            stmt = SQL('ON CONFLICT ON CONSTRAINT')
-            target = on_conflict._conflict_constraint
-            if isinstance(target, str):
-                target = Entity(target)
+            return NodeList([SQL('ON CONFLICT'), target])
+        elif on_conflict._conflict_constraint:
+            constraint = on_conflict._conflict_constraint
+            if isinstance(constraint, str):
+                constraint = Entity(constraint)
+            return NodeList([SQL('ON CONFLICT ON CONSTRAINT'), constraint])
+        return SQL('ON CONFLICT')
 
+    def _build_on_conflict_update(self, on_conflict, query):
         updates = []
         if on_conflict._preserve:
             for column in on_conflict._preserve:
@@ -3879,7 +3881,8 @@ class Database(_callable_context_manager):
             updates.extend(self._conflict_update_items(on_conflict, query,
                                                        qualify=True))
 
-        parts = [stmt, target, SQL('DO UPDATE SET'), CommaNodeList(updates)]
+        parts = [self._build_on_conflict_target(on_conflict),
+                 SQL('DO UPDATE SET'), CommaNodeList(updates)]
         if on_conflict._where:
             parts.extend((SQL('WHERE'), qualify_names(on_conflict._where)))
 
@@ -4403,7 +4406,11 @@ class SqliteDatabase(Database):
             return
 
         if action == 'nothing':
-            return SQL('ON CONFLICT DO NOTHING')
+            if oc._conflict_constraint:
+                raise ValueError('SQLite does not support specifying named '
+                                 'constraints for conflict resolution.')
+            return NodeList([self._build_on_conflict_target(oc),
+                             SQL('DO NOTHING')])
         elif not oc._update and not oc._preserve:
             raise ValueError('If you are not performing any updates (or '
                              'preserving any INSERTed values), then the '
@@ -4788,13 +4795,8 @@ class PostgresqlDatabase(Database):
     def conflict_update(self, oc, query):
         action = oc._action.lower() if oc._action else ''
         if action in ('ignore', 'nothing'):
-            parts = [SQL('ON CONFLICT')]
-            if oc._conflict_target:
-                parts.append(EnclosedNodeList([
-                    Entity(col) if isinstance(col, str) else col
-                    for col in oc._conflict_target]))
-            parts.append(SQL('DO NOTHING'))
-            return NodeList(parts)
+            return NodeList([self._build_on_conflict_target(oc),
+                             SQL('DO NOTHING')])
         elif action and action != 'update':
             raise ValueError('The only supported actions for conflict '
                              'resolution with Postgresql are "ignore" or '

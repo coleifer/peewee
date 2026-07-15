@@ -4327,6 +4327,72 @@ class PGOnConflictTests(OnConflictTests):
         u2_db = UKVP.get(UKVP.key == 'k2')
         self.assertEqual(u2_db.id, u2.id)
 
+    @requires_postgresql
+    @requires_models(UKVP)
+    def test_ignore_conflict_where(self):
+        # Postgres only. Dropping the predicate leaves ON CONFLICT ("key",
+        # "value"), which does not match the partial index, so Postgres rejects
+        # it. On SQLite the row is ignored either way, so this would not flag
+        # the regression.
+        UKVP.create(key='k1', value=1, extra=1)
+        UKVP.create(key='k2', value=2, extra=2)
+
+        # DO NOTHING must carry the partial-index predicate to match the index.
+        (UKVP.insert(key='k2', value=2, extra=5)
+         .on_conflict(action='nothing',
+                      conflict_target=(UKVP.key, UKVP.value),
+                      conflict_where=(UKVP.extra > 1))
+         .execute())
+
+        self.assertEqual(
+            sorted(UKVP.select(UKVP.key, UKVP.value, UKVP.extra).tuples()),
+            [('k1', 1, 1), ('k2', 2, 2)])
+
+    @requires_postgresql
+    @requires_models(KVCon)
+    def test_ignore_conflict_constraint(self):
+        KVCon.create(key='k1', value=1)
+
+        # ON CONFLICT ON CONSTRAINT names one constraint, so a conflict on a
+        # different constraint still raises. Without the fix the name was
+        # dropped to a bare ON CONFLICT DO NOTHING that swallows any conflict.
+        with self.assertRaises(IntegrityError):
+            with self.database.atomic():
+                (KVCon.insert(key='k2', value=1)
+                 .on_conflict(action='nothing',
+                              conflict_constraint='kvcon_key_uniq')
+                 .execute())
+
+        # A conflict on the named constraint is ignored as intended.
+        (KVCon.insert(key='k1', value=2)
+         .on_conflict(action='nothing',
+                      conflict_constraint='kvcon_key_uniq')
+         .execute())
+        self.assertEqual(
+            list(KVCon.select(KVCon.key, KVCon.value).tuples()), [('k1', 1)])
+
+    @requires_upsert
+    @skip_if(IS_CRDB, 'not verified on crdb')
+    @requires_models(KVCon)
+    def test_ignore_conflict_target_scope(self):
+        KVCon.create(key='k1', value=1)
+
+        # DO NOTHING with a conflict target only suppresses conflicts on that
+        # target. A conflict on the value column still raises. SQLite used to
+        # drop the target to a bare DO NOTHING that swallows any conflict.
+        with self.assertRaises(IntegrityError):
+            with self.database.atomic():
+                (KVCon.insert(key='k2', value=1)
+                 .on_conflict(action='nothing', conflict_target=[KVCon.key])
+                 .execute())
+
+        # A conflict on the target column is ignored.
+        (KVCon.insert(key='k1', value=2)
+         .on_conflict(action='nothing', conflict_target=[KVCon.key])
+         .execute())
+        self.assertEqual(
+            list(KVCon.select(KVCon.key, KVCon.value).tuples()), [('k1', 1)])
+
 
 @requires_mysql
 class TestUpsertMySQL(OnConflictTests, ModelTestCase):
