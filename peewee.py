@@ -1574,6 +1574,8 @@ class Expression(ColumnBase):
     def __init__(self, lhs, op, rhs, flat=False):
         self.lhs = lhs
         self.op = op
+        if op in (OP.IN, OP.NOT_IN) and isinstance(rhs, types.GeneratorType):
+            rhs = tuple(rhs)
         self.rhs = rhs
         self.flat = flat
 
@@ -1603,10 +1605,8 @@ class Expression(ColumnBase):
             # the equivalent boolean expression.
             op_in = self.op == OP.IN or self.op == OP.NOT_IN
             rhs = self.rhs
-            if op_in:
-                #
-                if self._is_rhs_empty(rhs, ctx):
-                    return ctx.literal('0 = 1' if self.op == OP.IN else '1 = 1')
+            if op_in and self._is_rhs_empty(rhs, ctx):
+                return ctx.literal('0 = 1' if self.op == OP.IN else '1 = 1')
             if rhs is None and (self.op == OP.IS or self.op == OP.IS_NOT):
                 rhs = SQL('NULL')
 

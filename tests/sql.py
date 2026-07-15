@@ -264,6 +264,25 @@ class TestSelectQuery(BaseTestCase):
         self.assertSQL(query, (
             'SELECT "t1"."id" FROM "users" AS "t1" WHERE (1 = 1)'))
 
+        # An empty generator is one-shot; materialize it so it is caught too.
+        query = User.select(User.c.id).where(User.c.id.in_(i for i in []))
+        self.assertSQL(query, (
+            'SELECT "t1"."id" FROM "users" AS "t1" WHERE (0 = 1)'))
+
+        query = User.select(User.c.id).where(User.c.id.not_in(i for i in []))
+        self.assertSQL(query, (
+            'SELECT "t1"."id" FROM "users" AS "t1" WHERE (1 = 1)'))
+
+    def test_generator_in_reused(self):
+        # A generator rhs is materialized at build time: it is one-shot, so
+        # rendering the query twice used to exhaust it and collapse to IN ().
+        query = User.select(User.c.id).where(
+            User.c.id.in_(i for i in (1, 2, 3)))
+        expected = ('SELECT "t1"."id" FROM "users" AS "t1" '
+                    'WHERE ("t1"."id" IN (?, ?, ?))')
+        self.assertSQL(query, expected, [1, 2, 3])
+        self.assertSQL(query, expected, [1, 2, 3])  # Second render survives.
+
     def test_between_via_slice(self):
         query = User.select(User.c.id).where(User.c.age[18:65])
         self.assertSQL(query, (
