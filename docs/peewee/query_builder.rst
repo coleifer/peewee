@@ -6,8 +6,7 @@ Query Builder
 Peewee's high-level :class:`Model` and :class:`Field` APIs are built upon
 lower-level :class:`Table` and :class:`Column` counterparts. While these
 lower-level APIs are not documented in as much detail as their high-level
-counterparts, this document will present an overview with examples that should
-hopefully allow you to experiment.
+counterparts, this document will present an overview with worked examples.
 
 We'll use the following schema:
 
@@ -76,8 +75,8 @@ To select the first three notes and print their content, we can write:
     the row data, if you wish.
 
 Because we didn't specify any columns, all the columns we defined in the
-note's :class:`Table` constructor will be selected. This won't work for
-Reminder, as we didn't specify any columns at all.
+note's :class:`Table` constructor will be selected. ``Reminder`` declares no
+columns, so ``Reminder.select()`` emits ``SELECT * FROM "reminder"`` instead.
 
 To select all notes published in 2018 along with the name of the creator, we
 will use :meth:`~Select.join`. We'll also request that rows be returned
@@ -190,7 +189,7 @@ new row is returned):
         Note.content: 'meeeeowwww',
         Note.timestamp: datetime.datetime.now()}).execute()
 
-It is easy to bulk-insert data, just pass in either:
+To bulk-insert data, pass in either:
 
 * A list of dictionaries (all must have the same keys/columns).
 * A list of tuples, if the columns are specified explicitly.

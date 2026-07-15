@@ -38,7 +38,7 @@ Example
 -------
 
 ``playhouse.pwasyncio`` contains the async database implementations. Typically
-this is the only thing you will need in order to use Peewee with asyncio:
+this is the only thing you need to use Peewee with asyncio:
 
 .. code-block:: python
 
@@ -110,14 +110,13 @@ performs I/O. Whenever a query executes, control switches to the event loop and
 the I/O coroutine is awaited like any other awaitable. Then the original call
 resumes with the result.
 
-This is real asyncio, NOT gevent-style concurrency. Nothing is
+This is real asyncio, not gevent-style concurrency. Nothing is
 monkey-patched, no sockets are wrapped, and the event loop is the ordinary
 asyncio loop running the rest of your application.
 
-To show how this works I'll walk through the following example, which uses two
-internal primitives ``greenlet_spawn`` (run sync code in a greenlet) and ``await_``
-(suspend the sync greenlet, passing control and a coroutine to the async
-parent).
+The following example uses two internal primitives, ``greenlet_spawn`` (run sync
+code in a greenlet) and ``await_`` (suspend the sync greenlet, passing control
+and a coroutine to the async parent).
 
 .. code-block:: python
 
@@ -147,7 +146,7 @@ When this runs:
    the bridge between sync and async python. Inside the new greenlet everything
    is synchronous, but it can yield coroutines to the async-world parent, which
    then awaits them on the loop.
-3. Inside the new greenlet we begin executing ``synchronous()`` (it does NOT know
+3. Inside the new greenlet we begin executing ``synchronous()`` (it does not know
    anything about asyncio). ``a_add(1, 2)`` creates a coroutine, which gets passed
    to ``await_()``.
 4. Inside ``await_()``, we *switch contexts* back to the parent (async world),
@@ -176,10 +175,9 @@ asynchronously:
 
 In your code you should never need to use ``greenlet_spawn()`` or ``await_()``
 directly. Peewee wraps all this in ``a``-prefixed methods and helpers so that the
-greenlet machinery remains an implementation detail, but it's worth taking a
-look at to understand what's going on. In short, Peewee uses greenlets to pass
-coroutines out of synchronous code, so they can be ``await``-ed, at the cost of
-two lightweight context switches.
+greenlet machinery remains an implementation detail. Peewee uses greenlets to
+pass coroutines out of synchronous code, so they can be ``await``-ed, at the cost
+of two lightweight context switches.
 
 Async Model Methods
 -------------------
@@ -341,7 +339,7 @@ For single-query operations, the async helpers are more direct:
    cursor = await query.aexecute()
 
    # Use a transaction:
-   async with db.atomic() as tx:
+   async with db.atomic():
        await db.run(User.create, name='Bob')
 
    # SELECT and return one model instance (raises DoesNotExist if none).
@@ -435,10 +433,8 @@ Explicit control is also available:
    # ... queries ...
    await db.aclose()      # Release connection back to pool.
 
-Each asyncio task gets its own connection from the pool. **Connections are not
-shared between tasks**. Each async task will have its own connection and
-transaction state - this prevents bugs that may occur when connections are
-shared and transactions end up interleaved across several running tasks.
+Each asyncio task gets its own connection and transaction state, so tasks never
+interleave each other's transactions.
 
 To shut down completely (e.g. during application teardown):
 
@@ -491,9 +487,8 @@ writes will not occur "faster", the bottleneck has merely been moved.
 Conversely, if you don't have that much load, the async wrapper adds complexity
 and overhead for no measurable benefit.
 
-To use SQLite in an async environment anyways, it is strongly recommended to
-use WAL-mode at a minimum, which allows multiple readers to co-exist with a
-single writer:
+To use SQLite in an async environment anyway, use WAL-mode at a minimum, which
+allows multiple readers to co-exist with a single writer:
 
 .. code-block:: python
 

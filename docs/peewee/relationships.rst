@@ -8,17 +8,6 @@ across tables. This document explains how Peewee models those links, what
 happens under the hood when you traverse them, and how to write queries that
 cross table boundaries efficiently.
 
-By the end of this document you will understand:
-
-* How :class:`ForeignKeyField` behaves at runtime, not just at schema
-  definition time.
-* What a back-reference is and when to use one.
-* What the N+1 problem is and how to recognise it.
-* How to write joins, including multi-table and self-referential joins.
-* How many-to-many relationships are modelled.
-* When to use eager loading (:meth:`~ModelSelect.with_related`) instead of a
-  join.
-
 
 Model Definitions
 -----------------
@@ -204,8 +193,7 @@ that user's tweets:
    alice-2
    alice-3
 
-Taking a closer look at ``alice.tweets``, we can see that it is just a simple
-pre-filtered ``SELECT`` query:
+``alice.tweets`` is a pre-filtered ``SELECT`` query:
 
 .. code-block:: pycon
 
@@ -292,28 +280,7 @@ Joins
 
 A SQL join combines columns from two or more tables into a single result set.
 Peewee's :meth:`~ModelSelect.join` method generates the appropriate ``JOIN``
-clause and reconstructs the model graph automatically:
-
-.. code-block:: python
-
-   TweetUser = User.alias()  # We are going to reference the User table twice,
-                             # so we need an alias.
-
-   query = (Favorite
-            .select(Favorite, User, Tweet, TweetUser)
-            .join_from(Favorite, User)  # Get user who owns this Favorite.
-            .join_from(Favorite, Tweet)  # What tweet was favorite-d.
-            .join_from(Tweet, TweetUser))  # What user created the tweet.
-
-   # Single query is issued.
-   for fav in query:
-       print(fav.user.username, 'likes', fav.tweet.content,
-             'by', fav.tweet.user.username)
-
-   # alice likes bob-2 by bob
-   # bob likes alice-3 by alice
-   # carol likes alice-1 by alice
-   # carol likes alice-3 by alice
+clause and reconstructs the model graph automatically.
 
 Simple joins
 ^^^^^^^^^^^^
@@ -452,8 +419,7 @@ corresponding attributes.
    # bob -> bob-1
    # bob -> bob-2
 
-To make it a bit more obvious that it's doing the correct thing, we can ask
-Peewee to return the rows as dictionaries.
+Returning the rows as dictionaries makes this clearer:
 
 .. code-block:: python
 
@@ -611,8 +577,7 @@ Iterating over the query, we can see each user and their latest tweet.
    # alice -> alice-3
    # bob -> bob-2
 
-There are a couple things you may not have seen before in the code we used to
-create the query in this section:
+Three things in this query:
 
 * We used :meth:`~ModelSelect.join_from` to explicitly specify the join
   context. We wrote ``.join_from(Tweet, User)``, which is equivalent to
@@ -847,8 +812,8 @@ the corresponding instance in the reconstructed graph:
 .. code-block:: python
 
    name = Case(User.username, [
-       ('u1', 'User One'),
-       ('u2', 'User Two')], 'Someone Else')
+       ('alice', 'Alice A.'),
+       ('bob', 'Bob B.')], 'Someone Else')
 
    query = (Tweet
             .select(Tweet.content, name.alias('display').bind_to(User))

@@ -4,8 +4,7 @@ Quickstart
 ==========
 
 This guide walks through defining a schema, writing rows, and reading them
-back. It takes about ten minutes. Every concept introduced here is covered in
-depth in the following documents.
+back.
 
 .. tip::
    Follow along in an interactive Python session.
@@ -39,8 +38,6 @@ classes map to tables.
        timestamp = DateTimeField(
            default=datetime.datetime.now,
            index=True)
-
-Three things to notice:
 
 * ``BaseModel`` exists only to carry the ``database`` setting. Every subclass
   inherits it automatically.
@@ -106,7 +103,7 @@ if no match is found:
    print(user.id, user.username)
 
 Retrieve multiple rows with :meth:`~Model.select`. The result is a lazy
-query - rows are fetched only when you iterate:
+query. Rows are fetched only when you iterate:
 
 .. code-block:: python
 
@@ -134,9 +131,7 @@ Join to combine data from related tables in a single query:
 
 .. code-block:: python
 
-   # Fetch each tweet alongside its author's username.
-   # Without the join, accessing tweet.user.username would issue
-   # an extra query per tweet - see the N+1 section in Relationships.
+   # Select each tweet with its author in one query.
    query = (Tweet
             .select(Tweet, User)
             .join(User)
@@ -177,7 +172,7 @@ Working with Existing databases
 -------------------------------
 
 If you have an existing database, peewee can generate models using :ref:`pwiz`.
-For example to generate models for a Postgres database named ``blog_db``:
+For example to generate models for a Postgres database named ``blog``:
 
 .. code-block:: shell
 

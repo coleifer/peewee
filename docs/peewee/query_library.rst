@@ -299,7 +299,7 @@ this information?
 
 .. code-block:: sql
 
-    SELECT MAX(join_date) FROM members;
+    SELECT MAX(joindate) FROM members;
 
 .. code-block:: python
 
@@ -914,7 +914,7 @@ slots, sorted by the number of slots.
 
     SELECT facid, SUM(slots)
     FROM bookings
-    WHERE (date_trunc('month', starttime) = '2012-09-01'::dates)
+    WHERE (date_trunc('month', starttime) = '2012-09-01'::date)
     GROUP BY facid
     ORDER BY SUM(slots)
 
@@ -1090,7 +1090,7 @@ Postgres ONLY.
 .. code-block:: sql
 
     SELECT facid, date_part('month', starttime), SUM(slots)
-    FROM booking
+    FROM bookings
     WHERE date_part('year', starttime) = 2012
     GROUP BY ROLLUP(facid, date_part('month', starttime))
     ORDER BY facid, date_part('month', starttime)

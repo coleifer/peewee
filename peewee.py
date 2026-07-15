@@ -6724,15 +6724,16 @@ class ManyToManyField(MetaField):
         super(ManyToManyField, self).bind(model, name, set_attribute)
 
         if not self._is_backref:
-            many_to_many_field = ManyToManyField(
-                self.model,
-                backref=name,
-                through_model=self.through_model,
-                on_delete=self._on_delete,
-                on_update=self._on_update,
-                _is_backref=True)
             self.backref = self.backref or model._meta.name + 's'
-            self.rel_model._meta.add_field(self.backref, many_to_many_field)
+            if self.backref not in '!+':
+                many_to_many_field = ManyToManyField(
+                    self.model,
+                    backref=name,
+                    through_model=self.through_model,
+                    on_delete=self._on_delete,
+                    on_update=self._on_update,
+                    _is_backref=True)
+                self.rel_model._meta.add_field(self.backref, many_to_many_field)
 
     def get_models(self):
         return [model for _, model in sorted((

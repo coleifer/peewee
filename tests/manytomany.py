@@ -446,6 +446,9 @@ class TestManyToManyBackrefBehavior(ModelTestCase):
         engl.students2.add([huey, zaizee])
 
     def test_manytomanyfield_disabled_backref(self):
+        # backref='+' adds no reverse M2M accessor on Student.
+        self.assertNotIn('+', Student._meta.manytomany)
+
         math = Course.get(name='math')
         query = math.students.order_by(Student.name)
         self.assertEqual([s.name for s in query], ['huey', 'zaizee'])

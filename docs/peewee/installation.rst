@@ -72,12 +72,12 @@ following drivers are supported out of the box:
 +-----------------------+----------------------------+--------------------------------------------+
 | MySQL (alternate)     | ``mysql-connector-python`` | :class:`.MySQLConnectorDatabase`           |
 +-----------------------+----------------------------+--------------------------------------------+
-| MariaDB (alternate)   | ``mariadb-connector``      | :class:`.MariaDBConnectorDatabase`         |
+| MariaDB (alternate)   | ``mariadb``                | :class:`.MariaDBConnectorDatabase`         |
 +-----------------------+----------------------------+--------------------------------------------+
 | CockroachDB           | ``psycopg`` (2 or 3)       | :class:`.CockroachDatabase`                |
 +-----------------------+----------------------------+--------------------------------------------+
 | Postgres (extensions) | ``psycopg`` (2 or 3)       | :class:`.PostgresqlExtDatabase`            |
 +-----------------------+----------------------------+--------------------------------------------+
 
-The three bolded rows cover the majority of deployments. All others are
+The bolded rows cover the majority of deployments. All others are
 optional; install their drivers when needed.

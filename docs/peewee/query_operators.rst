@@ -216,14 +216,12 @@ Now you can use these custom operators to build richer queries:
 Expressions
 -----------
 
-Peewee is designed to provide a simple, expressive, and pythonic way of
-constructing SQL queries. This section will provide a quick overview of some
-common types of expressions.
+This section gives an overview of common expression types.
 
 Two common types of objects that are composed to create expressions:
 
 * :class:`Field` instances
-* SQL aggregations and functions using :class:`fn`
+* SQL aggregations and functions using :func:`fn`
 
 We will assume a simple "User" model with fields for username and other things.
 It looks like this:
@@ -260,8 +258,8 @@ arbitrary depth:
    # User's username is either charlie or charles
    (User.username == 'charlie') | (User.username == 'charles')
 
-   # User is active and not a superuser.
-   (User.is_active & ~User.is_superuser)
+   # User is active and not an admin.
+   (User.is_active & ~User.is_admin)
 
 Comparisons can be used with functions as well:
 
@@ -286,7 +284,7 @@ Expressions allow us to do *atomic updates*:
    # when a user logs in we want to increment their login count:
    User.update(login_count=User.login_count + 1).where(User.id == user_id)
 
-Expressions can be used in all parts of a query, so experiment!
+Expressions can be used in all parts of a query.
 
 Row values
 ^^^^^^^^^^
@@ -368,10 +366,8 @@ parameters can be fields, values, subqueries, or even nested functions.
 Nesting function calls
 ^^^^^^^^^^^^^^^^^^^^^^
 
-Suppose you need to want to get a list of all users whose username begins with
-*a*. There are a couple ways to do this, but one method might be to use some
-SQL functions like *LOWER* and *SUBSTR*. To use arbitrary SQL functions, use
-the special :func:`fn` object to construct queries:
+To get all users whose username begins with *a*, use SQL functions like *LOWER*
+and *SUBSTR* via the :func:`fn` object:
 
 .. code-block:: python
 
@@ -388,8 +384,7 @@ the special :func:`fn` object to construct queries:
 SQL Helper
 ----------
 
-There are times when you may want to simply pass in some arbitrary sql. You can
-do this using the special :class:`SQL` class. One use-case is when
+To pass arbitrary SQL, use the special :class:`SQL` class. One use-case is
 referencing an alias:
 
 .. code-block:: python
@@ -404,7 +399,7 @@ referencing an alias:
    # Now we will order by the count, which was aliased to "ct"
    query = query.order_by(SQL('ct'))
 
-   # You could, of course, also write this as:
+   # Or equivalently:
    query = query.order_by(fn.COUNT(Tweet.id))
 
 There are two ways to execute hand-crafted SQL statements with peewee:

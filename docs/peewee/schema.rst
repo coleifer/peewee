@@ -36,10 +36,8 @@ Indexes declared in ``Meta.indexes`` and via :meth:`Model.add_index` are
 created along with the table.
 
 .. note::
-   A common pattern in web applications is to call ``db.create_tables(MODELS, safe=True)``
-   once at startup. This ensures all tables exist without failing on an already-
-   initialized database. It does **not** apply schema changes - for that, see
-   :ref:`migrations`.
+   ``create_tables`` creates missing tables but does **not** apply schema
+   changes to existing ones. For that, see :ref:`migrations`.
 
 Dropping Tables
 ---------------
@@ -55,8 +53,8 @@ multiple times. To disable this, pass ``safe=False``.
 
    db.drop_tables([User, Tweet, Favorite], safe=False)
 
-Pass ``cascade=True`` (Postgresql and MySQL) to let the database handle
-dependency ordering:
+Pass ``cascade=True`` on Postgresql to drop dependent objects and let the
+database handle ordering (MySQL parses but ignores CASCADE):
 
 .. code-block:: python
 
@@ -113,8 +111,8 @@ Schema Migrations
 -----------------
 
 Peewee does not include a built-in migration system. For schema changes in an
-existing deployment - adding columns, dropping columns, renaming tables,
-modifying indexes - use one of the following approaches.
+existing deployment (adding columns, dropping columns, renaming tables,
+modifying indexes), use one of the following approaches.
 
 Playhouse migrate module
 ^^^^^^^^^^^^^^^^^^^^^^^^^
