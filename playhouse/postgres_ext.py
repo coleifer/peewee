@@ -1,6 +1,5 @@
 import json
 import logging
-import uuid
 
 from peewee import *
 from peewee import ColumnBase
