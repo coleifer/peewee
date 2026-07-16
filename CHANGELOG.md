@@ -7,6 +7,10 @@ https://github.com/coleifer/peewee/releases
 
 ## master
 
+[View commits](https://github.com/coleifer/peewee/compare/4.2.4...master)
+
+## 4.2.4
+
 * Fix derived table joined in an expression subquery losing its FROM alias.
 * Fix default `Model.select()` used as a FROM/JOIN source reduced to its pk.
 * Fix compound/subquery SELECT-list column emitting a phantom alias.
@@ -15,7 +19,7 @@ https://github.com/coleifer/peewee/releases
 * Fix two-FK `.join(on=...)` mis-attaching rows when the fk is on the rhs.
 * Fix `ON CONFLICT ... DO NOTHING` dropping the target/where/constraint.
 
-[View commits](https://github.com/coleifer/peewee/compare/4.2.3...master)
+[View commits](https://github.com/coleifer/peewee/compare/4.2.3...4.2.4)
 
 ## 4.2.3
 
