@@ -5449,8 +5449,10 @@ class ForeignKeyAccessor(FieldAccessor):
         else:
             fk_value = instance.__data__.get(self.name)
             instance.__data__[self.name] = obj
-            if (obj != fk_value or obj is None) and \
-               self.name in instance.__rel__:
+            # A cached miss (None) is always invalidated by assignment.
+            if self.name in instance.__rel__ and (
+                    obj != fk_value or obj is None or
+                    instance.__rel__[self.name] is None):
                 del instance.__rel__[self.name]
         instance._dirty.add(self.name)
 
@@ -5479,9 +5481,10 @@ class ObjectIdAccessor(object):
         if instance is not None:
             value = instance.__data__.get(self.field.name)
             # Pull the object-id from the related object if it is not set.
-            if value is None and self.field.name in instance.__rel__:
-                rel_obj = instance.__rel__[self.field.name]
-                value = getattr(rel_obj, self.field.rel_field.name)
+            if value is None:
+                rel_obj = instance.__rel__.get(self.field.name)
+                if rel_obj is not None:
+                    value = getattr(rel_obj, self.field.rel_field.name)
             return value
         return self.field
 
@@ -9005,14 +9008,19 @@ class ModelCursorWrapper(BaseModelCursorWrapper):
                                                     is_model(constructor))
 
                     src_ctor = self.key_to_constructor.get(curr)
-                    # (src, attr, dest, src is dict?, join type, is outer?).
+                    is_fk = (src_ctor is not None and src_ctor[1] and
+                             isinstance(src_ctor[0]._meta.fields.get(attr),
+                                        ForeignKeyField))
+                    # (src, attr, dest, src is dict?, join type, is outer?,
+                    # attr is src's fk?).
                     self.src_to_dest.append((
                         curr,
                         attr,
                         key,
                         src_ctor is not None and not src_ctor[1],
                         join_type,
-                        'LEFT' in join_type or 'FULL' in join_type))
+                        'LEFT' in join_type or 'FULL' in join_type,
+                        is_fk))
 
                     accum.append(key)
 
@@ -9059,7 +9067,7 @@ class ModelCursorWrapper(BaseModelCursorWrapper):
 
         # Pre-compute join-graph reachability.
         self._dest_reachable = {}
-        for _, _, dest, _, _, _ in self.src_to_dest:
+        for _, _, dest, _, _, _, _ in self.src_to_dest:
             if dest not in self.joins:
                 continue
             reachable = set()
@@ -9102,7 +9110,7 @@ class ModelCursorWrapper(BaseModelCursorWrapper):
                 setattr(instance, column, value)
 
         # Need to do some analysis on the joins before this.
-        for (src, attr, dest, is_dict, _, is_outer) in self.src_to_dest:
+        for (src, attr, dest, is_dict, _, is_outer, is_fk) in self.src_to_dest:
             instance = objects.get(src)
             joined_instance = objects.get(dest)
             if joined_instance is None and dest not in objects:
@@ -9128,6 +9136,9 @@ class ModelCursorWrapper(BaseModelCursorWrapper):
 
             if is_dict:
                 instance[attr] = joined_instance
+            elif is_fk and joined_instance is None:
+                # Cache the miss without clearing the fk id on the source.
+                instance.__rel__[attr] = None
             else:
                 setattr(instance, attr, joined_instance)
 

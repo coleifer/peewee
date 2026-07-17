@@ -7,6 +7,12 @@ https://github.com/coleifer/peewee/releases
 
 ## master
 
+* A missed outer join is now cached as an absent relation instead of being
+  written through the foreign-key descriptor. The fk id on the source
+  instance keeps the column's value (previously it was overwritten with
+  `None`), and accessing the attribute on a non-null fk returns `None`
+  instead of raising `DoesNotExist`.
+
 [View commits](https://github.com/coleifer/peewee/compare/4.2.5...master)
 
 ## 4.2.5

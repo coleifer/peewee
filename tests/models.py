@@ -6885,18 +6885,26 @@ class OJNoteNoFK(TestModel):
         table_name = 'oj_note'
 
 
-class TestOuterJoinHydratesNone(ModelTestCase):
+class OJNoteReq(TestModel):
+    # Same table as OJNote, but declares the fk as non-null.
+    author = ForeignKeyField(OJUser)
+    content = TextField()
+    class Meta:
+        table_name = 'oj_note'
+
+
+class TestOuterJoinPopulateNone(ModelTestCase):
     requires = [OJOrg, OJUser, OJNote]
 
     def setUp(self):
-        super(TestOuterJoinHydratesNone, self).setUp()
-        acme = OJOrg.create(name='acme')
-        huey = OJUser.create(org=acme, name='huey')
-        zaizee = OJUser.create(org=None, name='zaizee')  # No org.
-        OJUser.create(org=acme, name='mickey')  # No notes.
-        OJNote.create(author=huey, content='meow')
+        super(TestOuterJoinPopulateNone, self).setUp()
+        self.acme = OJOrg.create(name='acme')
+        self.huey = OJUser.create(org=self.acme, name='huey')
+        self.zaizee = OJUser.create(org=None, name='zaizee')  # No org.
+        OJUser.create(org=self.acme, name='mickey')  # No notes.
+        OJNote.create(author=self.huey, content='meow')
         OJNote.create(author=None, content='???')  # No author.
-        OJNote.create(author=zaizee, content='zzz')
+        OJNote.create(author=self.zaizee, content='zzz')
 
     def assertNotes(self, query, expected, attr='author', model=OJNote):
         # Populate the relation as None.
@@ -7036,6 +7044,112 @@ class TestOuterJoinHydratesNone(ModelTestCase):
             [('meow', 'huey', 'acme'), ('???', None, None),
              ('zzz', None, None)],
             model=OJNoteNoFK)
+
+    def test_null_columns_vs_missed_join(self):
+        # A miss is detected by every selected column coming back NULL, so
+        # a matched row whose selected columns are all NULL also reads as
+        # None (zaizee's row joins, but his org_id is NULL).
+        query = (OJNote.select(OJNote, OJUser.org)
+                 .join(OJUser, JOIN.LEFT_OUTER))
+        with self.assertQueryCount(1):
+            accum = [(n.content, n.author is None)
+                     for n in query.order_by(OJNote.id)]
+        self.assertEqual(accum, [('meow', False), ('???', True),
+                                 ('zzz', True)])
+
+        # Selecting the pk disambiguates: only the true miss is None.
+        query = (OJNote.select(OJNote, OJUser.id, OJUser.org)
+                 .join(OJUser, JOIN.LEFT_OUTER))
+        with self.assertQueryCount(1):
+            accum = []
+            for note in query.order_by(OJNote.id):
+                a = note.author
+                accum.append((note.content,
+                              a.id if a is not None else None,
+                              a.org_id if a is not None else None))
+        self.assertEqual(accum, [
+            ('meow', self.huey.id, self.acme.id),
+            ('???', None, None),
+            ('zzz', self.zaizee.id, None)])
+
+    def test_missed_join_preserves_fk_id(self):
+        # The miss is cached on the relation rather than written through the
+        # fk descriptor, so author_id keeps the row's column value.
+        cond = (OJNote.author == OJUser.id) & (OJUser.name != 'zaizee')
+        query = (OJNote.select(OJNote, OJUser)
+                 .join(OJUser, JOIN.LEFT_OUTER, on=cond))
+        with self.assertQueryCount(1):
+            notes = list(query.order_by(OJNote.id))
+            accum = [(n.content, n.author is None, n.author_id, n.is_dirty())
+                     for n in notes]
+        self.assertEqual(accum, [
+            ('meow', False, self.huey.id, False),
+            ('???', True, None, False),
+            ('zzz', True, self.zaizee.id, False)])
+
+        # Assigning the fk id invalidates the cached miss and lazy-loads.
+        zzz = notes[2]
+        zzz.author_id = self.zaizee.id
+        with self.assertQueryCount(1):
+            self.assertEqual(zzz.author.name, 'zaizee')
+
+        # A custom attr never touches the fk.
+        query = (OJNote.select(OJNote, OJUser)
+                 .join(OJUser, JOIN.LEFT_OUTER, on=cond, attr='u'))
+        with self.assertQueryCount(1):
+            accum = [(n.content, n.u is None, n.author_id)
+                     for n in query.order_by(OJNote.id)]
+        self.assertEqual(accum, [
+            ('meow', False, self.huey.id),
+            ('???', True, None),
+            ('zzz', True, self.zaizee.id)])
+
+    def test_missed_join_not_null_fk(self):
+        # A miss on a non-null fk reads as None rather than raising
+        # DoesNotExist, and does not attempt a lazy-load.
+        cond = (OJNoteReq.author == OJUser.id) & (OJUser.name != 'zaizee')
+        query = (OJNoteReq.select(OJNoteReq, OJUser)
+                 .join(OJUser, JOIN.LEFT_OUTER, on=cond))
+        with self.assertQueryCount(1):
+            accum = [(n.content, n.author is None, n.author_id)
+                     for n in query.order_by(OJNoteReq.id)]
+        self.assertEqual(accum, [
+            ('meow', False, self.huey.id),
+            ('???', True, None),
+            ('zzz', True, self.zaizee.id)])
+
+    def test_inner_join_null_columns(self):
+        # Only outer joins populates None: an inner join leaves the attr
+        # unset when all selected columns are NULL, and the fk lazy-loads.
+        query = OJNote.select(OJNote, OJUser.org).join(OJUser)
+        with self.assertQueryCount(1):
+            notes = list(query.order_by(OJNote.id))
+            self.assertEqual([n.content for n in notes], ['meow', 'zzz'])
+        with self.assertQueryCount(0):
+            self.assertIsNotNone(notes[0].author)
+        with self.assertQueryCount(1):
+            self.assertEqual(notes[1].author.name, 'zaizee')
+
+    def test_skip_intermediate_model(self):
+        # No user columns are selected: a matched user populates as an empty
+        # shell carrying the org, or None when the org side is NULL too.
+        query = (OJNote.select(OJNote, OJOrg)
+                 .join(OJUser, JOIN.LEFT_OUTER)
+                 .join(OJOrg, JOIN.LEFT_OUTER))
+        with self.assertQueryCount(1):
+            accum = []
+            for note in query.order_by(OJNote.id):
+                a = note.author
+                if a is None:
+                    accum.append((note.content, True, None, None))
+                else:
+                    org = a.org
+                    accum.append((note.content, False, a.name,
+                                  org.name if org is not None else None))
+        self.assertEqual(accum, [
+            ('meow', False, None, 'acme'),  # Shell: unselected name is None.
+            ('???', True, None, None),
+            ('zzz', True, None, None)])
 
 
 class TestLikeColumnValue(ModelTestCase):

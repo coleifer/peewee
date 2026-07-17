@@ -828,6 +828,41 @@ or any other source that is present in the query's FROM / JOIN list. If the
 target is not selected, peewee raises a :exc:`ValueError` when building the
 result set.
 
+Outer joins and missing rows
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+When a ``LEFT OUTER`` (or ``FULL``) join finds no matching row, the join
+attribute is populated as ``None``:
+
+.. code-block:: python
+
+   query = (User
+            .select(User, Tweet)
+            .join(Tweet, JOIN.LEFT_OUTER))
+
+   for user in query:
+       if user.tweet is not None:
+           print(user.username, user.tweet.content)
+       else:
+           print(user.username, 'has no tweets')
+
+Peewee detects a missing row by checking whether every column selected from
+the joined source came back ``NULL``. As a result:
+
+* A row that *did* match, but whose selected columns all happen to be ``NULL``,
+  is indistinguishable from a miss and also populates as ``None``. Include a
+  column that is never ``NULL`` (typically the primary key) in the select
+  when the two cases must be told apart.
+* Only outer joins populate ``None``. With an inner join the attribute is left
+  unset, so a foreign-key attribute falls back to its usual behavior of
+  lazy-loading the related row on access.
+
+When the join attribute is the foreign key itself (the default in the forward
+direction), a miss does not disturb the foreign-key id on the instance. With
+a join predicate more restrictive than the foreign key, for example joining
+against a filtered subquery, the attribute reads as ``None`` while the
+``<fk>_id`` attribute still contains and reports the column's value.
+
 .. _manytomany:
 
 Many-to-Many Relationships
