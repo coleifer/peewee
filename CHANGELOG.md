@@ -7,9 +7,13 @@ https://github.com/coleifer/peewee/releases
 
 ## master
 
+[View commits](https://github.com/coleifer/peewee/compare/4.2.5...master)
+
+## 4.2.5
+
 * Fix anonymous sub-select keeping a stale `id()`-based hash after `clone()`.
 
-[View commits](https://github.com/coleifer/peewee/compare/4.2.4...master)
+[View commits](https://github.com/coleifer/peewee/compare/4.2.4...4.2.5)
 
 ## 4.2.4
 
