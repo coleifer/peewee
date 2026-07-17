@@ -901,6 +901,15 @@ class _HashableSource(object):
         self._alias = name
         self._update_hash()
 
+    def clone(self):
+        # clone() copies __dict__ without running __init__, so the copy would
+        # otherwise inherit the source's hash. An anonymous sub-select hashes
+        # on id(self), and the source may be garbage-collected, leaving the
+        # copy keyed on an address a later object can be allocated at.
+        clone = super(_HashableSource, self).clone()
+        clone._update_hash()
+        return clone
+
     def _update_hash(self):
         self._hash = self._get_hash()
 

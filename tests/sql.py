@@ -3542,3 +3542,20 @@ class TestContextAndAliasManager(BaseTestCase):
         s = {t1, t3}
         self.assertIn(t2, s)  # Same as t1.
         self.assertEqual(len(s), 2)
+
+    def test_subselect_clone_rehashes(self):
+        # Without a re-hash the clone stays keyed on the source's address, so
+        # it compares equal to the source and collides with it in the alias
+        # manager. Worse, once the source is collected, an unrelated object
+        # allocated at that address hashes the same.
+        base = User.select(User.c.id)
+        clone = base.where(User.c.username == 'huey')
+        self.assertNotEqual(hash(base), hash(clone))
+        self.assertFalse(base == clone)
+
+        am = AliasManager()
+        self.assertNotEqual(am.add(base), am.add(clone))
+
+        # An explicit alias is content-based, so it survives cloning.
+        aliased = User.select(User.c.id).alias('u')
+        self.assertEqual(hash(aliased), hash(aliased.where(User.c.id > 1)))
