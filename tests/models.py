@@ -6862,6 +6862,182 @@ class TestCompoundExistsRegression(ModelTestCase):
         self.assertEqual([u.username for u in query], ['u1', 'u2'])
 
 
+class OJOrg(TestModel):
+    name = TextField()
+
+
+class OJUser(TestModel):
+    org = ForeignKeyField(OJOrg, null=True)
+    name = TextField()
+
+
+class OJNote(TestModel):
+    author = ForeignKeyField(OJUser, null=True)
+    content = TextField()
+
+
+class OJNoteNoFK(TestModel):
+    # Same table as OJNote, but the author column is a plain integer, so the
+    # join attribute is not a field descriptor.
+    author_id = IntegerField(null=True)
+    content = TextField()
+    class Meta:
+        table_name = 'oj_note'
+
+
+class TestOuterJoinHydratesNone(ModelTestCase):
+    requires = [OJOrg, OJUser, OJNote]
+
+    def setUp(self):
+        super(TestOuterJoinHydratesNone, self).setUp()
+        acme = OJOrg.create(name='acme')
+        huey = OJUser.create(org=acme, name='huey')
+        zaizee = OJUser.create(org=None, name='zaizee')  # No org.
+        OJUser.create(org=acme, name='mickey')  # No notes.
+        OJNote.create(author=huey, content='meow')
+        OJNote.create(author=None, content='???')  # No author.
+        OJNote.create(author=zaizee, content='zzz')
+
+    def assertNotes(self, query, expected, attr='author', model=OJNote):
+        # Populate the relation as None.
+        with self.assertQueryCount(1):
+            accum = []
+            for note in query.order_by(model.id):
+                rel = getattr(note, attr)
+                accum.append((note.content,
+                              rel.name if rel is not None else None))
+        self.assertEqual(accum, expected)
+
+    def test_join_fk(self):
+        expected = [('meow', 'huey'), ('???', None), ('zzz', 'zaizee')]
+        self.assertNotes(
+            OJNote.select(OJNote, OJUser).join(OJUser, JOIN.LEFT_OUTER),
+            expected)
+
+        UA = OJUser.alias()
+        query = OJNote.select(OJNote, UA).join(UA, JOIN.LEFT_OUTER)
+        self.assertNotes(query, expected)
+
+        # The subquery holds only huey, so zaizee's note misses as well.
+        subq = OJUser.select().where(OJUser.name == 'huey')
+        query = (OJNote.select(OJNote, subq.c.id, subq.c.name)
+                 .join(subq, JOIN.LEFT_OUTER, on=OJNote.author == subq.c.id))
+        self.assertNotes(
+            query,
+            [('meow', 'huey'), ('???', None), ('zzz', None)])
+
+    def test_join_custom_attr(self):
+        # attr= is a plain attribute, not a field descriptor.
+        expected = [('meow', 'huey'), ('???', None), ('zzz', 'zaizee')]
+
+        query = (OJNote.select(OJNote, OJUser)
+                 .join(OJUser, JOIN.LEFT_OUTER, attr='u'))
+        self.assertNotes(query, expected, attr='u')
+
+        UA = OJUser.alias()
+        query = OJNote.select(OJNote, UA).join(UA, JOIN.LEFT_OUTER, attr='u')
+        self.assertNotes(query, expected, attr='u')
+
+        subq = OJUser.select().where(OJUser.name == 'huey')
+        query = (OJNote.select(OJNote, subq.c.id, subq.c.name)
+                 .join(subq, JOIN.LEFT_OUTER, on=OJNote.author == subq.c.id,
+                       attr='u'))
+        self.assertNotes(
+            query,
+            [('meow', 'huey'), ('???', None), ('zzz', None)],
+            attr='u')
+
+    def test_join_without_fk(self):
+        expected = [('meow', 'huey'), ('???', None), ('zzz', 'zaizee')]
+
+        query = (OJNoteNoFK.select(OJNoteNoFK, OJUser)
+                 .join(OJUser, JOIN.LEFT_OUTER,
+                       on=OJNoteNoFK.author_id == OJUser.id, attr='author'))
+        self.assertNotes(query, expected, model=OJNoteNoFK)
+
+        UA = OJUser.alias()
+        query = (OJNoteNoFK.select(OJNoteNoFK, UA)
+                 .join(UA, JOIN.LEFT_OUTER, on=OJNoteNoFK.author_id == UA.id,
+                       attr='author'))
+        self.assertNotes(query, expected, model=OJNoteNoFK)
+
+        subq = OJUser.select().where(OJUser.name == 'huey')
+        query = (OJNoteNoFK.select(OJNoteNoFK, subq.c.id, subq.c.name)
+                 .join(subq, JOIN.LEFT_OUTER,
+                       on=OJNoteNoFK.author_id == subq.c.id, attr='author'))
+        self.assertNotes(
+            query,
+            [('meow', 'huey'), ('???', None), ('zzz', None)],
+            model=OJNoteNoFK)
+
+    def assertUsers(self, query, attr='ojnote'):
+        with self.assertQueryCount(1):
+            accum = []
+            for user in query.order_by(OJUser.id):
+                note = getattr(user, attr)
+                accum.append((user.name,
+                              note.content if note is not None else None))
+        self.assertEqual(accum, [('huey', 'meow'), ('zaizee', 'zzz'),
+                                 ('mickey', None)])
+
+    def test_join_backref(self):
+        # The foreign key is on the right-hand model, so the attribute
+        # defaults to the model name and is not a descriptor on OJUser.
+        self.assertUsers(
+            OJUser.select(OJUser, OJNote).join(OJNote, JOIN.LEFT_OUTER))
+
+        NA = OJNote.alias()
+        self.assertUsers(
+            OJUser.select(OJUser, NA).join(NA, JOIN.LEFT_OUTER))
+
+        query = (OJUser.select(OJUser, OJNote)
+                 .join(OJNote, JOIN.LEFT_OUTER, attr='n'))
+        self.assertUsers(query, attr='n')
+
+    def assertOrgs(self, query, expected, model=OJNote):
+        with self.assertQueryCount(1):
+            accum = []
+            for note in query.order_by(model.id):
+                author = note.author
+                org = author.org if author is not None else None
+                accum.append((
+                    note.content,
+                    author.name if author is not None else None,
+                    org.name if org is not None else None))
+        self.assertEqual(accum, expected)
+
+    def test_multi_hop(self):
+        # "???" has no author at all (the intervening model is absent), and
+        # "zzz" has an author with no org (the leaf is absent).
+        expected = [('meow', 'huey', 'acme'), ('???', None, None),
+                    ('zzz', 'zaizee', None)]
+        self.assertOrgs(
+            (OJNote.select(OJNote, OJUser, OJOrg)
+             .join(OJUser, JOIN.LEFT_OUTER)
+             .join(OJOrg, JOIN.LEFT_OUTER)), expected)
+
+        UA = OJUser.alias()
+        self.assertOrgs(
+            (OJNote.select(OJNote, UA, OJOrg)
+             .join(UA, JOIN.LEFT_OUTER)
+             .join(OJOrg, JOIN.LEFT_OUTER)), expected)
+
+        u_subq = OJUser.select().where(OJUser.name == 'huey')
+        o_subq = OJOrg.select()
+        query = (OJNoteNoFK
+                 .select(OJNoteNoFK, u_subq.c.id, u_subq.c.name,
+                         u_subq.c.org_id, o_subq.c.id, o_subq.c.name)
+                 .join(u_subq, JOIN.LEFT_OUTER,
+                       on=OJNoteNoFK.author_id == u_subq.c.id, attr='author')
+                 .join(o_subq, JOIN.LEFT_OUTER,
+                       on=u_subq.c.org_id == o_subq.c.id, attr='org'))
+        self.assertOrgs(
+            query,
+            [('meow', 'huey', 'acme'), ('???', None, None),
+             ('zzz', None, None)],
+            model=OJNoteNoFK)
+
+
 class TestLikeColumnValue(ModelTestCase):
     requires = [User, Tweet]
 
