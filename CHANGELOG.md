@@ -15,6 +15,9 @@ https://github.com/coleifer/peewee/releases
   and MySQL rejects as an invalid path.
 * Reflection/pwiz map MySQL JSON columns to the core `JSONField` instead of
   emitting `from playhouse.mysql_ext import *` for a re-exported field.
+* `playhouse.pwasyncio` logs to the `peewee.pwasyncio` logger rather than
+  `playhouse.pwasyncio`, matching the logger hierarchy used by the other
+  extension modules.
 * A `lateral()` source joined without `on=` defaults to `ON true`. Previously
   model queries inferred a foreign-key predicate against the subquery, which
   raised `AttributeError` when the fk column was not selected and silently

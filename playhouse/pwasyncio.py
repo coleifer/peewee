@@ -31,7 +31,7 @@ except ImportError:
     aiomysql = None
 
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger('peewee.pwasyncio')
 
 
 class MissingGreenletBridge(RuntimeError):
@@ -211,7 +211,7 @@ class AsyncDatabaseMixin(object):
         try:
             return await_(self.aexecute_sql(sql, params or ()))
         except MissingGreenletBridge as exc:
-            errmsg = f'Attempted query outside greenlet runner: {sql}.'
+            errmsg = 'Attempted query outside greenlet runner: %s.' % sql
             raise MissingGreenletBridge(errmsg + _BRIDGE_ERR_HINT) from exc
 
     async def aexecute_sql(self, sql, params=None):

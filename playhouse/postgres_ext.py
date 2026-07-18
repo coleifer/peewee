@@ -58,8 +58,6 @@ JSONB_PATH_MATCH = '@@'
 
 class Json(Node):
     # Fallback JSON handler.
-    __slots__ = ('value',)
-
     def __init__(self, value, dumps=None):
         self.value = value
         self.dumps = dumps or json.dumps
@@ -423,6 +421,7 @@ class JsonPath(_JsonLookupBase):
 class JSONField(FieldDatabaseHook, Field):
     field_type = 'JSON'
     _json_datatype = 'json'
+    _adapter_json_type = 'json_type'
 
     def __init__(self, dumps=None, **kwargs):
         self._dumps = dumps
@@ -438,7 +437,8 @@ class JSONField(FieldDatabaseHook, Field):
             self.json_type = Json
             self.cast_json_case = True
         else:
-            self.json_type = database._adapter.json_type
+            self.json_type = getattr(database._adapter,
+                                     self._adapter_json_type)
             self.cast_json_case = database._adapter.cast_json_case
 
         if self._dumps:
@@ -505,22 +505,8 @@ def _jsonpath(expr):
 class BinaryJSONField(IndexedFieldMixin, JSONField):
     field_type = 'JSONB'
     _json_datatype = 'jsonb'
+    _adapter_json_type = 'jsonb_type'
     __hash__ = Field.__hash__
-
-    def _db_hook(self, database):
-        if database is None or not hasattr(database, '_adapter'):
-            self.json_type = Json
-            self.cast_json_case = True
-        else:
-            self.json_type = database._adapter.jsonb_type
-            self.cast_json_case = database._adapter.cast_json_case
-
-        if self._dumps:
-            dumps = self._dumps
-            class _Json(self.json_type):
-                def __init__(self, value):
-                    super(_Json, self).__init__(value, dumps=dumps)
-            self.json_type = _Json
 
     def contains(self, other):
         if not isinstance(other, Node):
