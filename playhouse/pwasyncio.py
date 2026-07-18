@@ -1054,25 +1054,10 @@ class AsyncPgAtomic(_callable_context_manager):
             await self._abegin()
 
     async def __aenter__(self):
-        await self._abegin()
-        self.db._state.transactions.append(self)
-        return self
+        return await self.db.run(self.__enter__)
 
     async def __aexit__(self, exc_type, exc_val, exc_tb):
-        self.db._state.transactions.pop()
-        if exc_type:
-            await self.arollback(False)
-        else:
-            try:
-                await self.acommit(False)
-            except Exception:
-                # asyncpg marks the transaction FAILED when commit errors,
-                # making rollback raise too - don't mask the original.
-                try:
-                    await self.arollback(False)
-                except Exception:
-                    pass
-                raise
+        return await self.db.run(self.__exit__, exc_type, exc_val, exc_tb)
 
 
 class AsyncPostgresqlDatabase(AsyncDatabaseMixin, PostgresqlDatabase):
