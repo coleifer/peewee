@@ -1,5 +1,3 @@
-import json
-
 try:
     import mysql.connector as mysql_connector
 except ImportError:
@@ -16,11 +14,9 @@ from peewee import InterfaceError
 from peewee import JSONField
 from peewee import JSONPath
 from peewee import MySQLDatabase
-from peewee import Node
 from peewee import NodeList
 from peewee import OP
 from peewee import SQL
-from peewee import TextField
 from peewee import Value
 from peewee import fn
 from playhouse.pool import _PooledMySQLDatabase

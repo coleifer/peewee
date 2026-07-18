@@ -473,9 +473,6 @@ class _callable_context_manager(object):
 
 
 class Proxy(object):
-    """
-    Create a proxy or placeholder for another object.
-    """
     __slots__ = ('obj', '_callbacks')
 
     def __init__(self):
@@ -514,9 +511,6 @@ class Proxy(object):
 
 
 class DatabaseProxy(Proxy):
-    """
-    Proxy implementation specifically for proxying `Database` objects.
-    """
     __slots__ = ('obj', '_callbacks', '_Model')
 
     def connection_context(self):
@@ -1248,10 +1242,6 @@ class ColumnBase(Node):
         return Negated(self)
 
     def _e(op, inv=False):
-        """
-        Lightweight factory which returns a method that builds an Expression
-        consisting of the left-hand and right-hand operands, using `op`.
-        """
         def inner(self, rhs):
             if inv:
                 return Expression(rhs, op, self)
@@ -2397,6 +2387,19 @@ class SelectBase(_HashableSource, Source, SelectQuery):
         except IndexError:
             pass
 
+    def _subquery_parens(self, ctx):
+        # Parens are unnecessary when the sole argument of a function call.
+        if ctx.state.in_function and ctx.state.function_arg_count == 1:
+            return False
+        return ctx.subquery or (ctx.scope == SCOPE_SOURCE)
+
+    def _apply_subquery_alias(self, ctx):
+        # No alias inside a function, or when unaliased in an expr/projection.
+        if ctx.state.in_function or (self._alias is None and (
+                ctx.state.in_expr or ctx.state.in_projection)):
+            return ctx
+        return self.apply_alias(ctx)
+
 
 # QUERY IMPLEMENTATIONS.
 
@@ -2442,10 +2445,7 @@ class CompoundSelectQuery(SelectBase):
         # Call parent method to handle any CTEs.
         super(CompoundSelectQuery, self).__sql__(ctx)
 
-        outer_parens = ctx.subquery or (ctx.scope == SCOPE_SOURCE)
-        if ctx.state.in_function and ctx.state.function_arg_count == 1:
-            outer_parens = False
-        with ctx(parentheses=outer_parens):
+        with ctx(parentheses=self._subquery_parens(ctx)):
             # Snapshot the aliases assigned by the enclosing scope before
             # rendering either side. A correlated reference from the right-hand
             # query must resolve to one of these outer aliases; otherwise the
@@ -2476,10 +2476,7 @@ class CompoundSelectQuery(SelectBase):
             with ctx.scope_values():
                 self._apply_ordering(ctx)
 
-        if ctx.state.in_function or (self._alias is None and (
-                ctx.state.in_expr or ctx.state.in_projection)):
-            return ctx
-        return self.apply_alias(ctx)
+        return self._apply_subquery_alias(ctx)
 
 
 class Select(SelectBase):
@@ -2559,9 +2556,8 @@ class Select(SelectBase):
         self._group_by = grouping
 
     def group_by_extend(self, *values):
-        """@Node.copy used from group_by() call"""
         group_by = tuple(self._group_by or ()) + values
-        return self.group_by(*group_by)
+        return self.group_by(*group_by)  # Uses Node.copy.
 
     @Node.copy
     def having(self, *expressions):
@@ -2616,11 +2612,9 @@ class Select(SelectBase):
             'in_expr': False,
             'in_function': False,
             'in_projection': False,
-            'parentheses': is_subquery or (ctx.scope == SCOPE_SOURCE),
+            'parentheses': self._subquery_parens(ctx),
             'subquery': True,
         }
-        if ctx.state.in_function and ctx.state.function_arg_count == 1:
-            state['parentheses'] = False
 
         with ctx.scope_normal(**state):
             # Defer calling parent SQL until here. This ensures that any CTEs
@@ -2668,14 +2662,7 @@ class Select(SelectBase):
                 ctx.literal(' ')
                 ctx.sql(self._for_update)
 
-        # If the subquery is inside a function, on either side of an
-        # expression, or is a SELECT-list column (not a FROM source), and has
-        # no explicit alias, do not add an alias + AS.
-        if ctx.state.in_function or (self._alias is None and (
-                ctx.state.in_expr or ctx.state.in_projection)):
-            return ctx
-
-        return self.apply_alias(ctx)
+        return self._apply_subquery_alias(ctx)
 
 
 class _WriteQuery(Query):
@@ -5294,7 +5281,6 @@ class CursorWrapper(object):
         return row
 
     def iterator(self):
-        """Efficient one-pass iteration over the result set."""
         while True:
             try:
                 yield self.iterate(False)
@@ -5449,11 +5435,12 @@ class ForeignKeyAccessor(FieldAccessor):
         else:
             fk_value = instance.__data__.get(self.name)
             instance.__data__[self.name] = obj
-            # A cached miss (None) is always invalidated by assignment.
-            if self.name in instance.__rel__ and (
-                    obj != fk_value or obj is None or
-                    instance.__rel__[self.name] is None):
-                del instance.__rel__[self.name]
+            if self.name in instance.__rel__:
+                # Keep the cache only for a real instance w/unchanged fk id.
+                keep = (obj is not None and obj == fk_value and
+                        instance.__rel__[self.name] is not None)
+                if not keep:
+                    del instance.__rel__[self.name]
         instance._dirty.add(self.name)
 
 
@@ -5473,7 +5460,6 @@ class BackrefAccessor(object):
 
 
 class ObjectIdAccessor(object):
-    """Gives direct access to the underlying id"""
     def __init__(self, field):
         self.field = field
 
@@ -6574,7 +6560,7 @@ class ForeignKeyField(Field):
 
         if set_attribute:
             setattr(model, self.object_id_name, ObjectIdAccessor(self))
-            if self.backref not in '!+':
+            if self.backref not in ('+', '!'):
                 setattr(self.rel_model, self.backref,
                         self.backref_accessor_class(self))
 
@@ -6737,7 +6723,7 @@ class ManyToManyField(MetaField):
 
         if not self._is_backref:
             self.backref = self.backref or model._meta.name + 's'
-            if self.backref not in '!+':
+            if self.backref not in ('+', '!'):
                 many_to_many_field = ManyToManyField(
                     self.model,
                     backref=name,
@@ -7935,8 +7921,7 @@ class Model(Node, metaclass=ModelBase):
 
     @property
     def dirty_field_names(self):
-        return [f.name for f in self._meta.sorted_fields
-                if f.name in self._dirty]
+        return [f.name for f in self.dirty_fields]
 
     def dependencies(self, search_nullable=True, exclude_null_children=False):
         model_class = type(self)
@@ -8075,7 +8060,6 @@ class Model(Node, metaclass=ModelBase):
 
 
 class ModelAlias(Node):
-    """Provide a separate reference to a model in a query."""
     def __init__(self, model, alias=None):
         self.__dict__['model'] = model
         self.__dict__['alias'] = alias
@@ -8805,13 +8789,11 @@ def safe_python_value(conv_func):
 
 
 def _resolve_model_columns(cursor, model, select):
-    """Resolve cursor columns against a model's selected nodes.
-
-    Returns ``(columns, fields, converters, no_convert, convert)``:
-    ``columns`` and ``fields`` are aligned per-column lists, ``converters``
-    is a per-column ``python_value`` callable or ``None``, and
-    ``no_convert``/``convert`` are the index partitions of ``converters``.
-    """
+    # Resolve cursor columns against a model's selected nodes. Returns a tuple
+    # of ``(columns, fields, converters, no_convert, convert)``:
+    # ``columns`` and ``fields`` are aligned per-column lists,
+    # ``converters`` is a per-column ``python_value`` callable or ``None``,
+    # ``no_convert``/``convert`` are the index partitions of ``converters``.
     combined = model._meta.combined
     table = model._meta.table
     description = cursor.description
@@ -9011,14 +8993,13 @@ class ModelCursorWrapper(BaseModelCursorWrapper):
                     is_fk = (src_ctor is not None and src_ctor[1] and
                              isinstance(src_ctor[0]._meta.fields.get(attr),
                                         ForeignKeyField))
-                    # (src, attr, dest, src is dict?, join type, is outer?,
+                    # (src, attr, dest, src is dict?, is outer?,
                     # attr is src's fk?).
                     self.src_to_dest.append((
                         curr,
                         attr,
                         key,
                         src_ctor is not None and not src_ctor[1],
-                        join_type,
                         'LEFT' in join_type or 'FULL' in join_type,
                         is_fk))
 
@@ -9067,7 +9048,7 @@ class ModelCursorWrapper(BaseModelCursorWrapper):
 
         # Pre-compute join-graph reachability.
         self._dest_reachable = {}
-        for _, _, dest, _, _, _, _ in self.src_to_dest:
+        for _, _, dest, _, _, _ in self.src_to_dest:
             if dest not in self.joins:
                 continue
             reachable = set()
@@ -9110,7 +9091,7 @@ class ModelCursorWrapper(BaseModelCursorWrapper):
                 setattr(instance, column, value)
 
         # Need to do some analysis on the joins before this.
-        for (src, attr, dest, is_dict, _, is_outer, is_fk) in self.src_to_dest:
+        for (src, attr, dest, is_dict, is_outer, is_fk) in self.src_to_dest:
             instance = objects.get(src)
             joined_instance = objects.get(dest)
             if joined_instance is None and dest not in objects:
@@ -9137,7 +9118,7 @@ class ModelCursorWrapper(BaseModelCursorWrapper):
             if is_dict:
                 instance[attr] = joined_instance
             elif is_fk and joined_instance is None:
-                # Cache the miss without clearing the fk id on the source.
+                # None in __rel__ marks a verified-absent row; fk id is kept.
                 instance.__rel__[attr] = None
             else:
                 setattr(instance, attr, joined_instance)
@@ -9208,8 +9189,6 @@ def _parent_keys(parent_query, cols):
 
 
 def _relate_children(query, parent_query, pairs, strategy):
-    """Restrict a one-to-many child query to rows whose foreign key matches a
-    parent in parent_query. pairs are (child_fk, parent_key) field tuples."""
     if strategy == PREFETCH_TYPE.JOIN:
         sub = _parent_keys(parent_query, {pk for _, pk in pairs})
         on = reduce(operator.or_, [getattr(sub.c, pk.column_name) == fk
@@ -9221,8 +9200,6 @@ def _relate_children(query, parent_query, pairs, strategy):
 
 
 def _relate_parent(query, parent_query, pairs, strategy):
-    """Restrict a many-to-one query to the rows referenced by parent_query.
-    pairs are (child_ref, parent_fk) field tuples."""
     if strategy == PREFETCH_TYPE.JOIN:
         sub = _parent_keys(parent_query, [fk for _, fk in pairs])
         on = reduce(operator.or_, [ref == getattr(sub.c, fk.column_name)

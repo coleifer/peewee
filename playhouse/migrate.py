@@ -519,7 +519,6 @@ class PostgresqlMigrator(SchemaMigrator):
                 .sql(Entity(fk_constraint)))
 
 
-
 class CockroachDBMigrator(PostgresqlMigrator):
     explicit_create_foreign_key = True
     transactional_ddl = False

@@ -24,11 +24,6 @@ class MaxConnectionsExceeded(ValueError): pass
 PoolConnection = namedtuple('PoolConnection', ('timestamp', 'connection',
                                                'checked_out'))
 
-class _sentinel(object):
-    def __lt__(self, other):
-        return True
-
-
 def locked(fn):
     @functools.wraps(fn)
     def inner(self, *args, **kwargs):
@@ -103,12 +98,8 @@ class PooledDatabase(object):
     @locked
     def _connect(self):
         while self._connections:
-            try:
-                # Remove the oldest connection from the heap.
-                ts, _counter, conn = heapq.heappop(self._connections)
-            except IndexError:
-                break
-
+            # Remove the oldest connection from the heap.
+            ts, _counter, conn = heapq.heappop(self._connections)
             key = self.conn_key(conn)
             if self._is_closed(conn):
                 # Connection closed either by user or by driver - discard.

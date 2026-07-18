@@ -14,7 +14,6 @@ from peewee import merge_dict
 from peewee import sqlite3
 
 
-
 FTS3_MATCHINFO = 'pcx'
 FTS4_MATCHINFO = 'pcnalx'
 FTS_VERSION = 4

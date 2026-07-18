@@ -201,7 +201,7 @@ class CySqliteDatabase(SqliteDatabase):
                 log.log(level, 'Slow query %0.1fms: %s', ms, sql)
 
         self.trace(_trace, cysqlite.SQLITE_TRACE_PROFILE, expand_sql=expand_sql)
-        return True
+        return _trace
 
     def progress(self, fn, n=1):
         if fn is None:

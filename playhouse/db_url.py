@@ -24,8 +24,6 @@ def register_database(db_class, *names):
 
 def parseresult_to_dict(parsed, unquote_password=False, unquote_user=False):
 
-    # urlparse in python 2.6 is broken so query will be empty and instead
-    # appended to path complete with '?'
     path = parsed.path[1:]  # Ignore leading '/'.
     query = parsed.query
 
