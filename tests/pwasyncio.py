@@ -860,6 +860,25 @@ class IntegrationTests(object):
                     TestModel.create(name=f'item{i:02d}', value=i * 10)
         await self.db.run(_seed)
 
+    async def test_task_done_releases_to_waiters(self):
+        # Tasks that exit without aclose() must return their connections
+        # promptly so waiters blocked in the pool are not starved.
+        db = type(self.db)(self.db.database, pool_size=2, acquire_timeout=5,
+                           **self.db.connect_params)
+        try:
+            async def worker():
+                await db.aexecute_sql('SELECT 1')
+                await asyncio.sleep(0.2)
+
+            loop = asyncio.get_running_loop()
+            start = loop.time()
+            await asyncio.wait_for(
+                asyncio.gather(*[worker() for _ in range(4)]), timeout=4.0)
+            elapsed = loop.time() - start
+            self.assertTrue(elapsed < 2.0, 'workers starved: %.2fs' % elapsed)
+        finally:
+            await db.close_pool()
+
     async def test_amodel_create_get(self):
         u = await AUser.acreate(username='u1')
         self.assertIsNotNone(u.id)

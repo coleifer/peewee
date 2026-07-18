@@ -7,8 +7,11 @@ https://github.com/coleifer/peewee/releases
 
 ## master
 
-* Lateral joins honor a user-supplied `on=` predicate instead of silently
-  replacing it with `true`.
+* `playhouse.pwasyncio` releases connections back to the pool as soon as the
+  owning task completes. Previously they were only reclaimed on a later
+  `aconnect()`, so a fan-out wider than `pool_size` could starve waiting
+  acquirers into timeout. Only tasks that ended without calling `aclose()`
+  (by omission, exception or cancellation) were affected.
 * `JSONField` negative path indexes render as `$[last]` / `$[last-n]` on
   MySQL/MariaDB. Previously the sqlite-only `$[#-n]` form was emitted, which
   MariaDB evaluates to NULL (overwriting the column when used with `set()`)
@@ -16,18 +19,11 @@ https://github.com/coleifer/peewee/releases
 * Reflection/pwiz map MySQL JSON columns to the core `JSONField` instead of
   emitting `from playhouse.mysql_ext import *` for a re-exported field.
 * `playhouse.pwasyncio` logs to the `peewee.pwasyncio` logger rather than
-  `playhouse.pwasyncio`, matching the logger hierarchy used by the other
-  extension modules.
-* Fix `dataset` freeze/thaw of NULL values. Thawing a JSON export with a null
-  blob column crashed (`bytes.fromhex(None)`), null datetimes crashed under
-  `iso8601_datetimes=True`, and CSV imports stored `''` / `b''` into typed
-  columns where NULL belonged. Empty CSV cells now import as NULL for
-  non-text fields.
-* A `lateral()` source joined without `on=` defaults to `ON true`. Previously
-  model queries inferred a foreign-key predicate against the subquery, which
-  raised `AttributeError` when the fk column was not selected and silently
-  joined on the fk when it was, and table queries emitted no ON clause at
-  all, which is invalid SQL for an inner or left lateral join.
+  `playhouse.pwasyncio`.
+* Fix `dataset` freeze/thaw of NULL blob and datetime values. Empty CSV cells
+  now import as NULL for non-text fields.
+* Lateral joins honor a user-supplied `on=` predicate instead of silently
+  replacing it with `true`, and default to `ON true` when `on=` is omitted.
 
 [View commits](https://github.com/coleifer/peewee/compare/4.2.6...master)
 

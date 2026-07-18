@@ -102,12 +102,15 @@ class _State(object):
 
 
 class _ConnectionState(object):
-    def __init__(self):
+    def __init__(self, release=None):
         self._cv = contextvars.ContextVar('pwasyncio_state')
         # Central registry: task-id -> _State.  Allows close_pool() to
         # enumerate *all* live states and release their connections.
         self._states = {}
         self._orphaned_conns = []
+        self._release = release
+        # Strong refs: the loop holds tasks weakly, keep ours alive.
+        self._release_tasks = set()
 
     def _current(self):
         task = asyncio.current_task()
@@ -144,8 +147,27 @@ class _ConnectionState(object):
         tid = id(task)
         state = self._states.pop(tid, None)
         if state is not None and state.conn is not None and not state.closed:
-            self._orphaned_conns.append(state.conn)
+            conn = state.conn
             state.reset()
+            if self._release is not None:
+                try:
+                    t = asyncio.get_running_loop().create_task(
+                        self._safe_release(conn))
+                except RuntimeError:
+                    pass
+                else:
+                    self._release_tasks.add(t)
+                    t.add_done_callback(self._release_tasks.discard)
+                    return
+            # No release hook or no running loop, park for aconnect().
+            self._orphaned_conns.append(conn)
+
+    async def _safe_release(self, conn):
+        try:
+            await self._release(conn)
+        except Exception:
+            logger.warning('Error releasing connection of completed task',
+                           exc_info=True)
 
     @property
     def conn(self):
@@ -202,7 +224,7 @@ class AsyncDatabaseMixin(object):
         self._acquire_timeout = kwargs.pop('acquire_timeout', 10)
         super(AsyncDatabaseMixin, self).__init__(database, **kwargs)
 
-        self._state = _ConnectionState()
+        self._state = _ConnectionState(release=self._pool_release)
         self._pool = None
         self._pool_lock = asyncio.Lock()
         self._closing = False  # Guard against use during shutdown.
@@ -283,6 +305,12 @@ class AsyncDatabaseMixin(object):
         self._closing = True
         try:
             if self._pool:
+                # Wait for releases scheduled by task-done callbacks.  A
+                # completing task may schedule one during the await, so loop.
+                while self._state._release_tasks:
+                    await asyncio.gather(*list(self._state._release_tasks),
+                                         return_exceptions=True)
+
                 # Release connections held by any task still in the registry.
                 # We must clear each state BEFORE releasing the connection,
                 # because the await in _pool_release can let the event loop
