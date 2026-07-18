@@ -7,6 +7,9 @@ https://github.com/coleifer/peewee/releases
 
 ## master
 
+* Lateral joins honor a user-supplied `on=` predicate instead of silently
+  replacing it with `true`.
+
 [View commits](https://github.com/coleifer/peewee/compare/4.2.6...master)
 
 ## 4.2.6

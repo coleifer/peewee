@@ -2524,7 +2524,8 @@ class Select(SelectBase):
             raise ValueError('No sources to join on.')
         item = self._from_list.pop()
         if join_type == JOIN.LATERAL or join_type == JOIN.LEFT_LATERAL:
-            on = True
+            if on is None:
+                on = True
         self._from_list.append(Join(item, dest, join_type, on))
 
     def left_outer_join(self, dest, on=None):
@@ -8509,7 +8510,8 @@ class ModelSelect(BaseModelSelect, Select):
         src = self._join_ctx if src is None else src
 
         if join_type == JOIN.LATERAL or join_type == JOIN.LEFT_LATERAL:
-            on = True
+            if on is None:
+                on = True
         elif join_type != JOIN.CROSS:
             on, attr, constructor = self._normalize_join(src, dest, on, attr)
             if attr:

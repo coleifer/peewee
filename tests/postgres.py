@@ -1399,6 +1399,19 @@ class TestPostgresLateralJoin(ModelTestCase):
             ('b', 'b7'),
             ('c', None)])
 
+        # A user-supplied on= is honored rather than replaced with true. It
+        # filters the lateral's top-2 output, a1 was already cut by LIMIT.
+        query = (User
+                 .select(User.username, subq.c.content)
+                 .join(subq, JOIN.LEFT_LATERAL, on=(subq.c.content != 'a10'))
+                 .order_by(User.username, subq.c.timestamp))
+        results = [(u.username, u.content) for u in query]
+        self.assertEqual(results, [
+            ('a', 'a2'),
+            ('b', 'b4'),
+            ('b', 'b7'),
+            ('c', None)])
+
     @requires_models(User, Tweet)
     def test_full_join_no_related(self):
         self.create_data()

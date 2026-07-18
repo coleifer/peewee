@@ -1452,6 +1452,35 @@ class TestSelectQuery(BaseTestCase):
             'ORDER BY "t3"."timestamp" DESC LIMIT ?) AS "t2"'),
             [1])
 
+    def test_lateral_join_predicate(self):
+        inner = (Tweet
+                 .select(Tweet.c.content)
+                 .where(Tweet.c.user_id == User.c.id)
+                 .limit(1))
+        # A user-supplied on= is honored rather than replaced with true.
+        query = (User
+                 .select(User.c.username, inner.c.content)
+                 .join(inner, JOIN.LEFT_LATERAL, on=(inner.c.content != '')))
+        self.assertSQL(query, (
+            'SELECT "t1"."username", "t2"."content" '
+            'FROM "users" AS "t1" '
+            'LEFT JOIN LATERAL ('
+            'SELECT "t3"."content" FROM "tweets" AS "t3" '
+            'WHERE ("t3"."user_id" = "t1"."id") LIMIT ?) AS "t2" '
+            'ON ("t2"."content" != ?)'), [1, ''])
+
+        # Omitting on= still defaults to ON true.
+        query = (User
+                 .select(User.c.username, inner.c.content)
+                 .join(inner, JOIN.LEFT_LATERAL))
+        self.assertSQL(query, (
+            'SELECT "t1"."username", "t2"."content" '
+            'FROM "users" AS "t1" '
+            'LEFT JOIN LATERAL ('
+            'SELECT "t3"."content" FROM "tweets" AS "t3" '
+            'WHERE ("t3"."user_id" = "t1"."id") LIMIT ?) AS "t2" ON ?'),
+            [1, True])
+
     def test_all_clauses(self):
         count = fn.COUNT(Tweet.c.id).alias('ct')
         query = (User
