@@ -453,10 +453,13 @@ class JSONField(FieldDatabaseHook, Field):
             return value
         return self.json_type(value)
 
-    def to_value(self, value, case=False):
+    def to_value(self, value):
+        return self.db_value(value)
+
+    def case_value(self, value):
         # CASE WHEN id = 123 THEN x.json_data fails because the expression is
         # untyped, so we need an explicit cast with psycopg2.
-        if case and self.cast_json_case:
+        if self.cast_json_case:
             return Cast(self.json_type(value), self._json_datatype)
         return self.db_value(value)
 

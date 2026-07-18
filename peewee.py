@@ -3692,9 +3692,7 @@ class Database(_callable_context_manager):
         self.deferred = not bool(database)
 
     def __deepcopy__(self, memo):
-        # Databases are shared and hold un-copyable state (locks, thread-local
-        # connections). Reached via deepcopy of an inherited field that caches a
-        # db reference, e.g. JSONField's helper. Keep the same db.
+        # A database is a live resource (locks, connections), copies share it.
         return self
 
     def __enter__(self):
@@ -5535,8 +5533,12 @@ class Field(ColumnBase):
     def python_value(self, value):
         return value if value is None else self.adapt(value)
 
-    def to_value(self, value, case=False):
+    def to_value(self, value):
         return Value(value, self.db_value, unpack=False)
+
+    def case_value(self, value):
+        # A CASE branch param is untyped on postgres, JSON fields cast it.
+        return self.to_value(value)
 
     def get_sort_key(self, ctx):
         return self._sort_key
@@ -6364,15 +6366,18 @@ class JSONField(FieldDatabaseHook, Field):
             return value
         return self._read(value) if self._read is not None else value
 
-    def to_value(self, value, case=False):
-        # bulk_update() needs a cast.
+    def to_value(self, value):
         if value is None or isinstance(value, Node):
             return value
-        if case and self._helper is not None:
+        return self.db_value(value)
+
+    def case_value(self, value):
+        if self._helper is not None and value is not None and \
+                not isinstance(value, Node):
             cast = self._helper.cast_for_case(self, value)
             if cast is not None:
                 return cast
-        return self.db_value(value)
+        return self.to_value(value)
 
     def __getitem__(self, key):
         return JSONPath(self, (key,))
@@ -7742,7 +7747,7 @@ class Model(Node, metaclass=ModelBase):
                 for model in batch:
                     value = getattr(model, attr)
                     if not isinstance(value, Node):
-                        value = field.to_value(value, case=True)
+                        value = field.case_value(value)
                     accum.append((pk.to_value(model._pk), value))
                 case = Case(pk, accum)
                 update[field] = case
