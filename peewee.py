@@ -5331,10 +5331,7 @@ class DictCursorWrapper(CursorWrapper):
         self.ncols = len(self.columns)
 
     def _row_to_dict(self, row):
-        result = {}
-        for i in range(self.ncols):
-            result.setdefault(self.columns[i], row[i])  # Do not overwrite.
-        return result
+        return {self.columns[i]: row[i] for i in range(self.ncols)}
 
     process_row = _row_to_dict
 
