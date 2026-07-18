@@ -3542,6 +3542,7 @@ EXCEPTIONS = {
     'IntegrityConstraintViolationError': IntegrityError,
     'IntegrityError': IntegrityError,
     'InterfaceError': InterfaceError,
+    'InternalClientError': InternalError,
     'InternalError': InternalError,
     'NotSupportedError': NotSupportedError,
     'OperationalError': OperationalError,
@@ -4486,16 +4487,18 @@ class Psycopg2Adapter(_BasePsycopgAdapter):
         return txn_status < pg_extensions.TRANSACTION_STATUS_INERROR
 
     def is_connection_reusable(self, conn):
+        # If the status is unknown then we lost the connection to the server
+        # and the connection should not be re-used.
         txn_status = conn.get_transaction_status()
-        # Do not return connection in an error state, as subsequent queries
-        # will all fail. If the status is unknown then we lost the connection
-        # to the server and the connection should not be re-used.
         if txn_status == pg_extensions.TRANSACTION_STATUS_UNKNOWN:
             return False
-        elif txn_status == pg_extensions.TRANSACTION_STATUS_INERROR:
-            conn.reset()
         elif txn_status != pg_extensions.TRANSACTION_STATUS_IDLE:
-            conn.rollback()
+            # rollback() no-ops and reset() raises under autocommit, send a
+            # raw ROLLBACK (clears both in-txn and error states).
+            try:
+                conn.cursor().execute('ROLLBACK')
+            except Exception:
+                return False
         return True
 
     def is_connection_closed(self, conn):
@@ -4503,7 +4506,11 @@ class Psycopg2Adapter(_BasePsycopgAdapter):
         if txn_status == pg_extensions.TRANSACTION_STATUS_UNKNOWN:
             return True
         elif txn_status != pg_extensions.TRANSACTION_STATUS_IDLE:
-            conn.rollback()
+            # rollback() no-ops under autocommit, send a raw ROLLBACK.
+            try:
+                conn.cursor().execute('ROLLBACK')
+            except Exception:
+                return True
         return False
 
 
@@ -4544,16 +4551,18 @@ class Psycopg3Adapter(_BasePsycopgAdapter):
         return conn.pgconn.transaction_status < TransactionStatus.INERROR
 
     def is_connection_reusable(self, conn):
+        # If the status is unknown then we lost the connection to the server
+        # and the connection should not be re-used.
         txn_status = conn.pgconn.transaction_status
-        # Do not return connection in an error state, as subsequent queries
-        # will all fail. If the status is unknown then we lost the connection
-        # to the server and the connection should not be re-used.
         if txn_status == TransactionStatus.UNKNOWN:
             return False
-        elif txn_status == TransactionStatus.INERROR:
-            conn.reset()
         elif txn_status != TransactionStatus.IDLE:
-            conn.rollback()
+            # rollback() clears both in-txn and error states (psycopg3 has
+            # no Connection.reset()).
+            try:
+                conn.rollback()
+            except Exception:
+                return False
         return True
 
     def is_connection_closed(self, conn):
@@ -4561,7 +4570,10 @@ class Psycopg3Adapter(_BasePsycopgAdapter):
         if txn_status == TransactionStatus.UNKNOWN:
             return True
         elif txn_status != TransactionStatus.IDLE:
-            conn.rollback()
+            try:
+                conn.rollback()
+            except Exception:
+                return True
         return False
 
 

@@ -17,6 +17,7 @@ from .base import IS_POSTGRESQL
 from .base import IS_SQLITE
 from .base import ModelTestCase
 from .base import db_loader
+from .base import requires_mysql
 from .base_models import Register
 
 
@@ -880,4 +881,39 @@ class TestPooledDatabaseIntegration(ModelTestCase):
             self.assertConnections(4 - i)
 
         self.assertConnections(0)
+
+    def test_checkin_open_transaction(self):
+        # A conn checked in mid-transaction (opened outside peewee's txn
+        # stack, so close() does not complain) is rolled back so the next
+        # checkout starts clean.
+        self.database.execute_sql('begin')
+        Register.create(value=1)
+        self.database.close()
+
+        self.assertTrue(self.database.connect())
+        self.assertEqual(Register.select().count(), 0)
+
+        # The connection is usable and no longer inside a transaction.
+        Register.create(value=2)
+        self.database.close()
+        self.assertTrue(self.database.connect())
+        self.assertEqual(Register.select().count(), 1)
+
+    @requires_mysql
+    def test_dead_conn_discarded(self):
+        conn = self.database.connection()
+        curs = self.database.execute_sql('SELECT CONNECTION_ID()')
+        conn_id = curs.fetchone()[0]
+        self.database.close()
+
+        killer = db_loader(BACKEND)
+        killer.execute_sql('KILL %s' % conn_id)
+        killer.close()
+
+        # The killed conn is discarded at checkout, not silently revived.
+        self.assertTrue(self.database.connect())
+        self.assertIsNot(self.database.connection(), conn)
+        curs = self.database.execute_sql('SELECT 1')
+        self.assertEqual(curs.fetchone()[0], 1)
+        self.database.close()
         self.assertEqual(len(self.database._in_use), 0)

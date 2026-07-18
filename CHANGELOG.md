@@ -19,6 +19,8 @@ https://github.com/coleifer/peewee/releases
   cross-released. Previously this could hang `close_pool()` on a full pool
   queue or, on sqlite, block interpreter shutdown via leaked connection
   threads.
+* Sync connection pools roll back transactions left open on check-in
+  (mirroring the async pools).
 * `JSONField` negative path indexes render as `$[last]` / `$[last-n]` on
   MySQL/MariaDB. Previously the sqlite-only `$[#-n]` form was emitted, which
   MariaDB evaluates to NULL (overwriting the column when used with `set()`)
