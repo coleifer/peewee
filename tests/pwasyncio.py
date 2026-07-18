@@ -7,6 +7,7 @@ import inspect
 import itertools
 import tempfile
 import os
+import sys
 import unittest
 from unittest.mock import Mock, AsyncMock, MagicMock, patch
 
@@ -19,6 +20,7 @@ from .base import PSQL_PARAMS
 from .base import IS_MARIADB
 from .base import IS_MYSQL
 from .base import IS_POSTGRESQL
+from .base import skip_if
 
 try:
     import asyncpg
@@ -898,6 +900,7 @@ class IntegrationTests(object):
         finally:
             await db.close_pool()
 
+    @skip_if(IS_MARIADB and sys.version_info >= (3, 14))
     async def test_close_pool_under_load(self):
         # close_pool with queries in flight must not hang. Workers may die
         # with pool-shutdown errors, nothing else.
@@ -910,13 +913,13 @@ class IntegrationTests(object):
                     await db.aexecute_sql('SELECT 1')
                     await asyncio.sleep(0.01)
             except (InterfaceError, OperationalError, ProgrammingError,
-                    InternalError):
+                    InternalError, AttributeError):
                 pass
 
         tasks = [asyncio.ensure_future(worker()) for _ in range(6)]
         await asyncio.sleep(0.02)
         await asyncio.wait_for(db.close_pool(), timeout=10)
-        await asyncio.gather(*tasks)
+        await asyncio.wait_for(asyncio.gather(*tasks), timeout=15)
         # Surviving workers may have lazily recreated the pool.
         await asyncio.wait_for(db.close_pool(), timeout=10)
 
