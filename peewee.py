@@ -2523,9 +2523,13 @@ class Select(SelectBase):
         if not self._from_list:
             raise ValueError('No sources to join on.')
         item = self._from_list.pop()
-        if join_type == JOIN.LATERAL or join_type == JOIN.LEFT_LATERAL:
-            if on is None:
-                on = True
+        # Lateral joins must have an ON clause, default to ON true.
+        if on is None and (
+                join_type == JOIN.LATERAL or
+                join_type == JOIN.LEFT_LATERAL or
+                (join_type != JOIN.CROSS and
+                 getattr(dest, '_lateral', False))):
+            on = True
         self._from_list.append(Join(item, dest, join_type, on))
 
     def left_outer_join(self, dest, on=None):
@@ -8502,6 +8506,9 @@ class ModelSelect(BaseModelSelect, Select):
             if on is None:
                 on = True
         elif join_type != JOIN.CROSS:
+            # A lateral source correlates inside the subquery, default ON true.
+            if on is None and getattr(dest, '_lateral', False):
+                on = True
             on, attr, constructor = self._normalize_join(src, dest, on, attr)
             if attr:
                 self._joins.setdefault(src, [])

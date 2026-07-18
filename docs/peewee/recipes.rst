@@ -354,6 +354,52 @@ can instead write:
     for tweet in query:
         print(tweet.username, tweet.content, tweet.created_date)
 
+The examples above populate the subquery's columns directly onto the outer
+instance. Peewee has a second lateral form: mark the subquery itself with
+``lateral()`` and join it using an ordinary join-type. This form goes through
+the regular model-graph join machinery, so the subquery is populated as a
+related instance:
+
+.. code-block:: python
+
+    subq = (Tweet
+            .select(Tweet.content, Tweet.created_date)
+            .where(Tweet.user == User.id)
+            .order_by(Tweet.created_date.desc())
+            .limit(3)
+            .lateral())
+
+    query = (User
+             .select(User, subq.c.content, subq.c.created_date)
+             .join(subq, JOIN.LEFT_OUTER)
+             .order_by(User.username, subq.c.created_date.desc()))
+
+    # Rows are User instances with the subquery populated as "tweet".
+    # Users with no tweets are preserved, with tweet set to None.
+    for user in query:
+        if user.tweet is not None:
+            print(user.username, user.tweet.content)
+
+Use ``attr=`` to control the attribute name, and ``JOIN.CROSS`` to omit users
+having no tweets (``CROSS JOIN LATERAL`` takes no ON clause and populates the
+columns flat, as in the first form):
+
+.. code-block:: python
+
+    query = (User
+             .select(User, subq.c.content)
+             .join(subq, attr='latest'))
+
+Two notes that apply to both forms:
+
+* Use one form or the other. Marking the subquery with ``lateral()`` and also
+  specifying a ``LATERAL`` join-type doubles the keyword and produces invalid
+  SQL.
+* The ON clause defaults to ``ON true``. A predicate given as ``on=`` filters
+  the subquery's rows after its LIMIT is applied, which is rarely what is
+  wanted. To filter the rows the subquery considers, put the predicate in the
+  subquery's WHERE clause.
+
 Correlated subquery count
 ^^^^^^^^^^^^^^^^^^^^^^^^^
 

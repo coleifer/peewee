@@ -1439,6 +1439,19 @@ class TestSelectQuery(BaseTestCase):
             'ORDER BY "t3"."timestamp" DESC LIMIT ?) AS "t2" ON ?'),
             [1, True])
 
+        # Omitting on= for a lateral source defaults to ON true.
+        query = (User
+                 .select(User.c.username, inner.c.content)
+                 .join(inner))
+        self.assertSQL(query, (
+            'SELECT "t1"."username", "t2"."content" '
+            'FROM "users" AS "t1" '
+            'INNER JOIN LATERAL ('
+            'SELECT "t3"."content" FROM "tweets" AS "t3" '
+            'WHERE ("t3"."user_id" = "t1"."id") '
+            'ORDER BY "t3"."timestamp" DESC LIMIT ?) AS "t2" ON ?'),
+            [1, True])
+
         # CROSS JOIN LATERAL takes no ON clause.
         query = (User
                  .select(User.c.username, inner.c.content)

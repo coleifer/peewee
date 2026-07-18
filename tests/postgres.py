@@ -1450,3 +1450,16 @@ class TestPostgresLateralJoin(ModelTestCase):
                 ('b', 'b7'),
                 ('b', 'b4'),
                 ('a', 'a2')])
+
+        # on= may be omitted, it defaults to ON true.
+        query = (User
+                 .select(User, subq.c.content)
+                 .join(subq)
+                 .order_by(subq.c.timestamp.desc(nulls='last')))
+        with self.assertQueryCount(1):
+            results = [(u.username, u.tweet.content) for u in query]
+            self.assertEqual(results, [
+                ('a', 'a10'),
+                ('b', 'b7'),
+                ('b', 'b4'),
+                ('a', 'a2')])
