@@ -158,8 +158,8 @@ logger.addHandler(logging.NullHandler())
 callable_ = lambda c: isinstance(c, Callable)
 multi_types = (list, tuple, frozenset, set, range, types.GeneratorType)
 
-def qesc(s):
-    return s.replace('"', '""')
+def qesc(s, q='"'):
+    return s.replace(q, q + q)
 
 def unqesc(part):
     part = part.strip()
@@ -896,10 +896,7 @@ class _HashableSource(object):
         self._update_hash()
 
     def clone(self):
-        # clone() copies __dict__ without running __init__, so the copy would
-        # otherwise inherit the source's hash. An anonymous sub-select hashes
-        # on id(self), and the source may be garbage-collected, leaving the
-        # copy keyed on an address a later object can be allocated at.
+        # The copy would otherwise keep the source's id()-based hash.
         clone = super(_HashableSource, self).clone()
         clone._update_hash()
         return clone
@@ -2446,12 +2443,7 @@ class CompoundSelectQuery(SelectBase):
         super(CompoundSelectQuery, self).__sql__(ctx)
 
         with ctx(parentheses=self._subquery_parens(ctx)):
-            # Snapshot the aliases assigned by the enclosing scope before
-            # rendering either side. A correlated reference from the right-hand
-            # query must resolve to one of these outer aliases; otherwise the
-            # right-hand query's fresh alias scope assigns the outer source a
-            # new, dangling alias. The left-hand query shares the enclosing
-            # scope, so only the right-hand query needs the seed.
+            # Correlated rhs refs must resolve to the enclosing aliases.
             outer_aliases = dict(ctx.alias_manager.mapping)
 
             # Should the left-hand query be wrapped in parentheses?
@@ -2460,9 +2452,7 @@ class CompoundSelectQuery(SelectBase):
                 ctx.sql(self.lhs)
             ctx.literal(' %s ' % self.op)
             with ctx.push_alias():
-                # Seed with only the outer aliases (not the left-hand query's
-                # own sources) so the right-hand query's own sources still
-                # receive fresh aliases.
+                # Seed only the outer aliases so rhs sources get fresh ones.
                 ctx.alias_manager.mapping.update(outer_aliases)
                 # Should the right-hand query be wrapped in parentheses?
                 rhs_parens = self._wrap_parens(ctx, self.rhs)
@@ -4702,9 +4692,8 @@ class PostgresqlDatabase(Database):
             WHERE t.relname = %s AND t.relkind = %s AND n.nspname = %s
             ORDER BY idx.indisunique DESC, i.relname;"""
         cursor = self.execute_sql(query, (table, 'r', schema or 'public'))
-        unesc = lambda cols: [unqesc(c) for c in cols]
-        return [IndexMetadata(name, sql.rstrip(' ;'), unesc(cols), unique,
-                              table)
+        return [IndexMetadata(name, sql.rstrip(' ;'),
+                              [unqesc(c) for c in cols], unique, table)
                 for name, sql, unique, cols in cursor.fetchall()]
 
     def get_columns(self, table, schema=None):
@@ -4950,9 +4939,9 @@ class MySQLDatabase(Database):
         return [ViewMetadata(*row) for row in cursor.fetchall()]
 
     def _show_index_target(self, table, schema):
-        table = table.replace('`', '``')
+        table = qesc(table, '`')
         if schema:
-            return '`%s`.`%s`' % (schema.replace('`', '``'), table)
+            return '`%s`.`%s`' % (qesc(schema, '`'), table)
         return '`%s`' % table
 
     def get_indexes(self, table, schema=None):
@@ -7940,11 +7929,8 @@ class Model(Node, metaclass=ModelBase):
                             .where(node))
                 if not fk.null or search_nullable:
                     queries.setdefault(rel_model, []).append((node, fk))
-                    # A nullable child will be updated rather than deleted, so
-                    # its children do not need to be visited - but do not mark
-                    # it seen, as it may also be reachable (and deleted) via a
-                    # non-nullable path, in which case its children must be
-                    # processed.
+                    # A nullable child is updated, not deleted, so skip its
+                    # children but leave it unseen for non-nullable paths.
                     if not (fk.null and exclude_null_children):
                         stack.append((rel_model, subquery))
 
@@ -9115,7 +9101,7 @@ class ModelCursorWrapper(BaseModelCursorWrapper):
             if is_dict:
                 instance[attr] = joined_instance
             elif is_fk and joined_instance is None:
-                # None in __rel__ marks a verified-absent row; fk id is kept.
+                # None in __rel__ marks a verified-absent row, fk id intact.
                 instance.__rel__[attr] = None
             else:
                 setattr(instance, attr, joined_instance)
@@ -9297,15 +9283,6 @@ def _bucket(field, is_backref, children, parents):
     # backref lists directly, skipping descriptor and dirty tracking.
     name, rel_name = field.name, field.rel_field.name
     if is_backref:
-        # children are the referenced rows, parents carry the fk.
-        id_map = {}
-        for child in children:
-            id_map[child.__data__[rel_name]] = child
-        for parent in parents:
-            key = parent.__data__[name]
-            if key in id_map:
-                parent.__rel__[name] = id_map[key]
-    else:
         # children carry the fk, parents get backref lists.
         buckets = {}
         for child in children:
@@ -9316,6 +9293,15 @@ def _bucket(field, is_backref, children, parents):
             for inst in rel:
                 inst.__rel__[name] = parent
             setattr(parent, backref, rel)
+    else:
+        # children are the referenced rows, parents carry the fk.
+        id_map = {}
+        for child in children:
+            id_map[child.__data__[rel_name]] = child
+        for parent in parents:
+            key = parent.__data__[name]
+            if key in id_map:
+                parent.__rel__[name] = id_map[key]
 
 
 class Load(Node):
@@ -9403,7 +9389,7 @@ class Load(Node):
                                             parent_query, parents)
         # The whole tree runs on the database the parent ran against.
         children = list(child_query.execute(database))
-        _bucket(field, not self._is_backref, children, parents)
+        _bucket(field, self._is_backref, children, parents)
         return children, child_query
 
     @staticmethod
