@@ -88,10 +88,11 @@ def await_(awaitable):
 
 
 class _State(object):
-    __slots__ = ('conn', 'closed', 'transactions', 'ctx', '_task_id')
+    __slots__ = ('conn', 'closed', 'transactions', 'ctx', '_task_id', '_task')
 
     def __init__(self):
         self._task_id = None
+        self._task = None
         self.reset()
 
     def reset(self):
@@ -134,6 +135,7 @@ class _ConnectionState(object):
         else:
             state = _State()
             state._task_id = tid
+            state._task = task
             self._states[tid] = state
             task.add_done_callback(self._on_task_done)
 
@@ -248,10 +250,15 @@ class AsyncDatabaseMixin(object):
             raise InterfaceError('Database pool is shutting down.')
 
         conn = self._state.conn
-        if conn is None or conn.conn is None:
+        if conn is None or conn.stale():
             if conn is not None:
-                # Previous connection was invalidated, release it.
-                await self._release_conn(conn)
+                # Best-effort: releasing a dead conn can raise from deep in
+                # the driver (e.g. asyncpg's detached pool proxy).
+                try:
+                    await self._release_conn(conn)
+                except Exception:
+                    logger.warning('Error releasing stale connection',
+                                   exc_info=True)
             conn = await self._acquire_conn_async()
             self._state.set_connection(conn)
         return conn
@@ -276,16 +283,26 @@ class AsyncDatabaseMixin(object):
         else:
             await self._pool_release(conn)
 
-    async def _acquire_conn_async(self):
+    async def _ensure_pool(self):
         async with self._pool_lock:
             if self._pool is None:
                 with __exception_wrapper__:
                     self._pool = await self._create_pool_async()
-            pool = self._pool
+            return self._pool
+
+    async def _acquire_conn_async(self):
+        # Bound pool creation. Stalled connect could freeze every acquirer.
+        try:
+            pool = await asyncio.wait_for(self._ensure_pool(),
+                                          timeout=self._acquire_timeout)
+        except asyncio.TimeoutError:
+            raise OperationalError(
+                'Timed out connecting to database '
+                '(acquire_timeout=%s).' % self._acquire_timeout) from None
 
         try:
             with __exception_wrapper__:
-                conn = await self._pool_acquire()
+                conn = await self._pool_acquire(pool)
         except asyncio.TimeoutError:
             raise OperationalError(
                 'Timed out acquiring connection from pool '
@@ -298,7 +315,7 @@ class AsyncDatabaseMixin(object):
     async def _create_pool_async(self):
         raise NotImplementedError('Subclasses must implement.')
 
-    async def _pool_acquire(self):
+    async def _pool_acquire(self, pool):
         raise NotImplementedError('Subclasses must implement.')
 
     async def _pool_release(self, conn):
@@ -308,16 +325,23 @@ class AsyncDatabaseMixin(object):
         self._closing = True
         try:
             if self._pool:
-                # Wait for releases scheduled by task-done callbacks.  A
+                # Wait for releases scheduled by task-done callbacks. A
                 # completing task may schedule one during the await, so loop.
+                # Remove entries ourselves, awaiting an all-done batch never
+                # yields 3.13+, so the pending discard callbacks could never
+                # run and this loop would spin forever.
                 while self._state._release_tasks:
-                    await asyncio.gather(*list(self._state._release_tasks),
-                                         return_exceptions=True)
+                    tasks = list(self._state._release_tasks)
+                    self._state._release_tasks.difference_update(tasks)
+                    await asyncio.gather(*tasks, return_exceptions=True)
 
-                # Release connections held by any task still in the registry.
-                # Clear each state BEFORE the release await, else the task's
-                # done-callback can see the conn and double-release it.
-                for state in list(self._state._states.values()):
+                # Reclaim conns of completed tasks. Running tasks keep theirs
+                # (releasing mid-query hands a live conn to another acquirer).
+                # Bounded _pool_close below collects the stragglers.
+                for tid, state in list(self._state._states.items()):
+                    task = state._task
+                    if task is not None and not task.done():
+                        continue
                     if state.conn and not state.closed:
                         conn = state.conn
                         state.reset()
@@ -327,7 +351,7 @@ class AsyncDatabaseMixin(object):
                             logger.warning(
                                 'Error releasing connection during pool close',
                                 exc_info=True)
-                self._state._states.clear()
+                    self._state._states.pop(tid, None)
 
                 # Drain the fallback parking list (used when a task-done
                 # callback could not schedule a release).
@@ -650,6 +674,11 @@ class AsyncConnectionWrapper(object):
     def cursor(self):
         return DummyCursor(self)
 
+    def stale(self):
+        # Subclasses extend with driver-level closed checks so aconnect()
+        # discards conns that were terminated underneath the owning task.
+        return self.conn is None
+
     async def execute_iter(self, sql, params=None):
         raise NotImplementedError('Subclasses must implement.')
 
@@ -690,15 +719,7 @@ class AsyncSqlitePool(object):
         return await asyncio.wait_for(self._queue.get(), timeout=timeout)
 
     def _conn_is_valid(self, conn):
-        driver_conn = conn.conn
-        if driver_conn is None:
-            return False
-        # aiosqlite private attrs - tolerate their absence in new versions.
-        if not getattr(driver_conn, '_running', True):
-            return False
-        if not getattr(driver_conn, '_connection', True):
-            return False
-        return True
+        return not conn.stale()
 
     async def _close_conn(self, conn):
         try:
@@ -741,6 +762,12 @@ class AsyncSqlitePool(object):
 
 
 class AsyncSqliteConnection(AsyncConnectionWrapper):
+    def stale(self):
+        # aiosqlite private attrs - tolerate their absence in new versions.
+        return (self.conn is None or
+                not getattr(self.conn, '_running', True) or
+                not getattr(self.conn, '_connection', True))
+
     async def _execute(self, sql, params=None):
         params = params or ()
         cursor = await self.conn.execute(sql, params)
@@ -847,8 +874,8 @@ class AsyncSqliteDatabase(AsyncDatabaseMixin, SqliteDatabase):
         for extension in self._extensions:
             await conn.load_extension(extension)
 
-    async def _pool_acquire(self):
-        return await self._pool.acquire(timeout=self._acquire_timeout)
+    async def _pool_acquire(self, pool):
+        return await pool.acquire(timeout=self._acquire_timeout)
 
     async def _pool_release(self, conn):
         if conn is not None:
@@ -909,22 +936,34 @@ class AsyncMySQLConnection(AsyncConnectionWrapper):
             await self.conn.ensure_closed()
             self.conn = None
 
+    def stale(self):
+        return self.conn is None or self.conn.closed
+
 
 class AsyncMySQLDatabase(AsyncDatabaseMixin, MySQLDatabase):
     async def _create_pool_async(self):
         if aiomysql is None:
             raise ImproperlyConfigured('aiomysql is not installed')
+        params = dict(self.connect_params)
+        # aiomysql's default is no connect timeout at all. In-pool refill
+        # connects happen under the pool's condition lock, so an unbounded
+        # connect can stall every other acquirer.
+        params.setdefault('connect_timeout', self._acquire_timeout)
         return await aiomysql.create_pool(
             db=self.database,
             autocommit=True,
             minsize=self._pool_min_size,
             maxsize=self._pool_size,
-            **self.connect_params)
+            **params)
 
-    async def _pool_acquire(self):
-        conn = await asyncio.wait_for(
-            self._pool.acquire(),
-            timeout=self._acquire_timeout)
+    async def _pool_acquire(self, pool):
+        try:
+            conn = await asyncio.wait_for(
+                pool.acquire(),
+                timeout=self._acquire_timeout)
+        except RuntimeError as exc:
+            # aiomysql signals a closing pool with a bare RuntimeError.
+            raise InterfaceError(str(exc)) from None
         if self.server_version is None:
             # Used for version-dependent SQL, e.g. MariaDB upsert VALUE().
             self.server_version = self._extract_server_version(
@@ -952,10 +991,25 @@ class AsyncMySQLDatabase(AsyncDatabaseMixin, MySQLDatabase):
                                    timeout=self._acquire_timeout)
         except asyncio.TimeoutError:
             self._pool.terminate()
-            await self._pool.wait_closed()
+            try:
+                # Post-terminate this only waits on an in-flight refill
+                # connect, do not let it hang shutdown.
+                await asyncio.wait_for(self._pool.wait_closed(),
+                                       timeout=self._acquire_timeout)
+            except asyncio.TimeoutError:
+                logger.warning('Timed out finalizing terminated pool')
 
 
 class AsyncPostgresqlConnection(AsyncConnectionWrapper):
+    def stale(self):
+        if self.conn is None:
+            return True
+        try:
+            return self.conn.is_closed()
+        except Exception:
+            # Detached pool proxy - unusable either way.
+            return True
+
     async def close(self):
         conn, self.conn = self.conn, None
         # _con is None when the pool proxy is detached (already released
@@ -975,7 +1029,7 @@ class AsyncPostgresqlConnection(AsyncConnectionWrapper):
         else:
             description = []
 
-        # asyncpg exposes no rowcount; parse the command-status tail, e.g.
+        # asyncpg exposes no rowcount, parse the command-status tail, e.g.
         # "UPDATE 3" / "DELETE 2" / "INSERT 0 3".
         status = (stmt.get_statusmsg() or '').rsplit(' ', 1)
         if len(status) == 2 and status[1].isdigit():
@@ -1117,7 +1171,7 @@ class AsyncPostgresqlDatabase(AsyncDatabaseMixin, PostgresqlDatabase):
     psycopg2_adapter = psycopg3_adapter = AsyncPgAdapter
 
     def init(self, database, **kwargs):
-        # asyncpg has no psycopg-style isolation-level constants; keep the
+        # asyncpg has no psycopg-style isolation-level constants, keep the
         # raw value and apply it per-connection in register_adapters().
         self._async_isolation_level = kwargs.pop('isolation_level', None)
         super(AsyncPostgresqlDatabase, self).init(database, **kwargs)
@@ -1158,23 +1212,26 @@ class AsyncPostgresqlDatabase(AsyncDatabaseMixin, PostgresqlDatabase):
             db_params = {'dsn': self.database}
         else:
             db_params = {'database': self.database}
+        params = dict(self.connect_params)
+        # Per-connection establish timeout (asyncpg's default is 60s).
+        params.setdefault('timeout', self._acquire_timeout)
         return await asyncpg.create_pool(
             min_size=self._pool_min_size,
             max_size=self._pool_size,
             init=self.register_adapters,
             **db_params,
-            **self.connect_params)
+            **params)
 
-    async def _pool_acquire(self):
+    async def _pool_acquire(self, pool):
         conn = await asyncio.wait_for(
-            self._pool.acquire(),
+            pool.acquire(),
             timeout=self._acquire_timeout)
         return AsyncPostgresqlConnection(conn)
 
     async def _pool_release(self, conn):
         if conn and conn.conn:
             # Roll back any transaction left open, e.g. by a dead task. asyncpg
-            # records the started transaction in conn._top_xact; rolling back
+            # records the started transaction in conn._top_xact, rolling back
             # through it clears that bookkeeping. A raw "ROLLBACK" only resets
             # the server and leaves _top_xact set, so the pool's own reset would
             # still log "Resetting connection with an active transaction".

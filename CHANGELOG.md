@@ -7,18 +7,11 @@ https://github.com/coleifer/peewee/releases
 
 ## master
 
-* `playhouse.pwasyncio` releases connections back to the pool as soon as the
-  owning task completes. Previously they were only reclaimed on a later
-  `aconnect()`, so a fan-out wider than `pool_size` could starve waiting
-  acquirers into timeout. Only tasks that ended without calling `aclose()`
-  (by omission, exception or cancellation) were affected.
-* `playhouse.pwasyncio` `close_pool()` is now safe to call with queries in
-  flight. The asyncpg/aiomysql graceful pool close is now bounded by
-  `acquire_timeout`, after which stragglers are terminated, and a connection
-  released after its pool was closed or replaced is closed rather than
-  cross-released. Previously this could hang `close_pool()` on a full pool
-  queue or, on sqlite, block interpreter shutdown via leaked connection
-  threads.
+* `playhouse.pwasyncio` pool-lifecycle: `close_pool()` no longer spins
+  the event loop on Python 3.13+, no longer reclaims connections in use,
+  and pool creation is now bounded by `acquire_timeout`. Connections terminated
+  during shutdown are detected as stale and discarded at the next checkout
+  instead of raising from inside the driver.
 * Sync connection pools roll back transactions left open on check-in
   (mirroring the async pools).
 * `JSONField` negative path indexes render as `$[last]` / `$[last-n]` on
