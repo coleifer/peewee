@@ -12,6 +12,13 @@ https://github.com/coleifer/peewee/releases
   `aconnect()`, so a fan-out wider than `pool_size` could starve waiting
   acquirers into timeout. Only tasks that ended without calling `aclose()`
   (by omission, exception or cancellation) were affected.
+* `playhouse.pwasyncio` `close_pool()` is now safe to call with queries in
+  flight. The asyncpg/aiomysql graceful pool close is now bounded by
+  `acquire_timeout`, after which stragglers are terminated, and a connection
+  released after its pool was closed or replaced is closed rather than
+  cross-released. Previously this could hang `close_pool()` on a full pool
+  queue or, on sqlite, block interpreter shutdown via leaked connection
+  threads.
 * `JSONField` negative path indexes render as `$[last]` / `$[last-n]` on
   MySQL/MariaDB. Previously the sqlite-only `$[#-n]` form was emitted, which
   MariaDB evaluates to NULL (overwriting the column when used with `set()`)
