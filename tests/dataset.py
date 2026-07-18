@@ -408,6 +408,34 @@ class TestDataSet(ModelTestCase):
             'charlie',
             'huey'])
 
+    def test_freeze_thaw_nulls(self):
+        self.dataset._database.execute_sql(
+            'create table nt (id integer primary key, ts datetime, '
+            'data blob, num integer, label text)')
+        try:
+            self.dataset.update_cache('nt')
+            nt = self.dataset['nt']
+            variants = (('json', {}),
+                        ('json', {'iso8601_datetimes': True}),
+                        ('json', {'base64_bytes': True}),
+                        ('csv', {}),
+                        ('csv', {'iso8601_datetimes': True}))
+            for fmt, kwargs in variants:
+                nt.insert(label='x')
+                buf = StringIO()
+                self.dataset.freeze(nt.all(), fmt, file_obj=buf, **kwargs)
+                nt.delete()
+                buf.seek(0)
+                n = nt.thaw(format=fmt, file_obj=buf, **kwargs)
+                self.assertEqual(n, 1)
+                row = list(nt.all())[0]
+                self.assertEqual(
+                    (row['ts'], row['data'], row['num'], row['label']),
+                    (None, None, None, 'x'), (fmt, kwargs))
+                nt.delete()
+        finally:
+            self.dataset._database.execute_sql('drop table nt')
+
     def test_freeze_thaw_csv_utf8(self):
         self._test_freeze_thaw_utf8('csv')
 

@@ -9,6 +9,7 @@ from functools import reduce
 from urllib.parse import urlparse
 
 from peewee import *
+from peewee import _StringField
 from playhouse.db_url import connect
 from playhouse.migrate import migrate
 from playhouse.migrate import SchemaMigrator
@@ -334,6 +335,17 @@ class Exporter(object):
         self.iso8601_datetimes = iso8601_datetimes
         self.base64_bytes = base64_bytes
 
+    def _export_value(self, value):
+        if isinstance(value, _datetime_types):
+            return value.isoformat() if self.iso8601_datetimes else str(value)
+        elif isinstance(value, (Decimal, uuid.UUID)):
+            return str(value)
+        elif isinstance(value, bytes):
+            if self.base64_bytes:
+                return base64.urlsafe_b64encode(value).decode('utf8')
+            return value.hex()
+        return value
+
     def export(self, file_obj):
         raise NotImplementedError
 
@@ -344,20 +356,10 @@ _datetime_types = (datetime.datetime, datetime.date, datetime.time)
 class JSONExporter(Exporter):
     def _make_default(self):
         def default(o):
-            if isinstance(o, _datetime_types):
-                if self.iso8601_datetimes:
-                    return o.isoformat()
-                else:
-                    return str(o)
-            elif isinstance(o, (Decimal, uuid.UUID)):
-                return str(o)
-            elif isinstance(o, bytes):
-                if self.base64_bytes:
-                    return base64.urlsafe_b64encode(o).decode('utf8')
-                else:
-                    return o.hex()
-            raise TypeError('Unable to serialize %r as JSON' % o)
-
+            value = self._export_value(o)
+            if value is o:
+                raise TypeError('Unable to serialize %r as JSON' % o)
+            return value
         return default
 
     def export(self, file_obj, **kwargs):
@@ -376,23 +378,7 @@ class CSVExporter(Exporter):
         if header and getattr(tuples, 'columns', None):
             writer.writerow([column for column in tuples.columns])
         for row in tuples:
-            accum = []
-            for value in row:
-                if isinstance(value, _datetime_types):
-                    if self.iso8601_datetimes:
-                        value = value.isoformat()
-                    else:
-                        value = str(value)
-                elif isinstance(value, (Decimal, uuid.UUID)):
-                    value = str(value)
-                elif isinstance(value, bytes):
-                    if self.base64_bytes:
-                        value = base64.urlsafe_b64encode(value).decode('utf8')
-                    else:
-                        value = value.hex()
-                accum.append(value)
-
-            writer.writerow(accum)
+            writer.writerow([self._export_value(value) for value in row])
 
 
 class TSVExporter(CSVExporter):
@@ -413,6 +399,20 @@ class Importer(object):
         self.columns = dict(model._meta.columns)
         self.columns.update(model._meta.fields)
 
+    def _import_value(self, field, value):
+        if value is None:
+            return value
+        if isinstance(field, DateTimeField) and self.iso8601_datetimes:
+            value = datetime.datetime.fromisoformat(value)
+        elif isinstance(field, DateField) and self.iso8601_datetimes:
+            value = datetime.date.fromisoformat(value)
+        elif isinstance(field, BlobField):
+            if self.base64_bytes:
+                value = base64.urlsafe_b64decode(value.encode('utf8'))
+            else:
+                value = bytes.fromhex(value)
+        return field.python_value(value)
+
     def load(self, file_obj):
         raise NotImplementedError
 
@@ -426,22 +426,10 @@ class JSONImporter(Importer):
             obj = {}
             for key in row:
                 field = self.columns.get(key)
-                value = row[key]
-                if isinstance(field, DateTimeField) and self.iso8601_datetimes:
-                    value = datetime.datetime.fromisoformat(value)
-                elif isinstance(field, DateField) and self.iso8601_datetimes:
-                    value = datetime.date.fromisoformat(value)
-                elif isinstance(field, BlobField):
-                    if self.base64_bytes:
-                        value = base64.urlsafe_b64decode(value.encode('utf8'))
-                    else:
-                        value = bytes.fromhex(value)
-
                 if field is not None:
-                    value = field.python_value(value)
-                    obj[key] = value
+                    obj[key] = self._import_value(field, row[key])
                 elif not self.strict:
-                    obj[key] = value
+                    obj[key] = row[key]
 
             if obj:
                 self.table.insert(**obj)
@@ -481,17 +469,10 @@ class CSVImporter(Importer):
                     obj[name] = value
                     continue
 
-                if isinstance(field, DateTimeField) and self.iso8601_datetimes:
-                    value = datetime.datetime.fromisoformat(value)
-                elif isinstance(field, DateField) and self.iso8601_datetimes:
-                    value = datetime.date.fromisoformat(value)
-                elif isinstance(field, BlobField):
-                    if self.base64_bytes:
-                        value = base64.urlsafe_b64decode(value.encode('utf8'))
-                    else:
-                        value = bytes.fromhex(value)
-
-                obj[field.name] = field.python_value(value)
+                # CSV has no null, treat empty as NULL for non-text fields.
+                if value == '' and not isinstance(field, _StringField):
+                    value = None
+                obj[field.name] = self._import_value(field, value)
 
             self.table.insert(**obj)
             count += 1

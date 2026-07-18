@@ -18,6 +18,11 @@ https://github.com/coleifer/peewee/releases
 * `playhouse.pwasyncio` logs to the `peewee.pwasyncio` logger rather than
   `playhouse.pwasyncio`, matching the logger hierarchy used by the other
   extension modules.
+* Fix `dataset` freeze/thaw of NULL values. Thawing a JSON export with a null
+  blob column crashed (`bytes.fromhex(None)`), null datetimes crashed under
+  `iso8601_datetimes=True`, and CSV imports stored `''` / `b''` into typed
+  columns where NULL belonged. Empty CSV cells now import as NULL for
+  non-text fields.
 * A `lateral()` source joined without `on=` defaults to `ON true`. Previously
   model queries inferred a foreign-key predicate against the subquery, which
   raised `AttributeError` when the fk column was not selected and silently
