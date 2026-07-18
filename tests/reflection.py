@@ -9,6 +9,7 @@ from playhouse.reflection import *
 from .base import IS_CRDB
 from .base import IS_CYSQLITE
 from .base import IS_MYSQL
+from .base import IS_ORACLE_MYSQL
 from .base import IS_POSTGRESQL
 from .base import IS_SQLITE
 from .base import IS_SQLITE_OLD
@@ -185,6 +186,20 @@ class TestReflection(BaseReflectionTestCase):
             self.assertEqual(match.groups(), (
                 'col_types_id', 'coltypes', 'f11',
             ))
+
+    @skip_if(not IS_ORACLE_MYSQL, 'requires mysql (mariadb reports longtext)')
+    def test_mysql_json_maps_to_core_field(self):
+        self.database.execute_sql('drop table if exists rj')
+        self.database.execute_sql(
+            'create table rj (id integer not null primary key '
+            'auto_increment, data json)')
+        try:
+            models = self.introspector.generate_models(table_names=['rj'])
+            field = models['rj']._meta.fields['data']
+            self.assertTrue(isinstance(field, JSONField))
+            self.assertFalse(self.introspector.metadata.requires_extension)
+        finally:
+            self.database.execute_sql('drop table rj')
 
     def test_make_column_name(self):
         # Tests for is_foreign_key=False.

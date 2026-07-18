@@ -9,6 +9,12 @@ https://github.com/coleifer/peewee/releases
 
 * Lateral joins honor a user-supplied `on=` predicate instead of silently
   replacing it with `true`.
+* `JSONField` negative path indexes render as `$[last]` / `$[last-n]` on
+  MySQL/MariaDB. Previously the sqlite-only `$[#-n]` form was emitted, which
+  MariaDB evaluates to NULL (overwriting the column when used with `set()`)
+  and MySQL rejects as an invalid path.
+* Reflection/pwiz map MySQL JSON columns to the core `JSONField` instead of
+  emitting `from playhouse.mysql_ext import *` for a re-exported field.
 
 [View commits](https://github.com/coleifer/peewee/compare/4.2.6...master)
 

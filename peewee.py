@@ -3142,11 +3142,14 @@ class BaseJSONMethods(object):
         return Value(field._dumps(value), converter=False)
 
     @staticmethod
-    def _path(keys, suffix=''):
+    def _path_index(idx):
+        return '[#%d]' % idx if idx < 0 else '[%d]' % idx
+
+    def _path(self, keys, suffix=''):
         parts = ['$']
         for k in keys:
             if isinstance(k, int):
-                parts.append('[#%d]' % k if k < 0 else '[%d]' % k)
+                parts.append(self._path_index(k))
             else:
                 k = str(k).replace('\\', '\\\\').replace('"', '\\"')
                 parts.append('."%s"' % k)
@@ -3415,6 +3418,12 @@ class MySQLJSONMethods(BaseJSONMethods):
                                  compact=False)
         return wrapper
 
+    @staticmethod
+    def _path_index(idx):
+        if idx < 0:
+            return '[last]' if idx == -1 else '[last%d]' % (idx + 1)
+        return '[%d]' % idx
+
     def extract(self, field, keys):
         if not keys:
             return field
@@ -3476,7 +3485,7 @@ class MySQLJSONMethods(BaseJSONMethods):
         return fn.JSON_MERGE_PATCH(field, self._json_value(field, value))
 
     def contains(self, field, keys, value):
-        # JSON_CONTAINS returns 0/1; wrap in `= 1` so it composes cleanly in
+        # JSON_CONTAINS returns 0/1, wrap in `= 1` so it composes cleanly in
         # boolean contexts (NOT, AND, etc.).
         path_args = (self._path(keys),) if keys else ()
         call = fn.JSON_CONTAINS(field, self._contains_value(field, value),

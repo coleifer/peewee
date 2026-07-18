@@ -178,10 +178,12 @@ class TestPathExtract(ModelTestCase):
         self.assertEqual(JM.select(JM.data['tags'][2]).scalar(), 'fluffy')
         self.assertEqual(JM.select(JM.data['matrix'][1][0]).scalar(), 3)
 
-    @skip_if(IS_MYSQL)
     def test_negative_index(self):
         self.assertEqual(JM.select(JM.data['tags'][-1]).scalar(), 'fluffy')
+        self.assertEqual(JM.select(JM.data['tags'][-2]).scalar(), 'white')
         self.assertEqual(JM.select(JM.data['matrix'][-1][-1]).scalar(), 6)
+        JM.update(data=JM.data['tags'][-1].set('spotted')).execute()
+        self.assertEqual(JM.select(JM.data['tags'][-1]).scalar(), 'spotted')
 
     def test_special_char_key(self):
         self.assertEqual(self._val('a.b'), 'dotted key')
