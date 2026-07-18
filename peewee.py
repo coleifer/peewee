@@ -3205,15 +3205,6 @@ class SqliteJSONMethods(BaseJSONMethods):
             return fn.json(dumps(value))
         return wrapper
 
-    def extract(self, field, keys):
-        return Expression(field, '->', self._path(keys)) if keys else field
-
-    def extract_text(self, field, keys):
-        return Expression(field, '->>', self._path(keys)) if keys else field
-
-    def cast_type(self, t):
-        return {'int': 'INTEGER', 'float': 'REAL'}[t]
-
     def _wrap_value(self, field, value):
         # Wrap a Python value so SQLite stores it as JSON-typed. Containers
         # and JSON null go through fn.json() so the result is JSON-typed
@@ -3224,6 +3215,15 @@ class SqliteJSONMethods(BaseJSONMethods):
             return fn.json(field._dumps(value))
         return value
 
+    def extract(self, field, keys):
+        return Expression(field, '->', self._path(keys)) if keys else field
+
+    def extract_text(self, field, keys):
+        return Expression(field, '->>', self._path(keys)) if keys else field
+
+    def cast_type(self, t):
+        return {'int': 'INTEGER', 'float': 'REAL'}[t]
+
     def set(self, field, keys, value):
         return fn.json_set(
             field,
@@ -3231,23 +3231,18 @@ class SqliteJSONMethods(BaseJSONMethods):
             self._wrap_value(field, value))
 
     def insert(self, field, keys, value):
-        # json_insert is a no-op when the path already exists (including
-        # when it exists with stored JSON null) - matches the "only-if-
-        # missing" semantic on every backend.
         return fn.json_insert(
             field,
             self._path(keys),
             self._wrap_value(field, value))
 
     def replace(self, field, keys, value):
-        # json_replace is a no-op when the path is missing.
         return fn.json_replace(
             field,
             self._path(keys),
             self._wrap_value(field, value))
 
     def append(self, field, keys, value):
-        # SQLite's '$.path[#]' target means "append after the last element."
         return fn.json_set(
             field,
             self._path(keys, '[#]'),
@@ -3266,7 +3261,6 @@ class SqliteJSONMethods(BaseJSONMethods):
         return fn.json_patch(field, fn.json(field._dumps(value)))
 
     def contains(self, field, keys, value):
-        # _pw_json_contains() is a registered UDF - a per-row full scan, no index.
         call = fn._pw_json_contains(self.extract(field, keys),
                                     self._contains_value(field, value))
         return Expression(call, OP.EQ, 1)
@@ -3277,9 +3271,7 @@ class SqliteJSONMethods(BaseJSONMethods):
         return Expression(call, OP.EQ, 1)
 
     def has_key(self, field, keys, key):
-        # json_type() is NULL only when the path selects nothing, so it
-        # doubles as a key-existence test (a stored JSON null still has a
-        # type). Matches MySQL's object-key semantics.
+        # json_type() is SQL NULL only when the path is missing.
         path = self._path(tuple(keys) + (key,))
         return Expression(fn.json_type(field, path), OP.IS_NOT, None)
 
@@ -3308,6 +3300,18 @@ class PostgresqlJSONMethods(BaseJSONMethods):
         # can't use any user-provided loads() impl.
         return lambda v: v
 
+    def _jsonb_wrap(self, field, value):
+        adapter = self.database._adapter
+        jsonb_cls = adapter.jsonb_type
+        if isinstance(value, (adapter.json_type, jsonb_cls)):
+            return value
+        return jsonb_cls(value, dumps=field._dumps)
+
+    def _path_array(self, keys):
+        # Build a text[] from keys for jsonb_set / #- operator.
+        parts = [str(k) for k in keys]
+        return Cast(AsIs(parts, False), 'text[]')
+
     def extract(self, field, keys):
         if not keys:
             return field
@@ -3324,18 +3328,6 @@ class PostgresqlJSONMethods(BaseJSONMethods):
     def cast_for_case(self, field, value):
         return Cast(Value(field._dumps(value)), 'JSONB')
 
-    def _jsonb_wrap(self, field, value):
-        adapter = self.database._adapter
-        jsonb_cls = adapter.jsonb_type
-        if isinstance(value, (adapter.json_type, jsonb_cls)):
-            return value
-        return jsonb_cls(value, dumps=field._dumps)
-
-    def _path_array(self, keys):
-        # Build a text[] from keys for jsonb_set / #- operator.
-        parts = [str(k) for k in keys]
-        return Cast(AsIs(parts, False), 'text[]')
-
     def set(self, field, keys, value):
         # jsonb_set(field, '{path}'::text[], value::jsonb, create_missing=true)
         return fn.jsonb_set(
@@ -3346,10 +3338,7 @@ class PostgresqlJSONMethods(BaseJSONMethods):
 
     def insert(self, field, keys, value):
         # Postgres has no single-call equivalent of json_insert. Wrap
-        # jsonb_set in a CASE that no-ops when the path resolves to anything
-        # other than SQL NULL - `field -> 'k'` returns SQL NULL only for
-        # absent keys; a stored JSON null comes back as jsonb 'null' which
-        # is NOT SQL NULL, so this matches json_insert / JSON_INSERT.
+        # jsonb_set in a CASE.
         return Case(None, [
             (self.extract(field, keys).is_null(),
              fn.jsonb_set(field, self._path_array(keys),
@@ -3357,16 +3346,13 @@ class PostgresqlJSONMethods(BaseJSONMethods):
         ], field)
 
     def replace(self, field, keys, value):
-        # jsonb_set with create_missing=False is a no-op on absent paths.
         return fn.jsonb_set(
             field,
             self._path_array(keys),
             self._jsonb_wrap(field, value),
-            False)
+            False)  # create_missing=False.
 
     def append(self, field, keys, value):
-        # '-1' as the trailing path element + insert_after=True means
-        # "insert after the last array element."
         return fn.jsonb_insert(
             field,
             self._path_array(list(keys) + ['-1']),
@@ -3457,13 +3443,10 @@ class MySQLJSONMethods(BaseJSONMethods):
                            self._json_value(field, value))
 
     def insert(self, field, keys, value):
-        # JSON_INSERT is a no-op when the path already exists (including
-        # when it exists with stored JSON null).
         return fn.JSON_INSERT(field, self._path(keys),
                               self._json_value(field, value))
 
     def replace(self, field, keys, value):
-        # JSON_REPLACE is a no-op when the path is missing.
         return fn.JSON_REPLACE(field, self._path(keys),
                                self._json_value(field, value))
 
@@ -3493,14 +3476,11 @@ class MySQLJSONMethods(BaseJSONMethods):
         return Expression(call, OP.EQ, 1)
 
     def contained_by(self, field, keys, value):
-        # Args flipped: is `value` a superset of (sub-extract of) field?
         lhs = self.extract(field, keys) if keys else field
         call = fn.JSON_CONTAINS(self._contains_value(field, value), lhs)
         return Expression(call, OP.EQ, 1)
 
     def has_key(self, field, keys, key):
-        # JSON_CONTAINS_PATH(field, 'one', '$.key'). Reuse _path([key]) so the
-        # key gets the same escaping as anywhere else.
         path = self._path(tuple(keys) + (key,))
         call = fn.JSON_CONTAINS_PATH(field, 'one', path)
         return Expression(call, OP.EQ, 1)
