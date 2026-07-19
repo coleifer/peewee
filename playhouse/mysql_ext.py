@@ -73,6 +73,7 @@ class MariaDBConnectorDatabase(MySQLDatabase):
         self.server_version = (version, minor, point)
         if self.server_version >= (10, 5, 0):
             self.returning_clause = True
+        self._set_csq_grouped(True)
 
     def last_insert_id(self, cursor, query_type=None):
         if not self.returning_clause:

@@ -411,6 +411,12 @@ SCOPE_COLUMN = 16
 CSQ_PARENTHESES_NEVER = 0
 CSQ_PARENTHESES_ALWAYS = 1
 CSQ_PARENTHESES_UNNESTED = 2
+CSQ_PARENTHESES_GROUPED = 3
+
+# Rendering styles for compound select members (_member_style).
+CSQ_FLAT = 0
+CSQ_PARENS = 1
+CSQ_WRAP = 2  # SELECT * FROM (...), for dialects without member parens.
 
 # Regular expressions used to convert class names to snake-case table names.
 # First regex handles acronym followed by word or initial lower-word followed
@@ -2417,23 +2423,89 @@ class CompoundSelectQuery(SelectBase):
         query = Select((self.limit(1),), (SQL('1'),)).bind(database)
         return bool(query.scalar())
 
-    def _wrap_parens(self, ctx, subq):
+    def _self_wraps(self, subq):
+        # An inner ORDER BY / LIMIT / OFFSET forces the member to group.
+        return (bool(subq._order_by) or subq._limit is not None
+                or subq._offset is not None)
+
+    def _needs_group(self, subq, lhs=False):
+        # Group when writing the member flat would change the result:
+        # non-associative ops, an inner ORDER BY / LIMIT that would apply
+        # to the whole statement, or INTERSECT precedence (it binds
+        # tighter everywhere but sqlite).
+        if self._self_wraps(subq):
+            return True
+        if lhs:
+            # A flat lhs folds left to right before our op applies.
+            return self.op == 'INTERSECT' and subq.op != self.op
+        if self.op == 'EXCEPT':
+            return True
+        # A flat rhs joins the outer chain through its left spine, so
+        # every op along it must match ours.
+        node = subq
+        while isinstance(node, CompoundSelectQuery):
+            if node.op != self.op:
+                return True
+            node = node.lhs
+            if (isinstance(node, CompoundSelectQuery)
+                    and self._self_wraps(node)):
+                break  # Wraps itself, the spine ends here.
+        return False
+
+    def _union_only(self, subq):
+        # Whole subtree is UNION / UNION ALL with no inner ordering.
+        if not isinstance(subq, CompoundSelectQuery):
+            return True
+        if subq.op not in ('UNION', 'UNION ALL') or self._self_wraps(subq):
+            return False
+        return self._union_only(subq.lhs) and self._union_only(subq.rhs)
+
+    def _member_style(self, ctx, subq, lhs=False):
         csq_setting = ctx.state.compound_select_parentheses
 
         if not csq_setting or csq_setting == CSQ_PARENTHESES_NEVER:
-            return False
+            # Parens are not allowed here (sqlite), wrap a nested compound
+            # that needs grouping as a subquery instead.
+            if (isinstance(subq, CompoundSelectQuery)
+                    and self._needs_group(subq, lhs)):
+                return CSQ_WRAP
         elif csq_setting == CSQ_PARENTHESES_ALWAYS:
-            return True
+            return CSQ_PARENS
         elif csq_setting == CSQ_PARENTHESES_UNNESTED:
             if ctx.state.in_expr or ctx.state.in_function:
                 # If this compound select query is being used inside an
                 # expression, e.g., an IN or EXISTS().
-                return False
+                return CSQ_FLAT
 
             # If the query on the left or right is itself a compound select
             # query, then we do not apply parentheses. However, if it is a
             # regular SELECT query, we will apply parentheses.
-            return not isinstance(subq, CompoundSelectQuery)
+            if not isinstance(subq, CompoundSelectQuery):
+                return CSQ_PARENS
+        elif csq_setting == CSQ_PARENTHESES_GROUPED:
+            # Like unnested, but a nested compound gets parens when it
+            # needs them to keep its meaning.
+            if isinstance(subq, CompoundSelectQuery):
+                if ((ctx.state.in_expr or ctx.state.in_function)
+                        and self.op in ('UNION', 'UNION ALL')
+                        and self._union_only(subq)):
+                    # IN / EXISTS only see the distinct set, and regrouping
+                    # a pure union chain cannot change it. Stay flat so
+                    # mariadb can resolve correlated refs, it cannot see
+                    # them through nested parens.
+                    return CSQ_FLAT
+                if self._needs_group(subq, lhs):
+                    return CSQ_PARENS
+            elif not (ctx.state.in_expr or ctx.state.in_function):
+                return CSQ_PARENS
+        return CSQ_FLAT
+
+    def _member_sql(self, ctx, subq, lhs=False):
+        style = self._member_style(ctx, subq, lhs)
+        if style == CSQ_WRAP:
+            ctx.literal('SELECT * FROM ')
+        with ctx.scope_normal(parentheses=style != CSQ_FLAT, subquery=False):
+            ctx.sql(subq)
 
     def __sql__(self, ctx):
         if ctx.scope == SCOPE_COLUMN:
@@ -2446,18 +2518,12 @@ class CompoundSelectQuery(SelectBase):
             # Correlated rhs refs must resolve to the enclosing aliases.
             outer_aliases = dict(ctx.alias_manager.mapping)
 
-            # Should the left-hand query be wrapped in parentheses?
-            lhs_parens = self._wrap_parens(ctx, self.lhs)
-            with ctx.scope_normal(parentheses=lhs_parens, subquery=False):
-                ctx.sql(self.lhs)
+            self._member_sql(ctx, self.lhs, lhs=True)
             ctx.literal(' %s ' % self.op)
             with ctx.push_alias():
                 # Seed only the outer aliases so rhs sources get fresh ones.
                 ctx.alias_manager.mapping.update(outer_aliases)
-                # Should the right-hand query be wrapped in parentheses?
-                rhs_parens = self._wrap_parens(ctx, self.rhs)
-                with ctx.scope_normal(parentheses=rhs_parens, subquery=False):
-                    ctx.sql(self.rhs)
+                self._member_sql(ctx, self.rhs)
 
             # Apply ORDER BY, LIMIT, OFFSET. We use the "values" scope so that
             # entity names are not fully-qualified. This is a bit of a hack, as
@@ -4884,6 +4950,20 @@ class MySQLDatabase(Database):
         except AttributeError:
             version_raw = conn.get_server_info()
         self.server_version = self._extract_server_version(version_raw)
+        # Oracle MySQL has no 10.x, a 10.x server is MariaDB.
+        self._set_csq_grouped(self.mariadb
+                              or 'maria' in str(version_raw).lower()
+                              or self.server_version >= (10,))
+
+    def _set_csq_grouped(self, is_mariadb):
+        supported = (self.server_version >= (10, 4) if is_mariadb
+                     else self.server_version >= (8, 0, 22))
+        if (supported and self.compound_select_parentheses ==
+                CSQ_PARENTHESES_UNNESTED):
+            # These servers accept parens around compound members, use
+            # them so nested compounds keep their meaning. Only the
+            # default is upgraded, an explicit setting is respected.
+            self.compound_select_parentheses = CSQ_PARENTHESES_GROUPED
 
     def _extract_server_version(self, version):
         if isinstance(version, tuple):

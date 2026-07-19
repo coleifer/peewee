@@ -1179,6 +1179,218 @@ class TestSelectQuery(BaseTestCase):
             'WHERE ("t3"."value" = ?))'),
             [2, 7, 5], compound_select_parentheses=2)  # Un-nested.
 
+    def test_nested_compound_grouping(self):
+        Reg = Table('register', ('value',))
+        a = Reg.select().where(Reg.value < 5)
+        b = Reg.select().where(Reg.value > 2)
+        c = Reg.select().where(Reg.value == 4)
+        d = Reg.select().where(Reg.value != 9)
+        ordered = (a | b).order_by(Reg.value.desc()).limit(2)
+
+        # CSQ never (sqlite): the nested rhs is wrapped as a subquery,
+        # written flat it would run left to right and lose its grouping.
+        self.assertSQL(a - (b - c), (
+            'SELECT "t1"."value" FROM "register" AS "t1" '
+            'WHERE ("t1"."value" < ?) '
+            'EXCEPT '
+            'SELECT * FROM ('
+            'SELECT "t2"."value" FROM "register" AS "t2" '
+            'WHERE ("t2"."value" > ?) '
+            'EXCEPT '
+            'SELECT "t3"."value" FROM "register" AS "t3" '
+            'WHERE ("t3"."value" = ?))'), [5, 2, 4],
+            compound_select_parentheses=0)  # Never.
+
+        # A bare compound lhs stays flat, ops run left to right anyway.
+        self.assertSQL((a | b) - c, (
+            'SELECT "t1"."value" FROM "register" AS "t1" '
+            'WHERE ("t1"."value" < ?) '
+            'UNION '
+            'SELECT "t2"."value" FROM "register" AS "t2" '
+            'WHERE ("t2"."value" > ?) '
+            'EXCEPT '
+            'SELECT "t3"."value" FROM "register" AS "t3" '
+            'WHERE ("t3"."value" = ?)'), [5, 2, 4],
+            compound_select_parentheses=0)  # Never.
+
+        # Unions of unions group the same either way, they stay flat.
+        self.assertSQL(a | (b | c), (
+            'SELECT "t1"."value" FROM "register" AS "t1" '
+            'WHERE ("t1"."value" < ?) '
+            'UNION '
+            'SELECT "t2"."value" FROM "register" AS "t2" '
+            'WHERE ("t2"."value" > ?) '
+            'UNION '
+            'SELECT "t3"."value" FROM "register" AS "t3" '
+            'WHERE ("t3"."value" = ?)'), [5, 2, 4],
+            compound_select_parentheses=0)  # Never.
+
+        # An lhs with its own ORDER BY / LIMIT must be wrapped, written
+        # flat those would apply to the whole statement.
+        self.assertSQL(ordered - c, (
+            'SELECT * FROM ('
+            'SELECT "t1"."value" FROM "register" AS "t1" '
+            'WHERE ("t1"."value" < ?) '
+            'UNION '
+            'SELECT "t2"."value" FROM "register" AS "t2" '
+            'WHERE ("t2"."value" > ?) '
+            'ORDER BY "value" DESC LIMIT ?) '
+            'EXCEPT '
+            'SELECT "t3"."value" FROM "register" AS "t3" '
+            'WHERE ("t3"."value" = ?)'), [5, 2, 2, 4],
+            compound_select_parentheses=0)  # Never.
+
+        # CSQ unnested (mysql before the version gate): nested compounds
+        # stay flat, each plain member gets parens.
+        self.assertSQL(a - (b - c), (
+            '(SELECT "t1"."value" FROM "register" AS "t1" '
+            'WHERE ("t1"."value" < ?)) '
+            'EXCEPT '
+            '(SELECT "t2"."value" FROM "register" AS "t2" '
+            'WHERE ("t2"."value" > ?)) '
+            'EXCEPT '
+            '(SELECT "t3"."value" FROM "register" AS "t3" '
+            'WHERE ("t3"."value" = ?))'), [5, 2, 4],
+            compound_select_parentheses=2)  # Un-nested.
+
+        self.assertSQL((a | b) - c, (
+            '(SELECT "t1"."value" FROM "register" AS "t1" '
+            'WHERE ("t1"."value" < ?)) '
+            'UNION '
+            '(SELECT "t2"."value" FROM "register" AS "t2" '
+            'WHERE ("t2"."value" > ?)) '
+            'EXCEPT '
+            '(SELECT "t3"."value" FROM "register" AS "t3" '
+            'WHERE ("t3"."value" = ?))'), [5, 2, 4],
+            compound_select_parentheses=2)  # Un-nested.
+
+        # CSQ always (postgres): parens everywhere.
+        self.assertSQL(a - (b - c), (
+            '(SELECT "t1"."value" FROM "register" AS "t1" '
+            'WHERE ("t1"."value" < ?)) '
+            'EXCEPT '
+            '((SELECT "t2"."value" FROM "register" AS "t2" '
+            'WHERE ("t2"."value" > ?)) '
+            'EXCEPT '
+            '(SELECT "t3"."value" FROM "register" AS "t3" '
+            'WHERE ("t3"."value" = ?)))'), [5, 2, 4],
+            compound_select_parentheses=1)  # Always.
+
+        # CSQ grouped (mysql past the version gate): parens only where
+        # needed to keep the meaning.
+        self.assertSQL(a - (b - c), (
+            '(SELECT "t1"."value" FROM "register" AS "t1" '
+            'WHERE ("t1"."value" < ?)) '
+            'EXCEPT '
+            '((SELECT "t2"."value" FROM "register" AS "t2" '
+            'WHERE ("t2"."value" > ?)) '
+            'EXCEPT '
+            '(SELECT "t3"."value" FROM "register" AS "t3" '
+            'WHERE ("t3"."value" = ?)))'), [5, 2, 4],
+            compound_select_parentheses=3)  # Grouped.
+
+        # Union chains stay flat so outer column refs keep working,
+        # mysql cannot see them through two levels of parens.
+        self.assertSQL(a | (b | c), (
+            '(SELECT "t1"."value" FROM "register" AS "t1" '
+            'WHERE ("t1"."value" < ?)) '
+            'UNION '
+            '(SELECT "t2"."value" FROM "register" AS "t2" '
+            'WHERE ("t2"."value" > ?)) '
+            'UNION '
+            '(SELECT "t3"."value" FROM "register" AS "t3" '
+            'WHERE ("t3"."value" = ?))'), [5, 2, 4],
+            compound_select_parentheses=3)  # Grouped.
+
+        # INTERSECT runs first on mysql, so an lhs built from another op
+        # needs parens even though ops otherwise run left to right.
+        self.assertSQL((a | b) & c, (
+            '((SELECT "t1"."value" FROM "register" AS "t1" '
+            'WHERE ("t1"."value" < ?)) '
+            'UNION '
+            '(SELECT "t2"."value" FROM "register" AS "t2" '
+            'WHERE ("t2"."value" > ?))) '
+            'INTERSECT '
+            '(SELECT "t3"."value" FROM "register" AS "t3" '
+            'WHERE ("t3"."value" = ?))'), [5, 2, 4],
+            compound_select_parentheses=3)  # Grouped.
+
+        # A same-op rhs must not expose a different op through its
+        # flattened left spine, ops there join the outer chain.
+        self.assertSQL(a + ((b | c) + d), (
+            'SELECT "t1"."value" FROM "register" AS "t1" '
+            'WHERE ("t1"."value" < ?) '
+            'UNION ALL '
+            'SELECT * FROM ('
+            'SELECT "t2"."value" FROM "register" AS "t2" '
+            'WHERE ("t2"."value" > ?) '
+            'UNION '
+            'SELECT "t3"."value" FROM "register" AS "t3" '
+            'WHERE ("t3"."value" = ?) '
+            'UNION ALL '
+            'SELECT "t4"."value" FROM "register" AS "t4" '
+            'WHERE ("t4"."value" != ?))'), [5, 2, 4, 9],
+            compound_select_parentheses=0)  # Never.
+
+        self.assertSQL(a | ((b - c) | d), (
+            'SELECT "t1"."value" FROM "register" AS "t1" '
+            'WHERE ("t1"."value" < ?) '
+            'UNION '
+            'SELECT * FROM ('
+            'SELECT "t2"."value" FROM "register" AS "t2" '
+            'WHERE ("t2"."value" > ?) '
+            'EXCEPT '
+            'SELECT "t3"."value" FROM "register" AS "t3" '
+            'WHERE ("t3"."value" = ?) '
+            'UNION '
+            'SELECT "t4"."value" FROM "register" AS "t4" '
+            'WHERE ("t4"."value" != ?))'), [5, 2, 4, 9],
+            compound_select_parentheses=0)  # Never.
+
+        self.assertSQL(a + ((b | c) + d), (
+            '(SELECT "t1"."value" FROM "register" AS "t1" '
+            'WHERE ("t1"."value" < ?)) '
+            'UNION ALL '
+            '((SELECT "t2"."value" FROM "register" AS "t2" '
+            'WHERE ("t2"."value" > ?)) '
+            'UNION '
+            '(SELECT "t3"."value" FROM "register" AS "t3" '
+            'WHERE ("t3"."value" = ?)) '
+            'UNION ALL '
+            '(SELECT "t4"."value" FROM "register" AS "t4" '
+            'WHERE ("t4"."value" != ?)))'), [5, 2, 4, 9],
+            compound_select_parentheses=3)  # Grouped.
+
+        # Inside IN / EXISTS only the distinct set matters, so a pure
+        # union chain stays flat and correlated refs keep resolving.
+        self.assertSQL(
+            Reg.select(Reg.value).where(Reg.value.in_(a | (b + c))), (
+            'SELECT "t1"."value" FROM "register" AS "t1" '
+            'WHERE ("t1"."value" IN ('
+            'SELECT "t1"."value" FROM "register" AS "t1" '
+            'WHERE ("t1"."value" < ?) '
+            'UNION '
+            'SELECT "t1"."value" FROM "register" AS "t1" '
+            'WHERE ("t1"."value" > ?) '
+            'UNION ALL '
+            'SELECT "t1"."value" FROM "register" AS "t1" '
+            'WHERE ("t1"."value" = ?)))'), [5, 2, 4],
+            compound_select_parentheses=3)  # Grouped.
+
+        self.assertSQL(
+            Reg.select(Reg.value).where(Reg.value.in_(a | (b - c))), (
+            'SELECT "t1"."value" FROM "register" AS "t1" '
+            'WHERE ("t1"."value" IN ('
+            'SELECT "t1"."value" FROM "register" AS "t1" '
+            'WHERE ("t1"."value" < ?) '
+            'UNION '
+            '(SELECT "t1"."value" FROM "register" AS "t1" '
+            'WHERE ("t1"."value" > ?) '
+            'EXCEPT '
+            'SELECT "t1"."value" FROM "register" AS "t1" '
+            'WHERE ("t1"."value" = ?))))'), [5, 2, 4],
+            compound_select_parentheses=3)  # Grouped.
+
     def test_compound_select_order_limit(self):
         A = Table('a', ('col_a',))
         B = Table('b', ('col_b',))

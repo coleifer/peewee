@@ -1618,6 +1618,56 @@ class TestModelAPIs(ModelTestCase):
                  .with_cte(u_cte))
         self.assertEqual(sorted([u.username for u in query]), ['u1', 'u7'])
 
+    @requires_models(User)
+    def test_nested_compound_grouping(self):
+        if IS_ORACLE_MYSQL and self.database.server_version < (8, 0, 31):
+            self.skipTest('INTERSECT/EXCEPT requires MySQL 8.0.31.')
+        elif (IS_MYSQL and not IS_ORACLE_MYSQL
+              and self.database.server_version < (10, 4)):
+            self.skipTest('Compound parentheses require MariaDB 10.4.')
+
+        User.insert_many([('u%s' % i,) for i in range(1, 8)],
+                         fields=[User.username]).execute()
+        A = {'u1', 'u2', 'u3', 'u4', 'u5'}
+        B = {'u3', 'u4', 'u5', 'u6', 'u7'}
+        C = {'u2', 'u3', 'u7'}
+
+        def q(names):
+            return (User
+                    .select(User.username)
+                    .where(User.username.in_(sorted(names))))
+        a, b, c = q(A), q(B), q(C)
+
+        cases = (
+            ((a | b) & c, (A | B) & C),
+            (a | (b & c), A | (B & C)),
+            (a - (b - c), A - (B - C)),
+            (a - (b | c), A - (B | C)),
+            (((a | b) & c) | (b - c), ((A | B) & C) | (B - C)))
+        for query, expected in cases:
+            self.assertEqual(sorted(u.username for u in query),
+                             sorted(expected))
+
+        top2 = (a | b).order_by(User.username.desc()).limit(2)
+        self.assertEqual([u.username for u in (top2 - c)], ['u6'])
+
+        # Regression: a same-op rhs must not expose a different op
+        # through its flattened left spine.
+        query = a + ((b | c) + c)
+        expected = sorted(list(A) + list(B | C) + list(C))
+        self.assertEqual(sorted(u.username for u in query), expected)
+
+        # Correlated union-family IN stays flat on the mysql family.
+        UA = User.alias()
+        def corr(names):
+            return (UA.select(UA.username)
+                    .where(UA.username.in_(sorted(names)) &
+                           (UA.username == User.username)))
+        query = (User.select()
+                 .where(User.username.in_(corr(A) | (corr(B) + corr(C)))))
+        self.assertEqual(sorted(u.username for u in query),
+                         sorted(A | B | C))
+
     @requires_models(Category)
     def test_self_referential_fk(self):
         self.assertTrue(Category.parent.rel_model is Category)
