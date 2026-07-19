@@ -5,6 +5,7 @@ from .base import ModelTestCase
 from .base import TestModel
 from .base import get_in_memory_db
 from .base import IS_MYSQL
+from .base import IS_POSTGRESQL
 from .base import IS_SQLITE
 from .base import skip_if
 from .base import skip_unless
@@ -109,6 +110,83 @@ class TestWithRelated(ModelTestCase):
                 ('huey', ['hiss', 'meow', 'purr']),
                 ('mickey', ['bark', 'woof']),
                 ('zaizee', [])])
+
+    def test_compound_parent(self):
+        lhs = User.select().where(User.username == 'huey')
+        rhs = User.select().where(User.username == 'mickey')
+        for pt in PREFETCH_TYPE.values():
+            with self.assertQueryCount(2):
+                query = ((lhs | rhs)
+                         .with_related(Load(User.tweets, strategy=pt)))
+                accum = [(u.username, sorted(t.content for t in u.tweets))
+                         for u in query]
+            self.assertEqual(sorted(accum), [
+                ('huey', ['hiss', 'meow', 'purr']),
+                ('mickey', ['bark', 'woof'])])
+
+    def test_join_strategy_parent_fanout(self):
+        # Guards the key-dedup invariant: duplicate parent rows keep
+        # their duplication, children are not fanned out by the join,
+        # and both strategies agree.
+        parent = (User
+                  .select(User.id, User.username)
+                  .join(Tweet, on=(Tweet.user == User.id)))
+        results = {}
+        for pt in (PREFETCH_TYPE.WHERE, PREFETCH_TYPE.JOIN):
+            with self.assertQueryCount(2):
+                query = (parent.clone()
+                         .with_related(Load(User.tweets, strategy=pt)))
+                results[pt] = sorted((u.username,
+                                      sorted(t.content for t in u.tweets))
+                                     for u in query)
+        self.assertEqual(results[PREFETCH_TYPE.WHERE],
+                         results[PREFETCH_TYPE.JOIN])
+        self.assertEqual(results[PREFETCH_TYPE.JOIN], [
+            ('huey', ['hiss', 'meow', 'purr']),
+            ('huey', ['hiss', 'meow', 'purr']),
+            ('huey', ['hiss', 'meow', 'purr']),
+            ('mickey', ['bark', 'woof']),
+            ('mickey', ['bark', 'woof'])])
+
+    @skip_unless(IS_POSTGRESQL, 'requires postgres')
+    def test_join_strategy_child_distinct(self):
+        # A child DISTINCT ON ("latest tweet per user") survives the JOIN
+        # strategy, it used to be clobbered by an injected distinct.
+        latest = (Tweet
+                  .select()
+                  .distinct([Tweet.user])
+                  .order_by(Tweet.user, Tweet.timestamp.desc()))
+        for pt in (PREFETCH_TYPE.WHERE, PREFETCH_TYPE.JOIN):
+            with self.assertQueryCount(2):
+                query = (User
+                         .select()
+                         .order_by(User.username)
+                         .with_related(Load(User.tweets, query=latest,
+                                            strategy=pt)))
+                accum = [(u.username, [t.content for t in u.tweets])
+                         for u in query]
+            self.assertEqual(accum, [('huey', ['meow']),
+                                     ('mickey', ['woof']),
+                                     ('zaizee', [])])
+
+    @skip_unless(IS_POSTGRESQL, 'requires postgres')
+    def test_join_strategy_expression_ordering(self):
+        # The injected distinct also collided with the postgres rule that
+        # DISTINCT order expressions be projected. With it gone, a child
+        # ordered by an unprojected expression executes and orders.
+        expr_order = Tweet.select().order_by(Tweet.timestamp * -1)
+        for pt in (PREFETCH_TYPE.WHERE, PREFETCH_TYPE.JOIN):
+            with self.assertQueryCount(2):
+                query = (User
+                         .select()
+                         .order_by(User.username)
+                         .with_related(Load(User.tweets, query=expr_order,
+                                            strategy=pt)))
+                accum = [(u.username, [t.content for t in u.tweets])
+                         for u in query]
+            self.assertEqual(accum, [('huey', ['meow', 'hiss', 'purr']),
+                                     ('mickey', ['woof', 'bark']),
+                                     ('zaizee', [])])
 
     def test_fk_alias_parent(self):
         TA = Tweet.alias('ta')

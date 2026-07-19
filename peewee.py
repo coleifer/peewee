@@ -9260,6 +9260,11 @@ class PrefetchQuery(collections.namedtuple('_PrefetchQuery', (
 
 
 def _parent_keys(parent_query, cols):
+    if isinstance(parent_query, CompoundSelectQuery):
+        # A compound renders as a derived table, key columns must resolve
+        # through its alias rather than through the model's.
+        sub = parent_query.alias('_compound')
+        return Select((sub,), [getattr(sub.c, c.column_name) for c in cols])
     sub = parent_query.select(*cols)
     # MySQL rejects LIMIT directly inside IN so move it into a derived table.
     if parent_query._limit is not None or parent_query._offset is not None:
@@ -9270,10 +9275,20 @@ def _parent_keys(parent_query, cols):
 
 def _relate_children(query, parent_query, pairs, strategy):
     if strategy == PREFETCH_TYPE.JOIN:
-        sub = _parent_keys(parent_query, {pk for _, pk in pairs})
+        # Distinct the key subquery, not the child query. Deduping the
+        # keys prevents join fan-out without clobbering a child DISTINCT.
+        # Inherited ordering is dropped, a key set has none and postgres
+        # rejects DISTINCT ordered by an unprojected column.
+        sub = (_parent_keys(parent_query, {pk for _, pk in pairs})
+               .order_by().distinct())
         on = reduce(operator.or_, [getattr(sub.c, pk.column_name) == fk
                                    for fk, pk in pairs])
-        return query.distinct().join(sub, on=on)
+        query = query.join(sub, on=on)
+        if len(pairs) > 1:
+            # An OR join over several fks can match a child row to more
+            # than one key row, dedupe the children as well.
+            query = query.distinct()
+        return query
     expr = reduce(operator.or_, [fk << _parent_keys(parent_query, (pk,))
                                  for fk, pk in pairs])
     return query.where(expr)
@@ -9281,10 +9296,14 @@ def _relate_children(query, parent_query, pairs, strategy):
 
 def _relate_parent(query, parent_query, pairs, strategy):
     if strategy == PREFETCH_TYPE.JOIN:
-        sub = _parent_keys(parent_query, [fk for _, fk in pairs])
+        sub = (_parent_keys(parent_query, [fk for _, fk in pairs])
+               .order_by().distinct())
         on = reduce(operator.or_, [ref == getattr(sub.c, fk.column_name)
                                    for ref, fk in pairs])
-        return query.distinct().join(sub, on=on)
+        query = query.join(sub, on=on)
+        if len(pairs) > 1:
+            query = query.distinct()
+        return query
     expr = reduce(operator.or_, [ref << _parent_keys(parent_query, (fk,))
                                  for ref, fk in pairs])
     return query.where(expr)
