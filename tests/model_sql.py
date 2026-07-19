@@ -1948,12 +1948,16 @@ class TestModelCompoundSelect(BaseTestCase):
         lhs = Alpha.select(Alpha.alpha).order_by(Alpha.alpha).limit(3)
         rhs = Beta.select(Beta.beta).order_by(Beta.beta).limit(4)
         compound = (lhs | rhs).limit(5)
-        # This may be invalid SQL, but this at least documents the behavior.
+        # Each member carries its own ORDER BY / LIMIT, so it is wrapped as a
+        # subquery (CSQ never / sqlite) to keep that ordering from rebinding to
+        # the whole statement.
         self.assertSQL(compound, (
+            'SELECT * FROM ('
             'SELECT "t1"."alpha" FROM "alpha" AS "t1" '
-            'ORDER BY "t1"."alpha" LIMIT ? UNION '
+            'ORDER BY "t1"."alpha" LIMIT ?) UNION '
+            'SELECT * FROM ('
             'SELECT "t2"."beta" FROM "beta" AS "t2" '
-            'ORDER BY "t2"."beta" LIMIT ? LIMIT ?'), [3, 4, 5])
+            'ORDER BY "t2"."beta" LIMIT ?) LIMIT ?'), [3, 4, 5])
 
     def test_union_from(self):
         lhs = Alpha.select(Alpha.alpha).where(Alpha.alpha < 2)

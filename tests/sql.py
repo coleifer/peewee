@@ -1391,6 +1391,46 @@ class TestSelectQuery(BaseTestCase):
             'WHERE ("t1"."value" = ?))))'), [5, 2, 4],
             compound_select_parentheses=3)  # Grouped.
 
+    def test_compound_member_order_limit(self):
+        # A plain (non-compound) member with its own ORDER BY / LIMIT must be
+        # grouped, exactly like a nested compound member: written flat under
+        # CSQ never (sqlite) an lhs is a syntax error and an rhs silently
+        # rebinds the ORDER BY / LIMIT to the whole statement.
+        Reg = Table('register', ('value',))
+        a = Reg.select().where(Reg.value < 5).order_by(Reg.value.desc()).limit(2)
+        b = Reg.select().where(Reg.value > 2)
+
+        # CSQ never (sqlite): wrap the ordered/limited member as a subquery.
+        self.assertSQL(a | b, (
+            'SELECT * FROM ('
+            'SELECT "t1"."value" FROM "register" AS "t1" '
+            'WHERE ("t1"."value" < ?) '
+            'ORDER BY "t1"."value" DESC LIMIT ?) '
+            'UNION '
+            'SELECT "t2"."value" FROM "register" AS "t2" '
+            'WHERE ("t2"."value" > ?)'), [5, 2, 2],
+            compound_select_parentheses=0)  # Never.
+
+        self.assertSQL(b | a, (
+            'SELECT "t1"."value" FROM "register" AS "t1" '
+            'WHERE ("t1"."value" > ?) '
+            'UNION '
+            'SELECT * FROM ('
+            'SELECT "t2"."value" FROM "register" AS "t2" '
+            'WHERE ("t2"."value" < ?) '
+            'ORDER BY "t2"."value" DESC LIMIT ?)'), [2, 5, 2],
+            compound_select_parentheses=0)  # Never.
+
+        # CSQ always (postgres): the member gets ordinary parentheses.
+        self.assertSQL(a | b, (
+            '(SELECT "t1"."value" FROM "register" AS "t1" '
+            'WHERE ("t1"."value" < ?) '
+            'ORDER BY "t1"."value" DESC LIMIT ?) '
+            'UNION '
+            '(SELECT "t2"."value" FROM "register" AS "t2" '
+            'WHERE ("t2"."value" > ?))'), [5, 2, 2],
+            compound_select_parentheses=1)  # Always.
+
     def test_compound_select_order_limit(self):
         A = Table('a', ('col_a',))
         B = Table('b', ('col_b',))
