@@ -919,7 +919,8 @@ class IntegrationTests(object):
                 for _ in range(5):
                     await db.aexecute_sql('SELECT 1')
                     await asyncio.sleep(0.01)
-            except (InterfaceError, OperationalError, ProgrammingError):
+            except (InterfaceError, OperationalError, ProgrammingError,
+                    InternalError):
                 pass
 
         tasks = [asyncio.ensure_future(worker()) for _ in range(6)]
