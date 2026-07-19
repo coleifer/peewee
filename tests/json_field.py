@@ -859,6 +859,27 @@ class TestMutation(ModelTestCase):
         JM.update(data=JM.data['k'].set(None)).where(JM.id == m.id).execute()
         self.assertEqual(JM.get_by_id(m.id).data, {'k': None})
 
+    def test_set_bool(self):
+        # Bools must land as json true/false, not the driver's 0/1. Dict
+        # equality cannot discriminate (True == 1), so check identity.
+        m = JM.create(data={'k': 'v'})
+        JM.update(data=JM.data['k'].set(True)).where(JM.id == m.id).execute()
+        self.assertIs(JM.get_by_id(m.id).data['k'], True)
+        self.assertEqual(JM.select().where(JM.data['k'] == True).count(), 1)
+        self.assertEqual(JM.select().where(JM.data['k'] == False).count(), 0)
+
+        JM.update(data=JM.data['k'].set(False)).where(JM.id == m.id).execute()
+        self.assertIs(JM.get_by_id(m.id).data['k'], False)
+        self.assertEqual(JM.select().where(JM.data['k'] == False).count(), 1)
+
+    def test_set_float(self):
+        # Mariadb reformats driver floats and compares json textually, so a
+        # set() value must round-trip through dumps to stay findable.
+        m = JM.create(data={'k': 0})
+        JM.update(data=JM.data['k'].set(1e10)).where(JM.id == m.id).execute()
+        self.assertEqual(JM.get_by_id(m.id).data['k'], 1e10)
+        self.assertEqual(JM.select().where(JM.data['k'] == 1e10).count(), 1)
+
     def test_remove(self):
         m = JM.create(data={'k': 'v', 'n': 5})
         JM.update(data=JM.data['k'].remove()).where(JM.id == m.id).execute()

@@ -3276,12 +3276,13 @@ class SqliteJSONMethods(BaseJSONMethods):
         return wrapper
 
     def _wrap_value(self, field, value):
-        # Wrap a Python value so SQLite stores it as JSON-typed. Containers
-        # and JSON null go through fn.json() so the result is JSON-typed
-        # (otherwise SQLite stores them as TEXT). Scalars are passed as-is.
+        # Wrap a Python value so SQLite stores it as JSON-typed. Containers,
+        # bools and JSON null go through fn.json() so the result is JSON-typed
+        # (otherwise SQLite stores TEXT, or 0/1 for bools). Other scalars are
+        # passed as-is.
         if value is None:
             return fn.json(Value('null', converter=False))
-        if isinstance(value, (dict, list)):
+        if isinstance(value, (dict, list, bool)):
             return fn.json(field._dumps(value))
         return value
 
@@ -3496,8 +3497,10 @@ class MySQLJSONMethods(BaseJSONMethods):
 
     def _json_value(self, field, value):
         # Value for JSON_SET, etc. Need to apply wrapping in order to ensure
-        # objects/arrays/null are CAST as JSON and not strings.
-        if value is None or isinstance(value, (dict, list)):
+        # objects/arrays/null are CAST as JSON and not strings. Bools and
+        # floats also take the dumps form, the driver writes 0/1 and
+        # reformatted floats that break comparisons.
+        if value is None or isinstance(value, (dict, list, bool, float)):
             return self._as_json(self._contains_value(field, value))
         return Value(value, converter=False)
 

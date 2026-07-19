@@ -18,6 +18,11 @@ https://github.com/coleifer/peewee/releases
   MySQL/MariaDB. Previously the sqlite-only `$[#-n]` form was emitted, which
   MariaDB evaluates to NULL (overwriting the column when used with `set()`)
   and MySQL rejects as an invalid path.
+* `JSONField` mutators (`set()`, `insert()`, etc) store Python booleans as
+  json true/false instead of the driver's 0/1, so values written by `create()`
+  and by mutators compare consistently. Floats on MySQL/MariaDB likewise take
+  their json text form, as MariaDB reformats driver floats in a way that
+  breaks equality against the stored document.
 * Reflection/pwiz map MySQL JSON columns to the core `JSONField` instead of
   emitting `from playhouse.mysql_ext import *` for a re-exported field.
 * `playhouse.pwasyncio` logs to the `peewee.pwasyncio` logger rather than
