@@ -2058,6 +2058,21 @@ class TestISODateTimeField(ModelTestCase):
         raw = self.database.execute_sql('select * from dt').fetchone()
         self.assertEqual(raw, ('k1', str(d1), d2.isoformat()))
 
+    def test_string_input(self):
+        d_obj = datetime.datetime(2026, 1, 2, 3, 4, 5)
+        DT.create(key='k2', d='2026-01-02 03:04:05',
+                  iso='2026-01-02 03:04:05')
+        dt = DT['k2']
+        self.assertEqual(dt.iso, d_obj)
+
+        # String input is normalized to isoformat on write.
+        raw = self.database.execute_sql(
+            'select iso from dt where key = ?', ('k2',)).fetchone()
+        self.assertEqual(raw, ('2026-01-02T03:04:05',))
+
+        query = DT.select().where(DT.iso >= '2026-01-01')
+        self.assertEqual([d.key for d in query], ['k2'])
+
 #
 # If we have cysqlite, let's run tests on it.
 #

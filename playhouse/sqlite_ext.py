@@ -56,8 +56,12 @@ class ISODateTimeField(DateTimeField):
     ]
 
     def db_value(self, value):
-        if value:
+        if isinstance(value, str):
+            # Normalize string input so the column stays uniformly ISO.
+            value = self.adapt(value)
+        if value and not isinstance(value, str):
             return value.isoformat()
+        return value
 
 
 class JSONPath(ColumnBase):

@@ -5838,6 +5838,8 @@ class BlobField(FieldDatabaseHook, Field):
     def db_value(self, value):
         if isinstance(value, str):
             value = value.encode('utf8')
+        elif isinstance(value, memoryview):
+            value = value.tobytes()
         if isinstance(value, bytes):
             return self._constructor(value)
         return value
