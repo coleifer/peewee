@@ -898,6 +898,16 @@ class IntegrationTests(object):
         finally:
             await db.close_pool()
 
+    async def test_close_pool_releases_caller_conn(self):
+        # Deferring the caller's conn to task-end release strands it, the
+        # release task dies with the loop (hangs interpreter exit on 3.8).
+        db = type(self.db)(self.db.database, pool_size=2,
+                           **self.db.connect_params)
+        conn = await db.aconnect()
+        await db.close_pool()
+        self.assertIsNone(db._state.conn)
+        self.assertTrue(conn.stale())
+
     async def test_close_pool_under_load(self):
         # close_pool with queries in flight must not hang. Workers may die
         # with pool-shutdown errors, nothing else.

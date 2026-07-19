@@ -336,11 +336,14 @@ class AsyncDatabaseMixin(object):
                     await asyncio.gather(*tasks, return_exceptions=True)
 
                 # Reclaim conns of completed tasks. Running tasks keep theirs
-                # (releasing mid-query hands a live conn to another acquirer).
+                # (releasing mid-query hands a live conn to another acquirer),
+                # except the caller, whose conn is idle by definition here.
                 # Bounded _pool_close below collects the stragglers.
+                current = asyncio.current_task()
                 for tid, state in list(self._state._states.items()):
                     task = state._task
-                    if task is not None and not task.done():
+                    if (task is not None and not task.done()
+                            and task is not current):
                         continue
                     if state.conn and not state.closed:
                         conn = state.conn
