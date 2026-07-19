@@ -1668,6 +1668,41 @@ class TestModelAPIs(ModelTestCase):
         self.assertEqual(sorted(u.username for u in query),
                          sorted(A | B | C))
 
+    @requires_models(User)
+    def test_compound_member_order_limit(self):
+        User.insert_many([('u%s' % i,) for i in range(1, 8)],
+                         fields=[User.username]).execute()
+        lo = (User.select(User.username)
+              .where(User.username.in_(['u1', 'u2', 'u3', 'u4'])))
+        hi = (User.select(User.username)
+              .where(User.username.in_(['u5', 'u6', 'u7'])))
+        top2 = lo.order_by(User.username.desc()).limit(2)
+        expected = ['u3', 'u4', 'u5', 'u6', 'u7']
+
+        # A member's ORDER BY / LIMIT stays confined to that member. On
+        # sqlite a flat lhs was a syntax error and a flat rhs LIMIT
+        # silently applied to the whole statement.
+        self.assertEqual(sorted(u.username for u in (top2 | hi)), expected)
+        self.assertEqual(sorted(u.username for u in (hi | top2)), expected)
+        self.assertEqual(sorted(u.username for u in (top2 + hi)), expected)
+        self.assertEqual(sorted(u.username for u in (top2 + top2)),
+                         ['u3', 'u3', 'u4', 'u4'])
+
+        # Offset-only member, limit_max supplies a LIMIT where required.
+        skip2 = lo.order_by(User.username).offset(2)
+        self.assertEqual(sorted(u.username for u in (skip2 | hi)), expected)
+
+        # Ordering the whole statement still belongs to the compound.
+        self.assertEqual([u.username for u in
+                          (top2 | hi).order_by(User.username.desc())],
+                         ['u7', 'u6', 'u5', 'u4', 'u3'])
+
+        if not IS_MYSQL:
+            # The member limit stays confined inside IN as well. The
+            # mysql family still renders in-expr members flat.
+            query = User.select().where(User.username.in_(hi | top2))
+            self.assertEqual(sorted(u.username for u in query), expected)
+
     @requires_models(Category)
     def test_self_referential_fk(self):
         self.assertTrue(Category.parent.rel_model is Category)

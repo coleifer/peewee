@@ -2464,10 +2464,14 @@ class CompoundSelectQuery(SelectBase):
         csq_setting = ctx.state.compound_select_parentheses
 
         if not csq_setting or csq_setting == CSQ_PARENTHESES_NEVER:
-            # Parens are not allowed here (sqlite), wrap a nested compound
-            # that needs grouping as a subquery instead.
-            if (isinstance(subq, CompoundSelectQuery)
-                    and self._needs_group(subq, lhs)):
+            # Parens are not allowed here (sqlite), wrap a member that needs
+            # grouping as a subquery instead: a nested compound, or a plain
+            # member with its own ORDER BY / LIMIT / OFFSET (written flat those
+            # would apply to the whole statement).
+            if isinstance(subq, CompoundSelectQuery):
+                if self._needs_group(subq, lhs):
+                    return CSQ_WRAP
+            elif self._self_wraps(subq):
                 return CSQ_WRAP
         elif csq_setting == CSQ_PARENTHESES_ALWAYS:
             return CSQ_PARENS
