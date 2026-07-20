@@ -95,18 +95,18 @@ class Entry(flask_db.Model):
         # allow us to use SQLite's awesome full-text search extension to
         # search our entries.
         exists = (FTSEntry
-                  .select(FTSEntry.docid)
-                  .where(FTSEntry.docid == self.id)
+                  .select(FTSEntry.rowid)
+                  .where(FTSEntry.rowid == self.id)
                   .exists())
         content = '\n'.join((self.title, self.content))
         if exists:
             (FTSEntry
              .update({FTSEntry.content: content})
-             .where(FTSEntry.docid == self.id)
+             .where(FTSEntry.rowid == self.id)
              .execute())
         else:
             FTSEntry.insert({
-                FTSEntry.docid: self.id,
+                FTSEntry.rowid: self.id,
                 FTSEntry.content: content}).execute()
 
     @classmethod
@@ -131,7 +131,7 @@ class Entry(flask_db.Model):
         # search result.
         return (Entry
                 .select(Entry, FTSEntry.rank().alias('score'))
-                .join(FTSEntry, on=(Entry.id == FTSEntry.docid))
+                .join(FTSEntry, on=(Entry.id == FTSEntry.rowid))
                 .where(
                     FTSEntry.match(search) &
                     (Entry.published == True))
