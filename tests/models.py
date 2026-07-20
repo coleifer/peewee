@@ -3243,7 +3243,6 @@ class TestWindowFunctionIntegration(ModelTestCase):
         self.assertEqual(list(query),
                          [(1, 1), (1, 2), (2, 3), (2, 4), (3, 5)])
 
-    @skip_if(IS_MYSQL, 'flaky on mysql')
     def test_sum_with_frame(self):
         w = Window(order_by=[Sample.counter, Sample.value],
                    frame_type=Window.ROWS,
@@ -3253,7 +3252,7 @@ class TestWindowFunctionIntegration(ModelTestCase):
                  .select(Sample.counter,
                          fn.SUM(Sample.value).over(w).alias('rsum'))
                  .window(w)
-                 .order_by(Sample.counter)
+                 .order_by(Sample.counter, Sample.value)
                  .tuples())
         results = list(query)
         # Each row sums current + previous row's value.
@@ -3264,7 +3263,6 @@ class TestWindowFunctionIntegration(ModelTestCase):
             (2, 4.0),  # 1 + 3
             (3, 103.0)])  # 3 + 100
 
-    @skip_if(IS_MYSQL, 'flaky on mysql')
     def test_lag_lead(self):
         query = (Sample
                  .select(Sample.counter,
@@ -3272,7 +3270,7 @@ class TestWindowFunctionIntegration(ModelTestCase):
                              Sample.counter, Sample.value]).alias('prev'),
                          fn.LEAD(Sample.value, 1).over(order_by=[
                              Sample.counter, Sample.value]).alias('next'))
-                 .order_by(Sample.counter)
+                 .order_by(Sample.counter, Sample.value)
                  .tuples())
         results = list(query)
         self.assertEqual(results, [
@@ -3894,14 +3892,17 @@ class TestCTEIntegration(ModelTestCase):
             ('p3', 'root'),
         ])
 
-    @skip_if(IS_SQLITE_OLD or IS_MYSQL or IS_CRDB, 'requires recursive cte')
+    @skip_if(IS_SQLITE_OLD or (IS_MYSQL and not IS_MYSQL_ADVANCED_FEATURES)
+             or IS_CRDB, 'requires recursive cte')
     def test_recursive_cte(self):
         def get_parents(cname):
             C1 = Category.alias()
             C2 = Category.alias()
 
-            level = SQL('1').cast('integer').alias('level')
-            path = C1.name.cast('text').alias('path')
+            int_type = 'SIGNED' if IS_MYSQL else 'integer'
+            str_type = 'CHAR' if IS_MYSQL else 'text'
+            level = SQL('1').cast(int_type).alias('level')
+            path = C1.name.cast(str_type).alias('path')
 
             base = (C1
                     .select(C1.name, C1.parent, level, path)
@@ -3922,8 +3923,8 @@ class TestCTEIntegration(ModelTestCase):
             self.assertSQL(query, (
                 'WITH RECURSIVE "parents" AS ('
                 'SELECT "t1"."name", "t1"."parent_id", '
-                'CAST(1 AS integer) AS "level", '
-                'CAST("t1"."name" AS text) AS "path" '
+                'CAST(1 AS %s) AS "level", '
+                'CAST("t1"."name" AS %s) AS "path" '
                 'FROM "category" AS "t1" '
                 'WHERE ("t1"."name" = ?) '
                 'UNION ALL '
@@ -3935,7 +3936,8 @@ class TestCTEIntegration(ModelTestCase):
                 'ON ("t2"."name" = "parents"."parent_id")) '
                 'SELECT "parents"."name", "parents"."level", "parents"."path" '
                 'FROM "parents" '
-                'ORDER BY "parents"."level"'), [cname, 1, '->'])
+                'ORDER BY "parents"."level"') % (int_type, str_type),
+                [cname, 1, '->'])
             return query
 
         data = [row for row in get_parents('c31').tuples()]
@@ -3955,7 +3957,8 @@ class TestCTEIntegration(ModelTestCase):
         data = [(r.name, r.level, r.path) for r in query]
         self.assertEqual(data, [('root', 1, 'root')])
 
-    @skip_if(IS_SQLITE_OLD or IS_MYSQL or IS_CRDB, 'requires recursive cte')
+    @skip_if(IS_SQLITE_OLD or (IS_MYSQL and not IS_MYSQL_ADVANCED_FEATURES)
+             or IS_CRDB, 'requires recursive cte')
     def test_recursive_cte2(self):
         hierarchy = (Category
                      .select(Category.name, Value(0).alias('level'))
@@ -3980,13 +3983,16 @@ class TestCTEIntegration(ModelTestCase):
             ('p3', 1),
             ('root', 0)])
 
-    @skip_if(IS_SQLITE_OLD or IS_MYSQL or IS_CRDB, 'requires recursive cte')
+    @skip_if(IS_SQLITE_OLD or (IS_MYSQL and not IS_MYSQL_ADVANCED_FEATURES)
+             or IS_CRDB, 'requires recursive cte')
     def test_recursive_cte_docs_example(self):
         # Define the base case of our recursive CTE. This will be categories that
         # have a null parent foreign-key.
         Base = Category.alias()
-        level = Value(1).cast('integer').alias('level')
-        path = Base.name.cast('text').alias('path')
+        int_type = 'SIGNED' if IS_MYSQL else 'integer'
+        str_type = 'CHAR' if IS_MYSQL else 'text'
+        level = Value(1).cast(int_type).alias('level')
+        path = Base.name.cast(str_type).alias('path')
         base_case = (Base
                      .select(Base.name, Base.parent, level, path)
                      .where(Base.parent.is_null())
@@ -4020,7 +4026,7 @@ class TestCTEIntegration(ModelTestCase):
             ('c31', 3, 'root->p3->c31')])
 
     @requires_models(Sample)
-    @skip_if(IS_SQLITE_OLD or IS_MYSQL, 'sqlite too old for ctes, mysql flaky')
+    @skip_if(IS_SQLITE_OLD or (IS_MYSQL and not IS_MYSQL_ADVANCED_FEATURES))
     def test_cte_reuse_aggregate(self):
         data = (
             (1, (1.25, 1.5, 1.75)),
@@ -4050,7 +4056,7 @@ class TestCTEIntegration(ModelTestCase):
             (2, .2),
             (2, .4)])
 
-    @skip_if(IS_SQLITE_OLD or IS_MYSQL)
+    @skip_if(IS_SQLITE_OLD or (IS_MYSQL and not IS_MYSQL_ADVANCED_FEATURES))
     @requires_models(Sample)
     def test_cte_with_aggregate_filter(self):
         for i in range(1, 11):
