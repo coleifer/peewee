@@ -389,6 +389,8 @@ class BaseFTSModel(VirtualModel):
         if prefix:
             if isinstance(prefix, (list, tuple)):
                 prefix = ','.join([str(i) for i in prefix])
+            elif isinstance(prefix, int):
+                prefix = str(prefix)
             options['prefix'] = "'%s'" % prefix.strip("' ")
 
         if tokenize and cls._meta.extension_module.lower() == 'fts5':
@@ -404,8 +406,7 @@ class FTSModel(BaseFTSModel):
     VirtualModel class for creating tables that use the FTS4 search
     extension. To use FTS3, set ``Meta.extension_module = 'FTS3'``.
     """
-    # FTS3/4 uses "docid" in the same way a normal table uses "rowid".
-    docid = DocIDField()
+    rowid = RowIDField()
 
     class Meta:
         extension_module = 'FTS%s' % FTS_VERSION
@@ -472,7 +473,7 @@ class FTSModel(BaseFTSModel):
         elif isinstance(weights, dict):
             weight_args = []
             for field in cls._meta.sorted_fields:
-                # rowid/docid is not a searchable column.
+                # rowid is not a searchable column.
                 if isinstance(field, RowIDField):
                     continue
                 # Attempt to get the specified weight of the field by looking

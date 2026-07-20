@@ -183,7 +183,7 @@ FTS5VocabInstance = FTS5Test.VocabModel('instance')
 
 
 class SearchWeight(FTSModel, TestModel):
-    # FTS4 model for exercising dict-form search weights. The implicit `docid`
+    # FTS4 model for exercising dict-form search weights. The implicit `rowid`
     # primary-key precedes these content columns.
     title = SearchField()
     body = SearchField()
@@ -799,17 +799,17 @@ class TestFullTextSearch(BaseFTSTestCase, ModelTestCase):
     @requires_models(Document)
     def test_fts_insert_or_replace(self):
         # We can use replace to create a new row.
-        n = Document.replace(docid=100, message='m100').execute()
+        n = Document.replace(rowid=100, message='m100').execute()
         self.assertEqual(n, 100)
         self.assertEqual(Document.select().count(), 1)
 
         # We can use replace to update an existing row.
-        n = Document.replace(docid=100, message='x100').execute()
+        n = Document.replace(rowid=100, message='x100').execute()
         self.assertEqual(n, 100)
         self.assertEqual(Document.select().count(), 1)
 
         # Adds a new row.
-        n = Document.replace(docid=101, message='x101').execute()
+        n = Document.replace(rowid=101, message='x101').execute()
         self.assertEqual(n, 101)
         self.assertEqual(Document.select().count(), 2)
 
@@ -823,7 +823,7 @@ class TestFullTextSearch(BaseFTSTestCase, ModelTestCase):
         query = (Document
                  .select()
                  .where(Document.match('believe'))
-                 .order_by(Document.docid))
+                 .order_by(Document.rowid))
         self.assertMessages(query, [0, 3])
 
         query = Document.search('believe')
@@ -862,12 +862,12 @@ class TestFullTextSearch(BaseFTSTestCase, ModelTestCase):
         query = (ContentPost
                  .select(ContentPost, ContentPost.rank().alias('score'))
                  .where(ContentPost.match('believe'))
-                 .order_by(ContentPost.docid))
+                 .order_by(ContentPost.rowid))
         self.assertMessages(query, [0, 3])
 
         query = (ContentPost
-                 .select(ContentPost.docid)
-                 .order_by(ContentPost.docid))
+                 .select(ContentPost.rowid)
+                 .order_by(ContentPost.rowid))
         for content_post in query:
             self.assertEqual(content_post.delete_instance(), 1)
 
@@ -1003,25 +1003,25 @@ class TestFullTextSearch(BaseFTSTestCase, ModelTestCase):
         pq = (ModelClass
               .select()
               .where(ModelClass.match('faith'))
-              .order_by(ModelClass.docid))
+              .order_by(ModelClass.rowid))
         self.assertMessages(pq, range(len(self.messages)))
 
         pq = (ModelClass
               .select()
               .where(ModelClass.match('believe'))
-              .order_by(ModelClass.docid))
+              .order_by(ModelClass.rowid))
         self.assertMessages(pq, [0, 3])
 
         pq = (ModelClass
               .select()
               .where(ModelClass.match('thin*'))
-              .order_by(ModelClass.docid))
+              .order_by(ModelClass.rowid))
         self.assertMessages(pq, [2, 4])
 
         pq = (ModelClass
               .select()
               .where(ModelClass.match('"it is"'))
-              .order_by(ModelClass.docid))
+              .order_by(ModelClass.rowid))
         self.assertMessages(pq, [2, 3])
 
         pq = ModelClass.search('things', with_score=True)
@@ -1089,30 +1089,32 @@ class TestFullTextSearch(BaseFTSTestCase, ModelTestCase):
     @requires_models(SearchWeight)
     def test_search_dict_weights(self):
         # Regression: the dict form of `weights` iterated *all* sorted_fields,
-        # so the docid PK prepended a phantom weight and shifted every column
+        # so the rowid PK prepended a phantom weight and shifted every column
         # by one (IndexError with the Python ranking UDF, silent mis-scoring
         # with the Cython one). It must behave exactly like the list form.
-        SearchWeight.create(title='alpha alpha', body='common words')  # docid 1
-        SearchWeight.create(title='common words', body='alpha alpha')  # docid 2
-        SearchWeight.create(title='common', body='words')              # docid 3
+        SearchWeight.create(title='alpha alpha', body='common words')  # 1
+        SearchWeight.create(title='common words', body='alpha alpha')  # 2
+        SearchWeight.create(title='common', body='words')              # 3
 
         def results(weights):
-            return [(x.docid, round(x.score, 5)) for x in
+            return [(x.rowid, round(x.score, 5)) for x in
                     SearchWeight.search_bm25('alpha', weights=weights,
                                              with_score=True)]
 
-        # Weighting the title 3x ranks the title match (docid 1) ahead of the
-        # body match (docid 2); the dict forms must match the list form exactly.
+        # Weighting the title 3x ranks the title match (rowid 1) ahead of the
+        # body match (rowid 2); the dict forms must match the list form
+        # exactly.
         by_list = results([3., 1.])
-        self.assertEqual([docid for docid, _ in by_list], [1, 2])
-        self.assertEqual(results({SearchWeight.title: 3., SearchWeight.body: 1.}),
-                         by_list)
+        self.assertEqual([rowid for rowid, _ in by_list], [1, 2])
+        self.assertEqual(
+            results({SearchWeight.title: 3., SearchWeight.body: 1.}),
+            by_list)
         self.assertEqual(results({'title': 3., 'body': 1.}), by_list)
 
-        # Weighting the body instead flips the ranking -- proof the weights land
-        # on the intended columns rather than being shifted.
+        # Weighting the body instead flips the ranking -- proof the weights
+        # land on the intended columns rather than being shifted.
         self.assertEqual(
-            [docid for docid, _ in results({'body': 3., 'title': 1.})], [2, 1])
+            [rowid for rowid, _ in results({'body': 3., 'title': 1.})], [2, 1])
 
     def test_fts_match_single_column(self):
         data = (
