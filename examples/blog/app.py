@@ -26,7 +26,7 @@ ADMIN_PASSWORD = 'secret'
 APP_DIR = os.path.dirname(os.path.realpath(__file__))
 
 # The playhouse.flask_utils.FlaskDB object accepts database URL configuration.
-DATABASE = 'sqlite:///%s?rank_functions=1' % os.path.join(APP_DIR, 'blog.db')
+DATABASE = 'sqlite:///%s' % os.path.join(APP_DIR, 'blog.db')
 DEBUG = False
 
 # The secret key is used internally by Flask to encrypt session data stored
@@ -91,23 +91,13 @@ class Entry(flask_db.Model):
         return ret
 
     def update_search_index(self):
-        # Create a row in the FTSEntry table with the post content. This will
-        # allow us to use SQLite's awesome full-text search extension to
-        # search our entries.
-        exists = (FTSEntry
-                  .select(FTSEntry.rowid)
-                  .where(FTSEntry.rowid == self.id)
-                  .exists())
-        content = '\n'.join((self.title, self.content))
-        if exists:
-            (FTSEntry
-             .update({FTSEntry.content: content})
-             .where(FTSEntry.rowid == self.id)
-             .execute())
-        else:
-            FTSEntry.insert({
-                FTSEntry.rowid: self.id,
-                FTSEntry.content: content}).execute()
+        # Store the post content in the FTSEntry table so we can use SQLite's
+        # full-text search extension to search our entries. The search index
+        # rowid is the entry id, which is how we join the two back together.
+        # Replace acts as an upsert, so this handles new and edited entries.
+        FTSEntry.replace(
+            rowid=self.id,
+            content='\n'.join((self.title, self.content))).execute()
 
     @classmethod
     def public(cls):
@@ -119,12 +109,11 @@ class Entry(flask_db.Model):
 
     @classmethod
     def search(cls, query):
-        words = [word.strip() for word in query.split() if word.strip()]
-        if not words:
-            # Return an empty query.
-            return Entry.noop()
-        else:
-            search = ' '.join(words)
+        # Whatever the user typed in the search box is translated into a valid
+        # FTS5 query, so quoted phrases, OR/NOT and -exclusions work, and
+        # nothing they can type raises an error. An empty search box matches
+        # no entries.
+        search = FTSEntry.web_query(query)
 
         # Query the full-text search index for entries matching the given
         # search query, then join the actual Entry data on the matching
@@ -137,8 +126,8 @@ class Entry(flask_db.Model):
                     (Entry.published == True))
                 .order_by(SQL('score')))
 
-class FTSEntry(FTSModel):
-    content = TextField()
+class FTSEntry(FTS5Model):
+    content = SearchField()
 
     class Meta:
         database = database
