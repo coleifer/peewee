@@ -90,7 +90,7 @@ class ContentPost(FTSModel, Post):
 class ContentPostMessage(FTSModel, TestModel):
     message = TextField()
     class Meta:
-        options = {'tokenize': 'porter', 'content': Post.message}
+        options = {'tokenize': 'porter', 'content': Post}
 
 
 class Document(FTSModel, TestModel):
@@ -141,6 +141,36 @@ class FTS5Document(FTS5Model):
     message = SearchField()
     class Meta:
         options = {'tokenize': 'porter'}
+
+
+class ContentPost5(FTS5Model):
+    message = SearchField()
+    class Meta:
+        options = {'content': Post, 'content_rowid': Post.id}
+
+
+class FTS5Contentless(FTS5Model):
+    title = SearchField()
+    data = SearchField()
+    class Meta:
+        legacy_table_names = False
+        options = {'content': '', 'contentless_delete': 1}
+
+
+class FTS5ContentlessUnindexed(FTS5Model):
+    title = SearchField()
+    meta = SearchField(unindexed=True)
+    class Meta:
+        legacy_table_names = False
+        options = {
+            'content': '',
+            'contentless_delete': 1,
+            'contentless_unindexed': 1}
+
+
+FTS5Vocab = FTS5Test.VocabModel()
+FTS5VocabCol = FTS5Test.VocabModel('col')
+FTS5VocabInstance = FTS5Test.VocabModel('instance')
 
 
 class SearchWeight(FTSModel, TestModel):
@@ -1005,7 +1035,7 @@ class TestFullTextSearch(BaseFTSTestCase, ModelTestCase):
     def test_fts_auto_model(self):
         self._test_fts_auto(ContentPost)
 
-    def test_fts_auto_field(self):
+    def test_fts_auto_table_name(self):
         self._test_fts_auto(ContentPostMessage)
 
     def test_weighting(self):
@@ -1273,6 +1303,9 @@ class TestFTS5(BaseFTSTestCase, ModelTestCase):
             'INSERT INTO "fts5_test" ("fts5_test", "rank") VALUES (?, ?)'),
             ['merge', 4])
         FTS5Test.merge(4)  # Runs without error.
+        FTS5Test.automerge(64)  # fts5 accepts levels up to 64.
+        self.assertRaises(ValueError, FTS5Test.automerge, 65)
+        self.assertRaises(ValueError, FTS5Test.automerge, -1)
 
         FTS5Test.insert_many([{'title': 'k%08d' % i, 'data': 'v%08d' % i}
                               for i in range(100)]).execute()
@@ -1300,6 +1333,20 @@ class TestFTS5(BaseFTSTestCase, ModelTestCase):
             '"f1", "f2" UNINDEXED, "f3", '
             'content="post", content_rowid="id", '
             'prefix=\'2,3\', tokenize="porter unicode61")'), [])
+
+        # fts5 must accept the generated DDL (content tbl resolved lazily).
+        self.database.create_tables([Test1])
+        self.database.drop_tables([Test1])
+
+    def test_content_option_rejects_field(self):
+        class BadIndex(FTS5Model):
+            message = SearchField()
+
+            class Meta:
+                database = self.database
+                options = {'content': Post.message}
+
+        self.assertRaises(ImproperlyConfigured, BadIndex._schema._create_table)
 
     def assertResults(self, query, expected, scores=False, alias='score'):
         if scores:
@@ -1467,6 +1514,96 @@ class TestFTS5(BaseFTSTestCase, ModelTestCase):
             'cc [dd] ee cc [dd]...',
             'bb cc [dd] bb cc...',
             'bb cc bb cc bb...'])
+
+    @requires_models(Post, ContentPost5)
+    def test_fts5_external_content(self):
+        for message in self.messages:
+            Post.create(message=message)
+        ContentPost5.rebuild()
+        ContentPost5.integrity_check(rank=1)
+
+        query = ContentPost5.select().where(ContentPost5.match('faith'))
+        self.assertEqual(sorted(r.rowid for r in query), [1, 2, 4, 5])
+
+        # Column values are read through from the content table.
+        query = ContentPost5.search('nothing')
+        self.assertEqual([r.message for r in query], [self.messages[0]])
+
+        # Out-of-band update: the index is stale but reads are current.
+        Post.update(message='replaced entirely').where(Post.id == 1).execute()
+        query = ContentPost5.select().where(ContentPost5.match('nothing'))
+        self.assertEqual([(r.rowid, r.message) for r in query],
+                         [(1, 'replaced entirely')])
+
+        ContentPost5.integrity_check(rank=0)  # Does not verify content.
+        self.assertRaises(DatabaseError, ContentPost5.integrity_check, 1)
+
+        # Resync using the fts5 delete command w/the old values.
+        ContentPost5._fts_cmd('delete', rowid=1, message=self.messages[0])
+        ContentPost5.insert({'rowid': 1, 'message': 'replaced entirely'}).execute()
+        ContentPost5.integrity_check(rank=1)
+        query = ContentPost5.select().where(ContentPost5.match('faith'))
+        self.assertEqual(sorted(r.rowid for r in query), [2, 4, 5])
+
+    @skip_unless(sqlite3.sqlite_version_info >= (3, 43), 'sqlite >= 3.43')
+    @requires_models(FTS5Contentless)
+    def test_fts5_contentless_delete(self):
+        FC = FTS5Contentless
+        FC.insert({'rowid': 1, 'title': 'alpha one', 'data': 'first'}).execute()
+        FC.insert({'rowid': 2, 'title': 'beta two', 'data': 'second'}).execute()
+
+        # Only the rowid is stored, other columns select as NULL.
+        query = FC.search('alpha')
+        self.assertEqual([(r.rowid, r.title) for r in query], [(1, None)])
+
+        self.assertEqual(FC.delete().where(FC.rowid == 1).execute(), 1)
+        self.assertEqual([r.rowid for r in FC.search('alpha')], [])
+
+        # Updates must assign all indexed columns together.
+        FC.update(title='beta renamed', data='2nd').where(FC.rowid == 2).execute()
+        self.assertEqual([r.rowid for r in FC.search('renamed')], [2])
+        self.assertRaises(
+            OperationalError,
+            FC.update(title='partial').where(FC.rowid == 2).execute)
+
+    @skip_unless(sqlite3.sqlite_version_info >= (3, 47), 'sqlite >= 3.47')
+    @requires_models(FTS5ContentlessUnindexed)
+    def test_fts5_contentless_unindexed(self):
+        FC = FTS5ContentlessUnindexed
+        FC.insert({'rowid': 1, 'title': 'hello world', 'meta': 'kept'}).execute()
+        query = FC.search('hello')
+        self.assertEqual([(r.rowid, r.title, r.meta) for r in query],
+                         [(1, None, 'kept')])
+
+        # Stored unindexed columns may be updated independently.
+        FC.update(meta='changed').where(FC.rowid == 1).execute()
+        self.assertEqual([r.meta for r in FC.select()], ['changed'])
+
+    @requires_models(FTS5Vocab, FTS5VocabCol, FTS5VocabInstance)
+    def test_vocab_model(self):
+        self.assertEqual(
+            [v._meta.table_name
+             for v in (FTS5Vocab, FTS5VocabCol, FTS5VocabInstance)],
+            ['fts5_test_v', 'fts5_test_v_col', 'fts5_test_v_instance'])
+
+        query = FTS5Vocab.select().order_by(FTS5Vocab.term)
+        self.assertEqual([(v.term, v.doc, v.cnt) for v in query], [
+            ('aa', 2, 12), ('bar', 1, 1), ('baze', 1, 1), ('bb', 3, 28),
+            ('cc', 4, 36), ('dd', 3, 19), ('ee', 1, 8), ('foo', 1, 1),
+            ('nug', 1, 1)])
+
+        query = (FTS5VocabCol
+                 .select()
+                 .where(FTS5VocabCol.term == 'aa')
+                 .order_by(FTS5VocabCol.col))
+        self.assertEqual([(v.term, v.col, v.doc, v.cnt) for v in query],
+                         [('aa', 'data', 1, 10), ('aa', 'title', 2, 2)])
+
+        query = (FTS5VocabInstance
+                 .select()
+                 .where(FTS5VocabInstance.term == 'foo'))
+        self.assertEqual([(v.term, v.doc, v.col, v.offset) for v in query],
+                         [('foo', 1, 'title', 0)])
 
     def test_clean_query(self):
         cases = (

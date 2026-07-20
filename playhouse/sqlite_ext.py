@@ -9,7 +9,6 @@ from peewee import Expression
 from peewee import Node
 from peewee import NodeList
 from peewee import OP
-from peewee import VirtualField
 from peewee import merge_dict
 from peewee import sqlite3
 
@@ -381,9 +380,10 @@ class BaseFTSModel(VirtualModel):
             # Special-case content-less full-text search tables.
             options['content'] = "''"
         elif isinstance(content, Field):
-            # Special-case to ensure fields are fully-qualified.
-            options['content'] = Entity(content.model._meta.table_name,
-                                        content.column_name)
+            # A field generates DDL fts5 rejects and fts4 silently truncates.
+            raise ImproperlyConfigured('The content option must be a Model, '
+                                       'a table-name string, or the empty '
+                                       'string (contentless).')
 
         if prefix:
             if isinstance(prefix, (list, tuple)):
@@ -577,10 +577,11 @@ class FTS5Model(BaseFTSModel):
 
     Content-less tables:
 
-    If you don't need the full-text content in it's original form, you can
+    If you don't need the full-text content in its original form, you can
     specify a content-less table. Searches and auxiliary functions will work
     as usual, but the only values returned when SELECT-ing can be rowid. Also
-    content-less tables do not support UPDATE or DELETE.
+    content-less tables do not support UPDATE or DELETE, unless created with
+    the contentless_delete=1 option (sqlite >= 3.43).
 
     External content tables:
 
@@ -595,12 +596,16 @@ class FTS5Model(BaseFTSModel):
       INSERT INTO ft(rowid, b) VALUES (new.a, new.b);
     END;
     CREATE TRIGGER tbl_ad AFTER DELETE ON tbl BEGIN
-      INSERT INTO ft(fts_idx, rowid, b) VALUES('delete', old.a, old.b);
+      INSERT INTO ft(ft, rowid, b) VALUES('delete', old.a, old.b);
     END;
     CREATE TRIGGER tbl_au AFTER UPDATE ON tbl BEGIN
-      INSERT INTO ft(fts_idx, rowid, b) VALUES('delete', old.a, old.b);
+      INSERT INTO ft(ft, rowid, b) VALUES('delete', old.a, old.b);
       INSERT INTO ft(rowid, b) VALUES (new.a, new.b);
     END;
+
+    Note: with sqlite's default recursive_triggers=off, INSERT OR REPLACE on
+    the content table skips the delete trigger and corrupts the index. Enable
+    PRAGMA recursive_triggers if REPLACE may be used.
 
     Built-in auxiliary functions:
 
@@ -773,8 +778,8 @@ class FTS5Model(BaseFTSModel):
 
     @classmethod
     def automerge(cls, level):
-        if not (0 <= level <= 16):
-            raise ValueError('level must be between 0 and 16')
+        if not (0 <= level <= 64):
+            raise ValueError('level must be between 0 and 64')
         return cls._fts_cmd('automerge', rank=level)
 
     @classmethod
@@ -811,32 +816,32 @@ class FTS5Model(BaseFTSModel):
             raise ValueError('table_type must be either "row", "col" or '
                              '"instance".')
 
-        attr = '_vocab_model_%s' % table_type
+        # Each table-type needs a distinct default name, or the second type
+        # silently binds to the first's table via IF NOT EXISTS.
+        suffix = '_v' if table_type == 'row' else '_v_%s' % table_type
 
-        if not hasattr(cls, attr):
-            class Meta:
-                database = cls._meta.database
-                table_name = table or cls._meta.table_name + '_v'
-                extension_module = fn.fts5vocab(
-                    cls._meta.entity,
-                    SQL(table_type))
+        class Meta:
+            database = cls._meta.database
+            table_name = table or cls._meta.table_name + suffix
+            extension_module = fn.fts5vocab(
+                cls._meta.entity,
+                SQL(table_type))
 
-            attrs = {
-                'term': VirtualField(TextField),
-                'doc': IntegerField(),
-                'cnt': IntegerField(),
-                'rowid': RowIDField(),
-                'Meta': Meta,
-            }
-            if table_type == 'col':
-                attrs['col'] = VirtualField(TextField)
-            elif table_type == 'instance':
-                attrs['offset'] = VirtualField(IntegerField)
+        if table_type == 'row':
+            columns = ('term', 'doc', 'cnt')
+        elif table_type == 'col':
+            columns = ('term', 'col', 'doc', 'cnt')
+        else:
+            columns = ('term', 'doc', 'col', 'offset')
 
-            class_name = '%sVocab' % cls.__name__
-            setattr(cls, attr, type(class_name, (VirtualModel,), attrs))
+        attrs = {c: TextField() if c in ('term', 'col') else IntegerField()
+                 for c in columns}
+        attrs['rowid'] = RowIDField()
+        attrs['Meta'] = Meta
 
-        return getattr(cls, attr)
+        # Built fresh per-call: caching would pin the database bound at the
+        # time of the first call and ignore the table param thereafter.
+        return type('%sVocab' % cls.__name__, (VirtualModel,), attrs)
 
 
 OP.MATCH = 'MATCH'

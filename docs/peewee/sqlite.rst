@@ -1695,9 +1695,34 @@ efficiently:
       # Optimize the index.
       BlogIndex.optimize()
 
-   The ``content`` option accepts a :class:`Model` and can reduce the amount of
-   storage used by the database at the expense of requiring more care and
+   The ``content`` option accepts a :class:`Model` class or a table-name
+   string. Passing a :class:`Field` raises ``ImproperlyConfigured``. External
+   content reduces storage at the expense of requiring more care and
    attention to keeping data synchronized.
+
+   SQLite maps the content table into the FTS table **by column name**: every
+   column declared on the FTS model must exist in the content table (column
+   order does not matter). The mapping is not verified when the virtual table
+   is created. A missing column surfaces later, when the index is rebuilt or
+   queried, as a ``no such column`` error. When the names do not line up,
+   either declare the search field with a matching ``column_name``, or point
+   ``content`` at a view that renames the columns:
+
+   .. code-block:: python
+
+      class Document(Model):
+          body = TextField()
+
+          class Meta:
+              database = db
+
+      class DocumentIndex(FTS5Model):
+          # Model attribute "message", mapped to Document's "body" column.
+          message = SearchField(column_name='body')
+
+          class Meta:
+              database = db
+              options = {'content': Document, 'content_rowid': Document.id}
 
 
 .. class:: FTSModel()
@@ -1706,8 +1731,9 @@ efficiently:
 
    Supports the following options:
 
-   * ``content``: :class:`Model` containing external content, or empty string
-     for "contentless"
+   * ``content``: :class:`Model` class (or table-name string) containing the
+     external content, or empty string for "contentless". A :class:`Field` is
+     not accepted.
    * ``prefix``: integer(s). Ex: '2' or '2,3,4'
    * ``tokenize``: simple, porter, unicode61. Ex: 'porter'
 
@@ -2033,15 +2059,66 @@ additional copy of the search index content. See :ref:`External Content
 <sqlite-fts4-external-content>` for implementation details. The `FTS5 documentation <https://www.sqlite.org/fts5.html#external_content_and_contentless_tables>`_
 has more information.
 
+.. topic:: Contentless Tables
+
+   If the original content does not need to be stored at all, specify the
+   empty string for the ``content`` option. SQLite indexes the text and then
+   discards it: searches work as usual, but SELECT returns ``NULL`` for every
+   column except ``rowid``, as do auxiliary functions that return text, like
+   :meth:`~SearchField.highlight`. The ``rowid`` should be set explicitly so
+   results can be tied back to a canonical table.
+
+   .. code-block:: python
+
+      class NoteIndex(FTS5Model):
+          content = SearchField()
+
+          class Meta:
+              database = db
+              options = {'content': ''}
+
+      # Index a note, linking the rowid back to the canonical row.
+      NoteIndex.insert({'rowid': note.id, 'content': note.content}).execute()
+
+   Contentless tables accept ``INSERT`` only. ``UPDATE`` and ``DELETE`` raise
+   an ``OperationalError``, though :py:meth:`~FTS5Model.delete_all` may still
+   be used to clear the index. Two options relax these restrictions:
+
+   * ``contentless_delete=1`` (SQLite 3.43+): ``DELETE`` is supported, as is
+     ``UPDATE`` provided all indexed columns are assigned together. Assigning
+     a partial subset of the indexed columns is an error.
+   * ``contentless_unindexed=1`` (SQLite 3.47+): the values of ``UNINDEXED``
+     columns are stored, returned when SELECT-ing, and may be UPDATEd
+     independently of the indexed columns. Useful for keeping a bit of
+     metadata alongside an otherwise contentless index.
+
+   .. code-block:: python
+
+      class NoteIndex(FTS5Model):
+          content = SearchField()
+          note_id = SearchField(unindexed=True)
+
+          class Meta:
+              database = db
+              options = {
+                  'content': '',
+                  'contentless_delete': 1,
+                  'contentless_unindexed': 1}
+
 .. class:: FTS5Model()
 
    Inherits all :class:`FTSModel` methods plus.
 
    Supports the following options:
 
-   * ``content``: :class:`Model` containing external content, or empty string
-     for "contentless"
+   * ``content``: :class:`Model` class (or table-name string) containing the
+     external content, or empty string for "contentless". A :class:`Field` is
+     not accepted.
    * ``content_rowid``: :class:`Field` (external content primary key)
+   * ``contentless_delete``: set to ``1`` to allow ``DELETE`` and full-row
+     ``UPDATE`` on a contentless table. Requires SQLite 3.43+.
+   * ``contentless_unindexed``: set to ``1`` to store the values of
+     ``UNINDEXED`` columns in a contentless table. Requires SQLite 3.47+.
    * ``prefix``: integer(s). Ex: '2' or ``[2, 3]``
    * ``tokenize``: simple, porter, unicode61. Ex: 'porter unicode61'
 

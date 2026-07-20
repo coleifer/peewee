@@ -31,6 +31,15 @@ https://github.com/coleifer/peewee/releases
   now import as NULL for non-text fields.
 * Lateral joins honor a user-supplied `on=` predicate instead of silently
   replacing it with `true`, and default to `ON true` when `on=` is omitted.
+* The SQLite FTS `content` option must be a Model or table-name string.
+  Passing a Field now raises `ImproperlyConfigured`: it generated DDL that
+  fts5 rejects outright and that fts4 silently truncated to the table name.
+* Fix `FTS5Model.VocabModel()`: term/col/offset were declared as virtual
+  fields and omitted from default SELECTs, the instance-type model had the
+  wrong column set, all three table-types shared one default table name, and
+  the generated class was cached with whatever database was bound at first
+  call. Vocab models are now built fresh per call with real fields, correct
+  columns and per-type default names.
 
 [View commits](https://github.com/coleifer/peewee/compare/4.2.6...master)
 
