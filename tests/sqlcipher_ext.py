@@ -127,7 +127,7 @@ class SqlCipherExtTestCase(CleanUpModelTestCase):
         super(SqlCipherExtTestCase, self).setUp()
         FTSNote._meta.database = db
         FTSNote.drop_table(True)
-        FTSNote.create_table(tokenize='porter', content=Note.content)
+        FTSNote.create_table(tokenize='porter', content=Note)
 
     def tearDown(self):
         FTSNote.drop_table(True)
