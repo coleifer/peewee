@@ -59,6 +59,15 @@ Improvements:
   text, so `covid-19` or `c++` need no escaping, and the translation is always
   a valid query. The parser lives in the new `playhouse.fts_parser` module.
   Use it with search: `Doc.search(Doc.web_query(user_input))`.
+* Add `FTS5Model.delete_command()`, which removes a row using the fts5 `delete`
+  command. This is how rows are removed from external-content and contentless
+  tables, which need the originally-indexed values supplied back to them:
+  sqlite treats an omitted column as NULL, and values that do not match what
+  was indexed leave stale entries behind (undetectably so on a contentless
+  table). Peewee therefore requires a value for every indexed column; pass
+  `None` where NULL was indexed. The command exists only for those two
+  configurations - default-storage and `contentless_delete=1` tables reject
+  it and use ordinary `DELETE`.
 
 [View commits](https://github.com/coleifer/peewee/compare/4.2.6...master)
 

@@ -177,6 +177,15 @@ class FTS5ContentlessUnindexed(FTS5Model):
             'DROP TABLE IF EXISTS "%s_content"' % cls._meta.table_name)
 
 
+class FTS5DeleteCommand(FTS5Model):
+    # Contentless, with the attribute name mapped to a different column.
+    body = SearchField(column_name='msg')
+    note = SearchField(unindexed=True)
+    class Meta:
+        legacy_table_names = False
+        options = {'content': ''}
+
+
 FTS5Vocab = FTS5Test.VocabModel()
 FTS5VocabCol = FTS5Test.VocabModel('col')
 FTS5VocabInstance = FTS5Test.VocabModel('instance')
@@ -1555,6 +1564,55 @@ class TestFTS5(BaseFTSTestCase, ModelTestCase):
         ContentPost5.integrity_check(rank=1)
         query = ContentPost5.select().where(ContentPost5.match('faith'))
         self.assertEqual(sorted(r.rowid for r in query), [2, 4, 5])
+
+    @requires_models(Post, ContentPost5)
+    def test_fts5_delete_command_external(self):
+        for message in self.messages:
+            Post.create(message=message)
+        ContentPost5.rebuild()
+
+        # Remove a row whose content row is already gone, supplying the
+        # values as they were indexed.
+        Post.delete_by_id(1)
+        ContentPost5.delete_command(1, message=self.messages[0])
+        ContentPost5.integrity_check(rank=1)
+        query = ContentPost5.select().where(ContentPost5.match('faith'))
+        self.assertEqual(sorted(r.rowid for r in query), [2, 4, 5])
+
+        # An update is the delete command w/the old values followed by a
+        # plain insert of the new ones.
+        Post.update(message='changed entirely').where(Post.id == 2).execute()
+        ContentPost5.delete_command(2, message=self.messages[1])
+        ContentPost5.insert({'rowid': 2, 'message': 'changed entirely'}).execute()
+        ContentPost5.integrity_check(rank=1)
+        query = ContentPost5.select().where(ContentPost5.match('changed'))
+        self.assertEqual([(r.rowid, r.message) for r in query],
+                         [(2, 'changed entirely')])
+        query = ContentPost5.select().where(ContentPost5.match('faith'))
+        self.assertEqual(sorted(r.rowid for r in query), [4, 5])
+
+        # All indexed columns are required and unknown columns are rejected.
+        # Either mistake would otherwise corrupt the index silently.
+        self.assertRaises(ValueError, ContentPost5.delete_command, 3)
+        self.assertRaises(ValueError, ContentPost5.delete_command, 3,
+                          message=self.messages[2], other='x')
+        ContentPost5.integrity_check(rank=1)
+
+    @requires_models(FTS5DeleteCommand)
+    def test_fts5_delete_command_contentless(self):
+        FD = FTS5DeleteCommand
+        FD.insert({'rowid': 1, 'body': 'alpha beta', 'note': 'x'}).execute()
+        FD.insert({'rowid': 2, 'body': 'beta gamma', 'note': 'y'}).execute()
+
+        # Plain DELETE is refused on a contentless table, but the delete
+        # command works when the original values are supplied. The attribute
+        # name maps to the underlying column and unindexed columns may be
+        # omitted.
+        self.assertRaises(OperationalError,
+                          FD.delete().where(FD.rowid == 1).execute)
+        FD.delete_command(1, body='alpha beta')
+        self.assertEqual([r.rowid for r in FD.search('beta')], [2])
+        FD.integrity_check()
 
     @skip_unless_db(lambda db: db.server_version >= (3, 43), 'sqlite >= 3.43')
     @requires_models(FTS5Contentless)

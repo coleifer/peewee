@@ -819,6 +819,32 @@ class FTS5Model(BaseFTSModel):
         return cls._fts_cmd('delete-all')
 
     @classmethod
+    def delete_command(cls, rowid, **values):
+        """
+        Remove a row using the fts5 'delete' command, passing the values
+        exactly as they were indexed. This is how rows are removed from
+        external-content and contentless tables, which cannot look up the
+        old values themselves.
+        """
+        accum = {}
+        for field in cls._meta.sorted_fields:
+            if not isinstance(field, SearchField):
+                continue
+            if field.name in values:
+                accum[field.column_name] = values.pop(field.name)
+            elif field.column_name in values:
+                accum[field.column_name] = values.pop(field.column_name)
+            elif not field.unindexed:
+                # Deleting against a missing value silently corrupts the
+                # index, so all indexed columns are required.
+                raise ValueError('delete_command() requires the value of "%s" '
+                                 'as it was originally indexed.' % field.name)
+        if values:
+            raise ValueError('delete_command() received unrecognized column(s): '
+                             '%s' % ', '.join(sorted(values)))
+        return cls._fts_cmd('delete', rowid=rowid, **accum)
+
+    @classmethod
     def integrity_check(cls, rank=0):
         return cls._fts_cmd('integrity-check', rank=rank)
 
