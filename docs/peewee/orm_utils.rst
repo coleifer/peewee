@@ -1076,6 +1076,17 @@ Export and import data:
    # Import a JSON file to a new table.
    db.thaw('new_table', format='json', filename='json-data.json')
 
+.. note::
+    Caveats when importing and inserting data:
+
+    * Spreadsheet tools typically write CSV files with a UTF-8 byte-order
+      mark. Pass ``encoding='utf-8-sig'`` when importing such a file,
+      otherwise the mark is treated as part of the first column header and
+      that column's data is imported into a new, mangled column.
+    * CSV cannot represent ``NULL`` distinctly from an empty string. Empty
+      cells are imported as ``NULL`` for non-text columns, but text columns
+      receive ``''``. Use the json format when this distinction matters.
+
 Transactions:
 
 .. code-block:: python
@@ -1153,7 +1164,8 @@ Introspection:
       :param filename: Filename to read data from.
       :param file_obj: File-like object to read data from.
       :param bool strict: Skip values for columns that do not already exist on the table.
-      :param str encoding: File encoding.
+      :param str encoding: File encoding. Use ``'utf-8-sig'`` for CSV files
+         that begin with a byte-order mark (as written by Excel).
       :param bool iso8601_datetimes: Decode datetimes and dates from ISO 8601 format.
       :param bool base64_bytes: Decode BLOB field-data from base64. By default hex
          is assumed.
@@ -1240,7 +1252,8 @@ Introspection:
       :param filename: Filename to read data from.
       :param file_obj: File-like object to read data from.
       :param bool strict: Skip values for columns that do not already exist on the table.
-      :param str encoding: File encoding.
+      :param str encoding: File encoding. Use ``'utf-8-sig'`` for CSV files
+         that begin with a byte-order mark (as written by Excel).
       :param bool iso8601_datetimes: Decode datetimes and dates from ISO 8601 format.
       :param bool base64_bytes: Decode BLOB field-data from base64. By default hex
          is assumed.
