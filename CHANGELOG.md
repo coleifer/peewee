@@ -7,17 +7,26 @@ https://github.com/coleifer/peewee/releases
 
 ## master
 
-* `playhouse.pwasyncio` pool-lifecycle: `close_pool()` no longer spins
-  the event loop on Python 3.13+, no longer reclaims connections in use,
-  and pool creation is now bounded by `acquire_timeout`. Connections terminated
-  during shutdown are detected as stale and discarded at the next checkout
-  instead of raising from inside the driver.
-* Sync connection pools roll back transactions left open on check-in
-  (mirroring the async pools).
-* Pooled Postgres checkouts probe idle connections with `SELECT 1` and
-  discard dead ones, matching the MySQL pool's ping. Previously a connection
-  terminated server-side while parked in the pool was handed out and failed
-  on first use.
+Backwards-incompatible:
+
+* Replace ``docid`` implicit primary key on legacy ``FTSModel`` (FTS4) with
+  ``rowid``, which is equivalent. Using ``docid`` presents no benefit and
+  switching to ``rowid`` makes operations more consistent. Users have a couple
+  options when updating:
+    * Explicitly add ``docid = DocIDField()`` to your FTSModel classes.
+    * Update your code, replacing ``docid`` with ``rowid``. The underlying data
+      does not require a migration, as docid was just an alias for rowid.
+
+Improvements:
+
+* Connection pools roll back transactions left open on check-in.
+* Pooled Postgres probes idle connections with `SELECT 1` and discards dead
+  ones, matching the MySQL pool's ping. Previously a connection terminated
+  server-side while parked in the pool was handed out and failed on first use.
+* `close_pool()` in pwasyncio no longer spins the event loop on Python
+  3.13+ attempting to reclaim connections in use, and pool creation is now
+  bounded by `acquire_timeout`. Connections terminated during shutdown are
+  detected as stale and discarded at the next checkout.
 * `JSONField` negative path indexes render as `$[last]` / `$[last-n]` on
   MySQL/MariaDB. Previously the sqlite-only `$[#-n]` form was emitted, which
   MariaDB evaluates to NULL (overwriting the column when used with `set()`)
