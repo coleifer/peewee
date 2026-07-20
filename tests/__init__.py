@@ -33,6 +33,10 @@ except ImportError:
 from .dataset import *
 from .db_url import *
 from .extra_fields import *
+try:
+    from .fts_parser import *
+except ImportError:
+    print('Unable to import fts parser tests, skipping.')
 from .hybrid import *
 try:
     from .json_field import *

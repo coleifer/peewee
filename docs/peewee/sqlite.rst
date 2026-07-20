@@ -2204,6 +2204,61 @@ has more information.
       With FTS5, :meth:`~FTS5Model.search_bm25` is identical to the
       :meth:`~FTS5Model.search` method.
 
+   .. classmethod:: web_query(query)
+
+      :param str query: a query typed by a user, e.g. from a search box.
+      :return: an equivalent FTS5 query, as a string.
+
+      Translate the query syntax people expect from a web search engine into
+      the `FTS5 query syntax <https://sqlite.org/fts5.html#full_text_query_syntax>`_.
+      Pass the result to :meth:`~FTS5Model.search` or :meth:`~FTS5Model.match`:
+
+      .. code-block:: python
+
+         results = DocumentIndex.search(DocumentIndex.web_query(user_input))
+
+      The supported syntax:
+
+      ============================== ==========================================
+      Input                          Meaning
+      ============================== ==========================================
+      ``python sqlite``              both terms (words are AND-ed)
+      ``python OR sqlite``           either term
+      ``python NOT sqlite``          the first term, excluding the second
+      ``python -sqlite``             same, using the leading-minus form
+      ``"full text search"``         the exact phrase
+      ``pyth*``                      terms starting with "pyth"
+      ``title: python``              the term, in the ``title`` column only
+      ``{title body}: python``       the term, in either named column
+      ``title: (python OR sqlite)``  the group, in the ``title`` column only
+      ``(python OR sqlite) fast``    grouping with parentheses
+      ============================== ==========================================
+
+      Anything else is searched as ordinary text, so characters that are FTS5
+      syntax do not have to be escaped: ``covid-19``, ``o'brien`` and ``c++``
+      all search for what they say. Column filters naming a column the model
+      does not have (or an ``UNINDEXED`` column, which can never match) are
+      searched as text too.
+
+      Unbalanced quotes and parentheses are repaired, operators with nothing to
+      operate on are dropped, deeply-nested input is flattened, and a query
+      with no terms in it becomes ``""``, which matches nothing.
+
+      An exclusion applies to the terms it is AND-ed with, so
+      ``python -sqlite`` excludes as expected, while in ``python OR -sqlite``
+      the exclusion has nothing to apply to and is dropped.
+
+      .. note::
+         The minus sign has a different meaning here than in FTS5 itself. In
+         FTS5, ``-title: python`` matches "python" in every column *except*
+         the title. In a search box it means "exclude documents with python in
+         the title", which is how :meth:`~FTS5Model.web_query` translates it.
+
+      FTS5 features that have no search-box equivalent are searched as text
+      rather than being passed through. That includes ``NEAR()`` groups, the
+      ``^`` initial-token operator, and ``+`` phrase concatenation. Use
+      :meth:`~FTS5Model.match` to write those queries directly.
+
    .. classmethod:: rank(col1_weight, col2_weight...coln_weight)
 
       :param float col_weight: (Optional) weight to give to the *ith* column

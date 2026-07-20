@@ -44,6 +44,12 @@ https://github.com/coleifer/peewee/releases
   the generated class was cached with whatever database was bound at first
   call. Vocab models are now built fresh per call with real fields, correct
   columns and per-type default names.
+* Add `FTS5Model.web_query()`, which translates the query syntax users expect
+  from a search box (quoted phrases, AND/OR/NOT, `-exclusion`, `column:`
+  filters and parentheses) into an FTS5 query. Anything else is searched as
+  text, so `covid-19` or `c++` need no escaping, and the translation is always
+  a valid query. The parser lives in the new `playhouse.fts_parser` module.
+  Use it with search: `Doc.search(Doc.web_query(user_input))`.
 
 [View commits](https://github.com/coleifer/peewee/compare/4.2.6...master)
 
