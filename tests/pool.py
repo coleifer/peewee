@@ -18,6 +18,7 @@ from .base import IS_SQLITE
 from .base import ModelTestCase
 from .base import db_loader
 from .base import requires_mysql
+from .base import requires_postgresql
 from .base_models import Register
 
 
@@ -911,6 +912,25 @@ class TestPooledDatabaseIntegration(ModelTestCase):
         killer.close()
 
         # The killed conn is discarded at checkout, not silently revived.
+        self.assertTrue(self.database.connect())
+        self.assertIsNot(self.database.connection(), conn)
+        curs = self.database.execute_sql('SELECT 1')
+        self.assertEqual(curs.fetchone()[0], 1)
+        self.database.close()
+        self.assertEqual(len(self.database._in_use), 0)
+
+    @requires_postgresql
+    def test_dead_conn_discarded_pg(self):
+        conn = self.database.connection()
+        curs = self.database.execute_sql('select pg_backend_pid()')
+        pid = curs.fetchone()[0]
+        self.database.close()
+
+        killer = db_loader(BACKEND)
+        killer.execute_sql('select pg_terminate_backend(%s)', (pid,))
+        killer.close()
+
+        # The killed conn is discarded at checkout, not handed back dead.
         self.assertTrue(self.database.connect())
         self.assertIsNot(self.database.connection(), conn)
         curs = self.database.execute_sql('SELECT 1')

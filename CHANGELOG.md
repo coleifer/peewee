@@ -14,6 +14,10 @@ https://github.com/coleifer/peewee/releases
   instead of raising from inside the driver.
 * Sync connection pools roll back transactions left open on check-in
   (mirroring the async pools).
+* Pooled Postgres checkouts probe idle connections with `SELECT 1` and
+  discard dead ones, matching the MySQL pool's ping. Previously a connection
+  terminated server-side while parked in the pool was handed out and failed
+  on first use.
 * `JSONField` negative path indexes render as `$[last]` / `$[last-n]` on
   MySQL/MariaDB. Previously the sqlite-only `$[#-n]` form was emitted, which
   MariaDB evaluates to NULL (overwriting the column when used with `set()`)

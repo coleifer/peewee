@@ -4578,12 +4578,16 @@ class Psycopg2Adapter(_BasePsycopgAdapter):
         txn_status = conn.get_transaction_status()
         if txn_status == pg_extensions.TRANSACTION_STATUS_UNKNOWN:
             return True
-        elif txn_status != pg_extensions.TRANSACTION_STATUS_IDLE:
-            # rollback() no-ops under autocommit, send a raw ROLLBACK.
-            try:
+        try:
+            if txn_status != pg_extensions.TRANSACTION_STATUS_IDLE:
+                # rollback() no-ops under autocommit, send a raw ROLLBACK.
                 conn.cursor().execute('ROLLBACK')
-            except Exception:
-                return True
+            else:
+                # The status flag is local, only a round trip can detect a
+                # server-side disconnect.
+                conn.cursor().execute('SELECT 1')
+        except Exception:
+            return True
         return False
 
 
@@ -4642,11 +4646,15 @@ class Psycopg3Adapter(_BasePsycopgAdapter):
         txn_status = conn.pgconn.transaction_status
         if txn_status == TransactionStatus.UNKNOWN:
             return True
-        elif txn_status != TransactionStatus.IDLE:
-            try:
+        try:
+            if txn_status != TransactionStatus.IDLE:
                 conn.rollback()
-            except Exception:
-                return True
+            else:
+                # The status flag is local, only a round trip can detect a
+                # server-side disconnect.
+                conn.execute('SELECT 1')
+        except Exception:
+            return True
         return False
 
 
