@@ -327,6 +327,17 @@ def skip_unless(expr, reason='n/a'):
         return unittest.skipUnless(expr, reason)(method)
     return decorator
 
+def skip_unless_db(pred, reason='n/a'):
+    # Evaluated at run-time against the test's own database.
+    def decorator(method):
+        @wraps(method)
+        def inner(self):
+            if not pred(self.database):
+                raise unittest.SkipTest(reason)
+            return method(self)
+        return inner
+    return decorator
+
 def slow_test():
     def decorator(method):
         return unittest.skipUnless(SLOW_TESTS, 'skipping slow test')(method)

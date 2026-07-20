@@ -17,6 +17,7 @@ from .base import get_sqlite_db
 from .base import requires_models
 from .base import skip_if
 from .base import skip_unless
+from .base import skip_unless_db
 from .base_models import Person
 from .base_models import Tweet
 from .base_models import User
@@ -166,6 +167,14 @@ class FTS5ContentlessUnindexed(FTS5Model):
             'content': '',
             'contentless_delete': 1,
             'contentless_unindexed': 1}
+
+    @classmethod
+    def drop_table(cls, *args, **kwargs):
+        super(FTS5ContentlessUnindexed, cls).drop_table(*args, **kwargs)
+        # Sqlite drop of a contentless_unindexed fts5 table (thru at least
+        # 3.54) orphans the _content shadow table, breaking re-creation.
+        cls._meta.database.execute_sql(
+            'DROP TABLE IF EXISTS "%s_content"' % cls._meta.table_name)
 
 
 FTS5Vocab = FTS5Test.VocabModel()
@@ -1545,7 +1554,7 @@ class TestFTS5(BaseFTSTestCase, ModelTestCase):
         query = ContentPost5.select().where(ContentPost5.match('faith'))
         self.assertEqual(sorted(r.rowid for r in query), [2, 4, 5])
 
-    @skip_unless(sqlite3.sqlite_version_info >= (3, 43), 'sqlite >= 3.43')
+    @skip_unless_db(lambda db: db.server_version >= (3, 43), 'sqlite >= 3.43')
     @requires_models(FTS5Contentless)
     def test_fts5_contentless_delete(self):
         FC = FTS5Contentless
@@ -1566,7 +1575,7 @@ class TestFTS5(BaseFTSTestCase, ModelTestCase):
             OperationalError,
             FC.update(title='partial').where(FC.rowid == 2).execute)
 
-    @skip_unless(sqlite3.sqlite_version_info >= (3, 47), 'sqlite >= 3.47')
+    @skip_unless_db(lambda db: db.server_version >= (3, 47), 'sqlite >= 3.47')
     @requires_models(FTS5ContentlessUnindexed)
     def test_fts5_contentless_unindexed(self):
         FC = FTS5ContentlessUnindexed
@@ -2162,6 +2171,7 @@ class TestDeterministicFunction(ModelTestCase):
                     SQL('create unique index "reg_pylower_key" '
                         'on "reg" (pylower("key"))')]
 
+        db.drop_tables([Reg])
         db.create_tables([Reg])
         Reg.create(key='k1')
         with self.assertRaises(IntegrityError):
@@ -2254,3 +2264,8 @@ else:
             'database': cysqlite_database,
         })
         locals()[new_name] = klass
+
+    @skip_unless(cysqlite_database.server_version >= (3, 35, 0),
+                 'sqlite returning clause required')
+    class TestSqliteReturningConfigCySqlite(TestSqliteReturningConfig):
+        database = CySqliteDatabase(':memory:', returning_clause=True)

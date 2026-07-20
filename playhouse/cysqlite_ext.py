@@ -64,6 +64,9 @@ class TDecimalField(DecimalField):
 
 
 class CySqliteDatabase(SqliteDatabase):
+    # Unlike the inherited value, reflects the runtime-linked library.
+    server_version = cysqlite.sqlite_version_info
+
     def __init__(self, database, rank_functions=True, *args, **kwargs):
         super(CySqliteDatabase, self).__init__(database, *args, **kwargs)
 
