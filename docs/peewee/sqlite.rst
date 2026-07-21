@@ -263,15 +263,41 @@ ordered (e.g. ``cmp(lhs, rhs)``).
 Table function example
 ^^^^^^^^^^^^^^^^^^^^^^
 
-Example user-defined table-value function (see `cysqlite TableFunction docs <https://cysqlite.readthedocs.io/en/latest/api.html#tablefunction>`_
-for full details on ``TableFunction``).
+The simplest table function is a plain function or generator. It is called
+once per query with the SQL arguments and returns an iterable of row tuples.
+Parameters are taken from the function signature. A parameter with a Python
+default is optional in SQL.
+
+.. code-block:: python
+
+   from playhouse.cysqlite_ext import CySqliteDatabase
+
+   db = CySqliteDatabase('my_app.db')
+
+   @db.table_function(columns=['value'])
+   def series(start, stop, step=1):
+       i = start
+       while i < stop:
+           yield (i,)
+           i += step
+
+   cursor = db.execute_sql('SELECT value FROM series(0, 5, 2)')
+   print([value for value, in cursor])
+   # [0, 2, 4]
+
+   # step falls back to its default of 1.
+   cursor = db.execute_sql('SELECT value FROM series(0, 3)')
+   print([value for value, in cursor])
+   # [0, 1, 2]
+
+For writable tables, ``with_rowid``, or full control over the per-query
+lifecycle, subclass ``cysqlite.TableFunction`` (see `cysqlite TableFunction
+docs <https://cysqlite.readthedocs.io/en/latest/api.html#tablefunction>`_) and
+register it the same way. The equivalent of the above:
 
 .. code-block:: python
 
    from cysqlite import TableFunction
-   from playhouse.cysqlite_ext import CySqliteDatabase
-
-   db = CySqliteDatabase('my_app.db')
 
    @db.table_function('series')
    class Series(TableFunction):
@@ -279,38 +305,19 @@ for full details on ``TableFunction``).
        params = ['start', 'stop', 'step']
 
        def initialize(self, start=0, stop=None, step=1):
-           """
-           Table-functions declare an initialize() method, which is
-           called with whatever arguments the user has called the
-           function with.
-           """
+           # Called once per query, with the SQL arguments.
            self.start = self.current = start
            self.stop = stop if stop is not None else float('Inf')
            self.step = step
 
        def iterate(self, idx):
-           """
-           Iterate is called repeatedly by the SQLite database engine
-           until the required number of rows has been read **or** the
-           function raises a `StopIteration` signalling no more rows
-           are available.
-           """
+           # Called for each row. Raise StopIteration when done.
            if ((self.step > 0 and self.current > self.stop) or
                (self.step < 0 and self.current < self.stop)):
                raise StopIteration
 
            ret, self.current = self.current, self.current + self.step
            return (ret,)
-
-   # Usage:
-   cursor = db.execute_sql('SELECT * FROM series(?, ?, ?)', (0, 5, 2))
-   for value, in cursor:
-       print(value)
-
-   # Prints:
-   # 0
-   # 2
-   # 4
 
 Shared Libraries
 ^^^^^^^^^^^^^^^^
@@ -426,30 +433,23 @@ Usage:
 
        db = CySqliteDatabase('app.db', pragmas={'journal_mode': 'wal'})
 
-   .. method:: table_function(name)
+   .. method:: table_function(name=None, columns=None, params=None)
 
-      Class-decorator for registering a ``cysqlite.TableFunction``. Table
-      functions are user-defined functions that, rather than returning a
-      single, scalar value, can return any number of rows of tabular data.
+      Decorator for registering a table function. Table functions are
+      user-defined functions that, rather than returning a single, scalar
+      value, can return any number of rows of tabular data. Accepts a plain
+      callable or generator, or a ``cysqlite.TableFunction`` subclass for
+      writable tables and full control over the per-query lifecycle. For a
+      plain callable ``columns`` is required, and the SQL parameters are
+      taken from the function signature.
 
-      See `cysqlite docs <https://cysqlite.readthedocs.io/en/latest/api.html#tablefunction>`__ for details on
-      ``TableFunction`` API.
+      See `Table function example`_ above, and `cysqlite docs <https://cysqlite.readthedocs.io/en/latest/api.html#tablefunction>`__
+      for the full ``TableFunction`` API.
 
-      For a complete example, see `Table function example`_ above.
+   .. method:: register_table_function(klass, name=None, columns=None, params=None)
 
-   .. method:: register_table_function(klass, name)
-
-      :param TableFunction klass: class implementing TableFunction API.
-      :param str name: name for user-defined table function.
-
-      Register a ``cysqlite.TableFunction`` class with the connection. Table
-      functions are user-defined functions that, rather than returning a
-      single, scalar value, can return any number of rows of tabular data.
-
-      .. seealso::
-         * :meth:`CySqliteDatabase.table_function` for example implementation.
-         * `cysqlite docs <https://cysqlite.readthedocs.io/en/latest/api.html#tablefunction>`__
-           for details on ``TableFunction`` API.
+      Non-decorator form of :meth:`CySqliteDatabase.table_function`.
+      Registrations are replayed each time a new connection is opened.
 
    .. method:: unregister_table_function(name)
 

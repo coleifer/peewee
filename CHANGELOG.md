@@ -68,6 +68,7 @@ Improvements:
   `None` where NULL was indexed. The command exists only for those two
   configurations - default-storage and `contentless_delete=1` tables reject
   it and use ordinary `DELETE`.
+* Add support for cysqlite's sick table func decorator syntax.
 
 [View commits](https://github.com/coleifer/peewee/compare/4.2.6...master)
 

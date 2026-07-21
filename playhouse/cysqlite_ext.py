@@ -137,8 +137,13 @@ class CySqliteDatabase(SqliteDatabase):
         for name, (klass, num_params) in self._window_functions.items():
             conn.create_window_function(klass, name, num_params)
 
-    def register_table_function(self, klass, name=None):
-        if name is not None:
+    def register_table_function(self, klass, name=None, columns=None,
+                                params=None):
+        if not (isinstance(klass, type)
+                and issubclass(klass, cysqlite.TableFunction)):
+            klass = cysqlite.TableFunction.from_function(klass, name, columns,
+                                                         params)
+        elif name is not None:
             klass.name = name
         self._table_functions.append(klass)
         if not self.is_closed():
@@ -153,10 +158,10 @@ class CySqliteDatabase(SqliteDatabase):
         self._table_functions.pop(idx)
         return True
 
-    def table_function(self, name=None):
-        def decorator(klass):
-            self.register_table_function(klass, name)
-            return klass
+    def table_function(self, name=None, columns=None, params=None):
+        def decorator(obj):
+            self.register_table_function(obj, name, columns, params)
+            return obj
         return decorator
 
     def on_commit(self, fn):
