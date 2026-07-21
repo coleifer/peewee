@@ -57,6 +57,7 @@ class TestWebQuery(ModelTestCase):
         ('aa AND bb', '"aa" AND "bb"'),
         ('aa OR bb', '"aa" OR "bb"'),
         ('aa NOT bb', '"aa" NOT "bb"'),
+        ('aa AND NOT bb', '"aa" NOT "bb"'),
         ('aa -bb', '"aa" NOT "bb"'),
         ('aa bb -cc -dd', '("aa" AND "bb") NOT "cc" NOT "dd"'),
         ('aa OR -bb', '"aa"'),

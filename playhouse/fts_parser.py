@@ -88,6 +88,8 @@ class _Parser:
             pos = match.end()
             phrase, word, star = match.group('phrase', 'word', 'star')
             if phrase is None and not star and word in OPERATORS:
+                if word == 'NOT' and tokens and tokens[-1] == ('op', 'AND'):
+                    tokens.pop()  # "AND NOT" means NOT.
                 tokens.append(('op', word))
                 continue
             text = word if phrase is None else phrase
