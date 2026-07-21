@@ -593,6 +593,12 @@ Usage:
 
       More details can be found in the `cysqlite docs <https://cysqlite.readthedocs.io/en/latest/api.html#Connection.progress>`__.
 
+   .. method:: begin(lock_type='deferred')
+
+      Begin a transaction, optionally specifying the lock type, one of
+      ``deferred``, ``immediate`` or ``exclusive``. See
+      :ref:`sqlite-locking-mode`.
+
    .. attribute:: autocommit
 
       Property which returns a boolean indicating if autocommit is enabled.
@@ -635,7 +641,7 @@ Usage:
          # Backup the contents of master to replica.
          master.backup(replica)
 
-   .. method:: backup_to_file(filename, pages, name, progress)
+   .. method:: backup_to_file(filename, pages=None, name=None, progress=None)
 
       :param filename: Filename to store the database backup.
       :param int pages: Number of pages per iteration. Default value of -1
@@ -659,7 +665,7 @@ Usage:
              filename = 'backup-%s.db' % (datetime.date.today())
              db.backup_to_file(filename)
 
-   .. method:: blob_open(table, column, rowid, read_only=False)
+   .. method:: blob_open(table, column, rowid, read_only=False, dbname=None)
 
       :param str table: Name of table containing data.
       :param str column: Name of column containing data.
@@ -698,10 +704,39 @@ Usage:
           blob.seek(0)
           image_data = blob.read(img_size)
 
+   .. attribute:: server_version
+
+      Version tuple of the SQLite library linked at runtime, e.g.
+      ``(3, 54, 0)``.
+
+   .. attribute:: memory_used
+
+      2-tuple of current and highwater memory usage of the SQLite library,
+      in bytes. Reads as zeros when the linked SQLite was built without
+      memory statistics.
+
+   .. attribute:: cache_used
+
+      Bytes of heap memory used by the current connection's page cache.
+
+   .. attribute:: cache_hit
+
+      Number of page-cache hits on the current connection.
+
+   .. attribute:: cache_miss
+
+      Number of page-cache misses on the current connection.
+
+   .. attribute:: cache_write
+
+      Number of dirty cache entries written to disk on the current
+      connection.
+
 
 .. class:: PooledCySqliteDatabase(database, **kwargs)
 
-   Connection-pooling variant of :class:`CySqliteDatabase`.
+   Connection-pooling variant of :class:`CySqliteDatabase`. See
+   :ref:`connection-pooling`.
 
 .. _apsw:
 
