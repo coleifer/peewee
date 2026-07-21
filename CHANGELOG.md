@@ -69,6 +69,8 @@ Improvements:
   configurations - default-storage and `contentless_delete=1` tables reject
   it and use ordinary `DELETE`.
 * Add support for cysqlite's sick table func decorator syntax.
+* Better behavior for INSERT when `as_rowcount()` is specified, along with
+  proper return of all parts of a composite PK instead of just the 1st column.
 
 [View commits](https://github.com/coleifer/peewee/compare/4.2.6...master)
 

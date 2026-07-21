@@ -1992,6 +1992,12 @@ class KVR(TestModel):
     key = TextField(primary_key=True)
     value = IntegerField()
 
+class KVC(TestModel):
+    key = TextField()
+    value = IntegerField()
+    class Meta:
+        primary_key = CompositeKey('key', 'value')
+
 
 @skip_unless(database.server_version >= (3, 35, 0), 'sqlite returning clause required')
 class TestSqliteReturning(ModelTestCase):
@@ -2081,7 +2087,7 @@ class TestSqliteReturning(ModelTestCase):
 @skip_unless(database.server_version >= (3, 35, 0), 'sqlite returning clause required')
 class TestSqliteReturningConfig(ModelTestCase):
     database = SqliteDatabase(':memory:', returning_clause=True)
-    requires = [KVR, User]
+    requires = [KVC, KVR, User]
 
     def test_pk_set_properly(self):
         user = User.create(username='u1')
@@ -2097,12 +2103,10 @@ class TestSqliteReturningConfig(ModelTestCase):
         iq = User.insert_many([{'username': 'u2'}, {'username': 'u3'}])
         self.assertEqual(list(iq.execute()), [(2,), (3,)])
 
-        # NOTE: sqlite3_changes() does not return the inserted rowcount until
-        # the statement has been consumed. The fact that it returned 2 is a
-        # side-effect of the statement cache and our having consumed the query
-        # in the previous test assertion. So this test is invalid.
-        #iq = User.insert_many([('u4',), ('u5',)]).as_rowcount()
-        #self.assertEqual(iq.execute(), 2)
+        # as_rowcount() suppresses the implicit RETURNING, so the driver
+        # rowcount is valid here.
+        iq = User.insert_many([('u4',), ('u5',)]).as_rowcount()
+        self.assertEqual(iq.execute(), 2)
 
         iq = KVR.insert({'key': 'k1', 'value': 1})
         self.assertEqual(iq.execute(), 'k1')
@@ -2110,9 +2114,18 @@ class TestSqliteReturningConfig(ModelTestCase):
         iq = KVR.insert_many([('k2', 2), ('k3', 3)])
         self.assertEqual(list(iq.execute()), [('k2',), ('k3',)])
 
-        # See note above.
-        #iq = KVR.insert_many([('k4', 4), ('k5', 5)]).as_rowcount()
-        #self.assertEqual(iq.execute(), 2)
+        iq = KVR.insert_many([('k4', 4), ('k5', 5)]).as_rowcount()
+        self.assertEqual(iq.execute(), 2)
+
+    def test_insert_composite_pk(self):
+        iq = KVC.insert({'key': 'k1', 'value': 1})
+        self.assertEqual(iq.execute(), ('k1', 1))
+
+        iq = KVC.insert_many([('k2', 2), ('k3', 3)])
+        self.assertEqual(list(iq.execute()), [('k2', 2), ('k3', 3)])
+
+        iq = KVC.insert_many([('k4', 4), ('k5', 5)]).as_rowcount()
+        self.assertEqual(iq.execute(), 2)
 
     def test_insert_on_conflict(self):
         KVR.create(key='k1', value=1)

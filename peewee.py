@@ -3036,8 +3036,12 @@ class Insert(_WriteQuery):
             return self.apply_returning(ctx)
 
     def _execute(self, database):
-        if self._returning is None and database.returning_clause \
-           and self.table._primary_key:
+        if self._as_rowcount:
+            # Strip implicit pk-returning, which breaks rowcount on sqlite.
+            if not self._return_cursor:
+                self._returning = None
+        elif self._returning is None and database.returning_clause \
+             and self.table._primary_key:
             self._returning = (self.table.primary_key,)
             self._row_type = ROW.TUPLE
         try:
@@ -4354,7 +4358,10 @@ class SqliteDatabase(Database):
             return cursor.lastrowid
         elif query_type == Insert.SIMPLE:
             try:
-                return cursor[0][0]
+                row = cursor[0]
+                if isinstance(row, tuple) and len(row) > 1:
+                    return row  # Composite pk, return all columns.
+                return row[0]
             except (IndexError, KeyError, TypeError):
                 pass
         return cursor
@@ -4727,8 +4734,13 @@ class PostgresqlDatabase(Database):
         return self._adapter.is_connection_usable(self._state.conn)
 
     def last_insert_id(self, cursor, query_type=None):
+        if query_type != Insert.SIMPLE:
+            return cursor
         try:
-            return cursor if query_type != Insert.SIMPLE else cursor[0][0]
+            row = cursor[0]
+            if isinstance(row, tuple) and len(row) > 1:
+                return row  # Composite pk, return all columns.
+            return row[0]
         except (IndexError, KeyError, TypeError):
             pass
 

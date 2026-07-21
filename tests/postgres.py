@@ -1258,6 +1258,28 @@ class TestJsonColumnTypes(ModelTestCase):
             JBDoc.select(JBDoc.data['items'].length()).scalar(), 3)
 
 
+class KVC(TestModel):
+    key = TextField()
+    value = IntegerField()
+    class Meta:
+        primary_key = CompositeKey('key', 'value')
+
+
+class TestPostgresReturning(ModelTestCase):
+    database = db_loader('postgres')
+    requires = [KVC]
+
+    def test_insert_composite_pk(self):
+        iq = KVC.insert({'key': 'k1', 'value': 1})
+        self.assertEqual(iq.execute(), ('k1', 1))
+
+        iq = KVC.insert_many([('k2', 2), ('k3', 3)])
+        self.assertEqual(list(iq.execute()), [('k2', 2), ('k3', 3)])
+
+        iq = KVC.insert_many([('k4', 4), ('k5', 5)]).as_rowcount()
+        self.assertEqual(iq.execute(), 2)
+
+
 class TestTableInsertReturning(DatabaseTestCase):
     database = db_loader('postgres')
 
