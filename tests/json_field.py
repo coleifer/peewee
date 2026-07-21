@@ -640,7 +640,7 @@ class TestAsTextDeep(ModelTestCase):
         self.assertEqual(n, 2)
 
     def test_text_then_cast(self):
-        # MySQL spells the integer cast-type SIGNED (MariaDB accepts both).
+        # MySQL names the integer cast-type SIGNED (MariaDB accepts both).
         cast_type = 'signed' if IS_MYSQL else 'integer'
         n = (JM.select()
              .where(JM.data['count'].as_text().cast(cast_type) > 10).count())

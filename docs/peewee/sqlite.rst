@@ -408,7 +408,7 @@ Usage:
 
 .. class:: CySqliteDatabase(database, **kwargs)
 
-   :param list pragmas: A list of 2-tuples containing pragma key and value to
+   :param pragmas: A dict (or list of 2-tuples) of pragma key/value pairs to
        set every time a connection is opened.
    :param timeout: Set the busy-timeout on the SQLite driver (in seconds).
    :param bool rank_functions: Make search result ranking functions available.
@@ -466,8 +466,8 @@ Usage:
       on the current connection. The callback accepts no parameters and the
       return value is ignored.
 
-      However, if the callback raises a :class:`ValueError`, the
-      transaction will be aborted and rolled-back.
+      If the callback raises a :class:`ValueError`, the transaction is
+      aborted and rolled back.
 
       Example:
 
@@ -547,7 +547,7 @@ Usage:
 
       More details can be found in the `cysqlite docs <https://cysqlite.readthedocs.io/en/latest/api.html#Connection.authorizer>`__.
 
-   .. method:: trace(fn, mask=2, expand_sql=True):
+   .. method:: trace(fn, mask=2, expand_sql=True)
 
       :param fn: callable or ``None`` to clear the current trace hook.
       :param int mask: mask of what types of events to trace. Default value
@@ -822,8 +822,8 @@ of PRAGMAs and their descriptions can be found in the `SQLCipher documentation <
 .. class:: SqlCipherDatabase(database, passphrase, **kwargs)
 
    :param str database: Path to the encrypted database file.
-   :param str passphrase: Encryption passphrase (should be 8 character minimum;
-       enforce stronger requirements in your application).
+   :param str passphrase: Encryption passphrase, 8 characters minimum.
+       Enforce stronger requirements in your application.
 
    If the database file does not exist, it is created and encrypted with a
    key derived from ``passphrase``. If it does exist, ``passphrase`` must
@@ -890,9 +890,10 @@ transaction from one thread execute atomically without statements from
 another thread appearing between them. The ``atomic()`` and
 ``transaction()`` methods raise a ``ValueError`` if called.
 
-If you need to temporarily bypass the queue and write directly (for
-example, during a batch import), use :meth:`~SqliteQueueDatabase.pause`
-and :meth:`~SqliteQueueDatabase.unpause`.
+To write directly, bypassing the queue (for example, a bulk import through
+a separate connection), use :meth:`~SqliteQueueDatabase.pause` and
+:meth:`~SqliteQueueDatabase.unpause`. While paused the writer thread is
+disconnected, and writes submitted through the queue raise ``WriterPaused``.
 
 .. class:: SqliteQueueDatabase(database, use_gevent=False, autostart=True, queue_max_size=None, results_timeout=None, **kwargs)
 
@@ -919,8 +920,10 @@ and :meth:`~SqliteQueueDatabase.unpause`.
    .. method:: pause()
 
       Block until the writer thread finishes its current work, then
-      disconnect it. The calling thread takes over direct database access.
-      Must be followed by a call to :meth:`~SqliteQueueDatabase.unpause`.
+      disconnect it so another connection may write to the database
+      directly. While paused, writes submitted through the queue raise
+      ``WriterPaused``. Must be followed by a call to
+      :meth:`~SqliteQueueDatabase.unpause`.
 
    .. method:: unpause()
 
@@ -955,14 +958,7 @@ These field classes live in ``playhouse.sqlite_ext`` and can be used with:
           content = TextField()
           timestamp = TimestampField()
 
-   RowIDField can be mapped to a different field name, but it's underlying
-   column name will always be ``rowid``.
-
-   .. code-block:: python
-
-      class Note(Model):
-          id = RowIDField()
-          ...
+   The field must be named ``rowid``. Any other name raises ``ValueError``.
 
 .. class:: AutoIncrementField()
 
@@ -1101,6 +1097,7 @@ in SQLite using the `SQLite json functions <https://sqlite.org/json1.html>`_.
                .select(
                    Config.data['statuses'],
                    Config.data['statuses'].length())
+               .where(Config.id.in_([cfg1.id, cfg2.id]))
                .tuples())
 
       # [([1, 99, 1, 1], 4), ([1, 1], 2)]
@@ -1110,27 +1107,27 @@ in SQLite using the `SQLite json functions <https://sqlite.org/json1.html>`_.
 
    .. code-block:: python
 
-      Config.create(data={'x1': {'y1': 'z1', 'y2': 'z2'}, 'x2': [1, 2]})
+      cfg = Config.create(data={'x1': {'y1': 'z1', 'y2': 'z2'}, 'x2': [1, 2]})
 
       tree = Config.data.tree().alias('tree')
       query = (Config
-               .select(Config.id, tree.c.fullkey, tree.c.value)
-               .from_(Config, tree))
+               .select(tree.c.fullkey, tree.c.value)
+               .from_(Config, tree)
+               .where(Config.id == cfg.id))
 
       for row in query.tuples():
           print(row)
 
-      (1, '$', '{"x1":{"y1":"z1","y2":"z2"},"x2":[1,2]}')
-      (1, '$.x1', '{"y1":"z1","y2":"z2"}')
-      (1, '$.x1.y1', 'z1')
-      (1, '$.x1.y2', 'z2')
-      (1, '$.x2', '[1,2]')
-      (1, '$.x2[0]', 1)
-      (1, '$.x2[1]', 2)
+      ('$', '{"x1":{"y1":"z1","y2":"z2"},"x2":[1,2]}')
+      ('$.x1', '{"y1":"z1","y2":"z2"}')
+      ('$.x1.y1', 'z1')
+      ('$.x1.y2', 'z2')
+      ('$.x2', '[1,2]')
+      ('$.x2[0]', 1)
+      ('$.x2[1]', 2)
 
-   The :meth:`~JSONField.tree` and :meth:`~JSONField.children` methods
-   are powerful. For more information on how to utilize them, see the
-   `json1 extension documentation <http://sqlite.org/json1.html#jtree>`_.
+   For more on :meth:`~JSONField.tree` and :meth:`~JSONField.children`, see
+   the `json1 extension documentation <http://sqlite.org/json1.html#jtree>`_.
 
    .. method:: __getitem__(item)
 
@@ -1139,8 +1136,8 @@ in SQLite using the `SQLite json functions <https://sqlite.org/json1.html>`_.
       :rtype: JSONPath
 
       Access a specific key or array index in the JSON data. Returns a
-      :class:`JSONPath` object, which exposes convenient methods for
-      reading or modifying a particular part of a JSON object.
+      :class:`JSONPath` object, which exposes methods for reading or
+      modifying a particular part of a JSON object.
 
       Example:
 
@@ -1383,7 +1380,7 @@ in SQLite using the `SQLite json functions <https://sqlite.org/json1.html>`_.
    :param JSONField field: the field object we intend to access.
    :param tuple path: Components comprising the JSON path.
 
-   A convenient, Pythonic way of representing JSON paths for use with
+   A Pythonic way of representing JSON paths for use with
    :class:`JSONField`. Implements the same methods as :class:`JSONField` but
    designed for operating on nested items, e.g.:
 
@@ -1501,8 +1498,7 @@ key. The choice determines what can be read back out of the index and how it is
 kept up to date:
 
 * **Default** (no ``content`` option): the index keeps its own copy of the
-  text and reads and writes like an ordinary table. Data is read or written to
-  the index table like any other table.
+  text, and is read and written like any other table.
 * :ref:`External content <sqlite-fts-external-content>` (``content=Model``):
   only the search structures are stored. The searchable text itself is read
   from the content table on demand, so ``SELECT`` and the highlighting
@@ -1533,8 +1529,8 @@ joined back to it:
        content=document.content,
        author=document.author)
 
-   # Replace acts as an upsert, which is convenient when re-indexing a row
-   # that may or may not already be present:
+   # Replace acts as an upsert, for re-indexing a row that may or may not
+   # already be present:
    (DocumentIndex
     .replace(rowid=document.id,
              title=document.title,
@@ -1692,7 +1688,7 @@ SQLite does not keep the index in sync for you, and writing the index has a
 twist: to remove or change a row, the index needs the values that were
 originally indexed, since it stores no text of its own to look them up in.
 They are supplied with the special "delete" command, an ``INSERT`` naming
-the table itself. Removing a row is one such ``INSERT``; changing a row is a
+the table itself. Removing a row is one such ``INSERT``. Changing a row is a
 removal followed by a plain ``INSERT`` of the new values:
 
 .. code-block:: sql
@@ -1799,7 +1795,7 @@ Using both:
                'contentless_delete': 1,
                'contentless_unindexed': 1}
 
-   # The title is stored and comes back with each hit; the content is
+   # The title is stored and comes back with each hit. The content is
    # indexed, then discarded, and selects as NULL.
    NoteIndex.insert({'rowid': note.id, 'content': note.content,
                      'title': note.title}).execute()
@@ -1966,8 +1962,8 @@ Using both:
         This is the attribute you will use to access the score
         if ``with_score=True``.
       :param bool explicit_ordering: Order using full SQL function to
-          calculate rank, as opposed to simply referencing the score alias
-          in the ORDER BY clause.
+          calculate rank, as opposed to referencing the score alias in the
+          ORDER BY clause.
 
       Shorthand way of searching for a term and sorting results by the
       quality of the match using BM25.
@@ -2169,16 +2165,16 @@ Using both:
       removed from :ref:`external-content <sqlite-fts-external-content>` and
       :ref:`contentless <sqlite-fts5-contentless>` tables, which cannot look
       the old values up themselves. The command exists only for those two
-      configurations: default-storage and ``contentless_delete=1`` tables
-      reject it, and are written with ordinary ``DELETE`` statements.
+      configurations. Default-storage and ``contentless_delete=1`` tables
+      reject it and use ordinary ``DELETE`` statements.
 
       SQLite requires the values to match what was indexed, treating an
-      omitted column as NULL. Any mismatch leaves stale entries in the
-      index, which :meth:`~FTS5Model.integrity_check` with ``rank=1`` can
-      detect on an external-content table but nothing can detect on a
-      contentless one. A value is therefore required for every indexed
-      column (pass ``None`` where NULL was indexed), and a missing or
-      unrecognized column raises ``ValueError``.
+      omitted column as NULL. A mismatch leaves stale entries behind,
+      detectable by :meth:`~FTS5Model.integrity_check` with ``rank=1`` on an
+      external-content table and undetectable on a contentless one. A value
+      is therefore required for every indexed column (pass ``None`` where
+      NULL was indexed), and a missing or unrecognized column raises
+      ``ValueError``.
 
    .. classmethod:: integrity_check(rank=0)
 
@@ -2315,8 +2311,8 @@ ordinary table holding the canonical data. The differences:
         This is the attribute you will use to access the score
         if ``with_score=True``.
       :param bool explicit_ordering: Order using full SQL function to
-          calculate rank, as opposed to simply referencing the score alias
-          in the ORDER BY clause.
+          calculate rank, as opposed to referencing the score alias in the
+          ORDER BY clause.
 
       Shorthand way of searching for a term and sorting results by the
       quality of the match. Requires ``rank_functions=True`` on the database.
@@ -2519,7 +2515,7 @@ Available functions
    :param date_str: A datetime, encoded as a string.
    :returns: The datetime with any timezone info stripped off.
 
-   The time is not adjusted in any way, the timezone is simply removed.
+   The time is not adjusted. Only the timezone is removed.
 
 .. function:: human_delta(nseconds, glue=', ')
 
