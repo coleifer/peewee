@@ -1458,7 +1458,7 @@ Full-text search
 
 SQLite can maintain a full-text index over one or more columns of text, and
 query it using the ``MATCH`` operator. Peewee exposes an index as a
-:class:`Model`, where each :class:`SearchField` is an indexed column.
+:class:`Model`, where each columns is a :class:`SearchField`.
 
 :ref:`FTS5 <sqlite-fts5>` should be used wherever possible. Legacy
 :ref:`FTS3 and FTS4 <sqlite-fts4>` support is available for older databases.
@@ -1546,7 +1546,7 @@ kept up to date:
 
 Prefer the default, which the rest of this section assumes. Choose external
 content when storing a second copy of the text would be prohibitively
-expensive, and for contentless when the text never needs to be read back
+expensive, and choose contentless when the text never needs to be read back
 through the index.
 
 Writing to the index
@@ -1605,8 +1605,8 @@ Input                      :meth:`~FTS5Model.match`                   :meth:`~FT
 (empty)                    ``OperationalError: syntax error``         ``OperationalError``           matches nothing
 =========================  =========================================  =============================  ============================
 
-A search box should pass the user's text through :meth:`~FTS5Model.web_query`
-first, and joining the hits back to the source table gives the rows themselves:
+A search box should pass the user's text through :meth:`~FTS5Model.web_query`.
+This example fetches documents matching a user search query ``phrase``:
 
 .. code-block:: python
 
@@ -1712,8 +1712,8 @@ that renames the columns:
 .. code-block:: python
 
    class DocumentIndex(FTS5Model):
-       # Model attribute "message", mapped to Document's "body" column.
-       message = SearchField(column_name='body')
+       # Model attribute "body", mapped to Document's "content" column.
+       body = SearchField(column_name='content')
 
        class Meta:
            database = db
@@ -1907,7 +1907,7 @@ Using both:
       :param str right: closing tag for highlight, e.g. ``'</b>'``
       :param str over_length: text to prepend or append when snippet exceeds
           the maximum number of tokens.
-      :param int max_tokens: max tokens returned, **must be 1 - 64**.
+      :param int max_tokens: max tokens returned, between 1 and 64.
 
       **FTS5 only.** Like :meth:`~SearchField.highlight`, but returns a
       short excerpt of the column containing the match rather than the whole
@@ -2459,11 +2459,11 @@ ordinary table holding the canonical data. The differences:
       The above code example is equivalent to calling the
       :meth:`~FTSModel.search_bm25` method:
 
-          .. code-block:: python
+      .. code-block:: python
 
-             query = DocumentIndex.search_bm25('search phrase', with_score=True)
-             for search_result in query:
-                 print(search_result.title, search_result.score)
+         query = DocumentIndex.search_bm25('search phrase', with_score=True)
+         for search_result in query:
+             print(search_result.title, search_result.score)
 
    .. classmethod:: bm25f(col1_weight, col2_weight...coln_weight)
 
