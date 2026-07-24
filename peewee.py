@@ -3947,8 +3947,21 @@ class Database(_callable_context_manager):
 
         return NodeList(parts)
 
-    def last_insert_id(self, cursor, query_type=None):
+    def _last_insert_rowid(self, cursor):
         return cursor.lastrowid
+
+    def last_insert_id(self, cursor, query_type=None):
+        if not self.returning_clause:
+            return self._last_insert_rowid(cursor)
+        elif query_type == Insert.SIMPLE:
+            try:
+                row = cursor[0]
+                if isinstance(row, tuple) and len(row) > 1:
+                    return row  # Composite pk, return all columns.
+                return row[0]
+            except (AttributeError, IndexError, KeyError, TypeError):
+                return  # Nothing was inserted, e.g. a conflict was ignored.
+        return cursor
 
     def rows_affected(self, cursor):
         try:
@@ -4353,19 +4366,6 @@ class SqliteDatabase(Database):
             self.execute_sql('DETACH DATABASE ?', (name,))
         return True
 
-    def last_insert_id(self, cursor, query_type=None):
-        if not self.returning_clause:
-            return cursor.lastrowid
-        elif query_type == Insert.SIMPLE:
-            try:
-                row = cursor[0]
-                if isinstance(row, tuple) and len(row) > 1:
-                    return row  # Composite pk, return all columns.
-                return row[0]
-            except (IndexError, KeyError, TypeError):
-                pass
-        return cursor
-
     def begin(self, lock_type=None):
         statement = 'BEGIN %s' % lock_type if lock_type else 'BEGIN'
         self.execute_sql(statement)
@@ -4732,17 +4732,6 @@ class PostgresqlDatabase(Database):
         # connection. If the connection is in an error state or the connection
         # is otherwise unusable, return False.
         return self._adapter.is_connection_usable(self._state.conn)
-
-    def last_insert_id(self, cursor, query_type=None):
-        if query_type != Insert.SIMPLE:
-            return cursor
-        try:
-            row = cursor[0]
-            if isinstance(row, tuple) and len(row) > 1:
-                return row  # Composite pk, return all columns.
-            return row[0]
-        except (IndexError, KeyError, TypeError):
-            pass
 
     def begin(self, isolation_level=None):
         if self.is_closed():

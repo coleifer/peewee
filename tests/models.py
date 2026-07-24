@@ -507,17 +507,24 @@ class TestModelAPIs(ModelTestCase):
         p3, p7 = people[3], people[7]
         p3.first = p7.first = 'fx'
         p3.last = p7.last = 'lx'
-        with self.assertRaises(IntegrityError):
-            with self.assertQueryCount(1):
-                with self.database.atomic():
-                    Person.bulk_update(people, fields=['first', 'last'])
+        # A raising block skips assertQueryCount()'s assertion. Count UPDATEs,
+        # as sqlite logs BEGIN/ROLLBACK where the other backends do not.
+        n_updates = lambda: len([r for r in self.history
+                                 if r.msg[0].startswith('UPDATE')])
 
+        self.reset_sql_history()
         with self.assertRaises(IntegrityError):
-            # 10 objects, batch size=4, so 0-3, 4-7, 8&9. But we never get to 8
-            # and 9 because of the integrity error processing the 2nd batch.
-            with self.assertQueryCount(2):
-                with self.database.atomic():
-                    Person.bulk_update(people, ['first', 'last'], 4)
+            with self.database.atomic():
+                Person.bulk_update(people, fields=['first', 'last'])
+        self.assertEqual(n_updates(), 1)
+
+        # 10 objects, batch size=4, so 0-3, 4-7, 8&9. But we never get to 8 and
+        # 9 because of the integrity error processing the 2nd batch.
+        self.reset_sql_history()
+        with self.assertRaises(IntegrityError):
+            with self.database.atomic():
+                Person.bulk_update(people, ['first', 'last'], 4)
+        self.assertEqual(n_updates(), 2)
 
         # Ensure no changes were made.
         vals = [(p.first, p.last) for p in Person.select().order_by(Person.id)]

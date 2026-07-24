@@ -16,6 +16,8 @@ Backwards-incompatible:
     * Explicitly add ``docid = DocIDField()`` to your FTSModel classes.
     * Update your code, replacing ``docid`` with ``rowid``. The underlying data
       does not require a migration, as docid was just an alias for rowid.
+* When a RETURNING-clause insert of a single row inserts nothing, e.g. a
+  conflict was ignored, ``execute()`` returns ``None`` on every backend.
 
 Improvements:
 
@@ -71,6 +73,10 @@ Improvements:
 * Add support for cysqlite's sick table func decorator syntax.
 * Better behavior for INSERT when `as_rowcount()` is specified, along with
   proper return of all parts of a composite PK instead of just the 1st column.
+* ``last_insert_id()`` is implemented once on ``Database``, with backends
+  overriding ``_last_insert_rowid()`` where the driver differs. APSW and the
+  MariaDB connector inherit composite primary-key support as a result, having
+  previously returned only the first column.
 
 [View commits](https://github.com/coleifer/peewee/compare/4.2.6...master)
 

@@ -9,7 +9,6 @@ except ImportError:
 
 from peewee import Expression
 from peewee import ImproperlyConfigured
-from peewee import Insert
 from peewee import InterfaceError
 from peewee import JSONField
 from peewee import JSONPath
@@ -74,16 +73,6 @@ class MariaDBConnectorDatabase(MySQLDatabase):
         if self.server_version >= (10, 5, 0):
             self.returning_clause = True
         self._set_csq_grouped(True)
-
-    def last_insert_id(self, cursor, query_type=None):
-        if not self.returning_clause:
-            return cursor.lastrowid
-        elif query_type == Insert.SIMPLE:
-            try:
-                return cursor[0][0]
-            except (AttributeError, IndexError, TypeError):
-                return cursor.lastrowid
-        return cursor
 
     def get_binary_type(self):
         return mariadb.Binary

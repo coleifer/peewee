@@ -2144,6 +2144,16 @@ class TestSqliteReturningConfig(ModelTestCase):
         self.assertEqual(sorted(KVR.select().tuples()),
                          [('k1', 21), ('k2', 12), ('k3', 300)])
 
+    def test_insert_ignored_returns_none(self):
+        KVR.create(key='k1', value=1)
+        iq = KVR.insert({'key': 'k1', 'value': 100}).on_conflict_ignore()
+        self.assertTrue(iq.execute() is None)
+        self.assertEqual(KVR.get(KVR.key == 'k1').value, 1)
+
+        iq = KVC.insert({'key': 'k1', 'value': 1})
+        self.assertEqual(iq.execute(), ('k1', 1))
+        self.assertTrue(iq.clone().on_conflict_ignore().execute() is None)
+
     def test_update_delete_rowcounts(self):
         users = [User.create(username=u) for u in 'abc']
         kvrs = [KVR.create(key='k%s' % i, value=i) for i in (1, 2, 3)]
