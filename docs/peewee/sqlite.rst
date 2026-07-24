@@ -1458,7 +1458,7 @@ Full-text search
 
 SQLite can maintain a full-text index over one or more columns of text, and
 query it using the ``MATCH`` operator. Peewee exposes an index as a
-:class:`Model`, where each columns is a :class:`SearchField`.
+:class:`Model`, where each column is a :class:`SearchField`.
 
 :ref:`FTS5 <sqlite-fts5>` should be used wherever possible. Legacy
 :ref:`FTS3 and FTS4 <sqlite-fts4>` support is available for older databases.
@@ -1656,7 +1656,7 @@ the latter returning only an excerpt:
 .. code-block:: python
 
    query = (DocumentIndex
-            .search('python')
+            .search(DocumentIndex.web_query('python'))
             .select(DocumentIndex.title.highlight('[', ']').alias('hi'),
                     DocumentIndex.content.snippet('[', ']').alias('snip')))
 
@@ -1894,7 +1894,7 @@ Using both:
       .. code-block:: python
 
          query = (DocumentIndex
-                  .search('python')
+                  .search(DocumentIndex.web_query('python'))
                   .select_extend(DocumentIndex.title.highlight('[', ']').alias('hi')))
          # e.g. result.hi = "Learn [python] the hard way"
 
@@ -2005,14 +2005,14 @@ Using both:
 
       .. code-block:: python
 
-          # Simple search.
-          docs = DocumentIndex.search('search term')
+          # Search on user input, best matches first.
+          docs = DocumentIndex.search(DocumentIndex.web_query(user_input))
           for result in docs:
               print(result.title)
 
-          # More complete example.
+          # Weighted columns, returning the computed score.
           docs = DocumentIndex.search(
-              'search term',
+              DocumentIndex.web_query(user_input),
               weights={'title': 2.0, 'content': 1.0},
               with_score=True,
               score_alias='search_score')
@@ -2104,15 +2104,6 @@ Using both:
                   .where(DocumentIndex.match('search phrase'))
                   .order_by(DocumentIndex.rank()))
 
-         for search_result in query:
-             print(search_result.title, search_result.score)
-
-      The above code example is equivalent to calling the
-      :meth:`~FTS5Model.search` method:
-
-      .. code-block:: python
-
-         query = DocumentIndex.search('search phrase', with_score=True)
          for search_result in query:
              print(search_result.title, search_result.score)
 
@@ -2295,21 +2286,6 @@ ordinary table holding the canonical data. The differences:
    * ``compress`` / ``uncompress``: names of registered functions used to
      compress the stored content.
 
-   Example:
-
-   .. code-block:: python
-
-      class DocumentIndex(FTSModel):
-          title = SearchField()
-          content = SearchField()
-
-          class Meta:
-              database = db
-              options = {
-                  'tokenize': 'porter unicode61',
-                  'prefix': [3, 4],
-              }
-
    .. classmethod:: match(term)
 
       :param term: Search term or expression. `FTS syntax documentation <https://www.sqlite.org/fts3.html#full_text_index_queries>`__.
@@ -2318,20 +2294,6 @@ ordinary table holding the canonical data. The differences:
       expression in the table. SQLite uses the ``MATCH`` operator to indicate
       a full-text search. The term is passed through unmodified, so invalid
       syntax raises an ``OperationalError``.
-
-      Example:
-
-      .. code-block:: python
-
-         # Search index for "search phrase" and return results ranked
-         # by relevancy using the BM25 algorithm.
-         query = (DocumentIndex
-                  .select()
-                  .where(DocumentIndex.match('search phrase'))
-                  .order_by(DocumentIndex.bm25()))
-
-         for result in query:
-             print('Result: %s' % result.title)
 
    .. classmethod:: search(term, weights=None, with_score=False, score_alias='score', explicit_ordering=False)
 
@@ -2357,22 +2319,6 @@ ordinary table holding the canonical data. The differences:
       use the :meth:`~FTSModel.search_bm25` method.
 
       Unlike :meth:`FTS5Model.search`, the term is passed through unmodified.
-
-      .. code-block:: python
-
-         # Simple search.
-         docs = DocumentIndex.search('search term')
-         for result in docs:
-             print(result.title)
-
-         # More complete example.
-         docs = DocumentIndex.search(
-             'search term',
-             weights={'title': 2.0, 'content': 1.0},
-             with_score=True,
-             score_alias='search_score')
-         for result in docs:
-             print(result.title, result.search_score)
 
    .. classmethod:: search_bm25(term, weights=None, with_score=False, score_alias='score', explicit_ordering=False)
 
@@ -2403,10 +2349,6 @@ ordinary table holding the canonical data. The differences:
       the search match. This ``rank`` can be used to sort the search results.
       Requires ``rank_functions=True`` on the database.
 
-      The ``rank`` function accepts optional parameters that allow you to
-      specify weights for the various columns. If no weights are specified,
-      all columns are considered of equal importance.
-
       The algorithm used by :meth:`~FTSModel.rank` is simple and
       relatively quick. For more sophisticated result ranking, use:
 
@@ -2414,56 +2356,15 @@ ordinary table holding the canonical data. The differences:
       * :meth:`~FTSModel.bm25f`
       * :meth:`~FTSModel.lucene`
 
-      .. code-block:: python
-
-         query = (DocumentIndex
-                  .select(
-                      DocumentIndex,
-                      DocumentIndex.rank().alias('score'))
-                  .where(DocumentIndex.match('search phrase'))
-                  .order_by(DocumentIndex.rank()))
-
-         for search_result in query:
-             print(search_result.title, search_result.score)
-
    .. classmethod:: bm25(col1_weight, col2_weight...coln_weight)
 
       :param float col_weight: (Optional) weight to give to the *ith* column
           of the model. By default all columns have a weight of ``1.0``.
 
-      Generate an expression that will calculate and return the quality of
-      the search match using the `BM25 algorithm <https://en.wikipedia.org/wiki/Okapi_BM25>`_.
-      This value can be used to sort the search results. Requires
-      ``rank_functions=True`` on the database.
-
-      Like :meth:`~FTSModel.rank`, ``bm25`` function accepts optional
-      parameters that allow you to specify weights for the various columns.
-      If no weights are specified, all columns are considered of equal
-      importance.
-
-      The BM25 result ranking algorithm requires FTS4. If you are using
-      FTS3, use :meth:`~FTSModel.rank` instead.
-
-      .. code-block:: python
-
-         query = (DocumentIndex
-                  .select(
-                      DocumentIndex,
-                      DocumentIndex.bm25().alias('score'))
-                  .where(DocumentIndex.match('search phrase'))
-                  .order_by(DocumentIndex.bm25()))
-
-         for search_result in query:
-             print(search_result.title, search_result.score)
-
-      The above code example is equivalent to calling the
-      :meth:`~FTSModel.search_bm25` method:
-
-      .. code-block:: python
-
-         query = DocumentIndex.search_bm25('search phrase', with_score=True)
-         for search_result in query:
-             print(search_result.title, search_result.score)
+      Same as :meth:`~FTSModel.rank`, but using the `BM25 algorithm
+      <https://en.wikipedia.org/wiki/Okapi_BM25>`_. Requires FTS4 and
+      ``rank_functions=True`` on the database. If you are using FTS3, use
+      :meth:`~FTSModel.rank` instead.
 
    .. classmethod:: bm25f(col1_weight, col2_weight...coln_weight)
 
