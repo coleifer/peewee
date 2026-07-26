@@ -1,6 +1,9 @@
 [build-system]
-requires = ["setuptools", "wheel", "cython"]
 build-backend="setuptools.build_meta"
+requires = [
+    "setuptools",
+    "cython>=3; platform_python_implementation == 'CPython'",
+]
 
 [project]
 name = "peewee"
@@ -15,9 +18,13 @@ classifiers = [
     "Intended Audience :: Developers",
     "Operating System :: OS Independent",
     "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: Implementation :: CPython",
+    "Programming Language :: Python :: Implementation :: PyPy",
     "Topic :: Database",
+    "Topic :: Database :: Front-Ends",
     "Topic :: Software Development :: Libraries :: Python Modules",
 ]
+requires-python = ">=3.8"
 
 [project.scripts]
 pwiz = "pwiz:main"
