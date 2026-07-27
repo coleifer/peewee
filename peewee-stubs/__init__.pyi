@@ -24,6 +24,7 @@ _DatabaseType: TypeAlias = Database | DatabaseProxy
 # Common field kwargs, Unpack-ed into the field __new__ overloads.
 @type_check_only
 class _FieldKwargs(TypedDict, total=False):
+    null: bool
     index: bool
     unique: bool
     primary_key: bool
