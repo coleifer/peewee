@@ -6578,7 +6578,7 @@ class ForeignKeyField(Field):
                            '"backref" for Field objects.')
             backref = related_name
 
-        self._is_self_reference = model == 'self'
+        self._is_self_reference = isinstance(model, str) and model == 'self'
         self.rel_model = model
         self.rel_field = field
         self.declared_backref = backref

@@ -114,6 +114,9 @@ jobs:
       - name: mypy
         working-directory: typecheck
         run: mypy check_stub.py
+      # Errors inside an installed stub are silenced, so check the file directly.
+      - name: mypy stub
+        run: mypy peewee-stubs/__init__.pyi
       - name: pyright
         working-directory: typecheck
         run: pyright check_stub.py
