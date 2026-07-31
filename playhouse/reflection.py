@@ -805,7 +805,9 @@ class Introspector(object):
                 params = {
                     'column_name': column_name,
                     'null': column.nullable}
-                if column.extra_parameters is not None:
+                if column.extra_parameters is not None and \
+                   FieldClass is not BareField:
+                    # e.g. max_length does not apply to BareField.
                     params.update(column.extra_parameters)
                 if column.primary_key and composite_key:
                     if FieldClass is AutoField:

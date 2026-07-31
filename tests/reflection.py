@@ -723,6 +723,12 @@ class TestReflectionFacets(BaseReflectionTestCase):
         self.assertEqual(F.dec.max_digits, 10)
         self.assertEqual(F.dec.decimal_places, 2)
 
+    def test_bare_fields_type_parameters(self):
+        models = self.introspector.generate_models(bare_fields=True)
+        F = models[Facets._meta.table_name]
+        self.assertTrue(type(F.char50) is BareField)
+        self.assertTrue(type(F.dec) is BareField)
+
     def test_field_classes(self):
         models = self.introspector.generate_models()
         F = models[Facets._meta.table_name]
