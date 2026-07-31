@@ -80,6 +80,7 @@ Improvements:
   overriding `_last_insert_rowid()` where the driver differs. APSW and the
   MariaDB connector inherit composite primary-key support as a result, having
   previously returned only the first column.
+* Don't apply field kwargs to barefield instances w/reflection, #3064.
 
 [View commits](https://github.com/coleifer/peewee/compare/4.2.6...master)
 
