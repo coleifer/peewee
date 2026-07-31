@@ -7,6 +7,10 @@ https://github.com/coleifer/peewee/releases
 
 ## master
 
+[View commits](https://github.com/coleifer/peewee/compare/4.3.0...master)
+
+## 4.3.0
+
 Backwards-incompatible:
 
 * Specify `requires-python >= 3.8`. I've been putting off committing to
@@ -82,7 +86,7 @@ Improvements:
   previously returned only the first column.
 * Don't apply field kwargs to barefield instances w/reflection, #3064.
 
-[View commits](https://github.com/coleifer/peewee/compare/4.2.6...master)
+[View commits](https://github.com/coleifer/peewee/compare/4.2.6...4.3.0)
 
 ## 4.2.6
 
