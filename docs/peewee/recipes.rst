@@ -225,7 +225,7 @@ subquery, then joins back to the tweet table on both user and timestamp:
                 (Tweet.created_date == subquery.c.max_ts) &
                 (Tweet.user == subquery.c.user_id))))
 
-SQLite and MySQL permit a shorter form that groups by a subset of selected
+SQLite and MariaDB permit a shorter form that groups by a subset of selected
 columns:
 
 .. code-block:: python
@@ -236,7 +236,7 @@ columns:
             .group_by(Tweet.user)
             .having(Tweet.created_date == fn.MAX(Tweet.created_date)))
 
-Postgresql requires the standard subquery form above.
+Postgresql and MySQL require the standard subquery form above.
 
 .. _top-n-per-group:
 
@@ -443,7 +443,8 @@ An alternative: self-join and count newer tweets in the HAVING clause:
             .group_by(Tweet.id, Tweet.content, Tweet.user, User.username)
             .having(fn.COUNT(Tweet.id) <= 3))
 
-The last example uses a ``LIMIT`` clause in a correlated subquery.
+The last example uses a ``LIMIT`` clause in a correlated subquery, which is
+accepted by SQLite and MariaDB:
 
 .. code-block:: python
 
@@ -462,10 +463,6 @@ The last example uses a ``LIMIT`` clause in a correlated subquery.
                  .where(TweetAlias.user == Tweet.user)
                  .order_by(TweetAlias.created_date.desc())
                  .limit(3))))
-
-For a thorough benchmark comparison of these approaches, see the blog post
-`Querying the top N objects per group with Peewee ORM
-<https://charlesleifer.com/blog/querying-the-top-n-objects-per-group-with-peewee-orm/>`_.
 
 
 Bulk-Loading with Explicit Primary Keys

@@ -1173,14 +1173,18 @@ CRDB API
     the :class:`CockroachDatabase` class.
 
 
+.. class:: ExceededMaxAttempts
+
+    Subclass of :class:`OperationalError` used to indicate transaction ran out
+    of client-side retries.
+
+
 CRDB-specific field types:
 
 .. class:: UUIDKeyField()
-   :noindex:
 
    UUID primary key auto-populated with CRDB's ``gen_random_uuid()``.
 
 .. class:: RowIDField()
-   :noindex:
 
    Integer primary key auto-populated with CRDB's ``unique_rowid()``.

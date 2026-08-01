@@ -85,7 +85,7 @@ Retrieving a Single Record
 --------------------------
 
 :meth:`Model.get` executes the query and returns the first matching row.
-If no row matches, :exc:`~Model.DoesNotExist` is raised:
+If no row matches, :class:`DoesNotExist` is raised:
 
 .. code-block:: python
 
@@ -832,9 +832,9 @@ difference:
 .. code-block:: pycon
 
    >>> Sample.create(counter=1, value=20.)
-   <Sample 6>
+   <Sample: 6>
    >>> Sample.create(counter=2, value=1.)
-   <Sample 7>
+   <Sample: 7>
 
 Our table now contains:
 

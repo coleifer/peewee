@@ -94,7 +94,7 @@ To delete a row:
 Reading Data
 ------------
 
-Retrieve a single row with :meth:`~Model.get`. It raises :exc:`~Model.DoesNotExist`
+Retrieve a single row with :meth:`~Model.get`. It raises :class:`DoesNotExist`
 if no match is found:
 
 .. code-block:: python

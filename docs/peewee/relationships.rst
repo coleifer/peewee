@@ -1160,10 +1160,7 @@ already fetched. The ``strategy`` argument controls how:
   at all, at the cost of one bind parameter per key, so it is bounded by the
   backend's parameter limit.
 
-``WHERE`` and ``JOIN`` embed the parent query, so they work with both
-:meth:`~ModelSelect.with_related` and :func:`prefetch`. ``MATERIALIZE`` reads
-keys from already-fetched parent instances, which only
-:meth:`~ModelSelect.with_related` holds, so :func:`prefetch` rejects it.
+Examples:
 
 .. code-block:: python
 
@@ -1239,10 +1236,5 @@ Use **eager loading** when:
 * The full set of related rows is needed for each parent row.
 * Nesting more than one level of related data (users -> tweets -> favorites).
 
-.. note::
-   ``LIMIT`` on the outer query works as expected. For top-N-per-parent, use
-   :meth:`~ModelSelect.with_related` with ``per_parent=n`` (above), or
-   :ref:`top-n-per-group` for the underlying technique.
-
 .. seealso::
-   :meth:`~ModelSelect.with_related` and :func:`prefetch` API reference.
+   :meth:`~ModelSelect.with_related`.

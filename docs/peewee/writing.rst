@@ -165,7 +165,7 @@ Optionally wrap the bulk insert in a transaction:
    with db.atomic():
        User.insert_many(data, fields=fields).execute()
 
-Insert queries support :meth:`~WriteQuery.returning` with Postgresql and SQLite
+Insert queries support :meth:`~_WriteQuery.returning` with Postgresql and SQLite
 to obtain the inserted rows:
 
 .. code-block:: python
@@ -286,7 +286,7 @@ matching the WHERE clause:
 
 The return value is the number of rows affected.
 
-Update queries support :meth:`~WriteQuery.returning` with Postgresql and SQLite
+Update queries support :meth:`~_WriteQuery.returning` with Postgresql and SQLite
 to obtain the updated rows:
 
 .. code-block:: python
@@ -577,7 +577,7 @@ To delete an arbitrary set of rows without fetching them:
                 (Tweet.timestamp < cutoff))
             .execute())
 
-Delete queries support :meth:`~WriteQuery.returning` with Postgresql and SQLite
+Delete queries support :meth:`~_WriteQuery.returning` with Postgresql and SQLite
 to obtain the deleted rows:
 
 .. code-block:: python

@@ -1500,8 +1500,8 @@ coming from the database into a Python type:
    class RawData(BaseModel):
        value = BareField(adapt=float)
 
-For full-text search virtual tables, use :class:`SearchField` rather
-than :class:`BareField`. See :ref:`sqlite-fts`.
+For full-text search virtual tables, use :class:`~playhouse.sqlite_ext.SearchField`
+rather than :class:`BareField`. See :ref:`sqlite-fts`.
 
 .. _custom-fields:
 

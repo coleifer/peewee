@@ -674,7 +674,6 @@ Usage:
       :param str dbname: Database name (e.g. if multiple databases attached).
       :returns: ``cysqlite.Blob`` instance which provides efficient access to
           the underlying binary data.
-      :rtype: cysqlite.Blob
 
       See `cysqlite documentation <https://cysqlite.readthedocs.io/en/latest/api.html#blob>`_ for
       more details.
@@ -1000,7 +999,7 @@ These field classes live in ``playhouse.sqlite_ext`` and can be used with:
    Integer primary key that uses SQLite's ``AUTOINCREMENT`` keyword,
    guaranteeing the primary key is always strictly increasing even after
    deletions. Has a small performance cost versus the default
-   :class:`PrimaryKeyField` or :class:`RowIDField`.
+   :class:`AutoField` or :class:`RowIDField`.
 
    See the `SQLite AUTOINCREMENT documentation <https://sqlite.org/autoinc.html>`_ for details.
 
@@ -2548,7 +2547,7 @@ Available functions
 
 **MATH**
 
-.. function:: randomrange(start, stop=None, step=None)
+.. function:: randomrange(start, end=None, step=None)
 
    :param int start: Start of range (inclusive)
    :param int end: End of range(not inclusive)

@@ -818,7 +818,7 @@ API Reference
       :param Query query: a Select query.
 
       Execute a SELECT query and return a single model instance.
-      Raises :exc:`~Model.DoesNotExist` if no row matches.
+      Raises :class:`DoesNotExist` if no row matches.
 
       Example:
 

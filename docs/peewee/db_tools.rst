@@ -500,7 +500,7 @@ Migration API
    .. method:: alter_column_type(table, column, field, cast=None)
 
       :param str table: Name of the table.
-      :param str column_name: Name of the column to modify.
+      :param str column: Name of the column to modify.
       :param Field field: :class:`Field` instance representing new
           data type.
       :param cast: (postgres-only) specify a cast expression if the

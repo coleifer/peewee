@@ -413,7 +413,8 @@ by (surname, firstname).
     query = (Member
              .select(Member.firstname, Member.surname)
              .join(MA, on=(MA.recommendedby == Member.memid))
-             .order_by(Member.surname, Member.firstname))
+             .order_by(Member.surname, Member.firstname)
+             .distinct())
 
 
 Produce a list of all members, along with their recommender
@@ -544,7 +545,8 @@ formatted as a column and ordered.
             .where(Member.recommendedby == MA.memid))
     query = (Member
              .select(fullname.alias('member'), subq.alias('recommended'))
-             .order_by(fullname))
+             .order_by(fullname)
+             .distinct())
 
 
 Produce a list of costly bookings, using a subquery
@@ -601,11 +603,6 @@ Querying data is all well and good, but at some point you're probably going to
 want to put data into your database! This section deals with inserting,
 updating, and deleting information. Operations that alter your data like this
 are collectively known as Data Manipulation Language, or DML.
-
-In previous sections, we returned to you the results of the query you've
-performed. Since modifications like the ones we're making in this section don't
-return any query results, we instead show you the updated content of the table
-you're supposed to be working on.
 
 Insert some data into a table
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -1163,8 +1160,6 @@ Produce a list of member names, with each row containing the total member count
 Produce a list of member names, with each row containing the total member
 count. Order by join date.
 
-Postgres ONLY (as written).
-
 .. code-block:: sql
 
     SELECT COUNT(*) OVER(), firstname, surname
@@ -1184,8 +1179,6 @@ Produce a monotonically increasing numbered list of members, ordered by their
 date of joining. Remember that member IDs are not guaranteed to be
 sequential.
 
-Postgres ONLY (as written).
-
 .. code-block:: sql
 
     SELECT row_number() OVER (ORDER BY joindate), firstname, surname
@@ -1203,8 +1196,6 @@ Output the facility id that has the highest number of slots booked, again
 
 Output the facility id that has the highest number of slots booked. Ensure
 that in the event of a tie, all tieing results get output.
-
-Postgres ONLY (as written).
 
 .. code-block:: sql
 
@@ -1242,8 +1233,6 @@ facilities, rounded to the nearest ten hours. Rank them by this rounded
 figure, producing output of first name, surname, rounded hours, rank. Sort by
 rank, surname, and first name.
 
-Postgres ONLY (as written).
-
 .. code-block:: sql
 
     SELECT firstname, surname,
@@ -1270,8 +1259,6 @@ Find the top three revenue generating facilities
 
 Produce a list of the top three revenue generating facilities (including
 ties). Output facility name and rank, sorted by rank and facility name.
-
-Postgres ONLY (as written).
 
 .. code-block:: sql
 
@@ -1308,8 +1295,6 @@ Classify facilities by value
 
 Classify facilities into equally sized groups of high, average, and low based
 on their revenue. Order by classification and facility name.
-
-Postgres ONLY (as written).
 
 .. code-block:: sql
 
@@ -1615,7 +1600,7 @@ Perform a case-insensitive search to find all facilities whose name begins with
    # `startswith()` uses ILIKE (case-insensitive):
    query = Facility.select().where(Facility.name.startswith('tennis'))
 
-   # For case-sensitive search use ILIKE explicitly:
+   # For case-insensitive search use ILIKE explicitly:
    query = Facility.select().where(Facility.name.ilike('tennis%'))
 
    # Or convert to upper:

@@ -398,9 +398,9 @@ A couple other things in the example app:
              abort(404)
 
 .. tip::
-   To avoid having to frequently copy/paste :func:`object_list` or
-   :func:`get_object_or_404`, these functions are included as part of the
-   playhouse :ref:`flask extension module <flask-utils>`.
+   To avoid having to frequently copy/paste :func:`~playhouse.flask_utils.object_list`
+   or :func:`~playhouse.flask_utils.get_object_or_404`, these functions are
+   included as part of the playhouse :ref:`flask extension module <flask-utils>`.
 
    .. code-block:: python
 

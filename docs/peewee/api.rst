@@ -81,6 +81,10 @@ Database
       Type of quotation-mark(s) to use to denote entities such as tables or
       columns, specified as ``'<open quote><close quote>'``.
 
+   .. attribute:: sequences = False (True for Postgres)
+
+      Whether the database supports sequences.
+
    .. attribute:: Model
 
       Property which returns a base :class:`Model` class bound to this
@@ -801,7 +805,7 @@ Database
    * Register user-defined functions, aggregates, window functions, collations
    * Load extension modules distributed as shared libraries
    * Advanced transactions (specify lock type)
-   * For additional features see :class:`CySqliteDatabase`.
+   * For additional features see :class:``~playhouse.cysqlite_ext.CySqliteDatabase`.
 
    Example of initializing a database and configuring some PRAGMAs:
 
@@ -815,11 +819,12 @@ Database
       # Alternatively, pragmas can be specified using a dictionary.
       db = SqliteDatabase('my_app.db', pragmas={'journal_mode': 'wal'})
 
-   .. method:: pragma(key, value=SENTINEL, permanent=False)
+   .. method:: pragma(key, value=SENTINEL, permanent=False, schema=None)
 
       :param key: Setting name.
       :param value: New value for the setting (optional).
       :param permanent: Apply this pragma whenever a connection is opened.
+      :param str schema: Database name to apply pragma to.
 
       Execute a PRAGMA query once on the active connection. If a value is not
       specified, then the current value will be returned.
@@ -1477,7 +1482,7 @@ Model
               .where(PageView.url == url))
          q.execute()  # Execute the query.
 
-      Update queries support :meth:`~WriteQuery.returning` with Postgresql and SQLite
+      Update queries support :meth:`~_WriteQuery.returning` with Postgresql and SQLite
       to obtain the updated rows:
 
       .. code-block:: python
@@ -1531,7 +1536,7 @@ Model
          # This INSERT query will automatically specify `active=True`:
          User.insert(username='charlie')
 
-      Insert queries support :meth:`~WriteQuery.returning` with Postgresql and
+      Insert queries support :meth:`~_WriteQuery.returning` with Postgresql and
       SQLite to obtain the inserted rows:
 
       .. code-block:: python
@@ -1603,7 +1608,7 @@ Model
                  yield {'username': username}
          User.insert_many(get_usernames()).execute()
 
-      Insert queries support :meth:`~WriteQuery.returning` with Postgresql and
+      Insert queries support :meth:`~_WriteQuery.returning` with Postgresql and
       SQLite to obtain the inserted rows:
 
       .. code-block:: python
@@ -1726,7 +1731,7 @@ Model
          q = User.delete().where(User.active == False)
          q.execute()  # Remove the rows, return number of rows removed.
 
-      Delete queries support :meth:`~WriteQuery.returning` with Postgresql and
+      Delete queries support :meth:`~_WriteQuery.returning` with Postgresql and
       SQLite to obtain the deleted rows:
 
       .. code-block:: python
@@ -2115,10 +2120,12 @@ Model
          with database:
              SomeModel.create_table()
 
-   .. classmethod:: drop_table(safe=True, **options)
+   .. classmethod:: drop_table(safe=True, drop_sequences=True, **options)
 
       :param bool safe: If set to ``True``, the drop table query will
           include an ``IF EXISTS`` clause.
+      :param bool drop_sequences: Drop any sequences associated with the
+          columns on the table (postgres only).
 
       Drop the model table.
 
@@ -2287,7 +2294,7 @@ Model
    See :ref:`relationships` for additional discussion.
 
 
-.. class:: Metadata(model, database=None, table_name=None, indexes=None, primary_key=None, constraints=None, schema=None, only_save_dirty=False, depends_on=None, options=None, without_rowid=False, strict_tables=False, **kwargs)
+.. class:: Metadata(model, database=None, table_name=None, indexes=None, primary_key=None, constraints=None, schema=None, only_save_dirty=False, depends_on=None, options=None, without_rowid=False, strict_tables=None, **kwargs)
 
    :param Model model: Model class.
    :param Database database: database model is bound to.
@@ -2414,9 +2421,10 @@ Model
 
    Model-specific implementation of SELECT query.
 
-   .. method:: get()
+   .. method:: get(database=None)
 
-      :param Database database: database to execute query against.
+      :param Database database: database to execute query against (defaults to
+          the model's configured database).
       :return: A single row from the database.
       :raises: ``DoesNotExist`` if row not found.
 
@@ -3000,9 +3008,8 @@ Fields
    reused. In conjunction with SQLite having foreign keys disabled by
    default (meaning ON DELETE is ignored, even if you specify it
    explicitly), this can lead to surprising and dangerous behaviour. To
-   avoid this, you may want to use one or both of
-   :class:`AutoIncrementField` and ``pragmas=[('foreign_keys', 'on')]``
-   when you instantiate :class:`SqliteDatabase`.
+   avoid this, you may want to use one or both of :class:`~playhouse.sqlite_ext.AutoIncrementField`
+   and ``pragmas=[('foreign_keys', 'on')]`` when you instantiate :class:`SqliteDatabase`.
 
 .. class:: BigAutoField
 
@@ -3983,7 +3990,7 @@ Fields
    or untyped columns, so for those cases as well you may wish to use an
    untyped field.
 
-   Accepts a special ``coerce`` parameter, a function that takes a value
+   Accepts a special ``adapt`` parameter, a function that takes a value
    coming from the database and converts it into the appropriate Python type.
 
 .. class:: ForeignKeyField(model, field=None, backref=None, on_delete=None, on_update=None, deferrable=None, object_id_name=None, lazy_load=True, constraint_name=None, **kwargs)
@@ -4404,11 +4411,9 @@ Schema Manager
 
       Execute CREATE TABLE query for the given model.
 
-   .. method:: drop_table(safe=True, drop_sequences=True, **options)
+   .. method:: drop_table(safe=True, **options)
 
       :param bool safe: Specify IF EXISTS clause.
-      :param bool drop_sequences: Drop any sequences associated with the
-          columns on the table (postgres only).
       :param options: Arbitrary options.
 
       Execute DROP TABLE query for the given model.
@@ -5285,9 +5290,9 @@ Query-builder
       aggregate function. This SQL feature is supported for Postgres and
       SQLite.
 
-   .. method:: coerce(coerce=True)
+   .. method:: coerce(_coerce=True)
 
-      :param bool coerce: Whether to attempt to coerce function-call result
+      :param bool _coerce: Whether to attempt to coerce function-call result
           to a Python data-type.
 
       When coerce is ``True``, the target data-type is inferred using several
@@ -5725,11 +5730,13 @@ Queries
       specified CTEs will be overwritten. For examples of common-table
       expressions, see :ref:`cte`.
 
-   .. method:: cte(name, recursive=False, columns=None)
+   .. method:: cte(name, recursive=False, columns=None, materialized=None)
 
       :param str name: Alias for common table expression.
       :param bool recursive: Will this be a recursive CTE?
       :param list columns: List of column names (as strings).
+      :param bool materialized: Specify ``MATERIALIZED`` or ``NOT MATERIALIZED``
+          clause.
 
       Indicate that a query will be used as a common table expression. For
       example, if we are modelling a category tree and are using a
@@ -6053,9 +6060,9 @@ Queries
 
 .. class:: CompoundSelectQuery(lhs, op, rhs)
 
-   :param SelectBase lhs: A Select or CompoundSelect query.
+   :param SelectBase lhs: A :class:`Select` or :class:`CompoundSelectQuery` query.
    :param str op: Operation (e.g. UNION, INTERSECT, EXCEPT).
-   :param SelectBase rhs: A Select or CompoundSelect query.
+   :param SelectBase rhs: A :class:`Select` or :class:`CompoundSelectQuery` query.
 
    Class representing a compound SELECT query.
 
@@ -6372,9 +6379,9 @@ Queries
       query = User.insert({User.c.username: 'alice'})
       query.execute(database)
 
-   .. method:: as_rowcount(as_rowcount=True)
+   .. method:: as_rowcount(_as_rowcount=True)
 
-      :param bool as_rowcount: Whether to return the modified row count (as
+      :param bool _as_rowcount: Whether to return the modified row count (as
           opposed to the last-inserted row id).
 
       SQLite and MySQL return the last inserted rowid. Postgresql will return a
@@ -6520,7 +6527,7 @@ Queries
    .. note::
       :meth:`ModelSelect.with_related` is the declarative, nestable form and is
       preferred for new code. ``prefetch`` is the flat-list form, kept for
-      compatibility. Minimal example of using :meth:`with_related`:
+      compatibility. Minimal example of using :meth:`~ModelSelect.with_related`:
 
       .. code-block:: python
 

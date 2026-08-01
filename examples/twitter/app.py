@@ -85,8 +85,7 @@ class Relationship(BaseModel):
 
 
 # a dead simple one-to-many relationship: one user has 0..n messages, exposed by
-# the foreign key.  because we didn't specify, a users messages will be accessible
-# as a special attribute, User.message_set
+# the foreign key.
 class Message(BaseModel):
     user = ForeignKeyField(User, backref='messages')
     content = TextField()
@@ -255,8 +254,8 @@ def user_detail(username):
     # username or short-circuit and display a 404 if no user exists in the db
     user = get_object_or_404(User, User.username == username)
 
-    # get all the users messages ordered newest-first -- note how we're accessing
-    # the messages -- user.message_set.  could also have written it as:
+    # get all the users messages ordered newest-first. note how we're accessing
+    # the messages (user.messages). could also have written it as:
     # Message.select().where(Message.user == user)
     messages = user.messages.order_by(Message.pub_date.desc())
     return object_list('user_detail.html', messages, 'message_list', user=user)
