@@ -72,18 +72,19 @@ Database
       # Initialize database.
       db.init(db_name, host=db_host, user='postgres')
 
-   .. attribute:: param = '?'
+   .. attribute:: param
 
-      String used as parameter placeholder in SQL queries.
+      String used as parameter placeholder in SQL queries. Default is ``'?'``.
 
-   .. attribute:: quote = '""'
+   .. attribute:: quote
 
       Type of quotation-mark(s) to use to denote entities such as tables or
-      columns, specified as ``'<open quote><close quote>'``.
+      columns, specified as ``'<open quote><close quote>'``. Default is ``'""'``.
 
-   .. attribute:: sequences = False (True for Postgres)
+   .. attribute:: sequences
 
-      Whether the database supports sequences.
+      Whether the database supports sequences. ``False`` by default,
+      ``True`` for Postgres.
 
    .. attribute:: Model
 
@@ -805,7 +806,7 @@ Database
    * Register user-defined functions, aggregates, window functions, collations
    * Load extension modules distributed as shared libraries
    * Advanced transactions (specify lock type)
-   * For additional features see :class:``~playhouse.cysqlite_ext.CySqliteDatabase`.
+   * For additional features see :class:`~playhouse.cysqlite_ext.CySqliteDatabase`.
 
    Example of initializing a database and configuring some PRAGMAs:
 
@@ -3299,10 +3300,9 @@ Fields
       '%Y-%m-%d %H:%M:%S%z' # ...with timezone offset
       '%Y-%m-%d' # year-month-day
 
-   In addition, any string accepted by
-   :py:meth:`datetime.datetime.fromisoformat` is parsed automatically,
-   including the ``T`` separator and a trailing ``Z`` (UTC). Custom
-   ``formats`` are still consulted as a fallback for non-ISO inputs (e.g.
+   In addition, any string accepted by ``datetime.datetime.fromisoformat`` is
+   parsed automatically, including the ``T`` separator and a trailing ``Z`` (UTC).
+   Custom ``formats`` are still consulted as a fallback for non-ISO inputs (e.g.
    ``'01/02/2003 01:37 PM'``).
 
    SQLite does not have a native datetime data-type, so datetimes are
@@ -3381,8 +3381,8 @@ Fields
       '%Y-%m-%d %H:%M:%S' # year-month-day hour-minute-second
       '%Y-%m-%d %H:%M:%S.%f' # year-month-day hour-minute-second.microsecond
 
-   In addition, any string accepted by
-   :py:meth:`datetime.datetime.fromisoformat` is parsed automatically.
+   In addition, any string accepted by ``datetime.datetime.fromisoformat`` is
+   parsed automatically.
 
    .. note::
       If the incoming value does not match a format, it is returned as-is.
@@ -3697,7 +3697,7 @@ Fields
 
    .. method:: as_int()
 
-      :rtype: peewee.Cast
+      :rtype: Cast
 
       Return the path's text extract cast to the backend's integer type. Use
       for numeric comparisons:
@@ -3709,7 +3709,7 @@ Fields
 
    .. method:: as_float()
 
-      :rtype: peewee.Cast
+      :rtype: Cast
 
       Return the path's text extract cast to the backend's floating-point
       type.
@@ -4238,7 +4238,7 @@ Fields
       ['CS 101', 'CS 151', 'English 101', 'English 151']
 
    To remove all relationships from a collection, you can use the
-   :meth:`~ManyToManyQuery.clear` method. Let's say that English 101 is
+   :meth:`~ManyToManyField.clear` method. Let's say that English 101 is
    canceled, so we need to remove all the students from it:
 
    .. code-block:: pycon
@@ -5974,7 +5974,7 @@ Queries
 
 .. class:: SelectBase()
 
-   Base-class for :class:`Select` and :class:`CompoundSelect` queries.
+   Base-class for :class:`Select` and :class:`CompoundSelectQuery` queries.
 
    .. method:: peek(database, n=1)
 

@@ -24,7 +24,7 @@ app.config.from_object(__name__)
 database = SqliteDatabase(DATABASE)
 
 # models specify their fields (or columns) declaratively, like django.
-class User(db.Model):
+class User(database.Model):
     username = CharField(unique=True)
     password = CharField()
     email = CharField()
@@ -64,7 +64,7 @@ class User(db.Model):
 # "many-to-many" relationship between users. by querying and joining on
 # different columns we can expose who a user is "related to" and who is
 # "related to" a given user.
-class Relationship(db.Model):
+class Relationship(database.Model):
     from_user = ForeignKeyField(User, backref='relationships')
     to_user = ForeignKeyField(User, backref='related_to')
 
@@ -76,7 +76,7 @@ class Relationship(db.Model):
 
 
 # simple one-to-many relationship: one user has 0..n messages.
-class Message(BaseModel):
+class Message(database.Model):
     user = ForeignKeyField(User, backref='messages')
     content = TextField()
     pub_date = DateTimeField()

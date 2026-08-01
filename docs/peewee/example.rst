@@ -74,47 +74,34 @@ To create these models we need:
 3. declare columns as :class:`Field` instances on the model classes
 
 .. code-block:: python
-   :emphasize-lines: 3, 8, 13, 23, 39
+   :emphasize-lines: 2, 6, 16, 32
 
-   # create a peewee database instance -- our models will use this database to
-   # persist information
+   # create a peewee database instance.
    database = SqliteDatabase(DATABASE)
 
-   # model definitions -- the standard "pattern" is to define a base model class
-   # that specifies which database to use.  then, any subclasses will automatically
-   # use the correct storage.
-   class BaseModel(Model):
-       class Meta:
-           database = database
-
-   # the user model specifies its fields (or columns) declaratively, like django
-   class User(BaseModel):
+   # models specify their fields (or columns) declaratively, like django.
+   class User(database.Model):
        username = CharField(unique=True)
        password = CharField()
        email = CharField()
        join_date = DateTimeField()
 
-   # this model contains two foreign keys to user -- it essentially allows us to
-   # model a "many-to-many" relationship between users.  by querying and joining
-   # on different columns we can expose who a user is "related to" and who is
-   # "related to" a given user
-   class Relationship(BaseModel):
+   # this model contains two foreign keys to user. it allows us to model a
+   # "many-to-many" relationship between users. by querying and joining on
+   # different columns we can expose who a user is "related to" and who is
+   # "related to" a given user.
+   class Relationship(database.Model):
        from_user = ForeignKeyField(User, backref='relationships')
        to_user = ForeignKeyField(User, backref='related_to')
 
        class Meta:
-           # `indexes` is a tuple of 2-tuples, where the 2-tuples are
-           # a tuple of column names to index and a boolean indicating
-           # whether the index is unique or not.
            indexes = (
                # Specify a unique multi-column index on from/to-user.
                (('from_user', 'to_user'), True),
            )
 
-   # a dead simple one-to-many relationship: one user has 0..n messages, exposed by
-   # the foreign key. a users messages will be accessible as a special attribute,
-   # User.messages.
-   class Message(BaseModel):
+   # simple one-to-many relationship: one user has 0..n messages.
+   class Message(database.Model):
        user = ForeignKeyField(User, backref='messages')
        content = TextField()
        pub_date = DateTimeField()
@@ -186,28 +173,34 @@ each model, ensuring the tables are created in order.
 Database Connection
 -------------------
 
-You may have noticed in the above model code that there is a class defined on
-the base model named *Meta* that sets the ``database`` attribute. Peewee allows
-every model to specify which database it uses. There are many :ref:`Meta
-options <model-options>` you can specify which control the behavior of your
-model.
+The models above subclass ``database.Model``, a :class:`Model` base-class
+bound to our database. A model may also declare its database, and much else,
+with an inner *Meta* class. See :ref:`Meta options <model-options>`.
 
 This is a peewee idiom:
 
 .. code-block:: python
-   :emphasize-lines: 9, 10, 11
+   :emphasize-lines: 8
 
    DATABASE = 'tweepee.db'
 
-   # Create a database instance that will manage the connection and
+   # create a database instance that will manage the connection and
    # execute queries
    database = SqliteDatabase(DATABASE)
 
-   # Create a base-class all our models will inherit, which defines
-   # the database we'll be using.
+   # subclass database.Model to bind models to the database.
+   class User(database.Model): ...
+
+Alternately, you can use a base class to express the same thing:
+
+.. code-block:: python
+
    class BaseModel(Model):
        class Meta:
-           database = database
+           database = database  # Assign the peewee database instance.
+
+   class User(BaseModel):
+       ...
 
 When developing a web application, it's common to:
 
@@ -292,7 +285,7 @@ the username is taken the database will raise an :class:`IntegrityError`.
                email=request.form['email'],
                join_date=datetime.datetime.now())
 
-       # mark the user as being 'authenticated' by setting the session vars
+       # mark the user as being authenticated by setting the session var.
        auth_user(user)
        return redirect(url_for('homepage'))
 
@@ -362,7 +355,7 @@ A couple other things in the example app:
      def object_list(template_name, qr, var_name='object_list', **kwargs):
          kwargs.update(
              page=int(request.args.get('page', 1)),
-             pages=qr.count() / 20 + 1)
+             pages=qr.count() // 20 + 1)
          kwargs[var_name] = qr.paginate(kwargs['page'])
          return render_template(template_name, **kwargs)
 

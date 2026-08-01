@@ -118,7 +118,7 @@ Playhouse migrate module
 ^^^^^^^^^^^^^^^^^^^^^^^^^
 
 The :ref:`migrate <migrate>` module in playhouse provides a set of helper
-functions for common schema changes, applied through a :class:`SchemaMigrator`:
+functions for common schema changes, applied through a :class:`~playhouse.migrate.SchemaMigrator`:
 
 .. code-block:: python
 
