@@ -34,11 +34,12 @@ class DataSet(object):
         # Introspect the database and generate models.
         self._introspector = Introspector.from_database(self._database)
         self._include_views = include_views
+        self._model_kwargs = kwargs
         self._models = self._introspector.generate_models(
             skip_invalid=True,
             literal_column_names=True,
             include_views=self._include_views,
-            **kwargs)
+            **self._model_kwargs)
         self._migrator = SchemaMigrator.from_database(self._database)
 
         class BaseModel(Model):
@@ -105,7 +106,8 @@ class DataSet(object):
             skip_invalid=True,
             table_names=dependencies,
             literal_column_names=True,
-            include_views=self._include_views)
+            include_views=self._include_views,
+            **self._model_kwargs)
         self._models.update(updated)
 
     def get_table_dependencies(self, table):

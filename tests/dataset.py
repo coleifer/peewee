@@ -133,6 +133,21 @@ class TestDataSet(ModelTestCase):
             {'id': 1, 'username': 'charlie', 'color': None, 'kind': 'person'},
             {'id': 2, 'username': 'zaizee', 'color': None, 'kind': 'cat'}])
 
+    def test_model_kwargs_preserved(self):
+        dataset = DataSet('sqlite:///:memory:', bare_fields=True)
+        users = dataset['users']
+        users.insert(username='charlie')
+
+        def assertBare():
+            fields = users.model_class._meta.sorted_fields
+            self.assertTrue(all(type(f) is BareField for f in fields))
+
+        # Adding a column alters the table and refreshes the model cache.
+        users.insert(username='huey', color='white')
+        assertBare()
+        dataset.update_cache()
+        assertBare()
+
     def create_users(self, n=2):
         user = self.dataset['user']
         for i in range(min(n, len(self.names))):
