@@ -490,7 +490,7 @@ Migration API
       string literal. Otherwise the default will be treated literally.
       Postgres and MySQL support specifying the default as a peewee
       expression, e.g. ``fn.NOW()``, but Sqlite users will need to use
-      ``default='now()'`` instead.
+      ``"(datetime('now'))"`` instead.
 
    .. method:: drop_column_default(table, column)
 

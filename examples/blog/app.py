@@ -2,7 +2,6 @@ import datetime
 import functools
 import os
 import re
-import urllib
 from urllib.parse import urlencode
 
 from flask import (Flask, flash, redirect, render_template, request,
