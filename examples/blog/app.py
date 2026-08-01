@@ -173,8 +173,7 @@ def index():
 
     # The `object_list` helper will take a base query and then handle
     # paginating the results if there are more than 20. For more info see
-    # the docs:
-    # http://docs.peewee-orm.com/en/latest/peewee/playhouse.html#object_list
+    # the docs: https://docs.peewee-orm.com/
     return object_list(
         'index.html',
         query,

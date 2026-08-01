@@ -15,25 +15,16 @@ DATABASE = 'tweepee.db'
 DEBUG = True
 SECRET_KEY = 'hin6bab8ge25*r=x&amp;+5$0kn=-#log$pt^#@vrqjld!^2ci@g*b'
 
-# create a flask application - this ``app`` object will be used to handle
+# create a flask application - this `app` object will be used to handle
 # inbound requests, routing them to the proper 'view' functions, etc
 app = Flask(__name__)
 app.config.from_object(__name__)
 
-# create a peewee database instance -- our models will use this database to
-# persist information
+# create a peewee database instance.
 database = SqliteDatabase(DATABASE)
 
-# model definitions -- the standard "pattern" is to define a base model class
-# that specifies which database to use.  then, any subclasses will automatically
-# use the correct storage. for more information, see:
-# https://charlesleifer.com/docs/peewee/peewee/models.html#model-api-smells-like-django
-class BaseModel(Model):
-    class Meta:
-        database = database
-
-# the user model specifies its fields (or columns) declaratively, like django
-class User(BaseModel):
+# models specify their fields (or columns) declaratively, like django.
+class User(db.Model):
     username = CharField(unique=True)
     password = CharField()
     email = CharField()
@@ -42,7 +33,7 @@ class User(BaseModel):
     # it often makes sense to put convenience methods on model instances, for
     # example, "give me all the users this user is following":
     def following(self):
-        # query other users through the "relationship" table
+        # query other users through the "relationship" table.
         return (User
                 .select()
                 .join(Relationship, on=Relationship.to_user)
@@ -69,11 +60,11 @@ class User(BaseModel):
             (md5(self.email.strip().lower().encode('utf-8')).hexdigest(), size)
 
 
-# this model contains two foreign keys to user -- it essentially allows us to
-# model a "many-to-many" relationship between users.  by querying and joining
-# on different columns we can expose who a user is "related to" and who is
-# "related to" a given user
-class Relationship(BaseModel):
+# this model contains two foreign keys to user. it allows us to model a
+# "many-to-many" relationship between users. by querying and joining on
+# different columns we can expose who a user is "related to" and who is
+# "related to" a given user.
+class Relationship(db.Model):
     from_user = ForeignKeyField(User, backref='relationships')
     to_user = ForeignKeyField(User, backref='related_to')
 
@@ -84,35 +75,33 @@ class Relationship(BaseModel):
         )
 
 
-# a dead simple one-to-many relationship: one user has 0..n messages, exposed by
-# the foreign key.
+# simple one-to-many relationship: one user has 0..n messages.
 class Message(BaseModel):
     user = ForeignKeyField(User, backref='messages')
     content = TextField()
     pub_date = DateTimeField()
 
 
-# simple utility function to create tables
+# helper function to create tables.
 def create_tables():
     with database:
         database.create_tables([User, Relationship, Message])
 
-# flask provides a "session" object, which allows us to store information across
-# requests (stored by default in a secure cookie).  this function allows us to
-# mark a user as being logged-in by setting some values in the session data:
+# flask provides a "session" object, which allows us to store information
+# across requests (stored by default in a secure cookie). this is used to
+# store the logged-in user.
 def auth_user(user):
     session['logged_in'] = True
     session['user_id'] = user.id
     session['username'] = user.username
     flash('You are logged in as %s' % (user.username))
 
-# get the user from the session
 def get_current_user():
     if session.get('logged_in'):
         return User.get(User.id == session['user_id'])
 
 # view decorator which indicates that the requesting user must be authenticated
-# before they can access the view.  it checks the session to see if they're
+# before they can access the view. it checks the session to see if they're
 # logged in, and if not redirects them to the login view.
 def login_required(f):
     @wraps(f)
@@ -122,8 +111,8 @@ def login_required(f):
         return f(*args, **kwargs)
     return inner
 
-# given a template and a SelectQuery instance, render a paginated list of
-# objects from the query inside the template
+# given a template and a query, render a paginated list of objects from the
+# query inside the template
 def object_list(template_name, qr, var_name='object_list', **kwargs):
     kwargs.update(
         page=int(request.args.get('page', 1)),
@@ -131,25 +120,21 @@ def object_list(template_name, qr, var_name='object_list', **kwargs):
     kwargs[var_name] = qr.paginate(kwargs['page'])
     return render_template(template_name, **kwargs)
 
-# retrieve a single object matching the specified query or 404 -- this uses the
+# retrieve a single object matching the specified query or 404. this uses the
 # shortcut "get" method on model, which retrieves a single object or raises a
-# DoesNotExist exception if no matching object exists
-# https://charlesleifer.com/docs/peewee/peewee/models.html#Model.get)
+# DoesNotExist exception if no matching object exists.
 def get_object_or_404(model, *expressions):
     try:
         return model.get(*expressions)
     except model.DoesNotExist:
         abort(404)
 
-# custom template filter -- flask allows you to define these functions and then
-# they are accessible in the template -- this one returns a boolean whether the
-# given user is following another user.
 @app.template_filter('is_following')
 def is_following(from_user, to_user):
     return from_user.is_following(to_user)
 
-# Request handlers -- these two hooks are provided by flask and we will use them
-# to create and tear down a database connection on each request.
+# request handlers - these two hooks are provided by flask and we will use
+# them to create and tear down a database connection on each request.
 @app.before_request
 def before_request():
     database.connect()
@@ -159,11 +144,11 @@ def teardown_request(exc=None):
     if not database.is_closed():
         database.close()
 
-# views -- these are the actual mappings of url to view function
+# views - these are the actual mappings of url to view function.
 @app.route('/')
 def homepage():
     # depending on whether the requesting user is logged in or not, show them
-    # either the public timeline or their own private timeline
+    # either the public timeline or their own private timeline.
     if session.get('logged_in'):
         return private_timeline()
     else:
@@ -171,19 +156,19 @@ def homepage():
 
 @app.route('/private/')
 def private_timeline():
-    # the private timeline exemplifies the use of a subquery -- we are asking for
-    # messages where the person who created the message is someone the current
-    # user is following.  these messages are then ordered newest-first.
+    # the private timeline shows the use of a subquery -- we are asking
+    # for messages where the person who created the message is someone the
+    # current user is following.
     user = get_current_user()
     messages = (Message
                 .select()
-                .where(Message.user << user.following())
+                .where(Message.user.in_(user.following()))
                 .order_by(Message.pub_date.desc()))
     return object_list('private_messages.html', messages, 'message_list')
 
 @app.route('/public/')
 def public_timeline():
-    # simply display all messages, newest first
+    # simply display all messages, newest first.
     messages = Message.select().order_by(Message.pub_date.desc())
     return object_list('public_messages.html', messages, 'message_list')
 
@@ -192,15 +177,18 @@ def join():
     if request.method == 'POST' and request.form['username']:
         try:
             with database.atomic():
-                # Attempt to create the user. If the username is taken, due to the
-                # unique constraint, the database will raise an IntegrityError.
+                # attempt to create the user. if the username is taken, due to
+                # the unique constraint, the database will raise an
+                # IntegrityError.
+                password = (md5((request.form['password']).encode('utf-8'))
+                            .hexdigest())
                 user = User.create(
                     username=request.form['username'],
-                    password=md5((request.form['password']).encode('utf-8')).hexdigest(),
+                    password=password,
                     email=request.form['email'],
                     join_date=datetime.datetime.now())
 
-            # mark the user as being 'authenticated' by setting the session vars
+            # mark the user as being authenticated by setting the session var.
             auth_user(user)
             return redirect(url_for('homepage'))
 
@@ -212,6 +200,8 @@ def join():
 @app.route('/login/', methods=['GET', 'POST'])
 def login():
     if request.method == 'POST' and request.form['username']:
+        # find user whose username + hashed password match the input, and log
+        # them in if found.
         try:
             pw_hash = md5(request.form['password'].encode('utf-8')).hexdigest()
             user = User.get(
@@ -250,8 +240,6 @@ def user_list():
 
 @app.route('/users/<username>/')
 def user_detail(username):
-    # using the "get_object_or_404" shortcut here to get a user with a valid
-    # username or short-circuit and display a 404 if no user exists in the db
     user = get_object_or_404(User, User.username == username)
 
     # get all the users messages ordered newest-first. note how we're accessing
@@ -306,7 +294,7 @@ def create():
 def _inject_user():
     return {'current_user': get_current_user()}
 
-# allow running from the command line
+
 if __name__ == '__main__':
     create_tables()
     app.run()

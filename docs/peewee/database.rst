@@ -410,7 +410,7 @@ Applications will generally fall into two categories:
 
 * Single-user applications which open a connection at startup and close at
   exit.
-* Multi-user or web appliactions, which open a connection per request and close
+* Multi-user or web applications, which open a connection per request and close
   it at the end of the request.
 
 To open a connection to a database, use the :meth:`Database.connect` method:

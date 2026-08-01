@@ -401,7 +401,7 @@ column. Peewee allows you to access the raw foreign key value by appending
        print(tweet.user_id, tweet.content)
 
 To prevent accidentally resolving a foreign-key and triggering an additional
-query, :class:`ForeignKeyField` supports an initialization paramater
+query, :class:`ForeignKeyField` supports an initialization parameter
 ``lazy_load`` which, when disabled, behaves like the ``"_id"`` attribute:
 
 .. code-block:: python
