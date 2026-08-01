@@ -681,7 +681,9 @@ specify a different row type:
 
 .. code-block:: python
 
-   data = [{'name': 'charlie'}, {'name': 'huey'}, {'name': 'mickey'}]
+   data = [{'username': 'charlie'},
+           {'username': 'huey'},
+           {'username': 'mickey'}]
    query = (User
             .insert_many(data)
             .returning(User.id, User.username)

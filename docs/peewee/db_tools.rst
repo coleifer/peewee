@@ -389,7 +389,10 @@ Peewee appends by default):
    migrate(migrator.add_column_default('entry', 'created_at', fn.NOW()))
 
    # SQLite-compatible function syntax:
-   migrate(migrator.add_column_default('entry', 'created_at', 'now()'))
+   migrate(migrator.add_column_default(
+       'entry',
+       'created_at',
+       "(datetime('now'))"))
 
    # Remove a default:
    migrate(migrator.drop_column_default('entry', 'status'))

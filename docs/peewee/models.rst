@@ -1209,7 +1209,7 @@ Partial indexes, indexes with expressions, and more complex indexes can use the
    # Create a unique index on timestamp desc, status & 4.
    idx = Article.index(
        Article.timestamp.desc(),
-       Article.flags.bin_and(4),
+       Article.status.bin_and(4),
        unique=True)
    Article.add_index(idx)
 

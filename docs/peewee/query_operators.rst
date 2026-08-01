@@ -419,6 +419,8 @@ query parameter and not part of the actual SQL query:
 
 .. code-block:: python
 
+   user_data = ('0; drop table ...',)
+
    # Bad! DO NOT DO THIS!
    query = MyModel.raw('SELECT * FROM my_table WHERE data = %s' % user_data)
 
@@ -428,6 +430,8 @@ query parameter and not part of the actual SQL query:
 Use parameters to prevent SQL injection:
 
 .. code-block:: python
+
+   user_data = ('0; drop table ...',)
 
    # Good. `user_data` will be treated as a parameter to the query.
    query = MyModel.raw('SELECT * FROM my_table WHERE data = %s', user_data)

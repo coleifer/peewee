@@ -1,6 +1,7 @@
 # Collection of Query Examples.
 # https://docs.peewee-orm.com/en/latest/peewee/query_library.html
 
+import datetime
 from functools import partial
 from peewee import *
 

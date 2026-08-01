@@ -3,6 +3,7 @@ import functools
 import os
 import re
 import urllib
+from urllib.parse import urlencode
 
 from flask import (Flask, flash, redirect, render_template, request,
                    Response, session, url_for)
@@ -242,7 +243,7 @@ def clean_querystring(request_args, *keys_to_remove, **new_values):
     for key in keys_to_remove:
         querystring.pop(key, None)
     querystring.update(new_values)
-    return urllib.urlencode(querystring)
+    return urlencode(querystring)
 
 @app.errorhandler(404)
 def not_found(exc):

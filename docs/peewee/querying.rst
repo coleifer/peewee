@@ -1172,9 +1172,10 @@ table, using a single query:
        timestamp = DateTimeField()
 
    # Move rows older than 24 hours from the Event table to the Archive.
+   cutoff = datetime.datetime.now() - datetime.timedelta(days=1)
    cte = (Event
           .delete()
-          .where(Event.timestamp < (datetime.now() - timedelta(days=1)))
+          .where(Event.timestamp < cutoff)
           .returning(Event)
           .cte('moved_rows'))
 
