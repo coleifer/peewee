@@ -177,7 +177,7 @@ Field Type              Sqlite              Postgresql          MySQL
 ``DateTimeField``       datetime            timestamp           datetime
 ``DateField``           date                date                date
 ``TimeField``           time                time                time
-``TimestampField``      integer             integer             integer
+``TimestampField``      integer             bigint              bigint
 ``IPField``             integer             bigint              bigint
 ``BooleanField``        integer             boolean             bool
 ``BareField``           untyped             not supported       not supported

@@ -164,9 +164,19 @@ directly:
 SQLite limitations
 ^^^^^^^^^^^^^^^^^^
 
-SQLite has limited ALTER TABLE support. It supports ``ADD COLUMN`` and
-``RENAME TABLE`` but not ``DROP COLUMN``, ``RENAME COLUMN``, or constraint
-changes in older versions (SQLite 3.35.0+ adds ``DROP COLUMN``).
+SQLite has limited ALTER TABLE support depending on which version is installed.
+Some functionality can be emulated using a detailed fallback path which moves
+the existing table, recreates a new table, then copies into the newly-created
+table.
+
+Version-specific or limited functionality:
+
+* ``DROP COLUMN`` (3.35.0, fallback for older).
+* ``RENAME COLUMN`` (3.25.0, fallback for older).
+* ``ALTER COLUMN ... SET/DROP NOT NULL`` (3.53.0, fallback for older).
+* ``ALTER COLUMN ... DEFAULT ...`` (uses fallback)
+* ``ALTER COLUMN ... TYPE ...`` (uses fallback)
+* ``ADD/DROP CONSTRAINT`` (3.53.0, limited to certain operations).
 
 For more complex SQLite schema changes, the standard workaround is to:
 

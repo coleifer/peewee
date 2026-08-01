@@ -208,7 +208,7 @@ inserts them efficiently. Pass ``batch_size`` to avoid hitting database limits:
    with db.atomic():
        User.bulk_create(users, batch_size=100)
 
-If you are using Postgresql (which supports the ``RETURNING`` clause), then
+If you are using Postgresql (or SQLite with ``returning_clause=True``), then
 the previously-unsaved model instances will have their new primary key
 values automatically populated. Other backends will not.
 

@@ -1136,6 +1136,11 @@ class TestServerSide(ModelTestCase):
             ss_query = ServerSide(query.where(SQL('1 = 0')))
             self.assertEqual(list(ss_query), [])
 
+        # No transaction.
+        with self.assertQueryCount(1):
+            data = [row.value for row in ServerSide(query)]
+            self.assertEqual(data, list(range(100)))
+
     def test_lower_level_apis(self):
         query = Register.select(Register.value).order_by(Register.value)
         with self.database.atomic():

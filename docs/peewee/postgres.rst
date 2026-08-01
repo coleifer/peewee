@@ -992,9 +992,8 @@ For more granular control or to close the cursor explicitly:
        query.close()
 
 .. warning::
-   Server-side cursors live only within a transaction. If you are using psycopg2
-   (not psycopg3), cursors are declared ``WITH HOLD`` and must be fully
-   exhausted or explicitly closed to release server resources.
+   Server-side cursors are declared ``WITH HOLD`` and must be fully exhausted
+   or explicitly closed to release server resources.
 
 .. function:: ServerSide(select_query, array_size=None)
 
@@ -1004,8 +1003,7 @@ For more granular control or to close the cursor explicitly:
    :rtype generator:
 
    Iterate ``select_query`` using a named server-side cursor via
-   :meth:`~BaseQuery.iterator` (disables row caching). Must be run inside a
-   transaction, e.g. ``with db.atomic():``.
+   :meth:`~BaseQuery.iterator` (disables row caching).
 
 .. _crdb:
 
