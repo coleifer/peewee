@@ -274,7 +274,7 @@ validation.
 | ``UUIDField``                             | ``uuid.UUID``          |
 +-------------------------------------------+------------------------+
 | ``JSONField``, ``BinaryJSONField``        | ``Any`` (an object,    |
-| (core, SQLite or Postgres extensions)     | array or scalar)       |
+| (core or Postgres extensions)             | array or scalar)       |
 +-------------------------------------------+------------------------+
 | ``IntervalField`` (Postgres)              | ``datetime.timedelta`` |
 +-------------------------------------------+------------------------+
@@ -458,9 +458,9 @@ Back-references work the same way, but the schema must be wrapped in
 .. note::
    In async applications using the :ref:`asyncio extension <pwasyncio>`,
    run validation inside the greenlet bridge unless relations were
-   preloaded. A lazy load outside ``db.run()`` raises
-   ``MissingGreenletBridge``:
-   ``data = await db.run(UserDetail.model_validate, user)``.
+   preloaded. A lazy load outside ``db.run()`` raises ``MissingGreenletBridge``,
+   which in turn triggers a pydantic ``ValidationError``. To lazy-load,
+   use ``db.run()``, e.g.: ``data = await db.run(UserDetail.model_validate, user)``.
 
 
 JSON schema output

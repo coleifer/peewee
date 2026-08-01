@@ -33,15 +33,22 @@ database class:
 PostgresqlExtDatabase
 ---------------------
 
+The following special field classes may be used with either
+:class:`PostgresqlDatabase` (core) or :class:`PostgresqlExtDatabase`.
+
+   * :class:`ArrayField`
+   * :class:`DateTimeTZField`
+   * :class:`JSONField` / :class:`BinaryJSONField` (legacy, prefer core :ref:`json-field`).
+   * :class:`TSVectorField`
+
+For ``hstore`` (legacy, consider jsonb instead) and :ref:`postgres-server-side-cursors`
+you must use :class:`PostgresqlExtDatabase`.
+
 .. class:: PostgresqlExtDatabase(database, server_side_cursors=False, register_hstore=False, prefer_psycopg3=False, **kwargs)
 
    Extends :class:`PostgresqlDatabase` and is required to use:
 
-   * :class:`ArrayField`
-   * :class:`DateTimeTZField`
-   * :class:`JSONField` / :class:`BinaryJSONField`
    * :class:`HStoreField`
-   * :class:`TSVectorField`
    * :ref:`postgres-server-side-cursors`
 
    :param str database: Name of database to connect to.
@@ -1049,10 +1056,6 @@ SSL configuration:
 Key differences from Postgresql
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-* **No nested transactions.** CRDB does not support savepoints, so calling
-  :meth:`~Database.atomic` inside another ``atomic()`` block raises an
-  exception. Use :meth:`~Database.transaction` instead, which ignores
-  nested calls and commits only when the outermost block exits.
 * **Client-side retries.** CRDB may abort transactions due to contention.
   Use :meth:`~CockroachDatabase.run_transaction` for automatic retries.
 
@@ -1151,9 +1154,9 @@ CRDB API
       * **May** be called more than one time.
       * **Should** ideally only contain SQL operations.
 
-      Additionally, the database must not have any open transactions at the
-      time this function is called, as CRDB does not support nested
-      transactions. Attempting to do so will raise a ``NotImplementedError``.
+      Additionally, the database should ideally not have any open transactions
+      at the time this function is called, as setting the ``AS OF SYSTEM TIME``
+      and ``PRIORITY`` require this to be the outermost transaction.
 
 
 .. class:: PooledCockroachDatabase(database, **kwargs)

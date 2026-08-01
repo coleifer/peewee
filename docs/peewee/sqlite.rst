@@ -4,8 +4,8 @@ SQLite
 ======
 
 The core :class:`SqliteDatabase` handles pragmas, user-defined functions,
-WAL mode, full-text search and JSON. Because the full-text search and JSON
-fields are specific to SQLite, these features are provided by ``playhouse.sqlite_ext``.
+WAL mode, full-text search and JSON. Because the full-text search is specific
+to SQLite, this feature is provided by ``playhouse.sqlite_ext``.
 
 .. contents:: On this page
    :local:
@@ -857,8 +857,8 @@ of PRAGMAs and their descriptions can be found in the `SQLCipher documentation <
 .. class:: SqlCipherDatabase(database, passphrase, **kwargs)
 
    :param str database: Path to the encrypted database file.
-   :param str passphrase: Encryption passphrase, 8 characters minimum.
-       Enforce stronger requirements in your application.
+   :param str passphrase: Encryption passphrase, Recommend 8 characters
+       minimum, enforce stronger requirements in your application.
 
    If the database file does not exist, it is created and encrypted with a
    key derived from ``passphrase``. If it does exist, ``passphrase`` must
@@ -2333,12 +2333,13 @@ ordinary table holding the canonical data. The differences:
    .. classmethod:: search_bm25f(term, weights=None, with_score=False, score_alias='score', explicit_ordering=False)
 
       Same as :meth:`FTSModel.search_bm25`, but using the BM25f variant
-      of the BM25 ranking algorithm.
+      of the BM25 ranking algorithm. Requires the compiled C extension.
 
    .. classmethod:: search_lucene(term, weights=None, with_score=False, score_alias='score', explicit_ordering=False)
 
       Same as :meth:`FTSModel.search_bm25`, but using the result ranking
-      algorithm from the Lucene search engine.
+      algorithm from the Lucene search engine. Requires the compiled C
+      extension.
 
    .. classmethod:: rank(col1_weight, col2_weight...coln_weight)
 
@@ -2404,8 +2405,8 @@ User-Defined Function Collection
 
 .. module:: playhouse.sqlite_udf
 
-The ``playhouse.sqlite_udf`` contains a number of functions, aggregates, and
-table-valued functions grouped into named collections.
+The ``playhouse.sqlite_udf`` contains a number of functions and aggregates
+grouped into named collections.
 
 .. code-block:: python
 
