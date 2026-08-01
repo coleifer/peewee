@@ -210,7 +210,7 @@ def clear_toggles():
 def randomrange(start, end=None, step=None):
     if end is None:
         start, end = 0, start
-    elif step is None:
+    if step is None:
         step = 1
     return random.randrange(start, end, step)
 
