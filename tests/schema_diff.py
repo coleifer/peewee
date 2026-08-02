@@ -200,12 +200,13 @@ class TestSchemaDiff(ModelTestCase):
     def test_display(self):
         diff = diff_models(self.database, [SdUser2, SdNote, SdTweet,
                                            SdPoints])
-        lines = str(diff).splitlines()
-        self.assertEqual(lines[0], 'create table sd_note')
-        self.assertIn('add column sd_user.karma', lines)
-        self.assertIn('drop column sd_user.email', lines)
-        self.assertIn('add index sd_user (username, karma) unique', lines)
-        self.assertIn('drop index sd_user.sd_user_email (email)', lines)
+        self.assertEqual(str(diff), (
+            'create table sd_note\n'
+            'add column sd_user.karma\n'
+            'drop column sd_user.email\n'
+            'add index sd_user (username, karma) unique\n'
+            'drop index sd_user.sd_user_email (email)\n'
+            'drop index sd_user.sd_user_username (username) unique'))
 
     @requires_sqlite
     def test_virtual_models_skipped(self):
@@ -229,40 +230,121 @@ class TestSchemaDiff(ModelTestCase):
             self.database.drop_tables([SdIdx])
 
 
+def strip_header(body):
+    # Drop the timestamped '# Generated ...' comment line.
+    return body.split('\n', 1)[1]
+
+
+# Everything at once: new table (fk placeholder, boolean flags), column
+# add/drop, index changes, TODOs for the unrestorable. down() holds the
+# certain inverses only, walked in reverse.
+FULL_BODY = """\
+from peewee import *
+
+# TODO: sd_user: dropped index sd_user_email cannot be restored by down() (column dropped)
+# TODO: sd_user.email: dropped column cannot be restored by down()
+
+def up(migrator, db):
+    class SdNote(Model):
+        user = ForeignKeyField(...)
+        content = TextField()
+        class Meta:
+            database = db
+            table_name = 'sd_note'
+    db.create_tables([SdNote])
+
+    migrator.migrate(migrator.drop_index('sd_user', 'sd_user_email'))
+    migrator.migrate(migrator.drop_index('sd_user', 'sd_user_username'))
+    migrator.migrate(migrator.add_column('sd_user', 'karma', IntegerField(...)))
+    migrator.migrate(migrator.add_index('sd_user', ('username', 'karma'), unique=True))
+    migrator.migrate(migrator.drop_column('sd_user', 'email'))
+
+
+def down(migrator, db):
+    migrator.migrate(migrator.drop_index('sd_user', 'sd_user_username_karma'))
+    migrator.migrate(migrator.drop_column('sd_user', 'karma'))
+    migrator.migrate(migrator.add_index('sd_user', ('username',), unique=True))
+    migrator.migrate(migrator.drop_table('sd_note'))
+"""
+
+# A non-default fk column name survives into the placeholder.
+FK_ALIAS_BODY = """\
+from peewee import *
+
+def up(migrator, db):
+    class SdOwned(Model):
+        owner = ForeignKeyField(..., column_name='owner')
+        label = CharField()
+        class Meta:
+            database = db
+            table_name = 'sd_owned'
+    db.create_tables([SdOwned])
+
+
+def down(migrator, db):
+    migrator.migrate(migrator.drop_table('sd_owned'))
+"""
+
+# unique/null render in added-fk placeholders. index=True, the fk
+# default, stays out: add_column() indexes the column itself. down()
+# still drops the indexes before the columns.
+ADDED_FK_BODY = """\
+from peewee import *
+
+def up(migrator, db):
+    migrator.migrate(migrator.add_column('sd_tweet', 'editor_id', ForeignKeyField(..., unique=True, null=True)))
+    migrator.migrate(migrator.add_column('sd_tweet', 'parent_id', ForeignKeyField(..., null=True)))
+
+
+def down(migrator, db):
+    migrator.migrate(migrator.drop_index('sd_tweet', 'sd_tweet_parent_id'))
+    migrator.migrate(migrator.drop_index('sd_tweet', 'sd_tweet_editor_id'))
+    migrator.migrate(migrator.drop_column('sd_tweet', 'parent_id'))
+    migrator.migrate(migrator.drop_column('sd_tweet', 'editor_id'))
+"""
+
+# A partial index is known by name only, so up() stays empty.
+PARTIAL_TODO_BODY = """\
+from peewee import *
+
+# TODO: sd_partial: create index sd_partial_flags (partial/expression, details not detected)
+
+def up(migrator, db):
+    pass
+
+
+def down(migrator, db):
+    pass
+"""
+
+SCHEMA_BODY = """\
+from peewee import *
+
+def up(migrator, db):
+    class SdAux(Model):
+        label = CharField()
+        class Meta:
+            database = db
+            table_name = 'sd_aux'
+            schema = 'aux'
+    db.create_tables([SdAux])
+
+
+def down(migrator, db):
+    migrator.migrate(migrator.drop_table('sd_aux', schema='aux'))
+"""
+
+
 @skip_if(IS_CRDB, 'crdb introspection differs')
 class TestTemplate(ModelTestCase):
     requires = SD_MODELS
 
-    def test_body(self):
+    def test_full_body(self):
         body = template(diff_models(self.database,
                                     [SdUser2, SdNote, SdTweet, SdPoints]))
-        # New table: inline skeleton with fk placeholder, boolean flags.
-        self.assertIn('class SdNote(Model):', body)
-        self.assertIn('    user = ForeignKeyField(...)', body)
-        self.assertIn('    content = TextField()', body)
-        self.assertIn('db.create_tables([SdNote])', body)
-        # Added column: class name with placeholder args.
-        self.assertIn("add_column('sd_user', 'karma', IntegerField(...))",
-                      body)
-        # Fully-determined operations render runnable, drops active.
-        self.assertIn("add_index('sd_user', ('username', 'karma'), "
-                      "unique=True", body)
-        self.assertIn("drop_column('sd_user', 'email')", body)
-        self.assertIn("drop_index('sd_user', 'sd_user_email')", body)
-        # down() holds the certain inverses only: the new table and unique
-        # username index come back, the dropped email column cannot.
-        self.assertIn("drop_column('sd_user', 'karma')", body)
-        self.assertIn("migrator.migrate(migrator.drop_table('sd_note'))",
-                      body)
-        self.assertIn("add_index('sd_user', ('username',), unique=True)",
-                      body)
-        self.assertIn('# TODO: sd_user.email: dropped column cannot be '
-                      'restored by down()', body)
-        self.assertIn('sd_user_email cannot be restored by down() '
-                      '(column dropped)', body)
+        self.assertEqual(strip_header(body), FULL_BODY)
 
     def test_fk_placeholder_alias(self):
-        # A non-default fk column name must survive into the placeholder.
         class SdOwned(TestModel):
             owner = ForeignKeyField(SdUser, column_name='owner')
             label = CharField()
@@ -271,12 +353,9 @@ class TestTemplate(ModelTestCase):
                 table_name = 'sd_owned'
 
         body = template(diff_models(self.database, [SdOwned] + SD_MODELS))
-        self.assertIn("owner = ForeignKeyField(..., column_name='owner')",
-                      body)
+        self.assertEqual(strip_header(body), FK_ALIAS_BODY)
 
     def test_added_fk_flags(self):
-        # unique/null render in an added-fk placeholder. index=True, the
-        # fk default, stays out: add_column() indexes the column itself.
         class SdTweetFks(TestModel):
             user = ForeignKeyField(SdUser, backref='tweets')
             content = TextField()
@@ -291,21 +370,14 @@ class TestTemplate(ModelTestCase):
 
         body = template(diff_models(self.database,
                                     [SdTweetFks, SdUser, SdPoints]))
-        self.assertIn("add_column('sd_tweet', 'editor_id', "
-                      "ForeignKeyField(..., unique=True, null=True))", body)
-        self.assertIn("add_column('sd_tweet', 'parent_id', "
-                      "ForeignKeyField(..., null=True))", body)
-        self.assertNotIn('index=True', body)
+        self.assertEqual(strip_header(body), ADDED_FK_BODY)
 
     @requires_sqlite
     @requires_models(SdPartial)
     def test_partial_index_todo(self):
-        # The declaration is known by name only, so up() stays empty.
         self.database.execute_sql('DROP INDEX sd_partial_flags')
         body = template(diff_models(self.database, [SdPartial]))
-        self.assertIn('# TODO: sd_partial: create index sd_partial_flags '
-                      '(partial/expression, details not detected)', body)
-        self.assertIn('def up(migrator, db):\n    pass', body)
+        self.assertEqual(strip_header(body), PARTIAL_TODO_BODY)
 
     @requires_sqlite
     def test_schema_rendered(self):
@@ -319,8 +391,7 @@ class TestTemplate(ModelTestCase):
                 schema = 'aux'
 
         body = template(diff_models(self.database, [SdAux]))
-        self.assertIn("schema = 'aux'", body)
-        self.assertIn("drop_table('sd_aux', schema='aux')", body)
+        self.assertEqual(strip_header(body), SCHEMA_BODY)
 
 
 # What a user writes after filling in the fk placeholders rendered for the
@@ -438,10 +509,6 @@ class TestTemplateRoundTrip(ModelTestCase):
 
         models = [SdUserFlip, SdTweet, SdPoints]
         body = template(diff_models(self.database, models))
-        self.assertTrue(
-            body.index("drop_index('sd_user', 'sd_user_username')") <
-            body.index("add_index('sd_user', ('username',))"))
-
         self.apply(body, 'flip')
         self.assertFalse(diff_models(self.database, models))
         # And the reverse flip on the way down.
@@ -464,10 +531,6 @@ class TestTemplateRoundTrip(ModelTestCase):
         body = template(diff_models(self.database, models))
         self.assertIn("add_column('sd_user', 'karma', "
                       "IntegerField(..., index=True))", body)
-        self.assertNotIn("add_index('sd_user', ('karma',)", body)
-        self.assertTrue(
-            body.index("drop_index('sd_user', 'sd_user_karma')") <
-            body.index("drop_column('sd_user', 'karma')"))
 
         # Fill in the placeholder the way a user would.
         body = body.replace('IntegerField(..., index=True)',
@@ -501,6 +564,7 @@ class TestTemplateRoundTrip(ModelTestCase):
         self.assertEqual(self.runner.down(), ['0001_profile'])
 
     def test_autofield_alias(self):
+        # The aliased pk must render or the table never converges.
         class SdAlias(TestModel):
             id = AutoField(column_name='object_id')
             label = CharField()
@@ -510,8 +574,6 @@ class TestTemplateRoundTrip(ModelTestCase):
 
         models = [SdAlias] + SD_MODELS
         body = template(diff_models(self.database, models))
-        self.assertIn("id = AutoField(column_name='object_id')", body)
-
         self.apply(body, 'alias')
         self.assertFalse(diff_models(self.database, models))
 
@@ -527,8 +589,5 @@ class TestTemplateRoundTrip(ModelTestCase):
 
         models = [SdKV] + SD_MODELS
         body = template(diff_models(self.database, models))
-        self.assertIn('key = CharField(max_length=32, primary_key=True)',
-                      body)
-
         self.apply(body, 'kv')
         self.assertFalse(diff_models(self.database, models))
