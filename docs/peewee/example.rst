@@ -74,7 +74,7 @@ To create these models we need:
 3. declare columns as :class:`Field` instances on the model classes
 
 .. code-block:: python
-   :emphasize-lines: 2, 6, 16, 32
+   :emphasize-lines: 2, 5, 15, 26
 
    # create a peewee database instance.
    database = SqliteDatabase(DATABASE)
