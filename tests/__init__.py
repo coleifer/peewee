@@ -50,6 +50,7 @@ try:
 except ImportError:
     print('Unable to import mysql-connector, skipping mysql_ext tests.')
 from .pool import *
+from .schema_diff import *
 try:
     from .postgres import *
 except (ImportError, ImproperlyConfigured):

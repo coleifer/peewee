@@ -252,9 +252,10 @@ incremental schema changes to an existing database without writing raw SQL.
 The peewee migration philosophy is that tools relying on database
 introspection, versioning, and auto-detection are often fragile, brittle and
 unnecessarily complex. Migrations can be written as simple python scripts and
-executed from the command-line. Since the migrations only depend on your
-application's :class:`Database` object, migration scripts do not introduce new
-dependencies.
+executed from the command-line. The small :ref:`runner <migration-runner>`
+below adds bookkeeping and nothing else. Since the migrations only depend on
+your application's :class:`Database` object, migration scripts do not
+introduce new dependencies.
 
 Supported operations:
 
@@ -598,6 +599,300 @@ Migration API
 .. class:: MySQLMigrator(database)
 
    MySQL-specific subclass.
+
+
+.. _migration-runner:
+
+Migration Runner
+----------------
+
+.. module:: playhouse.migrations
+
+The ``playhouse.migrations`` module is a minimal runner for the migration
+scripts described above: it records which scripts have been applied and
+applies pending ones in order. Nothing is introspected, versioned or
+auto-detected. The database and the scripts are the source of truth.
+
+A migration is a python file with a numeric prefix, defining
+``up(migrator, db)`` and, optionally, ``down(migrator, db)``:
+
+.. code-block:: python
+
+   # migrations/0002_add_karma.py
+   from peewee import *
+
+   def up(migrator, db):
+       migrator.migrate(
+           migrator.add_column('user', 'karma', IntegerField(default=0)))
+
+   def down(migrator, db):
+       migrator.migrate(migrator.drop_column('user', 'karma'))
+
+New tables need no special support. Define the model inline and call
+``create_tables()``. Being written in the file, the definition is a frozen
+copy, deliberately independent of your application models:
+
+.. code-block:: python
+
+   # migrations/0003_create_notes.py
+   from peewee import *
+
+   def up(migrator, db):
+       class User(Model):  # Stub for the FK target. Only its name is used.
+           class Meta:
+               database = db
+               table_name = 'user'
+
+       class Note(Model):
+           user = ForeignKeyField(User)
+           content = TextField()
+           class Meta:
+               database = db
+               table_name = 'note'
+
+       db.create_tables([Note])
+
+   def down(migrator, db):
+       migrator.migrate(migrator.drop_table('note'))
+
+Data migrations are plain python between (or instead of) schema
+operations. ``db`` is your application's database, so anything goes.
+
+Run migrations from the command line. The CLI is installed as
+``pwmigrate``, equivalent to ``python -m playhouse.migrations``:
+
+.. code-block:: console
+
+   $ python -m playhouse.migrations sqlite:///app.db create "add karma"
+   migrations/0002_add_karma.py
+   $ python -m playhouse.migrations sqlite:///app.db status
+   [x] 0001_create_users  2026-07-03 09:14:22
+   [ ] 0002_add_karma
+   $ python -m playhouse.migrations sqlite:///app.db up
+   applied: 0002_add_karma
+
+``status`` exits 0 when the database is current and 1 when migrations
+are pending, so it can gate a deploy. Validation and database errors
+exit 2.
+
+The database is given as a :ref:`db_url <db-url>` string, a path to an
+existing sqlite file, or a dotted path to a :class:`Database` instance
+(an initialized :class:`DatabaseProxy` or a zero-argument callable
+returning one both work). The same operations are available
+programmatically:
+
+.. code-block:: python
+
+   from playhouse.migrations import Runner
+
+   runner = Runner(db, directory='migrations')
+   runner.create('add karma')  # Write a skeleton file.
+   runner.status()             # [(name, applied_at_or_None), ...]
+   runner.up()                 # Apply everything pending, in order.
+   runner.up('0004_x')         # Apply pending up through 0004_x.
+   runner.down()               # Revert the most recent applied migration.
+   runner.down('0004_x')       # Revert back through 0004_x, inclusive.
+   runner.fake()               # Record all as applied without running.
+
+``run(db)`` is shorthand for ``Runner(db, 'migrations').up()``.
+
+Semantics worth knowing:
+
+* Files apply in numeric order (the prefix is parsed as an integer, so
+  ``2_x.py`` runs before ``10_y.py``). Applied names are recorded in a
+  history table (default ``schema_migration``), exposed as a model at
+  ``runner.History``. The history is a set, so migrations merged in from
+  a branch are applied even when their numbers are not the highest.
+* On postgres and sqlite, each migration and its history row are wrapped
+  in a single transaction, so a failure rolls back cleanly. MySQL DDL
+  commits implicitly, so migrations run bare and the history row is
+  written only after every operation succeeds: a failed migration may be
+  partially applied, but the bookkeeping never runs ahead of the schema.
+  Set ``atomic = False`` at module level to opt a migration out of
+  transaction wrapping (e.g. for ``CREATE INDEX CONCURRENTLY``).
+* On sqlite, an enabled ``foreign_keys`` pragma is turned off for the
+  duration of each migration and restored afterwards. This is not
+  optional: the pragma is a no-op inside a transaction, and the table
+  rebuild used by some operations fires ``ON DELETE CASCADE``, silently
+  deleting child rows.
+* Plans are validated before they run. ``up()`` and ``fake()`` load every
+  pending file and require it to define ``up()``. ``down()`` requires
+  every file in its plan to exist and define ``down()``. A broken
+  migration aborts the run before anything executes.
+* ``down()`` reverts the most recent migration. Given a target it reverts
+  everything back through the target, newest first. A migration that does
+  not define ``down()`` cannot be reverted. There is no requirement to
+  write one.
+* ``fake()`` is the adoption story: point the runner at an existing
+  database (or one just built with ``create_tables()``), fake, and use
+  migrations for every change thereafter.
+* Do not edit an applied migration. Write a new one. There are no
+  checksums. The tool trusts the operator.
+
+.. class:: Runner(database, directory='migrations', table_name='schema_migration')
+
+   .. method:: up(target=None)
+
+      Apply all pending migrations in order, stopping after ``target`` if
+      given. Returns the applied names.
+
+   .. method:: down(target=None)
+
+      Revert the most recent applied migration, or, given a target, every
+      applied migration back through the target (newest first). Returns
+      the reverted names.
+
+   .. method:: status()
+
+      Return ``[(name, applied_at_or_None), ...]`` covering both migration
+      files and history rows (including rows whose files are missing).
+
+   .. method:: fake(target=None)
+
+      Record pending migrations as applied without running them, stopping
+      after ``target`` if given. Returns the recorded names.
+
+   .. method:: create(name, body=None)
+
+      Write a numbered migration file (a skeleton, unless ``body`` is
+      given) and return its path.
+
+   .. attribute:: History
+
+      The history-table model, for manual bookkeeping repair.
+
+.. function:: run(database, directory='migrations', **kwargs)
+
+   Apply pending migrations. Shorthand for ``Runner(database, directory).up()``.
+
+.. function:: template(diff)
+
+   Render a :class:`playhouse.schema_diff.SchemaDiff` as a migration-file
+   body. See :ref:`schema-diff`.
+
+
+.. _schema-diff:
+
+Schema Diff
+-----------
+
+.. module:: playhouse.schema_diff
+
+The ``playhouse.schema_diff`` module compares model definitions against
+the live database schema and reports the obvious differences: tables that
+need creating, columns added or removed, indexes added or removed. It
+deliberately detects nothing else. Columns are compared by name alone (no
+types, nullability or constraints), so a rename appears as an addition
+plus a removal. Partial and expression indexes are compared by name only.
+Tables in the database that no model covers are ignored, and tables are
+never proposed for dropping.
+
+.. code-block:: pycon
+
+   >>> from playhouse.schema_diff import diff_models
+   >>> diff = diff_models(db, [User, Tweet])
+   >>> bool(diff)
+   True
+   >>> print(diff)
+   create table note
+   add column user.karma
+   drop column user.email
+   add index tweet (user_id, flags)
+
+.. function:: diff_models(database, models)
+
+   Compare the live schema against the given models. Returns a
+   :class:`SchemaDiff` which is falsy when everything matches.
+
+.. class:: SchemaDiff
+
+   A named tuple of five lists, each mapping directly onto a
+   :class:`~playhouse.migrate.SchemaMigrator` call:
+
+   * ``create_tables``: model classes whose tables do not exist, in
+     foreign-key dependency order.
+   * ``add_columns``: the model :class:`Field` instances missing from the
+     database.
+   * ``drop_columns``: ``(table, column_name)`` for database columns no
+     model declares.
+   * ``add_indexes`` / ``drop_indexes``: :class:`IndexDiff` entries.
+
+.. class:: IndexDiff
+
+   Named tuple ``(table, name, columns, unique)``. ``columns is None``
+   marks a partial or expression index, detected by name but not
+   described. Plain additions carry ``columns``/``unique`` and no name
+   (the name is chosen at creation). Removals always carry the name to
+   drop.
+
+Generating a migration from a diff
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+:py:func:`playhouse.migrations.template` renders a diff as a migration
+file body. Fully-determined changes render as runnable code (drops
+included). Anything needing a definition renders as the field class with
+a ``(...)`` placeholder or a TODO comment. Boolean flags (``unique``,
+``index``, ``null``, ``primary_key``) render alongside the ``...``, as
+the file's other operations depend on them. Only values (defaults,
+lengths, FK targets) are left to fill in. ``down()`` gets the certain
+inverses only. The file is a starting point, not a finished migration:
+
+.. code-block:: python
+
+   # Generated from a schema diff on 2026-07-03 09:15.
+   from peewee import *
+
+   # TODO: user.email: dropped column cannot be restored by down()
+
+   def up(migrator, db):
+       class Note(Model):
+           user = ForeignKeyField(...)
+           content = TextField()
+           class Meta:
+               database = db
+               table_name = 'note'
+       db.create_tables([Note])
+
+       migrator.migrate(migrator.add_column('user', 'karma', IntegerField(...)))
+       migrator.migrate(migrator.add_index('tweet', ('user_id', 'flags')))
+       migrator.migrate(migrator.drop_column('user', 'email'))
+
+
+   def down(migrator, db):
+       migrator.migrate(migrator.drop_index('tweet', 'tweet_user_id_flags'))
+       migrator.migrate(migrator.drop_column('user', 'karma'))
+       migrator.migrate(migrator.drop_table('note'))
+
+From the command line, ``diff`` prints the differences and ``create
+--models`` writes the generated migration (refusing when the schema
+already matches):
+
+.. code-block:: console
+
+   $ python -m playhouse.migrations app.settings.db diff app.models
+   create table note
+   add column user.karma
+   drop column user.email
+   $ python -m playhouse.migrations app.settings.db create "add karma" --models app.models
+   migrations/0007_add_karma.py
+
+The same flow in python:
+
+.. code-block:: python
+
+   from playhouse.migrations import Runner, template
+   from playhouse.schema_diff import diff_models
+
+   runner = Runner(db)
+   diff = diff_models(db, [User, Tweet])
+   if diff:
+       runner.create('add karma', body=template(diff))
+
+Models are given as a dotted module path. Every model defined in the
+module is used (field-less base classes are skipped and reported).
+Models imported into the module from elsewhere are ignored, so a package
+that only re-exports its models needs the explicit-list form,
+``app.models:MODELS``.
 
 
 .. _reflection:

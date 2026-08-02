@@ -1,9 +1,18 @@
 import datetime
+import io
 import os
+import shutil
+import sys
+import tempfile
+from contextlib import redirect_stderr
+from contextlib import redirect_stdout
 from functools import partial
 
 from peewee import *
 from playhouse.migrate import *
+from playhouse.migrations import MigrationError
+from playhouse.migrations import Runner
+from playhouse.migrations import main as migrations_cli
 from .base import BaseTestCase
 from .base import IS_CRDB
 from .base import IS_MYSQL
@@ -1174,3 +1183,473 @@ class TestFKMigrationRegression(ModelTestCase):
         FKMB.create(name='fb', fkma=fa)
         obj = FKMB.select().first()
         self.assertEqual(obj.name, 'fb')
+
+
+# Migration runner (playhouse.migrations).
+
+def add_column_mig(column):
+    return (
+        "from peewee import *\n"
+        "def up(migrator, db):\n"
+        "    migrator.migrate(\n"
+        "        migrator.add_column('person', %r, TextField(null=True)))\n"
+        "def down(migrator, db):\n"
+        "    migrator.migrate(migrator.drop_column('person', %r))\n"
+        % (column, column))
+
+RUNNER_MIG_NO_DOWN = (
+    "from peewee import *\n"
+    "def up(migrator, db):\n"
+    "    migrator.add_column('person', 'nickname', "
+    "TextField(null=True)).run()\n")
+
+RUNNER_MIG_BAD = (
+    "from peewee import *\n"
+    "def up(migrator, db):\n"
+    "    migrator.add_column('person', 'notes', TextField(null=True)).run()\n"
+    "    db.execute_sql('select bad_column from person')\n")
+
+RUNNER_MIG_TABLE = (
+    "from peewee import *\n"
+    "def up(migrator, db):\n"
+    "    class Widget(Model):\n"
+    "        name = CharField(default='')\n"
+    "        class Meta:\n"
+    "            database = db\n"
+    "            table_name = 'runner_widget'\n"
+    "    db.create_tables([Widget])\n"
+    "def down(migrator, db):\n"
+    "    db.execute_sql('drop table runner_widget')\n")
+
+
+class TestMigrationRunner(ModelTestCase):
+    requires = [Person]
+
+    def setUp(self):
+        super(TestMigrationRunner, self).setUp()
+        self.dir = tempfile.mkdtemp()
+        self.runner = Runner(self.database, self.dir)
+
+    def tearDown(self):
+        try:
+            shutil.rmtree(self.dir, ignore_errors=True)
+            self.database.drop_tables([self.runner.History], safe=True)
+            self.database.execute_sql('DROP TABLE IF EXISTS runner_widget')
+        finally:
+            super(TestMigrationRunner, self).tearDown()
+            self.database.close()
+
+    def write(self, filename, body):
+        with open(os.path.join(self.dir, filename), 'w') as fh:
+            fh.write(body)
+
+    def write_chain(self):
+        self.write('0001_notes.py', add_column_mig('notes'))
+        self.write('0002_email.py', add_column_mig('email'))
+        self.write('0003_phone.py', add_column_mig('phone'))
+
+    def columns(self):
+        return set(c.name for c in self.database.get_columns('person'))
+
+    def applied(self):
+        return [name for name, applied in self.runner.status() if applied]
+
+    def pending(self):
+        return [name for name, applied in self.runner.status()
+                if not applied]
+
+    def test_up_down_status(self):
+        self.write('0001_notes.py', add_column_mig('notes'))
+        self.write('0002_email.py', add_column_mig('email'))
+
+        self.assertEqual(self.pending(), ['0001_notes', '0002_email'])
+        self.assertEqual(self.runner.up(), ['0001_notes', '0002_email'])
+        self.assertIn('notes', self.columns())
+        self.assertIn('email', self.columns())
+        self.assertEqual(self.pending(), [])
+        self.assertEqual(self.runner.up(), [])  # Idempotent.
+
+        # One step at a time.
+        self.assertEqual(self.runner.down(), ['0002_email'])
+        self.assertNotIn('email', self.columns())
+        self.assertIn('notes', self.columns())
+        self.assertEqual(self.runner.down(), ['0001_notes'])
+        self.assertEqual(self.runner.down(), [])
+
+    def test_numeric_ordering(self):
+        # Lexicographic filename sort would run 10 before 2.
+        self.write('2_notes.py', add_column_mig('notes'))
+        self.write('10_email.py', add_column_mig('email'))
+        self.assertEqual(self.runner.up(), ['2_notes', '10_email'])
+
+    def test_create_table_inline_model(self):
+        self.write('0001_widget.py', RUNNER_MIG_TABLE)
+        self.assertEqual(self.runner.up(), ['0001_widget'])
+        self.assertIn('runner_widget', self.database.get_tables())
+        self.assertEqual(self.runner.down(), ['0001_widget'])
+        self.assertNotIn('runner_widget', self.database.get_tables())
+
+    def test_down_requires_down(self):
+        self.write('0001_nickname.py', RUNNER_MIG_NO_DOWN)
+        self.assertEqual(self.runner.up(), ['0001_nickname'])
+        self.assertRaises(MigrationError, self.runner.down)
+
+    def test_down_plan_requires_down(self):
+        self.write('0001_nickname.py', RUNNER_MIG_NO_DOWN)
+        self.write('0002_email.py', add_column_mig('email'))
+        self.write('0003_phone.py', add_column_mig('phone'))
+        self.runner.up()
+        self.assertRaises(MigrationError, self.runner.down, '0001_nickname')
+        # Verified before reverting any: everything is still applied.
+        self.assertEqual(self.applied(),
+                         ['0001_nickname', '0002_email', '0003_phone'])
+        self.assertIn('email', self.columns())
+        self.assertIn('phone', self.columns())
+
+    def test_down_missing_file(self):
+        self.write('0001_notes.py', add_column_mig('notes'))
+        self.runner.up()
+        os.remove(os.path.join(self.dir, '0001_notes.py'))
+        self.assertRaises(MigrationError, self.runner.down)
+
+    def test_status_missing_file(self):
+        self.write_chain()
+        self.runner.up('0002_email')
+        os.remove(os.path.join(self.dir, '0001_notes.py'))
+        # Applied rows whose files are gone sort after the file-backed names.
+        self.assertEqual([n for n, _ in self.runner.status()],
+                         ['0002_email', '0003_phone', '0001_notes'])
+        self.assertEqual(self.pending(), ['0003_phone'])
+
+    def test_status_orphan_ordering(self):
+        self.write('2_notes.py', add_column_mig('notes'))
+        self.write('10_email.py', add_column_mig('email'))
+        self.write('30_phone.py', add_column_mig('phone'))
+        self.runner.up()
+        os.remove(os.path.join(self.dir, '2_notes.py'))
+        os.remove(os.path.join(self.dir, '10_email.py'))
+        # Orphaned rows sort numerically, like everything else.
+        self.assertEqual([n for n, _ in self.runner.status()],
+                         ['30_phone', '2_notes', '10_email'])
+
+    def test_fake(self):
+        self.write('0001_notes.py', add_column_mig('notes'))
+        self.write('0002_email.py', add_column_mig('email'))
+        self.assertEqual(self.runner.fake(), ['0001_notes', '0002_email'])
+        self.assertEqual(self.runner.up(), [])
+        self.assertNotIn('notes', self.columns())
+        self.assertEqual(self.runner.fake(), [])
+        self.assertRaises(MigrationError, self.runner.fake, '0009_nope')
+
+    def test_fake_target(self):
+        self.write_chain()
+        # Fakes everything pending through the target, like up().
+        self.assertEqual(self.runner.fake('0002_email'),
+                         ['0001_notes', '0002_email'])
+        self.assertEqual(self.runner.up(), ['0003_phone'])
+        self.assertNotIn('notes', self.columns())
+        self.assertNotIn('email', self.columns())
+        self.assertIn('phone', self.columns())
+
+    def test_create_scaffold(self):
+        path = self.runner.create('add user email!')
+        self.assertEqual(os.path.basename(path), '0001_add_user_email.py')
+        path = self.runner.create('another')
+        self.assertEqual(os.path.basename(path), '0002_another.py')
+        # Scaffolds apply cleanly (up() is a no-op).
+        self.assertEqual(self.runner.up(),
+                         ['0001_add_user_email', '0002_another'])
+
+    def test_failed_migration(self):
+        self.write('0001_bad.py', RUNNER_MIG_BAD)
+        self.assertRaises(DatabaseError, self.runner.up)
+        if self.runner.migrator.transactional_ddl:
+            self.assertNotIn('notes', self.columns())  # Rolled back.
+        else:
+            # Partial DDL persists, but the history row was never written.
+            self.assertIn('notes', self.columns())
+        self.assertEqual(self.applied(), [])
+
+    def test_atomic_optout(self):
+        self.write('0001_notes.py',
+                   'atomic = False\n' + add_column_mig('notes'))
+        self.assertEqual(self.runner.up(), ['0001_notes'])
+        self.assertIn('notes', self.columns())
+
+    @requires_sqlite
+    def test_sqlite_rewrite_cascade_regression(self):
+        # A table-rewrite migration with foreign_keys enforcement enabled
+        # must not cascade-delete child rows, and must restore the pragma.
+        db = get_in_memory_db(pragmas={'foreign_keys': 1})
+        db.execute_sql('CREATE TABLE parent (id INTEGER NOT NULL PRIMARY '
+                       'KEY, name TEXT, extra INTEGER DEFAULT 0)')
+        db.execute_sql('CREATE TABLE child (id INTEGER NOT NULL PRIMARY '
+                       'KEY, parent_id INTEGER NOT NULL REFERENCES parent '
+                       '(id) ON DELETE CASCADE)')
+        db.execute_sql('INSERT INTO parent (name) VALUES (?)', ('p1',))
+        db.execute_sql('INSERT INTO child (parent_id) VALUES (?)', (1,))
+
+        self.write('0001_drop_extra.py', (
+            "def up(migrator, db):\n"
+            "    migrator.drop_column('parent', 'extra', legacy=True)"
+            ".run()\n"))
+        runner = Runner(db, self.dir)
+        self.assertEqual(runner.up(), ['0001_drop_extra'])
+        curs = db.execute_sql('SELECT COUNT(*) FROM child')
+        self.assertEqual(curs.fetchone()[0], 1)
+        self.assertEqual(db.pragma('foreign_keys'), 1)
+
+    def test_up_target(self):
+        self.write_chain()
+        self.assertEqual(self.runner.up('0002_email'),
+                         ['0001_notes', '0002_email'])
+        self.assertIn('email', self.columns())
+        self.assertNotIn('phone', self.columns())
+        self.assertEqual(self.runner.up(), ['0003_phone'])
+        self.assertRaises(MigrationError, self.runner.up, '0009_nope')
+
+    def test_down_series(self):
+        self.write_chain()
+        self.runner.up()
+        # Reverts newest back through the target, inclusive.
+        self.assertEqual(self.runner.down('0002_email'),
+                         ['0003_phone', '0002_email'])
+        self.assertIn('notes', self.columns())
+        self.assertNotIn('email', self.columns())
+        self.assertNotIn('phone', self.columns())
+        self.assertEqual(self.runner.down('0001_notes'), ['0001_notes'])
+        self.assertEqual(self.applied(), [])
+
+    def test_down_target_validation(self):
+        self.write_chain()
+        self.runner.up('0002_email')
+        # Not applied and unknown are both errors.
+        self.assertRaises(MigrationError, self.runner.down, '0003_phone')
+        self.assertRaises(MigrationError, self.runner.down, '0009_nope')
+
+        # A missing file anywhere in the plan aborts before reverting.
+        os.remove(os.path.join(self.dir, '0002_email.py'))
+        self.assertRaises(MigrationError, self.runner.down, '0001_notes')
+        self.assertIn('email', self.columns())  # Nothing reverted.
+
+    def test_run_convenience(self):
+        from playhouse.migrations import run
+        self.write('0001_notes.py', add_column_mig('notes'))
+        self.assertEqual(run(self.database, self.dir), ['0001_notes'])
+        self.assertEqual(run(self.database, self.dir), [])
+        self.assertIn('notes', self.columns())
+
+    def test_runner_proxy(self):
+        proxy = DatabaseProxy()
+        proxy.initialize(self.database)
+        self.write('0001_notes.py', add_column_mig('notes'))
+        runner = Runner(proxy, self.dir)
+        self.assertEqual(runner.up(), ['0001_notes'])
+        self.assertIn('notes', self.columns())
+        self.assertEqual(runner.down(), ['0001_notes'])
+        self.assertNotIn('notes', self.columns())
+
+
+def run_cli(*args):
+    out, err = io.StringIO(), io.StringIO()
+    with redirect_stdout(out), redirect_stderr(err):
+        rc = migrations_cli(list(args))
+    return rc, out.getvalue(), err.getvalue()
+
+
+class TestMigrationRunnerCLI(BaseTestCase):
+    def setUp(self):
+        super(TestMigrationRunnerCLI, self).setUp()
+        self.dir = tempfile.mkdtemp()
+        self.migdir = os.path.join(self.dir, 'migrations')
+        self.url = 'sqlite:///%s' % os.path.join(self.dir, 'cli.db')
+
+    def tearDown(self):
+        shutil.rmtree(self.dir, ignore_errors=True)
+        super(TestMigrationRunnerCLI, self).tearDown()
+
+    def test_cli_database_spec(self):
+        dbfile = os.path.join(self.dir, 'spec.db')
+        with open(dbfile, 'wb'):
+            pass
+        rc, out, err = run_cli(dbfile, 'status', '-d', self.migdir)
+        self.assertEqual(rc, 0)
+
+        rc, out, err = run_cli('nope.db', 'status', '-d', self.migdir)
+        self.assertEqual(rc, 2)
+        self.assertIn('error:', err)
+
+    def test_cli_database_proxy(self):
+        dbfile = os.path.join(self.dir, 'proxy.db')
+        with open(os.path.join(self.dir, 'cli_proxy_mod.py'), 'w') as fh:
+            fh.write("from peewee import *\n"
+                     "db = DatabaseProxy()\n"
+                     "db.initialize(SqliteDatabase(%r))\n"
+                     "raw = DatabaseProxy()\n" % dbfile)
+        sys.path.insert(0, self.dir)
+        try:
+            rc, out, err = run_cli('cli_proxy_mod.db', 'status',
+                                   '-d', self.migdir)
+            self.assertEqual(rc, 0)
+
+            rc, out, err = run_cli('cli_proxy_mod.raw', 'status',
+                                   '-d', self.migdir)
+            self.assertEqual(rc, 2)
+            self.assertIn('uninitialized', err)
+        finally:
+            sys.path.remove(self.dir)
+            sys.modules.pop('cli_proxy_mod', None)
+
+    def test_cli_ambiguous_file_module_spec(self):
+        # "app.db" reads as both a filename and a dotted module path. The
+        # module interpretation wins when no such file exists; say so.
+        dbfile = os.path.join(self.dir, 'clash.db')
+        with open(os.path.join(self.dir, 'cli_clash_mod.py'), 'w') as fh:
+            fh.write("from peewee import *\n"
+                     "db = SqliteDatabase(%r)\n" % dbfile)
+        sys.path.insert(0, self.dir)
+        try:
+            rc, out, err = run_cli('cli_clash_mod.db', 'status',
+                                   '-d', self.migdir)
+            self.assertEqual(rc, 0)
+            self.assertIn('note: no file "cli_clash_mod.db" exists', err)
+        finally:
+            sys.path.remove(self.dir)
+            sys.modules.pop('cli_clash_mod', None)
+
+    def test_cli_workflow(self):
+        rc, out, err = run_cli(self.url, 'create', 'add widget',
+                               '-d', self.migdir)
+        self.assertEqual(rc, 0)
+        path = os.path.join(self.migdir, '0001_add_widget.py')
+        self.assertTrue(os.path.exists(path))
+
+        with open(path, 'w') as fh:
+            fh.write(
+                "def up(migrator, db):\n"
+                "    db.execute_sql('CREATE TABLE widget ('\n"
+                "                   'id INTEGER NOT NULL PRIMARY KEY, "
+                "name TEXT)')\n"
+                "def down(migrator, db):\n"
+                "    db.execute_sql('DROP TABLE widget')\n")
+
+        rc, out, err = run_cli(self.url, 'up', '-d', self.migdir)
+        self.assertEqual(rc, 0)
+        self.assertIn('applied: 0001_add_widget', out)
+
+        rc, out, err = run_cli(self.url, 'status', '-d', self.migdir)
+        self.assertEqual(rc, 0)
+        self.assertIn('[x] 0001_add_widget', out)
+
+        rc, out, err = run_cli(self.url, 'down', '-d', self.migdir)
+        self.assertEqual(rc, 0)
+        self.assertIn('reverted: 0001_add_widget', out)
+
+        rc, out, err = run_cli(self.url, 'status', '-d', self.migdir)
+        self.assertEqual(rc, 1)  # Pending migrations gate the exit code.
+        self.assertIn('[ ] 0001_add_widget', out)
+
+        rc, out, err = run_cli(self.url, 'fake', '-d', self.migdir)
+        self.assertEqual(rc, 0)
+        self.assertIn('faked: 0001_add_widget', out)
+        rc, out, err = run_cli(self.url, 'up', '-d', self.migdir)
+        self.assertIn('nothing to do.', out)
+
+    def test_cli_status_missing_file(self):
+        os.makedirs(self.migdir)
+        path = os.path.join(self.migdir, '0001_gone.py')
+        with open(path, 'w') as fh:
+            fh.write('def up(migrator, db):\n    pass\n')
+        rc, out, err = run_cli(self.url, 'up', '-d', self.migdir)
+        self.assertEqual(rc, 0)
+        os.remove(path)
+
+        rc, out, err = run_cli(self.url, 'status', '-d', self.migdir)
+        self.assertEqual(rc, 0)
+        self.assertIn('[?] 0001_gone', out)
+
+    def test_cli_error_exit_codes(self):
+        # Unreachable database exits 2, distinct from pending's exit 1.
+        url = 'sqlite:///%s' % os.path.join(self.dir, 'missing', 'cli.db')
+        rc, out, err = run_cli(url, 'status', '-d', self.migdir)
+        self.assertEqual(rc, 2)
+        self.assertIn('error:', err)
+
+        # A migration whose SQL fails exits 2.
+        os.makedirs(self.migdir)
+        path = os.path.join(self.migdir, '0001_boom.py')
+        with open(path, 'w') as fh:
+            fh.write("def up(migrator, db):\n"
+                     "    db.execute_sql('ALTER TABLE nope ADD COLUMN x')\n")
+        rc, out, err = run_cli(self.url, 'up', '-d', self.migdir)
+        self.assertEqual(rc, 2)
+        self.assertIn('error:', err)
+
+
+class TestMigrationsCLIDiff(BaseTestCase):
+    def setUp(self):
+        super(TestMigrationsCLIDiff, self).setUp()
+        self.dir = tempfile.mkdtemp()
+        self.migdir = os.path.join(self.dir, 'migrations')
+        self.url = 'sqlite:///%s' % os.path.join(self.dir, 'cli.db')
+        sys.path.insert(0, self.dir)
+        with open(os.path.join(self.dir, 'cli_diff_models.py'), 'w') as fh:
+            fh.write(
+                "from peewee import *\n\n"
+                "class Base(Model):\n"
+                "    pass\n\n"
+                "class Widget(Base):\n"
+                "    name = CharField(unique=True)\n"
+                "    class Meta:\n"
+                "        table_name = 'widget'\n\n"
+                "MODELS = [Widget]\n")
+
+    def tearDown(self):
+        sys.path.remove(self.dir)
+        sys.modules.pop('cli_diff_models', None)
+        shutil.rmtree(self.dir, ignore_errors=True)
+        super(TestMigrationsCLIDiff, self).tearDown()
+
+    def test_cli_diff_and_generate(self):
+        # diff: field-less base skipped and reported, drift printed.
+        rc, out, err = run_cli(self.url, 'diff', 'cli_diff_models',
+                               '-d', self.migdir)
+        self.assertEqual(rc, 0)
+        self.assertIn('create table widget', out)
+        self.assertIn('skipped: Base (no fields)', err)
+
+        # The explicit-list form bypasses discovery.
+        rc, out, err = run_cli(self.url, 'diff',
+                               'cli_diff_models:MODELS',
+                               '-d', self.migdir)
+        self.assertEqual(rc, 0)
+        self.assertIn('create table widget', out)
+        self.assertEqual(err, '')
+
+        # create --models: generate, apply, converge.
+        rc, out, err = run_cli(self.url, 'create', 'initial',
+                               '--models', 'cli_diff_models',
+                               '-d', self.migdir)
+        self.assertEqual(rc, 0)
+        path = os.path.join(self.migdir, '0001_initial.py')
+        self.assertTrue(os.path.exists(path))
+        with open(path) as fh:
+            body = fh.read()
+        self.assertIn('db.create_tables([Widget])', body)
+
+        rc, out, err = run_cli(self.url, 'up', '-d', self.migdir)
+        self.assertEqual(rc, 0)
+        self.assertIn('applied: 0001_initial', out)
+
+        rc, out, err = run_cli(self.url, 'diff', 'cli_diff_models',
+                               '-d', self.migdir)
+        self.assertEqual(rc, 0)
+        self.assertIn('schema matches models.', out)
+
+        rc, out, err = run_cli(self.url, 'create', 'noop',
+                               '--models', 'cli_diff_models',
+                               '-d', self.migdir)
+        self.assertEqual(rc, 0)
+        self.assertIn('Nothing to generate', out)
+        self.assertFalse(os.path.exists(
+            os.path.join(self.migdir, '0002_noop.py')))

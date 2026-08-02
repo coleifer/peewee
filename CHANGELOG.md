@@ -7,6 +7,18 @@ https://github.com/coleifer/peewee/releases
 
 ## master
 
+In which we learn to migrate (somewhat).
+
+* Add `playhouse.migrations` as a minimal runner for migration scripts. Plain
+  python files defining `up(migrator, db)` and optionally `down(...)`.
+  Migrations are applied in numeric order a-la Django, and stored by name in a
+  history table. CLI via `pwmigrate` accepting `status`, `up`, `down`,
+  `create`, `fake` and `diff`. To run from python, `migrations.run(db)`.
+* Add very basic `playhouse.schema_diff` for comparing models against the
+  schema and reporting differences (tables to create, columns added or removed,
+  indexes added or removed).
+* Add migration generation from the diff. Run `create NAME --models app.models`
+  to write a migration template. `diff` prints the differences.
 * Allow adding column to existing table as `NOT NULL`.
 * Add a `SchemaMigrator.migration_context()` helper for wrapping migrations.
   This was wanted for SQLite in order to disable FK pragma, which could trigger

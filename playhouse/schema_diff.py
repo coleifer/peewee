@@ -28,7 +28,7 @@ Each attribute of the result maps directly onto a SchemaMigrator call:
 * ``drop_indexes``: list of :class:`IndexDiff`
 """
 import re
-from collections import namedtuple
+from collections import namedtuple as nt
 
 from peewee import *
 from peewee import sort_models
@@ -36,19 +36,18 @@ from peewee import sort_models
 __all__ = ['IndexDiff', 'SchemaDiff', 'diff_models']
 
 
-class IndexDiff(namedtuple('IndexDiff', ('table', 'name', 'columns',
-                                         'unique', 'op'))):
-    def __str__(self):
+class IndexDiff(nt('IndexDiff', ('table', 'name', 'columns', 'unique'))):
+    def display(self, op):
         if self.columns is None:
-            return '%s index %s.%s' % (self.op, self.table, self.name)
+            return '%s index %s.%s' % (op, self.table, self.name)
         return '%s index %s%s (%s)%s' % (
-            self.op, self.table, '.%s' % self.name if self.name else '',
+            op, self.table, '.%s' % self.name if self.name else '',
             ', '.join(self.columns), ' unique' if self.unique else '')
 
 
-class SchemaDiff(namedtuple('SchemaDiff', ('create_tables', 'add_columns',
-                                           'drop_columns', 'add_indexes',
-                                           'drop_indexes'))):
+class SchemaDiff(nt('SchemaDiff', ('create_tables', 'add_columns',
+                                   'drop_columns', 'add_indexes',
+                                   'drop_indexes'))):
     __slots__ = ()
 
     def __bool__(self):
@@ -61,27 +60,25 @@ class SchemaDiff(namedtuple('SchemaDiff', ('create_tables', 'add_columns',
                                            f.column_name)
                      for f in self.add_columns)
         accum.extend('drop column %s.%s' % tc for tc in self.drop_columns)
-        accum.extend(str(idx) for idx in self.add_indexes)
-        accum.extend(str(idx) for idx in self.drop_indexes)
+        accum.extend(idx.display('add') for idx in self.add_indexes)
+        accum.extend(idx.display('drop') for idx in self.drop_indexes)
         return '\n'.join(accum)
 
 
 def _model_indexes(model):
-    # Simple indexes as (columns tuple, unique), and partial/expression indexes
-    # by name only.
-    simple = set()
-    partial = set()
+    # Plain indexes as a (columns, unique) signature. Partial and expression
+    # indexes carry no signature, just their (deterministic) name.
+    plain, named = set(), set()
     for index in model._meta.fields_to_index():
         if not isinstance(index, Index):
             continue  # SQL declarations are out of scope.
-        if index._where is None and \
-           all(isinstance(part, Field) for part in index._expressions):
-            simple.add((tuple(part.column_name
-                              for part in index._expressions),
-                        bool(index._unique)))
+        parts = index._expressions
+        if index._where is None and all(isinstance(p, Field) for p in parts):
+            plain.add((tuple(p.column_name for p in parts),
+                       bool(index._unique)))
         elif index._name:
-            partial.add(index._name)
-    return simple, partial
+            named.add(index._name)
+    return plain, named
 
 
 def _is_partial(index):
@@ -89,19 +86,18 @@ def _is_partial(index):
 
 
 def _database_indexes(database, table, schema=None):
-    simple = {}
-    partial = set()  # Partial / expression indexes.
+    # Every index as name -> (columns, unique) signature, or name -> None
+    # when partial / expression. Primary-key indexes are excluded.
+    indexes = {}
     for index in database.get_indexes(table, schema):
         if index.name == 'PRIMARY' or index.name.endswith('_pkey') or \
            index.name.startswith('sqlite_autoindex_'):
             continue
-
         if None in index.columns or _is_partial(index):
-            partial.add(index.name)
+            indexes[index.name] = None
         else:
-            simple[(tuple(index.columns), bool(index.unique))] = index.name
-
-    return simple, partial
+            indexes[index.name] = (tuple(index.columns), bool(index.unique))
+    return indexes
 
 
 def diff_models(database, models):
@@ -139,28 +135,27 @@ def diff_models(database, models):
         drop_columns.extend((table, name)
                             for name in sorted(columns - set(fields)))
 
-        code_simple, code_partial = _model_indexes(model)
-        db_simple, db_partial = _database_indexes(database, table, schema)
+        # Pair database indexes with declarations - named (partial and
+        # expression) indexes by name, plain indexes by signature - and
+        # whatever fails to pair is a change. Names pair first: the
+        # database may report a named index (e.g. ts.desc()) as plain.
+        plain, named = _model_indexes(model)
+        db_indexes = _database_indexes(database, table, schema)
+        for name, signature in sorted(db_indexes.items()):
+            if name in named:
+                named.remove(name)
+            elif signature in plain:
+                plain.remove(signature)
+            elif signature is None:
+                drop_indexes.append(IndexDiff(table, name, None, None))
+            else:
+                cols, unique = signature
+                drop_indexes.append(IndexDiff(table, name, cols, unique))
 
-        simple = {name: sig for sig, name in db_simple.items()}
-        found = {simple[name] for name in code_partial
-                 if name in simple}
-        remaining = set(db_simple) - found
-
-        # Partial/expression indexes that are expected, less any named or plain
-        # indexes found.
-        for name in sorted(code_partial - db_partial - set(simple)):
-            add_indexes.append(IndexDiff(table, name, None, None, 'add'))
-        # Plain indexes that are expected.
-        for cols, unique in sorted(code_simple - remaining):
-            add_indexes.append(IndexDiff(table, None, cols, unique, 'add'))
-
-        for cols, unique in sorted(remaining - code_simple):
-            drop_indexes.append(IndexDiff(table, db_simple[(cols, unique)],
-                                          cols, unique, 'drop'))
-        # Partial/expression indexes in db, but not in code.
-        for name in sorted(db_partial - code_partial):
-            drop_indexes.append(IndexDiff(table, name, None, None, 'drop'))
+        for name in sorted(named):
+            add_indexes.append(IndexDiff(table, name, None, None))
+        for cols, unique in sorted(plain):
+            add_indexes.append(IndexDiff(table, None, cols, unique))
 
     return SchemaDiff(create_tables, add_columns, drop_columns,
                       add_indexes, drop_indexes)
