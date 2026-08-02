@@ -779,6 +779,24 @@ Database
          for row in query:
              print(row.month, '->', row.count)
 
+   .. method:: to_timestamp(date_field)
+
+      :param date_field: a SQL node containing a date/time, for example
+          a :class:`DateTimeField`.
+      :return: a SQL node representing the value as an integer unix
+          timestamp.
+
+      Backend-appropriate conversion of a datetime value to an integer
+      timestamp. See also :meth:`DateTimeField.to_timestamp`, which calls
+      this.
+
+   .. method:: from_timestamp(date_field)
+
+      :param date_field: a SQL node containing an integer unix timestamp.
+      :return: a SQL node representing the value as a datetime.
+
+      Inverse of :meth:`to_timestamp`.
+
    .. method:: random()
 
       :return: a SQL node representing a function call that returns a random
@@ -834,9 +852,18 @@ Database
       executed whenever a new connection is opened, ensuring it is always
       in-effect.
 
+   .. attribute:: application_id
+
+      Get or set the application_id pragma for the current connection.
+
    .. attribute:: cache_size
 
       Get or set the cache_size pragma for the current connection.
+
+   .. attribute:: data_version
+
+      Get the data_version pragma for the current connection. Changes when
+      the database file is modified by another connection. Read-only.
 
    .. attribute:: foreign_keys
 
@@ -865,6 +892,10 @@ Database
    .. attribute:: synchronous
 
       Get or set the synchronous pragma for the current connection.
+
+   .. attribute:: user_version
+
+      Get or set the user_version pragma for the current connection.
 
    .. attribute:: wal_autocheckpoint
 
@@ -5290,6 +5321,18 @@ Query-builder
       aggregate function. This SQL feature is supported for Postgres and
       SQLite.
 
+   .. method:: order_by(*ordering)
+
+      :param ordering: Column(s) or expression(s) to order the aggregate's
+          input by.
+
+      Add an ``ORDER BY`` clause inside an aggregate function call:
+
+      .. code-block:: python
+
+         # GROUP_CONCAT("t1"."content" ORDER BY "t1"."timestamp")
+         fn.GROUP_CONCAT(Tweet.content).order_by(Tweet.timestamp)
+
    .. method:: coerce(_coerce=True)
 
       :param bool _coerce: Whether to attempt to coerce function-call result
@@ -6067,7 +6110,7 @@ Queries
    Class representing a compound SELECT query.
 
 
-.. class:: Select(from_list=None, columns=None, group_by=None, having=None, distinct=None, windows=None, for_update=None, **kwargs)
+.. class:: Select(from_list=None, columns=None, group_by=None, having=None, distinct=None, windows=None, for_update=None, lateral=None, **kwargs)
 
    :param list from_list: List of sources for FROM clause.
    :param list columns: Columns or values to select.
@@ -6076,6 +6119,8 @@ Queries
    :param distinct: Either a boolean or a list of column-like objects.
    :param list windows: List of :class:`Window` clauses.
    :param ForUpdate for_update: indicate SELECT...FOR UPDATE.
+   :param bool lateral: mark this query as the right-hand side of a
+       LATERAL join.
 
    Class representing a SELECT query.
 
@@ -6266,6 +6311,12 @@ Queries
       :param of: One or more models to restrict locking to.
       :param bool nowait: Specify NOWAIT option when locking.
       :param bool skip_locked: Specify SKIP LOCKED option when locking.
+
+   .. method:: lateral([lateral=True])
+
+      Mark this query as the right-hand side of a ``LATERAL`` join. When
+      joined, the subquery may reference columns from the tables to its
+      left.
 
 
 .. class:: _WriteQuery(table, returning=None, **kwargs)

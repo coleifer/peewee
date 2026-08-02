@@ -163,7 +163,7 @@ Field Type              Sqlite              Postgresql          MySQL
 ``BigIntegerField``     integer             bigint              bigint
 ``SmallIntegerField``   integer             smallint            smallint
 ``IdentityField``       not supported       int identity        not supported
-``FloatField``          real                real                real
+``FloatField``          real                real                float
 ``DoubleField``         real                double precision    double precision
 ``DecimalField``        decimal             numeric             numeric
 ``CharField``           varchar             varchar             varchar

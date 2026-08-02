@@ -116,7 +116,7 @@ def login_required(f):
 def object_list(template_name, qr, var_name='object_list', **kwargs):
     kwargs.update(
         page=int(request.args.get('page', 1)),
-        pages=qr.count() // 20 + 1)
+        pages=max(1, (qr.count() + 19) // 20))
     kwargs[var_name] = qr.paginate(kwargs['page'])
     return render_template(template_name, **kwargs)
 

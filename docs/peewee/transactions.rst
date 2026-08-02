@@ -187,8 +187,10 @@ In rare cases where you need to take direct control of ``BEGIN``/``COMMIT``/
                raise
 
 ``manual_commit`` suspends Peewee's transaction management for the duration
-of the block. ``atomic()`` and ``transaction()`` have no effect inside it.
-This should rarely be needed in application code.
+of the block. Inside it, ``atomic()`` raises ``ValueError`` (``with db:``
+likewise), and ``transaction()`` is inert, issuing no begin, commit, or
+rollback. ``savepoint()`` works normally inside a transaction opened with
+``begin()``. This should rarely be needed in application code.
 
 .. _sqlite-locking:
 

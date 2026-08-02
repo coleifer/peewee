@@ -622,8 +622,7 @@ generates Peewee model classes from its schema. It is used internally by
 
 .. function:: print_table_sql(model)
 
-   Print the ``CREATE TABLE`` SQL for a model class (without indexes or
-   constraints):
+   Print the ``CREATE TABLE`` SQL for a model class (without indexes):
 
    .. code-block:: pycon
 

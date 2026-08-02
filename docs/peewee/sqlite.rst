@@ -856,8 +856,8 @@ of PRAGMAs and their descriptions can be found in the `SQLCipher documentation <
 .. class:: SqlCipherDatabase(database, passphrase, **kwargs)
 
    :param str database: Path to the encrypted database file.
-   :param str passphrase: Encryption passphrase, Recommend 8 characters
-       minimum, enforce stronger requirements in your application.
+   :param str passphrase: Encryption passphrase. Recommend 8 characters
+       minimum and enforce stronger requirements in your application.
 
    If the database file does not exist, it is created and encrypted with a
    key derived from ``passphrase``. If it does exist, ``passphrase`` must
