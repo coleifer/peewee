@@ -113,6 +113,7 @@ Adding or dropping table constraints:
     migrate(migrator.add_unique('person', 'first_name', 'last_name'))
 """
 from collections import namedtuple
+from contextlib import contextmanager
 import functools
 import hashlib
 import re
@@ -136,9 +137,9 @@ except ImportError:
 
 class Operation(object):
     """Encapsulate a single schema altering operation."""
-    def __init__(self, migrator, method, *args, **kwargs):
+    def __init__(self, migrator, fn, *args, **kwargs):
         self.migrator = migrator
-        self.method = method
+        self.fn = fn
         self.args = args
         self.kwargs = kwargs
 
@@ -155,19 +156,13 @@ class Operation(object):
                 self._handle_result(item)
 
     def run(self):
-        kwargs = self.kwargs.copy()
-        kwargs['with_context'] = True
-        method = getattr(self.migrator, self.method)
-        self._handle_result(method(*self.args, **kwargs))
+        self._handle_result(self.fn(self.migrator, *self.args, **self.kwargs))
 
 
 def operation(fn):
     @functools.wraps(fn)
     def inner(self, *args, **kwargs):
-        with_context = kwargs.pop('with_context', False)
-        if with_context:
-            return fn(self, *args, **kwargs)
-        return Operation(self, fn.__name__, *args, **kwargs)
+        return Operation(self, fn, *args, **kwargs)
     return inner
 
 
@@ -187,11 +182,28 @@ class SchemaMigrator(object):
     def __init__(self, database):
         self.database = database
 
+    def migrate(self, *operations):
+        for operation in operations:
+            operation.run()
+
+    @contextmanager
+    def migration_context(self, atomic=True):
+        if atomic and self.transactional_ddl:
+            with self.database.atomic():
+                yield
+        else:
+            yield
+
     def make_context(self):
         return self.database.get_sql_context()
 
     @classmethod
     def from_database(cls, database):
+        if isinstance(database, Proxy):
+            if database.obj is None:
+                raise ValueError('Database proxy is uninitialized.')
+            database = database.obj
+
         if CockroachDatabase and isinstance(database, CockroachDatabase):
             return CockroachDBMigrator(database)
         elif isinstance(database, PostgresqlDatabase):
@@ -228,10 +240,15 @@ class SchemaMigrator(object):
                 .sql(Entity(column)))
 
     @operation
-    def alter_add_column(self, table, column_name, field):
+    def alter_add_column(self, table, column_name, field,
+                         allow_not_null=False):
         # Make field null at first.
         ctx = self.make_context()
-        field_null, field.null = field.null, True
+
+        # Add as nullable unless explicitly allowed to be NOT NULL.
+        field_null = field.null
+        if not allow_not_null:
+            field.null = True
 
         # Set the field's column-name and name, if it is not set or doesn't
         # match the new value.
@@ -311,23 +328,25 @@ class SchemaMigrator(object):
         return ctx
 
     @operation
-    def add_column(self, table, column_name, field):
+    def add_column(self, table, column_name, field, allow_not_null=False):
         # Adding a column is complicated by the fact that if there are rows
         # present and the field is non-null, then we need to first add the
         # column as a nullable field, then set the value, then add a not null
         # constraint.
-        if not field.null and field.default is None:
+        if not field.null and field.default is None and not allow_not_null:
             raise ValueError('%s is not null but has no default' % column_name)
 
         is_foreign_key = isinstance(field, ForeignKeyField)
         if is_foreign_key and not field.rel_field:
             raise ValueError('Foreign keys must specify a `field`.')
 
-        operations = [self.alter_add_column(table, column_name, field)]
+        operations = [
+            self.alter_add_column(table, column_name, field, allow_not_null)
+        ]
 
         # In the event the field is *not* nullable, update with the default
         # value and set not null.
-        if not field.null:
+        if not field.null and not allow_not_null:
             operations.extend([
                 self.apply_default(table, column_name, field),
                 self.add_not_null(table, column_name)])
@@ -492,7 +511,7 @@ class PostgresqlMigrator(SchemaMigrator):
         ParentClass = super(PostgresqlMigrator, self)
 
         operations = [
-            ParentClass.rename_table(old_name, new_name, with_context=True)]
+            ParentClass.rename_table(old_name, new_name)]
 
         if len(pk_names) == 1:
             # Check for existence of primary key sequence.
@@ -708,6 +727,20 @@ class SqliteMigrator(SchemaMigrator):
     column_split_re = re.compile(r'(?:[^,(]|\([^)]*\))+')
     column_name_re = re.compile(r'''["`']?([\w]+)''')
     fk_re = re.compile(r'FOREIGN KEY\s+\("?([\w]+)"?\)\s+', re.I)
+
+    @contextmanager
+    def migration_context(self, atomic=True):
+        # Have to set pragma to avoid cascading deletes, only works outside
+        # of a transaction, though.
+        fks_enabled = bool(self.database.pragma('foreign_keys'))
+        if fks_enabled:
+            self.database.pragma('foreign_keys', 0)
+        try:
+            with super(SqliteMigrator, self).migration_context(atomic):
+                yield
+        finally:
+            if fks_enabled:
+                self.database.pragma('foreign_keys', 1)
 
     def _get_create_table(self, table):
         res = self.database.execute_sql(

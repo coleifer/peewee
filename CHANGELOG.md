@@ -7,6 +7,12 @@ https://github.com/coleifer/peewee/releases
 
 ## master
 
+* Allow adding column to existing table as `NOT NULL`.
+* Add a `SchemaMigrator.migration_context()` helper for wrapping migrations.
+  This was wanted for SQLite in order to disable FK pragma, which could trigger
+  cascading deletes while recreating tables.
+* Allow `SchemaMigrator.from_database()` to support database proxies.
+
 [View commits](https://github.com/coleifer/peewee/compare/4.3.0...master)
 
 ## 4.3.0
