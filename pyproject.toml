@@ -28,6 +28,7 @@ requires-python = ">=3.8"
 
 [project.scripts]
 pwiz = "pwiz:main"
+pwmigrate = "playhouse.migrations:main"
 
 [project.urls]
 Repository = "https://github.com/coleifer/peewee"
