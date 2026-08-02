@@ -829,13 +829,16 @@ Generating a migration from a diff
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 :py:func:`playhouse.migrations.template` renders a diff as a migration
-file body. Fully-determined changes render as runnable code (drops
-included). Anything needing a definition renders as the field class with
-a ``(...)`` placeholder or a TODO comment. Boolean flags (``unique``,
-``index``, ``null``, ``primary_key``) render alongside the ``...``, as
-the file's other operations depend on them. Only values (defaults,
-lengths, FK targets) are left to fill in. ``down()`` gets the certain
-inverses only. The file is a starting point, not a finished migration:
+file body. Fully-determined changes render as runnable code, drops
+included. Foreign keys render complete, referencing the model created in
+the same file, ``'self'``, or a frozen stub of the target table declared
+at the top of ``up()``. ``on_delete`` and ``on_update`` carry over. Any
+other added column renders as its field class with a ``(...)``
+placeholder. Its default is not the diff's to choose. Boolean flags
+(``unique``, ``index``, ``null``, ``primary_key``) render alongside the
+``...``, as the file's other operations depend on them. ``down()`` gets
+the certain inverses only. The file is a starting point, not a finished
+migration:
 
 .. code-block:: python
 
@@ -845,8 +848,13 @@ inverses only. The file is a starting point, not a finished migration:
    # TODO: user.email: dropped column cannot be restored by down()
 
    def up(migrator, db):
+       class User(Model):
+           class Meta:
+               database = db
+               table_name = 'user'
+
        class Note(Model):
-           user = ForeignKeyField(...)
+           user = ForeignKeyField(User)
            content = TextField()
            class Meta:
                database = db

@@ -219,18 +219,34 @@ def _flag_args(field):
     return args
 
 
-def _field_source(field, imports):
-    # Defaults and relations are the implementor's to fill in.
+def _is_implicit_id(field):
+    return (type(field) is AutoField and field.name == 'id' and
+            field.column_name == 'id')
+
+
+def _field_source(field, imports, targets=None, unbound=False):
+    # Defaults are the implementor's to fill in.
     cls = type(field)
     if cls.__module__ != 'peewee':
         imports.add('from %s import %s' % (cls.__module__, cls.__name__))
     if isinstance(field, ForeignKeyField):
-        args = ['...'] + _flag_args(field)
+        rel = field.rel_model
+        ref = targets[rel]
+        args = [ref]
+        # add_column fields never get bound, so the migrator needs the
+        # target field spelled out. In a class body the pk is implied.
+        if unbound or field.rel_field is not rel._meta.primary_key:
+            args.append('field=%s.%s' % (ref, field.rel_field.name))
+        args.extend(_flag_args(field))
         # The default from ForeignKeyField.bind().
         default = (field.name if field.name.endswith('_id')
                    else field.name + '_id')
         if field.column_name != default:
             args.append('column_name=%r' % field.column_name)
+        if field.on_delete:
+            args.append('on_delete=%r' % field.on_delete)
+        if field.on_update:
+            args.append('on_update=%r' % field.on_update)
         return '%s(%s)' % (cls.__name__, ', '.join(args))
     args = []
     if isinstance(field, CharField) and field.max_length != 255:
@@ -246,15 +262,16 @@ def _field_source(field, imports):
     return '%s(%s)' % (cls.__name__, ', '.join(args))
 
 
-def _model_source(model, todos, imports):
+def _model_source(model, todos, imports, targets):
     meta = model._meta
+    refs = dict(targets)
+    refs[model] = "'self'"
     lines = ['class %s(Model):' % model.__name__]
     for field in meta.sorted_fields:
-        if type(field) is AutoField and field.name == 'id' and \
-           field.column_name == 'id':
-            continue  # Implicit id.
+        if _is_implicit_id(field):
+            continue
         lines.append('    %s = %s' % (field.name,
-                                      _field_source(field, imports)))
+                                      _field_source(field, imports, refs)))
     lines.append('    class Meta:')
     lines.append('        database = db')
     lines.append('        table_name = %r' % meta.table_name)
@@ -280,6 +297,22 @@ def _model_source(model, todos, imports):
     return lines
 
 
+def _stub_source(model, fields, imports):
+    # A frozen stand-in for an existing table: its name plus whichever
+    # referenced columns are not the implicit id.
+    meta = model._meta
+    lines = ['class %s(Model):' % model.__name__]
+    for field in fields:
+        lines.append('    %s = %s' % (field.name,
+                                      _field_source(field, imports)))
+    lines.append('    class Meta:')
+    lines.append('        database = db')
+    lines.append('        table_name = %r' % meta.table_name)
+    if meta.schema:
+        lines.append('        schema = %r' % meta.schema)
+    return lines
+
+
 def _add_index_source(idx):
     return ('migrator.migrate(migrator.add_index(%r, %r%s))'
             % (idx.table, idx.columns,
@@ -289,15 +322,43 @@ def _add_index_source(idx):
 def template(diff):
     """
     Render a playhouse.schema_diff.SchemaDiff as a migration-file body.
-    Fully-determined changes render as runnable code. Anything needing a
-    definition renders with a (...) placeholder or a TODO comment.
+    Fully-determined changes render as runnable code. Foreign keys
+    reference a model created in the file, 'self', or a frozen stub of
+    the target table. Anything else needing a definition renders with a
+    (...) placeholder or a TODO comment.
     """
     todos, imports = [], set()
 
+    # Foreign keys render against a class in the generated file: the
+    # model created here, 'self' in its own class body, or a frozen stub
+    # of the existing table, declared ahead of everything else.
+    fks = []
+    for model in diff.create_tables:
+        fks.extend(f for f in model._meta.sorted_fields
+                   if isinstance(f, ForeignKeyField) and
+                   f.rel_model is not model)
+    fks.extend(f for f in diff.add_columns
+               if isinstance(f, ForeignKeyField))
+
+    created = set(diff.create_tables)
+    stubs = {}  # Existing fk target -> referenced fields, by name.
+    for field in fks:
+        rel = field.rel_model
+        if rel in created:
+            continue
+        fields = stubs.setdefault(rel, {})
+        if not _is_implicit_id(field.rel_field):
+            fields[field.rel_field.name] = field.rel_field
+    targets = {model: model.__name__ for model in created | set(stubs)}
+
     # (up lines, down lines) per operation; down() reads the plan in reverse.
     plan = []
+    for model in sorted(stubs, key=lambda m: m.__name__):
+        fields = sorted(stubs[model].values(), key=lambda f: f._sort_key)
+        plan.append((_stub_source(model, fields, imports) + [''], []))
+
     for model in diff.create_tables:
-        up = _model_source(model, todos, imports)
+        up = _model_source(model, todos, imports, targets)
         up.extend(['db.create_tables([%s])' % model.__name__, ''])
         meta = model._meta
         down = ['migrator.migrate(migrator.drop_table(%r%s))'
@@ -327,15 +388,22 @@ def template(diff):
         meta = field.model._meta
         if meta.schema:
             qualified.add(meta.table_name)
-        cls = type(field)
-        if cls.__module__ != 'peewee':
-            imports.add('from %s import %s' % (cls.__module__,
-                                               cls.__name__))
-        args = ['...'] + _flag_args(field)
+        if isinstance(field, ForeignKeyField):
+            source = _field_source(field, imports, targets, unbound=True)
+            if not field.null:
+                todos.append('%s.%s: not-null column needs a default or '
+                             'allow_not_null backfill'
+                             % (meta.table_name, field.column_name))
+        else:
+            cls = type(field)
+            if cls.__module__ != 'peewee':
+                imports.add('from %s import %s' % (cls.__module__,
+                                                   cls.__name__))
+            source = '%s(%s)' % (cls.__name__,
+                                 ', '.join(['...'] + _flag_args(field)))
         plan.append((
-            ['migrator.migrate(migrator.add_column(%r, %r, %s(%s)))'
-             % (meta.table_name, field.column_name, cls.__name__,
-                ', '.join(args))],
+            ['migrator.migrate(migrator.add_column(%r, %r, %s))'
+             % (meta.table_name, field.column_name, source)],
             ['migrator.migrate(migrator.drop_column(%r, %r))'
              % (meta.table_name, field.column_name)]))
 

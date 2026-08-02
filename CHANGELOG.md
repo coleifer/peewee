@@ -18,7 +18,8 @@ In which we learn to migrate (somewhat).
   schema and reporting differences (tables to create, columns added or removed,
   indexes added or removed).
 * Add migration generation from the diff. Run `create NAME --models app.models`
-  to write a migration template. `diff` prints the differences.
+  to write a migration template. `diff` prints the differences. Foreign keys
+  render runnable, against frozen stubs of their target tables.
 * Allow adding column to existing table as `NOT NULL`.
 * Add a `SchemaMigrator.migration_context()` helper for wrapping migrations.
   This was wanted for SQLite in order to disable FK pragma, which could trigger

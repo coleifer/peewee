@@ -83,6 +83,25 @@ class SdDesc(TestModel):
 SdDesc.add_index(SdDesc.ts.desc())
 
 
+class SdSlug(TestModel):
+    slug = CharField(max_length=24, primary_key=True)
+    alt = CharField(unique=True)
+
+    class Meta:
+        table_name = 'sd_slug'
+
+
+class SdBadge(TestModel):
+    owner = ForeignKeyField(SdUser, backref='badges', on_delete='CASCADE')
+    slug = ForeignKeyField(SdSlug, backref='badges')
+    alt = ForeignKeyField(SdSlug, field=SdSlug.alt, backref='alt_badges',
+                          null=True)
+    parent = ForeignKeyField('self', null=True)
+
+    class Meta:
+        table_name = 'sd_badge'
+
+
 @skip_if(IS_CRDB, 'crdb introspection differs')
 class TestSchemaDiff(ModelTestCase):
     requires = SD_MODELS
@@ -235,7 +254,7 @@ def strip_header(body):
     return body.split('\n', 1)[1]
 
 
-# Everything at once: new table (fk placeholder, boolean flags), column
+# Everything at once: new table (fk against a frozen stub), column
 # add/drop, index changes, TODOs for the unrestorable. down() holds the
 # certain inverses only, walked in reverse.
 FULL_BODY = """\
@@ -245,8 +264,13 @@ from peewee import *
 # TODO: sd_user.email: dropped column cannot be restored by down()
 
 def up(migrator, db):
+    class SdUser(Model):
+        class Meta:
+            database = db
+            table_name = 'sd_user'
+
     class SdNote(Model):
-        user = ForeignKeyField(...)
+        user = ForeignKeyField(SdUser)
         content = TextField()
         class Meta:
             database = db
@@ -267,13 +291,18 @@ def down(migrator, db):
     migrator.migrate(migrator.drop_table('sd_note'))
 """
 
-# A non-default fk column name survives into the placeholder.
+# A non-default fk column name survives onto the rendered fk.
 FK_ALIAS_BODY = """\
 from peewee import *
 
 def up(migrator, db):
+    class SdUser(Model):
+        class Meta:
+            database = db
+            table_name = 'sd_user'
+
     class SdOwned(Model):
-        owner = ForeignKeyField(..., column_name='owner')
+        owner = ForeignKeyField(SdUser, column_name='owner')
         label = CharField()
         class Meta:
             database = db
@@ -285,22 +314,75 @@ def down(migrator, db):
     migrator.migrate(migrator.drop_table('sd_owned'))
 """
 
-# unique/null render in added-fk placeholders. index=True, the fk
-# default, stays out: add_column() indexes the column itself. down()
-# still drops the indexes before the columns.
+# Added fks render runnable against stubs, with the target field spelled
+# out (add_column fields never get bound). index=True, the fk default,
+# stays out: add_column() indexes the column itself. down() still drops
+# the indexes before the columns. The not-null add gets a TODO, since
+# add_column() refuses it without a default.
 ADDED_FK_BODY = """\
 from peewee import *
 
+# TODO: sd_tweet.owner_id: not-null column needs a default or allow_not_null backfill
+
 def up(migrator, db):
-    migrator.migrate(migrator.add_column('sd_tweet', 'editor_id', ForeignKeyField(..., unique=True, null=True)))
-    migrator.migrate(migrator.add_column('sd_tweet', 'parent_id', ForeignKeyField(..., null=True)))
+    class SdTweetFks(Model):
+        class Meta:
+            database = db
+            table_name = 'sd_tweet'
+
+    class SdUser(Model):
+        class Meta:
+            database = db
+            table_name = 'sd_user'
+
+    migrator.migrate(migrator.add_column('sd_tweet', 'editor_id', ForeignKeyField(SdUser, field=SdUser.id, unique=True, null=True)))
+    migrator.migrate(migrator.add_column('sd_tweet', 'parent_id', ForeignKeyField(SdTweetFks, field=SdTweetFks.id, null=True)))
+    migrator.migrate(migrator.add_column('sd_tweet', 'owner_id', ForeignKeyField(SdUser, field=SdUser.id)))
 
 
 def down(migrator, db):
     migrator.migrate(migrator.drop_index('sd_tweet', 'sd_tweet_parent_id'))
+    migrator.migrate(migrator.drop_index('sd_tweet', 'sd_tweet_owner_id'))
     migrator.migrate(migrator.drop_index('sd_tweet', 'sd_tweet_editor_id'))
+    migrator.migrate(migrator.drop_column('sd_tweet', 'owner_id'))
     migrator.migrate(migrator.drop_column('sd_tweet', 'parent_id'))
     migrator.migrate(migrator.drop_column('sd_tweet', 'editor_id'))
+"""
+
+# Fk kwargs: on_delete carries over, a non-pk target renders field=, a
+# target created in the same diff is referenced directly (dependency
+# order), and a self-reference stays 'self'.
+FK_KWARGS_BODY = """\
+from peewee import *
+
+def up(migrator, db):
+    class SdUser(Model):
+        class Meta:
+            database = db
+            table_name = 'sd_user'
+
+    class SdSlug(Model):
+        slug = CharField(max_length=24, primary_key=True)
+        alt = CharField(unique=True)
+        class Meta:
+            database = db
+            table_name = 'sd_slug'
+    db.create_tables([SdSlug])
+
+    class SdBadge(Model):
+        owner = ForeignKeyField(SdUser, on_delete='CASCADE')
+        slug = ForeignKeyField(SdSlug)
+        alt = ForeignKeyField(SdSlug, field=SdSlug.alt, null=True)
+        parent = ForeignKeyField('self', null=True)
+        class Meta:
+            database = db
+            table_name = 'sd_badge'
+    db.create_tables([SdBadge])
+
+
+def down(migrator, db):
+    migrator.migrate(migrator.drop_table('sd_badge'))
+    migrator.migrate(migrator.drop_table('sd_slug'))
 """
 
 # A partial index is known by name only, so up() stays empty.
@@ -344,7 +426,7 @@ class TestTemplate(ModelTestCase):
                                     [SdUser2, SdNote, SdTweet, SdPoints]))
         self.assertEqual(strip_header(body), FULL_BODY)
 
-    def test_fk_placeholder_alias(self):
+    def test_fk_alias(self):
         class SdOwned(TestModel):
             owner = ForeignKeyField(SdUser, column_name='owner')
             label = CharField()
@@ -363,6 +445,7 @@ class TestTemplate(ModelTestCase):
             editor = ForeignKeyField(SdUser, backref='edits', unique=True,
                                      null=True)
             parent = ForeignKeyField('self', null=True)
+            owner = ForeignKeyField(SdUser, backref='owned')
 
             class Meta:
                 table_name = 'sd_tweet'
@@ -371,6 +454,11 @@ class TestTemplate(ModelTestCase):
         body = template(diff_models(self.database,
                                     [SdTweetFks, SdUser, SdPoints]))
         self.assertEqual(strip_header(body), ADDED_FK_BODY)
+
+    def test_fk_kwargs(self):
+        body = template(diff_models(self.database,
+                                    [SdBadge, SdSlug] + SD_MODELS))
+        self.assertEqual(strip_header(body), FK_KWARGS_BODY)
 
     @requires_sqlite
     @requires_models(SdPartial)
@@ -394,32 +482,6 @@ class TestTemplate(ModelTestCase):
         self.assertEqual(strip_header(body), SCHEMA_BODY)
 
 
-# What a user writes after filling in the fk placeholders rendered for the
-# SdProfile model below: a frozen stub for the target plus the real flags.
-FK_FLAGS_MIG = """\
-from peewee import *
-
-def up(migrator, db):
-    class SdUserStub(Model):
-        class Meta:
-            database = db
-            table_name = 'sd_user'
-
-    class SdProfile(Model):
-        user = ForeignKeyField(SdUserStub, backref='profiles', unique=True)
-        editor = ForeignKeyField(SdUserStub, backref='edited', null=True)
-
-        class Meta:
-            database = db
-            table_name = 'sd_profile'
-
-    db.create_tables([SdProfile])
-
-def down(migrator, db):
-    migrator.migrate(migrator.drop_table('sd_profile'))
-"""
-
-
 @skip_if(IS_CRDB, 'crdb introspection differs')
 class TestTemplateRoundTrip(ModelTestCase):
     requires = SD_MODELS
@@ -433,8 +495,8 @@ class TestTemplateRoundTrip(ModelTestCase):
         try:
             shutil.rmtree(self.dir, ignore_errors=True)
             self.database.drop_tables([self.runner.History], safe=True)
-            for table in ('sd_tag', 'sd_sku', 'sd_profile', 'sd_alias',
-                          'sd_kv'):
+            for table in ('sd_badge', 'sd_slug', 'sd_tag', 'sd_sku',
+                          'sd_profile', 'sd_alias', 'sd_kv'):
                 self.database.execute_sql('DROP TABLE IF EXISTS %s' % table)
         finally:
             super(TestTemplateRoundTrip, self).tearDown()
@@ -445,8 +507,8 @@ class TestTemplateRoundTrip(ModelTestCase):
         self.assertEqual(self.runner.up(), ['0001_%s' % name])
 
     def test_round_trip(self):
-        # A diff with no fk placeholders is fully runnable as generated:
-        # new table, index changes, column drop.
+        # Fully runnable as generated: new table, index changes, column
+        # drop.
         class SdUser3(TestModel):
             username = CharField(unique=True)
 
@@ -541,8 +603,8 @@ class TestTemplateRoundTrip(ModelTestCase):
         self.assertFalse(diff_models(self.database, SD_MODELS))
 
     def test_fk_flags(self):
-        # unique/null on an fk placeholder: without them the created table
-        # never converges (unique) or silently comes out NOT NULL (null).
+        # unique/null must render on the fks or the created table never
+        # converges (unique) or silently comes out NOT NULL (null).
         class SdProfile(TestModel):
             user = ForeignKeyField(SdUser, backref='profiles', unique=True)
             editor = ForeignKeyField(SdUser, backref='edited', null=True)
@@ -552,16 +614,38 @@ class TestTemplateRoundTrip(ModelTestCase):
 
         models = [SdProfile] + SD_MODELS
         body = template(diff_models(self.database, models))
-        self.assertIn('user = ForeignKeyField(..., unique=True)', body)
-        self.assertIn('editor = ForeignKeyField(..., null=True)', body)
-
-        self.apply(FK_FLAGS_MIG, 'profile')
+        self.apply(body, 'profile')
         self.assertFalse(diff_models(self.database, models))
         columns = {c.name: c
                    for c in self.database.get_columns('sd_profile')}
         self.assertTrue(columns['editor_id'].null)
         self.assertFalse(columns['user_id'].null)
         self.assertEqual(self.runner.down(), ['0001_profile'])
+
+    def test_fk_chain(self):
+        # Two new tables, one referencing the other plus stubbed and
+        # self targets. The generated file runs and reverts as-is.
+        models = [SdBadge, SdSlug] + SD_MODELS
+        body = template(diff_models(self.database, models))
+        self.apply(body, 'chain')
+        self.assertFalse(diff_models(self.database, models))
+
+        self.assertEqual(self.runner.down(), ['0001_chain'])
+        diff = diff_models(self.database, models)
+        self.assertEqual(diff.create_tables, [SdSlug, SdBadge])
+
+    @requires_models(SdSlug)
+    def test_fk_stub(self):
+        # sd_slug exists, so its typed pk and referenced unique column
+        # must come through on the stub or creating sd_badge fails.
+        models = [SdBadge, SdSlug] + SD_MODELS
+        body = template(diff_models(self.database, models))
+        self.apply(body, 'badge')
+        self.assertFalse(diff_models(self.database, models))
+
+        self.assertEqual(self.runner.down(), ['0001_badge'])
+        diff = diff_models(self.database, models)
+        self.assertEqual(diff.create_tables, [SdBadge])
 
     def test_autofield_alias(self):
         # The aliased pk must render or the table never converges.
