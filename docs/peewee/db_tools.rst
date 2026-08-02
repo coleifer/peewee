@@ -27,7 +27,7 @@ credentials live in environment variables.
    import os
    from playhouse.db_url import connect
 
-   db = connect(os.environ.get('DATABASE_URL', 'sqlite:////default.db'))
+   db = connect(os.environ.get('DATABASE_URL', 'sqlite:///default.db'))
 
 Pass additional keyword arguments in the query string:
 
@@ -138,8 +138,8 @@ Alternate drivers:
 
    .. code-block:: python
 
-       register_database(FirebirdDatabase, 'firebird')
-       db = connect('firebird://my-firebird-db')
+       register_database(ClickHouseDatabase, 'clickhouse')
+       db = connect('clickhouse:///my-db')
 
 
 .. _pool:
