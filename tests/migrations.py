@@ -530,9 +530,13 @@ class TestSchemaMigration(ModelTestCase):
 
     @requires_pglike
     def test_drop_table_cascade(self):
-        self.database.execute_sql('CREATE VIEW tag_v AS SELECT * FROM tag')
+        self.database.execute_sql('CREATE VIEW tag_v AS SELECT id FROM tag')
+        self.assertTrue('tag_v' in [v.name for v in self.database.get_views()])
+
         migrate(self.migrator.drop_table('tag', cascade=True))
         self.assertFalse('tag' in self.database.get_tables())
+        self.assertFalse('tag_v' in [v.name for v in
+                                     self.database.get_views()])
 
     @skip_unless(IS_SQLITE, 'sqlite-specific')
     def test_drop_table_cascade_sqlite(self):
