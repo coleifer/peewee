@@ -12,6 +12,7 @@ https://github.com/coleifer/peewee/releases
   This was wanted for SQLite in order to disable FK pragma, which could trigger
   cascading deletes while recreating tables.
 * Allow `SchemaMigrator.from_database()` to support database proxies.
+* Add support for newer SQLite ALTER TABLE functionality from 3.53.0.
 
 [View commits](https://github.com/coleifer/peewee/compare/4.3.0...master)
 

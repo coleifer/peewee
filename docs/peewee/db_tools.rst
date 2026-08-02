@@ -261,7 +261,7 @@ Supported operations:
 - Add, rename, or drop columns.
 - Make columns nullable or not nullable.
 - Change a column's type.
-- Rename a table.
+- Rename or drop a table.
 - Add or drop indexes and constraints.
 - Add or drop column default values.
 
@@ -343,6 +343,12 @@ Peewee appends by default):
 .. code-block:: python
 
    migrate(migrator.rename_table('story', 'stories'))
+
+**Drop table:**
+
+.. code-block:: python
+
+   migrate(migrator.drop_table('story', safe=True))
 
 **Add / drop indexes:**
 
@@ -440,16 +446,32 @@ Migration API
       Factory method that returns the appropriate :class:`SchemaMigrator`
       subclass for the given database.
 
-   .. method:: add_column(table, column_name, field)
+   .. method:: migrate(*operations)
+
+      Execute one or more schema-altering operations. Equivalent to the
+      module-level :py:func:`migrate` helper.
+
+   .. method:: migration_context(atomic=True)
+
+      Context manager wrapping a migration run in the appropriate
+      per-dialect safety: a transaction when the database supports
+      transactional DDL (and ``atomic`` is true), and on sqlite the
+      ``foreign_keys`` pragma is additionally disabled for the duration,
+      as table-rewrites would otherwise fire ``ON DELETE CASCADE``.
+
+   .. method:: add_column(table, column_name, field, allow_not_null=False)
 
       :param str table: Name of the table to add column to.
       :param str column_name: Name of the new column.
       :param Field field: A :class:`Field` instance.
+      :param bool allow_not_null: Emit the column definition as-is, skipping
+          the add-nullable-then-backfill sequence described below.
 
       Add a new column to the provided table. The ``field`` provided will be used
       to generate the appropriate column definition.
 
-      If the field is not nullable it must specify a default value.
+      If the field is not nullable it must specify a default value, unless
+      ``allow_not_null`` is set.
 
       .. note::
          For non-null columns, the following occurs:
@@ -457,6 +479,11 @@ Migration API
          1. column is added as allowing NULLs
          2. ``UPDATE`` query is executed to populate the default value
          3. column is changed to NOT NULL
+
+         With ``allow_not_null=True`` the column is added ``NOT NULL`` in a
+         single statement and no default is required. Existing rows are the
+         caller's responsibility: postgres and sqlite refuse to add the
+         column, while MySQL backfills its implicit default.
 
    .. method:: drop_column(table, column_name, cascade=True)
 
@@ -515,6 +542,13 @@ Migration API
       :param str old_name: Current name of the table.
       :param str new_name: New name for the table.
 
+   .. method:: drop_table(table, safe=False, cascade=False, schema=None)
+
+      :param str table: Name of the table to drop.
+      :param bool safe: Use ``IF EXISTS``.
+      :param bool cascade: Append ``CASCADE`` (not supported by sqlite).
+      :param str schema: Optional schema qualification.
+
    .. method:: add_index(table, columns, unique=False, using=None)
 
       :param str table: Name of table on which to create the index.
@@ -552,12 +586,14 @@ Migration API
 
 .. class:: SqliteMigrator(database)
 
-   SQLite has limited support for ``ALTER TABLE`` queries, so the following
-   operations are currently not supported for SQLite:
+   SQLite supports or emulates most schema-altering operations, but the code
+   path is dependent on the library version.
 
-   * ``add_constraint``
-   * ``drop_constraint``
-   * ``add_unique``
+   SQLite 3.53.0 added ``ALTER TABLE`` support for table constraints, so
+   ``add_constraint`` and ``drop_constraint`` work on 3.53 and newer.
+   Older versions raise ``NotImplementedError``. ``add_unique`` is not
+   supported on any version, as sqlite's ``ADD CONSTRAINT`` does not
+   extend to UNIQUE constraints.
 
 .. class:: MySQLMigrator(database)
 

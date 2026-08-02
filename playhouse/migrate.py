@@ -467,6 +467,13 @@ class SchemaMigrator(object):
                 .sql(Entity(new_name)))
 
     @operation
+    def drop_table(self, table, safe=False, cascade=False, schema=None):
+        ctx = self.make_context().literal(
+            'DROP TABLE IF EXISTS ' if safe else 'DROP TABLE ')
+        ctx = ctx.sql(Entity(*filter(None, (schema, table))))
+        return ctx.literal(' CASCADE') if cascade else ctx
+
+    @operation
     def add_index(self, table, columns, unique=False, using=None):
         ctx = self.make_context()
         index_name = make_index_name(table, columns)
@@ -728,6 +735,10 @@ class SqliteMigrator(SchemaMigrator):
     column_name_re = re.compile(r'''["`']?([\w]+)''')
     fk_re = re.compile(r'FOREIGN KEY\s+\("?([\w]+)"?\)\s+', re.I)
 
+    def __init__(self, *args, **kwargs):
+        super(SqliteMigrator, self).__init__(*args, **kwargs)
+        self.sqlite_version = self.database.server_version
+
     @contextmanager
     def migration_context(self, atomic=True):
         # Have to set pragma to avoid cascading deletes, only works outside
@@ -897,7 +908,7 @@ class SqliteMigrator(SchemaMigrator):
 
     @operation
     def drop_column(self, table, column_name, cascade=True, legacy=False):
-        if sqlite3.sqlite_version_info >= (3, 35, 0) and not legacy:
+        if self.sqlite_version >= (3, 35, 0) and not legacy:
             ctx = self.make_context()
             (self._alter_table(ctx, table)
              .literal(' DROP COLUMN ')
@@ -907,7 +918,7 @@ class SqliteMigrator(SchemaMigrator):
 
     @operation
     def rename_column(self, table, old_name, new_name, legacy=False):
-        if sqlite3.sqlite_version_info >= (3, 25, 0) and not legacy:
+        if self.sqlite_version >= (3, 25, 0) and not legacy:
             return (self
                     ._alter_table(self.make_context(), table)
                     .literal(' RENAME COLUMN ')
@@ -926,13 +937,19 @@ class SqliteMigrator(SchemaMigrator):
         return self._update_column(table, old_name, _rename)
 
     @operation
-    def add_not_null(self, table, column):
+    def add_not_null(self, table, column, legacy=False):
+        if self.sqlite_version >= (3, 53, 0) and not legacy:
+            return super(SqliteMigrator, self).add_not_null(table, column)
+
         def _add_not_null(column_name, column_def):
             return column_def + ' NOT NULL'
         return self._update_column(table, column, _add_not_null)
 
     @operation
-    def drop_not_null(self, table, column):
+    def drop_not_null(self, table, column, legacy=False):
+        if self.sqlite_version >= (3, 53, 0) and not legacy:
+            return super(SqliteMigrator, self).drop_not_null(table, column)
+
         def _drop_not_null(column_name, column_def):
             return column_def.replace('NOT NULL', '')
         return self._update_column(table, column, _drop_not_null)
@@ -973,10 +990,28 @@ class SqliteMigrator(SchemaMigrator):
 
     @operation
     def add_constraint(self, table, name, constraint):
+        if self.sqlite_version >= (3, 53, 0):
+            return super(SqliteMigrator, self).add_constraint(
+                table, name, constraint)
         raise NotImplementedError
 
     @operation
     def drop_constraint(self, table, name):
+        if self.sqlite_version >= (3, 53, 0):
+            return super(SqliteMigrator, self).drop_constraint(table, name)
+        raise NotImplementedError
+
+    @operation
+    def drop_table(self, table, safe=False, cascade=False, schema=None):
+        if cascade:
+            # No CASCADE clause in sqlite's DROP TABLE.
+            raise NotImplementedError
+        return super(SqliteMigrator, self).drop_table(table, safe,
+                                                      schema=schema)
+
+    @operation
+    def add_unique(self, table, *column_names):
+        # 3.53's ADD CONSTRAINT does not extend to UNIQUE constraints.
         raise NotImplementedError
 
     @operation

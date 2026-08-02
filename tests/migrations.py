@@ -12,6 +12,7 @@ from .base import IS_PSYCOPG3
 from .base import IS_SQLITE
 from .base import IS_SQLITE_25
 from .base import IS_SQLITE_35
+from .base import IS_SQLITE_53
 from .base import ModelTestCase
 from .base import TestModel
 from .base import db
@@ -97,7 +98,8 @@ class TestSchemaMigration(ModelTestCase):
         finally:
             self.database.close()
 
-    @requires_pglike
+    @skip_unless(IS_POSTGRESQL or IS_CRDB or IS_SQLITE_53,
+                 'requires pg-like or sqlite 3.53+')
     def test_add_table_constraint(self):
         price = FloatField(default=0.)
         migrate(self.migrator.add_column('tag', 'price', price),
@@ -117,7 +119,7 @@ class TestSchemaMigration(ModelTestCase):
         t1_db = Tag2.get(Tag2.tag == 't1')
         self.assertEqual(t1_db.price, 1.0)
 
-    @skip_if(IS_SQLITE)
+    @skip_if(IS_SQLITE, 'sqlite cannot ALTER TABLE ADD CONSTRAINT UNIQUE')
     def test_add_unique(self):
         alt_id = IntegerField(default=0)
         migrate(
@@ -135,7 +137,8 @@ class TestSchemaMigration(ModelTestCase):
         with self.database.atomic():
             self.assertRaises(IntegrityError, Tag2.create, tag='t2', alt_id=1)
 
-    @requires_pglike
+    @skip_unless(IS_POSTGRESQL or IS_CRDB or IS_SQLITE_53,
+                 'requires pg-like or sqlite 3.53+')
     def test_drop_table_constraint(self):
         price = FloatField(default=0.)
         migrate(
@@ -211,6 +214,39 @@ class TestSchemaMigration(ModelTestCase):
             (t1.id, 't1', None, datetime.datetime(2012, 1, 1), '', True, 0.0),
             (t2.id, 't2', None, datetime.datetime(2012, 1, 1), '', True, 0.0),
         ])
+
+    def test_add_column_not_null_explicit(self):
+        # allow_not_null emits the column NOT NULL directly, no default
+        # needed. Existing rows are the caller's responsibility.
+        migrate(self.migrator.add_column('tag', 'points', IntegerField(),
+                                         allow_not_null=True))
+        column = dict((c.name, c)
+                      for c in self.database.get_columns('tag'))['points']
+        self.assertFalse(column.null)
+
+        # Without the flag the default requirement stands.
+        self.assertRaises(ValueError, migrate,
+                          self.migrator.add_column('tag', 'p2',
+                                                   IntegerField()))
+
+    def test_add_column_not_null_default(self):
+        # A server-side default makes the one-statement NOT NULL add valid
+        # even with rows present: the database backfills.
+        Tag.create(tag='t1')
+        field = IntegerField(constraints=[SQL('DEFAULT 0')])
+        with self.assertQueryCount(1):
+            migrate(self.migrator.add_column('tag', 'karma', field,
+                                             allow_not_null=True))
+
+        column = dict((c.name, c)
+                      for c in self.database.get_columns('tag'))['karma']
+        self.assertFalse(column.null)
+        curs = self.database.execute_sql('SELECT karma FROM tag')
+        self.assertEqual(curs.fetchone()[0], 0)
+        self.database.execute_sql("INSERT INTO tag (tag) VALUES ('t2')")
+        curs = self.database.execute_sql(
+            "SELECT karma FROM tag WHERE tag = 't2'")
+        self.assertEqual(curs.fetchone()[0], 0)
 
     @skip_if(IS_MYSQL, 'mysql does not support CHECK()')
     def test_add_column_constraint(self):
@@ -364,12 +400,13 @@ class TestSchemaMigration(ModelTestCase):
                 with self.database.transaction():
                     Person.create(last_name='Last2')
 
-    def test_add_not_null(self):
+    def test_add_not_null(self, legacy=False):
+        kw = {'legacy': legacy} if IS_SQLITE else {}
         self._create_people()
 
         def addNotNull():
             with self.database.transaction():
-                migrate(self.migrator.add_not_null('person', 'dob'))
+                migrate(self.migrator.add_not_null('person', 'dob', **kw))
 
         # We cannot make the `dob` field not null because there is currently
         # a null value there.
@@ -393,28 +430,38 @@ class TestSchemaMigration(ModelTestCase):
                     last_name='Snazebrauer',
                     dob=None)
 
-    def test_drop_not_null(self):
+    @skip_unless(IS_SQLITE_53, 'Requires sqlite 3.53 or newer')
+    def test_add_not_null_sqlite_legacy(self):
+        self.test_add_not_null(legacy=True)
+
+    def test_drop_not_null(self, legacy=False):
+        kw = {'legacy': legacy} if IS_SQLITE else {}
         self._create_people()
         migrate(
-            self.migrator.drop_not_null('person', 'first_name'),
-            self.migrator.drop_not_null('person', 'last_name'))
+            self.migrator.drop_not_null('person', 'first_name', **kw),
+            self.migrator.drop_not_null('person', 'last_name', **kw))
 
         p = Person.create(first_name=None, last_name=None)
         query = (Person
                  .select()
                  .where(
-                     (Person.first_name >> None) &
-                     (Person.last_name >> None)))
+                     Person.first_name.is_null(True) &
+                     Person.last_name.is_null(True)))
         self.assertEqual(query.count(), 1)
 
-    def test_modify_not_null_foreign_key(self):
+    @skip_unless(IS_SQLITE_53, 'Requires sqlite 3.53 or newer')
+    def test_drop_not_null_sqlite_legacy(self):
+        self.test_drop_not_null(legacy=True)
+
+    def test_modify_not_null_foreign_key(self, legacy=False):
+        kw = {'legacy': legacy} if IS_SQLITE else {}
         user = User.create(id='charlie')
         Page.create(name='null user')
         Page.create(name='charlie', user=user)
 
         def addNotNull():
             with self.database.transaction():
-                migrate(self.migrator.add_not_null('page', 'user_id'))
+                migrate(self.migrator.add_not_null('page', 'user_id', **kw))
 
         if self._exception_add_not_null:
             with self.assertRaisesCtx((IntegrityError, InternalError)):
@@ -434,11 +481,15 @@ class TestSchemaMigration(ModelTestCase):
 
         # Now we will drop it.
         with self.database.transaction():
-            migrate(self.migrator.drop_not_null('page', 'user_id'))
+            migrate(self.migrator.drop_not_null('page', 'user_id', **kw))
 
         self.assertEqual(Page.select().where(Page.user.is_null()).count(), 0)
         Page.create(name='succeeds', user=None)
         self.assertEqual(Page.select().where(Page.user.is_null()).count(), 1)
+
+    @skip_unless(IS_SQLITE_53, 'Requires sqlite 3.53 or newer')
+    def test_modify_not_null_foreign_key_sqlite_legacy(self):
+        self.test_modify_not_null_foreign_key(legacy=True)
 
     def test_rename_table(self):
         t1 = Tag.create(tag='t1')
@@ -469,6 +520,31 @@ class TestSchemaMigration(ModelTestCase):
                 tag='t3')
 
         self.database.execute_sql('drop table tag_asdf')
+
+    def test_drop_table(self):
+        Tag.create(tag='t1')
+        migrate(self.migrator.drop_table('tag'))
+        self.assertFalse('tag' in self.database.get_tables())
+        # Missing table is fine when safe.
+        migrate(self.migrator.drop_table('tag', safe=True))
+
+    @requires_pglike
+    def test_drop_table_cascade(self):
+        self.database.execute_sql('CREATE VIEW tag_v AS SELECT * FROM tag')
+        migrate(self.migrator.drop_table('tag', cascade=True))
+        self.assertFalse('tag' in self.database.get_tables())
+
+    @skip_unless(IS_SQLITE, 'sqlite-specific')
+    def test_drop_table_cascade_sqlite(self):
+        self.assertRaises(NotImplementedError, migrate,
+                          self.migrator.drop_table('tag', cascade=True))
+
+    @requires_sqlite
+    def test_drop_table_schema(self):
+        self.database.execute_sql("ATTACH ':memory:' AS aux")
+        self.database.execute_sql('CREATE TABLE aux.dt (id INTEGER)')
+        migrate(self.migrator.drop_table('dt', schema='aux'))
+        self.assertFalse('dt' in self.database.get_tables('aux'))
 
     def test_add_index(self):
         # Create a unique index on first and last names.
@@ -819,7 +895,7 @@ class TestSchemaMigration(ModelTestCase):
         try:
             # Without the 'unique ' constraint term, the rebuild treats the
             # bare UNIQUE (a, b) as a column and raises OperationalError.
-            migrate(self.migrator.add_not_null('uc', 'a'))
+            migrate(self.migrator.add_not_null('uc', 'a', legacy=True))
             row = db.execute_sql('SELECT sql FROM sqlite_master '
                                  "WHERE type='table' AND name='uc'").fetchone()
             self.assertIn('UNIQUE', row[0].upper())
@@ -836,7 +912,7 @@ class TestSchemaMigration(ModelTestCase):
             db.execute_sql('INSERT INTO "ab" ("id", "x") VALUES (1, 10)')
             # 'ab' is a substring of "CREATE TABLE"; an unanchored rename
             # rewrites the keyword and produces a syntax error.
-            migrate(self.migrator.add_not_null('ab', 'x'))
+            migrate(self.migrator.add_not_null('ab', 'x', legacy=True))
             self.assertEqual(
                 db.execute_sql('SELECT "x" FROM "ab"').fetchall(), [(10,)])
         finally:
@@ -954,6 +1030,23 @@ class TestSchemaMigration(ModelTestCase):
         # Deleting the user will cascade to the associated page.
         User.delete().where(User.id == 'huey').execute()
         self.assertEqual(Page.select().count(), 0)
+
+    def test_from_database_proxy(self):
+        proxy = DatabaseProxy()
+        proxy.initialize(self.database)
+        migrator = SchemaMigrator.from_database(proxy)
+        self.assertTrue(type(migrator) is type(self.migrator))
+        self.assertTrue(migrator.database is self.database)
+        self.assertRaises(ValueError, SchemaMigrator.from_database,
+                          DatabaseProxy())
+
+    def test_migration_context(self):
+        with self.migrator.migration_context():
+            self.assertEqual(self.database.in_transaction(),
+                             self.migrator.transactional_ddl)
+        self.assertFalse(self.database.in_transaction())
+        with self.migrator.migration_context(atomic=False):
+            self.assertFalse(self.database.in_transaction())
 
     def test_make_index_name(self):
         self.assertEqual(make_index_name('table', ['column']), 'table_column')
