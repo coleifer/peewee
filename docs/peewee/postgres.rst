@@ -1138,7 +1138,7 @@ CRDB API
       :param callback: Callable accepting a single ``db`` argument.
           Must not manage the transaction itself. May be called multiple times.
       :param int max_attempts: Retry limit.
-      :param datetime system_time: Execute ``AS OF SYSTEM TIME`` with respect
+      :param datetime.datetime system_time: Execute ``AS OF SYSTEM TIME`` with respect
           to the given value.
       :param str priority: ``'low'``, ``'normal'``, or ``'high'``.
       :raises ExceededMaxAttempts: When ``max_attempts`` is exceeded.

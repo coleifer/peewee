@@ -775,7 +775,7 @@ from ``peewee`` to ensure correct type adaptation. For example, use
 
    Subclass of :class:`SqliteDatabase` using the APSW driver.
 
-   :param string database: filename of sqlite database
+   :param str database: filename of sqlite database
    :param connect_kwargs: keyword arguments passed to apsw when opening a connection
 
    .. method:: register_module(mod_name, mod_inst)
@@ -783,7 +783,7 @@ from ``peewee`` to ensure correct type adaptation. For example, use
       Register a virtual table module globally. See the `APSW virtual table
       documentation <https://rogerbinns.github.io/apsw/vtable.html>`_.
 
-      :param string mod_name: name to use for module
+      :param str mod_name: name to use for module
       :param object mod_inst: an object implementing the `Virtual Table <http://rogerbinns.github.io/apsw/vtable.html#vttable-class>`_ interface
 
    .. method:: unregister_module(mod_name)

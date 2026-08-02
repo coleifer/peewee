@@ -978,7 +978,7 @@ Signal callback signature:
       :param callable receiver: a callable that takes at least two parameters,
           a "sender", which is the Model subclass that triggered the signal, and
           an "instance", which is the actual model instance.
-      :param string name: a short alias
+      :param str name: a short alias
       :param Model sender: if specified, only instances of this model class will
           trigger the receiver callback.
 
@@ -995,7 +995,7 @@ Signal callback signature:
    .. method:: disconnect(receiver=None, name=None, sender=None)
 
       :param callable receiver: the callback to disconnect
-      :param string name: a short alias
+      :param str name: a short alias
       :param Model sender: disconnect model-specific handler.
 
       Disconnect the given receiver (or the receiver with the given name alias)
