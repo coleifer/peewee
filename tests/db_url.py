@@ -85,3 +85,9 @@ class TestDBUrl(BaseTestCase):
             connect('missing:///')
 
         self.assertRaises(RuntimeError, _test_scheme)
+
+    def test_missing_database_name(self):
+        # Two slashes instead of three: the name reads as the host.
+        self.assertRaises(ValueError, connect, 'postgres://dbname')
+        self.assertRaises(ValueError, connect, 'mysql://dbname')
+        self.assertRaises(ValueError, connect, 'postgres://host:5432')

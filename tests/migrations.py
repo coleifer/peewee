@@ -1485,7 +1485,8 @@ class TestMigrationRunnerCLI(BaseTestCase):
             fh.write("from peewee import *\n"
                      "db = DatabaseProxy()\n"
                      "db.initialize(SqliteDatabase(%r))\n"
-                     "raw = DatabaseProxy()\n" % dbfile)
+                     "raw = DatabaseProxy()\n"
+                     "deferred = SqliteDatabase(None)\n" % dbfile)
         sys.path.insert(0, self.dir)
         try:
             rc, out, err = run_cli('cli_proxy_mod.db', 'status',
@@ -1496,6 +1497,11 @@ class TestMigrationRunnerCLI(BaseTestCase):
                                    '-d', self.migdir)
             self.assertEqual(rc, 2)
             self.assertIn('uninitialized', err)
+
+            rc, out, err = run_cli('cli_proxy_mod.deferred', 'status',
+                                   '-d', self.migdir)
+            self.assertEqual(rc, 2)
+            self.assertIn('deferred', err)
         finally:
             sys.path.remove(self.dir)
             sys.modules.pop('cli_proxy_mod', None)
@@ -1567,6 +1573,24 @@ class TestMigrationRunnerCLI(BaseTestCase):
         rc, out, err = run_cli(self.url, 'status', '-d', self.migdir)
         self.assertEqual(rc, 0)
         self.assertIn('[?] 0001_gone', out)
+
+    def test_cli_bad_url(self):
+        # Two slashes instead of three: the database name lands in the
+        # host slot.
+        rc, out, err = run_cli('sqlite://cli.db', 'status', '-d', self.migdir)
+        self.assertEqual(rc, 2)
+        self.assertIn('cannot connect to "sqlite://cli.db"', err)
+
+        rc, out, err = run_cli('postgres://clidb', 'status',
+                               '-d', self.migdir)
+        self.assertEqual(rc, 2)
+        self.assertIn('no database name', err)
+        self.assertIn('postgres:///', err)
+
+        rc, out, err = run_cli('sqlitex:///cli.db', 'status',
+                               '-d', self.migdir)
+        self.assertEqual(rc, 2)
+        self.assertIn('Unrecognized', err)
 
     def test_cli_error_exit_codes(self):
         # Unreachable database exits 2, distinct from pending's exit 1.

@@ -514,7 +514,16 @@ def _resolve_models(spec):
 def _resolve_database(spec):
     if '://' in spec:
         from playhouse.db_url import connect
-        return connect(spec)
+        try:
+            database = connect(spec)
+        except (RuntimeError, ValueError) as exc:  # Malformed url.
+            raise MigrationError(str(exc))
+        try:
+            database.connect()
+            database.close()
+        except Exception as exc:
+            raise MigrationError('cannot connect to "%s": %s' % (spec, exc))
+        return database
     if os.path.isfile(spec):
         return SqliteDatabase(spec)
     if '.' not in spec:
@@ -545,6 +554,9 @@ def _resolve_database(spec):
         obj = obj.obj
     if not isinstance(obj, Database):
         raise MigrationError('"%s" did not resolve to a Database.' % spec)
+    if not obj.database:
+        raise MigrationError('"%s" is a deferred database. Initialize it, '
+                             'or point at one that is.' % spec)
     # "app.db" reads as a filename; say which interpretation won (a file
     # by that name, once created, would take precedence).
     if re.match(r'[^.]+\.(db|sqlite3?)$', spec):
@@ -643,7 +655,8 @@ def main(argv=None):
                 print('%s: %s' % (verb, name))
             if not names:
                 print('nothing to do.')
-    except (MigrationError, DatabaseError) as exc:
+    except (MigrationError, DatabaseError, InterfaceError,
+            ImproperlyConfigured) as exc:
         if args.verbose:
             traceback.print_exc()
         sys.stderr.write('error: %s\n' % exc)

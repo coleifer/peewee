@@ -81,6 +81,12 @@ def connect(url, unquote_password=False, unquote_user=False, **connect_params):
     if database_class is None:
         raise RuntimeError('Unrecognized or unsupported scheme: "%s".' %
                            parsed.scheme)
+    if not connect_kwargs.get('database'):
+        # Two slashes instead of three: the name reads as the host.
+        raise ValueError(
+            '"%s" has no database name. Local databases take three '
+            'slashes ("%s:///dbname"), remote ones "%s://host/dbname".'
+            % (url, parsed.scheme, parsed.scheme))
 
     return database_class(**connect_kwargs)
 
