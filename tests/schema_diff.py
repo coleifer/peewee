@@ -455,6 +455,24 @@ def down(migrator, db):
     migrator.migrate(migrator.drop_table('sd_field_defaults'))
 """
 
+# A field class from outside core peewee carries its import.
+IMPORT_BODY = """\
+from peewee import *
+from playhouse.sqlite_ext import JSONField
+
+def up(migrator, db):
+    class SdExt(Model):
+        data = JSONField()
+        class Meta:
+            database = db
+            table_name = 'sd_ext'
+    db.create_tables([SdExt])
+
+
+def down(migrator, db):
+    migrator.migrate(migrator.drop_table('sd_ext'))
+"""
+
 @skip_if(IS_CRDB, 'crdb introspection differs')
 class TestTemplate(ModelTestCase):
     requires = SD_MODELS
@@ -528,6 +546,16 @@ class TestTemplate(ModelTestCase):
 
         body = template(diff_models(self.database, [SdFieldDefaults]))
         self.assertEqual(strip_header(body), DEFAULTS_BODY)
+
+    def test_field_import(self):
+        # Import locally: module-level it would shadow core JSONField.
+        from playhouse.sqlite_ext import JSONField
+
+        class SdExt(TestModel):
+            data = JSONField()
+
+        body = template(diff_models(self.database, [SdExt]))
+        self.assertEqual(strip_header(body), IMPORT_BODY)
 
 
 @skip_if(IS_CRDB, 'crdb introspection differs')

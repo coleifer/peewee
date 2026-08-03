@@ -263,9 +263,7 @@ def _build_field_args(field, todos, targets=None, unbound=False):
 def _build_field(field, imports, todos, targets=None, unbound=False):
     cls = type(field)
     if cls.__module__ != 'peewee':
-        self.imports.add('from %s import %s' % (
-            cls.__module__,
-            cls.__name__))
+        imports.add('from %s import %s' % (cls.__module__, cls.__name__))
 
     args = _build_field_args(field, todos, targets, unbound)
     return '%s(%s)' % (cls.__name__, ', '.join(args))
@@ -276,7 +274,7 @@ def _is_implicit_id(field):
             field.column_name == 'id')
 
 
-def _model_source(model, imports, todos, targets):
+def _build_model(model, imports, todos, targets):
     meta = model._meta
     refs = dict(targets)
     refs[model] = "'self'"
@@ -315,7 +313,7 @@ def _model_source(model, imports, todos, targets):
     return lines
 
 
-def _stub_source(model, fields, imports):
+def _build_stub(model, fields, imports):
     # A frozen stand-in for an existing table: its name plus whichever
     # referenced columns are not the implicit id.
     meta = model._meta
@@ -333,7 +331,7 @@ def _stub_source(model, fields, imports):
     return lines
 
 
-def _add_index_source(idx):
+def _build_add_index(idx):
     return 'migrator.migrate(migrator.add_index(%r, %r%s))' % (
         idx.table,
         idx.columns,
@@ -383,10 +381,10 @@ def template(diff):
     plan = []
     for model in sorted(stubs, key=lambda m: m.__name__):
         fields = sorted(stubs[model].values(), key=lambda f: f._sort_key)
-        plan.append((_stub_source(model, fields, imports), []))
+        plan.append((_build_stub(model, fields, imports), []))
 
     for model in diff.create_tables:
-        up = _model_source(model, imports, todos, targets)
+        up = _build_model(model, imports, todos, targets)
         up.extend(['db.create_tables([%s])' % model.__name__, ''])
 
         meta = model._meta
@@ -409,7 +407,7 @@ def template(diff):
             todos.append('%s: dropped index %s cannot be restored by '
                          'down() (column dropped)' % (idx.table, idx.name))
         else:
-            down.append(_add_index_source(idx))
+            down.append(_build_add_index(idx))
         plan.append((up, down))
 
     qualified = set()
@@ -441,7 +439,7 @@ def template(diff):
             continue
         up = []
         if (idx.table, idx.columns, idx.unique) not in auto_indexed:
-            up.append(_add_index_source(idx))
+            up.append(_build_add_index(idx))
         down = ['migrator.migrate(migrator.drop_index(%r, %r))' %
                 (idx.table, make_index_name(idx.table, idx.columns))]
         plan.append((up, down))
@@ -572,7 +570,7 @@ def _resolve_database(spec):
     if not obj.database:
         raise MigrationError('"%s" is a deferred database. Initialize it, '
                              'or point at one that is.' % spec)
-    # "app.db" reads as a filename; say which interpretation won (a file
+    # "app.db" reads as a filename. Say which interpretation won (a file
     # by that name, once created, would take precedence).
     if re.match(r'[^.]+\.(db|sqlite3?)$', spec):
         sys.stderr.write('note: no file "%s" exists; resolved as module '

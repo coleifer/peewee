@@ -923,7 +923,7 @@ class TestSchemaMigration(ModelTestCase):
                        '"x" INTEGER)')
         try:
             db.execute_sql('INSERT INTO "ab" ("id", "x") VALUES (1, 10)')
-            # 'ab' is a substring of "CREATE TABLE"; an unanchored rename
+            # 'ab' is a substring of "CREATE TABLE". An unanchored rename
             # rewrites the keyword and produces a syntax error.
             migrate(self.migrator.add_not_null('ab', 'x', legacy=True))
             self.assertEqual(
@@ -1508,7 +1508,7 @@ class TestMigrationRunnerCLI(BaseTestCase):
 
     def test_cli_ambiguous_file_module_spec(self):
         # "app.db" reads as both a filename and a dotted module path. The
-        # module interpretation wins when no such file exists; say so.
+        # module interpretation wins when no such file exists. Say so.
         dbfile = os.path.join(self.dir, 'clash.db')
         with open(os.path.join(self.dir, 'cli_clash_mod.py'), 'w') as fh:
             fh.write("from peewee import *\n"
