@@ -1610,6 +1610,23 @@ class TestMigrationRunnerCLI(BaseTestCase):
         self.assertIn('error:', err)
 
 
+CLI_INITIAL_BODY = """\
+from peewee import *
+
+def up(migrator, db):
+    class Widget(Model):
+        name = CharField(unique=True)
+        class Meta:
+            database = db
+            table_name = 'widget'
+    db.create_tables([Widget])
+
+
+def down(migrator, db):
+    migrator.migrate(migrator.drop_table('widget'))
+"""
+
+
 class TestMigrationsCLIDiff(BaseTestCase):
     def setUp(self):
         super(TestMigrationsCLIDiff, self).setUp()
@@ -1633,6 +1650,33 @@ class TestMigrationsCLIDiff(BaseTestCase):
         sys.modules.pop('cli_diff_models', None)
         shutil.rmtree(self.dir, ignore_errors=True)
         super(TestMigrationsCLIDiff, self).tearDown()
+
+    def test_cli_initial(self):
+        # initial assumes an empty database: no introspection, so it also
+        # works against a database that already has the schema.
+        rc, out, err = run_cli(self.url, 'initial', 'cli_diff_models',
+                               '-d', self.migdir)
+        self.assertEqual(rc, 0)
+        path = os.path.join(self.migdir, '0001_initial.py')
+        self.assertEqual(out, '%s\n' % path)
+        with open(path) as fh:
+            body = fh.read()
+        # Compare below the timestamped header comment.
+        self.assertEqual(body.split('\n', 1)[1], CLI_INITIAL_BODY)
+
+        rc, out, err = run_cli(self.url, 'up', '-d', self.migdir)
+        self.assertEqual(rc, 0)
+        self.assertEqual(out, 'applied: 0001_initial\n')
+        rc, out, err = run_cli(self.url, 'diff', 'cli_diff_models',
+                               '-d', self.migdir)
+        self.assertEqual(out, 'schema matches models.\n')
+
+        # A second initial refuses.
+        rc, out, err = run_cli(self.url, 'initial', '-m', 'cli_diff_models',
+                               '-d', self.migdir)
+        self.assertEqual(rc, 2)
+        self.assertEqual(err, 'error: migrations already exist in "%s".\n'
+                         % self.migdir)
 
     def test_cli_diff_and_generate(self):
         # diff: field-less base skipped and reported, drift printed.

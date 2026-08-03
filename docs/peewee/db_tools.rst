@@ -634,14 +634,14 @@ Generate the initial migration from the models:
 
 .. code-block:: console
 
-   $ pwmigrate sqlite:///app.db -m models create initial
+   $ pwmigrate sqlite:///app.db -m models initial
    migrations/0001_initial.py
 
 Equivalent, but passing dotted-path to :class:`Database` instance:
 
 .. code-block:: console
 
-   $ pwmigrate models.database -m models create initial
+   $ pwmigrate models.database -m models initial
    migrations/0001_initial.py
 
 The generated file is a python script. The model being created is recorded here
@@ -670,7 +670,7 @@ Apply it:
 
 .. code-block:: console
 
-   $ pwmigrate models.db up
+   $ pwmigrate models.database up
    applied: 0001_initial
 
 Existing database
@@ -686,21 +686,19 @@ When the database and models already agree there is nothing to migrate,
 and migrations begin with the next model change (below).
 
 To capture the current schema as migration 0001, so new environments can be
-built by ``up``, generate it against an empty scratch database and ``fake`` it
-on the live one:
+built by ``up``, generate it with ``initial``, which assumes an empty
+database, and ``fake`` it on the live one:
 
 .. code-block:: console
 
-   $ pwmigrate models.database -m models create initial
+   $ pwmigrate models.database -m models initial
    migrations/0001_initial.py
    $ pwmigrate models.database fake  # Fake it against real database.
    faked: 0001_initial
    $ pwmigrate sqlite:///testing.db up
    applied: 0001_initial
 
-``fake`` records migrations as applied without running them. The scratch
-database can be sqlite regardless of your backend, a create-only
-migration renders models and nothing else.
+``fake`` records migrations as applied without running them.
 
 Changing models
 ^^^^^^^^^^^^^^^
@@ -718,9 +716,9 @@ Add a field:
 
 .. code-block:: console
 
-   $ pwmigrate sqlite:///app.db -m models diff
+   $ pwmigrate models.database -m models diff
    add column user.karma
-   $ pwmigrate sqlite:///app.db -m models create add_karma
+   $ pwmigrate models.database -m models create add_karma
    migrations/0002_add_karma.py
 
 The generated ``up()`` adds the column, with a placeholder where the
@@ -739,9 +737,9 @@ Replace ``IntegerField(...)`` with ``IntegerField(default=0)``, then:
 
 .. code-block:: console
 
-   $ pwmigrate sqlite:///app.db up
+   $ pwmigrate models.database up
    applied: 0002_add_karma
-   $ pwmigrate sqlite:///app.db status
+   $ pwmigrate models.database status
    [x] 0001_initial  2026-08-02 21:28:47
    [x] 0002_add_karma  2026-08-02 21:28:48
 
@@ -787,11 +785,77 @@ operations.
 Command line
 ^^^^^^^^^^^^
 
+.. code-block:: shell
+
+   # List migrations and when each was applied:
+   pwmigrate app.settings.db status
+
+   # Apply pending migrations, all or up through a target:
+   pwmigrate app.settings.db up
+   pwmigrate app.settings.db up 0002_add_karma
+
+   # Revert the most recent migration, or back through a target:
+   pwmigrate app.settings.db down
+   pwmigrate app.settings.db down 0002_add_karma
+
+   # Generate the first migration from the models, assuming an empty db:
+   pwmigrate app.settings.db -m app.models initial
+
+   # Write a skeleton migration, or generate it from the model diff:
+   pwmigrate app.settings.db create "add karma"
+   pwmigrate app.settings.db -m app.models create "add karma"
+
+   # Print schema drift against the models:
+   pwmigrate app.settings.db -m app.models diff
+
+   # Record pending migrations as applied without running them:
+   pwmigrate app.settings.db fake
+
 The database is given as:
 
 * dotted path to a :class:`Database` instance
 * :ref:`db_url <db-url>` string
 * a path to a sqlite database file
+
+Commands:
+
++-------------+------------------------------------------------------------+
+| Command     | Meaning                                                    |
++=============+============================================================+
+| ``status``  | List migrations and applied timestamps. ``[?]`` marks a    |
+|             | history row whose file is missing.                         |
++-------------+------------------------------------------------------------+
+| ``up``      | Apply pending migrations in order, stopping after          |
+|             | ``target`` when given.                                     |
++-------------+------------------------------------------------------------+
+| ``down``    | Revert the most recent migration, or everything back       |
+|             | through ``target``, newest first.                          |
++-------------+------------------------------------------------------------+
+| ``initial`` | Generate the first migration from the models, assuming an  |
+|             | empty database.                                            |
++-------------+------------------------------------------------------------+
+| ``create``  | Write a numbered migration file. With ``-m``, generate it  |
+|             | from the schema diff.                                      |
++-------------+------------------------------------------------------------+
+| ``fake``    | Record pending migrations as applied without running them, |
+|             | stopping after ``target`` when given.                      |
++-------------+------------------------------------------------------------+
+| ``diff``    | Print schema differences against a models module.          |
++-------------+------------------------------------------------------------+
+
+Command-line options:
+
++--------+---------------------------------------------------+--------------------+
+| Option | Meaning                                           | Example            |
++========+===================================================+====================+
+| ``-m`` | Models module for ``create`` and ``diff``         | ``-m app.models``  |
++--------+---------------------------------------------------+--------------------+
+| ``-d`` | Migrations directory (default ``migrations``)     | ``-d db/schema``   |
++--------+---------------------------------------------------+--------------------+
+| ``-t`` | History table name (default ``schema_migration``) |                    |
++--------+---------------------------------------------------+--------------------+
+| ``-v`` | Echo SQL as it executes                           |                    |
++--------+---------------------------------------------------+--------------------+
 
 ``status`` exits 0 when the database is current and 1 when migrations
 are pending, so it can gate a deploy. Validation and database errors
@@ -812,12 +876,8 @@ Behavior:
 * On SQLite, ``foreign_keys`` pragma is turned off for the duration of each
   migration and restored afterwards to prevent ``ON DELETE CASCADE`` being
   triggered during table rebuilds (required for some operations).
-* ``down()`` reverts the most recent migration. Given a target it reverts
-  everything back through the target, newest first. A migration that does
-  not define ``down()`` cannot be reverted (there is no requirement to
-  write one).
-* ``fake()`` can be used to "fake" run an initial migration, in the event you
-  are working from a pre-existing database schema.
+* A migration that does not define ``down()`` cannot be reverted (there
+  is no requirement to write one).
 
 Python interface
 ^^^^^^^^^^^^^^^^
@@ -944,12 +1004,14 @@ Generating a migration from a diff
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 The :ref:`migration-runner` can generate a migration file by comparing your
-application's models against the database schema, using the following two
+application's models against the database schema, using the following
 commands:
 
 * ``diff``: prints simple representation of differences between code and
   database schema.
 * ``create --models ...``: writes the generated migration.
+* ``initial``: writes the first migration without consulting the
+  database, assuming it is empty.
 
 Example:
 

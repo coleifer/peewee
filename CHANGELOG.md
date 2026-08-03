@@ -13,7 +13,8 @@ In which we learn to migrate (somewhat).
   python files defining `up(migrator, db)` and optionally `down(...)`.
   Migrations are applied in numeric order a-la Django, and stored by name in a
   history table. CLI via `pwmigrate` accepting `status`, `up`, `down`,
-  `create`, `fake` and `diff`. To run from python, `migrations.run(db)`.
+  `initial`, `create`, `fake` and `diff`. To run from python,
+  `migrations.run(db)`.
 * Add very basic `playhouse.schema_diff` for comparing models against the
   schema and reporting differences (tables to create, columns added or removed,
   indexes added or removed).

@@ -30,6 +30,7 @@ import re
 import sys
 
 from peewee import *
+from peewee import sort_models
 from playhouse.migrate import SchemaMigrator
 from playhouse.migrate import make_index_name
 
@@ -567,10 +568,12 @@ def _resolve_database(spec):
 
 
 def _resolve_diff(database, spec):
-    from playhouse.schema_diff import diff_models
+    from playhouse.schema_diff import SchemaDiff, diff_models
     models, skipped = _resolve_models(spec)
     for name in skipped:
         sys.stderr.write('skipped: %s (no fields)\n' % name)
+    if database is None:  # initial: assume an empty database.
+        return SchemaDiff(sort_models(models), [], [], [], [])
     try:
         return diff_models(database, models)
     except ValueError as exc:
@@ -585,18 +588,17 @@ def main(argv=None):
         prog = 'python -m playhouse.migrations'
     parser = argparse.ArgumentParser(
         prog=prog, description='peewee migration runner')
-    parser.add_argument('database', help='db url (e.g. sqlite:///app.db or '
-                        'postgres://localhost/app), path to a sqlite file, '
-                        'or dotted path to a Database instance (e.g. '
-                        'myapp.settings.db)')
+    parser.add_argument('database', help='dotted path to a Database '
+                        'instance (e.g. myapp.settings.db), db url (e.g. '
+                        'postgres:///app), or path to a sqlite file')
     parser.add_argument('command',
-                        choices=('status', 'up', 'down', 'create', 'fake',
-                                 'diff'))
+                        choices=('status', 'up', 'down', 'initial', 'create',
+                                 'fake', 'diff'))
     parser.add_argument('target', nargs='?',
                         help='migration name: stop after it (up), revert '
                         'back through it (down), record through it (fake), '
-                        'or describe it (create). For diff, the models '
-                        'module')
+                        'or describe it (create). For initial and diff, '
+                        'the models module')
     parser.add_argument('-d', '--directory', default='migrations',
                         help='migrations directory (default: migrations)')
     parser.add_argument('-t', '--table', default='schema_migration',
@@ -615,14 +617,21 @@ def main(argv=None):
         peewee_logger.setLevel(logging.DEBUG)
     if args.command == 'create' and not args.target:
         parser.error('create requires a migration name.')
-    if args.command == 'diff' and not (args.target or args.models):
-        parser.error('diff requires a models module.')
+    if args.command in ('initial', 'diff') and \
+       not (args.target or args.models):
+        parser.error('%s requires a models module.' % args.command)
 
     database = None
     try:
         database = _resolve_database(args.database)
         runner = Runner(database, args.directory, args.table)
-        if args.command == 'create':
+        if args.command == 'initial':
+            if runner.migrations():
+                raise MigrationError('migrations already exist in "%s".'
+                                     % args.directory)
+            diff = _resolve_diff(None, args.target or args.models)
+            print(runner.create('initial', body=template(diff)))
+        elif args.command == 'create':
             if args.models:
                 diff = _resolve_diff(database, args.models)
                 if not diff:
