@@ -14,6 +14,7 @@ from peewee import (
     IntegerField,
     Model,
     ModelAlias,
+    ModelDelete,
     ModelSelect,
     NodeList,
     NoopModelSelect,
@@ -87,6 +88,12 @@ for u in User.alias().select():
 
 assert_type(User.select().get(), User)
 assert_type(User.select().get_or_none(), User | None)
+
+# delete() constructs a DELETE query and resolves only on the class. On an
+# instance it raises TypeError at runtime (delete_instance() is the instance
+# path), and the descriptor makes that a type error as well.
+assert_type(User.delete(), ModelDelete)
+User().delete()  # type: ignore
 
 
 # A `database=` argument accepts a real Database or a DatabaseProxy stand-in.

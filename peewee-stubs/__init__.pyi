@@ -1842,6 +1842,12 @@ class _BoundModelsContext(_callable_context_manager):
         self, exc_type: type[BaseException] | None, exc_val: BaseException | None, exc_tb: TracebackType | None
     ) -> None: ...
 
+# Mirrors the runtime classmethod_only descriptor: no instance overload, so
+# instance access is an error rather than the TypeError it raises at runtime.
+@type_check_only
+class _classmethod_only(Generic[_F]):
+    def __get__(self, instance: None, owner: type) -> _F: ...
+
 class Model(metaclass=ModelBase):
     __data__: Incomplete
     __rel__: Incomplete
@@ -1867,8 +1873,7 @@ class Model(metaclass=ModelBase):
     def replace_many(cls, rows, fields=None): ...
     @classmethod
     def raw(cls, sql, *params) -> ModelRaw: ...
-    @classmethod
-    def delete(cls) -> ModelDelete: ...
+    delete: _classmethod_only[Callable[[], ModelDelete]]
     @classmethod
     def create(cls, **query) -> Self: ...
     @classmethod
