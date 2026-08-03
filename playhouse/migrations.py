@@ -213,7 +213,11 @@ def _build_field_args(field, todos, targets=None, unbound=False):
     # Populate FK-only attrs first.
     if isinstance(field, ForeignKeyField):
         rel_model = field.rel_model
-        rel_name = targets[rel_model]
+        # 'self' only means something inside a class body.
+        if not unbound and rel_model is field.model:
+            rel_name = "'self'"
+        else:
+            rel_name = targets[rel_model]
         args.append(rel_name)
         if unbound or field.rel_field is not rel_model._meta.primary_key:
             # Destination field needs to be explicitly specified when the
@@ -276,15 +280,13 @@ def _is_implicit_id(field):
 
 def _build_model(model, imports, todos, targets):
     meta = model._meta
-    refs = dict(targets)
-    refs[model] = "'self'"
     lines = ['class %s(Model):' % model.__name__]
     for field in meta.sorted_fields:
         if _is_implicit_id(field):
             continue
         lines.append('    %s = %s' % (
             field.name,
-            _build_field(field, imports, todos, refs)))
+            _build_field(field, imports, todos, targets)))
 
     lines.append('    class Meta:')
     lines.append('        database = db')
@@ -373,9 +375,10 @@ def template(diff):
         rel = field.rel_model
         if rel in created:
             continue
-        fields = stubs.setdefault(rel, {})
+        if rel not in stubs:
+            stubs[rel] = {}  # A stub renders even when only its name is used.
         if not _is_implicit_id(field.rel_field):
-            fields[field.rel_field.name] = field.rel_field
+            stubs[rel][field.rel_field.name] = field.rel_field
     targets = {model: model.__name__ for model in created | set(stubs)}
 
     plan = []
