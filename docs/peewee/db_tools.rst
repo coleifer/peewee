@@ -658,8 +658,8 @@ Equivalent to above, passing the database URL instead:
    migrations/0001_initial.py
 
 The generated file is a python script. The model being created is recorded here
-as a "stub" so that future changes to the application code do not affect the
-migration.
+as a frozen copy so that future changes to the application code do not affect
+the migration.
 
 .. code-block:: python
 
@@ -758,10 +758,9 @@ The generated ``up()`` adds the column:
    def down(migrator, db):
        migrator.migrate(migrator.drop_column('user', 'karma'))
 
-.. note::
-   Peewee's migration will populate ``default=`` for basic value types (``str``,
-   ``int``, ``float``, ``bool``). Anything else will be marked with a TODO
-   comment at the top of the migration script.
+Peewee's migration will populate ``default=`` for basic value types (``str``,
+``int``, ``float``, ``bool``). Anything else will be marked with a TODO
+comment at the top of the migration script.
 
 Run the migration:
 
@@ -825,11 +824,15 @@ Example usage:
    # Fake the initial migration (if models pre-date peewee migrations).
    pwmigrate app.settings.db fake
 
-   # Run the initial migration.
+   # Or, run the initial migration if starting from a clean db.
    pwmigrate app.settings.db up
 
    # List migrations and when each was applied:
    pwmigrate app.settings.db status
+
+   # Write a skeleton migration, or generate it from the model diff:
+   pwmigrate app.settings.db create "add karma"
+   pwmigrate app.settings.db -m app.models create "add karma"
 
    # Apply pending migrations, all or up through a target:
    pwmigrate app.settings.db up
@@ -838,10 +841,6 @@ Example usage:
    # Revert the most recent migration, or back through a target:
    pwmigrate app.settings.db down
    pwmigrate app.settings.db down 0002_add_karma
-
-   # Write a skeleton migration, or generate it from the model diff:
-   pwmigrate app.settings.db create "add karma"
-   pwmigrate app.settings.db -m app.models create "add karma"
 
    # Print schema drift against the models:
    pwmigrate app.settings.db -m app.models diff
@@ -1000,7 +999,7 @@ ignored.
 .. code-block:: pycon
 
    >>> from playhouse.schema_diff import diff_models
-   >>> diff = diff_models(db, [User, Tweet])
+   >>> diff = diff_models(db, [User, Tweet, Note])
    >>> bool(diff)
    True
    >>> print(diff)
@@ -1054,13 +1053,13 @@ Example:
 .. code-block:: console
 
    # View what changes were found between app models and db schema.
-   $ pwmigrate app.settings.db diff app.models
+   $ pwmigrate app.settings.db -m app.models diff
    create table note
    add column user.karma
    drop column user.email
 
    # Generate the migration.
-   $ pwmigrate app.settings.db create "add karma" --models app.models
+   $ pwmigrate app.settings.db -m app.models create "add karma"
    migrations/0007_add_karma.py
 
 The same flow in python:
@@ -1071,7 +1070,7 @@ The same flow in python:
    from playhouse.schema_diff import diff_models
 
    runner = Runner(db)
-   diff = diff_models(db, [User, Tweet])
+   diff = diff_models(db, [User, Tweet, Note])
    if diff:
        runner.create('add karma', body=template(diff))
 
@@ -1087,7 +1086,7 @@ migration:
 
 .. code-block:: python
 
-   # Generated from a schema diff on 2026-07-03 09:15.
+   # Generated from a schema diff on 2026-08-03 16:17.
    from peewee import *
 
    # TODO: user.email: dropped column cannot be restored by down()
@@ -1106,7 +1105,7 @@ migration:
                table_name = 'note'
        db.create_tables([Note])
 
-       migrator.migrate(migrator.add_column('user', 'karma', IntegerField(...)))
+       migrator.migrate(migrator.add_column('user', 'karma', IntegerField(default=0)))
        migrator.migrate(migrator.add_index('tweet', ('user_id', 'flags')))
        migrator.migrate(migrator.drop_column('user', 'email'))
 
@@ -1244,16 +1243,16 @@ ready-to-use Peewee model code. If you have an existing database, running
 .. code-block:: shell
 
    # Introspect a Postgresql database and write models to a file:
-   python -m pwiz -e postgresql -u postgres my_db > models.py
+   pwiz -e postgresql -u postgres my_db > models.py
 
    # Introspect a SQLite database:
-   python -m pwiz -e sqlite path/to/my.db
+   pwiz -e sqlite path/to/my.db
 
    # Introspect a MySQL database (prompts for password):
-   python -m pwiz -e mysql -u root -P my_db
+   pwiz -e mysql -u root -P my_db
 
    # Introspect only specific tables:
-   python -m pwiz -e postgresql my_db -t user,tweet,follow
+   pwiz -e postgresql my_db -t user,tweet,follow
 
 
 Command-line options:

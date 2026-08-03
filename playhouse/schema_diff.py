@@ -11,7 +11,7 @@ Detects basic changes:
     Renames are shown as an add + drop.
 * indexes to add/drop
     Index diff looks at columns being indexed and unique flag. Partial and
-    expressions indexes are compared by name only.
+    expression indexes are compared by name only.
 
 Usage::
 
@@ -28,7 +28,7 @@ Each attribute of the result maps directly onto a SchemaMigrator call:
 * ``drop_indexes``: list of :class:`IndexDiff`
 """
 import re
-from collections import namedtuple as nt
+from collections import namedtuple
 
 from peewee import *
 from peewee import sort_models
@@ -36,7 +36,15 @@ from peewee import sort_models
 __all__ = ['IndexDiff', 'SchemaDiff', 'diff_models']
 
 
-class IndexDiff(nt('IndexDiff', ('table', 'name', 'columns', 'unique'))):
+_IndexDiff = namedtuple('_IndexDiff', (
+    'table',
+    'name',
+    'columns',
+    'unique'))
+
+class IndexDiff(_IndexDiff):
+    __slots__ = ()
+
     def display(self, op):
         if self.columns is None:
             return '%s index %s.%s' % (op, self.table, self.name)
@@ -45,9 +53,14 @@ class IndexDiff(nt('IndexDiff', ('table', 'name', 'columns', 'unique'))):
             ', '.join(self.columns), ' unique' if self.unique else '')
 
 
-class SchemaDiff(nt('SchemaDiff', ('create_tables', 'add_columns',
-                                   'drop_columns', 'add_indexes',
-                                   'drop_indexes'))):
+_SchemaDiff = namedtuple('_SchemaDiff', (
+    'create_tables',
+    'add_columns',
+    'drop_columns',
+    'add_indexes',
+    'drop_indexes'))
+
+class SchemaDiff(_SchemaDiff):
     __slots__ = ()
 
     def __bool__(self):

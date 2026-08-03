@@ -573,8 +573,6 @@ class TestTemplateRoundTrip(ModelTestCase):
 
         models = [SdUser3, SdTag, SdTweet, SdPoints]
         body = template(diff_models(self.database, models))
-        self.assertNotIn('(...)', body)
-
         self.apply(body, 'auto')
         self.assertFalse(diff_models(self.database, models))
 

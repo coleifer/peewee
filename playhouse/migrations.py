@@ -243,7 +243,6 @@ def _is_implicit_id(field):
 
 
 def _field_source(field, imports, todos, targets=None, unbound=False):
-    # Defaults are the implementor's to fill in.
     cls = type(field)
     if cls.__module__ != 'peewee':
         imports.add('from %s import %s' % (cls.__module__, cls.__name__))
@@ -273,7 +272,7 @@ def _field_source(field, imports, todos, targets=None, unbound=False):
     return '%s(%s)' % (cls.__name__, ', '.join(args))
 
 
-def _model_source(model, todos, imports, targets):
+def _model_source(model, imports, todos, targets):
     meta = model._meta
     refs = dict(targets)
     refs[model] = "'self'"
@@ -333,13 +332,22 @@ def _add_index_source(idx):
         ', unique=True' if idx.unique else '')
 
 
+def _block(fn, lines):
+    while lines and not lines[-1]:
+        lines.pop()
+    if not lines:
+        return 'def %s(migrator, db):\n    pass' % fn
+    return 'def %s(migrator, db):\n%s' % (fn, '\n'.join(
+        '    %s' % line if line else '' for line in lines))
+
+
 def template(diff):
     """
     Render a playhouse.schema_diff.SchemaDiff as a migration-file body.
     Fully-determined changes render as runnable code. Foreign keys
     reference a model created in the file, 'self', or a frozen stub of
-    the target table. Anything else needing a definition renders with a
-    (...) placeholder or a TODO comment.
+    the target table. Anything else needing a definition is flagged
+    with a TODO comment.
     """
     todos, imports = [], set()
 
@@ -369,7 +377,7 @@ def template(diff):
         plan.append((_stub_source(model, fields, imports), []))
 
     for model in diff.create_tables:
-        up = _model_source(model, todos, imports, targets)
+        up = _model_source(model, imports, todos, targets)
         up.extend(['db.create_tables([%s])' % model.__name__, ''])
 
         meta = model._meta
@@ -446,14 +454,6 @@ def template(diff):
     for _, d in reversed(plan):
         down.extend(d)
 
-    def block(fn, lines):
-        while lines and not lines[-1]:
-            lines.pop()
-        if not lines:
-            return 'def %s(migrator, db):\n    pass' % fn
-        return 'def %s(migrator, db):\n%s' % (fn, '\n'.join(
-            '    %s' % line if line else '' for line in lines))
-
     ts = datetime.datetime.now().strftime('%Y-%m-%d %H:%M')
     out = ['# Generated from a schema diff on %s.' % ts,
            'from peewee import *']
@@ -463,10 +463,10 @@ def template(diff):
     out.extend('# TODO: %s' % todo for todo in todos)
     if todos:
         out.append('')
-    out.append(block('up', up))
+    out.append(_block('up', up))
     out.append('')
     out.append('')
-    out.append(block('down', down))
+    out.append(_block('down', down))
     return '\n'.join(out) + '\n'
 
 
@@ -507,8 +507,8 @@ def _resolve_models(spec):
         if _is_model(value) and value is not Model and \
            value.__module__ == module.__name__:
             fields = value._meta.sorted_fields
-            if len(fields) == 1 and type(fields[0]) is AutoField and \
-               fields[0].name == 'id' and not value._meta.indexes:
+            if len(fields) == 1 and _is_implicit_id(fields[0]) and \
+               not value._meta.indexes:
                 skipped.append(value.__name__)
             else:
                 models.append(value)
@@ -652,9 +652,16 @@ def main(argv=None):
             files = runner.migrations()
             rows = runner.status()
             for name, applied in rows:
-                marker = ' ' if not applied else 'x' if name in files else '?'
-                ts = applied.strftime('  %Y-%m-%d %H:%M:%S') if applied else ''
-                print('[%s] %s%s' % (marker, name, ts))
+                if not applied:
+                    marker = ' '
+                elif name in files:
+                    marker = 'x'
+                else:
+                    marker = '?'
+                line = '[%s] %s' % (marker, name)
+                if applied:
+                    line += '  ' + applied.strftime('%Y-%m-%d %H:%M:%S')
+                print(line)
             # Exit 1 when pending, so status can gate a deploy.
             if any(not applied for _, applied in rows):
                 return 1
