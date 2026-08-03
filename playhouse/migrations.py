@@ -322,13 +322,15 @@ def _stub_source(model, fields, imports):
     lines.append('        table_name = %r' % meta.table_name)
     if meta.schema:
         lines.append('        schema = %r' % meta.schema)
+    lines.append('')
     return lines
 
 
 def _add_index_source(idx):
-    return ('migrator.migrate(migrator.add_index(%r, %r%s))'
-            % (idx.table, idx.columns,
-               ', unique=True' if idx.unique else ''))
+    return 'migrator.migrate(migrator.add_index(%r, %r%s))' % (
+        idx.table,
+        idx.columns,
+        ', unique=True' if idx.unique else '')
 
 
 def template(diff):
@@ -341,9 +343,7 @@ def template(diff):
     """
     todos, imports = [], set()
 
-    # Foreign keys render against a class in the generated file: the
-    # model created here, 'self' in its own class body, or a frozen stub
-    # of the existing table, declared ahead of everything else.
+    # Ensure all FK reference targets exist, either as classes or stubs.
     fks = []
     for model in diff.create_tables:
         fks.extend(f for f in model._meta.sorted_fields
@@ -363,27 +363,27 @@ def template(diff):
             fields[field.rel_field.name] = field.rel_field
     targets = {model: model.__name__ for model in created | set(stubs)}
 
-    # (up lines, down lines) per operation; down() reads the plan in reverse.
     plan = []
     for model in sorted(stubs, key=lambda m: m.__name__):
         fields = sorted(stubs[model].values(), key=lambda f: f._sort_key)
-        plan.append((_stub_source(model, fields, imports) + [''], []))
+        plan.append((_stub_source(model, fields, imports), []))
 
     for model in diff.create_tables:
         up = _model_source(model, todos, imports, targets)
         up.extend(['db.create_tables([%s])' % model.__name__, ''])
+
         meta = model._meta
-        down = ['migrator.migrate(migrator.drop_table(%r%s))'
-                % (meta.table_name,
-                   ', schema=%r' % meta.schema if meta.schema else '')]
-        plan.append((up, down))
+        down = 'migrator.migrate(migrator.drop_table(%r%s))' % (
+            meta.table_name,
+            ', schema=%r' % meta.schema if meta.schema else '')
+        plan.append((up, [down]))
 
     # Index drops go first: a unique flip or a rename re-uses the old
     # index name, and sqlite refuses to drop an indexed column.
     dropped = set(diff.drop_columns)
     for idx in diff.drop_indexes:
-        up = ['migrator.migrate(migrator.drop_index(%r, %r))'
-              % (idx.table, idx.name)]
+        up = ['migrator.migrate(migrator.drop_index(%r, %r))' %
+              (idx.table, idx.name)]
         down = []
         if idx.columns is None:
             todos.append('%s: dropped index %s (partial/expression) cannot '
@@ -400,25 +400,17 @@ def template(diff):
         meta = field.model._meta
         if meta.schema:
             qualified.add(meta.table_name)
-        if isinstance(field, ForeignKeyField):
-            source = _field_source(field, imports, todos, targets,
-                                   unbound=True)
-            if not field.null:
-                todos.append('%s.%s: not-null column needs a default or '
-                             'allow_not_null backfill'
-                             % (meta.table_name, field.column_name))
-        else:
-            cls = type(field)
-            if cls.__module__ != 'peewee':
-                imports.add('from %s import %s' % (cls.__module__,
-                                                   cls.__name__))
-            source = '%s(%s)' % (cls.__name__,
-                                 ', '.join(_flag_args(field, todos)))
+
+        source = _field_source(field, imports, todos, targets, unbound=True)
+        if not field.null and field.default is None:
+            todos.append('%s.%s: not-null column needs a default or '
+                         'allow_not_null backfill' %
+                         (meta.table_name, field.column_name))
         plan.append((
-            ['migrator.migrate(migrator.add_column(%r, %r, %s))'
-             % (meta.table_name, field.column_name, source)],
-            ['migrator.migrate(migrator.drop_column(%r, %r))'
-             % (meta.table_name, field.column_name)]))
+            ['migrator.migrate(migrator.add_column(%r, %r, %s))' %
+             (meta.table_name, field.column_name, source)],
+            ['migrator.migrate(migrator.drop_column(%r, %r))' %
+             (meta.table_name, field.column_name)]))
 
     # add_column() creates the index for an index=True/unique=True field
     # itself, while `down()` drops the index before the column.
@@ -433,20 +425,20 @@ def template(diff):
         up = []
         if (idx.table, idx.columns, idx.unique) not in auto_indexed:
             up.append(_add_index_source(idx))
-        down = ['migrator.migrate(migrator.drop_index(%r, %r))'
-                % (idx.table, make_index_name(idx.table, idx.columns))]
+        down = ['migrator.migrate(migrator.drop_index(%r, %r))' %
+                (idx.table, make_index_name(idx.table, idx.columns))]
         plan.append((up, down))
 
     for table, name in diff.drop_columns:
-        plan.append((['migrator.migrate(migrator.drop_column(%r, %r))'
-                      % (table, name)], []))
-        todos.append('%s.%s: dropped column cannot be restored by down()'
-                     % (table, name))
+        plan.append((['migrator.migrate(migrator.drop_column(%r, %r))' %
+                      (table, name)], []))
+        todos.append('%s.%s: dropped column cannot be restored by down()' %
+                     (table, name))
 
     if qualified:
         todos.append('schema-qualified tables (%s): column/index '
-                     'operations are emitted unqualified. Qualify by hand'
-                     % ', '.join(sorted(qualified)))
+                     'operations are emitted unqualified. Qualify by hand' %
+                     ', '.join(sorted(qualified)))
 
     up, down = [], []
     for u, _ in plan:
@@ -462,9 +454,10 @@ def template(diff):
         return 'def %s(migrator, db):\n%s' % (fn, '\n'.join(
             '    %s' % line if line else '' for line in lines))
 
-    out = ['# Generated from a schema diff on %s.'
-           % datetime.datetime.now().strftime('%Y-%m-%d %H:%M'),
+    ts = datetime.datetime.now().strftime('%Y-%m-%d %H:%M')
+    out = ['# Generated from a schema diff on %s.' % ts,
            'from peewee import *']
+
     out.extend(sorted(imports))
     out.append('')
     out.extend('# TODO: %s' % todo for todo in todos)
