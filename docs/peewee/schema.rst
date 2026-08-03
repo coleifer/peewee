@@ -54,7 +54,7 @@ multiple times. To disable this, pass ``safe=False``.
    db.drop_tables([User, Tweet, Favorite], safe=False)
 
 Pass ``cascade=True`` on Postgresql to drop dependent objects and let the
-database handle ordering (MySQL parses but ignores CASCADE):
+database handle dependency resolution:
 
 .. code-block:: python
 
@@ -99,8 +99,8 @@ Truncating a table:
 
 .. code-block:: python
 
-   User._schema.truncate_table()       # No cascade.
-   User._schema.truncate_table(cascade=True)   # Postgresql only.
+   User._schema.truncate_table()  # No cascade.
+   User._schema.truncate_table(cascade=True)  # Postgresql only.
 
 .. seealso::
    :class:`SchemaManager` API reference.
@@ -111,8 +111,8 @@ Schema Migrations
 -----------------
 
 Peewee ships two layers of migration tooling in playhouse: the
-:ref:`migrate <migrate>` module, which applies individual schema changes,
-and the :ref:`migrations runner <migration-runner>`, which builds on it to
+:ref:`migrate <migrate>` module, which provides a Python interface for making
+schema changes, and the :ref:`migrations runner <migration-runner>`, which
 run versioned migration scripts. For schema changes in an existing
 deployment (adding columns, dropping columns, renaming tables, modifying
 indexes), use one of the following approaches.
@@ -126,14 +126,22 @@ The CLI is installed as ``pwmigrate``:
 
 .. code-block:: console
 
-   $ pwmigrate sqlite:///app.db create "add karma"
-   migrations/0001_add_karma.py
-   $ pwmigrate sqlite:///app.db up
-   applied: 0001_add_karma
+   # Identifies differences between application code and schema, then
+   # generates a migration file.
+   $ pwmigrate app.settings.db create -m app.models "add karma"
+   migrations/0002_add_karma.py
+
+   # Equivalent to above, but using a database URL instead of the
+   # dotted-path:
+   $ pwmigrate postgresql:///my_db create -m app.models "add karma"
+
+   $ pwmigrate app.settings.db up
+   applied: 0002_add_karma
 
 Scripts define ``up(migrator, db)`` and, optionally, ``down(migrator,
-db)``. With ``--models``, migrations are generated from a
-:ref:`schema diff <schema-diff>` against your model definitions.
+db)``. With ``-m / --models``, migrations are generated from a
+:ref:`schema diff <schema-diff>` against your model definitions. If ``-m`` is
+not specified, a bare migration template will be written.
 
 .. seealso::
    :ref:`migration-runner` for the runner, CLI and generation reference.

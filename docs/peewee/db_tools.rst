@@ -109,6 +109,7 @@ Alternate drivers:
    * ``sqlite:///my_app.db`` - SQLite file in the current directory.
    * ``sqlite:///:memory:`` - in-memory SQLite.
    * ``sqlite:////absolute/path/to/app.db`` - absolute path SQLite.
+   * ``postgresql:///dbname`` - database running locally.
    * ``postgresql://user:password@host:5432/dbname``
    * ``mysql://user:password@host:3306/dbname``
 
@@ -151,17 +152,16 @@ Connection Pooling
 .. module:: playhouse.pool
 
 The ``playhouse.pool`` module contains a number of :class:`Database` classes
-that provide connection pooling for Postgresql, MySQL and SQLite databases. The
-pool works by overriding the methods on the :class:`Database` class that open
-and close connections to the backend.
+that provide transparent connection pooling for peewee databases. The pool
+works by overriding the methods on the :class:`Database` class that open and
+close connections to the backend, and works as a drop-in replacement.
 
-In multi-threaded applications, each thread gets its own connection; the
-pool maintains up to ``max_connections`` open connections at any time.
-In single-threaded applications, a single connection is recycled.
-
-The application only needs to ensure that connections are *closed* when work
-is done - typically at the end of an HTTP request. Closing a pooled connection
-returns it to the pool rather than actually disconnecting.
+In multi-threaded or web applications, each thread gets its own connection. The
+pool maintains up to ``max_connections`` open connections at any time. The
+application only needs to ensure that connections are *closed* when work is
+done (typically at the end of an HTTP request), so the connection can be
+returned to the pool. Closing a pooled connection returns it to the pool rather
+than actually disconnecting.
 
 .. code-block:: python
 
@@ -181,12 +181,12 @@ returns it to the pool rather than actually disconnecting.
 
 .. note::
    Applications using Peewee's :ref:`asyncio integration <pwasyncio>` do not need to
-   use a special pooled database - the Async databases use a connection pool by
+   use a special pooled database. Async databases use a connection pool by
    default.
 
 .. class:: PooledDatabase(database, max_connections=20, stale_timeout=None, timeout=None, **kwargs)
 
-   Mixin class mixed into the specific backend subclasses above.
+   Common mixin class used for specific backend implementations.
 
    :param str database: The name of the database or database file.
    :param int max_connections: Maximum number of concurrent connections.
@@ -196,14 +196,12 @@ returns it to the pool rather than actually disconnecting.
    :param int timeout: Seconds to block when all connections are in use.
        ``0`` blocks indefinitely; ``None`` (default) raises immediately.
 
-   .. note::
-      Connections will not be closed exactly when they exceed their
-      ``stale_timeout``. Instead, stale connections are only closed when a new
-      connection is requested.
+   Connections will not be closed exactly when they exceed their
+   ``stale_timeout``. Instead, stale connections are only closed when a new
+   connection is requested.
 
-   .. note::
-       If the pool is exhausted and no ``timeout`` is configured, a
-       ``ValueError`` is raised.
+   If the pool is exhausted and no ``timeout`` is configured, a
+   ``MaxConnectionsError`` is raised.
 
    .. method:: manual_close()
 
@@ -239,6 +237,15 @@ returns it to the pool rather than actually disconnecting.
 
    Pool implementation for MySQL / MariaDB databases. Extends :class:`MySQLDatabase`.
 
+Additional implementations exist for:
+
+* :class:`~playhouse.postgres_ext.PooledPostgresqlExtDatabase`
+* :class:`~playhouse.postgres_ext.PooledPsycopg3Database`
+* :class:`~playhouse.mysql_ext.PooledMySQLConnectorDatabase`
+* :class:`~playhouse.mysql_ext.PooledMariaDBConnectorDatabase`
+* :class:`~playhouse.cysqlite_ext.PooledCySqliteDatabase`
+* :class:`~playhouse.cockroachdb.PooledCockroachDatabase`
+
 
 .. _migrate:
 
@@ -252,20 +259,17 @@ incremental schema changes to an existing database without writing raw SQL.
 
 The peewee migration philosophy is that tools relying on database
 introspection, versioning, and auto-detection are often fragile, brittle and
-unnecessarily complex. Migrations can be written as simple python scripts and
-executed from the command-line. The small :ref:`runner <migration-runner>`
-below adds bookkeeping and nothing else. Since the migrations only depend on
-your application's :class:`Database` object, migration scripts do not
-introduce new dependencies.
+complex. Migrations can be written as simple python scripts and executed from
+the command-line. The small :ref:`runner <migration-runner>` below adds
+bookkeeping and can be used for migration generation and execution.
 
-Supported operations:
+Supported schema-altering operations:
 
 - Add, rename, or drop columns.
 - Make columns nullable or not nullable.
-- Change a column's type.
+- Change a column's type or server-side default.
 - Rename or drop a table.
 - Add or drop indexes and constraints.
-- Add or drop column default values.
 
 .. seealso:: :ref:`schema`
 
@@ -283,8 +287,11 @@ Supported operations:
        )
 
 .. tip::
-   Wrap migrations in ``db.atomic()`` to ensure changes are not partially
-   applied.
+   Wrap migrations in :meth:`SchemaMigrator.migration_context` to ensure
+   changes are not partially applied when transactional DDL is available
+   (SQLite and Postgres). The migration context additionally will temporarily
+   disable the SQLite foreign-keys pragma to ensure table rebuilds (required
+   for some operations) do not destroy rows due to ``ON DELETE CASCADE``.
 
 Operations
 ^^^^^^^^^^
@@ -614,6 +621,11 @@ migration tooling. The runner records which scripts have been applied and
 applies pending ones in order. The CLI is installed as ``pwmigrate``,
 equivalent to ``python -m playhouse.migrations``.
 
+Migrations can be auto-generated by detecting basic changes between the schema
+and the application models.
+
+The following sections show basic usage for common scenarios.
+
 New application
 ^^^^^^^^^^^^^^^
 
@@ -630,18 +642,19 @@ Given a models module:
        username = CharField(unique=True)
        email = CharField()
 
-Generate the initial migration from the models:
-
-.. code-block:: console
-
-   $ pwmigrate sqlite:///app.db -m models initial
-   migrations/0001_initial.py
-
-Equivalent, but passing dotted-path to :class:`Database` instance:
+Generate the initial migration from the models by passing the dotted-path to a
+:class:`Database` instance and module containing model classes.
 
 .. code-block:: console
 
    $ pwmigrate models.database -m models initial
+   migrations/0001_initial.py
+
+Equivalent to above, passing the database URL instead:
+
+.. code-block:: console
+
+   $ pwmigrate sqlite:///app.db -m models initial
    migrations/0001_initial.py
 
 The generated file is a python script. The model being created is recorded here
@@ -666,7 +679,7 @@ migration.
    def down(migrator, db):
        migrator.migrate(migrator.drop_table('user'))
 
-Apply it:
+Apply it using ``up``:
 
 .. code-block:: console
 
@@ -676,11 +689,11 @@ Apply it:
 Existing database
 ^^^^^^^^^^^^^^^^^
 
-If models do not exist yet, they can be generated with :ref:`pwiz`:
+If model class definitions do not exist yet, they can be generated with :ref:`pwiz`:
 
 .. code-block:: console
 
-   $ python -m pwiz -e postgresql -u postgres my_db > models.py
+   $ pwiz -e postgresql -u postgres my_db > models.py
 
 When the database and models already agree there is nothing to migrate,
 and migrations begin with the next model change (below).
@@ -695,15 +708,21 @@ database, and ``fake`` it on the live one:
    migrations/0001_initial.py
    $ pwmigrate models.database fake  # Fake it against real database.
    faked: 0001_initial
+
+The ``fake`` command records the migration as being run, but does not write any
+changes to the schema.
+
+Now we can run the initial migration against a different database:
+
+.. code-block:: console
+
    $ pwmigrate sqlite:///testing.db up
    applied: 0001_initial
-
-``fake`` records migrations as applied without running them.
 
 Changing models
 ^^^^^^^^^^^^^^^
 
-Add a field:
+In this example we'll add a field to our model class:
 
 .. code-block:: python
 
@@ -712,12 +731,19 @@ Add a field:
        email = CharField()
        karma = IntegerField(default=0)  # This field is new.
 
-``diff`` shows the drift and ``create -m`` writes the migration:
+Then we can run two commands to verify the change was picked-up and generate a
+migration:
+
+1. ``diff`` shows the change was identified.
+2. ``create -m`` writes the new migration.
 
 .. code-block:: console
 
+   # Prints a list of differences between code and database schema.
    $ pwmigrate models.database -m models diff
    add column user.karma
+
+   # Generates a migration.
    $ pwmigrate models.database -m models create add_karma
    migrations/0002_add_karma.py
 
@@ -752,9 +778,9 @@ Migration files
 
 Peewee migrations are python files with a numeric prefix, defining
 ``up(migrator, db)`` and, optionally, ``down(migrator, db)``. New tables
-need no special support. Define the model inline and call ``create_tables()``.
-Being written in the file, the definition is a frozen copy, deliberately
-independent of your application models:
+need no special support. Define the model inline and call ``create_tables()``,
+which ensures that the migration records a frozen copy which is decoupled from
+the actual definition in your application code.
 
 .. code-block:: python
 
@@ -785,7 +811,18 @@ operations.
 Command line
 ^^^^^^^^^^^^
 
+Example usage:
+
 .. code-block:: shell
+
+   # Generate the first migration from the models, assuming an empty db:
+   pwmigrate app.settings.db -m app.models initial
+
+   # Fake the initial migration (if models pre-date peewee migrations).
+   pwmigrate app.settings.db fake
+
+   # Run the initial migration.
+   pwmigrate app.settings.db up
 
    # List migrations and when each was applied:
    pwmigrate app.settings.db status
@@ -798,9 +835,6 @@ Command line
    pwmigrate app.settings.db down
    pwmigrate app.settings.db down 0002_add_karma
 
-   # Generate the first migration from the models, assuming an empty db:
-   pwmigrate app.settings.db -m app.models initial
-
    # Write a skeleton migration, or generate it from the model diff:
    pwmigrate app.settings.db create "add karma"
    pwmigrate app.settings.db -m app.models create "add karma"
@@ -808,7 +842,7 @@ Command line
    # Print schema drift against the models:
    pwmigrate app.settings.db -m app.models diff
 
-   # Record pending migrations as applied without running them:
+   # Record all pending migrations as applied without running them:
    pwmigrate app.settings.db fake
 
 The database is given as:
@@ -822,8 +856,7 @@ Commands:
 +-------------+------------------------------------------------------------+
 | Command     | Meaning                                                    |
 +=============+============================================================+
-| ``status``  | List migrations and applied timestamps. ``[?]`` marks a    |
-|             | history row whose file is missing.                         |
+| ``status``  | List migrations and applied timestamps.                    |
 +-------------+------------------------------------------------------------+
 | ``up``      | Apply pending migrations in order, stopping after          |
 |             | ``target`` when given.                                     |
@@ -1010,17 +1043,19 @@ commands:
 * ``diff``: prints simple representation of differences between code and
   database schema.
 * ``create --models ...``: writes the generated migration.
-* ``initial``: writes the first migration without consulting the
-  database, assuming it is empty.
+* ``initial``: writes the first migration assuming an empty database.
 
 Example:
 
 .. code-block:: console
 
+   # View what changes were found between app models and db schema.
    $ pwmigrate app.settings.db diff app.models
    create table note
    add column user.karma
    drop column user.email
+
+   # Generate the migration.
    $ pwmigrate app.settings.db create "add karma" --models app.models
    migrations/0007_add_karma.py
 
