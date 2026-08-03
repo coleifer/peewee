@@ -624,14 +624,11 @@ Given a models module:
    # models.py
    from peewee import *
 
-   db = SqliteDatabase('app.db')
+   database = SqliteDatabase('app.db')
 
-   class User(Model):
+   class User(database.Model):
        username = CharField(unique=True)
        email = CharField()
-
-       class Meta:
-           database = db
 
 Generate the initial migration from the models:
 
@@ -640,7 +637,16 @@ Generate the initial migration from the models:
    $ pwmigrate sqlite:///app.db -m models create initial
    migrations/0001_initial.py
 
-The generated file is ordinary python:
+Equivalent, but passing dotted-path to :class:`Database` instance:
+
+.. code-block:: console
+
+   $ pwmigrate models.database -m models create initial
+   migrations/0001_initial.py
+
+The generated file is a python script. The model being created is recorded here
+as a "stub" so that future changes to the application code do not affect the
+migration.
 
 .. code-block:: python
 
@@ -664,32 +670,32 @@ Apply it:
 
 .. code-block:: console
 
-   $ pwmigrate sqlite:///app.db up
+   $ pwmigrate models.db up
    applied: 0001_initial
 
 Existing database
 ^^^^^^^^^^^^^^^^^
 
-If models do not exist yet, generate them from the database with
-:ref:`pwiz`:
+If models do not exist yet, they can be generated with :ref:`pwiz`:
 
 .. code-block:: console
 
    $ python -m pwiz -e postgresql -u postgres my_db > models.py
 
 When the database and models already agree there is nothing to migrate,
-and migrations begin with the next model change (below). To also capture
-the current schema as migration 0001, so new environments can be built
-by ``up`` alone, generate it against an empty scratch database and
-``fake`` it on the live one:
+and migrations begin with the next model change (below).
+
+To capture the current schema as migration 0001, so new environments can be
+built by ``up``, generate it against an empty scratch database and ``fake`` it
+on the live one:
 
 .. code-block:: console
 
-   $ pwmigrate sqlite:///scratch.db -m models create initial
+   $ pwmigrate models.database -m models create initial
    migrations/0001_initial.py
-   $ pwmigrate sqlite:///app.db fake
+   $ pwmigrate models.database fake  # Fake it against real database.
    faked: 0001_initial
-   $ pwmigrate sqlite:///new_env.db up
+   $ pwmigrate sqlite:///testing.db up
    applied: 0001_initial
 
 ``fake`` records migrations as applied without running them. The scratch
@@ -706,7 +712,7 @@ Add a field:
    class User(Model):
        username = CharField(unique=True)
        email = CharField()
-       karma = IntegerField(default=0)
+       karma = IntegerField(default=0)  # This field is new.
 
 ``diff`` shows the drift and ``create -m`` writes the migration:
 
@@ -748,9 +754,9 @@ Migration files
 
 Peewee migrations are python files with a numeric prefix, defining
 ``up(migrator, db)`` and, optionally, ``down(migrator, db)``. New tables
-need no special support. Define the model inline and call
-``create_tables()``. Being written in the file, the definition is a frozen
-copy, deliberately independent of your application models:
+need no special support. Define the model inline and call ``create_tables()``.
+Being written in the file, the definition is a frozen copy, deliberately
+independent of your application models:
 
 .. code-block:: python
 
@@ -791,23 +797,6 @@ The database is given as:
 are pending, so it can gate a deploy. Validation and database errors
 exit 2.
 
-The same operations are available programmatically:
-
-.. code-block:: python
-
-   from playhouse.migrations import Runner
-
-   runner = Runner(db, directory='migrations')
-   runner.create('add karma')  # Write a skeleton file.
-   runner.status()             # [(name, applied_at_or_None), ...]
-   runner.up()                 # Apply everything pending, in order.
-   runner.up('0004_x')         # Apply pending up through 0004_x.
-   runner.down()               # Revert the most recent applied migration.
-   runner.down('0004_x')       # Revert back through 0004_x, inclusive.
-   runner.fake()               # Record all as applied without running.
-
-``run(db)`` is shorthand for ``Runner(db, 'migrations').up()``.
-
 Behavior:
 
 * Files apply in numeric order (the prefix is parsed as an integer, so
@@ -829,6 +818,26 @@ Behavior:
   write one).
 * ``fake()`` can be used to "fake" run an initial migration, in the event you
   are working from a pre-existing database schema.
+
+Python interface
+^^^^^^^^^^^^^^^^
+
+All migration-runner operations are available programmatically:
+
+.. code-block:: python
+
+   from playhouse.migrations import Runner
+
+   runner = Runner(db, directory='migrations')
+   runner.create('add karma')  # Write a skeleton file.
+   runner.status()             # [(name, applied_at_or_None), ...]
+   runner.up()                 # Apply everything pending, in order.
+   runner.up('0004_x')         # Apply pending up through 0004_x.
+   runner.down()               # Revert the most recent applied migration.
+   runner.down('0004_x')       # Revert back through 0004_x, inclusive.
+   runner.fake()               # Record all as applied without running.
+
+``run(db)`` is shorthand for ``Runner(db, 'migrations').up()``.
 
 .. class:: Runner(database, directory='migrations', table_name='schema_migration')
 
