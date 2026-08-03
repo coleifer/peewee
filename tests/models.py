@@ -2506,6 +2506,11 @@ class TestDeleteInstance(ModelTestCase):
         tweet = Tweet.get()
         self.assertEqual(tweet.content, 'woof')
 
+    def test_delete_not_allowed_instance(self):
+        huey = User.get(User.username == 'huey')
+        with self.assertRaises(TypeError):
+            huey.delete()
+
 
 class CascadeParent(TestModel):
     name = TextField()

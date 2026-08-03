@@ -13,6 +13,12 @@ https://github.com/coleifer/peewee/releases
   cascading deletes while recreating tables.
 * Allow `SchemaMigrator.from_database()` to support database proxies.
 * Add support for newer SQLite ALTER TABLE functionality from 3.53.0.
+* Do not allow `delete()` method to be called on a model instance.
+  `Model.delete()` is a classmethod for constructing a `DELETE` query, and
+  `model.delete_instance()` has always been the correct path for deleting a
+  model instance. This new check just ensures that a new user cannot
+  accidentally delete their whole table by using the class-version from an
+  instance. Fixes #2277.
 
 [View commits](https://github.com/coleifer/peewee/compare/4.3.0...master)
 

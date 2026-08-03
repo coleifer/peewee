@@ -4,6 +4,7 @@ from collections.abc import Callable
 from collections.abc import Mapping
 from contextlib import contextmanager
 from copy import deepcopy
+from functools import partial
 from functools import reduce
 from functools import wraps
 from inspect import isclass
@@ -283,6 +284,14 @@ def _sqlite_json_contains(haystack, needle):
 
 def __deprecated__(s):
     warnings.warn(s, DeprecationWarning)
+
+class classmethod_only(object):
+    def __init__(self, fn): self.fn = fn
+    def __get__(self, instance, instance_type=None):
+        if instance is not None:
+            raise TypeError('%s cannot be called from an instance.' %
+                            self.fn.__name__)
+        return partial(self.fn, instance_type)
 
 
 class attrdict(dict):
@@ -7777,7 +7786,7 @@ class Model(Node, metaclass=ModelBase):
     def raw(cls, sql, *params):
         return ModelRaw(cls, sql, params)
 
-    @classmethod
+    @classmethod_only
     def delete(cls):
         return ModelDelete(cls)
 
