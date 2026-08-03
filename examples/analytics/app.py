@@ -28,7 +28,7 @@ import binascii
 
 from flask import Flask, Response, abort, g, request
 from peewee import *
-from playhouse.postgres_ext import BinaryJSONField, PostgresqlExtDatabase
+from playhouse.postgres_ext import PostgresqlDatabase
 
 # Analytics settings.
 # 1px gif.
@@ -48,7 +48,7 @@ SECRET_KEY = 'secret - change me'  # TODO: change me.
 app = Flask(__name__)
 app.config.from_object(__name__)
 
-database = PostgresqlExtDatabase(DATABASE_NAME, user='postgres')
+database = PostgresqlDatabase(DATABASE_NAME, user='postgres')
 
 
 class BaseModel(Model):
@@ -72,8 +72,8 @@ class PageView(BaseModel):
     title = TextField(default='')
     ip = CharField(default='')
     referrer = TextField(default='')
-    headers = BinaryJSONField()
-    params = BinaryJSONField()
+    headers = JSONField(index=True, index_type='GIN')
+    params = JSONField()
 
     @classmethod
     def create_from_request(cls, account, request):
