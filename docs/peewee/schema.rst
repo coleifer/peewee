@@ -138,10 +138,10 @@ db)``. With ``--models``, migrations are generated from a
 .. seealso::
    :ref:`migration-runner` for the runner, CLI and generation reference.
 
-Playhouse migrate module
-^^^^^^^^^^^^^^^^^^^^^^^^^
+Migrate module
+^^^^^^^^^^^^^^
 
-The :ref:`migrate <migrate>` module in playhouse provides a set of helper
+The :ref:`playhouse.migrate <migrate>` module provides a set of helper
 functions for common schema changes, applied through a :class:`~playhouse.migrate.SchemaMigrator`:
 
 .. code-block:: python
