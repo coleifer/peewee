@@ -207,7 +207,7 @@ def run(database, directory='migrations', **kwargs):
     return Runner(database, directory, **kwargs).up()
 
 
-def _flag_args(field):
+def _flag_args(field, todos):
     args = []
     if field.primary_key and not isinstance(field, AutoField):
         args.append('primary_key=True')
@@ -217,6 +217,23 @@ def _flag_args(field):
         args.append('index=True')
     if field.null:
         args.append('null=True')
+
+    if isinstance(field, CharField) and field.max_length != 255:
+        args.append('max_length=%r' % field.max_length)
+    elif isinstance(field, DecimalField):
+        if field.max_digits != 10:
+            args.append('max_digits=%r' % field.max_digits)
+        if field.decimal_places != 5:
+            args.append('decimal_places=%r' % field.decimal_places)
+
+    # Basic `default=` handling. This is trivial on purpose.
+    if field.default is not None:
+        if isinstance(field.default, (str, int, float, bool)):
+            args.append('default=%r' % field.default)
+        else:
+            todos.append('%s: default %r must be added by hand'
+                         % (field.name, field.default))
+
     return args
 
 
@@ -225,41 +242,34 @@ def _is_implicit_id(field):
             field.column_name == 'id')
 
 
-def _field_source(field, imports, targets=None, unbound=False):
+def _field_source(field, imports, todos, targets=None, unbound=False):
     # Defaults are the implementor's to fill in.
     cls = type(field)
     if cls.__module__ != 'peewee':
         imports.add('from %s import %s' % (cls.__module__, cls.__name__))
+
     if isinstance(field, ForeignKeyField):
         rel = field.rel_model
         ref = targets[rel]
         args = [ref]
-        # add_column fields never get bound, so the migrator needs the
-        # target field spelled out. In a class body the pk is implied.
         if unbound or field.rel_field is not rel._meta.primary_key:
+            # Destination field needs to be explicitly specified when the field
+            # is unbound (add_column calls) or if FK is not to the rel's PK.
             args.append('field=%s.%s' % (ref, field.rel_field.name))
-        args.extend(_flag_args(field))
-        # The default from ForeignKeyField.bind().
-        default = (field.name if field.name.endswith('_id')
-                   else field.name + '_id')
-        if field.column_name != default:
+
+        args.extend(_flag_args(field, todos))
+
+        default_colname = (field.name if field.name.endswith('_id')
+                           else field.name + '_id')
+        if field.column_name != default_colname:
             args.append('column_name=%r' % field.column_name)
-        if field.on_delete:
-            args.append('on_delete=%r' % field.on_delete)
-        if field.on_update:
-            args.append('on_update=%r' % field.on_update)
-        return '%s(%s)' % (cls.__name__, ', '.join(args))
-    args = []
-    if isinstance(field, CharField) and field.max_length != 255:
-        args.append('max_length=%r' % field.max_length)
-    elif isinstance(field, DecimalField):
-        if field.max_digits != 10:
-            args.append('max_digits=%r' % field.max_digits)
-        if field.decimal_places != 5:
-            args.append('decimal_places=%r' % field.decimal_places)
-    args.extend(_flag_args(field))
-    if field.column_name != field.name:
-        args.append('column_name=%r' % field.column_name)
+        if field.on_delete: args.append('on_delete=%r' % field.on_delete)
+        if field.on_update: args.append('on_update=%r' % field.on_update)
+    else:
+        args = _flag_args(field, todos)
+        if field.column_name != field.name:
+            args.append('column_name=%r' % field.column_name)
+
     return '%s(%s)' % (cls.__name__, ', '.join(args))
 
 
@@ -271,8 +281,9 @@ def _model_source(model, todos, imports, targets):
     for field in meta.sorted_fields:
         if _is_implicit_id(field):
             continue
-        lines.append('    %s = %s' % (field.name,
-                                      _field_source(field, imports, refs)))
+        lines.append('    %s = %s' % (
+            field.name,
+            _field_source(field, imports, todos, refs)))
     lines.append('    class Meta:')
     lines.append('        database = db')
     lines.append('        table_name = %r' % meta.table_name)
@@ -305,7 +316,7 @@ def _stub_source(model, fields, imports):
     lines = ['class %s(Model):' % model.__name__]
     for field in fields:
         lines.append('    %s = %s' % (field.name,
-                                      _field_source(field, imports)))
+                                      _field_source(field, imports, [])))
     lines.append('    class Meta:')
     lines.append('        database = db')
     lines.append('        table_name = %r' % meta.table_name)
@@ -390,7 +401,8 @@ def template(diff):
         if meta.schema:
             qualified.add(meta.table_name)
         if isinstance(field, ForeignKeyField):
-            source = _field_source(field, imports, targets, unbound=True)
+            source = _field_source(field, imports, todos, targets,
+                                   unbound=True)
             if not field.null:
                 todos.append('%s.%s: not-null column needs a default or '
                              'allow_not_null backfill'
@@ -401,7 +413,7 @@ def template(diff):
                 imports.add('from %s import %s' % (cls.__module__,
                                                    cls.__name__))
             source = '%s(%s)' % (cls.__name__,
-                                 ', '.join(['...'] + _flag_args(field)))
+                                 ', '.join(_flag_args(field, todos)))
         plan.append((
             ['migrator.migrate(migrator.add_column(%r, %r, %s))'
              % (meta.table_name, field.column_name, source)],

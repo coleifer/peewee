@@ -279,7 +279,7 @@ def up(migrator, db):
 
     migrator.migrate(migrator.drop_index('sd_user', 'sd_user_email'))
     migrator.migrate(migrator.drop_index('sd_user', 'sd_user_username'))
-    migrator.migrate(migrator.add_column('sd_user', 'karma', IntegerField(...)))
+    migrator.migrate(migrator.add_column('sd_user', 'karma', IntegerField(default=0)))
     migrator.migrate(migrator.add_index('sd_user', ('username', 'karma'), unique=True))
     migrator.migrate(migrator.drop_column('sd_user', 'email'))
 
@@ -362,7 +362,7 @@ def up(migrator, db):
             table_name = 'sd_user'
 
     class SdSlug(Model):
-        slug = CharField(max_length=24, primary_key=True)
+        slug = CharField(primary_key=True, max_length=24)
         alt = CharField(unique=True)
         class Meta:
             database = db
@@ -416,6 +416,44 @@ def down(migrator, db):
     migrator.migrate(migrator.drop_table('sd_aux', schema='aux'))
 """
 
+FIELD_PARAMS_BODY = """\
+from peewee import *
+
+def up(migrator, db):
+    class SdSku(Model):
+        code = CharField(unique=True, max_length=32)
+        price = DecimalField(max_digits=12, decimal_places=2)
+        label = CharField()
+        class Meta:
+            database = db
+            table_name = 'sd_sku'
+    db.create_tables([SdSku])
+
+
+def down(migrator, db):
+    migrator.migrate(migrator.drop_table('sd_sku'))
+"""
+
+DEFAULTS_BODY = """\
+from peewee import *
+
+# TODO: uval: default {} must be added by hand
+
+def up(migrator, db):
+    class SdFieldDefaults(Model):
+        ival = IntegerField(default=0)
+        sval = CharField(max_length=10, default='')
+        bval = BooleanField(default=True)
+        uval = JSONField()
+        class Meta:
+            database = db
+            table_name = 'sd_field_defaults'
+    db.create_tables([SdFieldDefaults])
+
+
+def down(migrator, db):
+    migrator.migrate(migrator.drop_table('sd_field_defaults'))
+"""
 
 @skip_if(IS_CRDB, 'crdb introspection differs')
 class TestTemplate(ModelTestCase):
@@ -480,6 +518,16 @@ class TestTemplate(ModelTestCase):
 
         body = template(diff_models(self.database, [SdAux]))
         self.assertEqual(strip_header(body), SCHEMA_BODY)
+
+    def test_field_defaults(self):
+        class SdFieldDefaults(TestModel):
+            ival = IntegerField(default=0)
+            sval = CharField(max_length=10, default='')
+            bval = BooleanField(default=True)
+            uval = JSONField(default={})
+
+        body = template(diff_models(self.database, [SdFieldDefaults]))
+        self.assertEqual(strip_header(body), DEFAULTS_BODY)
 
 
 @skip_if(IS_CRDB, 'crdb introspection differs')
@@ -551,10 +599,7 @@ class TestTemplateRoundTrip(ModelTestCase):
                 table_name = 'sd_sku'
 
         body = template(diff_models(self.database, [SdSku] + SD_MODELS))
-        self.assertIn('code = CharField(max_length=32, unique=True)', body)
-        self.assertIn('price = DecimalField(max_digits=12, '
-                      'decimal_places=2)', body)
-        self.assertIn('label = CharField()', body)
+        self.assertEqual(strip_header(body), FIELD_PARAMS_BODY)
 
         self.apply(body, 'sku')
         self.assertFalse(diff_models(self.database, [SdSku] + SD_MODELS))
@@ -584,7 +629,7 @@ class TestTemplateRoundTrip(ModelTestCase):
         class SdUserKarma(TestModel):
             username = CharField(unique=True)
             email = CharField(index=True)
-            karma = IntegerField(index=True)
+            karma = IntegerField(index=True, default=0)
 
             class Meta:
                 table_name = 'sd_user'
@@ -592,11 +637,8 @@ class TestTemplateRoundTrip(ModelTestCase):
         models = [SdUserKarma, SdTweet, SdPoints]
         body = template(diff_models(self.database, models))
         self.assertIn("add_column('sd_user', 'karma', "
-                      "IntegerField(..., index=True))", body)
+                      "IntegerField(index=True, default=0))", body)
 
-        # Fill in the placeholder the way a user would.
-        body = body.replace('IntegerField(..., index=True)',
-                            'IntegerField(default=0, index=True)')
         self.apply(body, 'karma')
         self.assertFalse(diff_models(self.database, models))
         self.assertEqual(self.runner.down(), ['0001_karma'])

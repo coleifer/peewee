@@ -747,19 +747,23 @@ migration:
    $ pwmigrate models.database -m models create add_karma
    migrations/0002_add_karma.py
 
-The generated ``up()`` adds the column, with a placeholder where the
-default belongs:
+The generated ``up()`` adds the column:
 
 .. code-block:: python
 
    def up(migrator, db):
-       migrator.migrate(migrator.add_column('user', 'karma', IntegerField(...)))
+       migrator.migrate(migrator.add_column('user', 'karma', IntegerField(default=0)))
 
 
    def down(migrator, db):
        migrator.migrate(migrator.drop_column('user', 'karma'))
 
-Replace ``IntegerField(...)`` with ``IntegerField(default=0)``, then:
+.. note::
+   Peewee's migration will populate ``default=`` for basic value types (``str``,
+   ``int``, ``float``, ``bool``). Anything else will be marked with a TODO
+   comment at the top of the migration script.
+
+Run the migration:
 
 .. code-block:: console
 
