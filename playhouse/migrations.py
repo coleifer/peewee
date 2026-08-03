@@ -207,8 +207,20 @@ def run(database, directory='migrations', **kwargs):
     return Runner(database, directory, **kwargs).up()
 
 
-def _flag_args(field, todos):
+def _build_field_args(field, todos, targets=None, unbound=False):
     args = []
+
+    # Populate FK-only attrs first.
+    if isinstance(field, ForeignKeyField):
+        rel_model = field.rel_model
+        rel_name = targets[rel_model]
+        args.append(rel_name)
+        if unbound or field.rel_field is not rel_model._meta.primary_key:
+            # Destination field needs to be explicitly specified when the
+            # field is unbound (add_column calls) or if FK is not to the
+            # rel's PK.
+            args.append('field=%s.%s' % (rel_name, field.rel_field.name))
+
     if field.primary_key and not isinstance(field, AutoField):
         args.append('primary_key=True')
     if field.unique:
@@ -231,45 +243,37 @@ def _flag_args(field, todos):
         if isinstance(field.default, (str, int, float, bool)):
             args.append('default=%r' % field.default)
         else:
-            todos.append('%s: default %r must be added by hand'
-                         % (field.name, field.default))
+            todos.append('%s: default %r must be added by hand' %
+                         (field.name, field.default))
 
-    return args
-
-
-def _is_implicit_id(field):
-    return (type(field) is AutoField and field.name == 'id' and
-            field.column_name == 'id')
-
-
-def _field_source(field, imports, todos, targets=None, unbound=False):
-    cls = type(field)
-    if cls.__module__ != 'peewee':
-        imports.add('from %s import %s' % (cls.__module__, cls.__name__))
-
+    # Specify column-name if necessary.
     if isinstance(field, ForeignKeyField):
-        rel = field.rel_model
-        ref = targets[rel]
-        args = [ref]
-        if unbound or field.rel_field is not rel._meta.primary_key:
-            # Destination field needs to be explicitly specified when the field
-            # is unbound (add_column calls) or if FK is not to the rel's PK.
-            args.append('field=%s.%s' % (ref, field.rel_field.name))
-
-        args.extend(_flag_args(field, todos))
-
         default_colname = (field.name if field.name.endswith('_id')
                            else field.name + '_id')
         if field.column_name != default_colname:
             args.append('column_name=%r' % field.column_name)
         if field.on_delete: args.append('on_delete=%r' % field.on_delete)
         if field.on_update: args.append('on_update=%r' % field.on_update)
-    else:
-        args = _flag_args(field, todos)
-        if field.column_name != field.name:
-            args.append('column_name=%r' % field.column_name)
+    elif field.column_name != field.name:
+        args.append('column_name=%r' % field.column_name)
 
+    return args
+
+
+def _build_field(field, imports, todos, targets=None, unbound=False):
+    cls = type(field)
+    if cls.__module__ != 'peewee':
+        self.imports.add('from %s import %s' % (
+            cls.__module__,
+            cls.__name__))
+
+    args = _build_field_args(field, todos, targets, unbound)
     return '%s(%s)' % (cls.__name__, ', '.join(args))
+
+
+def _is_implicit_id(field):
+    return (type(field) is AutoField and field.name == 'id' and
+            field.column_name == 'id')
 
 
 def _model_source(model, imports, todos, targets):
@@ -282,7 +286,8 @@ def _model_source(model, imports, todos, targets):
             continue
         lines.append('    %s = %s' % (
             field.name,
-            _field_source(field, imports, todos, refs)))
+            _build_field(field, imports, todos, refs)))
+
     lines.append('    class Meta:')
     lines.append('        database = db')
     lines.append('        table_name = %r' % meta.table_name)
@@ -294,17 +299,19 @@ def _model_source(model, imports, todos, targets):
                      ', '.join(repr(f) for f in pk.field_names))
     elif not pk:
         lines.append('        primary_key = False')
-    plain = []
+
+    indexes = []
     for index in (meta.indexes or ()):
         if isinstance(index, (list, tuple)):
             columns, unique = index
-            plain.append((tuple(columns), unique))
+            indexes.append((tuple(columns), unique))
         else:
-            todos.append('%s: index %s must be added by hand'
-                         % (meta.table_name,
-                            getattr(index, '_name', None) or repr(index)))
-    if plain:
-        lines.append('        indexes = %r' % (tuple(plain),))
+            idx_name = getattr(index, '_name', None) or repr(index)
+            todos.append('%s: index %s must be added by hand' %
+                         (meta.table_name, idx_name))
+    if indexes:
+        lines.append('        indexes = %r' % (tuple(indexes),))
+
     return lines
 
 
@@ -314,8 +321,9 @@ def _stub_source(model, fields, imports):
     meta = model._meta
     lines = ['class %s(Model):' % model.__name__]
     for field in fields:
-        lines.append('    %s = %s' % (field.name,
-                                      _field_source(field, imports, [])))
+        lines.append('    %s = %s' % (
+            field.name,
+            _build_field(field, imports, [])))
     lines.append('    class Meta:')
     lines.append('        database = db')
     lines.append('        table_name = %r' % meta.table_name)
@@ -337,8 +345,9 @@ def _block(fn, lines):
         lines.pop()
     if not lines:
         return 'def %s(migrator, db):\n    pass' % fn
-    return 'def %s(migrator, db):\n%s' % (fn, '\n'.join(
-        '    %s' % line if line else '' for line in lines))
+
+    indented = ['    %s' % line if line else '' for line in lines]
+    return 'def %s(migrator, db):\n%s' % (fn, '\n'.join(indented))
 
 
 def template(diff):
@@ -409,7 +418,7 @@ def template(diff):
         if meta.schema:
             qualified.add(meta.table_name)
 
-        source = _field_source(field, imports, todos, targets, unbound=True)
+        source = _build_field(field, imports, todos, targets, unbound=True)
         if not field.null and field.default is None:
             todos.append('%s.%s: not-null column needs a default or '
                          'allow_not_null backfill' %

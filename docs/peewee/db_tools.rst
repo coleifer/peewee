@@ -194,7 +194,7 @@ than actually disconnecting.
    :param int stale_timeout: Seconds after which an idle connection is
        considered stale and will be discarded next time it would be reused.
    :param int timeout: Seconds to block when all connections are in use.
-       ``0`` blocks indefinitely; ``None`` (default) raises immediately.
+       ``0`` blocks indefinitely, ``None`` (default) raises immediately.
 
    Connections will not be closed exactly when they exceed their
    ``stale_timeout``. Instead, stale connections are only closed when a new
@@ -698,7 +698,7 @@ If model class definitions do not exist yet, they can be generated with :ref:`pw
 When the database and models already agree there is nothing to migrate,
 and migrations begin with the next model change (below).
 
-To capture the current schema as migration 0001, so new environments can be
+To capture the current schema as migration ``0001``, so new environments can be
 built by ``up``, generate it with ``initial``, which assumes an empty
 database, and ``fake`` it on the live one:
 
@@ -706,6 +706,7 @@ database, and ``fake`` it on the live one:
 
    $ pwmigrate models.database -m models initial
    migrations/0001_initial.py
+
    $ pwmigrate models.database fake  # Fake it against real database.
    faked: 0001_initial
 
@@ -719,8 +720,8 @@ Now we can run the initial migration against a different database:
    $ pwmigrate sqlite:///testing.db up
    applied: 0001_initial
 
-Changing models
-^^^^^^^^^^^^^^^
+Making changes
+^^^^^^^^^^^^^^
 
 In this example we'll add a field to our model class:
 
@@ -734,7 +735,7 @@ In this example we'll add a field to our model class:
 Then we can run two commands to verify the change was picked-up and generate a
 migration:
 
-1. ``diff`` shows the change was identified.
+1. ``diff`` shows any changes that were identified.
 2. ``create -m`` writes the new migration.
 
 .. code-block:: console
@@ -1219,7 +1220,7 @@ generates Peewee model classes from its schema. It is used internally by
       :param list table_names: Only generate models for the given tables.
       :param bool literal_column_names: Use the exact database column names
           as field names (rather than converting to Python naming conventions).
-      :param bool bare_fields: Do not attempt to detect field types; use
+      :param bool bare_fields: Do not attempt to detect field types, use
           :class:`BareField` for all columns (**SQLite only**).
       :param bool include_views: Also generate models for views.
       :return: A dictionary mapping table-names to model classes.
