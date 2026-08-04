@@ -332,9 +332,13 @@ def _build_stub(model, fields, imports):
     meta = model._meta
     lines = ['class %s(Model):' % model.__name__]
     for field in fields:
-        lines.append('    %s = %s' % (
-            field.name,
-            _build_field(field, imports, [])))
+        if isinstance(field, ForeignKeyField):
+            # A pk that is itself a fk stores a plain integer.
+            source = 'IntegerField(primary_key=True, column_name=%r)' % (
+                field.column_name)
+        else:
+            source = _build_field(field, imports, [])
+        lines.append('    %s = %s' % (field.name, source))
     lines.append('    class Meta:')
     lines.append('        database = db')
     lines.append('        table_name = %r' % meta.table_name)

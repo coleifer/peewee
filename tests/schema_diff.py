@@ -102,6 +102,22 @@ class SdBadge(TestModel):
         table_name = 'sd_badge'
 
 
+class SdAccount(TestModel):
+    label = CharField()
+
+    class Meta:
+        table_name = 'sd_account'
+
+
+class SdSettings(TestModel):
+    # One-to-one extension: the pk is itself an fk.
+    account = ForeignKeyField(SdAccount, primary_key=True)
+    theme = CharField()
+
+    class Meta:
+        table_name = 'sd_settings'
+
+
 @skip_if(IS_CRDB, 'crdb introspection differs')
 class TestSchemaDiff(ModelTestCase):
     requires = SD_MODELS
@@ -571,7 +587,8 @@ class TestTemplateRoundTrip(ModelTestCase):
         try:
             shutil.rmtree(self.dir, ignore_errors=True)
             self.database.drop_tables([self.runner.History], safe=True)
-            for table in ('sd_badge', 'sd_slug', 'sd_tag', 'sd_sku',
+            for table in ('sd_theme', 'sd_settings', 'sd_account',
+                          'sd_badge', 'sd_slug', 'sd_tag', 'sd_sku',
                           'sd_profile', 'sd_alias', 'sd_kv'):
                 self.database.execute_sql('DROP TABLE IF EXISTS %s' % table)
         finally:
@@ -714,6 +731,28 @@ class TestTemplateRoundTrip(ModelTestCase):
         self.assertEqual(self.runner.down(), ['0001_badge'])
         diff = diff_models(self.database, models)
         self.assertEqual(diff.create_tables, [SdBadge])
+
+    @requires_models(SdAccount, SdSettings)
+    def test_fk_stub_pk_fk(self):
+        # sd_settings' pk is itself an fk. The stub renders it as a
+        # plain integer rather than recursing into sd_account.
+        class SdTheme(TestModel):
+            settings = ForeignKeyField(SdSettings)
+            name = CharField()
+
+            class Meta:
+                table_name = 'sd_theme'
+
+        models = [SdTheme, SdSettings, SdAccount] + SD_MODELS
+        body = template(diff_models(self.database, models))
+        self.assertIn("account = IntegerField(primary_key=True, "
+                      "column_name='account_id')", body)
+        self.apply(body, 'theme')
+        self.assertFalse(diff_models(self.database, models))
+
+        self.assertEqual(self.runner.down(), ['0001_theme'])
+        self.assertEqual(diff_models(self.database, models).create_tables,
+                         [SdTheme])
 
     def test_autofield_alias(self):
         # The aliased pk must render or the table never converges.
