@@ -18,6 +18,7 @@ production workloads of all sizes since 2010.
 * flexible query-builder that exposes full power of SQL
 * supports :ref:`sqlite, mysql, mariadb, postgresql <database>`.
 * :ref:`asyncio support <pwasyncio>`
+* :ref:`schema migrations <migration-runner>` with diff-based generation (``pwmigrate``)
 * tons of extensions
 * use with :ref:`flask <flask>`, :ref:`fastapi <fastapi>`, :ref:`pydantic <pydantic>`
   and :ref:`more <framework-integration>`

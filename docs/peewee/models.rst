@@ -1392,6 +1392,14 @@ To create a single table, use :meth:`Model.create_table`:
    :ref:`schema` for documentation on table creation and other schema
    management tasks.
 
+Migrations
+----------
+
+When models are created or modified, peewee can auto-generate migration scripts
+to apply the changes to your database schema.
+
+For details see the :ref:`schema migrations <migration-runner>` doc.
+
 .. _advanced-model-topics:
 
 Advanced Topics
