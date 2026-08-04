@@ -260,8 +260,8 @@ incremental schema changes to an existing database without writing raw SQL.
 The peewee migration philosophy is that tools relying on database
 introspection, versioning, and auto-detection are often fragile, brittle and
 complex. Migrations can be written as simple python scripts and executed from
-the command-line. The small :ref:`runner <migration-runner>` below adds
-bookkeeping and can be used for migration generation and execution.
+the command-line. The :ref:`runner <migration-runner>` below adds bookkeeping
+and can be used for migration generation and execution.
 
 Supported schema-altering operations:
 
@@ -616,7 +616,7 @@ Migration Runner
 
 .. module:: playhouse.migrations
 
-The ``playhouse.migrations`` module is a minimal runner built using the
+The ``playhouse.migrations`` module is a migration runner built using the
 migration tooling. The runner records which scripts have been applied and
 applies pending ones in order. The CLI is installed as ``pwmigrate``,
 equivalent to ``python -m playhouse.migrations``.
@@ -642,8 +642,8 @@ Given a models module:
        username = CharField(unique=True)
        email = CharField()
 
-Store the project defaults in a ``.pwmigrate`` file alongside it, so commands
-need no arguments:
+Store the project defaults in a ``.pwmigrate`` file, so commandsneed no
+arguments:
 
 .. code-block:: ini
 
@@ -791,10 +791,7 @@ Migration files
 ^^^^^^^^^^^^^^^
 
 Peewee migrations are python files with a numeric prefix, defining
-``up(migrator, db)`` and, optionally, ``down(migrator, db)``. New tables
-need no special support. Define the model inline and call ``create_tables()``,
-which ensures that the migration records a frozen copy which is decoupled from
-the actual definition in your application code.
+``up(migrator, db)`` and, optionally, ``down(migrator, db)``.
 
 .. code-block:: python
 
@@ -807,7 +804,7 @@ the actual definition in your application code.
                database = db
                table_name = 'user'
 
-       class Note(Model):
+       class Note(Model):  # Copy model definition to decouple from app code.
            user = ForeignKeyField(User)
            content = TextField()
            class Meta:
@@ -895,29 +892,29 @@ Arguments given on the command line override the file. ``models`` feeds
 
 Commands:
 
-+-------------+------------------------------------------------------------+
-| Command     | Meaning                                                    |
-+=============+============================================================+
-| ``status``  | List migrations and applied timestamps.                    |
-+-------------+------------------------------------------------------------+
-| ``up``      | Apply pending migrations in order, stopping after          |
-|             | ``target`` when given.                                     |
-+-------------+------------------------------------------------------------+
-| ``down``    | Revert the most recent migration, or everything back       |
-|             | through ``target``, newest first.                          |
-+-------------+------------------------------------------------------------+
-| ``initial`` | Generate the first migration from the models, assuming an  |
-|             | empty database.                                            |
-+-------------+------------------------------------------------------------+
-| ``create``  | Write a skeleton migration file.                           |
-+-------------+------------------------------------------------------------+
-| ``generate``| Generate a migration from the schema diff.                 |
-+-------------+------------------------------------------------------------+
-| ``fake``    | Record pending migrations as applied without running them, |
-|             | stopping after ``target`` when given.                      |
-+-------------+------------------------------------------------------------+
-| ``diff``    | Print schema differences against a models module.          |
-+-------------+------------------------------------------------------------+
++--------------+------------------------------------------------------------+
+| Command      | Meaning                                                    |
++==============+============================================================+
+| ``status``   | List migrations and applied timestamps.                    |
++--------------+------------------------------------------------------------+
+| ``up``       | Apply pending migrations in order, stopping after          |
+|              | ``target`` when given.                                     |
++--------------+------------------------------------------------------------+
+| ``down``     | Revert the most recent migration, or everything back       |
+|              | through ``target``, newest first.                          |
++--------------+------------------------------------------------------------+
+| ``initial``  | Generate the first migration from the models, assuming an  |
+|              | empty database.                                            |
++--------------+------------------------------------------------------------+
+| ``create``   | Write a skeleton migration file.                           |
++--------------+------------------------------------------------------------+
+| ``generate`` | Generate a migration from the schema diff.                 |
++--------------+------------------------------------------------------------+
+| ``fake``     | Record pending migrations as applied without running them, |
+|              | stopping after ``target`` when given.                      |
++--------------+------------------------------------------------------------+
+| ``diff``     | Print schema differences against a models module.          |
++--------------+------------------------------------------------------------+
 
 Command-line options:
 
