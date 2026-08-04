@@ -9,7 +9,7 @@ https://github.com/coleifer/peewee/releases
 
 In which we learn to migrate (somewhat).
 
-* Add `playhouse.migrations` as a minimal runner for migration scripts. Plain
+* Add `playhouse.migrations` as a runner for migration scripts, which are
   python files defining `up(migrator, db)` and optionally `down(...)`.
   Migrations are applied in numeric order a-la Django, and stored by name in a
   history table. CLI via `pwmigrate` accepting `status`, `up`, `down`,
@@ -18,7 +18,9 @@ In which we learn to migrate (somewhat).
 * Add basic `playhouse.schema_diff` for comparing models against the
   schema and reporting differences (tables to create, columns added or
   removed, indexes added or removed).
-* Allow adding column to existing table as `NOT NULL`.
+* Allow adding column to existing table as `NOT NULL` with migrator, which
+  allows skipping the 3-step process of add nullable, populate default, set not
+  null.
 * `db_url.connect()` raises `ValueError` for a url with no database name,
   e.g. `postgres://dbname` (two slashes reads `dbname` as the host).
 * Add a `SchemaMigrator.migration_context()` helper for wrapping migrations.
