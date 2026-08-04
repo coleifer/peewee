@@ -642,7 +642,7 @@ Given a models module:
        username = CharField(unique=True)
        email = CharField()
 
-Store the project defaults in a ``.pwmigrate`` file, so commandsneed no
+Store the project defaults in a ``.pwmigrate`` file, so commands need no
 arguments:
 
 .. code-block:: ini
@@ -710,7 +710,8 @@ and migrations begin with the next model change (below).
 
 To capture the current schema as migration ``0001``, so new environments can be
 built by ``up``, generate it with ``initial``, which assumes an empty
-database, and ``fake`` it on the live one:
+database, and ``fake`` it on the live one. Multiple databases are involved,
+so the specs are given explicitly:
 
 .. code-block:: console
 
@@ -747,6 +748,9 @@ migration:
 
 1. ``diff`` shows any changes that were identified.
 2. ``generate`` writes the new migration.
+
+Both commands read the database and models module from the ``.pwmigrate``
+file set up earlier.
 
 .. code-block:: console
 
