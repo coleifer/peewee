@@ -21,6 +21,7 @@ the application models) and call ``db.create_tables()`` from ``up()``.
 
 Set ``atomic = False`` at module scope to disable transaction wrapping.
 """
+import argparse
 import datetime
 import glob
 import importlib.util
@@ -28,6 +29,7 @@ import logging
 import os
 import re
 import sys
+import traceback
 
 from peewee import *
 from peewee import sort_models
@@ -243,7 +245,7 @@ def _build_field_args(field, todos, targets=None, unbound=False):
         if field.decimal_places != 5:
             args.append('decimal_places=%r' % field.decimal_places)
 
-    # Basic `default=` handling. This is trivial on purpose.
+    # Basic `default=` handling.
     if field.default is not None:
         if isinstance(field.default, (str, int, float, bool)):
             args.append('default=%r' % field.default)
@@ -381,6 +383,7 @@ def template(diff):
             stubs[rel][field.rel_field.name] = field.rel_field
     targets = {model: model.__name__ for model in created | set(stubs)}
 
+    # Build any stub models needed for FKs to resolve properly.
     plan = []
     for model in sorted(stubs, key=lambda m: m.__name__):
         fields = sorted(stubs[model].values(), key=lambda f: f._sort_key)
@@ -388,6 +391,7 @@ def template(diff):
         up.append('')
         plan.append((up, []))
 
+    # Create tables for models.
     for model in diff.create_tables:
         up = _build_model(model, imports, todos, targets)
         up.extend(['db.create_tables([%s])' % model.__name__, ''])
@@ -398,8 +402,7 @@ def template(diff):
             ', schema=%r' % meta.schema if meta.schema else '')
         plan.append((up, [down]))
 
-    # Index drops go first: a unique flip or a rename re-uses the old
-    # index name, and sqlite refuses to drop an indexed column.
+    # Index drops here to avoid issues dropping indexed columns w/sqlite.
     dropped = set(diff.drop_columns)
     for idx in diff.drop_indexes:
         up = ['migrator.migrate(migrator.drop_index(%r, %r))' %
@@ -550,21 +553,14 @@ def _resolve_database(spec):
     try:
         module = _cwd_import(module_path)
     except ModuleNotFoundError as exc:
-        # Errors importing the named module get a clean one-liner. Errors
-        # raised by the module itself propagate with their traceback.
-        if exc.name and (module_path == exc.name or
-                         module_path.startswith(exc.name + '.')):
-            raise MigrationError('"%s" is not a db url, sqlite file, or '
-                                 'importable module path.' % spec)
-        raise
+        raise MigrationError('"%s" is not a db url, sqlite file, or '
+                             'importable module path.' % spec)
     obj = getattr(module, attr, None)
     if obj is None:
-        raise MigrationError('"%s" not found in module "%s".'
-                             % (attr, module_path))
+        raise MigrationError('"%s" not found in "%s".' % (attr, module_path))
     if isinstance(obj, Proxy):
         if obj.obj is None:
-            raise MigrationError('"%s" is an uninitialized database proxy.'
-                                 % spec)
+            raise MigrationError('"%s" proxy is uninitialized.' % spec)
         obj = obj.obj
     if not isinstance(obj, Database):
         raise MigrationError('"%s" did not resolve to a Database.' % spec)
@@ -574,7 +570,7 @@ def _resolve_database(spec):
     # "app.db" reads as a filename. Say which interpretation won (a file
     # by that name, once created, would take precedence).
     if re.match(r'[^.]+\.(db|sqlite3?)$', spec):
-        sys.stderr.write('note: no file "%s" exists; resolved as module '
+        sys.stderr.write('note: no file "%s" exists. Resolved as module '
                          '"%s", attribute "%s".\n'
                          % (spec, module_path, attr))
     return obj
@@ -602,8 +598,6 @@ def _resolve_diff(database, spec):
 
 
 def main(argv=None):
-    import argparse
-    import traceback
     prog = os.path.basename(sys.argv[0] or '')
     if not prog.startswith('pwmigrate'):
         prog = 'python -m playhouse.migrations'
