@@ -25,7 +25,7 @@
 - [Postgres extensions](https://docs.peewee-orm.com/en/latest/peewee/postgres.html): JSONB, arrays, hstore, full-text search.
 - [Framework integration](https://docs.peewee-orm.com/en/latest/peewee/framework_integration.html): Flask, FastAPI, Sanic, Django coexistence.
 - [ORM utilities](https://docs.peewee-orm.com/en/latest/peewee/orm_utils.html): pydantic schema generation, model_to_dict.
-- [Schema migrations](https://docs.peewee-orm.com/en/latest/peewee/db_tools.html): migrate(), schema introspection, pwiz model generation.
+- [Schema migrations](https://docs.peewee-orm.com/en/latest/peewee/db_tools.html): `pwmigrate`, migrate(), schema introspection, migration runner and generator, pwiz model generation.
 
 ## Optional
 
