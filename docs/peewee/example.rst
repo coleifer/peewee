@@ -168,7 +168,11 @@ each model, ensuring the tables are created in order.
 
    * drop the table and re-create it, OR
    * manually add, drop or modify the columns, OR
-   * use the :ref:`migration tools <migrate>` to script your changes.
+   * use the :ref:`migration runner <migration-runner>` to script your
+     changes.
+
+The example app ships a ``.pwmigrate`` config and an initial migration, so
+the schema can also be built and evolved with ``pwmigrate up``.
 
 Database Connection
 -------------------

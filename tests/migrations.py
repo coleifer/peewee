@@ -1574,6 +1574,27 @@ class TestMigrationRunnerCLI(BaseTestCase):
         self.assertEqual(rc, 0)
         self.assertIn('[?] 0001_gone', out)
 
+    def test_cli_import_error_attribution(self):
+        # A missing dependency inside the module names the dependency,
+        # not the spec.
+        with open(os.path.join(self.dir, 'cli_dep_mod.py'), 'w') as fh:
+            fh.write('import missing_dep_xyz\ndb = None\n')
+        sys.path.insert(0, self.dir)
+        try:
+            rc, out, err = run_cli('cli_dep_mod.db', 'status',
+                                   '-d', self.migdir)
+            self.assertEqual(rc, 2)
+            self.assertIn('cannot import "cli_dep_mod"', err)
+            self.assertIn("No module named 'missing_dep_xyz'", err)
+
+            rc, out, err = run_cli('no_such_mod.db', 'status',
+                                   '-d', self.migdir)
+            self.assertEqual(rc, 2)
+            self.assertIn('cannot import "no_such_mod"', err)
+        finally:
+            sys.path.remove(self.dir)
+            sys.modules.pop('cli_dep_mod', None)
+
     def test_cli_config_file(self):
         conf = os.path.join(self.dir, 'pw.conf')
         with open(conf, 'w') as fh:

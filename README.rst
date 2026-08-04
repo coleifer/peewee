@@ -14,6 +14,8 @@ production workloads of all sizes since 2010.
 * supports sqlite, mysql, mariadb, postgresql
 * `asyncio support <https://docs.peewee-orm.com/en/latest/peewee/asyncio.html>`__
   built on the standard async drivers (aiosqlite, asyncpg, aiomysql)
+* `schema migrations <https://docs.peewee-orm.com/en/latest/peewee/db_tools.html#migration-runner>`__
+  with diff-based generation (``pwmigrate``)
 * tons of extensions
 * use with `flask <https://docs.peewee-orm.com/en/latest/peewee/framework_integration.html#flask>`__,
   `fastapi <https://docs.peewee-orm.com/en/latest/peewee/framework_integration.html#fastapi>`__,

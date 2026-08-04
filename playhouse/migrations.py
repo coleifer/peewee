@@ -553,8 +553,7 @@ def _resolve_database(spec):
     try:
         module = _cwd_import(module_path)
     except ModuleNotFoundError as exc:
-        raise MigrationError('"%s" is not a db url, sqlite file, or '
-                             'importable module path.' % spec)
+        raise MigrationError('cannot import "%s": %s' % (module_path, exc))
     obj = getattr(module, attr, None)
     if obj is None:
         raise MigrationError('"%s" not found in "%s".' % (attr, module_path))
