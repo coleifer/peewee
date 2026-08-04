@@ -967,7 +967,7 @@ All migration-runner operations are available programmatically:
 
    runner = Runner(db, directory='migrations')
    runner.create('add karma')  # Write a skeleton file.
-   runner.status()             # [(name, applied_at_or_None), ...]
+   runner.status()             # [Migration(idx, name, path, applied), ...]
    runner.up()                 # Apply everything pending, in order.
    runner.up('0004_x')         # Apply pending up through 0004_x.
    runner.down()               # Revert the most recent applied migration.
@@ -991,8 +991,10 @@ All migration-runner operations are available programmatically:
 
    .. method:: status()
 
-      Return ``[(name, applied_at_or_None), ...]`` covering both migration
-      files and history rows (including rows whose files are missing).
+      Return ``Migration`` namedtuples ``(idx, name, path, applied)``
+      merging migration files with history rows, in numeric order.
+      ``applied`` is None when pending, ``path`` is None when the file
+      is missing.
 
    .. method:: fake(target=None)
 

@@ -30,13 +30,14 @@ import os
 import re
 import sys
 import traceback
+from collections import namedtuple
 
 from peewee import *
 from peewee import sort_models
 from playhouse.migrate import SchemaMigrator
 from playhouse.migrate import make_index_name
 
-__all__ = ['MigrationError', 'Runner', 'run', 'template']
+__all__ = ['Migration', 'MigrationError', 'Runner', 'run', 'template']
 
 logger = logging.getLogger('peewee.migrations')
 
@@ -55,14 +56,30 @@ def up(migrator, db):
 #     pass
 '''
 
+class MigrationError(Exception): pass
 
-class MigrationError(Exception):
-    pass
-
-
-def _key(name):
+def _index(name):
     match = re.match(r'\d+', name)
-    return (int(match.group()) if match else -1, name)
+    return int(match.group()) if match is not None else -1
+
+class Migration(namedtuple('Migration', ('idx', 'name', 'path', 'applied'))):
+    __slots__ = ()
+
+    @classmethod
+    def load_directory(cls, directory):
+        accum = []
+        for path in glob.glob(os.path.join(directory, '[0-9]*.py')):
+            name = os.path.basename(path)[:-3]
+            accum.append(Migration(_index(name), name, path, None))
+        return sorted(accum)
+
+    def load(self):
+        # Execute the file at the exact path, bypassing sys.path and the
+        # sys.modules cache (migration names collide across projects).
+        spec = importlib.util.spec_from_file_location(self.name, self.path)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        return module
 
 
 class Runner(object):
@@ -70,58 +87,58 @@ class Runner(object):
                  table_name='schema_migration'):
         self.database = database
         self.directory = directory
+        self.table_name = table_name
         self.migrator = SchemaMigrator.from_database(database)
-        history_table = table_name
 
         class History(database.Model):
             name = CharField(unique=True)
             applied = DateTimeField(default=datetime.datetime.now)
             class Meta:
                 legacy_table_names = False
-                table_name = history_table
+                table_name = self.table_name
 
         self.History = History
 
     def migrations(self):
-        """Migration files as {name: path}, in application (numeric) order."""
-        paths = glob.glob(os.path.join(self.directory, '[0-9]*.py'))
-        names = {os.path.basename(path)[:-3]: path for path in paths}
-        return dict(sorted(names.items(), key=lambda kv: _key(kv[0])))
+        return Migration.load_directory(self.directory)
 
     def applied(self):
         if not self.History.table_exists():
             return {}
+
         return {h.name: h.applied for h in self.History.select()}
 
     def status(self):
+        """
+        Files and history merged as Migration tuples, in numeric order.
+        ``applied`` is None for pending files, ``path`` is None for rows
+        whose files are gone.
+        """
         applied = self.applied()
-        migrations = self.migrations()
-        accum = []
-        for name in migrations:
-            accum.append((name, applied.get(name)))
-        # Rows recorded as applied whose files are gone.
-        for name in sorted(set(applied) - set(migrations), key=_key):
-            accum.append((name, applied[name]))
-        return accum
+        accum = [m._replace(applied=applied.get(m.name))
+                 for m in self.migrations()]
+        gone = set(applied) - {m.name for m in accum}
+        accum.extend(Migration(_index(n), n, None, applied[n]) for n in gone)
+        return sorted(accum)
 
     def up(self, target=None, fake=False):
         """
         Apply all pending migrations in order, or, given a target, stop
         after applying it. Returns the applied names.
         """
-        migrations = self.migrations()
-        if target is not None and target not in migrations:
+        rows = [m for m in self.status() if m.path is not None]
+        if target is not None and target not in {m.name for m in rows}:
             raise MigrationError('unknown migration "%s".' % target)
 
-        applied = self.applied()
         plan = []
-        for name, path in migrations.items():
-            if name not in applied:
-                module = self._load(name, path)
+        for migration in rows:
+            if not migration.applied:
+                module = migration.load()
                 if getattr(module, 'up', None) is None:
-                    raise MigrationError('%s does not define up().' % name)
-                plan.append((name, module))
-            if name == target:
+                    raise MigrationError('%s does not define up().'
+                                         % migration.name)
+                plan.append((migration.name, module))
+            if migration.name == target:
                 break
 
         self.History.create_table()
@@ -138,22 +155,22 @@ class Runner(object):
         Revert the most recently-applied migration, or, given a target,
         every applied migration back through the target.
         """
-        applied = self.applied()
-        if target is not None and target not in applied:
+        rows = [m for m in self.status() if m.applied]
+        if target is not None and target not in {m.name for m in rows}:
             raise MigrationError('"%s" is not an applied migration.' % target)
 
-        migrations = self.migrations()
         plan = []
-        for name in sorted(applied, key=_key, reverse=True):
-            if name not in migrations:
+        for migration in reversed(rows):
+            if migration.path is None:
                 raise MigrationError('cannot revert "%s": migration file '
-                                     'is missing.' % name)
-            module = self._load(name, migrations[name])
+                                     'is missing.' % migration.name)
+            module = migration.load()
             if getattr(module, 'down', None) is None:
-                raise MigrationError('%s does not define down().' % name)
+                raise MigrationError('%s does not define down().'
+                                     % migration.name)
 
-            plan.append((name, module))
-            if target is None or (name == target):
+            plan.append((migration.name, module))
+            if target is None or migration.name == target:
                 break
 
         accum = []
@@ -170,24 +187,16 @@ class Runner(object):
         """
         return self.up(target, fake=True)
 
-    def create(self, name, body=None):
+    def create(self, name='', body=None):
         """Write a numbered skeleton migration file. Returns its path."""
         os.makedirs(self.directory, exist_ok=True)
-        idx = max((_key(n)[0] for n in self.migrations()), default=0) + 1
+        idx = max((m.idx for m in self.migrations()), default=0) + 1
         slug = re.sub(r'[^\w]+', '_', name.strip()).strip('_').lower()
         path = os.path.join(self.directory,
                             '%04d_%s.py' % (idx, slug or 'migration'))
         with open(path, 'w') as fh:
             fh.write(body or (TEMPLATE % name))
         return path
-
-    def _load(self, name, path):
-        # Execute the file at the exact path, bypassing sys.path and the
-        # sys.modules cache (migration names collide across projects).
-        spec = importlib.util.spec_from_file_location(name, path)
-        module = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(module)
-        return module
 
     def _run(self, name, module, direction, fake=False):
         # The plan was validated as it was built. Run it blind.
@@ -204,7 +213,6 @@ class Runner(object):
                 (self.History.delete()
                  .where(self.History.name == name)
                  .execute())
-
 
 def run(database, directory='migrations', **kwargs):
     return Runner(database, directory, **kwargs).up()
@@ -604,21 +612,20 @@ def _report(verb, names):
 
 
 def _cmd_status(runner, args):
-    files = runner.migrations()
     rows = runner.status()
-    for name, applied in rows:
-        if not applied:
+    for m in rows:
+        if not m.applied:
             marker = ' '
-        elif name in files:
+        elif m.path is not None:
             marker = 'x'
         else:
             marker = '?'
-        line = '[%s] %s' % (marker, name)
-        if applied:
-            line += '  ' + applied.strftime('%Y-%m-%d %H:%M:%S')
+        line = '[%s] %s' % (marker, m.name)
+        if m.applied:
+            line += '  ' + m.applied.strftime('%Y-%m-%d %H:%M:%S')
         print(line)
     # Exit 1 when pending, so status can gate a deploy.
-    if any(not applied for _, applied in rows):
+    if any(not m.applied for m in rows):
         return 1
 
 

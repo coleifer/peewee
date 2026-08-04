@@ -1252,11 +1252,10 @@ class TestMigrationRunner(ModelTestCase):
         return set(c.name for c in self.database.get_columns('person'))
 
     def applied(self):
-        return [name for name, applied in self.runner.status() if applied]
+        return [m.name for m in self.runner.status() if m.applied]
 
     def pending(self):
-        return [name for name, applied in self.runner.status()
-                if not applied]
+        return [m.name for m in self.runner.status() if not m.applied]
 
     def test_up_down_status(self):
         self.write('0001_notes.py', add_column_mig('notes'))
@@ -1316,9 +1315,9 @@ class TestMigrationRunner(ModelTestCase):
         self.write_chain()
         self.runner.up('0002_email')
         os.remove(os.path.join(self.dir, '0001_notes.py'))
-        # Applied rows whose files are gone sort after the file-backed names.
-        self.assertEqual([n for n, _ in self.runner.status()],
-                         ['0002_email', '0003_phone', '0001_notes'])
+        # Applied rows whose files are gone keep their numeric position.
+        self.assertEqual([m.name for m in self.runner.status()],
+                         ['0001_notes', '0002_email', '0003_phone'])
         self.assertEqual(self.pending(), ['0003_phone'])
 
     def test_status_orphan_ordering(self):
@@ -1329,8 +1328,8 @@ class TestMigrationRunner(ModelTestCase):
         os.remove(os.path.join(self.dir, '2_notes.py'))
         os.remove(os.path.join(self.dir, '10_email.py'))
         # Orphaned rows sort numerically, like everything else.
-        self.assertEqual([n for n, _ in self.runner.status()],
-                         ['30_phone', '2_notes', '10_email'])
+        self.assertEqual([m.name for m in self.runner.status()],
+                         ['2_notes', '10_email', '30_phone'])
 
     def test_fake(self):
         self.write('0001_notes.py', add_column_mig('notes'))
