@@ -995,7 +995,7 @@ the live database schema and reports basic differences:
 Columns are compared by name alone (no types, nullability or constraints), so a
 rename appears as an addition plus a removal. Partial and expression indexes
 are compared by name only. Tables in the database that no model covers are
-ignored.
+ignored. Virtual models (sqlite FTS, etc.) are skipped.
 
 .. code-block:: pycon
 

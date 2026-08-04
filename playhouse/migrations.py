@@ -586,7 +586,15 @@ def _resolve_diff(database, spec):
     for name in skipped:
         sys.stderr.write('skipped: %s (no fields)\n' % name)
     if database is None:  # initial: assume an empty database.
-        return SchemaDiff(sort_models(models), [], [], [], [])
+        # Virtual tables are out of scope, matching diff_models.
+        accum = []
+        for model in models:
+            if getattr(model._meta, 'extension_module', None):
+                sys.stderr.write('skipped: %s (virtual table)\n'
+                                 % model.__name__)
+            else:
+                accum.append(model)
+        return SchemaDiff(sort_models(accum), [], [], [], [])
     try:
         return diff_models(database, models)
     except ValueError as exc:

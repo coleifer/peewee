@@ -1636,13 +1636,18 @@ class TestMigrationsCLIDiff(BaseTestCase):
         sys.path.insert(0, self.dir)
         with open(os.path.join(self.dir, 'cli_diff_models.py'), 'w') as fh:
             fh.write(
-                "from peewee import *\n\n"
+                "from peewee import *\n"
+                "from playhouse.sqlite_ext import FTS5Model, SearchField\n\n"
                 "class Base(Model):\n"
                 "    pass\n\n"
                 "class Widget(Base):\n"
                 "    name = CharField(unique=True)\n"
                 "    class Meta:\n"
                 "        table_name = 'widget'\n\n"
+                "class Notes(FTS5Model):\n"
+                "    content = SearchField()\n"
+                "    class Meta:\n"
+                "        table_name = 'notes'\n\n"
                 "MODELS = [Widget]\n")
 
     def tearDown(self):
@@ -1659,6 +1664,8 @@ class TestMigrationsCLIDiff(BaseTestCase):
         self.assertEqual(rc, 0)
         path = os.path.join(self.migdir, '0001_initial.py')
         self.assertEqual(out, '%s\n' % path)
+        self.assertEqual(err, 'skipped: Base (no fields)\n'
+                              'skipped: Notes (virtual table)\n')
         with open(path) as fh:
             body = fh.read()
         # Compare below the timestamped header comment.
