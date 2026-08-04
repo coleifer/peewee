@@ -1,0 +1,2 @@
+database = app.database
+models = app
