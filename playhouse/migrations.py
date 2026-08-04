@@ -81,6 +81,7 @@ class Runner(object):
         self.History = History
 
     def migrations(self):
+        """Migration files as {name: path}, in application (numeric) order."""
         paths = glob.glob(os.path.join(self.directory, '[0-9]*.py'))
         names = {os.path.basename(path)[:-3]: path for path in paths}
         return dict(sorted(names.items(), key=lambda kv: _key(kv[0])))
@@ -329,7 +330,6 @@ def _build_stub(model, fields, imports):
     lines.append('        table_name = %r' % meta.table_name)
     if meta.schema:
         lines.append('        schema = %r' % meta.schema)
-    lines.append('')
     return lines
 
 
@@ -384,7 +384,9 @@ def template(diff):
     plan = []
     for model in sorted(stubs, key=lambda m: m.__name__):
         fields = sorted(stubs[model].values(), key=lambda f: f._sort_key)
-        plan.append((_build_stub(model, fields, imports), []))
+        up = _build_stub(model, fields, imports)
+        up.append('')
+        plan.append((up, []))
 
     for model in diff.create_tables:
         up = _build_model(model, imports, todos, targets)
@@ -413,12 +415,8 @@ def template(diff):
             down.append(_build_add_index(idx))
         plan.append((up, down))
 
-    qualified = set()
     for field in diff.add_columns:
         meta = field.model._meta
-        if meta.schema:
-            qualified.add(meta.table_name)
-
         source = _build_field(field, imports, todos, targets, unbound=True)
         if not field.null and field.default is None:
             todos.append('%s.%s: not-null column needs a default or '
@@ -453,6 +451,8 @@ def template(diff):
         todos.append('%s.%s: dropped column cannot be restored by down()' %
                      (table, name))
 
+    qualified = set(f.model._meta.table_name
+                    for f in diff.add_columns if f.model._meta.schema)
     if qualified:
         todos.append('schema-qualified tables (%s): column/index '
                      'operations are emitted unqualified. Qualify by hand' %
@@ -561,8 +561,6 @@ def _resolve_database(spec):
     if obj is None:
         raise MigrationError('"%s" not found in module "%s".'
                              % (attr, module_path))
-    if callable(obj) and not isinstance(obj, Database):
-        obj = obj()
     if isinstance(obj, Proxy):
         if obj.obj is None:
             raise MigrationError('"%s" is an uninitialized database proxy.'
