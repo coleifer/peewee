@@ -18,9 +18,12 @@ In which we learn to migrate (somewhat).
 * Add very basic `playhouse.schema_diff` for comparing models against the
   schema and reporting differences (tables to create, columns added or removed,
   indexes added or removed).
-* Add migration generation from the diff. Run `create NAME --models app.models`
+* Add migration generation from the diff. Run `generate NAME app.models`
   to write a migration template. `diff` prints the differences. Foreign keys
   render runnable, against frozen stubs of their target tables.
+* `pwmigrate` reads per-project defaults (`database`, `directory`, `models`,
+  `table`) from a `.pwmigrate` file in the working directory, or a file named
+  with `-c`. Arguments override the file.
 * Allow adding column to existing table as `NOT NULL`.
 * `db_url.connect()` raises `ValueError` for a url with no database name,
   e.g. `postgres://dbname` (two slashes reads `dbname` as the host).

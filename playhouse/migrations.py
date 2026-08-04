@@ -636,6 +636,8 @@ def _cmd_fake(runner, args):
 
 
 def _cmd_initial(runner, args):
+    if not args.models:
+        raise MigrationError('initial requires a models module.')
     if runner.migrations():
         raise MigrationError('migrations already exist in "%s".'
                              % args.directory)
@@ -644,9 +646,12 @@ def _cmd_initial(runner, args):
 
 
 def _cmd_create(runner, args):
+    print(runner.create(args.name))
+
+
+def _cmd_generate(runner, args):
     if not args.models:
-        print(runner.create(args.name))
-        return
+        raise MigrationError('generate requires a models module.')
     diff = _resolve_diff(runner.database, args.models)
     if not diff:
         print('schema matches models. Nothing to generate.')
@@ -655,11 +660,39 @@ def _cmd_create(runner, args):
 
 
 def _cmd_diff(runner, args):
+    if not args.models:
+        raise MigrationError('diff requires a models module.')
     diff = _resolve_diff(runner.database, args.models)
     print(diff if diff else 'schema matches models.')
 
 
-def _parser():
+# Mirrored by the subparser declarations in _parser().
+_COMMANDS = ('status', 'up', 'down', 'initial', 'create', 'generate',
+             'fake', 'diff')
+
+
+def _read_config(path):
+    # The default dotfile is optional. A file named with -c must exist
+    # (the caller checks).
+    if path is None:
+        path = '.pwmigrate'
+        if not os.path.exists(path):
+            return {}
+    config = {}
+    with open(path) as fh:
+        for line in fh:
+            line = line.strip()
+            if not line or line.startswith('#'):
+                continue
+            key, _, value = line.partition('=')
+            config[key.strip()] = value.strip()
+    for key in sorted(set(config) - {'database', 'directory', 'models',
+                                     'table'}):
+        sys.stderr.write('warning: unknown key "%s" in %s\n' % (key, path))
+    return config
+
+
+def _parser(config):
     prog = os.path.basename(sys.argv[0] or '')
     if not prog.startswith('pwmigrate'):
         prog = 'python -m playhouse.migrations'
@@ -668,11 +701,16 @@ def _parser():
     parser.add_argument('database', help='dotted path to a Database '
                         'instance (e.g. myapp.settings.db), db url (e.g. '
                         'postgres:///app), or path to a sqlite file')
+    parser.add_argument('-c', '--config', metavar='FILE',
+                        help='config file supplying argument defaults '
+                        '(default: .pwmigrate)')
 
     common = argparse.ArgumentParser(add_help=False)
-    common.add_argument('-d', '--directory', default='migrations',
+    common.add_argument('-d', '--directory',
+                        default=config.get('directory', 'migrations'),
                         help='migrations directory (default: migrations)')
-    common.add_argument('-t', '--table', default='schema_migration',
+    common.add_argument('-t', '--table',
+                        default=config.get('table', 'schema_migration'),
                         help='history table name')
     common.add_argument('-v', '--verbose', action='store_true',
                         help='echo SQL as it executes')
@@ -697,16 +735,23 @@ def _parser():
     p = sub.add_parser('initial', parents=[common],
                        help='generate the first migration, assuming an '
                        'empty database')
-    p.add_argument('models', help='models module ("app.models" or '
+    p.add_argument('models', nargs='?', default=config.get('models'),
+                   help='models module ("app.models" or '
                    '"app.models:MODELS")')
     p.set_defaults(func=_cmd_initial)
 
     p = sub.add_parser('create', parents=[common],
-                       help='write a numbered migration file')
+                       help='write a skeleton migration file')
     p.add_argument('name', help='migration name')
-    p.add_argument('-m', '--models', metavar='MODULE',
-                   help='generate the body from the schema diff')
     p.set_defaults(func=_cmd_create)
+
+    p = sub.add_parser('generate', parents=[common],
+                       help='generate a migration from the schema diff')
+    p.add_argument('name', help='migration name')
+    p.add_argument('models', nargs='?', default=config.get('models'),
+                   help='models module ("app.models" or '
+                   '"app.models:MODELS")')
+    p.set_defaults(func=_cmd_generate)
 
     p = sub.add_parser('fake', parents=[common],
                        help='record pending migrations without running them')
@@ -715,14 +760,35 @@ def _parser():
 
     p = sub.add_parser('diff', parents=[common],
                        help='print schema drift against the models')
-    p.add_argument('models', help='models module ("app.models" or '
+    p.add_argument('models', nargs='?', default=config.get('models'),
+                   help='models module ("app.models" or '
                    '"app.models:MODELS")')
     p.set_defaults(func=_cmd_diff)
     return parser
 
 
 def main(argv=None):
-    args = _parser().parse_args(argv)
+    if argv is None:
+        argv = sys.argv[1:]
+    # -c must be known before the parser is built: the config file
+    # supplies argument defaults.
+    pre = argparse.ArgumentParser(add_help=False)
+    pre.add_argument('-c', '--config')
+    known, argv = pre.parse_known_args(argv)
+    if known.config and not os.path.exists(known.config):
+        sys.stderr.write('error: config file "%s" not found.\n'
+                         % known.config)
+        return 2
+    config = _read_config(known.config)
+
+    if argv and argv[0] in _COMMANDS and not config.get('database'):
+        sys.stderr.write('error: no database given and no .pwmigrate '
+                         'config found.\n')
+        return 2
+    if config.get('database') and (not argv or argv[0] in _COMMANDS):
+        argv = [config['database']] + argv
+
+    args = _parser(config).parse_args(argv)
     if args.verbose:
         peewee_logger = logging.getLogger('peewee')
         peewee_logger.addHandler(logging.StreamHandler())

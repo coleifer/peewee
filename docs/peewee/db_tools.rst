@@ -633,7 +633,7 @@ Given a models module:
 
 .. code-block:: python
 
-   # models.py
+   # models.py, imported as `app.models` in examples.
    from peewee import *
 
    database = SqliteDatabase('app.db')
@@ -642,19 +642,29 @@ Given a models module:
        username = CharField(unique=True)
        email = CharField()
 
-Generate the initial migration from the models by passing the dotted-path to a
-:class:`Database` instance and module containing model classes.
+Store the project defaults in a ``.pwmigrate`` file alongside it, so commands
+need no arguments:
+
+.. code-block:: ini
+
+   # .pwmigrate
+   database = app.models.database
+   models = app.models
+   # directory = migrations/
+   # table = schema_migration
+
+Then generate the initial migration:
 
 .. code-block:: console
 
-   $ pwmigrate models.database initial models
+   $ pwmigrate initial
    migrations/0001_initial.py
 
-Equivalent to above, passing the database URL instead:
+Equivalent to above, passing the database URL and models module explicitly:
 
 .. code-block:: console
 
-   $ pwmigrate sqlite:///app.db initial models
+   $ pwmigrate sqlite:///app.db initial app.models
    migrations/0001_initial.py
 
 The generated file is a python script. The model being created is recorded here
@@ -683,7 +693,7 @@ Apply it using ``up``:
 
 .. code-block:: console
 
-   $ pwmigrate models.database up
+   $ pwmigrate up
    applied: 0001_initial
 
 Existing database
@@ -736,16 +746,16 @@ Then we can run two commands to verify the change was picked-up and generate a
 migration:
 
 1. ``diff`` shows any changes that were identified.
-2. ``create -m`` writes the new migration.
+2. ``generate`` writes the new migration.
 
 .. code-block:: console
 
    # Prints a list of differences between code and database schema.
-   $ pwmigrate models.database diff models
+   $ pwmigrate diff
    add column user.karma
 
    # Generates a migration.
-   $ pwmigrate models.database create add_karma -m models
+   $ pwmigrate generate add_karma
    migrations/0002_add_karma.py
 
 The generated ``up()`` adds the column:
@@ -767,11 +777,11 @@ Run the migration:
 
 .. code-block:: console
 
-   $ pwmigrate models.database up
+   $ pwmigrate up
    applied: 0002_add_karma
-   $ pwmigrate models.database status
-   [x] 0001_initial  2026-08-02 21:28:47
-   [x] 0002_add_karma  2026-08-02 21:28:48
+   $ pwmigrate status
+   [x] 0001_initial  2026-08-04 09:49:33
+   [x] 0002_add_karma  2026-08-04 09:49:33
 
 Deployments run ``pwmigrate <db> up``, or call ``run(db)`` from the
 application's startup code. :ref:`generating-migration-diff` describes
@@ -833,7 +843,7 @@ Example usage:
 
    # Write a skeleton migration, or generate it from the model diff:
    pwmigrate app.settings.db create "add karma"
-   pwmigrate app.settings.db create "add karma" -m app.models
+   pwmigrate app.settings.db generate "add karma" app.models
 
    # Apply pending migrations, all or up through a target:
    pwmigrate app.settings.db up
@@ -855,6 +865,34 @@ The database is given as:
 * :ref:`db_url <db-url>` string
 * a path to a sqlite database file
 
+Per-project defaults can be placed in a ``.pwmigrate`` file in the
+working directory, or in a file named with ``-c``, as ``key = value``
+lines:
+
+.. code-block:: ini
+
+   database = app.settings.db
+   models = app.models
+   # directory = migrations/
+   # table = schema_migration
+
+With ``database`` configured, commands run without it:
+
+.. code-block:: console
+
+   $ pwmigrate status
+   $ pwmigrate up
+
+Recognized keys:
+
+* ``database``
+* ``directory``
+* ``models``
+* ``table``
+
+Arguments given on the command line override the file. ``models`` feeds
+``diff``, ``initial`` and ``generate``.
+
 Commands:
 
 +-------------+------------------------------------------------------------+
@@ -871,8 +909,9 @@ Commands:
 | ``initial`` | Generate the first migration from the models, assuming an  |
 |             | empty database.                                            |
 +-------------+------------------------------------------------------------+
-| ``create``  | Write a numbered migration file. With ``-m``, generate it  |
-|             | from the schema diff.                                      |
+| ``create``  | Write a skeleton migration file.                           |
++-------------+------------------------------------------------------------+
+| ``generate``| Generate a migration from the schema diff.                 |
 +-------------+------------------------------------------------------------+
 | ``fake``    | Record pending migrations as applied without running them, |
 |             | stopping after ``target`` when given.                      |
@@ -885,13 +924,13 @@ Command-line options:
 +--------+---------------------------------------------------+--------------------+
 | Option | Meaning                                           | Example            |
 +========+===================================================+====================+
-| ``-m`` | With ``create``, generate from the schema diff    | ``-m app.models``  |
-+--------+---------------------------------------------------+--------------------+
 | ``-d`` | Migrations directory (default ``migrations``)     | ``-d db/schema``   |
 +--------+---------------------------------------------------+--------------------+
 | ``-t`` | History table name (default ``schema_migration``) |                    |
 +--------+---------------------------------------------------+--------------------+
 | ``-v`` | Echo SQL as it executes                           |                    |
++--------+---------------------------------------------------+--------------------+
+| ``-c`` | Config file supplying defaults                    | ``-c pw.conf``     |
 +--------+---------------------------------------------------+--------------------+
 
 ``status`` exits 0 when the database is current and 1 when migrations
@@ -1046,7 +1085,7 @@ commands:
 
 * ``diff``: prints simple representation of differences between code and
   database schema.
-* ``create --models ...``: writes the generated migration.
+* ``generate``: writes the migration from the diff.
 * ``initial``: writes the first migration assuming an empty database.
 
 Example:
@@ -1060,7 +1099,7 @@ Example:
    drop column user.email
 
    # Generate the migration.
-   $ pwmigrate app.settings.db create "add karma" -m app.models
+   $ pwmigrate app.settings.db generate "add karma" app.models
    migrations/0007_add_karma.py
 
 The same flow in python:

@@ -1574,6 +1574,56 @@ class TestMigrationRunnerCLI(BaseTestCase):
         self.assertEqual(rc, 0)
         self.assertIn('[?] 0001_gone', out)
 
+    def test_cli_config_file(self):
+        conf = os.path.join(self.dir, 'pw.conf')
+        with open(conf, 'w') as fh:
+            fh.write('# project defaults\n'
+                     'database = %s\n'
+                     'directory = %s\n' % (self.url, self.migdir))
+        rc, out, err = run_cli('-c', conf, 'create', 'add widget')
+        self.assertEqual(rc, 0)
+        self.assertTrue(os.path.exists(
+            os.path.join(self.migdir, '0001_add_widget.py')))
+
+        rc, out, err = run_cli('-c', conf, 'up')
+        self.assertEqual(rc, 0)
+        self.assertEqual(out, 'applied: 0001_add_widget\n')
+
+        # Explicit arguments override the file.
+        rc, out, err = run_cli(self.url, 'status', '-d', self.migdir,
+                               '-c', conf)
+        self.assertEqual(rc, 0)
+        self.assertIn('[x] 0001_add_widget', out)
+
+    def test_cli_config_dotfile(self):
+        cwd = os.getcwd()
+        os.chdir(self.dir)
+        try:
+            with open('.pwmigrate', 'w') as fh:
+                fh.write('database = %s\ndirectory = %s\n'
+                         % (self.url, self.migdir))
+            rc, out, err = run_cli('status')
+            self.assertEqual(rc, 0)
+        finally:
+            os.chdir(cwd)
+
+    def test_cli_config_errors(self):
+        # Bare command with no config in the working directory.
+        rc, out, err = run_cli('up')
+        self.assertEqual(rc, 2)
+        self.assertIn('no database given', err)
+
+        rc, out, err = run_cli('-c', 'nonexistent.conf', 'up')
+        self.assertEqual(rc, 2)
+        self.assertIn('not found', err)
+
+        conf = os.path.join(self.dir, 'typo.conf')
+        with open(conf, 'w') as fh:
+            fh.write('database = %s\ntabel = x\n' % self.url)
+        rc, out, err = run_cli('-c', conf, 'status', '-d', self.migdir)
+        self.assertEqual(rc, 0)
+        self.assertIn('unknown key "tabel"', err)
+
     def test_cli_bad_url(self):
         # Two slashes instead of three: the database name lands in the
         # host slot.
@@ -1685,6 +1735,19 @@ class TestMigrationsCLIDiff(BaseTestCase):
         self.assertEqual(err, 'error: migrations already exist in "%s".\n'
                          % self.migdir)
 
+    def test_cli_config_models(self):
+        conf = os.path.join(self.dir, 'pw.conf')
+        with open(conf, 'w') as fh:
+            fh.write('database = %s\nmodels = cli_diff_models\n' % self.url)
+        rc, out, err = run_cli('-c', conf, 'diff', '-d', self.migdir)
+        self.assertEqual(rc, 0)
+        self.assertIn('create table widget', out)
+
+        # Without config or argument, diff has no models module.
+        rc, out, err = run_cli(self.url, 'diff', '-d', self.migdir)
+        self.assertEqual(rc, 2)
+        self.assertEqual(err, 'error: diff requires a models module.\n')
+
     def test_cli_diff_and_generate(self):
         # diff: field-less base skipped and reported, drift printed.
         rc, out, err = run_cli(self.url, 'diff', 'cli_diff_models',
@@ -1701,10 +1764,9 @@ class TestMigrationsCLIDiff(BaseTestCase):
         self.assertIn('create table widget', out)
         self.assertEqual(err, '')
 
-        # create --models: generate, apply, converge.
-        rc, out, err = run_cli(self.url, 'create', 'initial',
-                               '--models', 'cli_diff_models',
-                               '-d', self.migdir)
+        # generate: build from diff, apply, converge.
+        rc, out, err = run_cli(self.url, 'generate', 'initial',
+                               'cli_diff_models', '-d', self.migdir)
         self.assertEqual(rc, 0)
         path = os.path.join(self.migdir, '0001_initial.py')
         self.assertTrue(os.path.exists(path))
@@ -1721,9 +1783,8 @@ class TestMigrationsCLIDiff(BaseTestCase):
         self.assertEqual(rc, 0)
         self.assertIn('schema matches models.', out)
 
-        rc, out, err = run_cli(self.url, 'create', 'noop',
-                               '--models', 'cli_diff_models',
-                               '-d', self.migdir)
+        rc, out, err = run_cli(self.url, 'generate', 'noop',
+                               'cli_diff_models', '-d', self.migdir)
         self.assertEqual(rc, 0)
         self.assertIn('Nothing to generate', out)
         self.assertFalse(os.path.exists(

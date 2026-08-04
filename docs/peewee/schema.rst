@@ -128,20 +128,20 @@ The CLI is installed as ``pwmigrate``:
 
    # Identifies differences between application code and schema, then
    # generates a migration file.
-   $ pwmigrate app.settings.db create -m app.models "add karma"
+   $ pwmigrate app.settings.db generate "add karma" app.models
    migrations/0002_add_karma.py
 
    # Equivalent to above, but using a database URL instead of the
    # dotted-path:
-   $ pwmigrate postgresql:///my_db create -m app.models "add karma"
+   $ pwmigrate postgresql:///my_db generate "add karma" app.models
 
    $ pwmigrate app.settings.db up
    applied: 0002_add_karma
 
 Scripts define ``up(migrator, db)`` and, optionally, ``down(migrator,
-db)``. With ``-m / --models``, migrations are generated from a
-:ref:`schema diff <schema-diff>` against your model definitions. If ``-m`` is
-not specified, a bare migration template will be written.
+db)``. ``generate`` builds the migration from a
+:ref:`schema diff <schema-diff>` against your model definitions, while
+``create`` writes a bare template.
 
 .. seealso::
    :ref:`migration-runner` for the runner, CLI and generation reference.
