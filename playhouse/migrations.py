@@ -597,7 +597,69 @@ def _resolve_diff(database, spec):
         raise MigrationError(str(exc))
 
 
-def main(argv=None):
+def _report(verb, names):
+    for name in names:
+        print('%s: %s' % (verb, name))
+    if not names:
+        print('nothing to do.')
+
+
+def _cmd_status(runner, args):
+    files = runner.migrations()
+    rows = runner.status()
+    for name, applied in rows:
+        if not applied:
+            marker = ' '
+        elif name in files:
+            marker = 'x'
+        else:
+            marker = '?'
+        line = '[%s] %s' % (marker, name)
+        if applied:
+            line += '  ' + applied.strftime('%Y-%m-%d %H:%M:%S')
+        print(line)
+    # Exit 1 when pending, so status can gate a deploy.
+    if any(not applied for _, applied in rows):
+        return 1
+
+
+def _cmd_up(runner, args):
+    _report('applied', runner.up(args.target))
+
+
+def _cmd_down(runner, args):
+    _report('reverted', runner.down(args.target))
+
+
+def _cmd_fake(runner, args):
+    _report('faked', runner.fake(args.target))
+
+
+def _cmd_initial(runner, args):
+    if runner.migrations():
+        raise MigrationError('migrations already exist in "%s".'
+                             % args.directory)
+    diff = _resolve_diff(None, args.models)
+    print(runner.create('initial', body=template(diff)))
+
+
+def _cmd_create(runner, args):
+    if not args.models:
+        print(runner.create(args.name))
+        return
+    diff = _resolve_diff(runner.database, args.models)
+    if not diff:
+        print('schema matches models. Nothing to generate.')
+        return
+    print(runner.create(args.name, body=template(diff)))
+
+
+def _cmd_diff(runner, args):
+    diff = _resolve_diff(runner.database, args.models)
+    print(diff if diff else 'schema matches models.')
+
+
+def _parser():
     prog = os.path.basename(sys.argv[0] or '')
     if not prog.startswith('pwmigrate'):
         prog = 'python -m playhouse.migrations'
@@ -606,86 +668,71 @@ def main(argv=None):
     parser.add_argument('database', help='dotted path to a Database '
                         'instance (e.g. myapp.settings.db), db url (e.g. '
                         'postgres:///app), or path to a sqlite file')
-    parser.add_argument('command',
-                        choices=('status', 'up', 'down', 'initial', 'create',
-                                 'fake', 'diff'))
-    parser.add_argument('target', nargs='?',
-                        help='migration name: stop after it (up), revert '
-                        'back through it (down), record through it (fake), '
-                        'or describe it (create). For initial and diff, '
-                        'the models module')
-    parser.add_argument('-d', '--directory', default='migrations',
-                        help='migrations directory (default: migrations)')
-    parser.add_argument('-t', '--table', default='schema_migration',
-                        help='history table name')
-    parser.add_argument('-m', '--models', metavar='MODULE',
-                        help='models module ("app.models" or '
-                        '"app.models:MODELS"). With create, generate the '
-                        'migration from the schema diff')
-    parser.add_argument('-v', '--verbose', action='store_true',
-                        help='echo SQL as it executes')
-    args = parser.parse_args(argv)
 
+    common = argparse.ArgumentParser(add_help=False)
+    common.add_argument('-d', '--directory', default='migrations',
+                        help='migrations directory (default: migrations)')
+    common.add_argument('-t', '--table', default='schema_migration',
+                        help='history table name')
+    common.add_argument('-v', '--verbose', action='store_true',
+                        help='echo SQL as it executes')
+
+    sub = parser.add_subparsers(dest='command', metavar='command',
+                                required=True)
+    p = sub.add_parser('status', parents=[common],
+                       help='list migrations and applied timestamps')
+    p.set_defaults(func=_cmd_status)
+
+    p = sub.add_parser('up', parents=[common],
+                       help='apply pending migrations in order')
+    p.add_argument('target', nargs='?', help='stop after this migration')
+    p.set_defaults(func=_cmd_up)
+
+    p = sub.add_parser('down', parents=[common],
+                       help='revert the most recent migration')
+    p.add_argument('target', nargs='?',
+                   help='revert back through this migration')
+    p.set_defaults(func=_cmd_down)
+
+    p = sub.add_parser('initial', parents=[common],
+                       help='generate the first migration, assuming an '
+                       'empty database')
+    p.add_argument('models', help='models module ("app.models" or '
+                   '"app.models:MODELS")')
+    p.set_defaults(func=_cmd_initial)
+
+    p = sub.add_parser('create', parents=[common],
+                       help='write a numbered migration file')
+    p.add_argument('name', help='migration name')
+    p.add_argument('-m', '--models', metavar='MODULE',
+                   help='generate the body from the schema diff')
+    p.set_defaults(func=_cmd_create)
+
+    p = sub.add_parser('fake', parents=[common],
+                       help='record pending migrations without running them')
+    p.add_argument('target', nargs='?', help='record through this migration')
+    p.set_defaults(func=_cmd_fake)
+
+    p = sub.add_parser('diff', parents=[common],
+                       help='print schema drift against the models')
+    p.add_argument('models', help='models module ("app.models" or '
+                   '"app.models:MODELS")')
+    p.set_defaults(func=_cmd_diff)
+    return parser
+
+
+def main(argv=None):
+    args = _parser().parse_args(argv)
     if args.verbose:
         peewee_logger = logging.getLogger('peewee')
         peewee_logger.addHandler(logging.StreamHandler())
         peewee_logger.setLevel(logging.DEBUG)
-    if args.command == 'create' and not args.target:
-        parser.error('create requires a migration name.')
-    if args.command in ('initial', 'diff') and \
-       not (args.target or args.models):
-        parser.error('%s requires a models module.' % args.command)
 
     database = None
     try:
         database = _resolve_database(args.database)
         runner = Runner(database, args.directory, args.table)
-        if args.command == 'initial':
-            if runner.migrations():
-                raise MigrationError('migrations already exist in "%s".'
-                                     % args.directory)
-            diff = _resolve_diff(None, args.target or args.models)
-            print(runner.create('initial', body=template(diff)))
-        elif args.command == 'create':
-            if args.models:
-                diff = _resolve_diff(database, args.models)
-                if not diff:
-                    print('schema matches models. Nothing to generate.')
-                    return 0
-                print(runner.create(args.target, body=template(diff)))
-            else:
-                print(runner.create(args.target))
-        elif args.command == 'diff':
-            diff = _resolve_diff(database, args.target or args.models)
-            print(diff if diff else 'schema matches models.')
-        elif args.command == 'status':
-            files = runner.migrations()
-            rows = runner.status()
-            for name, applied in rows:
-                if not applied:
-                    marker = ' '
-                elif name in files:
-                    marker = 'x'
-                else:
-                    marker = '?'
-                line = '[%s] %s' % (marker, name)
-                if applied:
-                    line += '  ' + applied.strftime('%Y-%m-%d %H:%M:%S')
-                print(line)
-            # Exit 1 when pending, so status can gate a deploy.
-            if any(not applied for _, applied in rows):
-                return 1
-        else:
-            if args.command == 'up':
-                names, verb = runner.up(args.target), 'applied'
-            elif args.command == 'down':
-                names, verb = runner.down(args.target), 'reverted'
-            else:
-                names, verb = runner.fake(args.target), 'faked'
-            for name in names:
-                print('%s: %s' % (verb, name))
-            if not names:
-                print('nothing to do.')
+        return args.func(runner, args) or 0
     except (MigrationError, DatabaseError, InterfaceError,
             ImproperlyConfigured) as exc:
         if args.verbose:
@@ -695,7 +742,6 @@ def main(argv=None):
     finally:
         if database is not None:
             database.close()
-    return 0
 
 
 if __name__ == '__main__':

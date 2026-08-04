@@ -1679,7 +1679,7 @@ class TestMigrationsCLIDiff(BaseTestCase):
         self.assertEqual(out, 'schema matches models.\n')
 
         # A second initial refuses.
-        rc, out, err = run_cli(self.url, 'initial', '-m', 'cli_diff_models',
+        rc, out, err = run_cli(self.url, 'initial', 'cli_diff_models',
                                '-d', self.migdir)
         self.assertEqual(rc, 2)
         self.assertEqual(err, 'error: migrations already exist in "%s".\n'

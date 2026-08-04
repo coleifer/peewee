@@ -201,7 +201,7 @@ than actually disconnecting.
    connection is requested.
 
    If the pool is exhausted and no ``timeout`` is configured, a
-   ``MaxConnectionsError`` is raised.
+   ``MaxConnectionsExceeded`` is raised.
 
    .. method:: manual_close()
 
@@ -647,14 +647,14 @@ Generate the initial migration from the models by passing the dotted-path to a
 
 .. code-block:: console
 
-   $ pwmigrate models.database -m models initial
+   $ pwmigrate models.database initial models
    migrations/0001_initial.py
 
 Equivalent to above, passing the database URL instead:
 
 .. code-block:: console
 
-   $ pwmigrate sqlite:///app.db -m models initial
+   $ pwmigrate sqlite:///app.db initial models
    migrations/0001_initial.py
 
 The generated file is a python script. The model being created is recorded here
@@ -704,7 +704,7 @@ database, and ``fake`` it on the live one:
 
 .. code-block:: console
 
-   $ pwmigrate models.database -m models initial
+   $ pwmigrate models.database initial models
    migrations/0001_initial.py
 
    $ pwmigrate models.database fake  # Fake it against real database.
@@ -741,11 +741,11 @@ migration:
 .. code-block:: console
 
    # Prints a list of differences between code and database schema.
-   $ pwmigrate models.database -m models diff
+   $ pwmigrate models.database diff models
    add column user.karma
 
    # Generates a migration.
-   $ pwmigrate models.database -m models create add_karma
+   $ pwmigrate models.database create add_karma -m models
    migrations/0002_add_karma.py
 
 The generated ``up()`` adds the column:
@@ -820,7 +820,7 @@ Example usage:
 .. code-block:: shell
 
    # Generate the first migration from the models, assuming an empty db:
-   pwmigrate app.settings.db -m app.models initial
+   pwmigrate app.settings.db initial app.models
 
    # Fake the initial migration (if models pre-date peewee migrations).
    pwmigrate app.settings.db fake
@@ -833,7 +833,7 @@ Example usage:
 
    # Write a skeleton migration, or generate it from the model diff:
    pwmigrate app.settings.db create "add karma"
-   pwmigrate app.settings.db -m app.models create "add karma"
+   pwmigrate app.settings.db create "add karma" -m app.models
 
    # Apply pending migrations, all or up through a target:
    pwmigrate app.settings.db up
@@ -844,7 +844,7 @@ Example usage:
    pwmigrate app.settings.db down 0002_add_karma
 
    # Print schema drift against the models:
-   pwmigrate app.settings.db -m app.models diff
+   pwmigrate app.settings.db diff app.models
 
    # Record all pending migrations as applied without running them:
    pwmigrate app.settings.db fake
@@ -885,7 +885,7 @@ Command-line options:
 +--------+---------------------------------------------------+--------------------+
 | Option | Meaning                                           | Example            |
 +========+===================================================+====================+
-| ``-m`` | Models module for ``create`` and ``diff``         | ``-m app.models``  |
+| ``-m`` | With ``create``, generate from the schema diff    | ``-m app.models``  |
 +--------+---------------------------------------------------+--------------------+
 | ``-d`` | Migrations directory (default ``migrations``)     | ``-d db/schema``   |
 +--------+---------------------------------------------------+--------------------+
@@ -1054,13 +1054,13 @@ Example:
 .. code-block:: console
 
    # View what changes were found between app models and db schema.
-   $ pwmigrate app.settings.db -m app.models diff
+   $ pwmigrate app.settings.db diff app.models
    create table note
    add column user.karma
    drop column user.email
 
    # Generate the migration.
-   $ pwmigrate app.settings.db -m app.models create "add karma"
+   $ pwmigrate app.settings.db create "add karma" -m app.models
    migrations/0007_add_karma.py
 
 The same flow in python:

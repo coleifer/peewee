@@ -24,8 +24,6 @@ In which we learn to migrate (somewhat).
 * Allow adding column to existing table as `NOT NULL`.
 * `db_url.connect()` raises `ValueError` for a url with no database name,
   e.g. `postgres://dbname` (two slashes reads `dbname` as the host).
-* `pwmigrate` reports unusable database specs as one-line errors instead of
-  tracebacks.
 * Add a `SchemaMigrator.migration_context()` helper for wrapping migrations.
   This was wanted for SQLite in order to disable FK pragma, which could trigger
   cascading deletes while recreating tables.
