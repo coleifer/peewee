@@ -102,7 +102,7 @@ Alternate drivers:
    :param connect_params: additional parameters to pass to the Database.
 
    Parse ``url`` and return an appropriate :class:`Database` instance. A
-   url without a database name raises ``ValueError``.
+   URL without a database name raises ``ValueError``.
 
    Examples:
 
@@ -258,7 +258,7 @@ The ``playhouse.migrate`` module provides a lightweight API for making
 incremental schema changes to an existing database without writing raw SQL.
 
 The peewee migration philosophy is that tools relying on database
-introspection, versioning, and auto-detection are often fragile, brittle and
+introspection, versioning, and auto-detection are often brittle and
 complex. Migrations can be written as simple python scripts and executed from
 the command-line. The :ref:`runner <migration-runner>` below adds bookkeeping
 and can be used for migration generation and execution.
@@ -289,9 +289,9 @@ Supported schema-altering operations:
 .. tip::
    Wrap migrations in :meth:`SchemaMigrator.migration_context` to ensure
    changes are not partially applied when transactional DDL is available
-   (SQLite and Postgres). The migration context additionally will temporarily
-   disable the SQLite foreign-keys pragma to ensure table rebuilds (required
-   for some operations) do not destroy rows due to ``ON DELETE CASCADE``.
+   (SQLite and Postgres). It also temporarily disables the SQLite
+   foreign-keys pragma, so table rebuilds (required for some operations)
+   do not destroy rows via ``ON DELETE CASCADE``.
 
 Operations
 ^^^^^^^^^^
@@ -400,7 +400,7 @@ Peewee appends by default):
    # Add a default value:
    migrate(migrator.add_column_default('entry', 'status', 'draft'))
 
-   # Use a function (not supported in SQLite):
+   # Use a function expression (not supported in SQLite):
    migrate(migrator.add_column_default('entry', 'created_at', fn.NOW()))
 
    # SQLite-compatible function syntax:
@@ -631,7 +631,8 @@ The following commands are available:
 * ``diff``: display differences between the database schema and model
   definitions.
 * ``up``: apply any pending migrations.
-* ``down``: roll-back one or more applied migrations.
+* ``down``: roll back one or more applied migrations.
+* ``fake``: record pending migrations as applied without running them.
 * ``status``: show which migrations have been applied and which are pending.
 
 The following sections show basic usage for common scenarios.
@@ -664,7 +665,7 @@ Store the project defaults in a ``.pwmigrate`` file in the project root
    # table = schema_migration
 
 Then generate the initial migration. ``initial`` reads the models and creates a
-migration suitable for running on an empty database.
+migration suitable for running on an empty database:
 
 .. code-block:: console
 
@@ -758,7 +759,7 @@ In this example we'll add a field to our model class:
        email = CharField()
        karma = IntegerField(default=0)  # This field is new.
 
-Then we can run two commands to verify the change was picked-up and generate a
+Then we can run two commands to verify the change was picked up and generate a
 migration:
 
 1. ``diff`` shows any changes that were identified.
@@ -807,8 +808,8 @@ Run the migration:
    [x] 0002_add_karma  2026-08-04 09:49:33
 
 Deployments run ``pwmigrate <db> up``, or call ``run(db)`` from the
-application's startup code. :ref:`generating-migration-diff` describes
-what generation covers.
+application's startup code. :ref:`schema-diff` describes what
+generation covers.
 
 Migration files
 ^^^^^^^^^^^^^^^
@@ -816,7 +817,8 @@ Migration files
 Peewee migrations are python files with a numeric prefix, defining
 ``up(migrator, db)`` and, optionally, ``down(migrator, db)``. The
 ``migrator`` is a :ref:`SchemaMigrator <migrate>` bound to the connected
-database and ``db`` is the :class:`Database`.
+database and ``db`` is the :class:`Database`, so inline models can
+subclass ``db.Model``.
 
 For anything the differ cannot write, such as a data migration, scaffold
 the next numbered file with ``create`` and fill in the body:
@@ -846,6 +848,41 @@ the next numbered file with ``create`` and fill in the body:
 
 Data migrations are plain python between (or instead of) schema
 operations.
+
+Generated files have the same shape. Treat one as a starting point, not
+a finished migration. Anything the differ cannot express is flagged with
+a TODO comment:
+
+.. code-block:: python
+
+   # Generated from a schema diff on 2026-08-03 16:17.
+   from peewee import *
+
+   # TODO: user.email: dropped column cannot be restored by down()
+
+   def up(migrator, db):
+       class User(Model):
+           class Meta:
+               database = db
+               table_name = 'user'
+
+       class Note(Model):
+           user = ForeignKeyField(User)
+           content = TextField()
+           class Meta:
+               database = db
+               table_name = 'note'
+       db.create_tables([Note])
+
+       migrator.migrate(migrator.add_column('user', 'karma', IntegerField(default=0)))
+       migrator.migrate(migrator.add_index('tweet', ('user_id', 'flags')))
+       migrator.migrate(migrator.drop_column('user', 'email'))
+
+
+   def down(migrator, db):
+       migrator.migrate(migrator.drop_index('tweet', 'tweet_user_id_flags'))
+       migrator.migrate(migrator.drop_column('user', 'karma'))
+       migrator.migrate(migrator.drop_table('note'))
 
 Command line
 ^^^^^^^^^^^^
@@ -889,6 +926,12 @@ The database is given as:
 * dotted path to a :class:`Database` instance
 * :ref:`db_url <db-url>` string
 * a path to a sqlite database file
+
+Models are given as a dotted module path. Every model defined in the
+module is used (field-less base classes are skipped and reported).
+Models imported into the module from elsewhere are ignored, so a package
+that only re-exports its models needs the explicit-list form,
+``app.models:MODELS``.
 
 .. _pwmigrate-config-file:
 
@@ -1010,6 +1053,18 @@ All migration-runner operations are available programmatically:
 
 ``run(db)`` is shorthand for ``Runner(db, 'migrations').up()``.
 
+Generate a migration from a diff:
+
+.. code-block:: python
+
+   from playhouse.migrations import Runner, template
+   from playhouse.schema_diff import diff_models
+
+   runner = Runner(db)
+   diff = diff_models(db, [User, Tweet, Note])
+   if diff:
+       runner.create('add karma', body=template(diff))
+
 .. class:: Runner(database, directory='migrations', table_name='schema_migration')
 
    .. method:: up(target=None)
@@ -1110,88 +1165,6 @@ ignored. Virtual models (sqlite FTS, etc.) are skipped.
    described. Plain additions carry ``columns``/``unique`` and no name
    (the name is chosen at creation). Removals always carry the name to
    drop.
-
-.. _generating-migration-diff:
-
-Generating a migration from a diff
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-
-The :ref:`migration-runner` can generate a migration file by comparing your
-application's models against the database schema, using the following
-commands:
-
-* ``diff``: prints simple representation of differences between code and
-  database schema.
-* ``generate``: writes the migration from the diff.
-* ``initial``: writes the first migration assuming an empty database.
-
-Example:
-
-.. code-block:: console
-
-   # View what changes were found between app models and db schema.
-   $ pwmigrate app.settings.db diff app.models
-   create table note
-   add column user.karma
-   drop column user.email
-
-   # Generate the migration.
-   $ pwmigrate app.settings.db generate "add karma" app.models
-   migrations/0007_add_karma.py
-
-The same flow in python:
-
-.. code-block:: python
-
-   from playhouse.migrations import Runner, template
-   from playhouse.schema_diff import diff_models
-
-   runner = Runner(db)
-   diff = diff_models(db, [User, Tweet, Note])
-   if diff:
-       runner.create('add karma', body=template(diff))
-
-Models are given as a dotted module path. Every model defined in the
-module is used (field-less base classes are skipped and reported).
-Models imported into the module from elsewhere are ignored, so a package
-that only re-exports its models needs the explicit-list form,
-``app.models:MODELS``.
-
-:py:func:`playhouse.migrations.template` renders a diff as a migration
-file body. Treat the generated file as a starting point, not a finished
-migration:
-
-.. code-block:: python
-
-   # Generated from a schema diff on 2026-08-03 16:17.
-   from peewee import *
-
-   # TODO: user.email: dropped column cannot be restored by down()
-
-   def up(migrator, db):
-       class User(Model):
-           class Meta:
-               database = db
-               table_name = 'user'
-
-       class Note(Model):
-           user = ForeignKeyField(User)
-           content = TextField()
-           class Meta:
-               database = db
-               table_name = 'note'
-       db.create_tables([Note])
-
-       migrator.migrate(migrator.add_column('user', 'karma', IntegerField(default=0)))
-       migrator.migrate(migrator.add_index('tweet', ('user_id', 'flags')))
-       migrator.migrate(migrator.drop_column('user', 'email'))
-
-
-   def down(migrator, db):
-       migrator.migrate(migrator.drop_index('tweet', 'tweet_user_id_flags'))
-       migrator.migrate(migrator.drop_column('user', 'karma'))
-       migrator.migrate(migrator.drop_table('note'))
-
 
 .. _reflection:
 
