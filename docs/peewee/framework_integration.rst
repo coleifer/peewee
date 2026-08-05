@@ -364,6 +364,47 @@ starts, shut the pool down on exit).
 
 .. seealso:: :ref:`pydantic`
 
+Synchronous endpoints
+^^^^^^^^^^^^^^^^^^^^^
+
+FastAPI runs a plain ``def`` endpoint in a worker thread, so synchronous
+peewee works unmodified. Scope the connection inside the endpoint body:
+
+.. code-block:: python
+
+   from fastapi import FastAPI
+   from peewee import *
+
+
+   db = SqliteDatabase('app.db')
+
+   class User(db.Model):
+       name = TextField()
+       email = TextField(unique=True)
+
+   with db:
+       db.create_tables([User])
+
+   app = FastAPI()
+
+   @app.get('/users')
+   def list_users():
+       with db:
+           return list(User.select().dicts())
+
+   @app.post('/users')
+   def create_user(name: str, email: str):
+       with db:
+           user = User.create(name=name, email=email)
+           return {'id': user.id, 'name': user.name}
+
+Do not manage the connection with a ``yield`` dependency or as request hook.
+FastAPI dispatches a sync dependency's setup, the endpoint, and the teardown as
+three separate threadpool calls(!), and under load they land on different
+threads. Peewee's connection state is thread-local, so each operation may see a
+different local state. By using ``with db:`` inside the endpoint body, the
+connection will be scoped properly.
+
 .. _quart:
 
 Quart
