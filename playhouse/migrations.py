@@ -600,12 +600,6 @@ def _resolve_database(spec):
     if not obj.database:
         raise MigrationError('"%s" is a deferred database. Initialize it, '
                              'or point at one that is.' % spec)
-    # "app.db" reads as a filename. Say which interpretation won (a file
-    # by that name, once created, would take precedence).
-    if re.match(r'[^.]+\.(db|sqlite3?)$', spec):
-        sys.stderr.write('note: no file "%s" exists. Resolved as module '
-                         '"%s", attribute "%s".\n'
-                         % (spec, module_path, attr))
     return obj
 
 

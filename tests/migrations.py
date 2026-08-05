@@ -1545,23 +1545,6 @@ class TestMigrationRunnerCLI(BaseTestCase):
             sys.path.remove(self.dir)
             sys.modules.pop('cli_proxy_mod', None)
 
-    def test_cli_ambiguous_file_module_spec(self):
-        # "app.db" reads as both a filename and a dotted module path. The
-        # module interpretation wins when no such file exists. Say so.
-        dbfile = os.path.join(self.dir, 'clash.db')
-        with open(os.path.join(self.dir, 'cli_clash_mod.py'), 'w') as fh:
-            fh.write("from peewee import *\n"
-                     "db = SqliteDatabase(%r)\n" % dbfile)
-        sys.path.insert(0, self.dir)
-        try:
-            rc, out, err = run_cli('cli_clash_mod.db', 'status',
-                                   '-d', self.migdir)
-            self.assertEqual(rc, 0)
-            self.assertIn('note: no file "cli_clash_mod.db" exists', err)
-        finally:
-            sys.path.remove(self.dir)
-            sys.modules.pop('cli_clash_mod', None)
-
     def test_cli_workflow(self):
         rc, out, err = run_cli(self.url, 'create', 'add widget',
                                '-d', self.migdir)
