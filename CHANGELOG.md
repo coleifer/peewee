@@ -18,6 +18,9 @@ In which we learn to migrate (somewhat).
 * Add basic `playhouse.schema_diff` for comparing models against the
   schema and reporting differences (tables to create, columns added or
   removed, indexes added or removed).
+* Render common field defaults in generated migrations
+  (`datetime.datetime.now`, `uuid.uuid4`, `decimal.Decimal`, enum values,
+  etc.) rather than flagging them with a TODO.
 * Allow adding column to existing table as `NOT NULL` with migrator, which
   allows skipping the 3-step process of add nullable, populate default, set not
   null.

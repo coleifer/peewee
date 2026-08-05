@@ -23,16 +23,21 @@ Set ``atomic = False`` at module scope to disable transaction wrapping.
 """
 import argparse
 import datetime
+import decimal
+import enum
 import glob
 import importlib.util
 import logging
 import os
 import re
 import sys
+import time
 import traceback
+import uuid
 from collections import namedtuple
 
 from peewee import *
+from peewee import is_model
 from peewee import sort_models
 from playhouse.migrate import SchemaMigrator
 from playhouse.migrate import make_index_name
@@ -218,7 +223,30 @@ def run(database, directory='migrations', **kwargs):
     return Runner(database, directory, **kwargs).up()
 
 
-def _build_field_args(field, todos, targets=None, unbound=False):
+_COMMON_DEFAULTS = (
+    (datetime.datetime.now, 'datetime.datetime.now', 'import datetime'),
+    (datetime.datetime.utcnow, 'datetime.datetime.utcnow', 'import datetime'),
+    (datetime.date.today, 'datetime.date.today', 'import datetime'),
+    (time.time, 'time.time', 'import time'),
+    (time.time_ns, 'time.time_ns', 'import time'),
+    (uuid.uuid4, 'uuid.uuid4', 'import uuid'),
+    (dict, 'dict', None),
+    (list, 'list', None))
+
+def _handle_common_default(default, args, imports):
+    for value, source, imp in _COMMON_DEFAULTS:
+        if default == value:
+            args.append('default=%s' % source)
+            if imp:
+                imports.add(imp)
+            return True
+    if isinstance(default, decimal.Decimal):
+        args.append('default=decimal.Decimal(%r)' % str(default))
+        imports.add('import decimal')
+        return True
+    return False
+
+def _build_field_args(field, imports, todos, targets=None, unbound=False):
     args = []
 
     # Populate FK-only attrs first.
@@ -255,9 +283,13 @@ def _build_field_args(field, todos, targets=None, unbound=False):
 
     # Basic `default=` handling.
     if field.default is not None:
-        if isinstance(field.default, (str, int, float, bool)):
-            args.append('default=%r' % field.default)
-        else:
+        default = field.default
+        if isinstance(default, enum.Enum):
+            # IntEnum passes the isinstance() below but %r is not valid source.
+            default = default.value
+        if isinstance(default, (str, int, float, bool)):
+            args.append('default=%r' % default)
+        elif not _handle_common_default(default, args, imports):
             todos.append('%s: default %r must be added by hand' %
                          (field.name, field.default))
 
@@ -274,20 +306,17 @@ def _build_field_args(field, todos, targets=None, unbound=False):
 
     return args
 
-
 def _build_field(field, imports, todos, targets=None, unbound=False):
     cls = type(field)
     if cls.__module__ != 'peewee':
         imports.add('from %s import %s' % (cls.__module__, cls.__name__))
 
-    args = _build_field_args(field, todos, targets, unbound)
+    args = _build_field_args(field, imports, todos, targets, unbound)
     return '%s(%s)' % (cls.__name__, ', '.join(args))
-
 
 def _is_implicit_id(field):
     return (type(field) is AutoField and field.name == 'id' and
             field.column_name == 'id')
-
 
 def _build_model(model, imports, todos, targets):
     meta = model._meta
@@ -325,7 +354,6 @@ def _build_model(model, imports, todos, targets):
 
     return lines
 
-
 def _build_stub(model, fields, imports):
     # A frozen stand-in for an existing table: its name plus whichever
     # referenced columns are not the implicit id.
@@ -346,13 +374,11 @@ def _build_stub(model, fields, imports):
         lines.append('        schema = %r' % meta.schema)
     return lines
 
-
 def _build_add_index(idx):
     return 'migrator.migrate(migrator.add_index(%r, %r%s))' % (
         idx.table,
         idx.columns,
         ', unique=True' if idx.unique else '')
-
 
 def _block(fn, lines):
     while lines and not lines[-1]:
@@ -495,10 +521,6 @@ def template(diff):
     return '\n'.join(out) + '\n'
 
 
-def _is_model(obj):
-    return isinstance(obj, type) and issubclass(obj, Model)
-
-
 def _cwd_import(path):
     if os.getcwd() not in sys.path:
         sys.path.insert(0, os.getcwd())
@@ -515,7 +537,7 @@ def _resolve_models(spec):
         if obj is None:
             raise MigrationError('"%s" not found in module "%s".'
                                  % (attr, spec))
-        if _is_model(obj):
+        if is_model(obj):
             return [obj], []
         try:
             models = list(obj)
@@ -523,13 +545,13 @@ def _resolve_models(spec):
             raise MigrationError('"%s:%s" must name a Model or a list '
                                  'of Models.' % (spec, attr))
         for model in models:
-            if not _is_model(model):
+            if not is_model(model):
                 raise MigrationError('"%s:%s" must name a Model or a list '
                                      'of Models.' % (spec, attr))
         return models, []
     models, skipped = [], []
     for value in vars(module).values():
-        if _is_model(value) and value is not Model and \
+        if is_model(value) and value is not Model and \
            value.__module__ == module.__name__:
             fields = value._meta.sorted_fields
             if len(fields) == 1 and _is_implicit_id(fields[0]) and \

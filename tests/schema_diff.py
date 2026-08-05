@@ -1,5 +1,10 @@
+import datetime
+import decimal
+import enum
 import shutil
 import tempfile
+import time
+import uuid
 
 from peewee import *
 from playhouse.migrations import Runner
@@ -471,6 +476,37 @@ def down(migrator, db):
     migrator.migrate(migrator.drop_table('sd_field_defaults'))
 """
 
+# Recognized common defaults render with their imports. IntEnum stores
+# its plain value.
+COMMON_DEFAULTS_BODY = """\
+from peewee import *
+import datetime
+import decimal
+import time
+import uuid
+
+def up(migrator, db):
+    class SdCommonDefaults(Model):
+        created = DateTimeField(default=datetime.datetime.now)
+        updated = DateTimeField(default=datetime.datetime.utcnow)
+        day = DateField(default=datetime.date.today)
+        stamp = FloatField(default=time.time)
+        stamp_ns = IntegerField(default=time.time_ns)
+        token = UUIDField(default=uuid.uuid4)
+        meta = JSONField(default=dict)
+        tags = JSONField(default=list)
+        amount = DecimalField(default=decimal.Decimal('0.01'))
+        color = IntegerField(default=1)
+        class Meta:
+            database = db
+            table_name = 'sd_common_defaults'
+    db.create_tables([SdCommonDefaults])
+
+
+def down(migrator, db):
+    migrator.migrate(migrator.drop_table('sd_common_defaults'))
+"""
+
 # A field class from outside core peewee carries its import.
 IMPORT_BODY = """\
 from peewee import *
@@ -562,6 +598,25 @@ class TestTemplate(ModelTestCase):
 
         body = template(diff_models(self.database, [SdFieldDefaults]))
         self.assertEqual(strip_header(body), DEFAULTS_BODY)
+
+    def test_common_defaults(self):
+        class SdColor(enum.IntEnum):
+            RED = 1
+
+        class SdCommonDefaults(TestModel):
+            created = DateTimeField(default=datetime.datetime.now)
+            updated = DateTimeField(default=datetime.datetime.utcnow)
+            day = DateField(default=datetime.date.today)
+            stamp = FloatField(default=time.time)
+            stamp_ns = IntegerField(default=time.time_ns)
+            token = UUIDField(default=uuid.uuid4)
+            meta = JSONField(default=dict)
+            tags = JSONField(default=list)
+            amount = DecimalField(default=decimal.Decimal('0.01'))
+            color = IntegerField(default=SdColor.RED)
+
+        body = template(diff_models(self.database, [SdCommonDefaults]))
+        self.assertEqual(strip_header(body), COMMON_DEFAULTS_BODY)
 
     def test_field_import(self):
         # Import locally: module-level it would shadow core JSONField.

@@ -821,8 +821,12 @@ The generated ``up()`` adds the column:
        migrator.migrate(migrator.drop_column('user', 'karma'))
 
 Peewee's migration will populate ``default=`` for basic value types (``str``,
-``int``, ``float``, ``bool``). Anything else will be marked with a TODO
-comment at the top of the migration script.
+``int``, ``float``, ``bool``), for ``decimal.Decimal`` values, and for the
+common callables ``datetime.datetime.now`` and ``utcnow``,
+``datetime.date.today``, ``time.time``, ``time.time_ns``, ``uuid.uuid4``,
+``dict`` and ``list``, adding any needed import. An ``enum`` member renders
+as its value. Anything else will be marked with a TODO comment at the top
+of the migration script.
 
 The differ matches columns by name, so a renamed field diffs as an add
 plus a drop. When the data must survive, replace the generated pair with
