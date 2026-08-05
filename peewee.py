@@ -4717,6 +4717,11 @@ class PostgresqlDatabase(Database):
 
         super(PostgresqlDatabase, self).init(database, **kwargs)
 
+    @property
+    def index_value_literals(self):
+        # Index DDL cannot take psycopg3's server-side bound parameters.
+        return isinstance(self._adapter, Psycopg3Adapter)
+
     def _connect(self):
         self._adapter.check_driver()
 

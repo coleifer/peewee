@@ -569,6 +569,46 @@ class TestSchemaMigration(ModelTestCase):
             with self.assertRaisesCtx((IntegrityError, InternalError)):
                 Person.create(first_name='first', last_name='last')
 
+    @skip_if(IS_MYSQL, 'requires partial-index support')
+    def test_add_index_where(self):
+        # Unique only within the predicate.
+        tbl = Table('person')
+        migrate(self.migrator.add_index(
+            'person', ('last_name',), True,
+            where=(tbl.c.first_name == 'live')))
+
+        Person.create(first_name='live', last_name='x')
+        Person.create(first_name='draft', last_name='x')
+        with self.database.transaction():
+            with self.assertRaisesCtx((IntegrityError, InternalError)):
+                Person.create(first_name='live', last_name='x')
+
+    @requires_postgresql
+    def test_add_index_nulls_distinct(self):
+        if self.database.server_version < 150000:
+            self.skipTest('requires postgres 15')
+        migrate(self.migrator.add_index('person', ('dob',), True,
+                                        nulls_distinct=False))
+        Person.create(first_name='a', last_name='a')
+        with self.database.transaction():
+            with self.assertRaisesCtx((IntegrityError, InternalError)):
+                Person.create(first_name='b', last_name='b')
+
+    def test_sql_operation(self):
+        Person.create(first_name='f', last_name='l')
+        migrate(
+            self.migrator.add_column('person', 'karma',
+                                     IntegerField(null=True)),
+            self.migrator.sql('UPDATE person SET karma = %s'
+                              % self.database.param, (90,)),
+            self.migrator.add_not_null('person', 'karma'))
+
+        curs = self.database.execute_sql('SELECT karma FROM person')
+        self.assertEqual([karma for karma, in curs.fetchall()], [90])
+        karma, = [c for c in self.database.get_columns('person')
+                  if c.name == 'karma']
+        self.assertFalse(karma.null)
+
     def test_add_unique_column(self):
         uf = CharField(default='', unique=True)
 

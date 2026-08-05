@@ -1014,6 +1014,8 @@ class PostgresqlDatabase(Database):
     sequences: bool
     psycopg2_adapter: Incomplete
     psycopg3_adapter: Incomplete
+    @property
+    def index_value_literals(self) -> bool: ...  # type: ignore[override]
     def init(
         self,
         database: str | None,

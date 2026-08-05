@@ -130,6 +130,7 @@ from peewee import Expression
 from peewee import Node
 from peewee import NodeList
 from peewee import OP
+from peewee import ValueLiterals
 from peewee import callable_
 from peewee import sqlite3
 from peewee import _truncate_constraint_name
@@ -478,12 +479,17 @@ class SchemaMigrator(object):
         return ctx.literal(' CASCADE') if cascade else ctx
 
     @operation
-    def add_index(self, table, columns, unique=False, using=None):
+    def add_index(self, table, columns, unique=False, using=None, where=None,
+                  nulls_distinct=None):
         ctx = self.make_context()
         index_name = make_index_name(table, columns)
         table_obj = Table(table)
         cols = [getattr(table_obj.c, column) for column in columns]
-        index = Index(index_name, table_obj, cols, unique=unique, using=using)
+        index = Index(index_name, table_obj, cols, unique=unique, using=using,
+                      where=where, nulls_distinct=nulls_distinct)
+        if self.database.index_value_literals:
+            # Sqlite prohibits bound parameters in partial-index predicates.
+            index = ValueLiterals(index)
         return ctx.sql(index)
 
     @operation
@@ -492,6 +498,10 @@ class SchemaMigrator(object):
                 .make_context()
                 .literal('DROP INDEX ')
                 .sql(Entity(index_name)))
+
+    @operation
+    def sql(self, sql, params=None):
+        return SQL(sql, params)
 
 
 class PostgresqlMigrator(SchemaMigrator):

@@ -375,6 +375,15 @@ Peewee appends by default):
        migrator.drop_index('story', 'story_pub_date_status'),
    )
 
+   # Only index published stories (sqlite and postgres).
+   story = Table('story')
+   migrate(migrator.add_index('story', ('pub_date',), False,
+                              where=(story.c.status == 'published')))
+
+   # Unique index treating NULLs as equal (postgres 15+).
+   migrate(migrator.add_index('story', ('external_id',), True,
+                              nulls_distinct=False))
+
 **Add / drop constraints:**
 
 .. code-block:: python
@@ -411,6 +420,20 @@ Peewee appends by default):
 
    # Remove a default:
    migrate(migrator.drop_column_default('entry', 'status'))
+
+**Raw SQL:**
+
+.. code-block:: python
+
+   # Interleave data fixes with schema changes in a single plan.
+   migrate(
+       migrator.add_column('entry', 'score', IntegerField(null=True)),
+       migrator.sql('UPDATE entry SET score = %s', (0,)),
+       migrator.add_not_null('entry', 'score'),
+   )
+
+``params`` are bound by the database driver, so the placeholder is the
+driver's own: ``%s`` for postgres and mysql, ``?`` for sqlite.
 
 .. note::
    Postgres users may need to set the search-path when using a non-standard
@@ -558,17 +581,25 @@ Migration API
       :param bool cascade: Append ``CASCADE`` (not supported by sqlite).
       :param str schema: Optional schema qualification.
 
-   .. method:: add_index(table, columns, unique=False, using=None)
+   .. method:: add_index(table, columns, unique=False, using=None, where=None, nulls_distinct=None)
 
       :param str table: Name of table on which to create the index.
       :param list columns: List of columns which should be indexed.
       :param bool unique: Whether the new index should specify a unique constraint.
       :param str using: Index type (where supported), e.g. GiST or GIN.
+      :param where: Expression for a partial index (sqlite and postgres).
+      :param bool nulls_distinct: For unique indexes, whether NULL values
+          are treated as distinct (postgres 15+).
 
    .. method:: drop_index(table, index_name)
 
       :param str table: Name of the table containing the index to be dropped.
       :param str index_name: Name of the index to be dropped.
+
+   .. method:: sql(sql, params=None)
+
+      Raw SQL as an operation, letting data fixes interleave with schema
+      changes in a single ``migrate()`` call.
 
    .. method:: add_constraint(table, name, constraint)
 
