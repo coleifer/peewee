@@ -21,6 +21,9 @@ In which we learn to migrate (somewhat).
 * Render common field defaults in generated migrations
   (`datetime.datetime.now`, `uuid.uuid4`, `decimal.Decimal`, enum values,
   etc.) rather than flagging them with a TODO.
+* Server-side cursors opened inside a transaction on psycopg3 are no longer
+  declared `WITH HOLD`. They stream and are scoped to the transaction, rather
+  than spooling their remaining rows server-side at commit.
 * Allow adding column to existing table as `NOT NULL` with migrator, which
   allows skipping the 3-step process of add nullable, populate default, set not
   null.

@@ -4527,12 +4527,6 @@ class _BasePsycopgAdapter(object):
             return self.isolation_levels[isolation_level]
         return isolation_level
 
-    def server_side_cursor(self, conn):
-        # psycopg2/3 do not allow us to use these in autocommit, even if we ARE
-        # inside a transaction - so specify withhold (not desirable!).
-        return conn.cursor(name=str(uuid.uuid1()), withhold=True)
-
-
 class Psycopg2Adapter(_BasePsycopgAdapter):
     isolation_levels = {
         1: 'READ COMMITTED',
@@ -4606,6 +4600,11 @@ class Psycopg2Adapter(_BasePsycopgAdapter):
             return True
         return False
 
+    def server_side_cursor(self, conn):
+        # psycopg2 does not allow named cursors in autocommit, even if we ARE
+        # inside a transaction - so specify withhold (not desirable!).
+        return conn.cursor(name=str(uuid.uuid1()), withhold=True)
+
 
 class Psycopg3Adapter(_BasePsycopgAdapter):
     isolation_levels = {
@@ -4672,6 +4671,12 @@ class Psycopg3Adapter(_BasePsycopgAdapter):
         except Exception:
             return True
         return False
+
+    def server_side_cursor(self, conn):
+        # In a transaction a plain named cursor streams and is scoped to it.
+        # Otherwise the server requires withhold, which spools at declare.
+        in_txn = conn.pgconn.transaction_status == TransactionStatus.INTRANS
+        return conn.cursor(name=str(uuid.uuid1()), withhold=not in_txn)
 
 
 class PostgresqlDatabase(Database):

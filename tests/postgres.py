@@ -13,6 +13,7 @@ from playhouse.reflection import Introspector
 
 from .base import BaseTestCase
 from .base import DatabaseTestCase
+from .base import IS_PSYCOPG3
 from .base import ModelTestCase
 from .base import TestModel
 from .base import db_loader
@@ -1140,6 +1141,28 @@ class TestServerSide(ModelTestCase):
         with self.assertQueryCount(1):
             data = [row.value for row in ServerSide(query)]
             self.assertEqual(data, list(range(100)))
+
+    def test_cursor_holdability(self):
+        query = Register.select().order_by(Register.value)
+
+        def is_holdable():
+            curs = self.database.execute_sql(
+                'select is_holdable from pg_cursors')
+            return curs.fetchone()[0]
+
+        # In a transaction psycopg3 scopes the cursor to it, psycopg2 always
+        # requires a holdable cursor.
+        with self.database.atomic():
+            it = iter(ServerSide(query, array_size=10))
+            self.assertEqual(next(it).value, 0)
+            self.assertEqual(is_holdable(), not IS_PSYCOPG3)
+            self.assertEqual([r.value for r in it], list(range(1, 100)))
+
+        # Without a transaction the server requires a holdable cursor.
+        it = iter(ServerSide(query, array_size=10))
+        self.assertEqual(next(it).value, 0)
+        self.assertTrue(is_holdable())
+        self.assertEqual([r.value for r in it], list(range(1, 100)))
 
     def test_lower_level_apis(self):
         query = Register.select(Register.value).order_by(Register.value)
