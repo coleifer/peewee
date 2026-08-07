@@ -987,7 +987,9 @@ Server-Side Cursors
 
 For large result sets, server-side (named) cursors stream rows from the server
 rather than loading the entire result into memory. Rows are fetched
-transparently from the server as you iterate.
+transparently from the server as you iterate. A regular cursor, by contrast,
+buffers the complete result set on the client at execute time, even when
+iterating with :meth:`~BaseQuery.iterator`.
 
 Refer to your driver documentation for details:
 
@@ -1019,11 +1021,52 @@ Rows are fetched from the server in batches of ``array_size``, which defaults
 to the driver's ``itersize`` (2000 with psycopg2, 100 with psycopg3). For
 large scans specify ``array_size`` explicitly.
 
-Cursors opened outside a transaction are declared ``WITH HOLD``, and the
-server materializes the full result set at declare time. Inside a transaction
-rows stream on demand. On psycopg3 the cursor is scoped to the transaction.
-On psycopg2, which always requires holdable cursors, a cursor left open at
-commit spools its remaining rows and survives the transaction.
+A named cursor is ordinarily bound to a transaction and is destroyed when the
+transaction ends. Declaring it ``WITH HOLD`` lets it outlive the transaction.
+The server pays for this at commit by copying the cursor's remaining rows
+into temporary storage, and later fetches read from that copy. Peewee
+connections autocommit, so a ``WITH HOLD`` cursor opened outside a
+transaction is committed at once and materializes the entire result set
+before the first row arrives. Inside a transaction nothing is copied and
+rows stream on demand.
+
+Peewee declares ``WITH HOLD`` only when it has to. With psycopg3, a cursor
+opened inside a transaction is a plain named cursor. It streams, commit is
+instant, and the cursor ends with the transaction. Iterating after the
+transaction closes raises ``InvalidCursorName``. psycopg2 does not allow
+plain named cursors on autocommit connections, so peewee always declares
+``WITH HOLD`` there. Inside a transaction such a cursor streams all the same,
+but if it is still open when the transaction commits, the remaining rows are
+copied and the cursor survives.
+
+Iterate inside a transaction when you can. Use a cursor with no transaction
+when the iteration is too long to hold one open, and accept the up-front
+materialization. When the result fits in client memory, a regular cursor is
+simpler still.
+
+.. list-table::
+   :header-rows: 1
+
+   * -
+     - Regular cursor
+     - Server-side, in transaction
+     - Server-side, no transaction
+   * - Client memory
+     - entire result set
+     - one batch of rows
+     - one batch of rows
+   * - Up-front cost
+     - full transfer at execute
+     - none, rows stream
+     - full materialization at declare
+   * - Transaction
+     - not required
+     - open for the whole iteration
+     - not required
+   * - Cursor cleanup
+     - automatic
+     - close, exhaust, or transaction end (psycopg3)
+     - close or exhaust, else lives until the connection closes
 
 For more granular control or to close the cursor explicitly:
 
