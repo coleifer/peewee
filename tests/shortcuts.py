@@ -704,7 +704,7 @@ class TestReconnectMixin(DatabaseTestCase):
         self.assertEqual(self.database._close_counter, 1)
 
         # Due to how we configured our mock, our queries are now failing and we
-        # can verify a reconnect is occuring *AND* the exception is propagated.
+        # can verify a reconnect is occurring *AND* the exception is propagated.
         self.assertRaises(OperationalError, self.database.execute_sql, sql)
         self.assertEqual(self.database._close_counter, 2)
 
@@ -729,7 +729,7 @@ class TestReconnectMixin(DatabaseTestCase):
             self.database._query_counter = 1
 
         # Due to how we configured our mock, our queries are now failing and we
-        # can verify a reconnect is occuring *AND* the exception is propagated.
+        # can verify a reconnect is occurring *AND* the exception is propagated.
         self.assertRaises(OperationalError, self.database.atomic().__enter__)
         self.assertEqual(self.database._close_counter, 2)
         self.assertFalse(self.database.in_transaction())
