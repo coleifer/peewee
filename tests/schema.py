@@ -913,7 +913,7 @@ class TestModelDDL(ModelDatabaseTestCase):
             '"label" VARCHAR(255) NOT NULL)'), [])
 
     def test_constraint_inheritance(self):
-        class Product(TestModel):
+        class Product(self.database.Model):
             price = IntegerField(constraints=[Check('price > 0', name='pc')])
         class Child(Product):
             pass
