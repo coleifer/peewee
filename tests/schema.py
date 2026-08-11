@@ -912,6 +912,21 @@ class TestModelDDL(ModelDatabaseTestCase):
             '"value" INTEGER NOT NULL, '
             '"label" VARCHAR(255) NOT NULL)'), [])
 
+    def test_constraint_inheritance(self):
+        class Product(TestModel):
+            price = IntegerField(constraints=[Check('price > 0', name='pc')])
+        class Child(Product):
+            pass
+
+        self.assertSQL(Product._schema._create_table(False), (
+            'CREATE TABLE "product" ('
+            '"id" INTEGER NOT NULL PRIMARY KEY, '
+            '"price" INTEGER NOT NULL CONSTRAINT "pc" CHECK (price > 0))'), [])
+        self.assertSQL(Child._schema._create_table(False), (
+            'CREATE TABLE "child" ('
+            '"id" INTEGER NOT NULL PRIMARY KEY, '
+            '"price" INTEGER NOT NULL CONSTRAINT "pc" CHECK (price > 0))'), [])
+
 
 class TestDDLAdditionalSQL(ModelDatabaseTestCase):
     database = get_in_memory_db()

@@ -1648,6 +1648,8 @@ class Entity(ColumnBase):
         self._path = [p for p in path if p]
 
     def __getattr__(self, attr):
+        if attr.startswith('__') and attr.endswith('__'):
+            return super(Entity, self).__getattr__(attr)
         return Entity(*self._path + [attr])
 
     def get_sort_key(self, ctx):
