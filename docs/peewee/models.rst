@@ -1249,6 +1249,11 @@ auto-incrementing integer field named ``id``:
        title = TextField()
        # Peewee implicitly adds: id = AutoField()
 
+.. note::
+   The implicit ``id`` is added while the model class is being constructed, so
+   static type checkers cannot see it. If you use mypy or pyright, declare
+   ``id = AutoField()`` on your model (or once on your base model).
+
 To use a different name for the auto-incrementing primary key, declare an
 :class:`AutoField` explicitly:
 
