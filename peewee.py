@@ -2363,8 +2363,8 @@ class SelectBase(_HashableSource, Source, SelectQuery):
     @database_required
     def scalar(self, database, as_tuple=False, as_dict=False):
         if as_dict:
-            return self.dicts().peek(database)
-        row = self.tuples().peek(database)
+            return self.dicts().first(database)
+        row = self.tuples().first(database)
         return row[0] if row and not as_tuple else row
 
     @database_required

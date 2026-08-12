@@ -2501,6 +2501,9 @@ Model
       scalar values are anticipated (e.g. multiple aggregations in a single
       query) then you may specify ``as_tuple=True`` to get the row tuple.
 
+      A ``LIMIT 1`` is applied internally, so only a single row is
+      requested from the database. The query itself is not modified.
+
       Example:
 
       .. code-block:: python
@@ -6057,6 +6060,9 @@ Queries
       Return a scalar value from the first row of results. If multiple
       scalar values are anticipated (e.g. multiple aggregations in a single
       query) then you may specify ``as_tuple=True`` to get the row tuple.
+
+      A ``LIMIT 1`` is applied internally, so only a single row is
+      requested from the database (the query itself is not mutated).
 
       Example:
 

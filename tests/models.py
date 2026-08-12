@@ -3710,6 +3710,20 @@ class TestScalarIntegration(ModelTestCase):
         self.assertEqual(count, 3)
 
     @requires_models(User)
+    def test_scalar_implicit_limit(self):
+        for u in ('huey', 'mickey', 'zaizee'):
+            User.create(username=u)
+        query = User.select(User.username).order_by(User.username.desc())
+        self.assertEqual(query.scalar(), 'zaizee')
+        self.assertHistory(1, [
+            ('SELECT "t1"."username" FROM "users" AS "t1" '
+             'ORDER BY "t1"."username" DESC LIMIT ?', [1])])
+
+        # The limit is applied to an internal clone, not the query itself.
+        self.assertEqual([u.username for u in query],
+                         ['zaizee', 'mickey', 'huey'])
+
+    @requires_models(User)
     def test_scalar_as_tuple(self):
         for u in ('huey', 'mickey', 'zaizee'):
             User.create(username=u)
