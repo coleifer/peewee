@@ -26,11 +26,13 @@ class count_queries(object):
 
     def __enter__(self):
         self._handler = _QueryLogHandler()
+        self._level = logger.level
         logger.setLevel(logging.DEBUG)
         logger.addHandler(self._handler)
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
+        logger.setLevel(self._level)
         logger.removeHandler(self._handler)
         if self.only_select:
             self.count = len([q for q in self._handler.queries
