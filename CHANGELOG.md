@@ -43,6 +43,8 @@ In which we learn to migrate (somewhat).
 * `scalar()` applies a `LIMIT 1` via `first()`, rather than running the
   query unbounded and reading the first value. The query itself is not mutated,
   the limit is applied only on an internal copy, refs #3068.
+* `commit()` / `rollback()` on a closed db will raise rather than silently open
+  a new connection.
 
 [View commits](https://github.com/coleifer/peewee/compare/4.3.0...master)
 

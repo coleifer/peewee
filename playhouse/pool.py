@@ -154,24 +154,22 @@ class PooledDatabase(object):
         if close_conn:
             self._in_use.pop(key, None)
             self._close_raw(conn)
-            return
-
-        if key not in self._in_use:
+        elif key not in self._in_use:
             logger.debug('Connection %s not in use, ignoring close.', key)
             return
-
-        pool_conn = self._in_use.pop(key)
-        if self._stale_timeout and self._is_stale(pool_conn.timestamp):
-            logger.debug('Closing stale connection %s on check-in.', key)
-            self._close_raw(conn)
-        elif not self._can_reuse(conn):
-            logger.debug('Connection %s not reusable, closing.', key)
-            self._close_raw(conn)
         else:
-            logger.debug('Returning %s to pool.', key)
-            self._heap_counter += 1
-            heapq.heappush(self._connections,
-                           (pool_conn.timestamp, self._heap_counter, conn))
+            pool_conn = self._in_use.pop(key)
+            if self._stale_timeout and self._is_stale(pool_conn.timestamp):
+                logger.debug('Closing stale connection %s on check-in.', key)
+                self._close_raw(conn)
+            elif not self._can_reuse(conn):
+                logger.debug('Connection %s not reusable, closing.', key)
+                self._close_raw(conn)
+            else:
+                logger.debug('Returning %s to pool.', key)
+                self._heap_counter += 1
+                heapq.heappush(self._connections,
+                               (pool_conn.timestamp, self._heap_counter, conn))
 
         # Wake up thread that may be waiting on connection.
         self._pool_available.notify()

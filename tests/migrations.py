@@ -9,6 +9,7 @@ from contextlib import redirect_stdout
 from functools import partial
 
 from peewee import *
+from peewee import _truncate_constraint_name
 from playhouse.migrate import *
 from playhouse.migrations import MigrationError
 from playhouse.migrations import Runner
@@ -1113,6 +1114,8 @@ class TestSchemaMigration(ModelTestCase):
         ]
         name = make_index_name('very_long_table_name', columns)
         self.assertEqual(len(name), 64)
+        self.assertEqual(name, _truncate_constraint_name(
+            '_'.join(['very_long_table_name'] + columns)))
 
 
 class BadNames(TestModel):

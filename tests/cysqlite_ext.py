@@ -36,6 +36,13 @@ class TestCSqliteHelpers(CyDatabaseTestCase):
         self.database.rollback()
         self.assertTrue(self.database.autocommit)
 
+    def test_commit_rollback_closed(self):
+        self.database.close()
+        self.assertRaises(InterfaceError, self.database.commit)
+        self.assertRaises(InterfaceError, self.database.rollback)
+        self.assertTrue(self.database.is_closed())
+        self.database.connect()
+
     def test_commit_hook(self):
         state = {}
 

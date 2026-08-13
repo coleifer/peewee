@@ -90,6 +90,13 @@ class TestReflection(BaseReflectionTestCase):
     requires = [ColTypes, Nullable, RelModel, FKPK, Underscores, Category,
                 Nugget]
 
+    def test_column_map_not_shared_with_class(self):
+        metadata = self.introspector.metadata
+        self.assertIsNot(metadata.column_map, type(metadata).column_map)
+        metadata.column_map['__fake__'] = TextField
+        self.assertNotIn('__fake__', type(metadata).column_map)
+        del metadata.column_map['__fake__']
+
     def test_generate_models(self):
         models = self.introspector.generate_models()
         self.assertTrue(set((

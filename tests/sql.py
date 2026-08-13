@@ -2657,6 +2657,13 @@ class TestWindowFunctions(BaseTestCase):
             '(PARTITION BY "t1"."data" ORDER BY "t1"."timestamp") AS "elapsed"'
             ' FROM "evtlog" AS "t1" ORDER BY "t1"."timestamp"'), [])
 
+    def test_duplicate_window_alias_error(self):
+        w1 = Window(partition_by=[Register.category])
+        w2 = Window(order_by=[Register.value])
+        query = Register.select(fn.AVG(Register.value).over(w1))
+        self.assertRaises(ValueError, query.window, w1, w2)
+        query.window(w1, w2.alias('w2'))
+
     def test_named_window(self):
         window = Window(partition_by=[Register.category])
         query = (Register
@@ -3319,6 +3326,12 @@ class TestOnConflictSqlite(BaseTestCase):
             'SET "extra" = COALESCE('
             '(SELECT MAX("t1"."n") FROM "stat" AS "t1"), ?)'),
             [1, 'k1', 'v1', 0])
+
+    def test_unbound_error(self):
+        KV = Table('kv', ('key', 'value'))
+        query = KV.insert(key='k1', value='v1').on_conflict(
+            conflict_target=(KV.key,), preserve=(KV.value,))
+        self.assertRaises(InterfaceError, query.sql)
 
 
 class TestOnConflictMySQL(BaseTestCase):

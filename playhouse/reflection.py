@@ -187,6 +187,8 @@ class Metadata(object):
     def __init__(self, database):
         self.database = database
         self.requires_extension = False
+        # Copy so live-probed types do not accumulate on the class-level map.
+        self.column_map = dict(self.column_map)
 
     def execute(self, sql, *params):
         return self.database.execute_sql(sql, params)

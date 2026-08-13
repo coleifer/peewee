@@ -334,6 +334,24 @@ class TestTransaction(BaseTransactionTestCase):
             with self.assertRaises(ValueError):
                 with db.manual_commit(): pass
 
+    def test_mixing_manual_db_context(self):
+        with db.manual_commit():
+            with self.assertRaises(ValueError):
+                with db: pass
+        # The aborted enter does not poison the connection-context stack.
+        self.assertEqual(db._state.ctx, [])
+        with db.connection_context():
+            pass
+        self.assertTrue(db.is_closed())
+        db.connect()
+
+    def test_commit_rollback_closed(self):
+        db.close()
+        self.assertRaises(InterfaceError, db.commit)
+        self.assertRaises(InterfaceError, db.rollback)
+        self.assertTrue(db.is_closed())
+        db.connect()
+
     def test_closing_db_in_transaction(self):
         with db.atomic():
             self.assertRaises(OperationalError, db.close)

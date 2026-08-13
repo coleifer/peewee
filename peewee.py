@@ -2057,6 +2057,9 @@ class OnConflict(Node):
         self._conflict_constraint = conflict_constraint
 
     def get_conflict_statement(self, ctx, query):
+        if ctx.state.conflict_statement is None:
+            raise InterfaceError('ON CONFLICT clause requires the query be '
+                                 'bound to a database.')
         return ctx.state.conflict_statement(self, query)
 
     def get_conflict_update(self, ctx, query):
@@ -2652,6 +2655,10 @@ class Select(SelectBase):
 
     @Node.copy
     def window(self, *windows):
+        aliases = [window._alias for window in windows]
+        if len(set(aliases)) != len(aliases):
+            raise ValueError('Window definitions must have unique aliases. '
+                             'Use alias= to name each window.')
         self._windows = windows if windows else None
 
     @Node.copy
@@ -3782,8 +3789,9 @@ class Database(_callable_context_manager):
         if self.is_closed():
             self.connect()
         ctx = self.atomic()
-        self._state.ctx.append(ctx)
+        # Track the context only once entered, an aborted entry is never popped.
         ctx.__enter__()
+        self._state.ctx.append(ctx)
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
@@ -4037,10 +4045,16 @@ class Database(_callable_context_manager):
             self.cursor().execute('BEGIN')
 
     def rollback(self):
+        if self.is_closed():
+            raise InterfaceError('Cannot rollback, database connection not '
+                                 'open.')
         with __exception_wrapper__:
             self.cursor().execute('ROLLBACK')
 
     def commit(self):
+        if self.is_closed():
+            raise InterfaceError('Cannot commit, database connection not '
+                                 'open.')
         with __exception_wrapper__:
             self.cursor().execute('COMMIT')
 
@@ -4382,10 +4396,16 @@ class SqliteDatabase(Database):
         self.execute_sql(statement)
 
     def commit(self):
+        if self.is_closed():
+            raise InterfaceError('Cannot commit, database connection not '
+                                 'open.')
         with __exception_wrapper__:
             return self.execute_sql('COMMIT')
 
     def rollback(self):
+        if self.is_closed():
+            raise InterfaceError('Cannot rollback, database connection not '
+                                 'open.')
         with __exception_wrapper__:
             return self.execute_sql('ROLLBACK')
 

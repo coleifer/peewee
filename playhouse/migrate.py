@@ -119,7 +119,6 @@ Adding or dropping table constraints:
 from collections import namedtuple
 from contextlib import contextmanager
 import functools
-import hashlib
 import re
 
 from peewee import *
@@ -172,11 +171,7 @@ def operation(fn):
 
 
 def make_index_name(table_name, columns):
-    index_name = '_'.join((table_name,) + tuple(columns))
-    if len(index_name) > 64:
-        index_hash = hashlib.md5(index_name.encode('utf-8')).hexdigest()
-        index_name = '%s_%s' % (index_name[:51], index_hash[:12])
-    return index_name
+    return _truncate_constraint_name('_'.join((table_name,) + tuple(columns)))
 
 
 class SchemaMigrator(object):

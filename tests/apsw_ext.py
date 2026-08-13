@@ -49,6 +49,13 @@ class TestAPSWExtension(ModelTestCase):
     database = database
     requires = [User, Message]
 
+    def test_commit_rollback_closed(self):
+        database.close()
+        self.assertRaises(InterfaceError, database.commit)
+        self.assertRaises(InterfaceError, database.rollback)
+        self.assertTrue(database.is_closed())
+        database.connect()
+
     def test_db_register_module(self):
         database.register_module('series', VTSource())
         database.execute_sql('create virtual table foo using series()')
