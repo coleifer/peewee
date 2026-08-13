@@ -674,8 +674,9 @@ class ReconnectMySQLDatabase(ReconnectMixin, MySQLDatabase):
 
         # The first (0th) query fails, as do all queries after the 2nd (1st).
         if self._query_counter != 1:
+            exc = self._reconnect_exc
             def _fake_execute(self, *args):
-                raise OperationalError('2006')
+                raise exc
             cursor.execute = _fake_execute
         self._query_counter += 1
         return cursor
@@ -687,6 +688,7 @@ class ReconnectMySQLDatabase(ReconnectMixin, MySQLDatabase):
     def _reset_mock(self):
         self._close_counter = 0
         self._query_counter = 0
+        self._reconnect_exc = OperationalError('2006')
 
 
 @requires_mysql
@@ -716,6 +718,14 @@ class TestReconnectMixin(DatabaseTestCase):
         self.assertEqual(curs.fetchone(), (2,))
         self.assertEqual(self.database._close_counter, 1)
 
+
+    def test_reconnect_mixin_interface_error(self):
+        self.database._reset_mock()
+        self.database._reconnect_exc = InterfaceError("(0, '')")
+
+        curs = self.database.execute_sql('select 1 + 1')
+        self.assertEqual(curs.fetchone(), (2,))
+        self.assertEqual(self.database._close_counter, 1)
 
     def test_reconnect_mixin_begin(self):
         # Verify initial state.
