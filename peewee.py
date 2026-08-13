@@ -7542,6 +7542,14 @@ class Metadata(object):
         self.table_name = table_name
         del self.table
 
+    def get_database_instance(self):
+        db = self.database
+        if db is None:
+            return
+        if isinstance(db, Proxy):
+            return db.obj if db.obj is not None else None
+        return db
+
 
 class SubclassAwareMetadata(Metadata):
     models = []
@@ -8805,8 +8813,9 @@ class ModelInsert(_ModelWriteQueryHelper, Insert):
 
     def __init__(self, *args, **kwargs):
         super(ModelInsert, self).__init__(*args, **kwargs)
-        if self._returning is None and self.model._meta.database is not None:
-            if self.model._meta.database.returning_clause:
+        if self._returning is None:
+            db = self.model._meta.get_database_instance()
+            if db is not None and db.returning_clause:
                 self._returning = self.model._meta.get_primary_keys()
 
     def returning(self, *returning):

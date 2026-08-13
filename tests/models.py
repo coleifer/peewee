@@ -7926,6 +7926,25 @@ class TestMetadataEdgeCases(BaseTestCase):
         self.assertIsNotNone(t2)
         self.assertIsNot(t1, t2)
 
+    def test_get_database_instance(self):
+        p = DatabaseProxy()
+        db = SqliteDatabase(':memory:')
+
+        class WithDB(TestModel):
+            class Meta:
+                database = db
+        class WithProxy(TestModel):
+            class Meta:
+                database = p
+        class Unbound(Model):
+            pass
+
+        self.assertEqual(WithDB._meta.get_database_instance(), db)
+        self.assertIsNone(WithProxy._meta.get_database_instance())
+        p.initialize(db)
+        self.assertEqual(WithProxy._meta.get_database_instance(), db)
+        self.assertIsNone(Unbound._meta.get_database_instance())
+
 
 class DepParent(TestModel):
     name = CharField()
