@@ -5087,6 +5087,21 @@ class ServerDefault(TestModel):
 class TestReturningIntegration(ModelTestCase):
     requires = [User]
 
+    def test_insert_bind_at_execute(self):
+        class LateBound(Model):
+            username = CharField()
+
+        with self.database.bind_ctx([LateBound]):
+            LateBound.create_table()
+        try:
+            query = LateBound.insert(username='zaizee')
+            self.assertEqual(query.execute(self.database), 1)
+            with self.database.bind_ctx([LateBound]):
+                self.assertEqual(LateBound.select().count(), 1)
+        finally:
+            with self.database.bind_ctx([LateBound]):
+                LateBound.drop_table()
+
     def test_simple_returning(self):
         query = User.insert(username='charlie')
         self.assertSQL(query, (

@@ -3053,15 +3053,20 @@ class Insert(_WriteQuery):
 
             return self.apply_returning(ctx)
 
+    def _pk_returning(self):
+        if self.table._primary_key:
+            return (self.table.primary_key,)
+
     def _execute(self, database):
         if self._as_rowcount:
             # Strip implicit pk-returning, which breaks rowcount on sqlite.
             if not self._return_cursor:
                 self._returning = None
-        elif self._returning is None and database.returning_clause \
-             and self.table._primary_key:
-            self._returning = (self.table.primary_key,)
-            self._row_type = ROW.TUPLE
+        elif self._returning is None and database.returning_clause:
+            returning = self._pk_returning()
+            if returning:
+                self._returning = returning
+                self._row_type = ROW.TUPLE
         try:
             return super(Insert, self)._execute(database)
         except self.DefaultValuesException:
@@ -8836,7 +8841,10 @@ class ModelInsert(_ModelWriteQueryHelper, Insert):
         if self._returning is None:
             db = self.model._meta.get_database_instance()
             if db is not None and db.returning_clause:
-                self._returning = self.model._meta.get_primary_keys()
+                self._returning = self._pk_returning()
+
+    def _pk_returning(self):
+        return self.model._meta.get_primary_keys() or None
 
     def returning(self, *returning):
         # By default ModelInsert will yield a `tuple` containing the
