@@ -334,6 +334,7 @@ class SchemaMigrator(object):
 
     @operation
     def add_column(self, table, column_name, field, allow_not_null=False):
+        field = field.clone()
         # Adding a column is complicated by the fact that if there are rows
         # present and the field is non-null, then we need to first add the
         # column as a nullable field, then set the value, then add a not null
