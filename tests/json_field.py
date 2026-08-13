@@ -461,6 +461,25 @@ class TestDeferredDatabase(ModelTestCase):
         finally:
             PM.drop_table()
 
+    def test_proxy_initialized_before_model(self):
+        proxy = Proxy()
+        proxy.initialize(db)
+
+        class PM(TestModel):
+            data = JSONField(null=True)
+            class Meta:
+                database = proxy
+
+        # Already initialized, so there is no later callback to wait for.
+        self.assertIsNotNone(PM.data._helper)
+
+        PM.create_table()
+        try:
+            PM.create(data={'k': [1, 2]})
+            self.assertEqual(PM.select().first().data, {'k': [1, 2]})
+        finally:
+            PM.drop_table()
+
 
 @skip_if(SKIP_PATHS, 'requires SQLite 3.38 or non-SQLite backend')
 class TestInheritedJSONField(ModelTestCase):

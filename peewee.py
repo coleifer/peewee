@@ -5872,14 +5872,13 @@ class FieldDatabaseHook(object):
         raise NotImplementedError('Subclasses must implement')
 
     def bind(self, model, name, set_attribute=True):
-        if model._meta.database is not None:
-            if isinstance(model._meta.database, Proxy):
-                model._meta.database.attach_callback(self._db_hook)
-                self._db_hook(None)
-            else:
-                self._db_hook(model._meta.database)
-        else:
-            self._db_hook(None)
+        database = model._meta.database
+        if isinstance(database, Proxy):
+            database.attach_callback(self._db_hook)
+            # An uninitialized proxy is treated as None.
+            if database.obj is None:
+                database = None
+        self._db_hook(database)
 
         # Attach a hook to the model metadata; in the event the database is
         # changed or set at run-time, we will be sure to apply our callback and
