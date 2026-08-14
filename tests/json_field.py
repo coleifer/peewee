@@ -441,8 +441,10 @@ class TestCustomLoads(ModelTestCase):
 class TestDeferredDatabase(ModelTestCase):
     requires = []
 
-    def test_proxy_initialize(self):
+    def test_proxy_initialize(self, init_early=False):
         proxy = Proxy()
+        if init_early:
+            proxy.initialize(db)
 
         class PM(TestModel):
             data = JSONField(null=True)
@@ -450,8 +452,10 @@ class TestDeferredDatabase(ModelTestCase):
                 database = proxy
 
         # No helper is configured until the proxy is initialized.
-        self.assertIsNone(PM.data._helper)
-        proxy.initialize(db)
+        if not init_early:
+            self.assertIsNone(PM.data._helper)
+            proxy.initialize(db)
+
         self.assertIsNotNone(PM.data._helper)
 
         PM.create_table()
@@ -460,6 +464,9 @@ class TestDeferredDatabase(ModelTestCase):
             self.assertEqual(PM.select().first().data, {'k': [1, 2]})
         finally:
             PM.drop_table()
+
+    def test_proxy_initialized_early(self):
+        self.test_proxy_initialize(init_early=True)
 
 
 @skip_if(SKIP_PATHS, 'requires SQLite 3.38 or non-SQLite backend')
