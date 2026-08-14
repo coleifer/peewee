@@ -649,11 +649,11 @@ class FTS5Model(BaseFTSModel):
         tmp_db = sqlite3.connect(':memory:')
         try:
             tmp_db.execute('CREATE VIRTUAL TABLE fts5test USING fts5 (data);')
-        except:
+        except Exception:
             try:
                 tmp_db.enable_load_extension(True)
                 tmp_db.load_extension('fts5')
-            except:
+            except Exception:
                 return False
             else:
                 cls._meta.database.load_extension('fts5')

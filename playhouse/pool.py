@@ -289,7 +289,7 @@ class _PooledSqliteDatabase(PooledDatabase):
     def _is_closed(self, conn):
         try:
             conn.total_changes
-        except:
+        except Exception:
             return True
         return False
 

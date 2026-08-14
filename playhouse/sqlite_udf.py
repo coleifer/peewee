@@ -165,7 +165,7 @@ def file_read(filename):
     try:
         with open(filename) as fh:
             return fh.read()
-    except:
+    except Exception:
         pass
 
 @udf(HELPER)
@@ -235,7 +235,7 @@ def tonumber(s):
     except ValueError:
         try:
             return float(s)
-        except:
+        except Exception:
             return None
 
 @udf(STRING)
@@ -253,7 +253,7 @@ def json_contains(src_json, obj_json):
     stack = []
     try:
         stack.append((json.loads(obj_json), json.loads(src_json)))
-    except:
+    except Exception:
         # Invalid JSON!
         return False
 
