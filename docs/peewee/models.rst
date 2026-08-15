@@ -158,6 +158,7 @@ Field types
 Field Type              Sqlite              Postgresql          MySQL
 =====================   =================   =================   =================
 ``AutoField``           integer             serial              integer
+``SmallAutoField``      integer             smallserial         smallint
 ``BigAutoField``        integer             bigserial           bigint
 ``IntegerField``        integer             integer             integer
 ``BigIntegerField``     integer             bigint              bigint

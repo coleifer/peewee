@@ -75,6 +75,7 @@ __all__ = [
     'AsIs',
     'AutoField',
     'BareField',
+    'SmallAutoField',
     'BigAutoField',
     'BigBitField',
     'BigIntegerField',
@@ -364,6 +365,7 @@ DJANGO_MAP = attrdict({
 #: may override or add to this list.
 FIELD = attrdict(
     AUTO='INTEGER',
+    SMALLAUTO='SMALLINT',
     BIGAUTO='BIGINT',
     BIGINT='BIGINT',
     BLOB='BLOB',
@@ -4145,6 +4147,7 @@ def __pragma__(name):
 
 class SqliteDatabase(Database):
     field_types = {
+        'SMALLAUTO': FIELD.AUTO,
         'BIGAUTO': FIELD.AUTO,
         'BIGINT': FIELD.INT,
         'BOOL': FIELD.INT,
@@ -4709,6 +4712,7 @@ class Psycopg3Adapter(_BasePsycopgAdapter):
 class PostgresqlDatabase(Database):
     field_types = {
         'AUTO': 'SERIAL',
+        'SMALLAUTO': 'SMALLSERIAL',
         'BIGAUTO': 'BIGSERIAL',
         'BLOB': 'BYTEA',
         'BOOL': 'BOOLEAN',
@@ -4962,6 +4966,7 @@ class PostgresqlDatabase(Database):
 class MySQLDatabase(Database):
     field_types = {
         'AUTO': 'INTEGER AUTO_INCREMENT',
+        'SMALLAUTO': 'SMALLINT AUTO_INCREMENT',
         'BIGAUTO': 'BIGINT AUTO_INCREMENT',
         'BOOL': 'BOOL',
         'DECIMAL': 'NUMERIC',
@@ -5756,6 +5761,7 @@ class SmallIntegerField(IntegerField):
 class AutoField(IntegerField):
     auto_increment = True
     field_type = 'AUTO'
+    rel_type = 'INT'
 
     def __init__(self, *args, **kwargs):
         if kwargs.get('primary_key') is False:
@@ -5764,8 +5770,14 @@ class AutoField(IntegerField):
         super(AutoField, self).__init__(*args, **kwargs)
 
 
+class SmallAutoField(AutoField):
+    field_type = 'SMALLAUTO'
+    rel_type = 'SMALLINT'
+
+
 class BigAutoField(AutoField):
     field_type = 'BIGAUTO'
+    rel_type = 'BIGINT'
 
 
 class IdentityField(AutoField):
@@ -6636,11 +6648,9 @@ class ForeignKeyField(Field):
 
     @property
     def field_type(self):
-        if isinstance(self.rel_field, BigAutoField):
-            return BigIntegerField.field_type
-        elif not isinstance(self.rel_field, AutoField):
+        if not isinstance(self.rel_field, AutoField):
             return self.rel_field.field_type
-        return IntegerField.field_type
+        return self.rel_field.rel_type
 
     def get_modifiers(self):
         if not isinstance(self.rel_field, AutoField):

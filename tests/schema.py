@@ -150,6 +150,26 @@ class TestModelDDL(ModelDatabaseTestCase):
              'FOREIGN KEY ("user_id") REFERENCES "foo"."user" ("id"))'),
             ('CREATE INDEX "bar"."tweet_user_id" ON "tweet" ("user_id")')])
 
+    def test_smallauto_and_fk(self):
+        class CustomDB(SqliteDatabase):
+            field_types = {
+                'SMALLAUTO': 'SMALLAUTO',
+                'SMALLINT': 'SMALLINT'}
+        db = CustomDB(None)
+
+        class User(db.Model):
+            id = SmallAutoField()
+        class Tweet(db.Model):
+            user = ForeignKeyField(User)
+
+        self.assertCreateTable(User, [
+            ('CREATE TABLE "user" ("id" SMALLAUTO NOT NULL PRIMARY KEY)')])
+        self.assertCreateTable(Tweet, [
+            ('CREATE TABLE "tweet" ("id" INTEGER NOT NULL PRIMARY KEY, '
+             '"user_id" SMALLINT NOT NULL, FOREIGN KEY ("user_id") REFERENCES '
+             '"user" ("id"))'),
+            ('CREATE INDEX "tweet_user_id" ON "tweet" ("user_id")')])
+
     def test_bigauto_and_fk(self):
         class CustomDB(SqliteDatabase):
             field_types = {

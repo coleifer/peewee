@@ -1259,7 +1259,11 @@ class SmallIntegerField(IntegerField[_V]):
 
 class AutoField(IntegerField[_V]):
     auto_increment: bool
+    rel_type: ClassVar[str]
     def __new__(cls, *args: Any, **kwargs: Unpack[_FieldKwargs]) -> AutoField[int]: ...
+
+class SmallAutoField(AutoField[_V]):
+    def __new__(cls, *args: Any, **kwargs: Unpack[_FieldKwargs]) -> SmallAutoField[int]: ...
 
 class BigAutoField(AutoField[_V]):
     def __new__(cls, *args: Any, **kwargs: Unpack[_FieldKwargs]) -> BigAutoField[int]: ...
@@ -2110,6 +2114,7 @@ __all__ = [
     "AsIs",
     "AutoField",
     "BareField",
+    "SmallAutoField",
     "BigAutoField",
     "BigBitField",
     "BigIntegerField",

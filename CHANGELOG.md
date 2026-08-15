@@ -9,6 +9,7 @@ https://github.com/coleifer/peewee/releases
 
 In which we learn to migrate (somewhat).
 
+* Added `SmallAutoField` to support 16-bit auto-incrementing primary keys.
 * Add `playhouse.migrations` as a runner for migration scripts, which are
   python files defining `up(migrator, db)` and optionally `down(...)`.
   Migrations are applied in numeric order a-la Django, and stored by name in a

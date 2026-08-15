@@ -31,6 +31,7 @@ RESERVED_WORDS = set([
 
 FieldTypeMap = {
     'AUTO': int,
+    'SMALLAUTO': int,
     'BIGAUTO': int,
     'BIGINT': int,
     'BLOB': bytes,
@@ -209,6 +210,8 @@ class Metadata(object):
             if pk not in metadata or metadata[pk].identity:
                 if column_types[pk] is IntegerField:
                     column_types[pk] = AutoField
+                elif column_types[pk] is SmallIntegerField:
+                    column_types[pk] = SmallAutoField
                 elif column_types[pk] is BigIntegerField:
                     column_types[pk] = BigAutoField
 
@@ -250,7 +253,7 @@ class Metadata(object):
                 return {'max_digits': int(p1), 'decimal_places': int(p2)}
 
     def _clean_default(self, field_class, default):
-        if default is None or field_class in (AutoField, BigAutoField) or \
+        if default is None or field_class in (AutoField, SmallAutoField, BigAutoField) or \
            default.lower() == 'null':
             return
         if issubclass(field_class, _StringField) and \

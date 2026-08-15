@@ -255,7 +255,8 @@ validation.
 | ``IntegerField``, ``SmallIntegerField``,  | ``int``                |
 | ``BigIntegerField``                       |                        |
 +-------------------------------------------+------------------------+
-| ``AutoField``, ``BigAutoField``           | ``int``                |
+| ``AutoField``, ``SmallAutoField```,       | ``int``                |
+| ``BigAutoField``                          |                        |
 +-------------------------------------------+------------------------+
 | ``FloatField``, ``DoubleField``           | ``float``              |
 +-------------------------------------------+------------------------+

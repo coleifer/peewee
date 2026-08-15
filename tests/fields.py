@@ -9,7 +9,7 @@ Test case ordering:
 * Date/time fields
 * Foreign key basics and deferred FK resolution
 * Composite PK, field functions, IP, bit fields
-* Blob, Auto, BigAuto, UUID, timestamp, custom fields
+* Blob, Auto, SmallAuto, BigAuto, UUID, timestamp, custom fields
 * String fields and misc field types
 * Virtual field behavior
 * Foreign key advanced: non-PK targets, multiple FKs, composite PK with FK
@@ -800,7 +800,7 @@ class TestDateTimeMath(ModelTestCase):
 
 
 # ===========================================================================
-# Blob, AutoField, BigAutoField, and field value handling
+# Blob, AutoField, SmallAutoField, BigAutoField, and field value handling
 # ===========================================================================
 
 class BlobModel(TestModel):
@@ -925,6 +925,32 @@ class TestAutoField(ModelTestCase):
         self.assertRaises(ValueError, AutoField, primary_key=False)
 
 
+class SmallModel(TestModel):
+    pk = SmallAutoField()
+    data = TextField()
+
+
+class TestSmallAutoField(ModelTestCase):
+    requires = [SmallModel]
+
+    def test_small_auto_field(self):
+        self.assertTrue(SmallModel._meta.primary_key is SmallModel.pk)
+
+        b1 = SmallModel.create(data='b1')
+        b2 = SmallModel.create(data='b2')
+
+        # Auto field gets populated on create.
+        self.assertTrue(b1.pk is not None)
+        self.assertTrue(b2.pk is not None)
+
+        b1_db = SmallModel.get(SmallModel.pk == b1.pk)
+        b2_db = SmallModel.get(SmallModel.pk == b2.pk)
+
+        self.assertTrue(b1_db.pk != b2_db.pk)
+        self.assertTrue(b1_db.data, 'b1')
+        self.assertTrue(b2_db.data, 'b2')
+
+
 class BigModel(TestModel):
     pk = BigAutoField()
     data = TextField()
@@ -949,6 +975,27 @@ class TestBigAutoField(ModelTestCase):
         self.assertTrue(b1_db.pk != b2_db.pk)
         self.assertTrue(b1_db.data, 'b1')
         self.assertTrue(b2_db.data, 'b2')
+
+
+class FK_AF(TestModel):
+    fk = ForeignKeyField(AFModel)
+
+
+class FK_Small(TestModel):
+    fk = ForeignKeyField(SmallModel)
+
+
+class FK_Big(TestModel):
+    fk = ForeignKeyField(BigModel)
+
+
+class TestFKFieldTypes(ModelTestCase):
+    requires = [AFModel, SmallModel, BigModel, FK_AF, FK_Small, FK_Big]
+
+    def test_fk_types(self):
+        assert FK_AF.fk.field_type == AFModel.pk.rel_type
+        assert FK_Small.fk.field_type == SmallModel.pk.rel_type
+        assert FK_Big.fk.field_type == BigModel.pk.rel_type
 
 
 class Item(TestModel):

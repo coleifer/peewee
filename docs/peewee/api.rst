@@ -3046,6 +3046,10 @@ Fields
    avoid this, you may want to use one or both of :class:`~playhouse.sqlite_ext.AutoIncrementField`
    and ``pragmas=[('foreign_keys', 'on')]`` when you instantiate :class:`SqliteDatabase`.
 
+.. class:: SmallAutoField
+
+   Field class for storing auto-incrementing primary keys using 16-bits.
+
 .. class:: BigAutoField
 
    Field class for storing auto-incrementing primary keys using 64-bits.
