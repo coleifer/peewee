@@ -8,6 +8,7 @@ from decimal import Decimal as Dc
 from types import MethodType
 
 from peewee import *
+from peewee import Psycopg3Adapter
 from playhouse.postgres_ext import *
 from playhouse.reflection import Introspector
 
@@ -1143,6 +1144,7 @@ class TestServerSide(ModelTestCase):
             self.assertEqual(data, list(range(100)))
 
     def test_cursor_holdability(self):
+        is_psycopg3 = isinstance(self.database._adapter, Psycopg3Adapter)
         query = Register.select().order_by(Register.value)
 
         def is_holdable():
@@ -1155,7 +1157,7 @@ class TestServerSide(ModelTestCase):
         with self.database.atomic():
             it = iter(ServerSide(query, array_size=10))
             self.assertEqual(next(it).value, 0)
-            self.assertEqual(is_holdable(), not IS_PSYCOPG3)
+            self.assertEqual(is_holdable(), not is_psycopg3)
             self.assertEqual([r.value for r in it], list(range(1, 100)))
 
         # Without a transaction the server requires a holdable cursor.
