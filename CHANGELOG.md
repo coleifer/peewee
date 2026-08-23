@@ -7,9 +7,13 @@ https://github.com/coleifer/peewee/releases
 
 ## master
 
+[View commits](https://github.com/coleifer/peewee/compare/4.4.0...master)
+
+## 4.4.0
+
 In which we learn to migrate (somewhat).
 
-* Add `playhouse.migrations` as a runner for migration scripts, which are
+* Add `playhouse.migrations` for running migration scripts. Migrations are
   python files defining `up(migrator, db)` and optionally `down(...)`.
   Migrations are applied in numeric order a-la Django, and stored by name in a
   history table. CLI via `pwmigrate` accepting `status`, `up`, `down`,
@@ -18,9 +22,6 @@ In which we learn to migrate (somewhat).
 * Add basic `playhouse.schema_diff` for comparing models against the
   schema and reporting differences (tables to create, columns added or
   removed, indexes added or removed).
-* Render common field defaults in generated migrations
-  (`datetime.datetime.now`, `uuid.uuid4`, `decimal.Decimal`, enum values,
-  etc.) rather than flagging them with a TODO.
 * Allow adding column to existing table as `NOT NULL` with migrator, which
   allows skipping the 3-step process of add nullable, populate default, set not
   null.
@@ -48,7 +49,7 @@ In which we learn to migrate (somewhat).
 * `commit()` / `rollback()` on a closed db will raise rather than silently open
   a new connection.
 
-[View commits](https://github.com/coleifer/peewee/compare/4.3.0...master)
+[View commits](https://github.com/coleifer/peewee/compare/4.3.0...4.4.0)
 
 ## 4.3.0
 
