@@ -80,7 +80,7 @@ complex.
 
 .. code-block:: python
 
-   # Find any users who are active administrations.
+   # Find any users who are active administrators.
    User.select().where(
      (User.is_admin == True) &
      (User.is_active == True))
@@ -252,7 +252,7 @@ arbitrary depth:
 
 .. code-block:: python
 
-   # User is both and admin and has logged in today
+   # User is both an admin and has logged in today
    (User.is_admin == True) & (User.last_login >= today)
 
    # User's username is either charlie or charles
@@ -273,8 +273,8 @@ against other expressions. Expressions also support arithmetic operations:
 
 .. code-block:: python
 
-   # users who entered the incorrect more than half the time and have logged
-   # in at least 10 times
+   # users who entered an incorrect password more than half the time and have
+   # logged in at least 10 times
    (User.failed_logins > (User.login_count * .5)) & (User.login_count > 10)
 
 Expressions allow us to do *atomic updates*:
@@ -323,13 +323,13 @@ correlate incidents with certain events:
        traceback = TextField()
        timestamp = TimestampField()
 
-   # Get a list of all the incident types and sources that have occured today.
+   # Get a list of all the incident types and sources that have occurred today.
    incidents = (IncidentLog
                 .select(IncidentLog.incident_type, IncidentLog.source)
                 .where(IncidentLog.timestamp >= datetime.date.today()))
 
    # Find all events that correlate with the type and source of the
-   # incidents that occured today.
+   # incidents that occurred today.
    events = (EventLog
              .select()
              .where(Tuple(EventLog.event_type, EventLog.source).in_(incidents))
@@ -337,7 +337,7 @@ correlate incidents with certain events:
 
 Other ways to express this type of query would be to use a :ref:`join <relationships>`
 or to :ref:`join on a subquery <join-subquery>`. The above example is there
-just to give you and idea how :class:`Tuple` might be used.
+just to give you an idea how :class:`Tuple` might be used.
 
 You can also use row-values to update multiple columns in a table, when the new
 data is derived from a subquery. For an example, see `here <https://www.sqlite.org/rowvalue.html#update_multiple_columns_of_a_table_based_on_a_query>`_.

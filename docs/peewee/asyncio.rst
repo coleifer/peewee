@@ -94,7 +94,7 @@ releases it on exit:
 Every query is awaited on the asyncio event loop, in the calling task: the
 SQL is handed to the async driver (``aiosqlite``, ``asyncpg`` or
 ``aiomysql``) and awaited like any other coroutine. No thread executor is
-involved and nothing is monkey-patched. Each task acquires its own
+involved. Each task acquires its own
 connection from the pool, so concurrent tasks never share connection or
 transaction state - details under `Connection Management`_ below.
 
@@ -268,7 +268,7 @@ a select.
 
    # The async counterpart of execute():
    active = await User.select().where(User.is_active == True).aexecute()
-   for user in active:  # Results are buffered; iteration performs no I/O.
+   for user in active:  # Results are buffered, iteration performs no I/O.
        print(user.username)
 
    # Writes return their usual values:
@@ -483,9 +483,9 @@ case with `aiosqlite <https://github.com/omnilib/aiosqlite/blob/main/aiosqlite/c
 
 Additionally, SQLite only allows one writer at a time, so while using an async
 wrapper may keep things responsive while waiting to obtain the write lock,
-writes will not occur "faster", the bottleneck has merely been moved.
-Conversely, if you don't have that much load, the async wrapper adds complexity
-and overhead for no measurable benefit.
+writes will not occur "faster" - the bottleneck has merely been moved. If you
+don't have that much load, the async wrapper adds complexity and overhead for
+no measurable benefit.
 
 To use SQLite in an async environment anyway, use WAL-mode at a minimum, which
 allows multiple readers to co-exist with a single writer:
@@ -540,8 +540,8 @@ Or by wrapping the access in ``db.run()``:
    name = await db.run(lambda: tweet.user.name)
 
 For strict codebases, disable lazy-loading on the foreign-key field
-(``lazy_load=False``) and enforce selecting relations via explicit joins;
-attribute access then returns the column value rather than performing a
+(``lazy_load=False``) and enforce selecting relations via explicit joins.
+Attribute access then returns the column value rather than performing a
 query, and ``afetch()`` on such a field raises ``ValueError`` rather than
 guessing.
 
@@ -697,7 +697,7 @@ API Reference
              with db:
                  db.create_tables([User])
 
-                 # Create admin user if does not exist.
+                 # Create admin user if it does not exist.
                  try:
                      with db.atomic():
                          User.create(username='admin')
@@ -846,7 +846,7 @@ API Reference
       :async:
 
       :param Query query: a Select query, or an Insert, Update or Delete
-          query that utilizes RETURNING.
+          query that uses RETURNING.
 
       Execute a SELECT (or INSERT/UPDATE/DELETE with RETURNING) and return
       a list of results.
@@ -867,7 +867,7 @@ API Reference
       :param int buffer_size: Number of rows fetched per round-trip
          (default 100).
 
-      :meth:`~AsyncDatabaseMixin.iterate` method uses server-side cursors
+      The :meth:`~AsyncDatabaseMixin.iterate` method uses server-side cursors
       (MySQL and Postgres) to efficiently stream large result-sets.
 
       Example:
@@ -1069,8 +1069,8 @@ API Reference
 .. method:: BaseQuery.aexecute(database=None)
    :async:
 
-   :param database: an async database; defaults to the query's bound
-       database.
+   :param database: an async database (defaults to the query's bound
+       database).
    :return: the normal return-value for the query type.
 
    Async counterpart of :py:meth:`~BaseQuery.execute`, defined on all query
@@ -1097,7 +1097,7 @@ API Reference
    ``playhouse.signals`` hooks all apply unchanged.
 
    The model must be bound to an async database (e.g.
-   :class:`AsyncSqliteDatabase`); calling an async model method on a model
+   :class:`AsyncSqliteDatabase`). Calling an async model method on a model
    bound to a synchronous database raises ``InterfaceError``.
 
    .. method:: acreate(**query)

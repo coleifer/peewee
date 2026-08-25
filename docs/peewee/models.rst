@@ -4,8 +4,7 @@ Models and Fields
 =================
 
 Models and Fields allow Peewee applications to declare the tables and columns
-they will use, and issue queries using Python. This document explains how to
-use Peewee to express database tables and columns.
+they will use, and issue queries using Python.
 
 :class:`Model` classes, :class:`Field` instances and model instances all
 map to database concepts:
@@ -87,8 +86,8 @@ Three things to note:
           username = CharField(unique=True)
 
    Model definition uses the declarative style seen in other popular ORMs.
-   Note that we are extending the *BaseModel* class so the *User* model will
-   inherit the database connection.
+   We are extending the *BaseModel* class so the *User* model will inherit
+   the database connection.
 
    We have explicitly defined a single *username* column with a unique
    constraint. Because we have not specified a primary key, Peewee will
@@ -100,7 +99,7 @@ Model Inheritance
 
 Model subclasses inherit the ``Meta`` configuration of their parent as well as
 the parent's fields. Inherited ``Meta`` attributes (such as ``database``) are
-shared; non-inheritable attributes (such as ``table_name``) are re-derived for
+shared. Non-inheritable attributes (such as ``table_name``) are re-derived for
 each subclass.
 
 .. code-block:: python
@@ -281,7 +280,7 @@ could declare the field with a default value:
 
 For ``read_count``, Peewee uses the literal value ``0``. For ``created``,
 Peewee calls ``datetime.datetime.now`` at the moment of instantiation -
-note that the **function itself is passed, not its return value**.
+the **function itself is passed, not its return value**.
 
 **Mutable defaults require a factory function.** If a default value is a mutable
 object such as a ``list`` or ``dict``, passing it directly means every model
@@ -311,7 +310,7 @@ use the ``constraints`` and :func:`Default` to specify the server default:
        timestamp = DateTimeField(constraints=[Default('CURRENT_TIMESTAMP')])
 
 This produces a ``DEFAULT CURRENT_TIMESTAMP`` clause in the ``CREATE TABLE``
-statement. Peewee's own ``default`` parameter produces no DDL; it only operates
+statement. Peewee's own ``default`` parameter produces no DDL. It only operates
 during Python-side model instantiation.
 
 A consequence of using server-generated defaults is that newly-inserted models
@@ -357,7 +356,7 @@ tweets.
    lazy loading, back-references, and avoiding N+1 query problems.
 
 Typically a foreign key will reference the primary key of the related model,
-but you can specify a particular column by specifying ``field=``.
+but you can specify a different column by passing ``field=``.
 
 In Peewee, accessing the value of a :class:`ForeignKeyField` will return the
 entire related object:
@@ -546,7 +545,7 @@ at least one event:
    stored, by default, as ``YYYY-MM-DD HH:MM:SS``.
 
 :class:`TimestampField` stores a datetime as a Unix timestamp integer.
-The ``resolution`` parameter controls sub-second precision (default: seconds);
+The ``resolution`` parameter controls sub-second precision (default: seconds).
 ``utc=True`` instructs Peewee to treat stored values as UTC.
 
 .. _json-field:
@@ -909,7 +908,7 @@ We can also use the flags on the Post class to build expressions in queries:
    sticky_faves = Post.select().where(Post.is_sticky & Post.is_favorite)
 
 Since the :class:`BitField` is stored in an integer, there is a maximum of
-64 flags you can represent (64-bits is common size of integer column). For
+64 flags you can represent (64 bits is the common size of an integer column). For
 storing arbitrarily large bitmaps, you can instead use :class:`BigBitField`,
 which uses an automatically managed buffer of bytes, stored in a
 :class:`BlobField`.
@@ -1318,7 +1317,8 @@ columns as a composite primary key:
 
 Composite primary keys are most appropriate for junction tables in many-to-many
 relationships. Peewee has limited support for foreign keys *to* models with
-composite primary keys; avoid them in models that other models will reference.
+composite primary keys, so avoid them in models that other models will
+reference.
 
 Models without a primary key
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -1334,8 +1334,8 @@ To create a table with no primary key, set ``primary_key = False``:
        class Meta:
            primary_key = False
 
-Note that :meth:`Model.save` and :meth:`Model.delete_instance` do not
-work on keyless models, since both require a primary key to target a specific
+:meth:`Model.save` and :meth:`Model.delete_instance` do not work on
+keyless models, since both require a primary key to target a specific
 row. Use :meth:`Model.insert`, :meth:`Model.update`, and :meth:`Model.delete`
 (the class-level query methods) instead.
 
@@ -1426,8 +1426,8 @@ tables.
    for instance).
 
 Adding circular foreign keys with peewee is a bit tricky because at the time
-you are defining either foreign key, the model it points to will not have been
-defined yet, causing a ``NameError``.
+you are defining the first foreign key, the model it points to will not have
+been defined yet, causing a ``NameError``.
 
 .. code-block:: python
    :emphasize-lines: 3
@@ -1440,7 +1440,7 @@ defined yet, causing a ``NameError``.
        message = TextField()
        user = ForeignKeyField(User, backref='tweets')
 
-One option is to simply use an :class:`IntegerField` to store the raw ID:
+One option is to use an :class:`IntegerField` to store the raw ID:
 
 .. code-block:: python
 
@@ -1488,7 +1488,7 @@ alternative attribute name and set ``column_name`` explicitly:
        created_at = DateTimeField(column_name='create')
        updated_at = DateTimeField(column_name='update')
 
-The database column is still named ``create`` and ``update``; the Python
+The database columns are still named ``create`` and ``update``. The Python
 attributes are ``created_at`` and ``updated_at``.
 
 .. _barefield:

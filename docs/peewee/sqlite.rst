@@ -389,8 +389,8 @@ CySqlite
 
 :class:`CySqliteDatabase` uses the `cysqlite <https://cysqlite.readthedocs.io>`_
 driver, a high-performance alternative to the standard library ``sqlite3``
-module. ``cysqlite`` provides additional features and hooks not available with
-in the standard library ``sqlite3`` driver.
+module. ``cysqlite`` provides additional features and hooks not available in
+the standard library ``sqlite3`` driver.
 
 Installation:
 
@@ -542,7 +542,7 @@ Usage:
 
       * ``cysqlite.SQLITE_OK``: allow operation.
       * ``cysqlite.SQLITE_IGNORE``: allow statement compilation but prevent
-        the operation from occuring.
+        the operation from occurring.
       * ``cysqlite.SQLITE_DENY``: prevent statement compilation.
 
       More details can be found in the `cysqlite docs <https://cysqlite.readthedocs.io/en/latest/api.html#Connection.authorizer>`__.
@@ -1226,7 +1226,7 @@ in SQLite using the `SQLite json functions <https://sqlite.org/json1.html>`_.
           serialized, while strings and integers are passed as-is.
 
       Replace the existing value stored in a :class:`JSONField`. Will not
-      create if does not exist.
+      create the path if it does not exist.
 
       Uses the `json_replace() <http://sqlite.org/json1.html#jset>`_ function
       from the json1 extension.
@@ -1239,7 +1239,8 @@ in SQLite using the `SQLite json functions <https://sqlite.org/json1.html>`_.
           default, lists and dictionaries are treated as JSON to be
           serialized, while strings and integers are passed as-is.
 
-      Insert value into :class:`JSONField`. Will not overwrite existing.
+      Insert value into :class:`JSONField`. Will not overwrite an existing
+      value.
 
       Uses the `json_insert() <http://sqlite.org/json1.html#jset>`_ function
       from the json1 extension.
@@ -1432,7 +1433,7 @@ in SQLite using the `SQLite json functions <https://sqlite.org/json1.html>`_.
 
    Extends :class:`JSONField` and stores data in the binary ``jsonb`` format
    (SQLite 3.45.0+). When reading raw column values the data is in its
-   encoded binary form use the :meth:`~JSONBField.json` method to decode:
+   encoded binary form. Use the :meth:`~JSONBField.json` method to decode:
 
    .. code-block:: python
 
@@ -2404,8 +2405,8 @@ User-Defined Function Collection
 
 .. module:: playhouse.sqlite_udf
 
-The ``playhouse.sqlite_udf`` contains a number of functions and aggregates
-grouped into named collections.
+The ``playhouse.sqlite_udf`` module contains a number of functions and
+aggregates grouped into named collections.
 
 .. code-block:: python
 
@@ -2550,7 +2551,7 @@ Available functions
 .. function:: randomrange(start, end=None, step=None)
 
    :param int start: Start of range (inclusive)
-   :param int end: End of range(not inclusive)
+   :param int end: End of range (not inclusive)
    :param int step: Interval at which to return a value.
 
    Return a random integer between ``[start, end)``.

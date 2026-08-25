@@ -377,7 +377,7 @@ the :class:`~playhouse.shortcuts.ThreadSafeDatabaseMetadata`.
            model_metadata_class = ThreadSafeDatabaseMetadata
 
 The database can now be swapped safely while running in a multi-threaded
-environment using the :meth:`Database.bind` or :meth:`Database.bind_ctx`.
+environment using :meth:`Database.bind` or :meth:`Database.bind_ctx`.
 
 Connecting via URL
 ------------------
@@ -520,7 +520,7 @@ To manage the connection lifetime without an implicit transaction, use
 .. code-block:: python
 
    with db.connection_context():
-       # Connection is open; no implicit transaction.
+       # Connection is open, no implicit transaction.
        results = User.select()
 
 ``connection_context()`` can also decorate a function:
@@ -537,16 +537,16 @@ Using autoconnect
 
 By default Peewee will automatically open a connection if one is not available.
 This behavior is controlled by the ``autoconnect`` Database parameter. Managing
-connections explicitly is considered a **best practice**, therefore
-consider disabling the ``autoconnect`` behavior:
+connections explicitly is considered a **best practice**, so consider
+disabling the ``autoconnect`` behavior:
 
 .. code-block:: python
 
    db = PostgresqlDatabase('app', autoconnect=False)
 
 It is helpful to be explicit about connection lifetimes. If a connection cannot
-be opened, the exception will be caught when the connection is being opened,
-rather than at query time.
+be opened, the exception is raised where ``connect()`` is called, rather than
+at query time.
 
 Thread safety
 ^^^^^^^^^^^^^
@@ -610,9 +610,9 @@ Executing SQL
 -------------
 
 SQL queries will typically be executed by calling ``execute()`` on a query
-constructed using the query-builder APIs (or by simply iterating over a query
+constructed using the query-builder APIs (or by iterating over a query
 object in the case of a :class:`Select` query). For cases where you wish to
-execute SQL directly, use the :meth:`Database.execute_sql`:
+execute SQL directly, use :meth:`Database.execute_sql`:
 
 .. code-block:: python
 

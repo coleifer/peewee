@@ -2333,7 +2333,7 @@ Model
    :param str table_name: Specify table name for model.
    :param list indexes: List of :class:`ModelIndex` objects.
    :param primary_key: Primary key for model (only specified if this is a
-       :class:`CompositeKey` or ``False`` for no primary key.
+       :class:`CompositeKey` or ``False`` for no primary key).
    :param list constraints: List of table constraints.
    :param str schema: Schema table exists in.
    :param bool only_save_dirty: When :meth:`~Model.save` is called, only
@@ -2672,8 +2672,8 @@ Model
                   .select(Tweet, User)
                   .join(User))
 
-         # Note that `tweet.user` is populated already since we SELECTed
-         # columns from the joined User model.
+         # `tweet.user` is populated already since we SELECTed columns
+         # from the joined User model.
          for tweet in query:
              print(tweet.user.username, '->', tweet.content)
 
@@ -2702,8 +2702,8 @@ Model
       * ``JOIN.FULL_OUTER``
       * ``JOIN.CROSS``
 
-      Example selecting tweets and joining on user in order to restrict to
-      only those tweets made by "admin" users:
+      Example selecting tweets and joining on user to restrict to only
+      those tweets made by "admin" users:
 
       .. code-block:: python
 
@@ -3443,8 +3443,8 @@ Fields
 
    .. method:: truncate(date_part)
 
-      See :meth:`DateTimeField.truncate`. Note that only *year*, *month*,
-      and *day* are meaningful for :class:`DateField`.
+      See :meth:`DateTimeField.truncate`. Only *year*, *month*, and *day*
+      are meaningful for :class:`DateField`.
 
 
 .. class:: TimeField(formats=None, **kwargs)
@@ -3629,9 +3629,9 @@ Fields
       Key-existence predicates, supported on **every** backend. Postgresql
       uses ``?`` / ``?&`` / ``?|``, MySQL / MariaDB use ``JSON_CONTAINS_PATH``,
       and SQLite tests ``json_type(field, path) IS NOT NULL`` per key. These
-      check for object-key existence; note that Postgresql's ``?`` *also*
-      matches a string against the elements of a top-level array, which the
-      MySQL and SQLite emulations do not.
+      check for object-key existence. Postgresql's ``?`` *also* matches a
+      string against the elements of a top-level array, which the MySQL and
+      SQLite emulations do not.
 
       .. code-block:: python
 
@@ -4035,7 +4035,7 @@ Fields
        key).
    :param str backref: Accessor name for back-reference, or "+" to disable
        the back-reference accessor.
-   :param str on_delete: ON DELETE action, e.g. ``'CASCADE'``..
+   :param str on_delete: ON DELETE action, e.g. ``'CASCADE'``.
    :param str on_update: ON UPDATE action.
    :param str deferrable: Control when constraint is enforced, e.g. ``'INITIALLY DEFERRED'``.
    :param str object_id_name: Name for object-id accessor.
@@ -4206,9 +4206,9 @@ Fields
 
    It does not matter from Peewee's perspective which model the
    :class:`ManyToManyField` goes on, since the back-reference is just
-   the mirror image. In order to write valid Python, though, you will need
-   to add the ``ManyToManyField`` on the second model so that the name of
-   the first model is in the scope.
+   the mirror image. To write valid Python, though, you will need to add
+   the ``ManyToManyField`` on the second model so that the name of the
+   first model is in scope.
 
    We still need a junction table to store the relationships between students
    and courses. This model can be accessed by calling the
@@ -4331,8 +4331,8 @@ Fields
       .. code-block:: python
 
          # Alice is currently enrolled in a lot of english classes
-         # as well as some Comp-Sci. He is changing majors, so we
-         # will remove all his courses.
+         # as well as some Comp-Sci. She is changing majors, so we
+         # will remove all her courses.
          english_courses = Course.select().where(
              Course.name.contains('english'))
          alice.courses.remove(english_courses)
@@ -4970,11 +4970,11 @@ Query-builder
 
    .. method:: select_from(*columns)
 
-      Create a SELECT query that utilizes the given common table expression
+      Create a SELECT query that uses the given common table expression
       as the source for a new query.
 
       :param columns: One or more columns to select from the CTE.
-      :return: :class:`Select` query utilizing the common table expression
+      :return: :class:`Select` query using the common table expression
 
    .. method:: union_all(other)
 
@@ -5075,7 +5075,7 @@ Query-builder
 
       :param str collation: Collation name to use for sorting.
       :param str nulls: Sort nulls (FIRST or LAST).
-      :return: an descending :class:`Ordering` object for the column.
+      :return: a descending :class:`Ordering` object for the column.
 
    .. method:: __invert__()
 
@@ -5174,7 +5174,7 @@ Query-builder
 
 .. function:: Desc(node, collation=None, nulls=None)
 
-   Short-hand for instantiating an descending :class:`Ordering` object.
+   Short-hand for instantiating a descending :class:`Ordering` object.
 
 
 .. class:: Expression(lhs, op, rhs, flat=False)
@@ -5215,18 +5215,18 @@ Query-builder
    Represent a CHECK constraint.
 
    MySQL may not support a ``name`` parameter when inlining the
-   constraint along with the column definition. The solution is to just
-   put the named ``Check`` constraint in the model's ``Meta.constraints``
-   list instead of in the field instances ``constraints=[...]`` list.
+   constraint along with the column definition. The solution is to put
+   the named ``Check`` constraint in the model's ``Meta.constraints``
+   list instead of in the field instance's ``constraints=[...]`` list.
 
 
 .. function:: Default(value)
 
    :param value: default value (literal).
 
-   Represent a DEFAULT constraint. It is important to note that this
-   constraint does not accept a parameterized value, so the value literal must
-   be given. If a string value is intended, it must be quoted.
+   Represent a DEFAULT constraint. This constraint does not accept a
+   parameterized value, so the value literal must be given. If a string
+   value is intended, it must be quoted.
 
    Examples:
 
@@ -5296,7 +5296,7 @@ Query-builder
                      fn.AVG(Sample.value).over([Sample.counter]))
                   .order_by(Sample.counter))
 
-         # Equivalent example Using a Window() instance instead.
+         # Equivalent example using a Window() instance instead.
          window = Window(partition_by=[Sample.counter])
          query = (Sample
                   .select(
@@ -6010,8 +6010,8 @@ Queries
 
    .. method:: except_(dest)
 
-      Create an EXCEPT query with ``dest``. Note that the method name has a
-      trailing "_" character since ``except`` is a Python reserved word.
+      Create an EXCEPT query with ``dest``. The method name has a trailing
+      "_" character since ``except`` is a Python reserved word.
 
    .. method:: __sub__(dest)
 
@@ -6300,14 +6300,14 @@ Queries
 
       .. code-block:: python
 
-         # Equivalent example Using a Window() instance instead.
+         # Declare a window and include it in the query with .window().
          window = Window(partition_by=[Sample.counter])
          query = (Sample
                   .select(
                      Sample.counter,
                      Sample.value,
                      fn.AVG(Sample.value).over(window))
-                  .window(window)  # Note call to ".window()"
+                  .window(window)
                   .order_by(Sample.counter))
 
    .. method:: for_update(for_update=True, of=None, nowait=None, skip_locked=None)
@@ -6759,8 +6759,7 @@ Query-builder Internals
    .. method:: add(source)
 
       Add a source to the AliasManager's internal registry at the current
-      scope. The alias will be automatically generated using the following
-      scheme (where each level of indentation refers to a new scope):
+      scope, generating an alias for it automatically.
 
       :param Source source: Make the manager aware of a new source. If the
           source has already been added, the call is a no-op.

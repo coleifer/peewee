@@ -122,15 +122,14 @@ Calling :meth:`Model.create` or :meth:`Model.save` in a loop should be avoided:
    for data_dict in data:
        User.create(**data_dict)
 
-The above is slow:
+The above is slow for several reasons:
 
-1. **Does not wrap the loop in a transaction.** Result is each
-   :meth:`~Model.create` happens in its own :ref:`transaction <transactions>`.
-2. **Python interpreter** is getting in the way, and each :class:`Insert`
-   must be generated and parsed into SQL.
-3. **Large amount of data** (in terms of raw bytes of SQL) may be sent to the
-   database to parse.
-4. **Retrieving the last insert id**, which may not be necessary.
+1. Each :meth:`~Model.create` call runs in its own
+   :ref:`transaction <transactions>`.
+2. Every row builds and parses its own :class:`Insert` query.
+3. More raw bytes of SQL are sent to the database.
+4. The last insert id is retrieved after every statement, whether or not it
+   is needed.
 
 You can get a significant speedup by wrapping this in a transaction with
 :meth:`~Database.atomic`:
@@ -320,7 +319,7 @@ cycle. Performing updates atomically prevents race-conditions:
 .. code-block:: python
 
    # WRONG: reads each row into Python, increments, then saves.
-   # Vulnerable to race conditions; slow on many rows.
+   # Vulnerable to race conditions and slow on many rows.
    for stat in Stat.select().where(Stat.url == url):
        stat.counter += 1
        stat.save()
@@ -422,7 +421,7 @@ The :meth:`~Insert.on_conflict` method is much more powerful.
     .insert(username='huey', last_login=now, login_count=1)
     .on_conflict(
         # Postgresql and SQLite require identifying the conflicting constraint.
-        # MySQL does not need this.
+        # MySQL rejects it - omit conflict_target there.
         conflict_target=[User.username],
 
         # Columns whose values should come from the incoming row:
@@ -467,8 +466,8 @@ if the constraint had not fired. This allows conditional updates:
 
 There are several important concepts to understand when using ``ON CONFLICT``:
 
-* ``conflict_target=``: which column(s) have the UNIQUE constraint. For a user
-  table, this might be the user's email (SQLite and Postgresql only).
+* ``conflict_target=``: which column(s) have the UNIQUE constraint. Required
+  by SQLite and Postgresql, rejected by MySQL.
 * ``preserve=``: if a conflict occurs, this parameter is used to indicate which
   values from the **new** data we wish to update.
 * ``update=``: if a conflict occurs, this is a mapping of data to apply to the
@@ -532,7 +531,7 @@ Insert the row, and silently do nothing if a constraint would be violated:
 
 .. code-block:: python
 
-   # Insert if username does not exist; ignore if it does.
+   # Insert if username does not exist, otherwise do nothing.
    User.insert(username='huey').on_conflict_ignore().execute()
 
 Supported by SQLite, MySQL, and Postgresql.

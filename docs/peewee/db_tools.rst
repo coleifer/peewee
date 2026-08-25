@@ -1409,8 +1409,8 @@ Example output for a SQLite database with ``user`` and ``tweet`` tables:
        class Meta:
            table_name = 'tweet'
 
-Note that ``pwiz`` detects foreign keys, unique constraints, and preserves
-explicit table names.
+``pwiz`` detects foreign keys and unique constraints, and preserves explicit
+table names.
 
 .. note::
     The ``UnknownField`` is a placeholder that is used in the event your schema

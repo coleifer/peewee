@@ -125,9 +125,9 @@ back. Otherwise the statements will be committed at the end of the wrapped block
 
    with db.transaction() as txn:
        User.create(username='mickey')
-       txn.commit()         # Commit now; a new transaction begins.
+       txn.commit()         # Commit now. A new transaction begins.
        User.create(username='huey')
-       txn.rollback()       # Roll back huey; a new transaction begins.
+       txn.rollback()       # Roll back huey. A new transaction begins.
        User.create(username='zaizee')
    # zaizee is committed when the block exits.
 
@@ -216,7 +216,7 @@ The three modes:
 * **DEFERRED** (default) - acquires the minimum necessary lock as reads and
   writes occur. Another writer can intervene between BEGIN and your first write.
 * **IMMEDIATE** - acquires a write reservation lock at BEGIN. Other writers are
-  blocked; readers can proceed.
+  blocked but readers can proceed.
 * **EXCLUSIVE** - acquires an exclusive lock at BEGIN. No other connection can
   read or write until the transaction completes.
 

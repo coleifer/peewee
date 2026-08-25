@@ -80,4 +80,4 @@ following drivers are supported out of the box:
 +-----------------------+----------------------------+--------------------------------------------+
 
 The bolded rows cover the majority of deployments. All others are
-optional; install their drivers when needed.
+optional. Install their drivers when needed.

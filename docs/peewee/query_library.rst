@@ -1789,7 +1789,7 @@ member ID and name, and order by ascending member id.
    for row in query:
        print(row.memid, row.firstname, row.surname)
 
-Produce a upward recommendation chain for any member
+Produce an upward recommendation chain for any member
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 Produce a CTE that can return the upward recommendation chain for any member.
@@ -1818,7 +1818,7 @@ descending.
 
 .. code-block:: python
 
-   # Base-case of recursive CTE. Get member recommender where memid=27.
+   # Base-case of recursive CTE. Get every member and their recommender.
    base = (Member
           .select(Member.recommendedby, Member.memid)
           .cte('recommenders', recursive=True, columns=('recommender', 'member')))

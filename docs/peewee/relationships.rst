@@ -177,8 +177,7 @@ query that returns all rows related to the given instance.
 
 In the example schema, ``Tweet.user`` is a foreign key to ``User``. The
 ``backref='tweets'`` parameter means that every ``User`` instance gains a
-``tweets`` attribute, which is a pre-filtered :class:`ModelSelect` query of
-that user's tweets:
+``tweets`` attribute holding that user's tweets:
 
 .. code-block:: pycon
 
@@ -193,7 +192,7 @@ that user's tweets:
    alice-2
    alice-3
 
-``alice.tweets`` is a pre-filtered ``SELECT`` query:
+``alice.tweets`` corresponds to the following query:
 
 .. code-block:: pycon
 
@@ -488,8 +487,8 @@ In SQL we would write:
    INNER JOIN tweet ON (favorite.tweet_id = tweet.id)
    INNER JOIN user AS author ON (tweet.user_id = author.id);
 
-Note that we are selecting from the user table twice - once in the context of
-the user who created the favorite, and again as the author of the tweet.
+We are selecting from the user table twice - once in the context of the user
+who created the favorite, and again as the author of the tweet.
 
 With Peewee, we use :meth:`Model.alias` to alias a model class so it can be
 referenced twice in a single query:
@@ -503,9 +502,9 @@ referenced twice in a single query:
             .join_from(Favorite, Tweet)  # Join favorite -> tweet.
             .join_from(Tweet, User))     # Join tweet -> user.
 
-We can iterate over the results and access the joined values in the following
-way. Note how Peewee has resolved the fields from the various models we
-selected and reconstructed the model graph:
+We can iterate over the results and access the joined values. Peewee has
+resolved the fields from the various models we selected and reconstructed the
+model graph:
 
 .. code-block:: python
 

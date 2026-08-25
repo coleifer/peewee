@@ -13,7 +13,7 @@ Model Definition
 -----------------
 
 A Peewee application starts with a :class:`Database` object and one or more
-:class:`Model` classes. The database object manages connections; model
+:class:`Model` classes. The database object manages connections. Model
 classes map to tables.
 
 .. code-block:: python
@@ -170,7 +170,7 @@ In a web application you would open the connection when a request arrives and
 close it when the response is sent. See :ref:`framework-integration` for
 framework-specific patterns.
 
-Working with Existing databases
+Working with Existing Databases
 -------------------------------
 
 If you have an existing database, peewee can generate models using :ref:`pwiz`.

@@ -89,11 +89,13 @@ A reusable base class:
 
 Usage:
 
-.. code-block:: pycon
+.. code-block:: python
 
    class UserProfile(BaseVersionedModel):
        username = TextField(unique=True)
        bio = TextField(default='')
+
+.. code-block:: pycon
 
    >>> u = UserProfile(username='charlie')
    >>> u.save_optimistic()

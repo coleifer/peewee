@@ -23,7 +23,7 @@ production workloads of all sizes since 2010.
 * use with :ref:`flask <flask>`, :ref:`fastapi <fastapi>`, :ref:`pydantic <pydantic>`
   and :ref:`more <framework-integration>`
 
-Peewee's source code hosted on `GitHub <https://github.com/coleifer/peewee>`_.
+Peewee's source code is hosted on `GitHub <https://github.com/coleifer/peewee>`_.
 
 New to peewee? These may help:
 

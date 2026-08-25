@@ -3,7 +3,7 @@
 Contributing
 ============
 
-In order to continually improve, Peewee needs the help of developers like you.
+To continually improve, Peewee needs the help of developers like you.
 Whether it's contributing patches, submitting bug reports, or just asking and
 answering questions, you are helping to make Peewee a better library.
 

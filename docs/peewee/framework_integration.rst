@@ -111,7 +111,7 @@ examples. There are a few things to watch out for, though:
 
 * SQLModel's official tutorial uses synchronous endpoints exclusively, which
   FastAPI runs on a threadpool. Async usage is listed as an "advanced" topic
-  and is undocumented currently.
+  and is currently undocumented.
 * Lazy-loading often breaks in async contexts. SQLAlchemy's implicit lazy-loading
   of relationships can trigger ``MissingGreenlet`` errors when used with async
   sessions. This can also occur with Peewee, but it's straightforward to avoid
@@ -128,7 +128,7 @@ with built-in pooling, fewer implicit lazy-load gotchas, and the Pydantic
 schemas generated with :func:`~playhouse.pydantic_utils.to_pydantic` can be
 configured to include/exclude fields without inheritance. Field metadata is
 captured automatically: choice enums, default values, descriptions, titles and
-type information are captured in the JSON schema and OpenAPI docs.
+type information all appear in the JSON schema and OpenAPI docs.
 
 Peewee requires far less machinery to provide real asyncio database access, and
 works equally well for synchronous FastAPI endpoints.
@@ -398,7 +398,7 @@ peewee works unmodified. Scope the connection inside the endpoint body:
            user = User.create(name=name, email=email)
            return {'id': user.id, 'name': user.name}
 
-Do not manage the connection with a ``yield`` dependency or as request hook.
+Do not manage the connection with a ``yield`` dependency or as a request hook.
 FastAPI dispatches a sync dependency's setup, the endpoint, and the teardown as
 three separate threadpool calls(!), and under load they land on different
 threads. Peewee's connection state is thread-local, so each operation may see a
@@ -454,7 +454,7 @@ Starlette is the ASGI toolkit FastAPI is built on. Connections are managed with
 a plain ASGI middleware (which shares the request task) plus a ``lifespan``
 handler for startup and shutdown. Do not use ``BaseHTTPMiddleware`` for this as
 it runs the endpoint in a separate task, and peewee's async connections are
-task-local (so the connection would not be used in the endpoint).
+task-local (the endpoint would not see the middleware's connection).
 
 .. code-block:: python
 

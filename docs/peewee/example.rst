@@ -276,7 +276,7 @@ Storing Data
 When a new user wants to join the site we need to make sure the username is
 available, and if so, create a new ``User`` record. Looking at the ``join()``
 view, we can see that our application attempts to create the ``User`` using
-:meth:`Model.create`. ``User.username`` field has a unique constraint, so if
+:meth:`Model.create`. The ``User.username`` field has a unique constraint, so if
 the username is taken the database will raise an :class:`IntegrityError`.
 
 .. code-block:: python
@@ -319,8 +319,8 @@ If you are logged-in and visit the twitter homepage, you will see tweets from
 the users that you follow. We can implement this cleanly with a subquery:
 
 .. note::
-   ``user.following()`` will automatically only select ``User.id`` when it used
-   in a subquery.
+   ``user.following()`` will automatically only select ``User.id`` when it is
+   used in a subquery.
 
 .. code-block:: python
    :emphasize-lines: 5

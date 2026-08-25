@@ -52,7 +52,7 @@ you must use :class:`PostgresqlExtDatabase`.
    * :ref:`postgres-server-side-cursors`
 
    :param str database: Name of database to connect to.
-   :param bool server_side_cursors: Whether ``SELECT`` queries should utilize
+   :param bool server_side_cursors: Whether ``SELECT`` queries should use
        server-side cursors.
    :param bool register_hstore: Register the hstore extension.
    :param bool prefer_psycopg3: If both psycopg2 and psycopg3 are installed,
@@ -143,7 +143,7 @@ Most applications will wish to use :class:`BinaryJSONField` (``JSONB``):
 * Faster Queries: direct access to data elements without parsing the entire
   JSON document each time.
 * Index Support: supports indexing via GiST or GIN.
-* Faster updates without requiring rewriting the entire document.
+* Faster updates without rewriting the entire document.
 
 The only time :class:`JSONField` is preferable is when you must store
 the exact JSON data verbatim (whitespace, object key ordering).
@@ -208,7 +208,7 @@ BinaryJSONField and JSONField
 
    .. method:: concat(data)
 
-      Concatenate the field value with ``data``. Note this is a shallow
+      Concatenate the field value with ``data``. This is a shallow
       operation and does not deep-merge nested objects.
 
       Example:
@@ -423,7 +423,7 @@ BinaryJSONField and JSONField
 
       Set the value at this path **only if the path does not already exist**.
       Internally rendered as a ``CASE`` expression around ``jsonb_set`` since
-      Postgres has no single-call for this.
+      Postgres has no single call for this.
 
       .. code-block:: python
 
@@ -449,7 +449,7 @@ BinaryJSONField and JSONField
 
       Shallow-merge ``value`` into the object at this path. Equivalent to
       ``jsonb_set(field, path, current || value, true)``. Top-level keys in
-      ``value`` overwrite existing keys, Postgres does **not** provide RFC-7396
+      ``value`` overwrite existing keys. Postgres does **not** provide RFC-7396
       deep merge.
 
       .. code-block:: python
@@ -1039,7 +1039,7 @@ declared ``WITH HOLD``, which has a couple consequences:
 
 * Server has to copy the cursor's rows into temporary storage upon commit, so
   subsequent fetches read from the frozen copy.
-* Cursor must be exhausted or explicitly closed in order to release the held
+* Cursor must be exhausted or explicitly closed to release the held
   resources.
 
 Peewee connections autocommit, so a ``WITH HOLD`` cursor opened outside a
@@ -1181,7 +1181,7 @@ Transactions:
 
 .. code-block:: python
 
-   # transaction() is safe to nest; the outer block manages the commit.
+   # transaction() is safe to nest. The outer block manages the commit.
    @db.transaction()
    def create_user(username):
        return User.create(username=username)
