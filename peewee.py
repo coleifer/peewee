@@ -1759,7 +1759,7 @@ class Function(ColumnBase):
                     (arg if isinstance(arg, Node) else Value(arg, False))
                     for arg in args]))
 
-        if self._filter:
+        if self._filter is not None:
             ctx.literal(' FILTER (WHERE ').sql(self._filter).literal(')')
         return ctx
 
@@ -2845,7 +2845,7 @@ class Update(_WriteQuery):
                 with ctx.scope_source(parentheses=False):
                     ctx.literal(' FROM ').sql(CommaNodeList(self._from))
 
-            if self._where:
+            if self._where is not None:
                 with ctx.scope_normal():
                     ctx.literal(' WHERE ').sql(self._where)
             self._apply_ordering(ctx)
@@ -3973,7 +3973,7 @@ class Database(_callable_context_manager):
 
         parts = [self._build_on_conflict_target(on_conflict),
                  SQL('DO UPDATE SET'), CommaNodeList(updates)]
-        if on_conflict._where:
+        if on_conflict._where is not None:
             parts.extend((SQL('WHERE'), qualify_names(on_conflict._where)))
 
         return NodeList(parts)
@@ -5172,8 +5172,8 @@ class MySQLDatabase(Database):
                              'MySQL supports REPLACE, IGNORE and UPDATE.')
 
     def conflict_update(self, on_conflict, query):
-        if on_conflict._where or on_conflict._conflict_target or \
-           on_conflict._conflict_constraint:
+        if on_conflict._where is not None or on_conflict._conflict_target \
+           or on_conflict._conflict_constraint:
             raise ValueError('MySQL does not support the specification of '
                              'where clauses or conflict targets for conflict '
                              'resolution.')

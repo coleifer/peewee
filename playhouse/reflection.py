@@ -907,7 +907,7 @@ def print_model(model, indexes=True, inline_indexes=False):
             ctx = model._meta.database.get_sql_context()
             with ctx.scope_values(param='%s', quote='""'):
                 ctx.sql(CommaNodeList(index._expressions))
-                if index._where:
+                if index._where is not None:
                     ctx.literal(' WHERE ')
                     ctx.sql(index._where)
                 sql, params = ctx.query()
