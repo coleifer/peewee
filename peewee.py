@@ -5471,10 +5471,12 @@ class CursorWrapper(object):
 
 
 class DictCursorWrapper(CursorWrapper):
+    valid_identifiers = False
+
     def initialize(self):
         self.columns = self.dedupe_columns(
             [col_spec[0] for col_spec in self.cursor.description],
-            valid_identifiers=False)
+            valid_identifiers=self.valid_identifiers)
         self.ncols = len(self.columns)
 
     def _row_to_dict(self, row):
@@ -5494,15 +5496,11 @@ class NamedTupleCursorWrapper(CursorWrapper):
 
 
 class ObjectCursorWrapper(DictCursorWrapper):
+    valid_identifiers = True
+
     def __init__(self, cursor, constructor):
         super(ObjectCursorWrapper, self).__init__(cursor)
         self.constructor = constructor
-
-    def initialize(self):
-        self.columns = self.dedupe_columns(
-            [col_spec[0] for col_spec in self.cursor.description],
-            valid_identifiers=True)
-        self.ncols = len(self.columns)
 
     def process_row(self, row):
         row_dict = self._row_to_dict(row)
@@ -9059,11 +9057,13 @@ class BaseModelCursorWrapper(DictCursorWrapper):
 
 
 class ModelDictCursorWrapper(BaseModelCursorWrapper):
+    valid_identifiers = False
+
     def initialize(self):
         super(ModelDictCursorWrapper, self).initialize()
         self.unique_columns = self.dedupe_columns(
             self.columns,
-            valid_identifiers=False)
+            valid_identifiers=self.valid_identifiers)
 
     def process_row(self, row):
         result = {}
@@ -9094,23 +9094,15 @@ class ModelNamedTupleCursorWrapper(ModelTupleCursorWrapper):
 
 
 class ModelObjectCursorWrapper(ModelDictCursorWrapper):
+    valid_identifiers = True
+
     def __init__(self, cursor, model, select, constructor):
         self.constructor = constructor
         self.is_model = is_model(constructor)
         super(ModelObjectCursorWrapper, self).__init__(cursor, model, select)
 
-    def initialize(self):
-        super(ModelObjectCursorWrapper, self).initialize()
-        self.identifiers = self.dedupe_columns(self.columns)
-
     def process_row(self, row):
-        result = {}
-        columns = self.identifiers
-        for i in self.no_convert:
-            result[columns[i]] = row[i]
-        for i in self.convert:
-            result[columns[i]] = self.converters[i](row[i])
-
+        result = super(ModelObjectCursorWrapper, self).process_row(row)
         if self.is_model:
             # Clear out any dirty fields before returning to the user.
             obj = self.constructor(__no_default__=1, **result)
