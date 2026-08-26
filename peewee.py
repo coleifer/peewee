@@ -1319,20 +1319,20 @@ class ColumnBase(Node):
         return template % s
     def contains(self, rhs):
         if isinstance(rhs, Node):
-            rhs = Expression('%', OP.CONCAT,
-                             Expression(rhs, OP.CONCAT, '%'))
+            rhs = StringExpression('%', OP.CONCAT,
+                                   StringExpression(rhs, OP.CONCAT, '%'))
         else:
             rhs = self._escape_like_expr(rhs, '%%%s%%')
         return Expression(self, OP.ILIKE, rhs)
     def startswith(self, rhs):
         if isinstance(rhs, Node):
-            rhs = Expression(rhs, OP.CONCAT, '%')
+            rhs = StringExpression(rhs, OP.CONCAT, '%')
         else:
             rhs = self._escape_like_expr(rhs, '%s%%')
         return Expression(self, OP.ILIKE, rhs)
     def endswith(self, rhs):
         if isinstance(rhs, Node):
-            rhs = Expression('%', OP.CONCAT, rhs)
+            rhs = StringExpression('%', OP.CONCAT, rhs)
         else:
             rhs = self._escape_like_expr(rhs, '%%%s')
         return Expression(self, OP.ILIKE, rhs)
@@ -1637,6 +1637,11 @@ class Expression(ColumnBase):
 
 
 class StringExpression(Expression):
+    def __sql__(self, ctx):
+        if self.op == OP.CONCAT and ctx.state.use_concat_function:
+            return ctx.sql(fn.CONCAT(self.lhs, self.rhs))
+        return super(StringExpression, self).__sql__(ctx)
+
     def __add__(self, rhs):
         return self.concat(rhs)
     def __radd__(self, lhs):
@@ -3722,6 +3727,7 @@ class Database(_callable_context_manager):
     context_class = Context
     field_types = {}
     operations = {}
+    use_concat_function = False
     param = '?'
     quote = '""'
     server_version = None
@@ -3903,6 +3909,7 @@ class Database(_callable_context_manager):
             'index_using_precedes_table': self.index_using_precedes_table,
             'limit_max': self.limit_max,
             'nulls_ordering': self.nulls_ordering,
+            'use_concat_function': self.use_concat_function,
         }
 
     def get_sql_context(self, **context_options):
@@ -4979,6 +4986,7 @@ class MySQLDatabase(Database):
     param = '%s'
     quote = '``'
     json_methods = MySQLJSONMethods
+    use_concat_function = True  # Treats || as logical OR by default.
     mariadb = False  # JSON value-marking flavor: JSON_COMPACT vs CAST AS JSON.
 
     compound_select_parentheses = CSQ_PARENTHESES_UNNESTED
@@ -4987,15 +4995,14 @@ class MySQLDatabase(Database):
     limit_max = 2 ** 64 - 1
     safe_create_index = False
     safe_drop_index = False
-    sql_mode = 'PIPES_AS_CONCAT'
+    sql_mode = None
 
     def init(self, database, mariadb=None, **kwargs):
         if mariadb is not None:
             self.mariadb = mariadb
-        params = {
-            'charset': 'utf8',
-            'sql_mode': self.sql_mode,
-            'use_unicode': True}
+        params = {'charset': 'utf8mb4'}
+        if self.sql_mode is not None:
+            params['sql_mode'] = self.sql_mode
         params.update(kwargs)
         super(MySQLDatabase, self).init(database, **params)
 

@@ -128,7 +128,7 @@ class TestModelAPIs(ModelTestCase):
         if IS_SQLITE:
             self.database.foreign_keys = True
 
-        exc_class = (ProgrammingError, IntegrityError)
+        exc_class = (ProgrammingError, IntegrityError, OperationalError)
         with self.database.atomic() as txn:
             self.assertRaises(exc_class, PostNote.create, note='pxn')
             txn.rollback()

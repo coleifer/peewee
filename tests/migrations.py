@@ -399,16 +399,9 @@ class TestSchemaMigration(ModelTestCase):
         with self.database.transaction():
             migrate(self.migrator.drop_column_default('person', 'first_name'))
 
-        if IS_MYSQL:
-            # MySQL, even though the column is NOT NULL, does not seem to be
-            # enforcing the constraint(?).
-            Person.create(last_name='Last2')
-            p_db = Person.get(Person.last_name == 'Last2')
-            self.assertEqual(p_db.first_name, '')
-        else:
-            with self.assertRaises(IntegrityError):
-                with self.database.transaction():
-                    Person.create(last_name='Last2')
+        with self.assertRaises((IntegrityError, OperationalError)):
+            with self.database.transaction():
+                Person.create(last_name='Last2')
 
     def test_add_not_null(self, legacy=False):
         kw = {'legacy': legacy} if IS_SQLITE else {}

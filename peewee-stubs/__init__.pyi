@@ -422,6 +422,7 @@ class Expression(ColumnBase):
     def __sql__(self, ctx): ...
 
 class StringExpression(Expression):
+    def __sql__(self, ctx): ...
     def __add__(self, rhs) -> StringExpression: ...
     def __radd__(self, lhs) -> StringExpression: ...
 
@@ -805,6 +806,7 @@ class Database(_callable_context_manager):
     json_methods: Incomplete
     field_types: Incomplete
     operations: Incomplete
+    use_concat_function: bool
     param: str
     quote: str
     server_version: Incomplete
@@ -1058,7 +1060,8 @@ class MySQLDatabase(Database):
     limit_max: Incomplete
     safe_create_index: bool
     safe_drop_index: bool
-    sql_mode: str
+    use_concat_function: bool
+    sql_mode: str | None
     mariadb: bool
     def init(self, database: str | None, mariadb: bool | None = ..., **kwargs) -> None: ...
     def is_connection_usable(self) -> bool: ...

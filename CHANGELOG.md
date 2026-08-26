@@ -7,6 +7,17 @@ https://github.com/coleifer/peewee/releases
 
 ## master
 
+Backwards-incompatible:
+
+* MySQL and MariaDB connections no longer set `sql_mode`. Peewee had been
+  setting `PIPES_AS_CONCAT`, but the param replaced the server's mode rather
+  than adding to it, which silently disabled `STRICT_TRANS_TABLES` (etc).
+  Going forward we'll leave `sql_mode` alone by default and use `CONCAT()`
+  rather than `||` for MySQL/MariaDB.
+* The MySQL and MariaDB connection charset defaults to `utf8mb4` instead of
+  `utf8`, which is an alias for `utf8mb3` and cannot store 4-byte characters.
+  Pass `charset='utf8'` to restore the old default.
+
 [View commits](https://github.com/coleifer/peewee/compare/4.4.0...master)
 
 ## 4.4.0
