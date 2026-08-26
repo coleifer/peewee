@@ -451,6 +451,11 @@ def quote(path, quote_chars):
 
 is_model = lambda o: isclass(o) and issubclass(o, Model)
 
+def _combine(existing, expressions, op=operator.and_):
+    if existing is not None:
+        expressions = (existing,) + expressions
+    return reduce(op, expressions)
+
 def ensure_tuple(value):
     if value is not None:
         return value if isinstance(value, (list, tuple)) else (value,)
@@ -2089,9 +2094,7 @@ class OnConflict(Node):
 
     @Node.copy
     def where(self, *expressions):
-        if self._where is not None:
-            expressions = (self._where,) + expressions
-        self._where = reduce(operator.and_, expressions)
+        self._where = _combine(self._where, expressions)
 
     @Node.copy
     def conflict_target(self, *constraints):
@@ -2100,9 +2103,7 @@ class OnConflict(Node):
 
     @Node.copy
     def conflict_where(self, *expressions):
-        if self._conflict_where is not None:
-            expressions = (self._conflict_where,) + expressions
-        self._conflict_where = reduce(operator.and_, expressions)
+        self._conflict_where = _combine(self._conflict_where, expressions)
 
     @Node.copy
     def conflict_constraint(self, constraint):
@@ -2262,15 +2263,11 @@ class Query(BaseQuery):
 
     @Node.copy
     def where(self, *expressions):
-        if self._where is not None:
-            expressions = (self._where,) + expressions
-        self._where = reduce(operator.and_, expressions)
+        self._where = _combine(self._where, expressions)
 
     @Node.copy
     def orwhere(self, *expressions):
-        if self._where is not None:
-            expressions = (self._where,) + expressions
-        self._where = reduce(operator.or_, expressions)
+        self._where = _combine(self._where, expressions, operator.or_)
 
     @Node.copy
     def order_by(self, *values):
@@ -2648,9 +2645,7 @@ class Select(SelectBase):
 
     @Node.copy
     def having(self, *expressions):
-        if self._having is not None:
-            expressions = (self._having,) + expressions
-        self._having = reduce(operator.and_, expressions)
+        self._having = _combine(self._having, expressions)
 
     @Node.copy
     def distinct(self, *columns):
@@ -3122,9 +3117,7 @@ class Index(Node):
 
     @Node.copy
     def where(self, *expressions):
-        if self._where is not None:
-            expressions = (self._where,) + expressions
-        self._where = reduce(operator.and_, expressions)
+        self._where = _combine(self._where, expressions)
 
     @Node.copy
     def using(self, _using=None):
@@ -7867,12 +7860,7 @@ class Model(Node, metaclass=ModelBase):
             pk_fields = None
 
         fields = [cls._meta.fields[field_name] for field_name in field_names]
-        attrs = []
-        for field in fields:
-            if isinstance(field, ForeignKeyField):
-                attrs.append(field.object_id_name)
-            else:
-                attrs.append(field.name)
+        attrs = [field.safe_name for field in fields]
 
         for batch in batches:
             accum = ([getattr(model, f) for f in attrs]
@@ -7893,8 +7881,7 @@ class Model(Node, metaclass=ModelBase):
         fields = [cls._meta.fields[f] if isinstance(f, str) else f
                   for f in fields]
         # Now collect list of attribute names to use for values.
-        attrs = [field.object_id_name if isinstance(field, ForeignKeyField)
-                 else field.name for field in fields]
+        attrs = [field.safe_name for field in fields]
 
         if batch_size is not None:
             batches = chunked(model_list, batch_size)
@@ -9348,39 +9335,25 @@ def _parent_keys(parent_query, cols):
     return sub
 
 
-def _relate_children(query, parent_query, pairs, strategy):
+def _relate(query, parent_query, pairs, strategy):
+    # Pairs are (column on query, the column it matches on parent_query).
     if strategy == PREFETCH_TYPE.JOIN:
         # Distinct the key subquery, not the child query. Deduping the
         # keys prevents join fan-out without clobbering a child DISTINCT.
         # Inherited ordering is dropped, a key set has none and postgres
         # rejects DISTINCT ordered by an unprojected column.
-        sub = (_parent_keys(parent_query, {pk for _, pk in pairs})
-               .order_by().distinct())
-        on = reduce(operator.or_, [getattr(sub.c, pk.column_name) == fk
-                                   for fk, pk in pairs])
+        keys = list(dict.fromkeys([key for _, key in pairs]))
+        sub = _parent_keys(parent_query, keys).order_by().distinct()
+        on = reduce(operator.or_, [col == getattr(sub.c, key.column_name)
+                                   for col, key in pairs])
         query = query.join(sub, on=on)
         if len(pairs) > 1:
             # An OR join over several fks can match a child row to more
             # than one key row, dedupe the children as well.
             query = query.distinct()
         return query
-    expr = reduce(operator.or_, [fk << _parent_keys(parent_query, (pk,))
-                                 for fk, pk in pairs])
-    return query.where(expr)
-
-
-def _relate_parent(query, parent_query, pairs, strategy):
-    if strategy == PREFETCH_TYPE.JOIN:
-        sub = (_parent_keys(parent_query, [fk for _, fk in pairs])
-               .order_by().distinct())
-        on = reduce(operator.or_, [ref == getattr(sub.c, fk.column_name)
-                                   for ref, fk in pairs])
-        query = query.join(sub, on=on)
-        if len(pairs) > 1:
-            query = query.distinct()
-        return query
-    expr = reduce(operator.or_, [ref << _parent_keys(parent_query, (fk,))
-                                 for ref, fk in pairs])
+    expr = reduce(operator.or_, [col << _parent_keys(parent_query, (key,))
+                                 for col, key in pairs])
     return query.where(expr)
 
 
@@ -9420,13 +9393,13 @@ def prefetch_add_subquery(sq, subqueries, prefetch_type):
         dest = (target_model,) if target_model else None
 
         if fks:
-            subquery = _relate_children(subquery, last_query,
-                                        list(zip(fks, pks)), prefetch_type)
+            subquery = _relate(subquery, last_query, list(zip(fks, pks)),
+                               prefetch_type)
             fixed_queries.append(PrefetchQuery(subquery, fks, False, dest))
         elif backrefs:
             pairs = [(getattr(subquery_model, backref.rel_field.name),
                       getattr(last_obj, backref.name)) for backref in backrefs]
-            subquery = _relate_parent(subquery, last_query, pairs, prefetch_type)
+            subquery = _relate(subquery, last_query, pairs, prefetch_type)
             fixed_queries.append(PrefetchQuery(subquery, backrefs, True, dest))
 
     return fixed_queries
@@ -9554,8 +9527,7 @@ class Load(Node):
         # Resolve the key on parent_query.model so aliased parents render
         # against their alias.
         pk = getattr(parent_query.model, field.rel_field.name)
-        return _relate_children(query, parent_query, [(field, pk)],
-                                self._strategy)
+        return _relate(query, parent_query, [(field, pk)], self._strategy)
 
     def _link_parent(self, query, parent_query, parents):
         field = self._field
@@ -9564,8 +9536,8 @@ class Load(Node):
                                   lambda p: p.__data__.get(field.name))
             return query.where(field.rel_field << keys)
         fk = getattr(parent_query.model, field.name)
-        return _relate_parent(query, parent_query, [(field.rel_field, fk)],
-                              self._strategy)
+        return _relate(query, parent_query, [(field.rel_field, fk)],
+                       self._strategy)
 
     def _run(self, parents, parent_query, depth=0, database=None):
         field = self._field
