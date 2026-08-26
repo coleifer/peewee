@@ -553,6 +553,23 @@ class TestTransactionLockType(BaseTransactionTestCase):
                     self._save(6)
         self.assertRegister([2, 4, 5])
 
+    def test_default_lock_type(self):
+        db = new_connection(lock_type='EXCLUSIVE')
+        db2 = new_connection(timeout=0.0001)
+        db2.connect()
+
+        with db.atomic():  # Uses the database default.
+            with self.assertRaises(OperationalError):
+                with db2.atomic('IMMEDIATE'):
+                    pass
+
+        with db.atomic('DEFERRED'):  # Explicit arg wins over the default.
+            with db2.atomic('IMMEDIATE'):
+                pass
+
+        db.close()
+        db2.close()
+
 
 class TestTransactionIsolationLevel(BaseTransactionTestCase):
     @skip_unless(IS_POSTGRESQL, 'requires postgresql')

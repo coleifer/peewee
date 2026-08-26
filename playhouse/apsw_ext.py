@@ -104,7 +104,8 @@ class APSWDatabase(SqliteDatabase):
         except AttributeError:
             return cursor.cursor.connection.changes()  # RETURNING query.
 
-    def begin(self, lock_type='deferred'):
+    def begin(self, lock_type=None):
+        lock_type = lock_type or self._lock_type or 'deferred'
         self.cursor().execute('begin %s;' % lock_type)
 
     def commit(self):

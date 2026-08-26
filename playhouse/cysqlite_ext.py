@@ -222,9 +222,9 @@ class CySqliteDatabase(SqliteDatabase):
             self.connection().progress(*args)
         return fn
 
-    def begin(self, lock_type='deferred'):
+    def begin(self, lock_type=None):
         with __exception_wrapper__:
-            self.connection().begin(lock_type)
+            self.connection().begin(lock_type or self._lock_type or 'deferred')
 
     def commit(self):
         if self.is_closed():

@@ -18,6 +18,9 @@ Backwards-incompatible:
   `utf8`, which is an alias for `utf8mb3` and cannot store 4-byte characters.
   Pass `charset='utf8'` to restore the old default.
 
+* Add `SqliteDatabase(..., lock_type=...)` to set the default locking strategy
+  for transactions that do not specify one, e.g. `lock_type='IMMEDIATE'`.
+
 [View commits](https://github.com/coleifer/peewee/compare/4.4.0...master)
 
 ## 4.4.0

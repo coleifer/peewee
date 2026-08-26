@@ -807,13 +807,15 @@ Database
       this is equivalent to ``fn.random()``, for MySQL ``fn.rand()``.
 
 
-.. class:: SqliteDatabase(database, pragmas=None, regexp_function=False, rank_functions=False, timeout=5, returning_clause=None,  **kwargs)
+.. class:: SqliteDatabase(database, pragmas=None, regexp_function=False, rank_functions=False, lock_type=None, timeout=5, returning_clause=None,  **kwargs)
 
    :param pragmas: Either a dictionary or a list of 2-tuples containing
        pragma key and value to set every time a connection is opened.
    :param bool regexp_function: Make the REGEXP function available.
    :param bool rank_functions: Make the full-text search ranking functions
       available (recommended only if using FTS4).
+   :param str lock_type: Default locking strategy for transactions that do not
+       specify one: DEFERRED, IMMEDIATE or EXCLUSIVE.
    :param timeout: Set the busy-timeout on the SQLite driver (in seconds).
    :param bool returning_clause: Use `RETURNING` clause automatically for bulk
        INSERT queries (requires Sqlite 3.35 or newer).

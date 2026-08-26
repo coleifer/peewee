@@ -220,6 +220,20 @@ The three modes:
 * **EXCLUSIVE** - acquires an exclusive lock at BEGIN. No other connection can
   read or write until the transaction completes.
 
+DEFERRED is a common source of trouble for concurrent writers, because a block
+that reads before it writes upgrades its lock late, and the resulting
+``SQLITE_BUSY_SNAPSHOT`` does not consult the busy-timeout. The transaction
+fails immediately and retrying cannot help, since the snapshot is already
+stale. Pass ``lock_type`` to the database to make every transaction IMMEDIATE:
+
+.. code-block:: python
+
+   db = SqliteDatabase('app.db', lock_type='IMMEDIATE')
+
+An explicit ``atomic(lock_type=...)`` still takes precedence. Note that
+IMMEDIATE blocks other writers for the whole block, so a long read-only
+``atomic()`` costs more than it does under DEFERRED.
+
 .. seealso::
    `SQLite locking documentation
    <https://sqlite.org/lockingv3.html>`_.

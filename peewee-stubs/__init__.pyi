@@ -908,7 +908,8 @@ class SqliteDatabase(Database):
     truncate_table: bool
     nulls_ordering: bool
     def __init__(
-        self, database: str | None, pragmas=None, regexp_function: bool = False, rank_functions: bool = False, *args, **kwargs
+        self, database: str | None, pragmas=None, regexp_function: bool = False, rank_functions: bool = False,
+        lock_type: str | None = None, *args, **kwargs
     ) -> None: ...
     returning_clause: Incomplete
     def init(self, database: str | None, pragmas=None, timeout: int = 5, returning_clause=None, **kwargs) -> None: ...
