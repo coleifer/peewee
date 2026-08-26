@@ -597,10 +597,13 @@ class AliasManager(object):
         self._current_index -= 1
 
 
-class State(collections.namedtuple('_State', ('scope', 'parentheses',
-                                              'settings'))):
-    def __new__(cls, scope=SCOPE_NORMAL, parentheses=False, **kwargs):
-        return super(State, cls).__new__(cls, scope, parentheses, kwargs)
+class State(object):
+    __slots__ = ('settings', 'scope', 'parentheses')
+
+    def __init__(self, scope=SCOPE_NORMAL, parentheses=False, settings=None):
+        self.settings = settings if settings is not None else {}
+        self.scope = scope
+        self.parentheses = parentheses
 
     def __call__(self, scope=None, parentheses=None, **kwargs):
         # Scope and settings are "inherited" (parentheses is not, however).
@@ -614,17 +617,15 @@ class State(collections.namedtuple('_State', ('scope', 'parentheses',
             settings = kwargs
         else:
             settings = self.settings
-        return State(scope, parentheses, **settings)
+        return State(scope, parentheses, settings)
 
     def __getattr__(self, attr_name):
         return self.settings.get(attr_name)
 
 
 def __scope_context__(scope):
-    @contextmanager
     def inner(self, **kwargs):
-        with self(scope=scope, **kwargs):
-            yield self
+        return self(scope=scope, **kwargs)
     return inner
 
 
@@ -632,11 +633,13 @@ class Context(object):
     __slots__ = ('stack', '_sql', '_values', 'alias_manager', 'state')
 
     def __init__(self, **settings):
+        scope = settings.pop('scope', SCOPE_NORMAL)
+        parentheses = settings.pop('parentheses', False)
         self.stack = []
         self._sql = []
         self._values = []
         self.alias_manager = AliasManager()
-        self.state = State(**settings)
+        self.state = State(scope, parentheses, settings)
 
     def as_new(self):
         return Context(**self.state.settings)
