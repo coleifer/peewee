@@ -91,6 +91,35 @@ class TestAPSWExtension(ModelTestCase):
         query = User.select(fn.First(User.username)).order_by(User.username)
         self.assertEqual(query.scalar(), 'u0')
 
+    def test_db_register_window_function(self):
+        @database.window_function('my_sum')
+        class MySum(object):
+            def __init__(self):
+                self._value = 0
+
+            def step(self, value):
+                self._value += value
+
+            def inverse(self, value):
+                self._value -= value
+
+            def value(self):
+                return self._value
+
+            def finalize(self):
+                return self._value
+
+        with database.atomic():
+            for i in range(1, 4):
+                User.create(username=str(i))
+
+        query = (User
+                 .select(User.username, fn.my_sum(User.id).over(
+                     order_by=[User.id]).alias('total'))
+                 .order_by(User.id))
+        self.assertEqual([(u.username, u.total) for u in query],
+                         [('1', 1), ('2', 3), ('3', 6)])
+
     def test_db_register_collation(self):
         @database.collation()
         def reverse(lhs, rhs):

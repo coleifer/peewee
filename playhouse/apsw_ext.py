@@ -76,6 +76,13 @@ class APSWDatabase(SqliteDatabase):
             args = (deterministic,) if deterministic else ()
             conn.createscalarfunction(name, fn, num_params, *args)
 
+    def _load_window_functions(self, conn):
+        for name, (klass, num_params) in self._window_functions.items():
+            def make_window(klass=klass):
+                return (klass(), klass.step, klass.finalize, klass.value,
+                        klass.inverse)
+            conn.create_window_function(name, make_window, num_params)
+
     def _load_extensions(self, conn):
         conn.enableloadextension(True)
         for extension in self._extensions:
