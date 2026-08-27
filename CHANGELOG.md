@@ -29,6 +29,10 @@ Backwards-incompatible:
 
 Improvements:
 
+* Postgres introspection (`get_tables()`, `get_columns()`, `get_indexes()`,
+  `get_primary_keys()`, `get_foreign_keys()`, `get_views()`) with no `schema`
+  now follows the search path via `current_schema()` instead of assuming
+  `public`, matching MySQL's `DATABASE()` behavior.
 * Add `SchemaMigrator(db, schema=...)`, which qualifies every table name w/the
   given schema (or database on MySQL). Not supported for SQLite, as the
   table-rebuild rewrites DDL straight from `sqlite_master`.

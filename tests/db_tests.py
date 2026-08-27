@@ -756,6 +756,46 @@ class TestIntrospection(ModelTestCase):
         self.assertEqual(idx.columns, ['da"ta'])
 
 
+@requires_postgresql
+class TestIntrospectionSearchPath(DatabaseTestCase):
+    """With no schema given, introspection follows the search path."""
+    schema = 'ispath'
+
+    def setUp(self):
+        super(TestIntrospectionSearchPath, self).setUp()
+        self.execute('DROP SCHEMA IF EXISTS %s CASCADE' % self.schema)
+        self.execute('CREATE SCHEMA %s' % self.schema)
+        self.execute('CREATE TABLE %s.parent (id SERIAL PRIMARY KEY)'
+                     % self.schema)
+        self.execute('CREATE TABLE %s.child (id SERIAL PRIMARY KEY, '
+                     'parent_id INTEGER REFERENCES %s.parent (id), '
+                     'name TEXT)' % (self.schema, self.schema))
+        self.execute('CREATE INDEX child_name ON %s.child (name)'
+                     % self.schema)
+        self.execute('CREATE VIEW %s.child_names AS SELECT name FROM '
+                     '%s.child' % (self.schema, self.schema))
+        self.execute('SET search_path TO %s' % self.schema)
+
+    def tearDown(self):
+        try:
+            self.execute('DROP SCHEMA IF EXISTS %s CASCADE' % self.schema)
+        finally:
+            super(TestIntrospectionSearchPath, self).tearDown()
+
+    def test_search_path(self):
+        db = self.database
+        self.assertEqual(db.get_tables(), ['child', 'parent'])
+        self.assertEqual([v.name for v in db.get_views()], ['child_names'])
+        self.assertEqual([c.name for c in db.get_columns('child')],
+                         ['id', 'parent_id', 'name'])
+        self.assertEqual(db.get_primary_keys('child'), ['id'])
+        self.assertEqual([(fk.column, fk.dest_table)
+                          for fk in db.get_foreign_keys('child')],
+                         [('parent_id', 'parent')])
+        self.assertTrue('child_name' in
+                        [i.name for i in db.get_indexes('child')])
+
+
 # ===========================================================================
 # Thread safety
 # ===========================================================================

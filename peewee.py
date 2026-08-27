@@ -4795,14 +4795,16 @@ class PostgresqlDatabase(Database):
 
     def get_tables(self, schema=None):
         query = ('SELECT tablename FROM pg_catalog.pg_tables '
-                 'WHERE schemaname = %s ORDER BY tablename')
-        cursor = self.execute_sql(query, (schema or 'public',))
+                 'WHERE schemaname = COALESCE(%s, current_schema()) '
+                 'ORDER BY tablename')
+        cursor = self.execute_sql(query, (schema,))
         return [table for table, in cursor.fetchall()]
 
     def get_views(self, schema=None):
         query = ('SELECT viewname, definition FROM pg_catalog.pg_views '
-                 'WHERE schemaname = %s ORDER BY viewname')
-        cursor = self.execute_sql(query, (schema or 'public',))
+                 'WHERE schemaname = COALESCE(%s, current_schema()) '
+                 'ORDER BY viewname')
+        cursor = self.execute_sql(query, (schema,))
         return [ViewMetadata(view_name, sql.strip(' \t;'))
                 for (view_name, sql) in cursor.fetchall()]
 
@@ -4822,9 +4824,10 @@ class PostgresqlDatabase(Database):
                 idxs.tablename = t.relname
                 AND idxs.indexname = i.relname
                 AND idxs.schemaname = n.nspname)
-            WHERE t.relname = %s AND t.relkind = %s AND n.nspname = %s
+            WHERE t.relname = %s AND t.relkind = %s
+                AND n.nspname = COALESCE(%s, current_schema())
             ORDER BY idx.indisunique DESC, i.relname;"""
-        cursor = self.execute_sql(query, (table, 'r', schema or 'public'))
+        cursor = self.execute_sql(query, (table, 'r', schema))
         return [IndexMetadata(name, sql.rstrip(' ;'),
                               [unqesc(c) for c in cols], unique, table)
                 for name, sql, unique, cols in cursor.fetchall()]
@@ -4842,10 +4845,11 @@ class PostgresqlDatabase(Database):
                 ON (t.relname = c.table_name AND t.relnamespace = n.oid)
             INNER JOIN pg_catalog.pg_attribute AS a
                 ON (a.attrelid = t.oid AND a.attname = c.column_name)
-            WHERE c.table_name = %s AND c.table_schema = %s
+            WHERE c.table_name = %s
+                AND c.table_schema = COALESCE(%s, current_schema())
                 AND NOT a.attisdropped
             ORDER BY c.ordinal_position"""
-        cursor = self.execute_sql(query, (table, schema or 'public'))
+        cursor = self.execute_sql(query, (table, schema))
         pks = set(self.get_primary_keys(table, schema))
         def is_ident(ident, df):
             return ident == 'YES' or (df or '').startswith(
@@ -4865,9 +4869,9 @@ class PostgresqlDatabase(Database):
             WHERE
                 tc.constraint_type = %s AND
                 tc.table_name = %s AND
-                tc.table_schema = %s"""
+                tc.table_schema = COALESCE(%s, current_schema())"""
         ctype = 'PRIMARY KEY'
-        cursor = self.execute_sql(query, (ctype, table, schema or 'public'))
+        cursor = self.execute_sql(query, (ctype, table, schema))
         return [pk for pk, in cursor.fetchall()]
 
     def get_foreign_keys(self, table, schema=None):
@@ -4890,8 +4894,8 @@ class PostgresqlDatabase(Database):
             WHERE
                 tc.constraint_type = 'FOREIGN KEY' AND
                 tc.table_name = %s AND
-                tc.table_schema = %s"""
-        cursor = self.execute_sql(sql, (table, schema or 'public'))
+                tc.table_schema = COALESCE(%s, current_schema())"""
+        cursor = self.execute_sql(sql, (table, schema))
         return [ForeignKeyMetadata(row[0], row[1], row[2], table, row[3],
                                    row[4], row[5])
                 for row in cursor.fetchall()]
