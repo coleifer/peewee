@@ -23,6 +23,9 @@ Backwards-incompatible:
   name you pass already contains a dot it is treated as fully-qualified and
   used as-is, so `sequence='other.seq'` is unaffected by `Meta.schema`. Also,
   `sequence_exists()` accepts a schema-qualified name.
+* `Model.bind_ctx()` and `Database.bind_ctx()` can be used as decorators, like
+  the other peewee context-managers. Previously the decorator form raised
+  `TypeError: '_BoundModelsContext' object is not callable`.
 
 [View commits](https://github.com/coleifer/peewee/compare/4.4.0...master)
 

@@ -213,6 +213,43 @@ class TestDatabase(DatabaseTestCase):
         db.close()
         alt_db.close()
 
+    def test_bind_ctx_decorator(self):
+        db = get_in_memory_db()
+        alt_db = get_in_memory_db()
+
+        class A(Model):
+            class Meta:
+                database = db
+        class B(Model):
+            a = ForeignKeyField(A)
+            class Meta:
+                database = db
+
+        @alt_db.bind_ctx([A, B])
+        def with_db():
+            return (A._meta.database, B._meta.database)
+
+        @A.bind_ctx(alt_db)
+        def with_model():
+            return (A._meta.database, B._meta.database)
+
+        for fn in (with_db, with_model):
+            # The context is rebuilt per-call, so it can be re-entered.
+            for _ in range(2):
+                self.assertEqual(fn(), (alt_db, alt_db))
+                self.assertEqual(A._meta.database, db)
+                self.assertEqual(B._meta.database, db)
+
+        @A.bind_ctx(alt_db, bind_refs=False, bind_backrefs=False)
+        def recurse(n):
+            if n:
+                self.assertEqual(recurse(n - 1), alt_db)
+            self.assertEqual(B._meta.database, db)
+            return A._meta.database
+
+        self.assertEqual(recurse(2), alt_db)
+        self.assertEqual(A._meta.database, db)
+
     def test_bind_regression(self):
         class Base(Model):
             class Meta:

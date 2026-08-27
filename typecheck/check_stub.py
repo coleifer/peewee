@@ -111,6 +111,15 @@ User.select().get(proxy)
 User.select().execute('not a database')  # type: ignore
 
 
+# bind_ctx() is usable as a context-manager or as a decorator.
+with User.bind_ctx(real_db):
+    pass
+
+@User.bind_ctx(real_db)
+@real_db.bind_ctx([User])
+def bound() -> None: ...
+
+
 # chunked() preserves the element type of the source iterable.
 assert_type(chunked([1, 2, 3], 2), Generator[list[int], None, None])
 

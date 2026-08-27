@@ -708,8 +708,8 @@ Database
        :param bool bind_backrefs: Bind models that reference the given model
            with a foreign-key.
 
-       Create a context-manager that binds (associates) the given models with
-       the current database for the duration of the wrapped block.
+       Create a context-manager or decorator that binds (associates) the given
+       models with the current database for the duration of the wrapped block.
 
        Example:
 
@@ -2133,8 +2133,14 @@ Model
 
    .. classmethod:: bind_ctx(database, bind_refs=True, bind_backrefs=True)
 
-      Like :meth:`~Model.bind`, but returns a context manager that only
-      binds the models for the duration of the wrapped block.
+      Like :meth:`~Model.bind`, but returns a context-manager or decorator that
+      only binds the models for the duration of the wrapped block.
+
+      .. code-block:: python
+
+          @User.bind_ctx(test_db)
+          def test_something():
+              assert User._meta.database is test_db
 
       See also: :meth:`Database.bind_ctx`.
 

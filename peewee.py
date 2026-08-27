@@ -7715,12 +7715,16 @@ class ModelBase(type):
         return ctx.sql(self._meta.table)
 
 
-class _BoundModelsContext(object):
+class _BoundModelsContext(_callable_context_manager):
     def __init__(self, models, database, bind_refs, bind_backrefs):
         self.models = models
         self.database = database
         self.bind_refs = bind_refs
         self.bind_backrefs = bind_backrefs
+
+    def _build_ctx(self):
+        return type(self)(self.models, self.database, self.bind_refs,
+                          self.bind_backrefs)
 
     def __enter__(self):
         self._orig_database = []
