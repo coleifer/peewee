@@ -1010,6 +1010,7 @@ Recognized keys:
 * ``database`` - database spec (dotted path, url, or sqlite filename)
 * ``directory`` - migrations directory
 * ``models`` - models module, read by ``diff``, ``initial`` and ``generate``
+* ``schema`` - schema containing the tables to be migrated
 * ``table`` - history table name
 
 The file is read from the working directory only. A different config
@@ -1111,7 +1112,17 @@ Generate a migration from a diff:
    if diff:
        runner.create('add karma', body=template(diff))
 
-.. class:: Runner(database, directory='migrations', table_name='schema_migration')
+.. class:: Runner(database, directory='migrations', table_name='schema_migration', schema=None)
+
+   :param str schema: schema containing the tables to be migrated, passed to
+       the :class:`SchemaMigrator`. The history table lives in the same
+       schema, so each schema tracks its own applied set and one set of
+       migration files can be run against any number of schemas
+       (``pwmigrate up -s tenant_a``, ``pwmigrate up -s tenant_b``).
+
+       When adopting ``schema=`` on a deployment whose history predates it,
+       the runner will find no history there and consider every migration
+       pending. Backfill with ``fake`` first.
 
    .. method:: up(target=None)
 

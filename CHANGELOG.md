@@ -33,6 +33,10 @@ Improvements:
   `get_primary_keys()`, `get_foreign_keys()`, `get_views()`) with no `schema`
   now follows the search path via `current_schema()` instead of assuming
   `public`, matching MySQL's `DATABASE()` behavior.
+* Add `Runner(db, schema=...)` and `pwmigrate --schema` for running
+  migrations against a specific schema. The history table lives in that
+  schema, so each schema tracks its own applied set and one set of migration
+  files can be run against any number of schemas.
 * Add `SchemaMigrator(db, schema=...)`, which qualifies every table name w/the
   given schema (or database on MySQL). Not supported for SQLite, as the
   table-rebuild rewrites DDL straight from `sqlite_master`.

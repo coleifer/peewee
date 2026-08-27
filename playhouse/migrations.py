@@ -89,18 +89,22 @@ class Migration(namedtuple('Migration', ('idx', 'name', 'path', 'applied'))):
 
 class Runner(object):
     def __init__(self, database, directory='migrations',
-                 table_name='schema_migration'):
+                 table_name='schema_migration', schema=None):
         self.database = database
         self.directory = directory
         self.table_name = table_name
-        self.migrator = SchemaMigrator.from_database(database)
+        self.schema = schema
+        self.migrator = SchemaMigrator.from_database(database, schema=schema)
 
+        # History lives in the schema it describes, so each schema tracks
+        # its own applied set.
         class History(database.Model):
             name = CharField(unique=True)
             applied = DateTimeField(default=datetime.datetime.now)
             class Meta:
                 legacy_table_names = False
                 table_name = self.table_name
+                schema = self.schema
 
         self.History = History
 
@@ -496,7 +500,7 @@ def template(diff):
                     for f in diff.add_columns if f.model._meta.schema)
     if qualified:
         todos.append('schema-qualified tables (%s): column/index '
-                     'operations are emitted unqualified. Qualify by hand' %
+                     'operations are emitted unqualified. Run with --schema' %
                      ', '.join(sorted(qualified)))
 
     up, down = [], []
@@ -713,7 +717,7 @@ def _read_config(path):
             key, _, value = line.partition('=')
             config[key.strip()] = value.strip()
     for key in sorted(set(config) - {'database', 'directory', 'models',
-                                     'table'}):
+                                     'schema', 'table'}):
         sys.stderr.write('warning: unknown key "%s" in %s\n' % (key, path))
     return config
 
@@ -735,6 +739,9 @@ def _parser(config):
     common.add_argument('-d', '--directory',
                         default=config.get('directory', 'migrations'),
                         help='migrations directory (default: migrations)')
+    common.add_argument('-s', '--schema',
+                        default=config.get('schema'),
+                        help='schema containing the tables to be migrated')
     common.add_argument('-t', '--table',
                         default=config.get('table', 'schema_migration'),
                         help='history table name')
@@ -823,10 +830,10 @@ def main(argv=None):
     database = None
     try:
         database = _resolve_database(args.database)
-        runner = Runner(database, args.directory, args.table)
+        runner = Runner(database, args.directory, args.table, args.schema)
         return args.func(runner, args) or 0
     except (MigrationError, DatabaseError, InterfaceError,
-            ImproperlyConfigured) as exc:
+            ImproperlyConfigured, ValueError) as exc:
         if args.verbose:
             traceback.print_exc()
         sys.stderr.write('error: %s\n' % exc)

@@ -1731,6 +1731,72 @@ def run_cli(*args):
     return rc, out.getvalue(), err.getvalue()
 
 
+@requires_postgresql
+class TestRunnerSchema(DatabaseTestCase):
+    """One set of migration files runs against any number of schemas."""
+    target = 'runner_target'
+    decoy = 'runner_decoy'
+
+    def setUp(self):
+        super(TestRunnerSchema, self).setUp()
+        self.dir = tempfile.mkdtemp()
+        for schema in (self.target, self.decoy):
+            self.execute('DROP SCHEMA IF EXISTS %s CASCADE' % schema)
+            self.execute('CREATE SCHEMA %s' % schema)
+            self.execute('CREATE TABLE %s.person (id SERIAL PRIMARY KEY, '
+                         'first_name TEXT)' % schema)
+        with open(os.path.join(self.dir, '0001_notes.py'), 'w') as fh:
+            fh.write(add_column_mig('notes'))
+        self.runner = Runner(self.database, self.dir, schema=self.target)
+
+    def tearDown(self):
+        try:
+            shutil.rmtree(self.dir, ignore_errors=True)
+            for schema in (self.target, self.decoy):
+                self.execute('DROP SCHEMA IF EXISTS %s CASCADE' % schema)
+        finally:
+            super(TestRunnerSchema, self).tearDown()
+
+    def columns(self, schema):
+        return sorted(c.name for c in
+                      self.database.get_columns('person', schema))
+
+    def tables(self, schema):
+        return self.database.get_tables(schema)
+
+    def test_up_down(self):
+        self.assertEqual(self.runner.up(), ['0001_notes'])
+        self.assertEqual(self.columns(self.target),
+                         ['first_name', 'id', 'notes'])
+        self.assertEqual(self.columns(self.decoy), ['first_name', 'id'])
+        # History lives in the schema it describes.
+        self.assertTrue('schema_migration' in self.tables(self.target))
+        self.assertFalse('schema_migration' in self.tables(self.decoy))
+
+        self.assertEqual(self.runner.down(), ['0001_notes'])
+        self.assertEqual(self.columns(self.target), ['first_name', 'id'])
+
+    def test_per_schema_history(self):
+        self.runner.up()
+        other = Runner(self.database, self.dir, schema=self.decoy)
+        self.assertEqual(other.up(), ['0001_notes'])
+        self.assertEqual(self.columns(self.decoy),
+                         ['first_name', 'id', 'notes'])
+        self.assertEqual(sorted(self.runner.applied()), ['0001_notes'])
+        self.assertEqual(sorted(other.applied()), ['0001_notes'])
+
+        # Each schema reverts independently.
+        other.down()
+        self.assertEqual(self.columns(self.decoy), ['first_name', 'id'])
+        self.assertEqual(self.columns(self.target),
+                         ['first_name', 'id', 'notes'])
+
+    def test_fake_backfill(self):
+        self.assertEqual(self.runner.fake(), ['0001_notes'])
+        self.assertEqual(self.columns(self.target), ['first_name', 'id'])
+        self.assertEqual(self.runner.up(), [])
+
+
 class TestMigrationRunnerCLI(BaseTestCase):
     def setUp(self):
         super(TestMigrationRunnerCLI, self).setUp()
