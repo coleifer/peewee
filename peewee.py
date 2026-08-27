@@ -8530,8 +8530,9 @@ class ModelSelect(BaseModelSelect, Select):
         src_model, src_is_model = self._get_model(src)
         dest_model, dest_is_model = self._get_model(dest)
 
+        join_ctx = self._join_ctx
         if src_model and dest_model:
-            self._join_ctx = dest
+            join_ctx = dest
             constructor = dest_model
 
             # In the case where the "on" clause is a Column or Field, we will
@@ -8585,11 +8586,11 @@ class ModelSelect(BaseModelSelect, Select):
         elif dest_model:
             # Joining from a model-less source (subquery, CTE, table) to a
             # model, e.g. join_from(cte, SomeModel, on=...).
-            self._join_ctx = dest
+            join_ctx = dest
             constructor = dest_model
             attr = attr or dest_model._meta.name
 
-        return (on, attr, constructor)
+        return (on, attr, constructor, join_ctx)
 
     def _generate_on_clause(self, src, dest, to_field=None, on=None):
         meta = src._meta
@@ -8667,7 +8668,9 @@ class ModelSelect(BaseModelSelect, Select):
             # A lateral source correlates inside the subquery, default ON true.
             if on is None and getattr(dest, '_lateral', False):
                 on = True
-            on, attr, constructor = self._normalize_join(src, dest, on, attr)
+            on, attr, constructor, join_ctx = self._normalize_join(
+                src, dest, on, attr)
+            self._join_ctx = join_ctx
             if attr:
                 self._joins.setdefault(src, [])
                 self._joins[src].append((dest, attr, constructor, join_type))
