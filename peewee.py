@@ -9335,23 +9335,26 @@ def _parent_keys(parent_query, cols):
     return sub
 
 
+def _join_parent_keys(query, parent_query, pairs):
+    # The parent query can repeat a key (it may carry its own joins), and a
+    # duplicated key would multiply every row of query. Dedupe the keys
+    # rather than the query, which is bigger and may carry its own DISTINCT.
+    keys = list(dict.fromkeys([key for _, key in pairs]))
+    sub = _parent_keys(parent_query, keys).order_by().distinct()
+    on = reduce(operator.or_, [col == getattr(sub.c, key.column_name)
+                               for col, key in pairs])
+    query = query.join(sub, on=on)
+    if len(pairs) > 1:
+        # Several fks OR'd together can match one row to two distinct keys,
+        # which deduping the keys cannot prevent.
+        query = query.distinct()
+    return query
+
+
 def _relate(query, parent_query, pairs, strategy):
     # Pairs are (column on query, the column it matches on parent_query).
     if strategy == PREFETCH_TYPE.JOIN:
-        # Distinct the key subquery, not the child query. Deduping the
-        # keys prevents join fan-out without clobbering a child DISTINCT.
-        # Inherited ordering is dropped, a key set has none and postgres
-        # rejects DISTINCT ordered by an unprojected column.
-        keys = list(dict.fromkeys([key for _, key in pairs]))
-        sub = _parent_keys(parent_query, keys).order_by().distinct()
-        on = reduce(operator.or_, [col == getattr(sub.c, key.column_name)
-                                   for col, key in pairs])
-        query = query.join(sub, on=on)
-        if len(pairs) > 1:
-            # An OR join over several fks can match a child row to more
-            # than one key row, dedupe the children as well.
-            query = query.distinct()
-        return query
+        return _join_parent_keys(query, parent_query, pairs)
     expr = reduce(operator.or_, [col << _parent_keys(parent_query, (key,))
                                  for col, key in pairs])
     return query.where(expr)
