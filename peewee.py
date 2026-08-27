@@ -2381,18 +2381,17 @@ class SelectBase(_HashableSource, Source, SelectQuery):
         for row in self.tuples().execute(database):
             yield row[0]
 
+    def _count_can_project_one(self):
+        # Compound queries take their columns from their operands.
+        return False
+
     @database_required
     def count(self, database, clear_limit=False):
         clone = self.order_by().alias('_wrapped')
         if clear_limit:
             clone._limit = clone._offset = None
-        try:
-            if clone._having is None and clone._group_by is None and \
-               clone._windows is None and clone._distinct is None and \
-               clone._simple_distinct is not True:
-                clone = clone.select(SQL('1'))
-        except AttributeError:
-            pass
+        if clone._count_can_project_one():
+            clone = clone.select(SQL('1'))
         return Select([clone], [fn.COUNT(SQL('1'))]).scalar(database)
 
     @database_required
@@ -2679,6 +2678,12 @@ class Select(SelectBase):
     @Node.copy
     def lateral(self, lateral=True):
         self._lateral = lateral
+
+    def _count_can_project_one(self):
+        # With any of these the columns can affect the number of rows.
+        return (self._having is None and self._group_by is None and
+                self._windows is None and self._distinct is None and
+                self._simple_distinct is not True)
 
     def __sql_selection__(self, ctx, is_subquery=False):
         return ctx.sql(CommaNodeList(self._returning))
