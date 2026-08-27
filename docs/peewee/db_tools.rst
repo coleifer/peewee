@@ -436,14 +436,13 @@ Peewee appends by default):
 driver's own: ``%s`` for postgres and mysql, ``?`` for sqlite.
 
 .. note::
-   Postgres users may need to set the search-path when using a non-standard
-   schema. This can be done as follows:
+   Pass the schema to the migrator when the tables are not in the default
+   schema.
 
    .. code-block:: python
 
-      migrator = PostgresqlMigrator(db)
+      migrator = PostgresqlMigrator(db, schema='my_schema')
       migrate(
-          migrator.set_search_path('my_schema'),
           migrator.add_column('table', 'field', TextField(default='')),
       )
 
@@ -463,16 +462,18 @@ Migration API
            migrator.add_index('t', ('col',), False),
        )
 
-.. class:: SchemaMigrator(database)
+.. class:: SchemaMigrator(database, schema=None)
 
    :param database: a :class:`Database` instance.
+   :param str schema: schema containing the tables to be migrated.
 
    The :class:`SchemaMigrator` is responsible for generating schema-altering
    statements.
 
-   .. classmethod:: from_database(database)
+   .. classmethod:: from_database(database, schema=None)
 
       :param Database database: database instance to generate migrations for.
+      :param str schema: schema containing the tables to be migrated.
       :return: :class:`SchemaMigrator` instance appropriate to provided database.
 
       Factory method that returns the appropriate :class:`SchemaMigrator`
@@ -579,7 +580,8 @@ Migration API
       :param str table: Name of the table to drop.
       :param bool safe: Use ``IF EXISTS``.
       :param bool cascade: Append ``CASCADE`` (not supported by sqlite).
-      :param str schema: Optional schema qualification.
+      :param str schema: Schema to drop the table from, overriding the
+          migrator's own schema.
 
    .. method:: add_index(table, columns, unique=False, using=None, where=None, nulls_distinct=None)
 
@@ -618,11 +620,13 @@ Migration API
       :param str table: Table to add constraint to.
       :param str column_names: One or more columns for UNIQUE constraint.
 
-.. class:: PostgresqlMigrator(database)
+.. class:: PostgresqlMigrator(database, schema=None)
 
    .. method:: set_search_path(schema_name)
 
-      Set the Postgres search path for subsequent operations.
+      Set the Postgres search path for subsequent operations. The search path
+      belongs to the connection and is lost when it is closed, so prefer the
+      migrator's ``schema`` parameter.
 
 .. class:: SqliteMigrator(database)
 
@@ -635,9 +639,16 @@ Migration API
    supported on any version, as sqlite's ``ADD CONSTRAINT`` does not
    extend to UNIQUE constraints.
 
-.. class:: MySQLMigrator(database)
+   SQLite is the one backend that does not accept a ``schema``, as the
+   table-rebuild path rewrites unqualified DDL read out of ``sqlite_master``.
+   ``drop_table()`` still takes one, for attached databases.
 
-   MySQL-specific subclass.
+.. class:: MySQLMigrator(database, schema=None)
+
+   MySQL-specific subclass. A schema is a database in MySQL, so ``schema`` is
+   the database to migrate. Note that ``rename_table()`` keeps the table in
+   that database, where a plain ``RENAME TABLE a.t TO u`` would move it to the
+   connection's own.
 
 
 .. _migration-runner:

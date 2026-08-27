@@ -27,6 +27,12 @@ Backwards-incompatible:
   the other peewee context-managers. Previously the decorator form raised
   `TypeError: '_BoundModelsContext' object is not callable`.
 
+Improvements:
+
+* Add `SchemaMigrator(db, schema=...)`, which qualifies every table name w/the
+  given schema (or database on MySQL). Not supported for SQLite, as the
+  table-rebuild rewrites DDL straight from `sqlite_master`.
+
 [View commits](https://github.com/coleifer/peewee/compare/4.4.0...master)
 
 ## 4.4.0

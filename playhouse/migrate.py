@@ -170,6 +170,13 @@ def operation(fn):
     return inner
 
 
+def _check_table_name(name):
+    if '.' in name:
+        raise ValueError('Table name "%s" is schema-qualified. Use the '
+                         'migrator schema= parameter instead.' % name)
+    return name
+
+
 def make_index_name(table_name, columns):
     return _truncate_constraint_name('_'.join((table_name,) + tuple(columns)))
 
@@ -177,10 +184,18 @@ def make_index_name(table_name, columns):
 class SchemaMigrator(object):
     explicit_create_foreign_key = False
     explicit_delete_foreign_key = False
+    supports_schema = True
     transactional_ddl = True
 
-    def __init__(self, database):
+    def __init__(self, database, schema=None):
+        if schema is not None and not self.supports_schema:
+            raise ValueError('%s does not support schema=.'
+                             % type(self).__name__)
         self.database = database
+        self.schema = schema
+
+    def _table(self, table, schema=None):
+        return Entity(schema or self.schema, _check_table_name(table))
 
     def migrate(self, *operations):
         for operation in operations:
@@ -198,21 +213,23 @@ class SchemaMigrator(object):
         return self.database.get_sql_context()
 
     @classmethod
-    def from_database(cls, database):
+    def from_database(cls, database, schema=None):
         if isinstance(database, Proxy):
             if database.obj is None:
                 raise ValueError('Database proxy is uninitialized.')
             database = database.obj
 
         if CockroachDatabase and isinstance(database, CockroachDatabase):
-            return CockroachDBMigrator(database)
+            migrator = CockroachDBMigrator
         elif isinstance(database, PostgresqlDatabase):
-            return PostgresqlMigrator(database)
+            migrator = PostgresqlMigrator
         elif isinstance(database, MySQLDatabase):
-            return MySQLMigrator(database)
+            migrator = MySQLMigrator
         elif isinstance(database, SqliteDatabase):
-            return SqliteMigrator(database)
-        raise ValueError('Unsupported database: %s' % database)
+            migrator = SqliteMigrator
+        else:
+            raise ValueError('Unsupported database: %s' % database)
+        return migrator(database, schema=schema)
 
     @operation
     def apply_default(self, table, column_name, field):
@@ -222,7 +239,7 @@ class SchemaMigrator(object):
 
         return (self.make_context()
                 .literal('UPDATE ')
-                .sql(Entity(table))
+                .sql(self._table(table))
                 .literal(' SET ')
                 .sql(Expression(
                     Entity(column_name),
@@ -231,7 +248,7 @@ class SchemaMigrator(object):
                     flat=True)))
 
     def _alter_table(self, ctx, table):
-        return ctx.literal('ALTER TABLE ').sql(Entity(table))
+        return ctx.literal('ALTER TABLE ').sql(self._table(table))
 
     def _alter_column(self, ctx, table, column):
         return (self
@@ -290,9 +307,10 @@ class SchemaMigrator(object):
                 .sql(Entity(name)))
 
     def add_inline_fk_sql(self, ctx, field):
+        meta = field.rel_model._meta
         ctx = (ctx
                .literal(' REFERENCES ')
-               .sql(Entity(field.rel_model._meta.table_name))
+               .sql(self._table(meta.table_name, meta.schema))
                .literal(' ')
                .sql(EnclosedNodeList((Entity(field.rel_field.column_name),))))
         if field.on_delete is not None:
@@ -304,20 +322,20 @@ class SchemaMigrator(object):
     @operation
     def add_foreign_key_constraint(self, table, column_name, rel, rel_column,
                                    on_delete=None, on_update=None,
-                                   constraint_name=None):
+                                   constraint_name=None, rel_schema=None):
         constraint = constraint_name or 'fk_%s_%s_refs_%s' % (table,
                                                               column_name,
                                                               rel)
         ctx = (self
                .make_context()
                .literal('ALTER TABLE ')
-               .sql(Entity(table))
+               .sql(self._table(table))
                .literal(' ADD CONSTRAINT ')
                .sql(Entity(_truncate_constraint_name(constraint)))
                .literal(' FOREIGN KEY ')
                .sql(EnclosedNodeList((Entity(column_name),)))
                .literal(' REFERENCES ')
-               .sql(Entity(rel))
+               .sql(self._table(rel, rel_schema))
                .literal(' (')
                .sql(Entity(rel_column))
                .literal(')'))
@@ -360,7 +378,8 @@ class SchemaMigrator(object):
                     field.rel_model._meta.table_name,
                     field.rel_field.column_name,
                     field.on_delete,
-                    field.on_update))
+                    field.on_update,
+                    rel_schema=field.rel_model._meta.schema))
 
         if field.index or field.unique:
             using = getattr(field, 'index_type', None)
@@ -370,7 +389,7 @@ class SchemaMigrator(object):
         return operations
 
     def get_foreign_key_constraint(self, table, column_name):
-        for fk in self.database.get_foreign_keys(table):
+        for fk in self.database.get_foreign_keys(table, self.schema):
             if fk.column == column_name and fk.name:
                 return fk.name
         raise AttributeError(
@@ -391,9 +410,8 @@ class SchemaMigrator(object):
         if cascade:
             ctx.literal(' CASCADE')
 
-        fk_columns = [
-            foreign_key.column
-            for foreign_key in self.database.get_foreign_keys(table)]
+        fk_columns = [fk.column for fk in
+                      self.database.get_foreign_keys(table, self.schema)]
         if column_name in fk_columns and self.explicit_delete_foreign_key:
             return [self.drop_foreign_key_constraint(table, column_name), ctx]
 
@@ -462,6 +480,7 @@ class SchemaMigrator(object):
 
     @operation
     def rename_table(self, old_name, new_name):
+        # The new name must not be qualified, the table stays in-place.
         return (self
                 ._alter_table(self.make_context(), old_name)
                 .literal(' RENAME TO ')
@@ -471,7 +490,7 @@ class SchemaMigrator(object):
     def drop_table(self, table, safe=False, cascade=False, schema=None):
         ctx = self.make_context().literal(
             'DROP TABLE IF EXISTS ' if safe else 'DROP TABLE ')
-        ctx = ctx.sql(Entity(*filter(None, (schema, table))))
+        ctx = ctx.sql(self._table(table, schema))
         return ctx.literal(' CASCADE') if cascade else ctx
 
     @operation
@@ -479,7 +498,7 @@ class SchemaMigrator(object):
                   nulls_distinct=None):
         ctx = self.make_context()
         index_name = make_index_name(table, columns)
-        table_obj = Table(table)
+        table_obj = Table(_check_table_name(table), schema=self.schema)
         cols = [getattr(table_obj.c, column) for column in columns]
         index = Index(index_name, table_obj, cols, unique=unique, using=using,
                       where=where, nulls_distinct=nulls_distinct)
@@ -493,7 +512,7 @@ class SchemaMigrator(object):
         return (self
                 .make_context()
                 .literal('DROP INDEX ')
-                .sql(Entity(index_name)))
+                .sql(self._table(index_name)))
 
     @operation
     def sql(self, sql, params=None):
@@ -512,7 +531,9 @@ class PostgresqlMigrator(SchemaMigrator):
                 pg_attribute.attnum = any(pg_index.indkey) AND
                 indisprimary;
         """
-        cursor = self.database.execute_sql(query, (tbl,))
+        # regclass parses the identifier, so it is passed quoted.
+        name, _ = self.make_context().sql(self._table(tbl)).query()
+        cursor = self.database.execute_sql(query, (name,))
         return [row[0] for row in cursor.fetchall()]
 
     @operation
@@ -537,8 +558,9 @@ class PostgresqlMigrator(SchemaMigrator):
                 SELECT 1
                 FROM information_schema.sequences
                 WHERE LOWER(sequence_name) = LOWER(%s)
+                    AND sequence_schema = COALESCE(%s, current_schema())
             """
-            cursor = self.database.execute_sql(query, (seq_name,))
+            cursor = self.database.execute_sql(query, (seq_name, self.schema))
             if bool(cursor.fetchone()):
                 new_seq_name = '%s_%s_seq' % (new_name, pk_names[0])
                 operations.append(ParentClass.rename_table(
@@ -567,7 +589,7 @@ class CockroachDBMigrator(PostgresqlMigrator):
         return (self
                 .make_context()
                 .literal('DROP INDEX ')
-                .sql(Entity(index_name))
+                .sql(self._table(index_name))
                 .literal(' CASCADE'))
 
 
@@ -619,16 +641,17 @@ class MySQLMigrator(SchemaMigrator):
 
     @operation
     def rename_table(self, old_name, new_name):
+        # An unqualified new name moves the table to the current database.
         return (self
                 .make_context()
                 .literal('RENAME TABLE ')
-                .sql(Entity(old_name))
+                .sql(self._table(old_name))
                 .literal(' TO ')
-                .sql(Entity(new_name)))
+                .sql(self._table(new_name)))
 
     def _get_column_definition(self, table, column_name):
-        table_safe = table.replace('`', '``')
-        cursor = self.database.execute_sql('DESCRIBE `%s`;' % table_safe)
+        name, _ = self.make_context().sql(self._table(table)).query()
+        cursor = self.database.execute_sql('DESCRIBE %s;' % name)
         rows = cursor.fetchall()
         for row in rows:
             column = MySQLColumn(*row)
@@ -657,7 +680,7 @@ class MySQLMigrator(SchemaMigrator):
 
         fk_objects = dict(
             (fk.column, fk)
-            for fk in self.database.get_foreign_keys(table))
+            for fk in self.database.get_foreign_keys(table, self.schema))
         if column not in fk_objects:
             return add_not_null
 
@@ -686,7 +709,7 @@ class MySQLMigrator(SchemaMigrator):
     def rename_column(self, table, old_name, new_name):
         fk_objects = dict(
             (fk.column, fk)
-            for fk in self.database.get_foreign_keys(table))
+            for fk in self.database.get_foreign_keys(table, self.schema))
         is_foreign_key = old_name in fk_objects
 
         column = self._get_column_definition(table, old_name)
@@ -732,7 +755,7 @@ class MySQLMigrator(SchemaMigrator):
                 .literal('DROP INDEX ')
                 .sql(Entity(index_name))
                 .literal(' ON ')
-                .sql(Entity(table)))
+                .sql(self._table(table)))
 
 
 class SqliteMigrator(SchemaMigrator):
@@ -740,6 +763,8 @@ class SqliteMigrator(SchemaMigrator):
     SQLite supports a subset of ALTER TABLE queries, view the docs for the
     full details http://sqlite.org/lang_altertable.html
     """
+    # Table rebuilds rewrite unqualified DDL read out of sqlite_master.
+    supports_schema = False
     column_re = re.compile(r'(.+?)\((.+)\)')
     column_split_re = re.compile(r'(?:[^,(]|\([^)]*\))+')
     column_name_re = re.compile(r'''["`']?([\w]+)''')
