@@ -2868,7 +2868,6 @@ class Insert(_WriteQuery):
         self._insert = insert
         self._columns = columns
         self._on_conflict = on_conflict
-        self._query_type = None
         self._as_rowcount = False
 
     def where(self, *expressions):
@@ -3028,6 +3027,15 @@ class Insert(_WriteQuery):
             return ctx.literal('DEFAULT VALUES')
         return self._database.default_values_insert(ctx)
 
+    @property
+    def _query_type(self):
+        if isinstance(self._insert, Mapping) and not self._columns:
+            return Insert.SIMPLE
+        elif isinstance(self._insert, (SelectQuery, SQL)):
+            return Insert.QUERY
+        else:
+            return Insert.MULTI
+
     def __sql__(self, ctx):
         super(Insert, self).__sql__(ctx)
         with ctx.scope_values():
@@ -3041,18 +3049,16 @@ class Insert(_WriteQuery):
              .sql(self.table)
              .literal(' '))
 
-            if isinstance(self._insert, Mapping) and not self._columns:
+            query_type = self._query_type
+            if query_type == Insert.SIMPLE:
                 try:
                     self._simple_insert(ctx)
                 except self.DefaultValuesException:
                     self._default_values(ctx)
-                self._query_type = Insert.SIMPLE
-            elif isinstance(self._insert, (SelectQuery, SQL)):
+            elif query_type == Insert.QUERY:
                 self._query_insert(ctx)
-                self._query_type = Insert.QUERY
             else:
                 self._generate_insert(self._insert, ctx)
-                self._query_type = Insert.MULTI
 
             if self._on_conflict is not None:
                 update = self._on_conflict.get_conflict_update(ctx, self)
