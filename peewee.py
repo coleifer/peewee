@@ -7483,22 +7483,18 @@ class Metadata(object):
         original = self.fields.pop(field_name)
         del self.columns[original.column_name]
         del self.combined[field_name]
-        try:
+        if original.column_name != field_name:
             del self.combined[original.column_name]
-        except KeyError:
-            pass
         self._sorted_field_list.remove(original)
         self._update_sorted_fields()
 
         if original.default is not None:
             del self.defaults[original]
             if callable_(original.default):
-                for i, (name, _) in enumerate(self._default_callable_list):
-                    if name == field_name:
-                        self._default_callable_list.pop(i)
-                        break
+                self._default_callable_list.remove((field_name,
+                                                    original.default))
             else:
-                self._default_by_name.pop(original.name, None)
+                del self._default_by_name[field_name]
 
         if isinstance(original, ForeignKeyField):
             self.remove_ref(original)
