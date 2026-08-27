@@ -484,10 +484,15 @@ def chunked(it, n):
 
 
 class _callable_context_manager(object):
+    __slots__ = ()
+
+    def _build_ctx(self):
+        return self
+
     def __call__(self, fn):
         @wraps(fn)
         def inner(*args, **kwargs):
-            with self:
+            with self._build_ctx():
                 return fn(*args, **kwargs)
         return inner
 
@@ -984,17 +989,13 @@ class BaseTable(Source):
     __rmul__ = __join__(JOIN.CROSS, inverted=True)
 
 
-class _BoundTableContext(object):
+class _BoundTableContext(_callable_context_manager):
     def __init__(self, table, database):
         self.table = table
         self.database = database
 
-    def __call__(self, fn):
-        @wraps(fn)
-        def inner(*args, **kwargs):
-            with _BoundTableContext(self.table, self.database):
-                return fn(*args, **kwargs)
-        return inner
+    def _build_ctx(self):
+        return type(self)(self.table, self.database)
 
     def __enter__(self):
         self._orig_database = self.table._database
@@ -3699,7 +3700,7 @@ class _NoopLock(object):
     def __exit__(self, exc_type, exc_val, exc_tb): pass
 
 
-class ConnectionContext(object):
+class ConnectionContext(_callable_context_manager):
     __slots__ = ('db',)
     def __init__(self, db):
         self.db = db
@@ -3711,12 +3712,8 @@ class ConnectionContext(object):
         self.db._state.ctx.pop()
         if not self.db._state.ctx:
             self.db.close()
-    def __call__(self, fn):
-        @wraps(fn)
-        def inner(*args, **kwargs):
-            with ConnectionContext(self.db):
-                return fn(*args, **kwargs)
-        return inner
+    def _build_ctx(self):
+        return type(self)(self.db)
 
 
 class Database(_callable_context_manager):
@@ -5226,16 +5223,12 @@ class MySQLDatabase(Database):
 # TRANSACTION CONTROL.
 
 
-class _manual(object):
+class _manual(_callable_context_manager):
     def __init__(self, db):
         self.db = db
 
-    def __call__(self, fn):
-        @wraps(fn)
-        def inner(*args, **kwargs):
-            with _manual(self.db):
-                return fn(*args, **kwargs)
-        return inner
+    def _build_ctx(self):
+        return type(self)(self.db)
 
     def __enter__(self):
         top = self.db.top_transaction()
@@ -5250,18 +5243,14 @@ class _manual(object):
                              'manual commit block.')
 
 
-class _atomic(object):
+class _atomic(_callable_context_manager):
     def __init__(self, db, *args, **kwargs):
         self.db = db
         self._transaction_args = (args, kwargs)
 
-    def __call__(self, fn):
-        @wraps(fn)
-        def inner(*args, **kwargs):
-            a, k = self._transaction_args
-            with _atomic(self.db, *a, **k):
-                return fn(*args, **kwargs)
-        return inner
+    def _build_ctx(self):
+        args, kwargs = self._transaction_args
+        return type(self)(self.db, *args, **kwargs)
 
     def __enter__(self):
         if self.db.transaction_depth() == 0:
@@ -5278,18 +5267,14 @@ class _atomic(object):
         return self._helper.__exit__(exc_type, exc_val, exc_tb)
 
 
-class _transaction(object):
+class _transaction(_callable_context_manager):
     def __init__(self, db, *args, **kwargs):
         self.db = db
         self._begin_args = (args, kwargs)
 
-    def __call__(self, fn):
-        @wraps(fn)
-        def inner(*args, **kwargs):
-            a, k = self._begin_args
-            with _transaction(self.db, *a, **k):
-                return fn(*args, **kwargs)
-        return inner
+    def _build_ctx(self):
+        args, kwargs = self._begin_args
+        return type(self)(self.db, *args, **kwargs)
 
     def _begin(self):
         args, kwargs = self._begin_args
@@ -5324,18 +5309,14 @@ class _transaction(object):
                 raise
 
 
-class _savepoint(object):
+class _savepoint(_callable_context_manager):
     def __init__(self, db, sid=None):
         self.db = db
         self.sid = sid or 's' + uuid.uuid4().hex
         self.quoted_sid = self.sid.join(self.db.quote)
 
-    def __call__(self, fn):
-        @wraps(fn)
-        def inner(*args, **kwargs):
-            with _savepoint(self.db):
-                return fn(*args, **kwargs)
-        return inner
+    def _build_ctx(self):
+        return type(self)(self.db)  # Omit sid, each call gets its own.
 
     def _begin(self):
         self.db.execute_sql('SAVEPOINT %s;' % self.quoted_sid)
