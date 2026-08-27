@@ -6795,22 +6795,23 @@ class ManyToManyFieldAccessor(FieldAccessor):
         self.src_fk = src_fks[0]
         self.dest_fk = dest_fks[0]
 
-    def __get__(self, instance, instance_type=None, force_query=False):
+    def get_query(self, instance):
+        src_id = getattr(instance, self.src_fk.rel_field.name)
+        if src_id is None and self.field._prevent_unsaved:
+            raise ValueError('Cannot get many-to-many "%s" for unsaved '
+                             'instance "%s".' % (self.field, instance))
+        return (ManyToManyQuery(instance, self, self.rel_model)
+                .join(self.through_model)
+                .join(self.model)
+                .where(self.src_fk == src_id))
+
+    def __get__(self, instance, instance_type=None):
         if instance is not None:
-            if not force_query and self.src_fk.backref not in ('+', '!'):
+            if self.src_fk.backref not in ('+', '!'):
                 backref = getattr(instance, self.src_fk.backref)
                 if isinstance(backref, list):
                     return [getattr(obj, self.dest_fk.name) for obj in backref]
-
-            src_id = getattr(instance, self.src_fk.rel_field.name)
-            if src_id is None and self.field._prevent_unsaved:
-                raise ValueError('Cannot get many-to-many "%s" for unsaved '
-                                 'instance "%s".' % (self.field, instance))
-            return (ManyToManyQuery(instance, self, self.rel_model)
-                    .join(self.through_model)
-                    .join(self.model)
-                    .where(self.src_fk == src_id))
-
+            return self.get_query(instance)
         return self.field
 
     def __set__(self, instance, value):
@@ -6818,8 +6819,7 @@ class ManyToManyFieldAccessor(FieldAccessor):
         if src_id is None and self.field._prevent_unsaved:
             raise ValueError('Cannot set many-to-many "%s" for unsaved '
                              'instance "%s".' % (self.field, instance))
-        query = self.__get__(instance, force_query=True)
-        query.add(value, clear_existing=True)
+        self.get_query(instance).add(value, clear_existing=True)
 
 
 class ManyToManyField(MetaField):
@@ -6863,9 +6863,8 @@ class ManyToManyField(MetaField):
                 self.rel_model._meta.add_field(self.backref, many_to_many_field)
 
     def get_models(self):
-        return [model for _, model in sorted((
-            (self._is_backref, self.model),
-            (not self._is_backref, self.rel_model)))]
+        return ([self.rel_model, self.model] if self._is_backref else
+                [self.model, self.rel_model])
 
     @property
     def through_model(self):
