@@ -6916,7 +6916,8 @@ class VirtualField(MetaField):
     def bind(self, model, name, set_attribute=True):
         self.model = model
         self.column_name = self.name = self.safe_name = name
-        setattr(model, name, self.accessor_class(model, self, name))
+        if set_attribute:
+            setattr(model, name, self.accessor_class(model, self, name))
 
 
 class CompositeKey(MetaField):
@@ -6977,7 +6978,8 @@ class CompositeKey(MetaField):
     def bind(self, model, name, set_attribute=True):
         self.model = model
         self.column_name = self.name = self.safe_name = name
-        setattr(model, self.name, self)
+        if set_attribute:
+            setattr(model, self.name, self)
 
 
 class _SortedFieldList(object):
@@ -7533,7 +7535,7 @@ class Metadata(object):
 
     def set_database(self, database):
         self.database = database
-        self.model._schema._database = database
+        self.model._schema.database = database
         del self.table
 
         # Apply any hooks that have been registered. If we have an
@@ -8256,7 +8258,7 @@ class FieldAlias(Field):
     def python_value(self, value): return self.field.python_value(value)
     def db_value(self, value): return self.field.db_value(value)
     def __getattr__(self, attr):
-        return self.source if attr == 'model' else getattr(self.field, attr)
+        return getattr(self.field, attr)
 
     def __sql__(self, ctx):
         return ctx.sql(Column(self.source, self.field.column_name))
