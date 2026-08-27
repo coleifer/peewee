@@ -648,9 +648,11 @@ Database
               sql='CREATE VIEW entries_public AS SELECT ... '),
           ...]
 
-   .. method:: sequence_exists(seq)
+   .. method:: sequence_exists(seq, schema=None)
 
-      :param str seq: Name of sequence.
+      :param str seq: Name of sequence. A dotted name is read as
+          schema-qualified when ``schema`` is not given.
+      :param str schema: Schema to look in.
       :return: Whether sequence exists.
       :rtype: bool
 

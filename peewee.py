@@ -4091,7 +4091,7 @@ class Database(_callable_context_manager):
     def get_foreign_keys(self, table, schema=None):
         raise NotImplementedError
 
-    def sequence_exists(self, seq):
+    def sequence_exists(self, seq, schema=None):
         raise NotImplementedError
 
     def create_tables(self, models, **options):
@@ -4897,13 +4897,19 @@ class PostgresqlDatabase(Database):
                                    row[4], row[5])
                 for row in cursor.fetchall()]
 
-    def sequence_exists(self, sequence):
-        res = self.execute_sql("""
+    def sequence_exists(self, sequence, schema=None):
+        if schema is None:
+            schema, _, sequence = sequence.rpartition('.')
+        query = """
             SELECT COUNT(*) FROM pg_class, pg_namespace
             WHERE relkind='S'
                 AND pg_class.relnamespace = pg_namespace.oid
-                AND relname=%s""", (sequence,))
-        return bool(res.fetchone()[0])
+                AND relname=%s"""
+        params = [sequence]
+        if schema:
+            query += ' AND nspname=%s'
+            params.append(schema)
+        return bool(self.execute_sql(query, params).fetchone()[0])
 
     def get_binary_type(self):
         try:
@@ -5695,6 +5701,19 @@ class Field(ColumnBase):
         else:
             return SQL(column_type)
 
+    def _sequence_parts(self):
+        # A dotted sequence= is already qualified, otherwise use the schema
+        # that create_sequence() puts the sequence in.
+        if '.' in self.sequence:
+            return self.sequence.rsplit('.', 1)
+        model = getattr(self, 'model', None)
+        return [model._meta.schema if model is not None else None,
+                self.sequence]
+
+    def _sequence_name(self):
+        schema, name = self._sequence_parts()
+        return '%s.%s' % (schema, name) if schema else name
+
     def ddl(self, ctx):
         accum = [Entity(self.column_name)]
         data_type = self.ddl_datatype(ctx)
@@ -5707,7 +5726,7 @@ class Field(ColumnBase):
         if self.primary_key:
             accum.append(SQL('PRIMARY KEY'))
         if self.sequence:
-            accum.append(SQL("DEFAULT NEXTVAL('%s')" % self.sequence))
+            accum.append(SQL("DEFAULT NEXTVAL('%s')" % self._sequence_name()))
         if self.constraints:
             accum.extend(self.constraints)
         if self.collation:
@@ -7201,14 +7220,12 @@ class SchemaManager(object):
                              'defined for "%s".' % field.name)
 
     def _sequence_for_field(self, field):
-        if field.model._meta.schema:
-            return Entity(field.model._meta.schema, field.sequence)
-        else:
-            return Entity(field.sequence)
+        return Entity(*field._sequence_parts())
 
     def _create_sequence(self, field):
         self._check_sequences(field)
-        if not self.database.sequence_exists(field.sequence):
+        schema, name = field._sequence_parts()
+        if not self.database.sequence_exists(name, schema):
             return (self
                     ._create_context()
                     .literal('CREATE SEQUENCE ')
@@ -7221,7 +7238,8 @@ class SchemaManager(object):
 
     def _drop_sequence(self, field):
         self._check_sequences(field)
-        if self.database.sequence_exists(field.sequence):
+        schema, name = field._sequence_parts()
+        if self.database.sequence_exists(name, schema):
             return (self
                     ._create_context()
                     .literal('DROP SEQUENCE ')

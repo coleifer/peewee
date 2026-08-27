@@ -17,9 +17,12 @@ Backwards-incompatible:
 * The MySQL and MariaDB connection charset defaults to `utf8mb4` instead of
   `utf8`, which is an alias for `utf8mb3` and cannot store 4-byte characters.
   Pass `charset='utf8'` to restore the old default.
-
 * Add `SqliteDatabase(..., lock_type=...)` to set the default locking strategy
   for transactions that do not specify one, e.g. `lock_type='IMMEDIATE'`.
+* A field's `sequence=` is now qualified with the model's `Meta.schema`. If the
+  name you pass already contains a dot it is treated as fully-qualified and
+  used as-is, so `sequence='other.seq'` is unaffected by `Meta.schema`. Also,
+  `sequence_exists()` accepts a schema-qualified name.
 
 [View commits](https://github.com/coleifer/peewee/compare/4.4.0...master)
 
