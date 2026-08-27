@@ -1159,10 +1159,7 @@ class NamedTupleCursorWrapper(CursorWrapper):
 class ObjectCursorWrapper(DictCursorWrapper):
     valid_identifiers: bool
     constructor: Incomplete
-    columns: list[str]
-    ncols: int
     def __init__(self, cursor, constructor) -> None: ...
-    def initialize(self) -> None: ...
     def process_row(self, row): ...
 
 class ResultIterator:
@@ -2072,9 +2069,7 @@ class ModelObjectCursorWrapper(ModelDictCursorWrapper):
     valid_identifiers: bool
     constructor: Incomplete
     is_model: Incomplete
-    identifiers: list[str]
     def __init__(self, cursor, model, select, constructor) -> None: ...
-    def initialize(self) -> None: ...
     def process_row(self, row): ...
 
 class ModelCursorWrapper(BaseModelCursorWrapper):
