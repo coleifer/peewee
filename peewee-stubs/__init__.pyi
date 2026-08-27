@@ -1145,6 +1145,7 @@ class CursorWrapper:
     def dedupe_columns(self, columns: Iterable[str], valid_identifiers: bool = True) -> list[str]: ...
 
 class DictCursorWrapper(CursorWrapper):
+    valid_identifiers: bool
     columns: list[str]
     ncols: int
     def initialize(self) -> None: ...
@@ -1156,6 +1157,7 @@ class NamedTupleCursorWrapper(CursorWrapper):
     def process_row(self, row): ...
 
 class ObjectCursorWrapper(DictCursorWrapper):
+    valid_identifiers: bool
     constructor: Incomplete
     columns: list[str]
     ncols: int
@@ -2052,6 +2054,7 @@ class BaseModelCursorWrapper(DictCursorWrapper):
     def process_row(self, row): ...
 
 class ModelDictCursorWrapper(BaseModelCursorWrapper):
+    valid_identifiers: bool
     unique_columns: list[str]
     def initialize(self) -> None: ...
     def process_row(self, row) -> dict[str, Incomplete]: ...
@@ -2066,6 +2069,7 @@ class ModelNamedTupleCursorWrapper(ModelTupleCursorWrapper):
     def initialize(self) -> None: ...
 
 class ModelObjectCursorWrapper(ModelDictCursorWrapper):
+    valid_identifiers: bool
     constructor: Incomplete
     is_model: Incomplete
     identifiers: list[str]
