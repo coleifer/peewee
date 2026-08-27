@@ -4541,6 +4541,7 @@ class SqliteDatabase(Database):
 
 class _BasePsycopgAdapter(object):
     isolation_levels = {}  # Map int -> str.
+    txn_idle = txn_inerror = txn_unknown = None  # Driver constants.
 
     def __init__(self):
         self.isolation_levels_inv = {
@@ -4556,6 +4557,37 @@ class _BasePsycopgAdapter(object):
             return self.isolation_levels[isolation_level]
         return isolation_level
 
+    def is_connection_usable(self, conn):
+        return self.txn_status(conn) < self.txn_inerror
+
+    def is_connection_reusable(self, conn):
+        # If the status is unknown then we lost the connection to the server
+        # and the connection should not be re-used.
+        status = self.txn_status(conn)
+        if status == self.txn_unknown:
+            return False
+        elif status != self.txn_idle:
+            try:
+                self.rollback(conn)
+            except Exception:
+                return False
+        return True
+
+    def is_connection_closed(self, conn):
+        status = self.txn_status(conn)
+        if status == self.txn_unknown:
+            return True
+        try:
+            if status != self.txn_idle:
+                self.rollback(conn)
+            else:
+                # status flag is local, have to round trip.
+                conn.cursor().execute('SELECT 1')
+        except Exception:
+            return True
+        return False
+
+
 class Psycopg2Adapter(_BasePsycopgAdapter):
     isolation_levels = {
         1: 'READ COMMITTED',
@@ -4563,6 +4595,11 @@ class Psycopg2Adapter(_BasePsycopgAdapter):
         3: 'SERIALIZABLE',
         4: 'READ UNCOMMITTED',
     }
+
+    if psycopg2 is not None:
+        txn_idle = pg_extensions.TRANSACTION_STATUS_IDLE
+        txn_inerror = pg_extensions.TRANSACTION_STATUS_INERROR
+        txn_unknown = pg_extensions.TRANSACTION_STATUS_UNKNOWN
 
     def __init__(self):
         super(Psycopg2Adapter, self).__init__()
@@ -4594,44 +4631,17 @@ class Psycopg2Adapter(_BasePsycopgAdapter):
     def get_server_version(self, conn):
         return conn.server_version
 
-    def is_connection_usable(self, conn):
-        txn_status = conn.get_transaction_status()
-        return txn_status < pg_extensions.TRANSACTION_STATUS_INERROR
+    def txn_status(self, conn):
+        return conn.get_transaction_status()
 
-    def is_connection_reusable(self, conn):
-        # If the status is unknown then we lost the connection to the server
-        # and the connection should not be re-used.
-        txn_status = conn.get_transaction_status()
-        if txn_status == pg_extensions.TRANSACTION_STATUS_UNKNOWN:
-            return False
-        elif txn_status != pg_extensions.TRANSACTION_STATUS_IDLE:
-            # rollback() no-ops and reset() raises under autocommit, send a
-            # raw ROLLBACK (clears both in-txn and error states).
-            try:
-                conn.cursor().execute('ROLLBACK')
-            except Exception:
-                return False
-        return True
-
-    def is_connection_closed(self, conn):
-        txn_status = conn.get_transaction_status()
-        if txn_status == pg_extensions.TRANSACTION_STATUS_UNKNOWN:
-            return True
-        try:
-            if txn_status != pg_extensions.TRANSACTION_STATUS_IDLE:
-                # rollback() no-ops under autocommit, send a raw ROLLBACK.
-                conn.cursor().execute('ROLLBACK')
-            else:
-                # The status flag is local, only a round trip can detect a
-                # server-side disconnect.
-                conn.cursor().execute('SELECT 1')
-        except Exception:
-            return True
-        return False
+    def rollback(self, conn):
+        # rollback() no-ops and reset() raises under autocommit, send a raw
+        # ROLLBACK (clears both in-txn and error states).
+        conn.cursor().execute('ROLLBACK')
 
     def server_side_cursor(self, conn):
         # psycopg2 does not allow named cursors in autocommit, even if we ARE
-        # inside a transaction - so specify withhold (not desirable!).
+        # inside a transaction. Specify withhold (not desirable!).
         return conn.cursor(name=str(uuid.uuid1()), withhold=True)
 
 
@@ -4642,6 +4652,10 @@ class Psycopg3Adapter(_BasePsycopgAdapter):
         3: 'REPEATABLE READ',
         4: 'SERIALIZABLE',
     }
+    if psycopg is not None:
+        txn_idle = TransactionStatus.IDLE
+        txn_inerror = TransactionStatus.INERROR
+        txn_unknown = TransactionStatus.UNKNOWN
 
     def __init__(self):
         super(Psycopg3Adapter, self).__init__()
@@ -4668,43 +4682,17 @@ class Psycopg3Adapter(_BasePsycopgAdapter):
     def get_server_version(self, conn):
         return conn.pgconn.server_version
 
-    def is_connection_usable(self, conn):
-        return conn.pgconn.transaction_status < TransactionStatus.INERROR
+    def txn_status(self, conn):
+        return conn.pgconn.transaction_status
 
-    def is_connection_reusable(self, conn):
-        # If the status is unknown then we lost the connection to the server
-        # and the connection should not be re-used.
-        txn_status = conn.pgconn.transaction_status
-        if txn_status == TransactionStatus.UNKNOWN:
-            return False
-        elif txn_status != TransactionStatus.IDLE:
-            # rollback() clears both in-txn and error states (psycopg3 has
-            # no Connection.reset()).
-            try:
-                conn.rollback()
-            except Exception:
-                return False
-        return True
-
-    def is_connection_closed(self, conn):
-        txn_status = conn.pgconn.transaction_status
-        if txn_status == TransactionStatus.UNKNOWN:
-            return True
-        try:
-            if txn_status != TransactionStatus.IDLE:
-                conn.rollback()
-            else:
-                # The status flag is local, only a round trip can detect a
-                # server-side disconnect.
-                conn.execute('SELECT 1')
-        except Exception:
-            return True
-        return False
+    def rollback(self, conn):
+        # rollback() clears both in-txn and error states.
+        conn.rollback()
 
     def server_side_cursor(self, conn):
         # In a transaction a plain named cursor streams and is scoped to it.
         # Otherwise the server requires withhold, which spools at declare.
-        in_txn = conn.pgconn.transaction_status == TransactionStatus.INTRANS
+        in_txn = self.txn_status(conn) == TransactionStatus.INTRANS
         return conn.cursor(name=str(uuid.uuid1()), withhold=not in_txn)
 
 
