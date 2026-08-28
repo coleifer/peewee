@@ -379,10 +379,13 @@ def _build_stub(model, fields, imports):
     return lines
 
 def _build_add_index(idx):
+    extra = ', unique=True' if idx.unique else ''
+    if idx.name and idx.name != make_index_name(idx.table, idx.columns):
+        extra += ', name=%r' % idx.name
     return 'migrator.migrate(migrator.add_index(%r, %r%s))' % (
         idx.table,
         idx.columns,
-        ', unique=True' if idx.unique else '')
+        extra)
 
 def _block(fn, lines):
     while lines and not lines[-1]:

@@ -420,6 +420,17 @@ def down(migrator, db):
     pass
 """
 
+DROP_RESTORE_NAME_BODY = """\
+from peewee import *
+
+def up(migrator, db):
+    migrator.migrate(migrator.drop_index('sd_tweet', 'sd_extra'))
+
+
+def down(migrator, db):
+    migrator.migrate(migrator.add_index('sd_tweet', ('content',), name='sd_extra'))
+"""
+
 SCHEMA_BODY = """\
 from peewee import *
 
@@ -574,6 +585,17 @@ class TestTemplate(ModelTestCase):
         self.database.execute_sql('DROP INDEX sd_partial_flags')
         body = template(diff_models(self.database, [SdPartial]))
         self.assertEqual(strip_header(body), PARTIAL_TODO_BODY)
+
+    def test_dropped_index_restored_by_name(self):
+        if IS_MYSQL:  # Mysql requires a prefix length to index TEXT.
+            self.database.execute_sql(
+                'CREATE INDEX sd_extra ON sd_tweet (content(16))')
+        else:
+            self.database.execute_sql(
+                'CREATE INDEX sd_extra ON sd_tweet (content)')
+
+        body = template(diff_models(self.database, SD_MODELS))
+        self.assertEqual(strip_header(body), DROP_RESTORE_NAME_BODY)
 
     @requires_sqlite
     def test_schema_rendered(self):
