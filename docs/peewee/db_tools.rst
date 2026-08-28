@@ -583,7 +583,7 @@ Migration API
       :param str schema: Schema to drop the table from, overriding the
           migrator's own schema.
 
-   .. method:: add_index(table, columns, unique=False, using=None, where=None, nulls_distinct=None)
+   .. method:: add_index(table, columns, unique=False, using=None, where=None, nulls_distinct=None, name=None)
 
       :param str table: Name of table on which to create the index.
       :param list columns: List of columns which should be indexed.
@@ -592,6 +592,9 @@ Migration API
       :param where: Expression for a partial index (sqlite and postgres).
       :param bool nulls_distinct: For unique indexes, whether NULL values
           are treated as distinct (postgres 15+).
+      :param str name: Index name. The generated default joins table and
+          column names and can differ from the name ``create_table()``
+          gives a model-declared index.
 
    .. method:: drop_index(table, index_name)
 

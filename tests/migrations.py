@@ -583,6 +583,13 @@ class TestSchemaMigration(ModelTestCase):
             with self.assertRaisesCtx((IntegrityError, InternalError)):
                 Person.create(first_name='live', last_name='x')
 
+    def test_add_index_name(self):
+        migrate(self.migrator.add_index('person', ('first_name',),
+                                        name='person_fn_idx'))
+        indexes = [idx.name for idx in self.database.get_indexes('person')]
+        self.assertTrue('person_fn_idx' in indexes)
+        migrate(self.migrator.drop_index('person', 'person_fn_idx'))
+
     @requires_postgresql
     def test_add_index_nulls_distinct(self):
         if self.database.server_version < 150000:

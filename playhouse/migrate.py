@@ -495,9 +495,9 @@ class SchemaMigrator(object):
 
     @operation
     def add_index(self, table, columns, unique=False, using=None, where=None,
-                  nulls_distinct=None):
+                  nulls_distinct=None, name=None):
         ctx = self.make_context()
-        index_name = make_index_name(table, columns)
+        index_name = name or make_index_name(table, columns)
         table_obj = Table(_check_table_name(table), schema=self.schema)
         cols = [getattr(table_obj.c, column) for column in columns]
         index = Index(index_name, table_obj, cols, unique=unique, using=using,
