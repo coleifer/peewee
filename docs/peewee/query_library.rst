@@ -1451,6 +1451,51 @@ into a CTE to make it a little more clear.
         .order_by(Facility.name)
         .with_cte(monthdata))
 
+Attach each member's bookings as JSON
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Fetch every member with their bookings attached, in a single query. A
+correlated subquery aggregates each member's bookings into a JSON array, so
+there is no second query and no join fan-out, and a member with no bookings
+gets an empty list.
+
+.. code-block:: sql
+
+    SELECT m.firstname, m.surname,
+           (SELECT COALESCE(json_agg(json_build_object(
+                       'facility', f.name,
+                       'starttime', b.starttime)), '[]'::json)
+            FROM bookings AS b
+            INNER JOIN facilities AS f ON b.facid = f.facid
+            WHERE b.memid = m.memid) AS bookings
+    FROM members AS m;
+
+.. code-block:: python
+
+    bookings = (Booking
+                .select(fn.COALESCE(
+                    fn.json_agg(fn.json_build_object(
+                        'facility', Facility.name,
+                        'starttime', Booking.starttime)),
+                    SQL("'[]'::json")))
+                .join(Facility)
+                .where(Booking.member == Member.memid))
+
+    query = (Member
+             .select(Member.firstname, Member.surname,
+                     bookings.alias('bookings'))
+             .dicts())
+
+    for row in query:
+        print(row['surname'], len(row['bookings']))
+
+The postgres driver parses the ``json`` column, so ``row['bookings']`` is a
+list of dicts. On SQLite the functions are ``json_group_array`` and
+``json_object``, on MySQL and MariaDB ``json_arrayagg`` and ``json_object``,
+and both return the JSON as text for ``json.loads()``. Consume the result as
+dicts. The pattern replaces a prefetch when round trips matter more than
+local processing.
+
 Dates and Times
 ---------------
 
