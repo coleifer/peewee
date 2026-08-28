@@ -724,7 +724,9 @@ class PostgresqlExtDatabase(PostgresqlDatabase):
         return cursor
 
     def execute_sql(self, sql, params=None, named_cursor=None):
-        logger.debug((sql, params))
+        if not named_cursor:
+            return super(PostgresqlExtDatabase, self).execute_sql(sql, params)
+        self._log_query(sql, params)
         with __exception_wrapper__:
             cursor = self.cursor(named_cursor=named_cursor)
             cursor.execute(sql, params or ())

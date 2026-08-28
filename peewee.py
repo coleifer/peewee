@@ -3886,9 +3886,12 @@ class Database(_callable_context_manager):
                 raise InterfaceError('Error, database connection not opened.')
         return self._state.conn.cursor()
 
-    def execute_sql(self, sql, params=None):
+    def _log_query(self, sql, params):
         if logger.isEnabledFor(logging.DEBUG):
             logger.debug((sql, params))
+
+    def execute_sql(self, sql, params=None):
+        self._log_query(sql, params)
         with __exception_wrapper__:
             cursor = self.cursor()
             cursor.execute(sql, params or ())

@@ -11,7 +11,6 @@ from peewee import *
 from peewee import _atomic, _savepoint, _transaction
 from peewee import _callable_context_manager
 from peewee import __exception_wrapper__
-from peewee import logger as peewee_logger
 from peewee import Psycopg3Adapter
 from playhouse.postgres_ext import Json
 
@@ -237,7 +236,7 @@ class AsyncDatabaseMixin(object):
             raise MissingGreenletBridge(errmsg + _BRIDGE_ERR_HINT) from exc
 
     async def aexecute_sql(self, sql, params=None):
-        peewee_logger.debug((sql, params))
+        self._log_query(sql, params)
         conn = await self.aconnect()
         with __exception_wrapper__:
             return await conn.execute(sql, params)

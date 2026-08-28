@@ -226,6 +226,11 @@ Database
 
       Execute a SQL query and return a cursor over the results.
 
+      Every query peewee executes goes through this method. A subclass that
+      overrides it must keep this signature and route execution through
+      ``super().execute_sql()``, so logging happens exactly once and added
+      behavior survives peewee upgrades.
+
       .. code-block:: python
 
          db = SqliteDatabase('my_app.db')
