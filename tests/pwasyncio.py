@@ -795,6 +795,25 @@ class TestQueryAexecuteErrors(unittest.IsolatedAsyncioTestCase):
         await adb.close_pool()
 
 
+class TestQueryHooksAsync(unittest.IsolatedAsyncioTestCase):
+    async def test_query_hooks(self):
+        db = AsyncSqliteDatabase(':memory:', pool_size=1)
+        events = []
+        db.query_hooks.append(events.append)
+        await db.aconnect()
+        await db.aexecute_sql('SELECT 1', ())
+        self.assertEqual(len(events), 1)
+        self.assertEqual(events[0].sql, 'SELECT 1')
+        self.assertIsNone(events[0].exception)
+        self.assertTrue(events[0].duration >= 0.)
+
+        with self.assertRaises(OperationalError):
+            await db.aexecute_sql('SELECT * FROM missing_tbl', ())
+        self.assertEqual(len(events), 2)
+        self.assertIsInstance(events[1].exception, OperationalError)
+        await db.close_pool()
+
+
 class IntegrationTests(object):
     db_path = None
     models = [TestModel, User, Tweet, UniqueModel, AUser, ATweet, ANoLazy,

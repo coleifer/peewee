@@ -663,6 +663,52 @@ the standard library ``logging`` module:
 This is the simplest way to verify what queries are being issued during
 development.
 
+.. _query-hooks:
+
+Query Hooks
+-----------
+
+For instrumentation beyond logging, every :class:`Database` has a
+``query_hooks`` list. Each callable in it is invoked after every query with a
+single :class:`QueryEvent`, on success and on failure alike:
+
+.. code-block:: python
+
+   def slow_query_log(event):
+       if event.duration > 0.5:
+           logger.warning('slow query (%.2fs): %s', event.duration, event.sql)
+
+   db.query_hooks.append(slow_query_log)
+
+``QueryEvent`` is a named tuple with ``sql``, ``params``, ``duration`` (in
+seconds, including connection or cursor acquisition), and ``exception``, which
+is ``None`` on success. Hooks observe, they cannot modify the query, and an
+exception raised by a hook propagates to the caller. Do not mutate ``params``.
+When the list is empty no timing is performed, so idle overhead is a single
+attribute check.
+
+A retried query (e.g. under ``ReconnectMixin``) produces one event per
+attempt. With ``playhouse.sqliteq`` write events fire on the writer thread,
+and duration measures execution, not time spent queued.
+
+An OpenTelemetry span per query, using the event's duration to backdate the
+span start:
+
+.. code-block:: python
+
+   from opentelemetry import trace
+   tracer = trace.get_tracer('peewee')
+
+   def otel_hook(event):
+       end = time.time_ns()
+       span = tracer.start_span('query', start_time=end - int(event.duration * 1e9))
+       span.set_attribute('db.statement', event.sql)
+       if event.exception is not None:
+           span.set_status(trace.StatusCode.ERROR, str(event.exception))
+       span.end(end_time=end)
+
+   db.query_hooks.append(otel_hook)
+
 .. _testing:
 
 Testing Peewee Applications

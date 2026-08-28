@@ -1158,6 +1158,19 @@ class TestServerSide(ModelTestCase):
             data = [row.value for row in ServerSide(query)]
             self.assertEqual(data, list(range(100)))
 
+    def test_server_side_query_hooks(self):
+        events = []
+        self.database.query_hooks.append(events.append)
+        try:
+            query = Register.select().order_by(Register.value)
+            data = [row.value for row in ServerSide(query)]
+            self.assertEqual(data, list(range(100)))
+            self.assertEqual(len(events), 1)
+            self.assertTrue(events[0].sql.startswith('SELECT'))
+            self.assertIsNone(events[0].exception)
+        finally:
+            del self.database.query_hooks[:]
+
     def test_cursor_holdability(self):
         is_psycopg3 = isinstance(self.database._adapter, Psycopg3Adapter)
         query = Register.select().order_by(Register.value)

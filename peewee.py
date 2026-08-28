@@ -136,6 +136,7 @@ __all__ = [
     'ProgrammingError',
     'Proxy',
     'QualifiedNames',
+    'QueryEvent',
     'SchemaManager',
     'SmallIntegerField',
     'Select',
@@ -3684,6 +3685,8 @@ ForeignKeyMetadata = collections.namedtuple(
     ('column', 'dest_table', 'dest_column', 'table', 'name', 'on_delete',
      'on_update'), defaults=(None, None, None))
 ViewMetadata = collections.namedtuple('ViewMetadata', ('name', 'sql'))
+QueryEvent = collections.namedtuple(
+    'QueryEvent', ('sql', 'params', 'duration', 'exception'))
 
 
 class _ConnectionState(object):
@@ -3763,6 +3766,7 @@ class Database(_callable_context_manager):
 
         self.autoconnect = autoconnect
         self.thread_safe = thread_safe
+        self.query_hooks = []
         if thread_safe:
             self._state = _ConnectionLocal()
             self._lock = threading.Lock()
@@ -3890,12 +3894,31 @@ class Database(_callable_context_manager):
         if logger.isEnabledFor(logging.DEBUG):
             logger.debug((sql, params))
 
-    def execute_sql(self, sql, params=None):
+    def _notify_hooks(self, sql, params, start, exc):
+        event = QueryEvent(sql, params, time.perf_counter() - start, exc)
+        for hook in self.query_hooks:
+            hook(event)
+
+    def _execute_cursor(self, sql, params, cursor_options=None):
         self._log_query(sql, params)
-        with __exception_wrapper__:
-            cursor = self.cursor()
-            cursor.execute(sql, params or ())
+        start = time.perf_counter() if self.query_hooks else None
+        try:
+            with __exception_wrapper__:
+                if cursor_options:
+                    cursor = self.cursor(**cursor_options)
+                else:
+                    cursor = self.cursor()
+                cursor.execute(sql, params or ())
+        except Exception as exc:
+            if start is not None:
+                self._notify_hooks(sql, params, start, exc)
+            raise
+        if start is not None:
+            self._notify_hooks(sql, params, start, None)
         return cursor
+
+    def execute_sql(self, sql, params=None):
+        return self._execute_cursor(sql, params)
 
     def execute(self, query, **context_options):
         ctx = self.get_sql_context(**context_options)

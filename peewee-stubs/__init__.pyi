@@ -778,6 +778,12 @@ class ViewMetadata(NamedTuple):
     name: Incomplete
     sql: Incomplete
 
+class QueryEvent(NamedTuple):
+    sql: str
+    params: Incomplete
+    duration: float
+    exception: BaseException | None
+
 class _ConnectionState:
     def __init__(self, **kwargs) -> None: ...
     closed: bool
@@ -828,6 +834,7 @@ class Database(_callable_context_manager):
     truncate_table: bool
     autoconnect: Incomplete
     thread_safe: Incomplete
+    query_hooks: list[Callable[[QueryEvent], Any]]
     connect_params: Incomplete
     def __deepcopy__(self, memo: Any) -> Self: ...
     def __init__(
@@ -2184,6 +2191,7 @@ __all__ = [
     "ProgrammingError",
     "Proxy",
     "QualifiedNames",
+    "QueryEvent",
     "SchemaManager",
     "SmallIntegerField",
     "Select",

@@ -5,6 +5,7 @@ import itertools
 import json
 import logging
 import re
+import time
 
 from greenlet import greenlet, getcurrent
 from peewee import *
@@ -237,9 +238,18 @@ class AsyncDatabaseMixin(object):
 
     async def aexecute_sql(self, sql, params=None):
         self._log_query(sql, params)
-        conn = await self.aconnect()
-        with __exception_wrapper__:
-            return await conn.execute(sql, params)
+        start = time.perf_counter() if self.query_hooks else None
+        try:
+            conn = await self.aconnect()
+            with __exception_wrapper__:
+                result = await conn.execute(sql, params)
+        except Exception as exc:
+            if start is not None:
+                self._notify_hooks(sql, params, start, exc)
+            raise
+        if start is not None:
+            self._notify_hooks(sql, params, start, None)
+        return result
 
     def connect(self):
         return await_(self.aconnect())

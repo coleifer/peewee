@@ -343,6 +343,49 @@ class TestDatabase(DatabaseTestCase):
         self.assertRaises(InterfaceError, db.cursor)
 
 
+class TestQueryHooks(ModelTestCase):
+    database = get_in_memory_db()
+    requires = [User]
+
+    def setUp(self):
+        super(TestQueryHooks, self).setUp()
+        self.events = []
+        self.database.query_hooks.append(self.events.append)
+
+    def tearDown(self):
+        del self.database.query_hooks[:]
+        super(TestQueryHooks, self).tearDown()
+
+    def test_query_hooks(self):
+        User.create(username='u1')
+        event = self.events[-1]
+        self.assertTrue('INSERT' in event.sql)
+        self.assertEqual(event.params, ['u1'])
+        self.assertTrue(event.duration >= 0.)
+        self.assertIsNone(event.exception)
+
+        n = len(self.events)
+        self.assertEqual(User.select().count(), 1)
+        self.assertEqual(len(self.events), n + 1)
+        self.assertTrue(self.events[-1].sql.startswith('SELECT'))
+
+    def test_query_hooks_error(self):
+        with self.assertRaises(OperationalError):
+            self.database.execute_sql('select * from missing_tbl')
+        event = self.events[-1]
+        self.assertTrue('missing_tbl' in event.sql)
+        self.assertIsInstance(event.exception, OperationalError)
+
+    def test_query_hooks_propagate_errors(self):
+        def bad_hook(event):
+            raise ValueError('nope')
+        self.database.query_hooks.append(bad_hook)
+        self.assertRaises(ValueError, self.database.execute_sql, 'select 1')
+
+    def test_query_hooks_per_instance(self):
+        self.assertEqual(get_in_memory_db().query_hooks, [])
+
+
 class TestDatabaseConnection(DatabaseTestCase):
     def test_is_connection_usable(self):
         # Ensure a connection is open.

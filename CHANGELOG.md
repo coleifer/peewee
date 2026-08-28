@@ -43,6 +43,9 @@ Improvements:
 * Add `websearch=True` to `TSVectorField.match()` and `Match()` to parse the
   query using `websearch_to_tsquery()` (pg 11+). Accepts user input without
   raising (quoted phrases, `or`, and `-negation`).
+* Add `Database.query_hooks`, a list of callables invoked after every query
+  with a `QueryEvent` named tuple (`sql`, `params`, `duration`, `exception`),
+  on success and failure both. No timing overhead when the list is empty.
 
 [View commits](https://github.com/coleifer/peewee/compare/4.4.0...master)
 

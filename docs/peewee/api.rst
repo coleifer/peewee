@@ -228,8 +228,14 @@ Database
 
       Every query peewee executes goes through this method. A subclass that
       overrides it must keep this signature and route execution through
-      ``super().execute_sql()``, so logging happens exactly once and added
-      behavior survives peewee upgrades.
+      ``super().execute_sql()``, so logging and query hooks happen exactly
+      once and added behavior survives peewee upgrades.
+
+   .. attribute:: query_hooks
+
+      List of callables invoked after every query with a ``QueryEvent``
+      named tuple: ``sql``, ``params``, ``duration``, ``exception``. See
+      :ref:`query-hooks`.
 
       .. code-block:: python
 
