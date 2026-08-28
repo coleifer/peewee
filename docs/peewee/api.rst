@@ -652,7 +652,8 @@ Database
 
       :param str seq: Name of sequence. A dotted name is read as
           schema-qualified when ``schema`` is not given.
-      :param str schema: Schema to look in.
+      :param str schema: Schema to look in. An unqualified name is checked
+          against the current schema.
       :return: Whether sequence exists.
       :rtype: bool
 

@@ -4907,12 +4907,10 @@ class PostgresqlDatabase(Database):
             SELECT COUNT(*) FROM pg_class, pg_namespace
             WHERE relkind='S'
                 AND pg_class.relnamespace = pg_namespace.oid
-                AND relname=%s"""
-        params = [sequence]
-        if schema:
-            query += ' AND nspname=%s'
-            params.append(schema)
-        return bool(self.execute_sql(query, params).fetchone()[0])
+                AND relname=%s
+                AND nspname=COALESCE(%s, current_schema())"""
+        curs = self.execute_sql(query, (sequence, schema or None))
+        return bool(curs.fetchone()[0])
 
     def get_binary_type(self):
         try:
