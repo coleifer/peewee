@@ -48,6 +48,10 @@ Improvements:
 * Add `Database.after_commit(fn)`, which runs a callable after the outermost
   transaction commits. Hook is discarded on rollback and runs immediately if
   no transaction is active. Use for, e.g., writing a row PK to a task queue.
+* Add `EnumField` and `IntEnumField` to `playhouse.fields`, storing
+  `member.value` and returning the member, rejecting unknown values on write
+  and comparison. `to_pydantic()` maps any field with an `enum_class`
+  attribute to the enum itself, so schemas validate membership.
 
 [View commits](https://github.com/coleifer/peewee/compare/4.4.0...master)
 

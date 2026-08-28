@@ -9,6 +9,8 @@ except ImportError:
     zlib = None
 
 from peewee import BlobField
+from peewee import CharField
+from peewee import IntegerField
 
 
 class CompressedField(BlobField):
@@ -53,3 +55,25 @@ class PickleField(BlobField):
         if value is not None:
             pickled = pickle.dumps(value, pickle.HIGHEST_PROTOCOL)
             return self._constructor(pickled)
+
+
+class EnumFieldMixin(object):
+    def __init__(self, enum_class, *args, **kwargs):
+        self.enum_class = enum_class
+        super(EnumFieldMixin, self).__init__(*args, **kwargs)
+
+    def db_value(self, value):
+        if value is None:
+            return value
+        return super(EnumFieldMixin, self).db_value(
+            self.enum_class(value).value)
+
+    def python_value(self, value):
+        if value is None:
+            return value
+        return self.enum_class(
+            super(EnumFieldMixin, self).python_value(value))
+
+
+class EnumField(EnumFieldMixin, CharField): pass
+class IntEnumField(EnumFieldMixin, IntegerField): pass

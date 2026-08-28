@@ -1266,7 +1266,7 @@ Extra Field Types
 
 .. module:: playhouse.fields
 
-``playhouse.fields`` provides two general-purpose field types.
+``playhouse.fields`` provides a handful of general-purpose field types.
 
 .. class:: CompressedField(compression_level=6, algorithm='zlib', **kwargs)
 
@@ -1295,6 +1295,35 @@ Extra Field Types
            data = PickleField()
 
        CachedResult.create(data={'nested': [1, 2, 3]})
+
+.. class:: EnumField(enum_class, **kwargs)
+
+   Stores members of an :class:`enum.Enum` with string values in a
+   :class:`CharField`, storing ``member.value`` and returning the member.
+   Unknown values are rejected with a ``ValueError`` on both the write and
+   comparison paths.
+
+   .. code-block:: python
+
+       from playhouse.fields import EnumField
+
+       class Status(enum.Enum):
+           ACTIVE = 'active'
+           ARCHIVED = 'archived'
+
+       class Account(Model):
+           status = EnumField(Status, default=Status.ACTIVE)
+
+       Account.select().where(Account.status == Status.ARCHIVED)
+
+   ``max_length`` defaults to 255 as with :class:`CharField`.
+   :py:func:`~playhouse.pydantic_utils.to_pydantic` maps the field to the
+   enum itself, so generated schemas validate membership.
+
+.. class:: IntEnumField(enum_class, **kwargs)
+
+   Like :class:`EnumField` for enums with integer values, stored in an
+   :class:`IntegerField`.
 
 
 .. _flask-utils:

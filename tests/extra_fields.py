@@ -1,5 +1,9 @@
+import enum
+
 from peewee import *
 from playhouse.fields import CompressedField
+from playhouse.fields import EnumField
+from playhouse.fields import IntEnumField
 from playhouse.fields import PickleField
 
 from .base import db
@@ -15,6 +19,21 @@ class Comp(TestModel):
 class Pickled(TestModel):
     key = TextField()
     data = PickleField()
+
+
+class Color(enum.Enum):
+    RED = 'red'
+    BLUE = 'blue'
+
+
+class Prio(enum.IntEnum):
+    LOW = 1
+    HIGH = 9
+
+
+class Enums(TestModel):
+    color = EnumField(Color, null=True)
+    prio = IntEnumField(Prio, null=True)
 
 
 class TestCompressedField(ModelTestCase):
@@ -60,3 +79,31 @@ class TestPickleField(ModelTestCase):
 
         b_db = Pickled.get(Pickled.key == 'b')
         self.assertEqual(b_db.data, b)
+
+
+class TestEnumField(ModelTestCase):
+    requires = [Enums]
+
+    def test_enum_field(self):
+        Enums.create(color=Color.RED, prio=Prio.HIGH)
+        Enums.create(color='blue', prio=9)  # Raw values normalize.
+        Enums.create()
+
+        e = Enums.get(Enums.color == Color.RED)
+        self.assertTrue(e.color is Color.RED)
+        self.assertTrue(e.prio is Prio.HIGH)
+
+        # Values are stored, members come back.
+        tbl = Table('enums', ('id', 'color', 'prio')).bind(self.database)
+        obj = tbl.select().order_by(tbl.id).get()
+        self.assertEqual((obj['color'], obj['prio']), ('red', 9))
+
+        self.assertEqual(
+            Enums.select().where(Enums.color == Color.BLUE).count(), 1)
+        self.assertEqual(Enums.select().where(
+            Enums.prio.in_([Prio.LOW, Prio.HIGH])).count(), 2)
+        self.assertTrue(Enums.get(Enums.color.is_null()).prio is None)
+
+    def test_enum_field_invalid(self):
+        self.assertRaises(ValueError, Enums.create, color='mauve')
+        self.assertRaises(ValueError, Enums.create, prio=4)

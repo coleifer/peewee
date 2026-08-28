@@ -2,11 +2,13 @@ from __future__ import annotations
 
 import datetime
 import decimal
+import enum
 import uuid
 from typing import List
 from typing import Literal
 
 from peewee import *
+from playhouse.fields import EnumField
 from playhouse.pydantic_utils import to_pydantic
 from pydantic import BaseModel
 
@@ -70,6 +72,22 @@ class TestPydanticConversion(BasePydanticTestCase):
         self.assertEqual(Schema.__name__, 'UserSchema')
         self.assertEqual(set(Schema.model_fields), {
             'name', 'age', 'active', 'bio', 'score', 'status', 'created'})
+
+    def test_enum_field(self):
+        class Shade(enum.Enum):
+            LIGHT = 'light'
+            DARK = 'dark'
+
+        class Themed(TestModel):
+            shade = EnumField(Shade)
+            class Meta:
+                database = self.database
+
+        Schema = to_pydantic(Themed)
+        self.assertIs(Schema.model_fields['shade'].annotation, Shade)
+        obj = Schema(shade='dark')
+        self.assertIs(obj.shade, Shade.DARK)
+        self.assertRaises(ValueError, Schema, shade='mauve')
 
     def test_base_model(self):
         class TestBase(BaseModel):

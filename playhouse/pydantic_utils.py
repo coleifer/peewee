@@ -24,6 +24,9 @@ def choices_description(choices):
 def get_field_type(field):
     if isinstance(field, ForeignKeyField):
         field = field.rel_field
+    enum_class = getattr(field, 'enum_class', None)
+    if enum_class is not None:
+        return enum_class
     if field.field_type in ('JSON', 'JSONB'):
         # A json value may be an object, array, scalar or null - the dict
         # mapping in reflection is too narrow for schema validation.
