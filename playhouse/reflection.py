@@ -627,6 +627,7 @@ class Introspector(object):
             views = self.metadata.database.get_views(schema=self.schema)
             tables.extend([view.name for view in views])
 
+        schema_tables = set(tables)
         if table_names is not None:
             tables = [table for table in tables if table in table_names]
         table_set = set(tables)
@@ -656,6 +657,19 @@ class Introspector(object):
             except ValueError as exc:
                 foreign_keys[table] = []
             else:
+                # Drop foreign-keys targeting tables outside the schema, e.g.
+                # cross-schema references. The column is left as-is.
+                keep = []
+                for foreign_key in foreign_keys[table]:
+                    if foreign_key.dest_table in schema_tables:
+                        keep.append(foreign_key)
+                    else:
+                        warnings.warn('Ignoring foreign-key %s.%s, "%s" was '
+                                      'not introspected.' %
+                                      (table, foreign_key.column,
+                                       foreign_key.dest_table))
+                foreign_keys[table] = keep
+
                 # If there is a possibility we could exclude a dependent table,
                 # ensure that we introspect it so FKs will work.
                 if table_names is not None:
