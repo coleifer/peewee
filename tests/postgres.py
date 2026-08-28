@@ -543,6 +543,14 @@ class TestTSVectorField(ModelTestCase):
             'FROM "fts_model" AS "t1" '
             'WHERE (to_tsvector("t1"."data") @@ to_tsquery(?))'), ['foo bar'])
 
+        query = FTSModel.select().where(
+            Match(FTSModel.data, 'foo bar', websearch=True))
+        self.assertSQL(query, (
+            'SELECT "t1"."id", "t1"."title", "t1"."data", "t1"."fts_data" '
+            'FROM "fts_model" AS "t1" '
+            'WHERE (to_tsvector("t1"."data") @@ websearch_to_tsquery(?))'),
+            ['foo bar'])
+
     def test_match_function(self):
         D = FTSModel.data
         self.assertMessages(Match(D, 'heart'), [1])
@@ -569,6 +577,13 @@ class TestTSVectorField(ModelTestCase):
         self.assertMessages(M('god', plain=True), [1])
         self.assertMessages(M('thing', plain=True), [2, 4])
         self.assertMessages(M('faith things', plain=True), [2, 4])
+
+        # websearch handles raw user input: quoted phrases, "or", negation.
+        self.assertMessages(M('god or things', websearch=True), [1, 2, 4])
+        self.assertMessages(M('faith -things', websearch=True), [0, 1, 3])
+        self.assertMessages(M('"small things"', websearch=True), [2])
+        self.assertMessages(M('&&&! ()', websearch=True), [])
+        self.assertRaises(ValueError, M, 'x', plain=True, websearch=True)
 
 
 def pg12():

@@ -40,6 +40,9 @@ Improvements:
 * Add `SchemaMigrator(db, schema=...)`, which qualifies every table name w/the
   given schema (or database on MySQL). Not supported for SQLite, as the
   table-rebuild rewrites DDL straight from `sqlite_master`.
+* Add `websearch=True` to `TSVectorField.match()` and `Match()` to parse the
+  query using `websearch_to_tsquery()` (pg 11+). Accepts user input without
+  raising (quoted phrases, `or`, and `-negation`).
 
 [View commits](https://github.com/coleifer/peewee/compare/4.4.0...master)
 

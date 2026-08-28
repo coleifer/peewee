@@ -567,19 +567,29 @@ class TSVectorField(IndexedFieldMixin, TextField):
     field_type = 'TSVECTOR'
     __hash__ = Field.__hash__
 
-    def match(self, query, language=None, plain=False):
+    def match(self, query, language=None, plain=False, websearch=False):
         params = (language, query) if language is not None else (query,)
-        func = fn.plainto_tsquery if plain else fn.to_tsquery
+        func = _tsquery_func(plain, websearch)
         return Expression(self, TS_MATCH, func(*params))
 
 
-def Match(field, query, language=None):
+def _tsquery_func(plain, websearch):
+    if plain and websearch:
+        raise ValueError('"plain" and "websearch" are mutually exclusive.')
+    if websearch:
+        return fn.websearch_to_tsquery
+    elif plain:
+        return fn.plainto_tsquery
+    return fn.to_tsquery
+
+
+def Match(field, query, language=None, plain=False, websearch=False):
     params = (language, query) if language is not None else (query,)
     field_params = (language, field) if language is not None else (field,)
     return Expression(
         fn.to_tsvector(*field_params),
         TS_MATCH,
-        fn.to_tsquery(*params))
+        _tsquery_func(plain, websearch)(*params))
 
 
 class IntervalField(Field):

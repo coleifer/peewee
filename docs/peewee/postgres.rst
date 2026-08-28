@@ -980,12 +980,18 @@ For more information, see the `Postgres full-text search docs <https://www.postg
        .select()
        .where(Post.search_content.match('python & (sqlite | postgres)')))
 
-   .. method:: match(query, language=None, plain=False)
+   .. method:: match(query, language=None, plain=False, websearch=False)
 
       :param str query: Full-text search query.
       :param str language: Optional language name.
       :param bool plain: Use the plain (simple) query parser instead of the
           default one, which supports ``&``, ``|``, and ``!`` operators.
+      :param bool websearch: Parse with ``websearch_to_tsquery`` (postgres
+          11+), which accepts user input without raising. Words are
+          AND-ed, ``"quoted phrases"`` match in sequence, ``or`` alternates
+          and ``-word`` negates.
+
+      Raw text from a search box should use ``websearch=True``.
 
 .. _postgres-server-side-cursors:
 
