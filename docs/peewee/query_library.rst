@@ -1451,13 +1451,15 @@ into a CTE to make it a little more clear.
         .order_by(Facility.name)
         .with_cte(monthdata))
 
+.. _json-relations-recipe:
+
 Attach each member's bookings as JSON
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 Fetch every member with their bookings attached, in a single query. A
-correlated subquery aggregates each member's bookings into a JSON array, so
-there is no second query and no join fan-out, and a member with no bookings
-gets an empty list.
+correlated subquery gathers each member's bookings into a JSON array, with
+no second query and none of the row multiplication a join would cause. A
+member with no bookings gets an empty list.
 
 .. code-block:: sql
 
@@ -1490,11 +1492,14 @@ gets an empty list.
         print(row['surname'], len(row['bookings']))
 
 The postgres driver parses the ``json`` column, so ``row['bookings']`` is a
-list of dicts. On SQLite the functions are ``json_group_array`` and
-``json_object``, on MySQL and MariaDB ``json_arrayagg`` and ``json_object``,
-and both return the JSON as text for ``json.loads()``. Consume the result as
-dicts. The pattern replaces a prefetch when round trips matter more than
-local processing.
+list of dicts. The function names differ by database:
+
+* postgres: ``json_agg``, ``json_build_object``
+* SQLite: ``json_group_array``, ``json_object``
+* MySQL and MariaDB: ``json_arrayagg``, ``json_object``
+
+SQLite and MySQL return the JSON as text, so pass it through
+``json.loads()``.
 
 Dates and Times
 ---------------
