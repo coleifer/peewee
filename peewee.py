@@ -6122,7 +6122,8 @@ def _date_part(date_part):
 _fromisoformat = datetime.datetime.fromisoformat
 
 
-def format_date_time(value, formats, post_process=None):
+def format_date_time(value, formats, post_process=None, memo=None):
+    # memo: one-element cell remembering the format that matched last.
     post_process = post_process or (lambda x: x)
     if value:
         s = value
@@ -6134,11 +6135,20 @@ def format_date_time(value, formats, post_process=None):
             return post_process(_fromisoformat(s))
         except (TypeError, ValueError):
             pass
-    for fmt in formats:
+    if memo is not None and memo[0] is not None:
         try:
-            return post_process(datetime.datetime.strptime(value, fmt))
+            return post_process(datetime.datetime.strptime(value, memo[0]))
         except ValueError:
             pass
+    for fmt in formats:
+        try:
+            result = post_process(datetime.datetime.strptime(value, fmt))
+        except ValueError:
+            pass
+        else:
+            if memo is not None:
+                memo[0] = fmt
+            return result
     return value
 
 def simple_date_time(value):
@@ -6154,6 +6164,7 @@ class _BaseFormattedField(Field):
     def __init__(self, formats=None, *args, **kwargs):
         if formats is not None:
             self.formats = formats
+        self._format_memo = [None]
         super(_BaseFormattedField, self).__init__(*args, **kwargs)
 
 
@@ -6169,7 +6180,8 @@ class DateTimeField(_BaseFormattedField):
 
     def adapt(self, value):
         if value and isinstance(value, str):
-            return format_date_time(value, self.formats)
+            return format_date_time(value, self.formats,
+                                    memo=self._format_memo)
         return value
 
     def to_timestamp(self):
@@ -6197,7 +6209,8 @@ class DateField(_BaseFormattedField):
     def adapt(self, value):
         if value and isinstance(value, str):
             pp = lambda x: x.date()
-            return format_date_time(value, self.formats, pp)
+            return format_date_time(value, self.formats, pp,
+                                    memo=self._format_memo)
         elif value and isinstance(value, datetime.datetime):
             return value.date()
         return value
@@ -6227,7 +6240,8 @@ class TimeField(_BaseFormattedField):
         if value:
             if isinstance(value, str):
                 pp = lambda x: x.time()
-                return format_date_time(value, self.formats, pp)
+                return format_date_time(value, self.formats, pp,
+                                        memo=self._format_memo)
             elif isinstance(value, datetime.datetime):
                 return value.time()
         if value is not None and isinstance(value, datetime.timedelta):
