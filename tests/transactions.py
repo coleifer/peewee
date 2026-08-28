@@ -420,6 +420,77 @@ class TestTransaction(BaseTransactionTestCase):
 
 
 # ===========================================================================
+# after_commit() callbacks
+# ===========================================================================
+
+class TestAfterCommit(BaseTransactionTestCase):
+    def setUp(self):
+        super(TestAfterCommit, self).setUp()
+        self.accum = []
+
+    def hook(self, val):
+        return lambda: self.accum.append(val)
+
+    def test_after_commit(self):
+        db.after_commit(self.hook(1))  # No transaction: runs immediately.
+        self.assertEqual(self.accum, [1])
+
+        with db.atomic():
+            db.after_commit(self.hook(2))
+            self.assertEqual(self.accum, [1])
+        self.assertEqual(self.accum, [1, 2])
+
+    def test_after_commit_rollback(self):
+        with self.assertRaises(ValueError):
+            with db.atomic():
+                db.after_commit(self.hook(1))
+                raise ValueError('nope')
+        self.assertEqual(self.accum, [])
+
+        # Discarded callbacks do not resurface on the next commit.
+        with db.atomic():
+            db.after_commit(self.hook(2))
+        self.assertEqual(self.accum, [2])
+
+    def test_after_commit_explicit(self):
+        with db.atomic() as txn:
+            db.after_commit(self.hook(1))
+            txn.commit()
+            self.assertEqual(self.accum, [1])
+            db.after_commit(self.hook(2))
+            txn.rollback()
+            db.after_commit(self.hook(3))
+        self.assertEqual(self.accum, [1, 3])
+
+    @requires_nested
+    def test_after_commit_nested(self):
+        with db.atomic():
+            db.after_commit(self.hook(1))
+            with db.atomic():
+                db.after_commit(self.hook(2))
+            try:
+                with db.atomic():
+                    db.after_commit(self.hook(3))
+                    raise ValueError('sp')
+            except ValueError:
+                pass
+            self.assertEqual(self.accum, [])
+        # No savepoint granularity: 3 runs though its savepoint rolled back.
+        self.assertEqual(self.accum, [1, 2, 3])
+
+    def test_after_commit_reentrant(self):
+        with db.atomic():
+            db.after_commit(self.hook(1))
+            db.after_commit(lambda: db.after_commit(self.hook(2)))
+        self.assertEqual(self.accum, [1, 2])
+
+    def test_after_commit_manual(self):
+        with db.manual_commit():
+            self.assertRaises(ValueError, db.after_commit, self.hook(1))
+        self.assertEqual(self.accum, [])
+
+
+# ===========================================================================
 # Session (context manager) behavior
 # ===========================================================================
 

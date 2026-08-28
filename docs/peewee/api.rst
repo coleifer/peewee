@@ -393,6 +393,14 @@ Database
       Savepoints can be committed or rolled-back within the wrapped block.
       If this occurs, a new savepoint is begun.
 
+   .. method:: after_commit(fn)
+
+      :param fn: A callable taking no arguments.
+
+      Register ``fn`` to run after the current transaction commits. Discarded
+      on rollback, and run immediately when no transaction is active. See
+      :ref:`transactions` for details.
+
    .. method:: manual_commit()
 
       Create a context-manager or decorator which disables Peewee's transaction

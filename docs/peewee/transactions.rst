@@ -158,6 +158,30 @@ Savepoints must occur within a transaction, but can be nested arbitrarily deep.
 If you manually commit or roll back a savepoint, a new savepoint will
 automatically begin.
 
+Running Code After Commit
+-------------------------
+
+:meth:`Database.after_commit` registers a callable to run after the current
+transaction commits. If the transaction rolls back the callable is discarded.
+If not transaction is active, the hook runs immediately. Use-case, e.g., is
+writing a row PK to a task queue.
+
+.. code-block:: python
+
+   with db.atomic():
+       order = Order.create(...)
+       db.after_commit(lambda: process_order(order.id))
+
+Callbacks run in registration order after the outermost block commits.
+Savepoints get no special treatment, so a callback registered in a nested block
+whose savepoint rolls back still runs if the outer transaction commits. An
+exception from a callback propagates, and later callbacks do not run. Not
+available in manual-commit mode, where peewee does not control the commit.
+
+With ``playhouse.pwasyncio`` callbacks run on the greenlet runner and may
+issue queries. A coroutine function is rejected, since it would never be
+awaited. To schedule it instead: ``db.after_commit(lambda: asyncio.get_running_loop().create_task(coro()))``.
+
 Autocommit Mode
 ---------------
 

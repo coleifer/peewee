@@ -14,9 +14,8 @@ Backwards-incompatible:
   than adding to it, which silently disabled `STRICT_TRANS_TABLES` (etc).
   Going forward we'll leave `sql_mode` alone by default and use `CONCAT()`
   rather than `||` for MySQL/MariaDB.
-* The MySQL and MariaDB connection charset defaults to `utf8mb4` instead of
-  `utf8`, which is an alias for `utf8mb3` and cannot store 4-byte characters.
-  Pass `charset='utf8'` to restore the old default.
+* MySQL and MariaDB connection charset defaults to `utf8mb4` instead of `utf8`,
+  which is an alias for `utf8mb3` and cannot store 4-byte characters.
 * Add `SqliteDatabase(..., lock_type=...)` to set the default locking strategy
   for transactions that do not specify one, e.g. `lock_type='IMMEDIATE'`.
 * A field's `sequence=` is now qualified with the model's `Meta.schema`. If the
@@ -46,6 +45,9 @@ Improvements:
 * Add `Database.query_hooks`, a list of callables invoked after every query
   with a `QueryEvent` named tuple (`sql`, `params`, `duration`, `exception`),
   on success and failure both. No timing overhead when the list is empty.
+* Add `Database.after_commit(fn)`, which runs a callable after the outermost
+  transaction commits. Hook is discarded on rollback and runs immediately if
+  no transaction is active. Use for, e.g., writing a row PK to a task queue.
 
 [View commits](https://github.com/coleifer/peewee/compare/4.4.0...master)
 

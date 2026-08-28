@@ -88,7 +88,8 @@ def await_(awaitable):
 
 
 class _State(object):
-    __slots__ = ('conn', 'closed', 'transactions', 'ctx', '_task_id', '_task')
+    __slots__ = ('conn', 'closed', 'transactions', 'ctx', 'commit_callbacks',
+                 '_task_id', '_task')
 
     def __init__(self):
         self._task_id = None
@@ -100,6 +101,7 @@ class _State(object):
         self.closed = True
         self.transactions = []
         self.ctx = []
+        self.commit_callbacks = []
 
 
 class _ConnectionState(object):
@@ -185,6 +187,10 @@ class _ConnectionState(object):
     def ctx(self):
         return self._current().ctx
 
+    @property
+    def commit_callbacks(self):
+        return self._current().commit_callbacks
+
     def reset(self):
         try:
             state = self._current()
@@ -228,6 +234,14 @@ class AsyncDatabaseMixin(object):
         self._pool = None
         self._pool_lock = asyncio.Lock()
         self._closing = False  # Guard against use during shutdown.
+
+    def after_commit(self, fn):
+        if asyncio.iscoroutinefunction(fn):
+            raise ValueError('after_commit() takes a plain callable, and a '
+                             'coroutine would never be awaited. Schedule it '
+                             'instead: after_commit(lambda: asyncio.'
+                             'get_running_loop().create_task(coro())).')
+        return super(AsyncDatabaseMixin, self).after_commit(fn)
 
     def execute_sql(self, sql, params=None):
         try:
@@ -1132,7 +1146,10 @@ class AsyncPgAtomic(_callable_context_manager):
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         self.db._state.transactions.pop()
+        outermost = not self.db._state.transactions
         if exc_type:
+            if outermost:
+                self.db._clear_commit_callbacks()
             self.rollback(False)
         else:
             try:
@@ -1140,11 +1157,15 @@ class AsyncPgAtomic(_callable_context_manager):
             except Exception:
                 # asyncpg marks the transaction FAILED when commit errors,
                 # making rollback raise too - don't mask the original.
+                if outermost:
+                    self.db._clear_commit_callbacks()
                 try:
                     self.rollback(False)
                 except Exception:
                     pass
                 raise
+            if outermost:
+                self.db._run_commit_callbacks()
 
     def commit(self, begin=True):
         await_(self.acommit(begin))

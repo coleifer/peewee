@@ -3699,12 +3699,14 @@ class _ConnectionState(object):
         self.conn = None
         self.ctx = []
         self.transactions = []
+        self.commit_callbacks = []
 
     def set_connection(self, conn):
         self.conn = conn
         self.closed = False
         self.ctx = []
         self.transactions = []
+        self.commit_callbacks = []
 
 
 class _ConnectionLocal(_ConnectionState, threading.local): pass
@@ -4067,6 +4069,25 @@ class Database(_callable_context_manager):
     def top_transaction(self):
         if self._state.transactions:
             return self._state.transactions[-1]
+
+    def after_commit(self, fn):
+        if isinstance(self.top_transaction(), _manual):
+            raise ValueError('after_commit() cannot be used with `manual`')
+        if self.transaction_depth() == 0:
+            fn()
+        else:
+            self._state.commit_callbacks.append(fn)
+        return fn
+
+    def _run_commit_callbacks(self):
+        callbacks = self._state.commit_callbacks
+        if callbacks:
+            todo, callbacks[:] = list(callbacks), []
+            for fn in todo:
+                fn()
+
+    def _clear_commit_callbacks(self):
+        del self._state.commit_callbacks[:]
 
     def atomic(self, *args, **kwargs):
         return _atomic(self, *args, **kwargs)
@@ -5315,11 +5336,13 @@ class _transaction(_callable_context_manager):
 
     def commit(self, begin=True):
         self.db.commit()
+        self.db._run_commit_callbacks()
         if begin:
             self._begin()
 
     def rollback(self, begin=True):
         self.db.rollback()
+        self.db._clear_commit_callbacks()
         if begin:
             self._begin()
 
