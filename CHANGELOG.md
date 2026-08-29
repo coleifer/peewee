@@ -52,6 +52,8 @@ Improvements:
   `member.value` and returning the member, rejecting unknown values on write
   and comparison. `to_pydantic()` maps any field with an `enum_class`
   attribute to the enum itself, so schemas validate membership.
+* Add `Database.dispose()` / `PooledDatabase.dispose()` for discarding and
+  resetting local connection state, e.g. in a child process after `fork()`.
 
 [View commits](https://github.com/coleifer/peewee/compare/4.4.0...master)
 

@@ -140,6 +140,12 @@ Database
          if not db.is_closed():
              db.close()
 
+   .. method:: dispose()
+
+      Discard the connection without closing it. For a child process after
+      ``fork()``, where the inherited connection belongs to the parent. See
+      :ref:`forking`.
+
    .. method:: is_closed()
 
       :return: return ``True`` if database is closed, ``False`` if open.

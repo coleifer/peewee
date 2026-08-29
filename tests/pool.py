@@ -1,3 +1,4 @@
+import gc
 import heapq
 import os
 import threading
@@ -19,6 +20,7 @@ from .base import ModelTestCase
 from .base import db_loader
 from .base import requires_mysql
 from .base import requires_postgresql
+from .base import skip_unless
 from .base_models import Register
 
 
@@ -443,6 +445,27 @@ class TestPooledDatabase(BaseTestCase):
         # _close_raw.  The subsequent loop over the snapshot handles it.)
         self.assertGreaterEqual(db.closed_counter, closed_before + 4)
 
+    def test_dispose(self):
+        db = FakePooledDatabase('testing', counter=3)
+        now = time.time()
+        push_conn(db, now - 5, 1)
+        push_conn(db, now - 1, 2)
+        db._in_use[3] = PoolConnection(now, 3, now)
+        db._state.closed = True
+        db.connect()
+        self.assertEqual(len(db._in_use), 2)
+
+        closed_before = db.closed_counter
+        db.dispose()
+        self.assertTrue(db.is_closed())
+        self.assertEqual(db._connections, [])
+        self.assertEqual(db._in_use, {})
+        self.assertEqual(db.closed_counter, closed_before)
+
+        # The next connection is new, not one of the discarded ones.
+        db.connect()
+        self.assertEqual(db.connection(), 4)
+
     def test_connect_timeout_with_condition_variable(self):
         # Verify that connect() with a timeout raises after the timeout
         # expires when the pool is exhausted.
@@ -795,6 +818,34 @@ class TestPooledDatabaseIntegration(ModelTestCase):
         self.assertEqual(available + in_use, expected,
                          'expected %s, got: %s available, %s in use'
                          % (expected, available, in_use))
+
+    @skip_unless(hasattr(os, 'fork'), 'requires fork')
+    def test_dispose_after_fork(self):
+        conn = self.database.connection()
+
+        pid = os.fork()
+        if pid == 0:
+            try:
+                self.database.dispose()
+                if not (self.database.is_closed() and
+                        self.database._connections == [] and
+                        self.database._in_use == {}):
+                    os._exit(1)
+                del conn
+                gc.collect()
+                Register.create(value=1)
+                self.database.close()
+            except BaseException:
+                os._exit(2)
+            os._exit(0)
+
+        _, status = os.waitpid(pid, 0)
+        self.assertEqual(status, 0)
+
+        self.assertTrue(self.database.connection() is conn)
+        Register.create(value=2)
+        query = Register.select().order_by(Register.value)
+        self.assertEqual([r.value for r in query], [1, 2])
 
     def test_pooled_database_integration(self):
         # Connection should be open from the setup method.

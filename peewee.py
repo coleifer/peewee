@@ -3870,6 +3870,10 @@ class Database(_callable_context_manager):
                 self._state.reset()
             return is_open
 
+    def dispose(self):
+        with self._lock:
+            self._state.reset()
+
     def _close(self, conn):
         conn.close()
 

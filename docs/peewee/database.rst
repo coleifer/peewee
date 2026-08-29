@@ -561,6 +561,37 @@ only have a single connection open at a given time.
 Peewee's :ref:`asyncio integration <pwasyncio>` stores connection state in
 task-local storage, so the same applies to async applications.
 
+.. _forking:
+
+Forking
+^^^^^^^
+
+A forked child process inherits any open connection from the parent, and both
+processes then read and write the same socket. Closing the connection in the
+child sends the driver's disconnect over that socket, which closes the parent's
+connection too.
+
+To avoid problems:
+
+* Close the connection in the parent before ``fork``, or
+* Call :meth:`Database.dispose` / :meth:`~playhouse.pool.PooledDatabase.dispose`
+  (pool) in the child, which discards the inherited connection(s) without
+  closing. The child then connects as usual.
+
+.. code-block:: python
+
+   # gunicorn.conf.py, the app itself connects per request.
+   def post_fork(server, worker):
+       db.dispose()
+
+   # multiprocessing, each worker connects once.
+   def init():
+       db.dispose()
+       db.connect()
+
+   with multiprocessing.Pool(4, initializer=init) as pool:
+       pool.map(work, items)
+
 DB-API Connection object
 ^^^^^^^^^^^^^^^^^^^^^^^^
 

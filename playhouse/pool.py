@@ -234,6 +234,13 @@ class PooledDatabase(object):
 
             self._pool_available.notify_all()
 
+    def dispose(self):
+        super(PooledDatabase, self).dispose()
+        with self._pool_lock:
+            self._connections = []
+            self._in_use = {}
+            self._pool_available.notify_all()
+
 
 class _PooledMySQLDatabase(PooledDatabase):
     def _is_closed(self, conn):

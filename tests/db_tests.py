@@ -14,6 +14,8 @@ Test case ordering:
 """
 from itertools import permutations
 from queue import Queue
+import gc
+import os
 import platform
 import re
 import threading
@@ -38,6 +40,7 @@ from .base import IS_ORACLE_MYSQL
 from .base import IS_POSTGRESQL
 from .base import IS_SQLITE
 from .base import ModelTestCase
+from .base import skip_unless
 from .base import TestModel
 from .base import db
 from .base import get_in_memory_db
@@ -415,6 +418,38 @@ class TestDatabaseConnection(DatabaseTestCase):
             curs = self.database.execute_sql('select * from foo')
             self.assertEqual(list(curs), [])
             self.database.execute_sql('drop table foo')
+
+    @skip_unless(hasattr(os, 'fork'), 'requires fork')
+    def test_dispose_after_fork(self):
+        self.database.execute_sql('drop table if exists foo')
+        self.database.execute_sql('create table foo (data text not null)')
+        conn = self.database.connection()
+
+        pid = os.fork()
+        if pid == 0:
+            # Child. The exit code reports the result, os._exit skips the
+            # runner's teardown.
+            try:
+                self.database.dispose()
+                if not self.database.is_closed():
+                    os._exit(1)
+                del conn  # Let the parent's connection object be collected.
+                gc.collect()
+                self.database.execute_sql("insert into foo (data) values ('c')")
+                self.database.close()
+            except BaseException:
+                os._exit(2)
+            os._exit(0)
+
+        _, status = os.waitpid(pid, 0)
+        self.assertEqual(status, 0)
+
+        # The parent's connection survived the child's dispose, gc and close.
+        self.assertTrue(self.database.connection() is conn)
+        self.database.execute_sql("insert into foo (data) values ('p')")
+        curs = self.database.execute_sql('select data from foo order by data')
+        self.assertEqual([row[0] for row in curs], ['c', 'p'])
+        self.database.execute_sql('drop table foo')
 
 
 class TestSessionTransactions(DatabaseTestCase):

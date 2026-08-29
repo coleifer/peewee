@@ -225,6 +225,11 @@ than actually disconnecting.
       Close all connections including those currently in use.
       Use with caution.
 
+   .. method:: dispose()
+
+      Discard every connection, idle or in use, without closing any. For a
+      child process after ``fork()``. See :ref:`forking`.
+
 .. class:: PooledSqliteDatabase(database, max_connections=20, stale_timeout=None, timeout=None, **kwargs)
 
    Pool implementation for SQLite databases. Extends :class:`SqliteDatabase`.
