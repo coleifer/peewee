@@ -164,16 +164,64 @@ Optionally wrap the bulk insert in a transaction:
    with db.atomic():
        User.insert_many(data, fields=fields).execute()
 
-Insert queries support :meth:`~_WriteQuery.returning` with Postgresql and SQLite
-to obtain the inserted rows:
+.. _insert-many-return:
+
+What ``insert_many()`` returns
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+The return value depends on the database:
+
++-----------------+----------------------------------------------------+
+| Database        | ``insert_many(rows).execute()``                    |
++=================+====================================================+
+| Postgres        | Cursor yielding a ``(pk,)`` tuple per inserted row |
++-----------------+----------------------------------------------------+
+| SQLite          | rowid of the last inserted row                     |
++-----------------+----------------------------------------------------+
+| MySQL / MariaDB | Auto-increment id of the first inserted row        |
++-----------------+----------------------------------------------------+
+
+For the same result on every database, use :meth:`~Insert.as_rowcount` to
+get the number of rows inserted:
+
+.. code-block:: python
+
+   # How many rows were inserted?
+   n = User.insert_many(data).as_rowcount().execute()
+
+.. note::
+    MySQL counts a row changed by ``ON DUPLICATE KEY UPDATE`` as 2 and an unchanged
+    row as 0.
+
+Without :meth:`~Insert.as_rowcount`, Postgres returns a cursor that yields the
+primary keys, since Peewee automatically includes a ``RETURNING`` clause.
+SQLite and MySQL return ``cursor.lastrowid``. If no rows were inserted,
+SQLite returns the rowid from the previous insert and MySQL returns 0. An
+empty list runs no query and returns ``None`` on every database.
+
+Postgres and SQLite (3.35+) also accept an explicit
+:meth:`~_WriteQuery.returning`, which returns the inserted rows as model
+instances:
 
 .. code-block:: python
 
    query = (User
             .insert_many([{'username': 'alice'}, {'username': 'bob'}])
             .returning(User))
-   for user in query:
+   for user in query.execute():
        print(f'Added {user.username} with id = {user.id}')
+
+Specific columns can be returned, and the row type chosen with :meth:`~BaseQuery.tuples`,
+:meth:`~BaseQuery.dicts` or :meth:`~BaseQuery.namedtuples`:
+
+.. code-block:: python
+
+   query = User.insert_many(data).returning(User.id, User.username).dicts()
+   for row in query.execute():
+       print(row)  # {'id': 1, 'username': 'alice'}
+
+``SqliteDatabase(returning_clause=True)`` makes SQLite automatically include a
+returning clause, matching Postgres behavior.
 
 Batching large data sets
 ^^^^^^^^^^^^^^^^^^^^^^^^
@@ -620,7 +668,8 @@ By default, the return values upon execution of the different queries are:
 
 * ``INSERT`` - auto-incrementing primary key value of the newly-inserted row.
   When not using an auto-incrementing primary key, Postgres will return the new
-  row's primary key, but SQLite and MySQL will not.
+  row's primary key, but SQLite and MySQL will not. Multi-row inserts differ
+  by database, see :ref:`insert-many-return`.
 * ``UPDATE`` - number of rows modified
 * ``DELETE`` - number of rows deleted
 

@@ -1611,7 +1611,7 @@ Model
 
       :param rows: An iterable that yields rows to insert.
       :param list fields: List of fields being inserted.
-      :return: number of rows modified (see note).
+      :return: Depends on the database (see below).
 
       INSERT multiple rows of data.
 
@@ -1685,16 +1685,22 @@ Model
       * `Max variable number limit <https://www.sqlite.org/limits.html#max_variable_number>`_
       * `SQLite compile-time flags <https://www.sqlite.org/compile.html>`_
 
-      The default return value is the number of rows modified. However,
-      when using Postgresql, Peewee will return a cursor that yields the
-      primary-keys of the inserted rows. To disable this functionality with
-      Postgresql, append ``as_rowcount()`` to your insert.
+      The return value depends on the database:
+
+      * Postgres: cursor yielding a ``(pk,)`` tuple per inserted row.
+      * SQLite: rowid of the last inserted row. ``returning_clause=True``
+        gives the Postgres behavior.
+      * MySQL: auto-increment id of the first inserted row.
+
+      Append ``as_rowcount()`` for the number of rows inserted on any
+      database, or :meth:`~_WriteQuery.returning` (Postgres and SQLite) for
+      the inserted rows. See :ref:`insert-many-return`.
 
    .. classmethod:: insert_from(query, fields)
 
       :param Select query: SELECT query to use as source of data.
       :param fields: Fields to insert data into.
-      :return: number of rows modified (see note).
+      :return: Depends on the database (see below).
 
       Generates an ``INSERT INTO ... SELECT`` query, copying rows from one
       table into another without round-tripping data through Python:
@@ -1709,10 +1715,16 @@ Model
 
       See :ref:`bulk-inserts` for additional discussion.
 
-      The default return value is the number of rows modified. However,
-      when using Postgresql, Peewee will return a cursor that yields the
-      primary-keys of the inserted rows. To disable this functionality with
-      Postgresql, append ``as_rowcount()`` to your insert.
+      The return value depends on the database:
+
+      * Postgres: cursor yielding a ``(pk,)`` tuple per inserted row.
+      * SQLite: rowid of the last inserted row. ``returning_clause=True``
+        gives the Postgres behavior.
+      * MySQL: auto-increment id of the first inserted row.
+
+      Append ``as_rowcount()`` for the number of rows inserted on any
+      database, or :meth:`~_WriteQuery.returning` (Postgres and SQLite) for
+      the inserted rows. See :ref:`insert-many-return`.
 
    .. classmethod:: replace(__data=None, **insert)
 
@@ -6471,8 +6483,8 @@ Queries
       :param bool _as_rowcount: Whether to return the modified row count (as
           opposed to the last-inserted row id).
 
-      SQLite and MySQL return the last inserted rowid. Postgresql will return a
-      cursor for iterating over the inserted id(s).
+      SQLite returns the last inserted rowid, MySQL the first auto-increment
+      id of the batch and Postgresql a cursor over the inserted primary keys.
 
       If you prefer to receive the inserted row-count, then specify
       ``as_rowcount()``:
@@ -6482,7 +6494,7 @@ Queries
          db = MySQLDatabase(...)
 
          query = User.insert_many([...])
-         # By default, the last rowid is returned:
+         # By default (MySQL), the first auto-increment id is returned:
          #last_id = query.execute()
 
          # To get the modified row-count:
