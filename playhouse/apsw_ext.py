@@ -18,12 +18,46 @@ Here are just a few reasons to use APSW, taken from the documentation:
 """
 import apsw
 from peewee import *
+from peewee import EXCEPTIONS
 from peewee import __exception_wrapper__
 from peewee import BooleanField as _BooleanField
 from peewee import DateField as _DateField
 from peewee import DateTimeField as _DateTimeField
 from peewee import DecimalField as _DecimalField
 from peewee import TimeField as _TimeField
+
+
+# apsw raises one exception per sqlite result code. Map them the way the
+# sqlite3 module does, so callers can catch peewee's DB-API exceptions.
+EXCEPTIONS.update({
+    'SQLError': OperationalError,
+    'BusyError': OperationalError,
+    'LockedError': OperationalError,
+    'ReadOnlyError': OperationalError,
+    'IOError': OperationalError,
+    'FullError': OperationalError,
+    'CantOpenError': OperationalError,
+    'SchemaChangeError': OperationalError,
+    'InterruptError': OperationalError,
+    'AbortError': OperationalError,
+    'PermissionsError': OperationalError,
+    'ProtocolError': OperationalError,
+    'EmptyError': OperationalError,
+    'ExtensionLoadingError': OperationalError,
+    'CorruptError': DatabaseError,
+    'NotADBError': DatabaseError,
+    'AuthError': DatabaseError,
+    'FormatError': DatabaseError,
+    'TooBigError': DataError,
+    'MismatchError': IntegrityError,
+    'MisuseError': InterfaceError,
+    'RangeError': InterfaceError,
+    'NotFoundError': InternalError,
+    'BindingsError': ProgrammingError,
+    'ConnectionClosedError': ProgrammingError,
+    'CursorClosedError': ProgrammingError,
+    'ThreadingViolationError': ProgrammingError,
+})
 
 
 class APSWDatabase(SqliteDatabase):
@@ -44,7 +78,7 @@ class APSWDatabase(SqliteDatabase):
     def _connect(self):
         conn = apsw.Connection(self.database, **self.connect_params)
         if self._timeout is not None:
-            conn.setbusytimeout(self._timeout * 1000)
+            conn.setbusytimeout(int(self._timeout * 1000))
         try:
             self._add_conn_hooks(conn)
         except:

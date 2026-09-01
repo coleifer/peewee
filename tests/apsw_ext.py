@@ -56,6 +56,18 @@ class TestAPSWExtension(ModelTestCase):
         self.assertTrue(database.is_closed())
         database.connect()
 
+    def test_exception_mapping(self):
+        # apsw's own exceptions are mapped to peewee's, like sqlite3's.
+        with self.assertRaises(OperationalError) as ctx:
+            database.execute_sql('select * from no_such_table')
+        self.assertIsInstance(ctx.exception.__context__, apsw.SQLError)
+        self.assertRaises(ProgrammingError, database.execute_sql,
+                          'select ?', (1, 2))
+        User.create(username='u')
+        self.assertRaises(IntegrityError, Message.create, user=None,
+                          message='m', pub_date=datetime.datetime.now(),
+                          published=False)
+
     def test_db_register_module(self):
         database.register_module('series', VTSource())
         database.execute_sql('create virtual table foo using series()')
