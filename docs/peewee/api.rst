@@ -237,12 +237,6 @@ Database
       ``super().execute_sql()``, so logging and query hooks happen exactly
       once and added behavior survives peewee upgrades.
 
-   .. attribute:: query_hooks
-
-      List of callables invoked after every query with a ``QueryEvent``
-      named tuple: ``sql``, ``params``, ``duration``, ``exception``. See
-      :ref:`query-hooks`.
-
       .. code-block:: python
 
          db = SqliteDatabase('my_app.db')
@@ -270,6 +264,12 @@ Database
 
          query = User.insert({'username': 'Alice'})
          db.execute(query)  # Equivalent to query.execute()
+
+   .. attribute:: query_hooks
+
+      List of callables invoked after every query with a ``QueryEvent``
+      named tuple: ``sql``, ``params``, ``duration``, ``exception``. See
+      :ref:`query-hooks`.
 
    .. method:: last_insert_id(cursor, query_type=None)
 
