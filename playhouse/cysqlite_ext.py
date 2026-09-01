@@ -223,6 +223,9 @@ class CySqliteDatabase(SqliteDatabase):
         return fn
 
     def begin(self, lock_type=None):
+        if self.is_closed() and not self.autoconnect:
+            raise InterfaceError('Error, database connection not opened.')
+
         with __exception_wrapper__:
             self.connection().begin(lock_type or self._lock_type or 'deferred')
 
