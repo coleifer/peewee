@@ -25,6 +25,14 @@ Backwards-incompatible:
 * `Model.bind_ctx()` and `Database.bind_ctx()` can be used as decorators, like
   the other peewee context-managers. Previously the decorator form raised
   `TypeError: '_BoundModelsContext' object is not callable`.
+* SQLite `BEGIN`, `COMMIT` and `ROLLBACK` are issued directly on a cursor
+  rather than through `execute_sql()`, so they are no longer debug-logged, do
+  not fire query hooks and are not counted by `count_queries()`. This matches
+  Postgres and MySQL.
+* `atomic()` and `transaction()` on a closed database with `autoconnect=False`
+  now raise `InterfaceError` on Postgres and MySQL, as they already did on
+  SQLite (and as queries do). Previously `begin()` opened a connection
+  regardless of `autoconnect`.
 
 Improvements:
 

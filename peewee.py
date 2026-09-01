@@ -4103,8 +4103,6 @@ class Database(_callable_context_manager):
         return _savepoint(self)
 
     def begin(self):
-        if self.is_closed():
-            self.connect()
         with __exception_wrapper__:
             self.cursor().execute('BEGIN')
 
@@ -4459,21 +4457,22 @@ class SqliteDatabase(Database):
     def begin(self, lock_type=None):
         lock_type = lock_type or self._lock_type
         statement = 'BEGIN %s' % lock_type if lock_type else 'BEGIN'
-        self.execute_sql(statement)
+        with __exception_wrapper__:
+            self.cursor().execute(statement)
 
     def commit(self):
         if self.is_closed():
             raise InterfaceError('Cannot commit, database connection not '
                                  'open.')
         with __exception_wrapper__:
-            return self.execute_sql('COMMIT')
+            self.cursor().execute('COMMIT')
 
     def rollback(self):
         if self.is_closed():
             raise InterfaceError('Cannot rollback, database connection not '
                                  'open.')
         with __exception_wrapper__:
-            return self.execute_sql('ROLLBACK')
+            self.cursor().execute('ROLLBACK')
 
     def get_tables(self, schema=None):
         schema = qesc(schema or 'main')
@@ -4829,8 +4828,6 @@ class PostgresqlDatabase(Database):
         return self._adapter.is_connection_usable(self._state.conn)
 
     def begin(self, isolation_level=None):
-        if self.is_closed():
-            self.connect()
         if isolation_level is None:
             isolation_level = self._isolation_level
         if isolation_level:
@@ -5118,8 +5115,6 @@ class MySQLDatabase(Database):
         return ctx.literal('() VALUES ()')
 
     def begin(self, isolation_level=None):
-        if self.is_closed():
-            self.connect()
         with __exception_wrapper__:
             curs = self.cursor()
             if isolation_level:

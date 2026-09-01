@@ -372,6 +372,12 @@ class TestQueryHooks(ModelTestCase):
         self.assertEqual(len(self.events), n + 1)
         self.assertTrue(self.events[-1].sql.startswith('SELECT'))
 
+    def test_query_hooks_transaction(self):
+        # BEGIN / COMMIT are not queries and do not reach the hooks.
+        with self.database.atomic():
+            User.create(username='u1')
+        self.assertEqual([e.sql.split()[0] for e in self.events], ['INSERT'])
+
     def test_query_hooks_error(self):
         with self.assertRaises(OperationalError):
             self.database.execute_sql('select * from missing_tbl')

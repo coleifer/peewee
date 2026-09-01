@@ -597,6 +597,20 @@ class TestSession(BaseTransactionTestCase):
 # Lock type and isolation level
 # ===========================================================================
 
+class TestBeginAutoconnect(BaseTransactionTestCase):
+    @skip_if(IS_CRDB, 'atomic() connects to read the server version')
+    def test_begin_autoconnect_false(self):
+        db = new_connection(autoconnect=False)
+        with self.assertRaises(InterfaceError):
+            with db.atomic():
+                pass
+        self.assertTrue(db.is_closed())
+        db.connect()
+        with db.atomic():
+            pass
+        db.close()
+
+
 @skip_unless(IS_SQLITE, 'requires sqlite for transaction lock type')
 class TestTransactionLockType(BaseTransactionTestCase):
     def test_lock_type(self):
