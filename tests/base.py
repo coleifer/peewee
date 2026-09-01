@@ -29,7 +29,7 @@ def db_loader(engine, name='peewee_test', db_class=None, **params):
             MySQLDatabase: ['mysql', 'mysql8'],
             PostgresqlDatabase: ['postgres', 'postgresql', 'psycopg3'],
             MySQLConnectorDatabase: ['mysqlconnector'],
-            MariaDBConnectorDatabase: ['mariadb', 'maridbconnector'],
+            MariaDBConnectorDatabase: ['mariadb', 'mariadbconnector'],
             CockroachDatabase: ['cockroach', 'cockroachdb', 'crdb'],
         }
         engine_map = dict((alias, db) for db, aliases in engine_aliases.items()
