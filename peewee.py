@@ -6875,7 +6875,7 @@ class ManyToManyFieldAccessor(FieldAccessor):
     def get_query(self, instance):
         src_id = getattr(instance, self.src_fk.rel_field.name)
         if src_id is None and self.field._prevent_unsaved:
-            raise ValueError('Cannot get many-to-many "%s" for unsaved '
+            raise ValueError('Cannot access many-to-many "%s" on unsaved '
                              'instance "%s".' % (self.field, instance))
         return (ManyToManyQuery(instance, self, self.rel_model)
                 .join(self.through_model)
@@ -6892,10 +6892,6 @@ class ManyToManyFieldAccessor(FieldAccessor):
         return self.field
 
     def __set__(self, instance, value):
-        src_id = getattr(instance, self.src_fk.rel_field.name)
-        if src_id is None and self.field._prevent_unsaved:
-            raise ValueError('Cannot set many-to-many "%s" for unsaved '
-                             'instance "%s".' % (self.field, instance))
         self.get_query(instance).add(value, clear_existing=True)
 
 
