@@ -3905,15 +3905,12 @@ class Database(_callable_context_manager):
         for hook in self.query_hooks:
             hook(event)
 
-    def _execute_cursor(self, sql, params, cursor_options=None):
+    def _execute_cursor(self, sql, params, **cursor_options):
         self._log_query(sql, params)
         start = time.perf_counter() if self.query_hooks else None
         try:
             with __exception_wrapper__:
-                if cursor_options:
-                    cursor = self.cursor(**cursor_options)
-                else:
-                    cursor = self.cursor()
+                cursor = self.cursor(**cursor_options)
                 cursor.execute(sql, params or ())
         except Exception as exc:
             if start is not None:

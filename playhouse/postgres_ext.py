@@ -726,8 +726,7 @@ class PostgresqlExtDatabase(PostgresqlDatabase):
     def execute_sql(self, sql, params=None, named_cursor=None):
         if not named_cursor:
             return super(PostgresqlExtDatabase, self).execute_sql(sql, params)
-        return self._execute_cursor(sql, params,
-                                    {'named_cursor': named_cursor})
+        return self._execute_cursor(sql, params, named_cursor=named_cursor)
 
 
 class PooledPostgresqlExtDatabase(_PooledPostgresqlDatabase, PostgresqlExtDatabase):
