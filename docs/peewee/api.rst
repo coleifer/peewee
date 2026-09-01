@@ -4288,9 +4288,8 @@ Fields
 
    To add new relationships between objects, you can either assign the objects
    directly to the ``ManyToManyField`` attribute, or call the
-   :meth:`~ManyToManyField.add` method. The difference between the two is
-   that simply assigning will clear out any existing relationships, whereas
-   ``add()`` can preserve existing relationships.
+   :meth:`~ManyToManyField.add` method. Assigning clears out any existing
+   relationships, whereas ``add()`` preserves them.
 
    .. code-block:: pycon
 
@@ -5781,8 +5780,8 @@ Queries
 
       Execute the query and return an iterator over the result-set.
 
-      Unlike :meth:`~BaseQuery.iterator`, this method will cause rows to
-      be cached in order to allow efficient iteration, indexing and slicing.
+      Unlike :meth:`~BaseQuery.iterator`, this method caches rows to allow
+      efficient iteration, indexing and slicing.
 
    .. method:: __getitem__(value)
 
@@ -7058,6 +7057,17 @@ Constants and Helpers
 
    .. data:: name
              sql
+
+
+.. class:: QueryEvent
+
+   Event passed to each callable in :attr:`Database.query_hooks`. See
+   :ref:`query-hooks`.
+
+   .. data:: sql
+             params
+             duration
+             exception
 
 
 Playhouse Reference

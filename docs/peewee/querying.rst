@@ -995,7 +995,7 @@ above-average for that key.
 .. code-block:: python
 
    # First we'll declare the query that will be used as a CTE. This query
-   # simply determines the average value for each key.
+   # determines the average value for each key.
    cte = (Sample
           .select(Sample.key, fn.AVG(Sample.value).alias('avg_value'))
           .group_by(Sample.key)

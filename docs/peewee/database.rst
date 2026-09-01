@@ -699,9 +699,9 @@ development.
 Query Hooks
 -----------
 
-For instrumentation beyond logging, every :class:`Database` has a
-``query_hooks`` list. Each callable in it is invoked after every query with a
-single :class:`QueryEvent`, on success and on failure alike:
+For more than logging, every :class:`Database` has a ``query_hooks`` list.
+Each callable in it is invoked after every query with a single
+:class:`QueryEvent`, on success and on failure alike:
 
 .. code-block:: python
 
@@ -713,7 +713,7 @@ single :class:`QueryEvent`, on success and on failure alike:
 
 ``QueryEvent`` is a named tuple with ``sql``, ``params``, ``duration`` (in
 seconds, including connection or cursor acquisition), and ``exception``, which
-is ``None`` on success. Hooks observe, they cannot modify the query, and an
+is ``None`` on success. Hooks observe the query and cannot modify it. An
 exception raised by a hook propagates to the caller. Do not mutate ``params``.
 When the list is empty no timing is performed, so idle overhead is a single
 attribute check.

@@ -654,8 +654,8 @@ Migration API
 .. class:: MySQLMigrator(database, schema=None)
 
    MySQL-specific subclass. A schema is a database in MySQL, so ``schema`` is
-   the database to migrate. Note that ``rename_table()`` keeps the table in
-   that database, where a plain ``RENAME TABLE a.t TO u`` would move it to the
+   the database to migrate. ``rename_table()`` keeps the table in that
+   database, where a plain ``RENAME TABLE a.t TO u`` would move it to the
    connection's own.
 
 
@@ -1123,10 +1123,10 @@ Generate a migration from a diff:
 .. class:: Runner(database, directory='migrations', table_name='schema_migration', schema=None)
 
    :param str schema: schema containing the tables to be migrated, passed to
-       the :class:`SchemaMigrator`. The history table lives in the same
-       schema, so each schema tracks its own applied set and one set of
-       migration files can be run against any number of schemas
-       (``pwmigrate up -s tenant_a``, ``pwmigrate up -s tenant_b``).
+       the :class:`~playhouse.migrate.SchemaMigrator`. The history table
+       lives in the same schema, so each schema tracks its own applied set
+       and one set of migration files can be run against any number of
+       schemas (``pwmigrate up -s tenant_a``, ``pwmigrate up -s tenant_b``).
 
        When adopting ``schema=`` on a deployment whose history predates it,
        the runner will find no history there and consider every migration

@@ -163,8 +163,8 @@ Running Code After Commit
 
 :meth:`Database.after_commit` registers a callable to run after the current
 transaction commits. If the transaction rolls back the callable is discarded.
-If not transaction is active, the hook runs immediately. Use-case, e.g., is
-writing a row PK to a task queue.
+If no transaction is active, the callable runs immediately. One use is
+enqueueing work keyed on a new row's id.
 
 .. code-block:: python
 
@@ -180,7 +180,11 @@ available in manual-commit mode, where peewee does not control the commit.
 
 With ``playhouse.pwasyncio`` callbacks run on the greenlet runner and may
 issue queries. A coroutine function is rejected, since it would never be
-awaited. To schedule it instead: ``db.after_commit(lambda: asyncio.get_running_loop().create_task(coro()))``.
+awaited. To schedule one instead:
+
+.. code-block:: python
+
+   db.after_commit(lambda: asyncio.get_running_loop().create_task(coro()))
 
 Autocommit Mode
 ---------------
@@ -254,9 +258,9 @@ stale. Pass ``lock_type`` to the database to make every transaction IMMEDIATE:
 
    db = SqliteDatabase('app.db', lock_type='IMMEDIATE')
 
-An explicit ``atomic(lock_type=...)`` still takes precedence. Note that
-IMMEDIATE blocks other writers for the whole block, so a long read-only
-``atomic()`` costs more than it does under DEFERRED.
+An explicit ``atomic(lock_type=...)`` still takes precedence. IMMEDIATE blocks
+other writers for the whole block, so a long read-only ``atomic()`` costs more
+than it does under DEFERRED.
 
 .. seealso::
    `SQLite locking documentation
