@@ -12,19 +12,14 @@ Backwards-incompatible:
 * MySQL and MariaDB connections no longer set `sql_mode`. Peewee had been
   setting `PIPES_AS_CONCAT`, but the param replaced the server's mode rather
   than adding to it, which silently disabled `STRICT_TRANS_TABLES` (etc).
-  Going forward we'll leave `sql_mode` alone by default and use `CONCAT()`
-  rather than `||` for MySQL/MariaDB.
+  Going forward Peewee will not modify `sql_mode` alone by default and use
+  `CONCAT()` rather than `||` for MySQL/MariaDB.
 * MySQL and MariaDB connection charset defaults to `utf8mb4` instead of `utf8`,
   which is an alias for `utf8mb3` and cannot store 4-byte characters.
-* Add `SqliteDatabase(..., lock_type=...)` to set the default locking strategy
-  for transactions that do not specify one, e.g. `lock_type='IMMEDIATE'`.
 * A field's `sequence=` is now qualified with the model's `Meta.schema`. If the
   name you pass already contains a dot it is treated as fully-qualified and
   used as-is, so `sequence='other.seq'` is unaffected by `Meta.schema`. Also,
   `sequence_exists()` accepts a schema-qualified name.
-* `Model.bind_ctx()` and `Database.bind_ctx()` can be used as decorators, like
-  the other peewee context-managers. Previously the decorator form raised
-  `TypeError: '_BoundModelsContext' object is not callable`.
 * SQLite `BEGIN`, `COMMIT` and `ROLLBACK` are issued directly on a cursor
   rather than through `execute_sql()`, so they are no longer debug-logged, do
   not fire query hooks and are not counted by `count_queries()`. This matches
@@ -36,6 +31,8 @@ Backwards-incompatible:
 
 Improvements:
 
+* Add `SqliteDatabase(..., lock_type=...)` to set the default locking strategy
+  for transactions that do not specify one, e.g. `lock_type='IMMEDIATE'`.
 * Postgres introspection (`get_tables()`, `get_columns()`, `get_indexes()`,
   `get_primary_keys()`, `get_foreign_keys()`, `get_views()`) with no `schema`
   now follows the search path via `current_schema()` instead of assuming
@@ -62,6 +59,9 @@ Improvements:
   attribute to the enum itself, so schemas validate membership.
 * Add `Database.dispose()` / `PooledDatabase.dispose()` for discarding and
   resetting local connection state, e.g. in a child process after `fork()`.
+* `Model.bind_ctx()` and `Database.bind_ctx()` can be used as decorators, like
+  the other peewee context-managers. Previously the decorator form raised
+  `TypeError: '_BoundModelsContext' object is not callable`.
 
 [View commits](https://github.com/coleifer/peewee/compare/4.4.0...master)
 
