@@ -276,10 +276,7 @@ would delete all notes by anyone whose last name is "Foo":
 Query Objects
 -------------
 
-One of the fundamental limitations of the abstractions provided by Peewee 2.x
-was the absence of a class that represented a structured query with no relation
-to a given model class.
-
+Query objects represent a structured query with no dependency on a given model.
 An example of this might be computing aggregate values over a subquery. For
 example, the :meth:`~SelectBase.count` method, which returns the count of
 rows in an arbitrary query, is implemented by wrapping the query:
@@ -288,14 +285,14 @@ rows in an arbitrary query, is implemented by wrapping the query:
 
     SELECT COUNT(1) FROM (...)
 
-To accomplish this with Peewee, the implementation is written in this way:
+To accomplish this with Peewee, the implementation is approximately:
 
 .. code-block:: python
 
-    def count(query):
+    def count(query, database):
         # Select([source1, ... sourcen], [column1, ...columnn])
         wrapped = Select(from_list=[query], columns=[fn.COUNT(SQL('1'))])
-        curs = wrapped.tuples().execute(db)
+        curs = wrapped.tuples().execute(database)
         return curs[0][0]  # Return first column from first row of result.
 
 We can actually express this more concisely using the
@@ -304,9 +301,9 @@ from aggregate queries:
 
 .. code-block:: python
 
-    def count(query):
+    def count(query, database):
         wrapped = Select(from_list=[query], columns=[fn.COUNT(SQL('1'))])
-        return wrapped.scalar(db)
+        return wrapped.scalar(database)
 
 The :ref:`query-library` document has a more complex example, in which we
 write a query for a facility with the highest number of available slots booked:

@@ -2216,7 +2216,7 @@ Model
 
       Truncate (delete all rows) for the model.
 
-   .. classmethod:: index(*fields, unique=False, safe=True, where=None, using=None, name=None)
+   .. classmethod:: index(*fields, unique=False, safe=True, where=None, using=None, name=None, nulls_distinct=None)
 
       :param fields: Fields to index.
       :param bool unique: Whether index is UNIQUE.
@@ -2224,6 +2224,9 @@ Model
       :param Expression where: Optional WHERE clause for index.
       :param str using: Index algorithm.
       :param str name: Optional index name.
+      :param bool nulls_distinct: Postgres-only - specify True (NULLS
+          DISTINCT) or False (NULLS NOT DISTINCT) - controls handling of
+          NULL in unique indexes.
 
       Expressive method for declaring an index on a model. Wraps the
       declaration of a :class:`ModelIndex` instance.

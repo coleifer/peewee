@@ -900,7 +900,15 @@ performance, create a ``GIN`` index:
 
 For more information, see the `Postgres full-text search docs <https://www.postgresql.org/docs/current/textsearch.html>`_.
 
-.. function:: Match(field, query)
+.. function:: Match(field, query, language=None, plain=False, websearch=False)
+
+   :param field: Field or expression to search. Peewee applies ``to_tsvector()``.
+   :param str query: Search terms. Peewee applies ``to_tsquery()``.
+   :param str language: Text search configuration passed to both
+       ``to_tsvector()`` and the query function.
+   :param bool plain: Parse ``query`` with ``plainto_tsquery()``.
+   :param bool websearch: Parse ``query`` with ``websearch_to_tsquery()``.
+       Mutually exclusive with ``plain``.
 
    Generate a full-text search expression that converts ``field`` to
    ``tsvector`` and ``query`` to ``tsquery`` automatically.
