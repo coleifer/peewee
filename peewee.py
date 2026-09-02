@@ -8750,7 +8750,8 @@ class ModelSelect(BaseModelSelect, Select):
                 # direct FK lookup is all that is required.
                 model_attr = getattr(curr, key)
             else:
-                for piece in key.split('__'):
+                pieces = key.split('__')
+                for i, piece in enumerate(pieces):
                     try:
                         model_attr = getattr(curr, piece, None)
                     except Exception:
@@ -8762,7 +8763,9 @@ class ModelSelect(BaseModelSelect, Select):
                             break
                     else:
                         model_attr = getattr(curr, piece)
-                        if value is not None and isinstance(model_attr, fks):
+                        # Follow an fk only when a piece remains, the last
+                        # one compares the fk column itself.
+                        if i < len(pieces) - 1 and isinstance(model_attr, fks):
                             curr = model_attr.rel_model
                             joins.append(model_attr)
             accum.append(op(model_attr, value))

@@ -7630,6 +7630,8 @@ class TestDjangoFilterRegression(ModelTestCase):
 
         assertNames(DFGC.filter(dfc__df=a), ['a1-1', 'a1-2', 'a2-1'])
         assertNames(DFGC.filter(dfc__df=a.id), ['a1-1', 'a1-2', 'a2-1'])
+        assertNames(DFGC.filter(dfc__df=None), [])
+        assertNames(DFGC.filter(dfc__df__name=None), [])
 
         q = DFC.select().join(DF)
         assertNames(q.filter(df=a), ['a1', 'a2'])

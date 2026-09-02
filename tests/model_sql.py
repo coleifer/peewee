@@ -406,6 +406,22 @@ class TestModelSQL(ModelDatabaseTestCase):
             'INNER JOIN "users" AS "ua" ON ("t1"."user_id" = "ua"."id") '
             'WHERE ("ua"."username" = ?)'), ['huey'])
 
+        # A path ending in None still walks to the last model.
+        query = Tweet.select(Tweet.content).filter(user__username=None)
+        self.assertSQL(query, (
+            'SELECT "t1"."content" FROM "tweet" AS "t1" '
+            'INNER JOIN "users" AS "t2" ON ("t1"."user_id" = "t2"."id") '
+            'WHERE ("t2"."username" IS NULL)'), [])
+
+        # A path ending on a foreign key compares the column and does not
+        # join the related model.
+        for value, clause, params in ((None, 'IS NULL', []), (3, '= ?', [3])):
+            query = Favorite.select(Favorite.id).filter(tweet__user=value)
+            self.assertSQL(query, (
+                'SELECT "t1"."id" FROM "favorite" AS "t1" '
+                'INNER JOIN "tweet" AS "t2" ON ("t1"."tweet_id" = "t2"."id") '
+                'WHERE ("t2"."user_id" %s)' % clause), params)
+
     def test_filter_with_or_across_joins(self):
         query = (Tweet
                  .select(Tweet.content)
