@@ -326,7 +326,7 @@ class PostgresqlMetadata(Metadata):
             for oid in self.array_types:
                 self.column_map[oid] = postgres_ext.ArrayField
 
-    def get_column_types(self, table, schema):
+    def get_column_types(self, table, schema=None):
         column_types = {}
         extra_params = {}
         extension_types = set((
@@ -337,10 +337,16 @@ class PostgresqlMetadata(Metadata):
             postgres_ext.HStoreField)) if postgres_ext is not None else set()
 
         # Look up the actual column type for each column.
-        identifier = '%s."%s"' % (schema, table)
         cursor = self.execute(
-            'SELECT attname, atttypid FROM pg_catalog.pg_attribute '
-            'WHERE attrelid = %s::regclass AND attnum > %s', identifier, 0)
+            'SELECT a.attname, a.atttypid '
+            'FROM pg_catalog.pg_attribute AS a '
+            'INNER JOIN pg_catalog.pg_class AS t ON a.attrelid = t.oid '
+            'INNER JOIN pg_catalog.pg_namespace AS n '
+            'ON t.relnamespace = n.oid '
+            'WHERE t.relname = %s '
+            'AND n.nspname = COALESCE(%s, current_schema()) '
+            'AND a.attnum > 0 AND NOT a.attisdropped '
+            'ORDER BY a.attnum', table, schema)
 
         # Store column metadata in dictionary keyed by column name.
         for name, oid in cursor.fetchall():
@@ -351,22 +357,6 @@ class PostgresqlMetadata(Metadata):
                 extra_params[name] = {'field_class': self.array_types[oid]}
 
         return column_types, extra_params
-
-    def get_columns(self, table, schema=None):
-        schema = schema or 'public'
-        return super(PostgresqlMetadata, self).get_columns(table, schema)
-
-    def get_foreign_keys(self, table, schema=None):
-        schema = schema or 'public'
-        return super(PostgresqlMetadata, self).get_foreign_keys(table, schema)
-
-    def get_primary_keys(self, table, schema=None):
-        schema = schema or 'public'
-        return super(PostgresqlMetadata, self).get_primary_keys(table, schema)
-
-    def get_indexes(self, table, schema=None):
-        schema = schema or 'public'
-        return super(PostgresqlMetadata, self).get_indexes(table, schema)
 
 
 class CockroachDBMetadata(PostgresqlMetadata):

@@ -623,6 +623,44 @@ class TestCrossSchemaForeignKey(ModelTestCase):
             self.assertTrue(any('author' in str(w.message) for w in ws))
 
 
+@requires_postgresql
+class TestReflectSearchPath(ModelTestCase):
+    # With no schema given, reflection follows the search path.
+    schema = 'rspath'
+
+    def setUp(self):
+        super(TestReflectSearchPath, self).setUp()
+        for query in (
+                'DROP SCHEMA IF EXISTS %s CASCADE' % self.schema,
+                'CREATE SCHEMA %s' % self.schema,
+                'CREATE TABLE %s.parent (id SERIAL PRIMARY KEY)' % self.schema,
+                'CREATE TABLE %s.child (id SERIAL PRIMARY KEY, '
+                'parent_id INTEGER REFERENCES %s.parent (id), name TEXT, '
+                'tags TEXT[])' % (self.schema, self.schema),
+                'CREATE INDEX child_name ON %s.child (name)' % self.schema,
+                'SET search_path TO %s' % self.schema):
+            self.database.execute_sql(query)
+
+    def tearDown(self):
+        try:
+            self.database.execute_sql('DROP SCHEMA IF EXISTS %s CASCADE'
+                                      % self.schema)
+        finally:
+            super(TestReflectSearchPath, self).tearDown()
+
+    def test_search_path(self):
+        models = generate_models(self.database)
+        self.assertEqual(sorted(models), ['child', 'parent'])
+        Child = models['child']
+        self.assertEqual(Child._meta.sorted_field_names,
+                         ['id', 'parent', 'name', 'tags'])
+        self.assertTrue(isinstance(Child.id, AutoField))
+        self.assertTrue(Child.parent.rel_model is models['parent'])
+        self.assertTrue(Child.name.index)
+        self.assertEqual(Child.tags.field_type, 'TEXT')
+        self.assertEqual(Child.tags.__class__.__name__, 'ArrayField')
+
+
 class Note(TestModel):
     content = TextField()
     timestamp = DateTimeField(default=datetime.datetime.now)

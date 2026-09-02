@@ -79,10 +79,10 @@ class CockroachDatabase(PostgresqlDatabase):
     def _get_pk_constraint(self, table, schema=None):
         query = ('SELECT constraint_name '
                  'FROM information_schema.table_constraints '
-                 'WHERE table_name = %s AND table_schema = %s '
+                 'WHERE table_name = %s '
+                 'AND table_schema = COALESCE(%s, current_schema()) '
                  'AND constraint_type = %s')
-        cursor = self.execute_sql(query, (table, schema or 'public',
-                                          'PRIMARY KEY'))
+        cursor = self.execute_sql(query, (table, schema, 'PRIMARY KEY'))
         row = cursor.fetchone()
         return row and row[0] or None
 
