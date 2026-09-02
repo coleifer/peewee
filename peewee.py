@@ -218,9 +218,13 @@ __date_parts__ = set(('year', 'month', 'day', 'hour', 'minute', 'second'))
 __sqlite_datetime_formats__ = (
     '%Y-%m-%d %H:%M:%S',
     '%Y-%m-%d %H:%M:%S.%f',
+    '%Y-%m-%d %H:%M:%S%z',
+    '%Y-%m-%d %H:%M:%S.%f%z',
     '%Y-%m-%d',
     '%H:%M:%S',
     '%H:%M:%S.%f',
+    '%H:%M:%S%z',
+    '%H:%M:%S.%f%z',
     '%H:%M')
 
 __sqlite_date_trunc__ = {
@@ -6250,19 +6254,23 @@ class TimeField(_BaseFormattedField):
         '%H:%M:%S.%f',
         '%H:%M:%S',
         '%H:%M',
+        '%H:%M:%S.%f%z',
+        '%H:%M:%S%z',
         '%Y-%m-%d %H:%M:%S.%f',
         '%Y-%m-%d %H:%M:%S',
     ]
 
     def adapt(self, value):
-        if value:
-            if isinstance(value, str):
-                pp = lambda x: x.time()
-                return format_date_time(value, self.formats, pp)
-            elif isinstance(value, datetime.datetime):
-                return value.time()
-        if value is not None and isinstance(value, datetime.timedelta):
-            return (datetime.datetime.min + value).time()
+        if isinstance(value, str) and value:
+            try:
+                return datetime.time.fromisoformat(value)
+            except ValueError:
+                pp = lambda x: x.timetz()
+                value = format_date_time(value, self.formats, pp)
+        elif isinstance(value, datetime.datetime):
+            value = value.time()
+        elif isinstance(value, datetime.timedelta):
+            value = (datetime.datetime.min + value).time()
         return value
 
     hour = property(_date_part('hour'))

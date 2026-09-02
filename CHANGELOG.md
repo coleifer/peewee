@@ -62,6 +62,9 @@ Improvements:
 * `Model.bind_ctx()` and `Database.bind_ctx()` can be used as decorators, like
   the other peewee context-managers. Previously the decorator form raised
   `TypeError: '_BoundModelsContext' object is not callable`.
+* `TimeField` supports utc offsets like `DateTimeField`, parsing e.g.
+  `'11:12:13+02:00'` to an aware `datetime.time` instead of returning `str`.
+  Only sqlite stores the offset. The postgres/mysql drivers drop it on write.
 
 [View commits](https://github.com/coleifer/peewee/compare/4.4.0...master)
 

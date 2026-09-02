@@ -462,6 +462,31 @@ class TestDateFields(ModelTestCase):
 
         self.assertEqual(format_date_time('not a date', []), 'not a date')
 
+    def test_time_utc_offset(self):
+        f = TimeField()
+        tz = datetime.timezone(datetime.timedelta(hours=2))
+        utc = datetime.timezone.utc
+        for s, expected in (
+                ('11:12:13+02:00', datetime.time(11, 12, 13, tzinfo=tz)),
+                ('11:12:13.123456+02:00',
+                 datetime.time(11, 12, 13, 123456, tzinfo=tz)),
+                ('11:12:13Z', datetime.time(11, 12, 13, tzinfo=utc)),
+                ('2019-01-02 11:12:13+02:00',
+                 datetime.time(11, 12, 13, tzinfo=tz)),
+                ('11:12:13', datetime.time(11, 12, 13))):
+            self.assertEqual(f.python_value(s), expected)
+
+        # The %z formats serve pythons whose fromisoformat rejects "Z".
+        val = format_date_time('11:12:13Z', TimeField.formats,
+                               lambda x: x.timetz())
+        self.assertEqual(val, datetime.time(11, 12, 13, tzinfo=utc))
+
+        if IS_SQLITE:
+            # date_part() must parse the stored offset.
+            dm = DateModel.create(time=datetime.time(11, 12, 13, tzinfo=tz))
+            query = DateModel.select().where(DateModel.time.hour == 11)
+            self.assertEqual([d.id for d in query], [dm.id])
+
     def test_to_timestamp(self):
         dt = datetime.datetime(2019, 1, 2, 3, 4, 5)
         ts = calendar.timegm(dt.utctimetuple())

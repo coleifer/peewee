@@ -3494,8 +3494,15 @@ Fields
       '%H:%M:%S.%f' # hour:minute:second.microsecond
       '%H:%M:%S' # hour:minute:second
       '%H:%M' # hour:minute
+      '%H:%M:%S.%f%z' # ...with timezone offset
+      '%H:%M:%S%z' # ...with timezone offset
       '%Y-%m-%d %H:%M:%S.%f' # year-month-day hour-minute-second.microsecond
       '%Y-%m-%d %H:%M:%S' # year-month-day hour-minute-second
+
+   In addition, any string accepted by ``datetime.time.fromisoformat`` or
+   ``datetime.datetime.fromisoformat`` is parsed automatically. Offsets are
+   preserved on sqlite only. The postgres and mysql drivers discard them for
+   ``TIME`` columns on write.
 
    .. note::
       If the incoming value does not match a format, it is returned as-is.
