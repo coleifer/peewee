@@ -201,12 +201,12 @@ class Metadata(object):
         # Look up the actual column type for each column.
         column_types, extra_params = self.get_column_types(table, schema)
 
-        # Look up the primary keys.
-        pk_names = self.get_primary_keys(table, schema)
+        # Only promote a lone primary key to auto-incrementing when the
+        # column actually is.
+        pk_names = [name for name, m in metadata.items() if m.primary_key]
         if len(pk_names) == 1:
             pk = pk_names[0]
-            # Only promote to auto-incrementing when the column actually is.
-            if pk not in metadata or metadata[pk].identity:
+            if metadata[pk].identity:
                 if column_types[pk] is IntegerField:
                     column_types[pk] = AutoField
                 elif column_types[pk] is BigIntegerField:
@@ -698,8 +698,9 @@ class Introspector(object):
                     table_columns[column].unique = index.unique
                     table_columns[column].index = True
 
-            primary_keys[table] = self.metadata.get_primary_keys(
-                table, self.schema)
+            primary_keys[table] = [name for name, column
+                                   in table_columns.items()
+                                   if column.primary_key]
             columns[table] = table_columns
             indexes[table] = table_indexes
 
@@ -786,15 +787,10 @@ class Introspector(object):
                 indexes = multi_column_indexes
                 table_name = table
 
-            # Fix models with multi-column primary keys.
             composite_key = False
-            if len(primary_keys) == 0:
-                if 'id' not in columns:
-                    Meta.primary_key = False
-                else:
-                    primary_keys = columns.keys()
-
-            if len(primary_keys) > 1:
+            if not primary_keys:
+                Meta.primary_key = False
+            elif len(primary_keys) > 1:
                 Meta.primary_key = CompositeKey(*[
                     field.name for col, field in columns.items()
                     if col in primary_keys])

@@ -494,18 +494,32 @@ class TestReflection(BaseReflectionTestCase):
                                 '%s not in %s' % (actual, fields))
 
 
+class NoPKId(TestModel):
+    id = IntegerField()
+    data = CharField()
+    class Meta:
+        primary_key = False
+
+
 class TestReflectNoPK(BaseReflectionTestCase):
-    requires = [NoPK]
+    requires = [NoPK, NoPKId]
 
     def test_no_pk(self):
         models = self.introspector.generate_models()
         NoPK = models['no_pk']
+        NoPKId = models['no_pk_id']
         if IS_CRDB:
             # CockroachDB always includes a "rowid".
             self.assertEqual(NoPK._meta.sorted_field_names, ['rowid', 'data'])
+            self.assertEqual(NoPKId._meta.sorted_field_names,
+                             ['rowid', 'id', 'data'])
         else:
             self.assertEqual(NoPK._meta.sorted_field_names, ['data'])
             self.assertTrue(NoPK._meta.primary_key is False)
+            # An "id" column without a constraint is not a key either.
+            self.assertEqual(NoPKId._meta.sorted_field_names, ['id', 'data'])
+            self.assertTrue(NoPKId._meta.primary_key is False)
+            self.assertTrue(isinstance(NoPKId.id, IntegerField))
 
 
 class EventLog(TestModel):
