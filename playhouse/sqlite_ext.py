@@ -527,7 +527,7 @@ class FTSModel(BaseFTSModel):
     @classmethod
     def search_bm25f(cls, term, weights=None, with_score=False,
                      score_alias='score', explicit_ordering=False):
-        """Full-text search for selected `term` using BM25 algorithm."""
+        """Full-text search for selected `term` using BM25F algorithm."""
         return cls._search(
             term,
             weights,
@@ -539,7 +539,7 @@ class FTSModel(BaseFTSModel):
     @classmethod
     def search_lucene(cls, term, weights=None, with_score=False,
                       score_alias='score', explicit_ordering=False):
-        """Full-text search for selected `term` using BM25 algorithm."""
+        """Full-text search for selected `term` using Lucene algorithm."""
         return cls._search(
             term,
             weights,
