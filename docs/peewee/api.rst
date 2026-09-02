@@ -2846,25 +2846,10 @@ Model
       :param prefetch_type: Query type to use for the subqueries.
       :return: a list of models with selected relations prefetched.
 
-      Execute the query, prefetching the given additional resources.
-
-      .. note::
-         :meth:`with_related` is the declarative, nestable form and is preferred
-         for new code. ``prefetch`` is the flat-list form, kept for
-         compatibility. Minimal example of using :meth:`with_related`:
-
-         .. code-block:: python
-
-            query = User.select().with_related(Load(User.tweets))
-
-      Prefetch type may be one of:
-
-      * ``PREFETCH_TYPE.WHERE``
-      * ``PREFETCH_TYPE.JOIN``
-
-      See also :func:`prefetch` standalone function.
-
-      Example:
+      Execute the query, prefetching the given additional resources. Same as
+      calling :func:`prefetch` with this query as the first argument, which
+      also documents the prefetch types. :meth:`with_related` is the
+      declarative, nestable form and is preferred for new code.
 
       .. code-block:: python
 
@@ -2874,11 +2859,6 @@ Model
              print(user.username)
              for tweet in user.tweets:
                  print('  *', tweet.content)
-
-      Because ``prefetch`` must reconstruct a graph of models, it is
-      necessary to be sure that the foreign-key/primary-key of any
-      related models are selected, so that the related objects can be
-      mapped correctly.
 
       **Disambiguating multi-reference subqueries.** If a subquery relates to
       more than one previously-fetched query (for example, a ``Favorite`` row

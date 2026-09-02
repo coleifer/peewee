@@ -616,38 +616,8 @@ Example:
    # Filter by key existence:
    Event.select().where(Event.data.exists('referrer'))
 
-   # Atomic update - adds new keys, updates existing ones:
-   new_data = Event.data.update({
-       'result': 'ok',
-       'status': 'success'})
-   (Event
-    .update(data=new_data)
-    .where(Event.data['result'] == 'success')
-    .execute())
-
-   # Atomic key deletion:
-   (Event
-    .update(data=Event.data.delete('referrer'))
-    .where(Event.data['referrer'] == 'google.com')
-    .execute())
-
-   # Retrieve keys or values as a list:
-   for event in Event.select(Event.id, Event.data.keys().alias('k')):
-       print(event.id, event.k)
-
-   # Prints:
-   # 1 ['ip', 'type', 'email', 'result', 'status']
-
-   # Retrieve a subset of data:
-   query = (Event
-            .select(Event.id,
-                    Event.data.slice('ip', 'email').alias('source'))
-            .order_by(Event.data['ip']))
-   for event in query:
-       print(event.id, event.source)
-
-   # Prints:
-   # 1 {'ip': '1.2.3.4', 'email': 'charles@example.com'}
+The :class:`HStoreField` reference below shows updates, deletions and key,
+value and slice retrieval.
 
 HStoreField API
 ^^^^^^^^^^^^^^^
