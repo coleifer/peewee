@@ -519,16 +519,16 @@ at least one event:
 
 .. code-block:: python
 
-    # Get the current date.
-    today = datetime.date.today()
+   # Get the current date.
+   today = datetime.date.today()
 
-    # Get days that have events for the current month.
-    query = (Event
-             .select(Event.event_date.day.alias('day'))
-             .where(
-                 (Event.event_date.year == today.year) &
-                 (Event.event_date.month == today.month))
-             .distinct())
+   # Get days that have events for the current month.
+   query = (Event
+            .select(Event.event_date.day.alias('day'))
+            .where(
+                (Event.event_date.year == today.year) &
+                (Event.event_date.month == today.month))
+            .distinct())
 
    # Group activity by hour of day.
    query = (PageView
