@@ -438,7 +438,7 @@ class TestCustomLoads(ModelTestCase):
             ML.drop_table()
 
 
-class TestDeferredDatabase(ModelTestCase):
+class TestJSONFieldDeferredDatabase(ModelTestCase):
     requires = []
 
     def test_proxy_initialize(self, init_early=False):

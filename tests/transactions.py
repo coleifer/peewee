@@ -261,8 +261,8 @@ class TestTransaction(BaseTransactionTestCase):
         save(1)
         self.assertRegister([1])
 
-    def text_atomic_exception(self):
-        def will_fail(self):
+    def test_atomic_exception(self):
+        def will_fail():
             with db.atomic():
                 self._save(1)
                 self._save(None)
@@ -270,7 +270,7 @@ class TestTransaction(BaseTransactionTestCase):
         self.assertRaises(IntegrityError, will_fail)
         self.assertRegister([])
 
-        def user_error(self):
+        def user_error():
             with db.atomic():
                 self._save(2)
                 raise ValueError

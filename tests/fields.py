@@ -2380,13 +2380,6 @@ class TestQueryWithModelInstanceParam(ModelTestCase):
 # Composite primary key
 # ===========================================================================
 
-class TestCompositePrimaryKeyField(ModelTestCase):
-    requires = [Composite]
-
-    def test_composite_primary_key(self):
-        pass
-
-
 class CompositeKeyModel(TestModel):
     f1 = CharField()
     f2 = IntegerField()
