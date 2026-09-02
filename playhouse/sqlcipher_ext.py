@@ -3,7 +3,7 @@ Peewee integration with sqlcipher3.
 
 Example usage:
 
-    from peewee.playground.ciphersql_ext import SqlCipherDatabase
+    from playground.sqlcipher_ext import SqlCipherDatabase
     db = SqlCipherDatabase('/path/to/my.db', passphrase="don'tuseme4real")
 
 Invalid or incorrect passphrases do not get a special exception, unfortunately,
