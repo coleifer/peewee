@@ -5389,8 +5389,8 @@ Query-builder
           to a Python data-type.
 
       When coerce is ``True``, the target data-type is inferred using several
-      heuristics. Read the source for ``BaseModelCursorWrapper._initialize_columns``
-      method to see how this works.
+      heuristics. Read the source for ``_resolve_model_columns`` method to see
+      how this works.
 
    .. method:: python_value(func=None)
 
@@ -6836,7 +6836,7 @@ Query-builder Internals
       Pop scope from the stack.
 
 
-.. class:: State(scope, parentheses=False, subquery=False, **kwargs)
+.. class:: State(scope, parentheses=False, settings=None)
 
    Lightweight object for representing the state at a given scope. During SQL
    generation, each object visited by the :class:`Context` can inspect the
@@ -6850,10 +6850,8 @@ Query-builder Internals
 
    :param int scope: The scope rules to be applied while the state is active.
    :param bool parentheses: Wrap the contained SQL in parentheses.
-   :param bool subquery: Whether the current state is a child of an outer
-       query.
-   :param dict kwargs: Arbitrary settings which should be applied in the
-       current state.
+   :param dict settings: Arbitrary settings which should be applied in the
+       current state (or ``None``).
 
 
 .. class:: Context(**settings)
@@ -6957,7 +6955,7 @@ Constants and Helpers
 
       :param callback: A function that accepts a single parameter, the bound
           object.
-      :return: self
+      :return: the callback.
 
       Add a callback to be executed when the proxy is initialized.
 

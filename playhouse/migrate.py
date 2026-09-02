@@ -102,8 +102,6 @@ Dropping an index:
 
 Adding or dropping table constraints:
 
-.. code-block:: python
-
     # Add a CHECK() constraint to enforce the price cannot be negative.
     migrate(migrator.add_constraint(
         'products',
