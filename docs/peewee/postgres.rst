@@ -229,6 +229,16 @@ BinaryJSONField and JSONField
 
          Event.select(Event.data['result'].concat({'status': 'ok'}))
 
+   The examples for the methods below match against this row:
+
+   .. code-block:: python
+
+      Event.create(data={
+          'type': 'rename',
+          'name': 'new name',
+          'metadata': {'old_name': 'the old name'},
+          'tags': ['t1', 't2', 't3']})
+
    .. method:: contains(other)
 
       Test whether this field's value contains ``other`` (as a subset).
@@ -237,14 +247,6 @@ BinaryJSONField and JSONField
       array.
 
       .. code-block:: python
-
-         Event.create(data={
-             'type': 'rename',
-             'name': 'new name',
-             'metadata': {'old_name': 'the old name'},
-             'tags': ['t1', 't2', 't3']})
-
-         # These queries match the above row:
 
          # Search by partial object:
          Event.select().where(Event.data.contains({'type': 'rename'}))
@@ -276,14 +278,6 @@ BinaryJSONField and JSONField
 
       .. code-block:: python
 
-         Event.create(data={
-             'type': 'rename',
-             'name': 'new name',
-             'metadata': {'old_name': 'the old name'},
-             'tags': ['t1', 't2', 't3']})
-
-         # These queries match the above row:
-
          Event.select().where(Event.data.contains_any('name', 'other'))
 
          # Search a nested object:
@@ -299,14 +293,6 @@ BinaryJSONField and JSONField
 
       .. code-block:: python
 
-         Event.create(data={
-             'type': 'rename',
-             'name': 'new name',
-             'metadata': {'old_name': 'the old name'},
-             'tags': ['t1', 't2', 't3']})
-
-         # These queries match the above row:
-
          Event.select().where(Event.data.contains_all('name', 'tags'))
 
          # Search nested object for items in an array:
@@ -321,12 +307,6 @@ BinaryJSONField and JSONField
          Event.create(data={
              'type': 'login',
              'result': {'success': True}})
-
-         Event.create(data={
-             'type': 'rename',
-             'name': 'new name',
-             'metadata': {'old_name': 'the old name'},
-             'tags': ['t1', 't2', 't3']})
 
          # Matches the login row.
          (Event

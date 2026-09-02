@@ -119,6 +119,8 @@ Usage:
    ConflictDetectedException
 
 
+.. _get-or-create-safely:
+
 Get-or-Create Safely
 ---------------------
 
@@ -565,20 +567,15 @@ The schema:
 
 We want: tasks where ``now >= last_run + interval``.
 
-Our desired code would look like:
+Here is the basic form of the query:
 
 .. code-block:: python
 
-    next_occurrence = something  # ??? how do we define this ???
-
-    # We can express the current time as a Python datetime value, or we could
-    # alternatively use the appropriate SQL function/name.
-    now = Value(datetime.datetime.now())  # Or SQL('current_timestamp'), e.g.
-
-    query = (Task
-             .select(Task, Schedule)
-             .join(Schedule)
-             .where(now >= next_occurrence))
+   now = datetime.datetime.now()  # Or SQL('current_timestamp').
+   tasks_due = (Task
+                .select(Task, Schedule)
+                .join(Schedule)
+                .where(next_run <= now))
 
 **Postgresql** - multiply a typed interval:
 
@@ -586,12 +583,6 @@ Our desired code would look like:
 
    one_second = SQL("INTERVAL '1 second'")
    next_run = Task.last_run + (Schedule.interval * one_second)
-
-   now = Value(datetime.datetime.now())
-   tasks_due = (Task
-                .select(Task, Schedule)
-                .join(Schedule)
-                .where(now >= next_run))
 
 **MySQL** - use ``DATE_ADD`` with a dynamic INTERVAL expression:
 
@@ -602,21 +593,9 @@ Our desired code would look like:
    interval = NodeList((SQL('INTERVAL'), Schedule.interval, SQL('SECOND')))
    next_run = fn.DATE_ADD(Task.last_run, interval)
 
-   now = Value(datetime.datetime.now())
-   tasks_due = (Task
-                .select(Task, Schedule)
-                .join(Schedule)
-                .where(now >= next_run))
-
 **SQLite** - convert to Unix timestamp, add seconds, convert back:
 
 .. code-block:: python
 
    next_ts = fn.strftime('%s', Task.last_run) + Schedule.interval
    next_run = fn.datetime(next_ts, 'unixepoch')
-
-   now = Value(datetime.datetime.now())
-   tasks_due = (Task
-                .select(Task, Schedule)
-                .join(Schedule)
-                .where(now >= next_run))

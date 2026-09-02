@@ -138,18 +138,9 @@ creation, not as lookup keys:
        username='charlie',
        defaults={'joined': datetime.date.today()})
 
-When uniqueness is enforced by a database constraint, the recommended pattern
-is to attempt creation first and fall back to retrieval on failure:
-
-.. code-block:: python
-
-   try:
-       with db.atomic():
-           return User.create(username=username)
-   except IntegrityError:
-       return User.get(User.username == username)
-
-This avoids a race window between the lookup and the insert.
+When uniqueness is enforced by a database constraint, attempt the create
+first and fall back to a get on ``IntegrityError``. See
+:ref:`get-or-create-safely`.
 
 .. _filtering:
 
