@@ -6250,6 +6250,8 @@ class TimeField(_BaseFormattedField):
         '%H:%M:%S.%f',
         '%H:%M:%S',
         '%H:%M',
+        '%H:%M:%S.%f%z',
+        '%H:%M:%S%z',
         '%Y-%m-%d %H:%M:%S.%f',
         '%Y-%m-%d %H:%M:%S',
     ]
@@ -6257,7 +6259,7 @@ class TimeField(_BaseFormattedField):
     def adapt(self, value):
         if value:
             if isinstance(value, str):
-                pp = lambda x: x.time()
+                pp = lambda x: x.timetz()
                 return format_date_time(value, self.formats, pp)
             elif isinstance(value, datetime.datetime):
                 return value.time()

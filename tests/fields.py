@@ -462,6 +462,32 @@ class TestDateFields(ModelTestCase):
 
         self.assertEqual(format_date_time('not a date', []), 'not a date')
 
+    def test_time_utc_offset(self):
+        # TimeField accepts an offset wherever DateTimeField does.
+        tz = datetime.timezone(datetime.timedelta(hours=2))
+        for s, expected in (
+                ('11:12:13+02:00', datetime.time(11, 12, 13, tzinfo=tz)),
+                ('11:12:13.123456+02:00',
+                 datetime.time(11, 12, 13, 123456, tzinfo=tz)),
+                ('11:12:13Z',
+                 datetime.time(11, 12, 13, tzinfo=datetime.timezone.utc)),
+                ('11:12:13', datetime.time(11, 12, 13))):
+            val = format_date_time(s, TimeField.formats, lambda x: x.timetz())
+            self.assertEqual(val, expected)
+            self.assertEqual(val.utcoffset(), expected.utcoffset())
+
+    def test_time_utc_offset_round_trip(self):
+        # A tz-aware time must come back as the same time, not as a str.
+        tz = datetime.timezone(datetime.timedelta(hours=2))
+        for t in (datetime.time(11, 12, 13, tzinfo=tz),
+                  datetime.time(11, 12, 13, 123456,
+                                tzinfo=datetime.timezone.utc),
+                  datetime.time(11, 12, 13)):
+            dm = DateModel.create(time=t)
+            dm_db = DateModel[dm.id]
+            self.assertEqual(dm_db.time, t)
+            self.assertEqual(dm_db.time.utcoffset(), t.utcoffset())
+
     def test_to_timestamp(self):
         dt = datetime.datetime(2019, 1, 2, 3, 4, 5)
         ts = calendar.timegm(dt.utctimetuple())
