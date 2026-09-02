@@ -4460,20 +4460,6 @@ class SqliteDatabase(Database):
         with __exception_wrapper__:
             self.cursor().execute(statement)
 
-    def commit(self):
-        if self.is_closed():
-            raise InterfaceError('Cannot commit, database connection not '
-                                 'open.')
-        with __exception_wrapper__:
-            self.cursor().execute('COMMIT')
-
-    def rollback(self):
-        if self.is_closed():
-            raise InterfaceError('Cannot rollback, database connection not '
-                                 'open.')
-        with __exception_wrapper__:
-            self.cursor().execute('ROLLBACK')
-
     def get_tables(self, schema=None):
         schema = qesc(schema or 'main')
         cursor = self.execute_sql('SELECT name FROM "%s".sqlite_master WHERE '
