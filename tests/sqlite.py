@@ -2335,16 +2335,15 @@ else:
         TestISODateTimeField,
         # For various reasons these do not work.
         #TestJsonContains,
-        #TestTDecimalField,
+        TestTDecimalField,
         #TestSqliteReturningConfig,
     ]
 
     for test_case in test_cases:
         new_name = test_case.__name__ + 'CySqlite'
-        klass = type(new_name, (test_case,), {
-            'database': cysqlite_database,
-        })
-        locals()[new_name] = klass
+        globals()[new_name] = type(new_name, (test_case,), {
+            'database': cysqlite_database})
+    del test_case  # Or the loader collects the last base class twice.
 
     @skip_unless(cysqlite_database.server_version >= (3, 35, 0),
                  'sqlite returning clause required')

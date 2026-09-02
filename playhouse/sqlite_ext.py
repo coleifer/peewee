@@ -45,6 +45,10 @@ class TDecimalField(DecimalField):
     field_type = 'TEXT'
     def get_modifiers(self): pass
 
+    def db_value(self, value):
+        if value is not None:
+            return str(super(TDecimalField, self).db_value(value))
+
 
 class ISODateTimeField(DateTimeField):
     formats = [

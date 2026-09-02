@@ -18,6 +18,7 @@ from playhouse.sqlite_ext import (
     JSONField,
     JSONBField,
     SearchField,
+    TDecimalField,
     VirtualModel,
     FTSModel,
     FTS5Model)
@@ -52,16 +53,6 @@ def __dbstatus__(flag, return_highwater=False, return_current=False):
             return result[0]
         return result[1] if return_highwater else result
     return property(getter)
-
-
-class TDecimalField(DecimalField):
-    field_type = 'TEXT'
-
-    def get_modifiers(self): pass
-
-    def db_value(self, value):
-        if value is not None:
-            return str(super(DecimalField, self).db_value(value))
 
 
 class CySqliteDatabase(SqliteDatabase):
