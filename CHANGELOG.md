@@ -7,6 +7,10 @@ https://github.com/coleifer/peewee/releases
 
 ## master
 
+[View commits](https://github.com/coleifer/peewee/compare/4.5.1...master)
+
+## 4.5.1
+
 * `EnumField` and `IntEnumField` validate member value types (`str` and
   `int` respectively) at field construction.
 * `EnumField` and `IntEnumField` default `choices` to `(value, name)` pairs
@@ -14,7 +18,7 @@ https://github.com/coleifer/peewee/releases
 * Fix #3075, migration generation for `EnumField`. Generated migrations will
   emit the storage field type (e.g. `IntegerField`) rather than `EnumField()`.
 
-[View commits](https://github.com/coleifer/peewee/compare/4.5.0...master)
+[View commits](https://github.com/coleifer/peewee/compare/4.5.0...4.5.1)
 
 ## 4.5.0
 
