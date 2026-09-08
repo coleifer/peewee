@@ -56,6 +56,8 @@ class CockroachDatabase(PostgresqlDatabase):
     })
 
     def __init__(self, database, *args, **kwargs):
+        # CRDB support is only validated against psycopg2.
+        kwargs.setdefault('prefer_psycopg3', False)
         # Unless a DSN or database connection-url were specified, provide
         # convenient defaults for the user and port.
         if 'dsn' not in kwargs and (database and

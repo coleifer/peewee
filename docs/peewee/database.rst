@@ -96,13 +96,13 @@ Pragma                  Recommended value   Effect
 Using Postgresql
 ----------------
 
-To use Peewee with Postgresql install ``psycopg2`` or ``psycopg3``:
+To use Peewee with Postgresql install ``psycopg3`` or ``psycopg2``:
 
 .. code-block:: shell
 
-   pip install "psycopg2-binary"  # Psycopg2.
+   pip install "psycopg[binary]"  # Psycopg3, preferred.
 
-   pip install "psycopg[binary]"  # Psycopg3.
+   pip install "psycopg2-binary"  # Psycopg2.
 
 To connect to a Postgresql database, use :class:`PostgresqlDatabase`.
 The first parameter is always the name of the database.

@@ -4774,7 +4774,7 @@ class PostgresqlDatabase(Database):
         self._register_unicode = register_unicode
         self._encoding = encoding
 
-        prefer_psycopg3 = kwargs.pop('prefer_psycopg3', False)
+        prefer_psycopg3 = kwargs.pop('prefer_psycopg3', True)
         if psycopg is not None and (prefer_psycopg3 or psycopg2 is None):
             self._adapter = self.psycopg3_adapter()
         else:

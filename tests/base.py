@@ -105,8 +105,8 @@ def make_db_params(key):
 CRDB_PARAMS = make_db_params('CRDB')
 MYSQL_PARAMS = make_db_params('MYSQL')
 PSQL_PARAMS = make_db_params('PSQL')
-if IS_PSYCOPG3:
-    PSQL_PARAMS['prefer_psycopg3'] = True
+# Pin the driver both ways, else psycopg2 coverage silently vanishes.
+PSQL_PARAMS['prefer_psycopg3'] = IS_PSYCOPG3
 
 if VERBOSITY > 1:
     handler = logging.StreamHandler()

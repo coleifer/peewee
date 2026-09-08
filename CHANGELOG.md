@@ -7,6 +7,9 @@ https://github.com/coleifer/peewee/releases
 
 ## master
 
+* Backwards-incompatible: `PostgresqlDatabase` prefers psycopg3 when both
+  psycopg2 and psycopg3 are installed. Pass `prefer_psycopg3=False` to keep
+  psycopg2. `CockroachDatabase` still defaults to psycopg2.
 * `EnumField` and `IntEnumField` validate member value types (`str` and
   `int` respectively) at field construction.
 * `EnumField` and `IntEnumField` default `choices` to `(value, name)` pairs

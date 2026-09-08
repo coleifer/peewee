@@ -1186,9 +1186,9 @@ Database
       specified locking strategy (default DEFERRED).
 
 
-.. class:: PostgresqlDatabase(database, register_unicode=True, encoding=None, isolation_level=None, prefer_psycopg3=False)
+.. class:: PostgresqlDatabase(database, register_unicode=True, encoding=None, isolation_level=None, prefer_psycopg3=True)
 
-   Postgresql database implementation. Uses psycopg2 or psycopg3.
+   Postgresql database implementation. Uses psycopg3 or psycopg2.
 
    Additional optional keyword-parameters:
 
@@ -1198,8 +1198,8 @@ Database
        ``psycopg2.extensions`` module or ``psycopg.IsolationLevel`` enum (psycopg3).
        Also accepts string which is converted to the matching constant.
    :type isolation_level: int, str
-   :param bool prefer_psycopg3: If both psycopg2 and psycopg3 are installed,
-       instruct Peewee to prefer psycopg3. See :ref:`psycopg2-vs-psycopg3`.
+   :param bool prefer_psycopg3: Set to ``False`` to prefer psycopg2 when
+       both drivers are installed. See :ref:`psycopg2-vs-psycopg3`.
 
    Example:
 
