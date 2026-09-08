@@ -108,6 +108,15 @@ class TestEnumField(ModelTestCase):
         self.assertRaises(ValueError, Enums.create, color='mauve')
         self.assertRaises(ValueError, Enums.create, prio=4)
 
+    def test_enum_choices(self):
+        self.assertEqual(Enums.color.choices,
+                         [('red', 'RED'), ('blue', 'BLUE')])
+        self.assertEqual(Enums.prio.choices, [(1, 'LOW'), (9, 'HIGH')])
+
+        # Explicit choices win.
+        f = EnumField(Color, choices=[('red', 'Rouge'), ('blue', 'Bleu')])
+        self.assertEqual(f.choices, [('red', 'Rouge'), ('blue', 'Bleu')])
+
     def test_enum_member_validation(self):
         self.assertRaises(ValueError, EnumField, Prio)
         self.assertRaises(ValueError, IntEnumField, Color)

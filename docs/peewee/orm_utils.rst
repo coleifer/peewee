@@ -1317,9 +1317,9 @@ Extra Field Types
 
        Account.select().where(Account.status == Status.ARCHIVED)
 
-   ``max_length`` defaults to 255 as with :class:`CharField`.
-   :py:func:`~playhouse.pydantic_utils.to_pydantic` maps the field to the
-   enum itself, so generated schemas validate membership.
+   ``max_length`` defaults to 255 as with :class:`CharField`. ``choices``
+   defaults to ``(member.value, member.name)`` pairs. :py:func:`~playhouse.pydantic_utils.to_pydantic`
+   maps the field to the enum itself, so generated schemas validate membership.
 
 .. class:: IntEnumField(enum_class, **kwargs)
 

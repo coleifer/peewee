@@ -106,6 +106,9 @@ def to_pydantic(model_cls, exclude=None, include=None, exclude_autofield=True,
 
         python_type = get_field_type(field)
         choices = list(field.choices) if field.choices else None
+        if choices and getattr(field, 'enum_class', None) is not None:
+            # Use the members from the enum field instead.
+            choices = None
         if choices:
             python_type = choices_to_literal(choices)
 

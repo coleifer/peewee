@@ -82,6 +82,8 @@ class TestPydanticConversion(ModelDatabaseTestCase):
 
         Schema = to_pydantic(Themed)
         self.assertIs(Schema.model_fields['shade'].annotation, Shade)
+        # choices do not override the enum annotation.
+        self.assertIsNone(Schema.model_fields['shade'].description)
         obj = Schema(shade='dark')
         self.assertIs(obj.shade, Shade.DARK)
         self.assertRaises(ValueError, Schema, shade='mauve')

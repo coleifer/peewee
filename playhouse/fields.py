@@ -69,19 +69,19 @@ class EnumFieldMixin(object):
                         enum_class.__name__, member.name, member.value,
                         self.enum_value_type.__name__))
         self.enum_class = enum_class
+        kwargs.setdefault('choices', [(m.value, m.name) for m in enum_class])
         super(EnumFieldMixin, self).__init__(*args, **kwargs)
 
     def db_value(self, value):
         if value is None:
             return value
-        return super(EnumFieldMixin, self).db_value(
-            self.enum_class(value).value)
+        value = self.enum_class(value).value
+        return super(EnumFieldMixin, self).db_value(value)
 
     def python_value(self, value):
         if value is None:
             return value
-        return self.enum_class(
-            super(EnumFieldMixin, self).python_value(value))
+        return self.enum_class(super(EnumFieldMixin, self).python_value(value))
 
 
 class EnumField(EnumFieldMixin, CharField):
