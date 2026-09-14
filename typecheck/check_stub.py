@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from collections.abc import Generator
+from collections.abc import Callable, Generator
 from typing_extensions import assert_type
 
 from peewee import (
@@ -118,6 +118,14 @@ with User.bind_ctx(real_db):
 @User.bind_ctx(real_db)
 @real_db.bind_ctx([User])
 def bound() -> None: ...
+
+
+# after_commit() returns the callable it registers, so decorator use
+# keeps the type.
+def enqueue() -> int:
+    return 1
+
+assert_type(real_db.after_commit(enqueue), Callable[[], int])
 
 
 # chunked() preserves the element type of the source iterable.
