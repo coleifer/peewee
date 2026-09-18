@@ -1814,6 +1814,9 @@ class TestUtilityFunctions(BaseTestCase):
         self.assertEqual(make_identifier('SUM("t1"."price")'), 'price')
         self.assertEqual(make_identifier('"foo"()'), 'foo')
         self.assertEqual(make_identifier('col name'), 'col')
+        self.assertEqual(make_identifier('θ_col'), 'θ_col')
+        self.assertEqual(make_identifier('SUM("t1"."θ_col")'), 'θ_col')
+        self.assertEqual(make_identifier('col$name'), 'col')
 
     def test_ensure_tuple(self):
         from peewee import ensure_tuple

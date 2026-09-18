@@ -440,7 +440,7 @@ SNAKE_CASE_STEP1 = re.compile('(.)_*([A-Z][a-z]+)')
 SNAKE_CASE_STEP2 = re.compile('([a-z0-9])_*([A-Z])')
 
 # Used for making valid Python identifiers.
-IDENTIFIER_RE = re.compile(r'[A-Za-z_][A-Za-z0-9_]*')
+IDENTIFIER_RE = re.compile(r'[^\W\d]\w*')
 
 # Helper functions that are used in various parts of the codebase.
 def merge_dict(source, overrides):
