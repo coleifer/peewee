@@ -12,6 +12,32 @@ from playhouse.cockroachdb import CockroachDatabase
 from playhouse.reflection import *
 
 
+import re as _re
+
+# Validate that generated identifiers are safe Python identifiers
+_IDENTIFIER_RE = _re.compile(r'^[A-Za-z_][A-Za-z0-9_]*$')
+
+def _validate_identifier(name, kind='identifier'):
+    """Validate a DB identifier before emitting it into generated Python source."""
+    if not _IDENTIFIER_RE.match(str(name)):
+        raise ValueError(
+            f'Unsafe {kind}: {name!r} contains characters that could break '
+            f'generated Python source. Rename the {kind} in the database.'
+        )
+    return name
+
+def _compile_check(source):
+    """Compile-check generated source before writing it."""
+    try:
+        compile(source, '<generated>', 'exec')
+    except SyntaxError as exc:
+        raise ValueError(
+            f'Generated source failed compile check: {exc}. '
+            f'This usually means a DB identifier contains quote-breaking characters.'
+        ) from exc
+    return source
+
+
 HEADER = """from peewee import *%s
 
 database = %s('%s'%s)
