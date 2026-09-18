@@ -114,24 +114,24 @@ def print_models(introspector, tables=None, preserve_order=False,
 
         print('')
         print('    class Meta:')
-        print('        table_name = \'%s\'' % table)
+        print('        table_name = %r' % table)
         multi_column_indexes = database.multi_column_indexes(table)
         if multi_column_indexes:
             print('        indexes = (')
             for fields, unique in sorted(multi_column_indexes):
                 print('            ((%s), %s),' % (
-                    ', '.join("'%s'" % field for field in fields),
+                    ', '.join(repr(field) for field in fields),
                     unique,
                 ))
             print('        )')
 
         if introspector.schema:
-            print('        schema = \'%s\'' % introspector.schema)
+            print('        schema = %r' % introspector.schema)
         if len(primary_keys) > 1:
             pk_field_names = sorted([
                 field.name for col, field in columns
                 if col in primary_keys])
-            pk_list = ', '.join("'%s'" % pk for pk in pk_field_names)
+            pk_list = ', '.join(repr(pk) for pk in pk_field_names)
             print('        primary_key = CompositeKey(%s)' % pk_list)
         elif not primary_keys:
             print('        primary_key = False')

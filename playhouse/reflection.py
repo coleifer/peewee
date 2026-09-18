@@ -105,7 +105,7 @@ class Column(object):
         if self.nullable:
             params['null'] = True
         if self.field_class is ForeignKeyField or self.name != self.column_name:
-            params['column_name'] = "'%s'" % self.column_name
+            params['column_name'] = repr(self.column_name)
         if self.primary_key and not issubclass(self.field_class, AutoField):
             params['primary_key'] = True
         if self.default is not None:
@@ -116,15 +116,15 @@ class Column(object):
         if self.is_foreign_key():
             params['model'] = self.rel_model
             if self.to_field:
-                params['field'] = "'%s'" % self.to_field
+                params['field'] = repr(self.to_field)
             if self.related_name:
-                params['backref'] = "'%s'" % self.related_name
+                params['backref'] = repr(self.related_name)
 
             fk = getattr(self, 'foreign_key', None)
             for attr in ('on_delete', 'on_update'):
                 value = getattr(fk, attr, None) if fk else None
                 if value and value not in ('NO ACTION', 'RESTRICT'):
-                    params[attr] = "'%s'" % value
+                    params[attr] = repr(value)
 
         # Handle indexes on column.
         if not self.is_primary_key():
