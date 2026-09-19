@@ -658,6 +658,14 @@ class TestDedupeColumns(BaseTestCase):
         result = cw.dedupe_columns(['"t1"."name"', 'SUM("t1"."value")'])
         self.assertEqual(result, ['name', 'value'])
 
+    def test_dedupe_columns_generated_collisions(self):
+        from peewee import CursorWrapper
+        cw = CursorWrapper.__new__(CursorWrapper)
+        result = cw.dedupe_columns(['value', 'value', 'value_2'])
+        self.assertEqual(result, ['value', 'value_2', 'value_2_2'])
+        result = cw.dedupe_columns(['value', 'value_2', 'value'])
+        self.assertEqual(result, ['value', 'value_2', 'value_2_2'])
+
     def test_dedupe_columns_no_identifier_cleanup(self):
         from peewee import CursorWrapper
         cw = CursorWrapper.__new__(CursorWrapper)
