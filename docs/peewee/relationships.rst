@@ -848,6 +848,9 @@ attribute is populated as ``None``:
 Peewee detects a missing row by checking whether every column selected from
 the joined source came back ``NULL``. As a result:
 
+* If no columns are selected from the joined source or any of its joined
+  descendants, the relationship is left unset. A foreign-key attribute can
+  still lazy-load the related row on access.
 * A row that *did* match, but whose selected columns all happen to be ``NULL``,
   is indistinguishable from a miss and also populates as ``None``. Include a
   column that is never ``NULL`` (typically the primary key) in the select

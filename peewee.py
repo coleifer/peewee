@@ -9222,6 +9222,8 @@ class ModelCursorWrapper(BaseModelCursorWrapper):
 
             self.column_keys.append(key)
 
+        self._selected_keys = frozenset(self.column_keys)
+
         # Pre-compute flat list of key/col/converter for each column index.
         self._row_spec = tuple(
             (i, self.column_keys[i], columns[i], self.converters[i])
@@ -9291,6 +9293,12 @@ class ModelCursorWrapper(BaseModelCursorWrapper):
             # If no fields were set on the destination instance then do not
             # assign an "empty" instance.
             if dest not in set_keys and not assign:
+                # An entirely unselected join branch is not a verified miss.
+                # Leave its relationships untouched to allow lazy-loading.
+                if (dest not in self._selected_keys and not
+                    (self._dest_reachable.get(dest, frozenset()) &
+                     self._selected_keys)):
+                    continue
                 if is_outer:
                     joined_instance = None
                 else:

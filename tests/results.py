@@ -665,3 +665,105 @@ class TestDedupeColumns(BaseTestCase):
             ['name', 'value', 'name'], valid_identifiers=False)
         self.assertEqual(result, ['name', 'value', 'name_2'])
 
+
+
+class TestOuterJoinRelationships(BaseTestCase):
+    def setUp(self):
+        super(TestOuterJoinRelationships, self).setUp()
+        self.db = get_in_memory_db()
+
+        class Base(Model):
+            class Meta:
+                database = self.db
+
+        class School(Base):
+            name = TextField()
+
+        class Course(Base):
+            name = TextField()
+            school = ForeignKeyField(School, null=True)
+
+        class Invoice(Base):
+            course = ForeignKeyField(Course, null=True)
+
+        self.School, self.Course, self.Invoice = School, Course, Invoice
+        self.db.create_tables([School, Course, Invoice])
+        self.addCleanup(self.db.close)
+        self.school = School.create(name='School')
+        self.course = Course.create(name='Existing course', school=self.school)
+        self.invoice = Invoice.create(course=self.course)
+
+    def query(self, eager=False, alias=False):
+        target = self.Course.alias() if alias else self.Course
+        columns = (self.Invoice, target) if eager else (self.Invoice,)
+        return self.Invoice.select(*columns).join(
+            target, JOIN.LEFT_OUTER, on=(self.Invoice.course == target.id))
+
+    def assert_lazy_relationship(self, alias=False):
+        with self.assertQueryCount(1):
+            invoice = self.query(alias=alias).get()
+        self.assertEqual(invoice.course_id, self.course.id)
+        self.assertNotIn('course', invoice.__rel__)
+        with self.assertQueryCount(1):
+            self.assertEqual(invoice.course.name, 'Existing course')
+        with self.assertQueryCount(0):
+            self.assertEqual(invoice.course.id, self.course.id)
+
+    def test_unselected_relationship_lazy_loads(self):
+        self.assert_lazy_relationship()
+
+    def test_unselected_alias_lazy_loads(self):
+        self.assert_lazy_relationship(alias=True)
+
+    def test_selected_relationship_is_eager_loaded(self):
+        for alias in (False, True):
+            with self.subTest(alias=alias):
+                with self.assertQueryCount(1):
+                    invoice = self.query(eager=True, alias=alias).get()
+                with self.assertQueryCount(0):
+                    self.assertEqual(invoice.course.name, 'Existing course')
+                self.assertIn('course', invoice.__rel__)
+                self.assertEqual(invoice.__rel__['course'].name,
+                                 'Existing course')
+                self.assertEqual(invoice.course_id, self.course.id)
+
+    def test_null_foreign_key(self):
+        empty = self.Invoice.create(course=None)
+        for eager in (False, True):
+            with self.subTest(eager=eager):
+                invoice = (self.query(eager=eager)
+                           .where(self.Invoice.id == empty.id).get())
+                self.assertIsNone(invoice.course_id)
+                self.assertIsNone(invoice.course)
+
+    def test_selected_unmatched_join_preserves_foreign_key(self):
+        # A restrictive ON clause can miss an existing row legitimately.
+        invoice = self.Invoice.select(self.Invoice, self.Course).join(
+            self.Course, JOIN.LEFT_OUTER,
+            on=((self.Invoice.course == self.Course.id) &
+                (self.Course.name == 'No match'))).get()
+        self.assertEqual(invoice.course_id, self.course.id)
+        self.assertIn('course', invoice.__rel__)
+        self.assertIsNone(invoice.__rel__['course'])
+        self.assertIsNone(invoice.course)
+
+    def test_selected_descendant_reconstructs_unselected_intermediate(self):
+        invoice = (self.Invoice.select(self.Invoice, self.School)
+                   .join(self.Course, JOIN.LEFT_OUTER)
+                   .join(self.School, JOIN.LEFT_OUTER).get())
+        self.assertIsNotNone(invoice.course)
+        self.assertEqual(invoice.course.school.name, 'School')
+        self.assertEqual(invoice.course.school.id, self.school.id)
+
+    def test_null_selected_descendant_preserves_existing_hydration(self):
+        course = self.Course.create(name='Without school', school=None)
+        empty = self.Invoice.create(course=course)
+        invoice = (self.Invoice.select(self.Invoice, self.School)
+                   .join(self.Course, JOIN.LEFT_OUTER)
+                   .join(self.School, JOIN.LEFT_OUTER)
+                   .where(self.Invoice.id == empty.id).get())
+        # Preserve Peewee's existing selected-descendant NULL behavior.
+        self.assertEqual(invoice.course_id, course.id)
+        self.assertIn('course', invoice.__rel__)
+        self.assertIsNone(invoice.course)
+
