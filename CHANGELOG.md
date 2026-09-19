@@ -7,6 +7,9 @@ https://github.com/coleifer/peewee/releases
 
 ## master
 
+* Preserve foreign-key lazy loading when an outer-joined source and all its
+  descendants are omitted from the selected columns.
+
 [View commits](https://github.com/coleifer/peewee/compare/4.5.1...master)
 
 ## 4.5.1
