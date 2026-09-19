@@ -169,6 +169,26 @@ class TestCursorWrapper(ModelTestCase):
 class TestRowTypes(ModelTestCase):
     requires = [User, Tweet]
 
+    def test_result_column_suffix_collisions(self):
+        User.create(username='u1')
+        cases = [
+            (('value', 'value', 'value_2'),
+             {'value': 'v0', 'value_2': 'v1', 'value_2_2': 'v2'}),
+            (('value', 'value_2', 'value'),
+             {'value': 'v0', 'value_2': 'v1', 'value_3': 'v2'}),
+            (('value', 'value', 'value_2', 'value_2_2', 'value'),
+             {'value': 'v0', 'value_2': 'v1', 'value_2_2': 'v2',
+              'value_2_2_2': 'v3', 'value_3': 'v4'})]
+        for aliases, expected in cases:
+            queries = [self.make_query(*aliases),
+                       Select(columns=[Value('v%d' % i).alias(alias)
+                                       for i, alias in enumerate(aliases)])
+                       .bind(self.database)]
+            for query in queries:
+                self.assertEqual(query.dicts().get(), expected)
+                self.assertEqual(query.objects(dict).get(), expected)
+                self.assertEqual(query.namedtuples().get()._asdict(), expected)
+
     def make_query(self, *exprs):
         count = 0
         accum = []

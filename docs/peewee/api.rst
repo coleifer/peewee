@@ -2626,6 +2626,9 @@ Model
 
       Return rows as dictionaries.
 
+      Duplicate column names receive numeric suffixes, avoiding names already
+      assigned to earlier columns, so every selected value has a unique key.
+
       Example:
 
       .. code-block:: python
@@ -5705,6 +5708,9 @@ Queries
       :param bool as_dict: Specify whether to return rows as dictionaries.
 
       Return rows as dictionaries.
+
+      Duplicate column names receive numeric suffixes, avoiding names already
+      assigned to earlier columns, so every selected value has a unique key.
 
    .. method:: tuples(as_tuple=True)
 

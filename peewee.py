@@ -5478,10 +5478,11 @@ class CursorWrapper(object):
                 column = make_identifier(column)
 
             if column in duplicates:
-                duplicates[column] += 1
-                column = '%s_%s' % (column, duplicates[column])
-            else:
-                duplicates[column] = 1
+                original = column
+                while column in duplicates:
+                    duplicates[original] += 1
+                    column = '%s_%s' % (original, duplicates[original])
+            duplicates[column] = 1
             identifiers.append(column)
         return identifiers
 
