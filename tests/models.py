@@ -957,6 +957,59 @@ class TestModelAPIs(ModelTestCase):
             ('huey', 'purr'),
             ('zaizee', None)])
 
+    @requires_models(User, Tweet)
+    def test_join_outer_unselected_lazy_load(self):
+        huey = self.add_user('huey')
+        self.add_tweets(huey, 'meow')
+
+        for src in (User, User.alias()):
+            with self.assertQueryCount(1):
+                tweet = (Tweet.select()
+                         .join(src, JOIN.LEFT_OUTER,
+                               on=(Tweet.user == src.id))
+                         .get())
+            self.assertNotIn('user', tweet.__rel__)
+            with self.assertQueryCount(1):
+                self.assertEqual(tweet.user.username, 'huey')
+
+    @requires_models(User, Tweet)
+    def test_join_outer_selected_miss_cached(self):
+        huey = self.add_user('huey')
+        self.add_tweets(huey, 'meow')
+
+        with self.assertQueryCount(1):
+            tweet = (Tweet
+                     .select(Tweet, User)
+                     .join(User, JOIN.LEFT_OUTER, on=(
+                         (Tweet.user == User.id) &
+                         (User.username == 'nugget')))
+                     .get())
+            self.assertEqual(tweet.user_id, huey.id)
+            self.assertIsNone(tweet.user)
+
+    @requires_models(User, Account)
+    def test_join_outer_unselected_null_fk(self):
+        Account.create(email='a1')
+
+        with self.assertQueryCount(1):
+            account = Account.select().join(User, JOIN.LEFT_OUTER).get()
+            self.assertIsNone(account.user_id)
+            self.assertIsNone(account.user)
+
+    @requires_models(A, B, C)
+    def test_join_outer_unselected_intermediate(self):
+        a = A.create(a='a1')
+        b = B.create(a=a, b='b1')
+        C.create(b=b, c='c1')
+
+        with self.assertQueryCount(1):
+            c = (C
+                 .select(C, A)
+                 .join(B, JOIN.LEFT_OUTER)
+                 .join(A, JOIN.LEFT_OUTER)
+                 .get())
+            self.assertEqual(c.b.a.a, 'a1')
+
     @requires_models(Relationship, Person)
     def test_join_same_model_twice(self):
         d = datetime.date(2010, 1, 1)

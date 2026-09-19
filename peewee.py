@@ -9247,6 +9247,16 @@ class ModelCursorWrapper(BaseModelCursorWrapper):
 
             self._dest_reachable[dest] = frozenset(reachable)
 
+        # When a join branch is unselected, don't mark it as missing, or lazy
+        # FK resolution will break.
+        selected = frozenset(self.column_keys)
+        keep = []
+        for src, attr, dest, is_dict, is_outer, is_fk in self.src_to_dest:
+            reachable = self._dest_reachable.get(dest, frozenset())
+            if dest in selected or reachable & selected:
+                keep.append((src, attr, dest, is_dict, is_outer, is_fk))
+        self.src_to_dest = keep
+
     def process_row(self, row):
         objects = {}
         model_list = []
