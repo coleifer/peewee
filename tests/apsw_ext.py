@@ -9,8 +9,8 @@ from .base import TestModel
 database = APSWDatabase(':memory:')
 
 
-# Local on purpose. An FK from Message to the base User would put Message in
-# base User's dependency graph process-wide and break recursive deletes.
+# An FK from Message to the base User would put Message in base User's
+# dependency graph process-wide and break recursive deletes.
 class User(TestModel):
     username = TextField()
 

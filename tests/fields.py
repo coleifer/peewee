@@ -1275,7 +1275,6 @@ class TestBitFields(ModelTestCase):
 
     def test_bit_field_subtract(self):
         # `x - y` clears bits: it means `x & ~y`, for an int or another column.
-        # __sub__ used to call a nonexistent bin_negated() and always raised.
         for i in range(1, 5):
             Bits.create(flags=i, status=6)  # status bits 2 and 4 set.
 
@@ -1813,8 +1812,7 @@ class TestCollatedFieldDefinitions(ModelTestCase):
 # Foreign key basics, deferred FK, lazy loading, constraints
 # ===========================================================================
 
-# U2/T2: local User/Tweet variants for testing on_delete='CASCADE'.
-# Not to be confused with base_models.User/Tweet which lack on_delete.
+# Local User/Tweet variants with on_delete='CASCADE'.
 class U2(TestModel):
     username = TextField()
 
@@ -2694,7 +2692,7 @@ class TestCompositePKwithFK(ModelTestCase):
 # ===========================================================================
 
 class TestValueConversion(ModelTestCase):
-    # In-memory pin: the asserted INSERT gains RETURNING on the shared pg db.
+    # The asserted INSERT would gain RETURNING on the shared pg db.
     database = get_in_memory_db()
     requires = [UpperModel]
 
@@ -3039,7 +3037,7 @@ class TestSafePythonValueFailure(BaseTestCase):
         def bad_converter(value):
             raise ValueError('bad')
         safe = safe_python_value(bad_converter)
-        # Should NOT raise - returns the raw value instead.
+        # Returns the raw value rather than raising.
         result = safe('hello')
         self.assertEqual(result, 'hello')
 

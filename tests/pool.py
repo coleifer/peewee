@@ -320,8 +320,6 @@ class TestPooledDatabase(BaseTestCase):
         self.assertEqual(len(self.db._in_use), 0)
 
     def test_heap_counter_deterministic_ordering(self):
-        # Verify that connections pushed with the same timestamp are returned
-        # in order.
         now = time.time()
         push_conn(self.db, now, 'a')
         push_conn(self.db, now, 'b')
@@ -334,8 +332,6 @@ class TestPooledDatabase(BaseTestCase):
         self.assertEqual(results, ['a', 'b', 'c'])
 
     def test_close_conn_removes_from_in_use(self):
-        # _close(conn, close_conn=True) should pop the key from _in_use AND
-        # close the underlying driver conn.
         self.assertEqual(self.db.connection(), 1)
         self.assertTrue(1 in self.db._in_use)
 
@@ -346,22 +342,16 @@ class TestPooledDatabase(BaseTestCase):
         self.assertEqual(self.db.closed_counter, closed_before + 1)
 
     def test_double_close_is_noop(self):
-        # Calling _close on a connection not in _in_use (and close_conn=False)
-        # should be a safe no-op rather than raising or leaking.
         self.assertEqual(self.db.connection(), 1)
         self.db.close()  # Returns conn 1 to the pool.
 
         self.assertNotIn(1, self.db._in_use)
         closed_before = self.db.closed_counter
-        # Second close should do nothing.
         self.db._close(1)
         self.assertEqual(self.db.closed_counter, closed_before)
-        # Pool state unchanged.
         self.assertEqual(len(self.db._connections), 1)
 
     def test_can_reuse_false_closes_connection(self):
-        # When _can_reuse returns False on check-in, the connection should be
-        # closed at the driver level and not returned to the pool.
         class NotReusablePooledDatabase(FakePooledDatabase):
             def _can_reuse(self, conn):
                 return False
@@ -371,8 +361,6 @@ class TestPooledDatabase(BaseTestCase):
         closed_before = db.closed_counter
 
         db.close()
-
-        # Connection should have been driver-closed, not pooled.
         self.assertEqual(db.closed_counter, closed_before + 1)
         self.assertEqual(len(db._connections), 0)
         self.assertEqual(db._in_use, {})
@@ -382,7 +370,6 @@ class TestPooledDatabase(BaseTestCase):
 
     def test_close_raw_swallows_exception(self):
         called = []
-        # _close_raw should not propagate exceptions from the driver.
         class BrokenDriverClose(FakeDatabase):
             def _close(self, conn):
                 called.append(conn)
@@ -396,8 +383,6 @@ class TestPooledDatabase(BaseTestCase):
         self.assertEqual(called, [1337])
 
     def test_close_stale_removes_from_in_use(self):
-        # Verify that close_stale both driver-closes the connection AND
-        # removes it from _in_use (no dangling keys).
         db = FakePooledDatabase('testing', counter=2)
 
         now = time.time()
@@ -411,20 +396,15 @@ class TestPooledDatabase(BaseTestCase):
         self.assertEqual(db.closed_counter, closed_before + 1)
 
     def test_close_all_clears_both_pools(self):
-        # close_all should leave both _connections and _in_use completely
-        # empty, and driver-close every connection.
         db = FakePooledDatabase('testing', counter=3)
 
         now = time.time()
         push_conn(db, now - 5, 1)
         push_conn(db, now - 1, 2)
-
-        # Simulate two in-use connections.
         db._in_use[3] = PoolConnection(now, 3, now)
         db._in_use[4] = PoolConnection(now, 4, now)
 
-        # One more for the "current thread" via normal connect path so
-        # self.close() inside close_all has something to reset.
+        # The current thread checks out idle conn 1 for close_all() to return.
         db._state.closed = True
         db.connect()
         conn = db.connection()
@@ -435,11 +415,7 @@ class TestPooledDatabase(BaseTestCase):
 
         self.assertEqual(db._connections, [])
         self.assertEqual(db._in_use, {})
-        # 2 idle + 2 manually-added in_use + the current thread's conn = 5.
-        # (close_all calls self.close() which triggers _close for the current
-        # thread's conn, but that goes through the return-to-pool path, not
-        # _close_raw.  The subsequent loop over the snapshot handles it.)
-        self.assertGreaterEqual(db.closed_counter, closed_before + 4)
+        self.assertEqual(db.closed_counter, closed_before + 4)
 
     def test_dispose(self):
         db = FakePooledDatabase('testing', counter=3)
@@ -463,8 +439,6 @@ class TestPooledDatabase(BaseTestCase):
         self.assertEqual(db.connection(), 4)
 
     def test_connect_timeout_with_condition_variable(self):
-        # Verify that connect() with a timeout raises after the timeout
-        # expires when the pool is exhausted.
         db = FakePooledDatabase('testing', max_connections=1, timeout=0.15)
         self.assertEqual(db.connection(), 1)
 
@@ -482,13 +456,10 @@ class TestPooledDatabase(BaseTestCase):
         t.join(timeout=2)
         elapsed = time.monotonic() - start
 
-        # Should have waited roughly the timeout duration.
         self.assertEqual(len(errors), 1)
         self.assertGreaterEqual(elapsed, 0.1)
 
     def test_connect_timeout_wakes_on_return(self):
-        # Verify that a waiting thread unblocks promptly when a connection
-        # is returned to the pool (via the Condition variable notify).
         db = FakePooledDatabase('testing', max_connections=1, timeout=5)
         self.assertEqual(db.connection(), 1)
 
@@ -516,13 +487,10 @@ class TestPooledDatabase(BaseTestCase):
         self.assertEqual(results[0], 1)  # Got the recycled connection.
 
     def test_connect_timeout_zero_becomes_infinite(self):
-        # A timeout of 0 should be treated as infinite (no immediate failure).
         db = FakePooledDatabase('testing', max_connections=1, timeout=0)
         self.assertEqual(db._wait_timeout, float('inf'))
 
     def test_close_all_wakes_waiters(self):
-        # Threads blocked in connect() should be woken by close_all() so they
-        # can create fresh connections.
         db = FakePooledDatabase('testing', max_connections=1, timeout=5)
         self.assertEqual(db.connection(), 1)
 
@@ -545,7 +513,6 @@ class TestPooledDatabase(BaseTestCase):
         t.join(timeout=2)
         self.assertFalse(t.is_alive(), 'Thread was not woken by close_all.')
         self.assertEqual(len(results), 1)
-        # After close_all, the thread should have gotten a fresh connection.
         self.assertEqual(results[0], 2)
 
     def test_close_stale_iteration(self):
@@ -559,16 +526,12 @@ class TestPooledDatabase(BaseTestCase):
         self.assertEqual(db._in_use, {})
 
     def test_concurrent_close_stale_and_return(self):
-        # Exercise close_stale running while other threads are actively
-        # returning connections (calling close()).  The snapshot-before-mutate
-        # pattern and the RLock should keep everything consistent.
+        # close_stale() runs while other threads return connections.
         db = FakePooledDatabase('testing', max_connections=20)
         barrier = threading.Barrier(11)  # 10 workers + main thread.
         errors = []
 
         def worker(n):
-            """Check out a connection, wait for all workers to be ready,
-            then return it."""
             try:
                 db._state.closed = True
                 db.connect()
@@ -609,7 +572,6 @@ class TestPooledDatabase(BaseTestCase):
                 self.assertNotEqual(db.conn_key(conn), key)
 
     def test_manual_close_when_already_closed(self):
-        # manual_close on an already-closed database should return False.
         self.assertFalse(self.db.manual_close())  # Never opened.
 
         self.db.connect()
@@ -617,11 +579,9 @@ class TestPooledDatabase(BaseTestCase):
         self.assertFalse(self.db.manual_close())  # Already closed.
 
     def _assert_no_pool_lock_during_close(self, action_name, action):
-        # Helper: hold db._lock in the main thread (simulating another
-        # thread mid-connect) while a worker calls `action` (which must
-        # internally invoke self.close()). Verify the pool lock remains
-        # acquirable -- if the worker is holding the pool lock while
-        # blocked on db._lock, that is the lock-inversion deadlock.
+        # Hold db._lock, as another thread mid-connect would, while a worker
+        # runs `action`, which calls self.close(). The pool lock must stay
+        # acquirable, or the worker holds it while blocked on db._lock.
         db = FakePooledDatabase('testing')
         worker_ready = threading.Event()
         proceed = threading.Event()
@@ -658,22 +618,18 @@ class TestPooledDatabase(BaseTestCase):
                         action_name)
 
     def test_manual_close_does_not_hold_pool_lock(self):
-        # Regression: manual_close used to be @locked, meaning it held the pool
-        # lock across the call to self.close(), which acquires the database
-        # lock. Meanwhile Database.connect() in another thread
-        # acquires those locks in the opposite order (database lock first, then
-        # pool lock via the @locked _connect), so the two would deadlock.
+        # self.close() takes the database lock. Database.connect() takes the
+        # database lock and then the pool lock, so holding the pool lock
+        # across self.close() would deadlock.
         self._assert_no_pool_lock_during_close(
             'manual_close', lambda db: db.manual_close())
 
     def test_close_all_does_not_hold_pool_lock(self):
-        # Regression: close_all used to be @locked, holding the pool lock
-        # across self.close() -- same lock-inversion as manual_close.
+        # Same lock order as manual_close().
         self._assert_no_pool_lock_during_close(
             'close_all', lambda db: db.close_all())
 
     def test_close_idle_driver_closes_all(self):
-        # Every idle connection should be driver-closed.
         db = FakePooledDatabase('testing', counter=5)
         now = time.time()
         for i in range(1, 6):
@@ -685,7 +641,6 @@ class TestPooledDatabase(BaseTestCase):
         self.assertEqual(db.closed_counter, closed_before + 5)
 
     def test_max_connections_zero_means_unlimited(self):
-        # max_connections=0 (falsy) should mean no limit.
         db = FakePooledDatabase('testing', max_connections=0)
         for i in range(50):
             db._state.closed = True
@@ -693,8 +648,6 @@ class TestPooledDatabase(BaseTestCase):
         self.assertEqual(len(db._in_use), 50)
 
     def test_stale_and_closed_all_skipped(self):
-        # If every connection in the pool is either stale or closed, a new one
-        # should be created.
         class AllClosedDatabase(FakePooledDatabase):
             def _is_closed(self, conn):
                 return True

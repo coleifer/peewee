@@ -1047,9 +1047,7 @@ class TestModelAPIs(ModelTestCase):
         Relationship.create(from_person=huey, to_person=zaizee)
 
         # With two foreign keys to Person the join resolves to the key named
-        # in the predicate regardless of which side it is on. The joined row
-        # used to land on a phantom attribute when the key was on the right,
-        # which forced an N+1 reload.
+        # in the predicate regardless of which side it is on.
         for on in ((Relationship.to_person == Person.id),
                    (Person.id == Relationship.to_person)):
             with self.assertQueryCount(1):
@@ -1485,8 +1483,7 @@ class TestModelAPIs(ModelTestCase):
     @requires_models(User, Tweet, Favorite)
     def test_correlated_compound_subquery(self):
         # A compound (UNION) used as a correlated subquery must resolve the
-        # outer model's alias in every branch. Before the fix the right-hand
-        # branch emitted a phantom alias and the query failed at execution.
+        # outer model's alias in every branch.
         users = {n: User.create(username=n) for n in ('u1', 'u2', 'u3', 'u4')}
         tweet = Tweet.create(user=users['u1'], content='hello')
         Favorite.create(user=users['u2'], tweet=tweet)
@@ -1512,7 +1509,7 @@ class TestModelAPIs(ModelTestCase):
         # u1 tweeted, u2/u3 favorited, u4 did neither.
         self.assertEqual([u.username for u in query], ['u1', 'u2', 'u3'])
 
-        # A branch that independently re-queries the *outer* model reuses the
+        # A branch that independently re-queries the outer model reuses the
         # outer alias (standard same-table scope shadowing) and still executes.
         others = User.select(User.id).where(User.username == 'u4')
         shadowed = (User
@@ -1688,8 +1685,8 @@ class TestModelAPIs(ModelTestCase):
         top2 = (a | b).order_by(User.username.desc()).limit(2)
         self.assertEqual([u.username for u in (top2 - c)], ['u6'])
 
-        # Regression: a same-op rhs must not expose a different op
-        # through its flattened left spine.
+        # A same-op rhs must not expose a different op through its flattened
+        # left spine.
         query = a + ((b | c) + c)
         expected = sorted(list(A) + list(B | C) + list(C))
         self.assertEqual(sorted(u.username for u in query), expected)
@@ -1716,9 +1713,9 @@ class TestModelAPIs(ModelTestCase):
         top2 = lo.order_by(User.username.desc()).limit(2)
         expected = ['u3', 'u4', 'u5', 'u6', 'u7']
 
-        # A member's ORDER BY / LIMIT stays confined to that member. On
-        # sqlite a flat lhs was a syntax error and a flat rhs LIMIT
-        # silently applied to the whole statement.
+        # A member's ORDER BY / LIMIT stays confined to that member. Written
+        # flat on sqlite, an lhs is a syntax error and an rhs LIMIT applies to
+        # the whole statement.
         self.assertEqual(sorted(u.username for u in (top2 | hi)), expected)
         self.assertEqual(sorted(u.username for u in (hi | top2)), expected)
         self.assertEqual(sorted(u.username for u in (top2 + hi)), expected)
@@ -3828,8 +3825,7 @@ class TestWindowFunctionIntegration(ModelTestCase):
     @skip_if(IS_MYSQL or IS_CRDB or (IS_SQLITE and not IS_SQLITE_30),
              'window frame EXCLUDE')
     def test_frame_exclude_string(self):
-        # A raw string exclude= used to bind as a parameter (EXCLUDE ?), a
-        # syntax error at execution. It must render as literal SQL.
+        # A raw string exclude= renders as literal SQL, not a parameter.
         w = Window(order_by=[Sample.value],
                    start=Window.preceding(),
                    end=Window.following(),
@@ -4268,8 +4264,7 @@ class TestCompoundExistsRegression(ModelTestCase):
         lhs = User.select(User.id).where(User.username == 'u1')
         rhs = UA.select(UA.id).where(UA.username == 'u2')
 
-        # fn.EXISTS() around a compound used to emit EXISTS((...)), a syntax
-        # error. Both arms match, so the compound is non-empty and every row
+        # Both arms match, so the compound is non-empty and every row
         # qualifies. (An empty compound arm under EXISTS trips a SQLite 3.51.x
         # optimizer bug, so keep both arms non-empty.)
         query = (User
@@ -4705,8 +4700,7 @@ class TestValuesListIntegration(ModelTestCase):
     def test_values_list_in_expression(self):
         VL.insert_many(self._data).execute()
 
-        # col.in_(ValuesList(...)) used to emit "IN VALUES (...)" and raise a
-        # syntax error. It now wraps the VALUES clause in its own parens.
+        # col.in_(ValuesList(...)) wraps the VALUES clause in its own parens.
         vl = ValuesList([(1,), (3,)])
         query = VL.select().where(VL.n.in_(vl)).order_by(VL.n)
         self.assertEqual([(v.n, v.s) for v in query],
@@ -5417,10 +5411,9 @@ class PGOnConflictTests(OnConflictTests):
     @requires_postgresql
     @requires_models(UKVP)
     def test_ignore_conflict_where(self):
-        # Postgres only. Dropping the predicate leaves ON CONFLICT ("key",
-        # "value"), which does not match the partial index, so Postgres rejects
-        # it. On SQLite the row is ignored either way, so this would not flag
-        # the regression.
+        # Postgres only. Without the predicate, ON CONFLICT ("key", "value")
+        # does not match the partial index and Postgres rejects it. SQLite
+        # ignores the row either way.
         UKVP.create(key='k1', value=1, extra=1)
         UKVP.create(key='k2', value=2, extra=2)
 
@@ -5442,8 +5435,7 @@ class PGOnConflictTests(OnConflictTests):
         KVCon.create(key='k1', value=1)
 
         # ON CONFLICT ON CONSTRAINT names one constraint, so a conflict on a
-        # different constraint still raises. Without the fix the name was
-        # dropped to a bare ON CONFLICT DO NOTHING that swallows any conflict.
+        # different constraint still raises.
         with self.assertRaises(IntegrityError):
             with self.database.atomic():
                 (KVCon.insert(key='k2', value=1)
@@ -5466,8 +5458,7 @@ class PGOnConflictTests(OnConflictTests):
         KVCon.create(key='k1', value=1)
 
         # DO NOTHING with a conflict target only suppresses conflicts on that
-        # target. A conflict on the value column still raises. SQLite used to
-        # drop the target to a bare DO NOTHING that swallows any conflict.
+        # target. A conflict on the value column still raises.
         with self.assertRaises(IntegrityError):
             with self.database.atomic():
                 (KVCon.insert(key='k2', value=1)
@@ -6733,9 +6724,8 @@ class TestLateralJoin(ModelTestCase):
                 for j in range(4):
                     Tweet.create(user=u, content='u%s-t%s' % (i, j))
 
-        # JOIN.LATERAL is the inner lateral: JOIN LATERAL (...) ON true. It
-        # used to emit a bare, un-runnable LATERAL (...). Same result as the
-        # LEFT variant above, minus any user with no tweets.
+        # JOIN.LATERAL is the inner lateral: JOIN LATERAL (...) ON true. Same
+        # result as the LEFT variant above, minus any user with no tweets.
         TA = Tweet.alias()
         tweets = (TA
                   .select(TA.content)
@@ -8351,11 +8341,9 @@ class TestDefaultSelectAsSource(ModelTestCase):
         Tweet.create(user=huey, content='meow')
         Tweet.create(user=zaizee, content='hiss')
 
-        # An unnamed User.select() joined as a table used to return only the
-        # primary key, so reading username raised "no such column". Now every
-        # column comes back and the joined row rebuilds onto the foreign key
-        # attribute the same as a plain model join. The query count stays at
-        # one, proving the joined user is populated and not lazy-loaded.
+        # An unnamed User.select() joined as a table returns every column, and
+        # the joined row rebuilds onto the foreign key attribute as with a
+        # plain model join. One query, so the user is not lazy-loaded.
         src = User.select()
         query = (Tweet
                  .select(Tweet.content, src.c.username)
@@ -8376,7 +8364,7 @@ class TestDefaultSelectAsSource(ModelTestCase):
         with self.assertQueryCount(1):
             self.assertEqual([u.username for u in query], ['huey', 'zaizee'])
 
-        # The User.alias().select() form worked before and must still work.
+        # The User.alias().select() form.
         UA = User.alias()
         src = UA.select()
         query = (Tweet

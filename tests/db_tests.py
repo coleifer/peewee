@@ -835,7 +835,6 @@ class TestIntrospection(ModelTestCase):
 
     @requires_mysql
     def test_schema_argument_honored(self):
-        # The schema argument was previously ignored.
         tables = self.database.get_tables(schema='peewee_test')
         self.assertEqual(tables, self.database.get_tables())
         self.assertEqual(self.database.get_tables(schema='fake_schema_z'), [])

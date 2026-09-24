@@ -10,11 +10,10 @@ from .base import TestModel
 
 # ---------------------------------------------------------------------------
 # Module-local models for M2M tests.
-# NOTE: User and Note here are local to this module (not base_models).
 # ---------------------------------------------------------------------------
 
-# M2M binding installs accessors on the rel model at import, so the local
-# User stays local.
+# M2M binding installs accessors on the rel model at import, so these cannot
+# be the shared base_models.
 class User(TestModel):
     username = CharField(unique=True)  # CharField: mysql cannot index TEXT.
 

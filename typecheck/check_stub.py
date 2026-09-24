@@ -58,18 +58,17 @@ assert_type(Tweet.user, ForeignKeyField[User])
 assert_type(Tweet().user, User)
 assert_type(Tweet().author, User | None)
 
-# BigBitField is a special case: the instance descriptor yields a
-# BigBitFieldData wrapper rather than the underlying bytes.
+# The BigBitField instance descriptor yields a BigBitFieldData wrapper rather
+# than the underlying bytes.
 assert_type(Event.flags, BigBitField)
 assert_type(Event().flags, BigBitFieldData)
 
-# __set__ accepts the field's value type...
+# __set__ accepts the field's value type and rejects incompatible values.
 user = User()
 user.username = 'huey'
 user.age = 42
 user.nickname = None  # nullable field accepts None
 
-# ...and rejects incompatible values.
 user.age = 'not an int'  # type: ignore
 user.username = None  # type: ignore  # non-null field rejects None
 

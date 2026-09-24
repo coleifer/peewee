@@ -33,8 +33,8 @@ class User(TestModel):
     created = DateTimeField(default=datetime.datetime.now)
 
 
-# Local pair on purpose. A Tweet with backref='tweets' against the base User
-# would overwrite User.tweets process-wide.
+# A Tweet with backref='tweets' against the base User would overwrite
+# User.tweets process-wide.
 class Tweet(TestModel):
     user = ForeignKeyField(User, backref='tweets')
     content = TextField()
@@ -499,8 +499,8 @@ class TestMisc(ModelDatabaseTestCase):
                 to_pydantic(User, relationships={bad_key: List[TweetSchema]})
 
     def test_filter_by_field_objects(self):
-        # exclude= / include= accept field objects and back-references, the
-        # same currency as relationships=.
+        # exclude= / include= accept field objects and back-references, like
+        # relationships=.
         S = to_pydantic(User, exclude={User.age, User.bio})
         self.assertNotIn('age', S.model_fields)
         self.assertNotIn('bio', S.model_fields)
@@ -549,12 +549,12 @@ class TestMisc(ModelDatabaseTestCase):
                         relationships={User.tweets: List[TweetSchema]})
         self.assertNotIn('tweets', S.model_fields)
 
-        # Explicit relationship FKs are exempt from include= filtering...
+        # Explicit relationship FKs are exempt from include= filtering, but
+        # exclude= always wins.
         S = to_pydantic(Tweet, include='content',
                         relationships={Tweet.user: UserSchema})
         self.assertEqual(set(S.model_fields), {'content', 'user'})
 
-        # ...but exclude= always wins.
         S = to_pydantic(Tweet, exclude='user',
                         relationships={Tweet.user: UserSchema})
         self.assertEqual(set(S.model_fields), {'content', 'created'})

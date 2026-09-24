@@ -82,11 +82,9 @@ async def worker_task(db, task_id, num_operations=10):
                     except ValueError:
                         pass
 
-            # Small random delay to simulate real work
             if random.random() < 0.1:
                 await asyncio.sleep(0.001)
 
-        # Close connection
         await db.aclose()
         return "Task %s completed successfully" % task_id
 
@@ -101,16 +99,13 @@ async def stress_test(db, num_tasks=100, ops_per_task=10):
 
     User._meta.database = db
 
-    # Setup
     print('Setting up database...')
     async with db:
         await db.acreate_tables([User])
 
-    # Track memory
     tracemalloc.start()
     initial_memory = tracemalloc.get_traced_memory()[0]
 
-    # Run stress test
     print('Spawning %s concurrent tasks...' % num_tasks)
     start_time = time.time()
 
@@ -119,7 +114,6 @@ async def stress_test(db, num_tasks=100, ops_per_task=10):
 
     elapsed = time.time() - start_time
 
-    # Check memory
     final_memory = tracemalloc.get_traced_memory()[0]
     memory_delta = (final_memory - initial_memory) / 1024 / 1024  # MB
     tracemalloc.stop()
@@ -127,7 +121,6 @@ async def stress_test(db, num_tasks=100, ops_per_task=10):
     successful = sum(1 for r in results if isinstance(r, str) and 'completed' in r)
     failed = len(results) - successful
 
-    # Check final state
     async with db:
         total_users = await db.run(User.select().count)
 
@@ -135,7 +128,6 @@ async def stress_test(db, num_tasks=100, ops_per_task=10):
     # (from tasks that died holding one) are drained on connect / close_pool.
     orphans = len(db._state._orphaned_conns)
 
-    # Report
     throughput = (num_tasks * ops_per_task) / elapsed
     print('RESULTS')
     print('Duration: %0.2fs' % elapsed)
@@ -148,7 +140,6 @@ async def stress_test(db, num_tasks=100, ops_per_task=10):
     print('Remaining task states: %s' % len(db._state._states))
     print('-' * 60)
 
-    # Cleanup
     async with db:
         await db.adrop_tables([User])
     await db.close_pool()
@@ -170,20 +161,16 @@ async def test_connection_isolation():
         await db.aconnect()
 
         async with db.atomic():
-            # Create a user
             await db.run(User.create, name='Task-%s' % task_id, email='t%s@test.com' % task_id)
 
-            # Hold the transaction
             await asyncio.sleep(delay)
 
-            # Verify we can still see our own changes
             users = await db.run(list, User.select().where(User.name == 'Task-%s' % task_id))
             assert len(users) == 1, 'Task %s lost its data!' % task_id
 
         await db.aclose()
         return 'Task %s isolated correctly' % task_id
 
-    # Spawn multiple tasks that will overlap in time
     tasks = [
         task_with_transaction(0, 0.1),
         task_with_transaction(1, 0.2),
@@ -196,7 +183,6 @@ async def test_connection_isolation():
     for r in results:
         print('  - %s' % r)
 
-    # Cleanup
     async with db:
         final_count = await db.run(User.select().count)
         print('Final user count: %s (expected 4)' % final_count)
@@ -210,7 +196,6 @@ async def test_connection_isolation():
 async def test_pool_exhaustion():
     print('POOL EXHAUSTION TEST')
 
-    # Create a small pool
     db = AsyncPostgresqlDatabase('peewee_test', pool_size=3, pool_min_size=1,
                                  **PSQL_PARAMS)
     User._meta.database = db
@@ -236,7 +221,6 @@ async def test_pool_exhaustion():
     print('All %s tasks completed in %.2fs' % (len(results), elapsed))
     print('Expected ~1.5s (3 batches of parallel execution)')
 
-    # Cleanup
     async with db:
         await db.adrop_tables([User])
     await db.close_pool()
@@ -249,25 +233,19 @@ async def main():
     print('ASYNC PEEWEE STRESS TEST SUITE')
     print('-' * 60)
 
-    # Test 1: Basic stress test with many tasks
     db = AsyncPostgresqlDatabase('peewee_test', pool_size=20, **PSQL_PARAMS)
     success1 = await stress_test(db, num_tasks=100, ops_per_task=20)
 
-    # Test 2: Even more tasks with smaller pool
     db2 = AsyncPostgresqlDatabase('peewee_test', pool_size=5, **PSQL_PARAMS)
     success2 = await stress_test(db2, num_tasks=200, ops_per_task=10)
 
-    # Test 3: Even smaller pool.
     db3 = AsyncPostgresqlDatabase('peewee_test', pool_size=3, **PSQL_PARAMS)
     success3 = await stress_test(db3, num_tasks=100, ops_per_task=20)
 
-    ## Test 3: Connection isolation
     success4 = await test_connection_isolation()
 
-    ## Test 4: Pool exhaustion
     success5 = await test_pool_exhaustion()
 
-    # Final report
     print('=' * 60)
     print('Stress Test 1 (100 tasks): %s' % ('OK' if success1 else 'FAIL'))
     print('Stress Test 2 (200 tasks): %s' % ('OK' if success2 else 'FAIL'))

@@ -122,15 +122,14 @@ JSON Support
 ------------
 
 .. attention::
-   **For new code, prefer peewee's built-in** ``JSONField``
-   (``from peewee import JSONField``) over the ``playhouse.postgres_ext`` JSON
-   fields documented here. The built-in field maps to ``JSONB`` on Postgres,
-   presents a single API across SQLite / Postgres / MySQL, and avoids a number
-   of sharp edges in these older implementations. In particular, **avoid**
-   ``postgres_ext.JSONField`` (the text ``json`` variant): its mutation and
-   concatenation builders emit ``jsonb``-only SQL that a ``json`` column
-   rejects, and its path/key handling is weaker than the built-in field's. The
-   ``postgres_ext`` fields below are retained for backwards compatibility.
+   For new code, prefer peewee's built-in ``JSONField`` (``from peewee import
+   JSONField``) over the ``playhouse.postgres_ext`` JSON fields documented
+   here. The built-in field maps to ``JSONB`` on Postgres and presents a single
+   API across SQLite / Postgres / MySQL. Avoid ``postgres_ext.JSONField`` (the
+   text ``json`` variant) in particular. Its mutation and concatenation
+   builders emit ``jsonb``-only SQL that a ``json`` column rejects, and its
+   path/key handling is weaker than the built-in field's. The ``postgres_ext``
+   fields below are retained for backwards compatibility.
 
 Peewee provides two JSON field types for Postgresql:
 
@@ -859,7 +858,7 @@ Peewee offers two approaches: the simple :func:`Match` function (no schema
 changes required) and the :class:`TSVectorField` for dedicated search columns
 (better performance).
 
-**Simple approach** - no schema changes required:
+The simple approach requires no schema changes:
 
 .. code-block:: python
 
@@ -878,7 +877,7 @@ performance, create a ``GIN`` index:
 
    CREATE INDEX posts_fts ON post USING gin(to_tsvector('english', body));
 
-**Dedicated column** - better performance:
+A dedicated column performs better:
 
 .. code-block:: python
 
@@ -1127,8 +1126,8 @@ SSL configuration:
 Key differences from Postgresql
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-* **Client-side retries.** CRDB may abort transactions due to contention.
-  Use :meth:`~CockroachDatabase.run_transaction` for automatic retries.
+CRDB may abort transactions due to contention. Use
+:meth:`~CockroachDatabase.run_transaction` for automatic client-side retries.
 
 Special field-types that may be useful when using CRDB:
 

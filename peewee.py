@@ -3488,7 +3488,7 @@ class PostgresqlJSONMethods(BaseJSONMethods):
         return fn.jsonb_array_length(field)
 
     def update(self, field, value):
-        # Postgres `||` is a SHALLOW concat.
+        # Postgres `||` is a shallow concat.
         return Expression(field, '||', self._jsonb_wrap(field, value))
 
     def contains(self, field, keys, value):
@@ -3554,7 +3554,7 @@ class MySQLJSONMethods(BaseJSONMethods):
         return Value(value, converter=False)
 
     def compare_value(self, field, value):
-        # Mark the rhs as json so comparison against extract() works - raw
+        # Mark the rhs as json so comparison against extract() works. Raw
         # dumps() text matches neither flavor.
         if value is None or isinstance(value, Node):
             return value
@@ -6310,7 +6310,7 @@ class TimestampField(BigIntegerField):
 
     def get_timestamp(self, value):
         if self.utc or value.tzinfo is not None:
-            # Aware datetimes denote an unambiguous instant; naive datetimes in
+            # Aware datetimes denote an unambiguous instant. Naive datetimes in
             # utc-mode are assumed to already be UTC.
             return calendar.timegm(value.utctimetuple())
         else:
@@ -6430,8 +6430,8 @@ class JSONPath(ColumnBase):
         return self._field._compare(self, OP.NE, OP.IS_NOT, rhs, self._as_text)
 
     def is_null(self, is_null=True):
-        # Default-mode IS NULL on a path needs to catch SQL NULL, missing key,
-        # and stored JSON null - same three cases ``== None`` matches.
+        # Default-mode IS NULL on a path catches SQL NULL, missing key, and
+        # stored JSON null, the same cases `== None` matches.
         is_op = OP.IS if is_null else OP.IS_NOT
         return self._field._compare(self, OP.EQ, is_op, None, self._as_text)
 
@@ -6607,8 +6607,8 @@ class JSONField(FieldDatabaseHook, Field):
         return self._helper.append(self, (), value)
 
     def update(self, value):
-        # RFC-7396 deep merge on SQLite/MySQL/MariaDB; shallow `||` concat on
-        # PostgreSQL. Same call, different semantics - see the docs.
+        # RFC-7396 deep merge on SQLite/MySQL/MariaDB, shallow `||` concat on
+        # PostgreSQL.
         return self._helper.update(self, value)
 
     def contains(self, value):
@@ -8980,11 +8980,10 @@ def safe_python_value(conv_func):
 
 
 def _resolve_model_columns(cursor, model, select):
-    # Resolve cursor columns against a model's selected nodes. Returns a tuple
-    # of ``(columns, fields, converters, no_convert, convert)``:
-    # ``columns`` and ``fields`` are aligned per-column lists,
-    # ``converters`` is a per-column ``python_value`` callable or ``None``,
-    # ``no_convert``/``convert`` are the index partitions of ``converters``.
+    # Resolve cursor columns against a model's selected nodes. Returns
+    # (columns, fields, converters, no_convert, convert). The first three are
+    # per-column lists (a converter is a python_value callable or None), and
+    # no_convert/convert partition the column indexes by converter.
     combined = model._meta.combined
     table = model._meta.table
     description = cursor.description
@@ -9350,8 +9349,8 @@ class PrefetchQuery(collections.namedtuple('_PrefetchQuery', (
                 key = (field, identifier)
                 if key in id_map:
                     setattr(instance, field.name, id_map[key])
-                    # setattr marks the fk dirty, but it isn't - it's the value
-                    # we just loaded. Clear it so the row reflects db state.
+                    # setattr marks the fk dirty, but it holds the value just
+                    # loaded. Clear it so the row reflects db state.
                     instance._dirty.discard(field.name)
         else:
             for field, attname in self.field_to_name:
@@ -9560,7 +9559,7 @@ class Load(Node):
             c if isinstance(c, Load) else Load(c) for c in children)
 
     def _base(self, rel_model):
-        # Modifiers (where/order/limit/joins) ride on the supplied query.
+        # Modifiers (where/order/limit/joins) live on the supplied query.
         return self._query if self._query is not None else rel_model.select()
 
     @staticmethod
@@ -9649,7 +9648,7 @@ class Load(Node):
         on = reduce(operator.and_,
                     [pk == getattr(cte.c, pk.column_name) for pk in pks])
         # A custom projection keeps the relation's joins so selected
-        # instances ride along; a row-multiplying projection multiplies.
+        # instances hydrate. A to-many join there multiplies rows.
         if base._is_default:
             outer = rel_model.select()
         else:

@@ -5,8 +5,8 @@ Relationships and Joins
 
 Relational databases derive most of their power from the ability to link rows
 across tables. This document explains how Peewee models those links, what
-happens under the hood when you traverse them, and how to write queries that
-cross table boundaries efficiently.
+happens when you traverse them, and how to write queries that cross table
+boundaries efficiently.
 
 
 Model Definitions
@@ -261,11 +261,11 @@ The same problem can occur when iterating over back-references:
 
 Peewee provides two complementary tools for avoiding N+1 queries:
 
-* **Joins** - combine rows from multiple tables in a single ``SELECT``. Best
-  when traversing a foreign key *toward* its target (many-to-one direction),
-  for example fetching tweets with their authors.
-* **Eager loading** - issue one query per table and assign the results together
-  in Python. Best when traversing a back-reference (one-to-many direction), for
+* Joins combine rows from multiple tables in a single ``SELECT``. Best when
+  traversing a foreign key toward its target (many-to-one direction), for
+  example fetching tweets with their authors.
+* Eager loading issues one query per table and assigns the results together in
+  Python. Best when traversing a back-reference (one-to-many direction), for
   example fetching users with all their tweets. Peewee provides the
   :meth:`~ModelSelect.with_related` helper for this.
 
@@ -755,9 +755,9 @@ Default names
 
 For a :class:`ForeignKeyField`:
 
-* **Forward direction**: the foreign-key field's own name. ``Tweet.user``
+* Forward direction: the foreign-key field's own name. ``Tweet.user``
   produces ``tweet.user``.
-* **Back-reference**: the ``backref`` argument to the foreign-key. If ``backref``
+* Back-reference: the ``backref`` argument to the foreign-key. If ``backref``
   is not given, the default is ``<lowercase_classname>_set``, e.g. ``user.tweet_set``.
   Pass ``backref='+'`` to suppress the back-reference entirely.
 

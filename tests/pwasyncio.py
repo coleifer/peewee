@@ -39,8 +39,8 @@ class TestModel(Model):
     name = CharField()
     value = IntegerField(default=0)
 
-# Local models on purpose. asyncSetUp rebinds them to the async database
-# with no restore.
+# Local models, since asyncSetUp rebinds them to the async database with no
+# restore.
 class User(Model):
     username = CharField()
 
@@ -1088,7 +1088,7 @@ class IntegrationTests(object):
             ATweet.select(ATweet, AUser).join(AUser, on=ATweet.user))
         self.assertIn('user', t.__rel__)
 
-        # Swap in a database lacking `run` to prove no bridge is used.
+        # A database lacking `run` shows no bridge is used.
         real_db = ATweet._meta.database
         ATweet._meta.database = Mock(spec=[])
         try:
@@ -1191,7 +1191,7 @@ class IntegrationTests(object):
 
     async def test_gather_inside_atomic(self):
         # Tasks spawned inside a transaction get their own connections and run
-        # OUTSIDE the transaction.
+        # outside the transaction.
         conn_ids = []
         async def child(i):
             conn_ids.append(id(self.db._state._current()))
@@ -1209,10 +1209,10 @@ class IntegrationTests(object):
         except Abort:
             pass
 
-        # Children used distinct connections, not the parent's...
+        # Children used their own connections, so their writes survived the
+        # parent's rollback.
         self.assertEqual(len(set(conn_ids)), 2)
         self.assertNotIn(parent_state[0], conn_ids)
-        # ...so their writes survived the parent's rollback.
         q = AUser.select().where(AUser.username.startswith('child'))
         self.assertEqual(await self.db.count(q), 2)
 
@@ -2411,7 +2411,7 @@ class TestPostgresqlIntegration(IntegrationTests, unittest.IsolatedAsyncioTestCa
 
     async def test_json_field_jsonb(self):
         # Core JSONField maps to a real jsonb column on Postgres. Values with
-        # %s/%% survive asyncpg placeholder translation (they ride as bound
+        # %s/%% survive asyncpg placeholder translation (they are bound
         # params). The jsonb value decodes through the server-side cursor.
         async with self._json_model() as M:
             r = await self.db.aexecute_sql(

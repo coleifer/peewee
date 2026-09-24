@@ -1,11 +1,5 @@
 """
 SQL generation tests for Model-level queries.
-
-These tests verify that queries built using Model classes (with ForeignKeyField
-relationships, Meta options, etc.) produce correct SQL. Unlike sql.py which
-tests lower-level Table objects, these tests exercise the Model metaclass
-machinery including automatic join resolution, field type coercion, and alias
-handling.
 """
 import datetime
 
@@ -43,7 +37,6 @@ class CKM(TestModel):
 # ===========================================================================
 
 class TestModelSQL(ModelDatabaseTestCase):
-    # Fixed dialect for the SQL assertions, see the note above.
     database = get_in_memory_db()
     requires = [Category, CKM, Favorite, Note, Person, Sample, Tweet, User,
                 DfltM]
@@ -525,7 +518,6 @@ class TestModelSQL(ModelDatabaseTestCase):
         # key, which is what you want when checking a foreign key. The same
         # query used as a table to select FROM, or to JOIN against, must
         # instead return every column, or the outer query cannot read them.
-        # User.alias().select() already returned every column everywhere.
 
         # Used as a value: returns only the primary key.
         UA = User.alias()
@@ -639,7 +631,7 @@ class TestModelSQL(ModelDatabaseTestCase):
             'FROM "users" AS "t1"'), [])
 
         # A UNION inside an expression must not get a stray "AS t2" between its
-        # closing paren and the outer name. That was a syntax error.
+        # closing paren and the outer name.
         A = User.select(User.id).where(User.username == 'a')
         B = User.select(User.id).where(User.username == 'b')
         q = User.select(User.username, User.id.in_(A | B).alias('flag'))
@@ -1370,7 +1362,6 @@ class TestModelSQL(ModelDatabaseTestCase):
 
 
 class TestModelAliasFieldProperties(ModelTestCase):
-    # Fixed dialect for the SQL assertions, see the note above.
     database = get_in_memory_db()
 
     def test_field_properties(self):
@@ -1782,7 +1773,6 @@ class TestModelAdvancedSQL(ModelDatabaseTestCase):
 # ===========================================================================
 
 class TestOnConflictShortcutSQL(ModelDatabaseTestCase):
-    # Fixed dialect for the SQL assertions, see the note above.
     database = get_in_memory_db()
     requires = [User, Emp]
 
@@ -1924,8 +1914,6 @@ class TestOnConflictSQL(ModelDatabaseTestCase):
 # ===========================================================================
 
 class TestStringsForFieldsInsertUpdate(ModelDatabaseTestCase):
-    # Not inert: setUp rebinds the models here, and INSERT rendered
-    # against the shared pg db gains RETURNING.
     database = get_in_memory_db()
     requires = [Note, Person, Relationship]
 
@@ -2157,7 +2145,6 @@ class TestModelCompoundSelect(BaseTestCase):
 # ===========================================================================
 
 class TestModelArgument(BaseTestCase):
-    # Fixed dialect for the SQL assertions, see the note above.
     database = SqliteDatabase(None)
 
     def test_model_as_argument(self):
@@ -2288,11 +2275,10 @@ class TestRegressionNodeListClone(BaseTestCase):
 
 
 # ===========================================================================
-# Gap coverage: FieldAlias operator delegation, query.sql() shapes
+# FieldAlias operator delegation, query.sql() shapes
 # ===========================================================================
 
 class TestFieldAliasOperators(ModelDatabaseTestCase):
-    # Fixed dialect for the SQL assertions, see the note above.
     database = get_in_memory_db()
     requires = [User]
 
@@ -2326,8 +2312,6 @@ class TestFieldAliasOperators(ModelDatabaseTestCase):
 
 
 class TestQuerySqlMethod(ModelDatabaseTestCase):
-    # In-memory pin: User bound to the shared pg db renders INSERT with
-    # RETURNING.
     database = get_in_memory_db()
     requires = [User]
 

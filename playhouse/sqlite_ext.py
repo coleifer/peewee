@@ -750,7 +750,7 @@ class FTS5Model(BaseFTSModel):
         elif isinstance(weights, dict):
             weight_args = []
             for field in cls._meta.sorted_fields:
-                # bm25() assigns weights positionally across *all* columns,
+                # bm25() assigns weights positionally across all columns,
                 # including UNINDEXED columns, so they must not be skipped.
                 if isinstance(field, SearchField):
                     weight_args.append(

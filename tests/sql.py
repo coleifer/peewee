@@ -29,11 +29,6 @@ from .base import BaseTestCase
 from .base import __sql__
 
 
-# ---------------------------------------------------------------------------
-# Module-level Table objects shared across test cases in this module.
-# These are Table instances (not Model classes) - they test the low-level
-# query builder without Model metaclass involvement.
-# ---------------------------------------------------------------------------
 User = Table('users')
 Tweet = Table('tweets')
 Person = Table('person', ['id', 'name', 'dob'], primary_key='id')
@@ -244,8 +239,8 @@ class TestSelectQuery(BaseTestCase):
             'SELECT "t1"."id" FROM "users" AS "t1" WHERE (1 = 1)'))
 
     def test_generator_in_reused(self):
-        # A generator rhs is materialized at build time: it is one-shot, so
-        # rendering the query twice used to exhaust it and collapse to IN ().
+        # A generator rhs is materialized at build time. It is one-shot, so
+        # rendering the query twice would otherwise collapse to IN ().
         query = User.select(User.c.id).where(
             User.c.id.in_(i for i in (1, 2, 3)))
         expected = ('SELECT "t1"."id" FROM "users" AS "t1" '
@@ -1054,7 +1049,7 @@ class TestSelectQuery(BaseTestCase):
         B = UA.select(UA.c.id).where(UA.c.superuser == True)
 
         # A compound as the only argument of a function must not add its own
-        # parentheses on top of the function's. It used to emit EXISTS((...)).
+        # parentheses on top of the function's.
         self.assertSQL(User.select(User.c.id).where(fn.EXISTS(A | B)), (
             'SELECT "t1"."id" FROM "users" AS "t1" WHERE EXISTS('
             'SELECT "t1"."id" FROM "users" AS "t1" WHERE ("t1"."admin" = ?) '
@@ -1062,7 +1057,7 @@ class TestSelectQuery(BaseTestCase):
             'SELECT "u2"."id" FROM "users" AS "u2" '
             'WHERE ("u2"."superuser" = ?))'), [True, True])
 
-        # A plain select in the same spot already rendered single parens.
+        # A plain select in the same spot.
         self.assertSQL(User.select(User.c.id).where(fn.EXISTS(A)), (
             'SELECT "t1"."id" FROM "users" AS "t1" WHERE EXISTS('
             'SELECT "t1"."id" FROM "users" AS "t1" '
@@ -1467,10 +1462,8 @@ class TestSelectQuery(BaseTestCase):
 
     def test_correlated_compound_subquery(self):
         # A compound (UNION/INTERSECT/EXCEPT) used as a correlated subquery
-        # must reference the outer table by its existing alias in *every*
+        # must reference the outer table by its existing alias in every
         # branch. The right-hand branch renders in a fresh alias scope.
-        # Regression test for it assigning the correlated outer source a
-        # phantom new alias instead of reusing the outer "t1".
         Product = Table('product', ('id', 'name'))
         SaleA = Table('sale_a', ('id', 'pid', 'amt'))
         SaleB = Table('sale_b', ('id', 'pid', 'amt'))
@@ -2535,7 +2528,7 @@ class TestWindowFunctions(BaseTestCase):
 
     def test_window_exclude_constructor_string(self):
         # A raw string exclude= must render as literal SQL, not bind as a
-        # parameter (EXCLUDE ?). start/end and .exclude() already did this.
+        # parameter (EXCLUDE ?).
         w = Window(order_by=[User.c.id],
                    start=Window.preceding(),
                    end=Window.CURRENT_ROW,
@@ -2854,8 +2847,7 @@ class TestValuesList(BaseTestCase):
             'ORDER BY "t1"."username" DESC'), ['huey', 'zaizee'])
 
     def test_values_list_in_expression(self):
-        # As an IN operand the VALUES clause needs its own parentheses. It
-        # used to render "IN VALUES (?), (?)", a syntax error.
+        # As an IN operand the VALUES clause needs its own parentheses.
         query = Person.select(Person.id).where(
             Person.id.in_(ValuesList([(1,), (2,), (3,)])))
         self.assertSQL(query, (
@@ -3206,8 +3198,7 @@ class TestOnConflictSqlite(BaseTestCase):
             ('INSERT INTO "kv" ("extra", "key", "value") VALUES (?, ?, ?) '
              'ON CONFLICT DO NOTHING'), [1, 'k1', 'v1'])
 
-        # A target and its partial-index predicate used to be dropped for the
-        # nothing action, leaving a bare clause that ignores them.
+        # The nothing action keeps its target and partial-index predicate.
         self.assertSQL(
             (KV.insert(key='k1', value='v1', extra=1)
              .on_conflict(action='nothing',
@@ -3332,8 +3323,8 @@ class TestOnConflictPostgresql(BaseTestCase):
                  .on_conflict(action='nothing',
                               conflict_target=[KV.key],
                               conflict_where=(KV.extra > 1)))
-        # The partial-index predicate used to be dropped, leaving
-        # ON CONFLICT ("key"), which Postgres rejects for a partial index.
+        # Without the predicate, Postgres rejects ON CONFLICT ("key") for a
+        # partial index.
         self.assertSQL(query, (
             'INSERT INTO "kv" ("extra", "key", "value") VALUES (?, ?, ?) '
             'ON CONFLICT ("key") WHERE ("extra" > ?) DO NOTHING'),
@@ -3344,8 +3335,7 @@ class TestOnConflictPostgresql(BaseTestCase):
         query = (KV.insert(key='k1', value='v1', extra=9)
                  .on_conflict(action='nothing',
                               conflict_constraint='kv_key_value'))
-        # The named constraint used to be dropped, leaving a bare
-        # ON CONFLICT DO NOTHING that matches any conflict.
+        # A bare ON CONFLICT DO NOTHING would match any conflict.
         self.assertSQL(query, (
             'INSERT INTO "kv" ("extra", "key", "value") VALUES (?, ?, ?) '
             'ON CONFLICT ON CONSTRAINT "kv_key_value" DO NOTHING'),
@@ -3580,7 +3570,7 @@ class TestFunctionInfiniteLoop(BaseTestCase):
 
 
 # ===========================================================================
-# Gap coverage: Node fundamentals
+# Node fundamentals
 # ===========================================================================
 
 class TestNodeClone(BaseTestCase):
@@ -3604,7 +3594,7 @@ class TestNodeClone(BaseTestCase):
 
 
 # ===========================================================================
-# Gap coverage: Table and Source operations
+# Table and Source operations
 # ===========================================================================
 
 class TestTableOperations(BaseTestCase):
@@ -3638,7 +3628,7 @@ class TestTableOperations(BaseTestCase):
 
 
 # ===========================================================================
-# Gap coverage: Alias, Negated, Cast, and wrapped node types
+# Alias, Negated, Cast, and wrapped node types
 # ===========================================================================
 
 class TestWrappedNodes(BaseTestCase):
@@ -3729,7 +3719,7 @@ class TestQueryBuilderMisc(BaseTestCase):
 
 
 # ===========================================================================
-# Gap coverage: Context and AliasManager internals
+# Context and AliasManager internals
 # ===========================================================================
 
 class TestContextAndAliasManager(BaseTestCase):
@@ -3785,7 +3775,7 @@ class TestContextAndAliasManager(BaseTestCase):
     def test_subselect_clone_rehashes(self):
         # Without a re-hash the clone stays keyed on the source's address, so
         # it compares equal to the source and collides with it in the alias
-        # manager. Worse, once the source is collected, an unrelated object
+        # manager. Once the source is collected, an unrelated object
         # allocated at that address hashes the same.
         base = User.select(User.c.id)
         clone = base.where(User.c.username == 'huey')

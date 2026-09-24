@@ -4,9 +4,8 @@
 > continuous development since 2010. Supports SQLite, MySQL, MariaDB,
 > PostgreSQL and CockroachDB. The bundled playhouse extensions add connection
 > pooling, schema migrations, pydantic schema generation, JSON and full-text
-> search for SQLite and Postgres, and more. "Small" describes the library -
-> one module, zero dependencies - not the projects it supports: peewee runs
-> production workloads of all sizes.
+> search for SQLite and Postgres, and more. Peewee is a single module with no
+> required dependencies, and runs production workloads of all sizes.
 
 ## Documentation
 

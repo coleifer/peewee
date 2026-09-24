@@ -107,8 +107,8 @@ class _State(object):
 class _ConnectionState(object):
     def __init__(self, release=None):
         self._cv = contextvars.ContextVar('pwasyncio_state')
-        # Central registry: task-id -> _State.  Allows close_pool() to
-        # enumerate *all* live states and release their connections.
+        # task-id -> _State, so close_pool() can enumerate every live state
+        # and release its connection.
         self._states = {}
         self._orphaned_conns = []
         self._release = release
@@ -275,8 +275,8 @@ class AsyncDatabaseMixin(object):
         conn = self._state.conn
         if conn is None or conn.stale():
             if conn is not None:
-                # Best-effort: releasing a dead conn can raise from deep in
-                # the driver (e.g. asyncpg's detached pool proxy).
+                # Releasing a dead conn can raise from deep in the driver
+                # (e.g. asyncpg's detached pool proxy).
                 try:
                     await self._release_conn(conn)
                 except Exception:
@@ -673,8 +673,8 @@ class AsyncConnectionWrapper(object):
 
     async def _acquire_lock(self):
         # When an iterate() cursor holds the lock, wait briefly for it to
-        # finalize rather than deadlocking - this covers plain queries AND
-        # a second iterate() on the same connection.
+        # finalize rather than deadlocking. This covers plain queries and a
+        # second iterate() on the same connection.
         if self._streaming:
             try:
                 await asyncio.wait_for(self._lock.acquire(),
@@ -1033,7 +1033,7 @@ class AsyncPostgresqlConnection(AsyncConnectionWrapper):
         try:
             return self.conn.is_closed()
         except Exception:
-            # Detached pool proxy - unusable either way.
+            # Detached pool proxy, unusable either way.
             return True
 
     async def close(self):

@@ -1721,9 +1721,9 @@ that renames the columns:
            database = db
            options = {'content': Document, 'content_rowid': Document.id}
 
-SQLite does not keep the index in sync for you, and writing the index has a
-twist: to remove or change a row, the index needs the values that were
-originally indexed, since it stores no text of its own to look them up in.
+SQLite does not keep the index in sync for you. To remove or change a row, the
+index needs the values that were originally indexed, since it stores no text
+of its own to look them up in.
 They are supplied with the special "delete" command, an ``INSERT`` naming
 the table itself. Removing a row is one such ``INSERT``. Changing a row is a
 removal followed by a plain ``INSERT`` of the new values:

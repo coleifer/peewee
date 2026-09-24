@@ -241,11 +241,11 @@ control over read-write locking is required:
 
 The three modes:
 
-* **DEFERRED** (default) - acquires the minimum necessary lock as reads and
+* ``DEFERRED`` (default) acquires the minimum necessary lock as reads and
   writes occur. Another writer can intervene between BEGIN and your first write.
-* **IMMEDIATE** - acquires a write reservation lock at BEGIN. Other writers are
+* ``IMMEDIATE`` acquires a write reservation lock at BEGIN. Other writers are
   blocked but readers can proceed.
-* **EXCLUSIVE** - acquires an exclusive lock at BEGIN. No other connection can
+* ``EXCLUSIVE`` acquires an exclusive lock at BEGIN. No other connection can
   read or write until the transaction completes.
 
 DEFERRED is a common source of trouble for concurrent writers, because a block

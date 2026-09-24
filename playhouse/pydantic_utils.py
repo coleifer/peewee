@@ -83,7 +83,7 @@ def to_pydantic(model_cls, exclude=None, include=None, exclude_autofield=True,
         elif (include is not None and not (names & include)
               and name not in rel_fields):
             # Explicit relationships entries are exempt from include=
-            # filtering; exclude= always wins.
+            # filtering. exclude= always wins.
             continue
         elif exclude_autofield and isinstance(field, AutoField):
             continue

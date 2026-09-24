@@ -124,9 +124,8 @@ class TestWithRelated(ModelTestCase):
                 ('mickey', ['bark', 'woof'])])
 
     def test_join_strategy_parent_fanout(self):
-        # Guards the key-dedup invariant: duplicate parent rows keep
-        # their duplication, children are not fanned out by the join,
-        # and both strategies agree.
+        # Duplicate parent rows keep their duplication, children are not
+        # fanned out by the join, and both strategies agree.
         parent = (User
                   .select(User.id, User.username)
                   .join(Tweet, on=(Tweet.user == User.id)))
@@ -150,7 +149,7 @@ class TestWithRelated(ModelTestCase):
     @skip_unless(IS_POSTGRESQL, 'requires postgres')
     def test_join_strategy_child_distinct(self):
         # A child DISTINCT ON ("latest tweet per user") survives the JOIN
-        # strategy, it used to be clobbered by an injected distinct.
+        # strategy.
         latest = (Tweet
                   .select()
                   .distinct([Tweet.user])
@@ -170,9 +169,9 @@ class TestWithRelated(ModelTestCase):
 
     @skip_unless(IS_POSTGRESQL, 'requires postgres')
     def test_join_strategy_expression_ordering(self):
-        # The injected distinct also collided with the postgres rule that
-        # DISTINCT order expressions be projected. With it gone, a child
-        # ordered by an unprojected expression executes and orders.
+        # A child ordered by an unprojected expression executes and orders.
+        # Postgres requires DISTINCT order expressions to be projected, so the
+        # JOIN strategy must not add a DISTINCT.
         expr_order = Tweet.select().order_by(Tweet.timestamp * -1)
         for pt in (PREFETCH_TYPE.WHERE, PREFETCH_TYPE.JOIN):
             with self.assertQueryCount(2):
@@ -280,7 +279,7 @@ class TestWithRelated(ModelTestCase):
 
     def test_limited_parent_subquery(self):
         # MySQL rejects LIMIT directly inside an IN subquery. A limited parent
-        # hides behind a derived table (harmless elsewhere).
+        # is wrapped in a derived table (harmless elsewhere).
         for pt in PREFETCH_TYPE.values():
             with self.assertQueryCount(2):
                 query = (User
@@ -316,7 +315,7 @@ class TestWithRelated(ModelTestCase):
                              ['hiss', 'meow', 'purr'])
 
     def test_limited_parent_offset_only(self):
-        # OFFSET without LIMIT also hides behind the derived table.
+        # OFFSET without LIMIT is also wrapped in the derived table.
         for pt in PREFETCH_TYPE.values():
             query = (User
                      .select()
@@ -499,12 +498,12 @@ class TestWithRelated(ModelTestCase):
                           prefetch_type='join')
 
     def test_load_accepts_model_alias(self):
-        # A model alias on the Load reference is accepted and normalized to the
-        # base relationship -- the alias has no role in with_related.
+        # A model alias on the Load reference is normalized to the base
+        # relationship, as the alias has no role in with_related.
         self.assertIs(Load(Tweet.alias().user)._field, Tweet.user)
         self.assertIs(Load(User.alias().tweets)._field, Tweet.user)
 
-        # Forward FK via alias: used to raise "no such column". Now resolves.
+        # Forward FK via alias.
         with self.assertQueryCount(2):
             query = (Tweet
                      .select()
@@ -515,7 +514,7 @@ class TestWithRelated(ModelTestCase):
             ('bark', 'mickey'), ('hiss', 'huey'), ('meow', 'huey'),
             ('purr', 'huey'), ('woof', 'mickey')])
 
-        # Backref via alias: was already inert. Still loads correctly.
+        # Backref via alias.
         with self.assertQueryCount(2):
             query = (User
                      .select()
@@ -1029,7 +1028,7 @@ class TestWithRelatedLimit(ModelTestCase):
 
     def test_per_parent_order_multi_term(self):
         # Mixed order terms: the fanned column aggregates, the same-table
-        # tiebreaker rides along.
+        # tiebreaker is kept as-is.
         self._fan_out_h3()
         tweets = (Tweet.select().join(Favorite)
                   .order_by(Favorite.id.desc(), Tweet.timestamp))
@@ -1197,8 +1196,8 @@ class TestWithRelatedLimit(ModelTestCase):
              'ORDER BY "_load_ranked_1"."_rn"', ['huey', 2, 1])])
 
     def test_per_parent_custom_projection(self):
-        # Same-model computed columns ride the outer re-select: the windowed
-        # path returns what the plain path returns.
+        # Same-model computed columns survive the outer re-select, so the
+        # windowed path returns what the plain path returns.
         rel = (Tweet
                .select(Tweet, fn.LENGTH(Tweet.content).alias('clen'))
                .order_by(Tweet.timestamp.desc()))

@@ -148,10 +148,10 @@ def diff_models(database, models):
         drop_columns.extend((table, name)
                             for name in sorted(columns - set(fields)))
 
-        # Pair database indexes with declarations - named (partial and
-        # expression) indexes by name, plain indexes by signature - and
-        # whatever fails to pair is a change. Names pair first: the
-        # database may report a named index (e.g. ts.desc()) as plain.
+        # Pair database indexes with declarations: named (partial and
+        # expression) indexes by name, plain indexes by signature. Whatever
+        # fails to pair is a change. Names pair first, as the database may
+        # report a named index (e.g. ts.desc()) as plain.
         plain, named = _model_indexes(model)
         db_indexes = _database_indexes(database, table, schema)
         for name, signature in sorted(db_indexes.items()):

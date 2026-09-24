@@ -22,9 +22,6 @@ SUBQUERY_PREFETCH_TYPES = (PREFETCH_TYPE.WHERE, PREFETCH_TYPE.JOIN)
 
 # ---------------------------------------------------------------------------
 # Module-local models for core prefetch tests.
-# NOTE: Person, Note, Category, etc. here are intentionally different from
-# base_models - they have different fields and FK structures tailored for
-# prefetch testing.
 # ---------------------------------------------------------------------------
 
 class Person(TestModel):

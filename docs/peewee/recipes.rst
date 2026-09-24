@@ -152,13 +152,13 @@ The ``db.atomic()`` wrapper is important: it ensures that the rollback on
 Eager-loading for a list view
 -----------------------------
 
-List views - a page of rows, each shown with related data - are where the N+1
+List views, a page of rows each shown with related data, are where the N+1
 problem creeps in. :meth:`~ModelSelect.with_related` loads the page and its
 related rows in a fixed number of queries, no matter how many rows are shown.
 
 This fetches a page of users, each with their two most-recent tweets, and for
-each tweet the favorites with the favoriting user - three queries for the whole
-page, whatever the page size:
+each tweet the favorites with the favoriting user. That is three queries for
+the whole page, whatever the page size:
 
 .. code-block:: python
 
@@ -577,14 +577,14 @@ Here is the basic form of the query:
                 .join(Schedule)
                 .where(next_run <= now))
 
-**Postgresql** - multiply a typed interval:
+On Postgresql, multiply a typed interval:
 
 .. code-block:: python
 
    one_second = SQL("INTERVAL '1 second'")
    next_run = Task.last_run + (Schedule.interval * one_second)
 
-**MySQL** - use ``DATE_ADD`` with a dynamic INTERVAL expression:
+On MySQL, use ``DATE_ADD`` with a dynamic INTERVAL expression:
 
 .. code-block:: python
 
@@ -593,7 +593,7 @@ Here is the basic form of the query:
    interval = NodeList((SQL('INTERVAL'), Schedule.interval, SQL('SECOND')))
    next_run = fn.DATE_ADD(Task.last_run, interval)
 
-**SQLite** - convert to Unix timestamp, add seconds, convert back:
+On SQLite, convert to Unix timestamp, add seconds, convert back:
 
 .. code-block:: python
 

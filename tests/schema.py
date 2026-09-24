@@ -28,7 +28,7 @@ from .base_models import User
 # constraints, schema namespace, etc.).
 # ---------------------------------------------------------------------------
 
-# DDL is rendered through the pinned sqlite db on purpose: the shared
+# The DDL-asserting classes below pin an in-memory sqlite db, as the shared
 # backend would render SERIAL, AUTO_INCREMENT or backticks instead.
 
 class TMUnique(TestModel):
@@ -93,7 +93,6 @@ Article.add_index(SQL('CREATE INDEX "article_foo" ON "article" ("flags" & 3)'))
 # ===========================================================================
 
 class TestModelDDL(ModelDatabaseTestCase):
-    # Fixed dialect for the DDL assertions, see the note above.
     database = get_in_memory_db()
     requires = [Article, CacheData, Category, Note, Person, Relationship,
                 TMUnique, TMSequence, TMIndexes, TMConstraints,
@@ -1072,7 +1071,6 @@ class TestModelDDL(ModelDatabaseTestCase):
 
 
 class TestDDLAdditionalSQL(ModelDatabaseTestCase):
-    # Fixed dialect for the DDL assertions, see the note above.
     database = get_in_memory_db()
     requires = [User, Note, Person]
 
@@ -1150,7 +1148,6 @@ class TMKVNew(TestModel):
 
 
 class TestCreateTableAsSQL(ModelDatabaseTestCase):
-    # Fixed dialect for the DDL assertions, see the note above.
     database = get_in_memory_db()
     requires = [TMKV]
 
@@ -1296,11 +1293,10 @@ class TestNamedConstraintsIntegration(ModelTestCase):
 
 
 # ===========================================================================
-# Gap coverage: truncate SQL, sequences, create/drop_all, pg schemas
+# Truncate SQL, sequences, create/drop_all, pg schemas
 # ===========================================================================
 
 class TestTruncateTableSQL(ModelDatabaseTestCase):
-    # Fixed dialect for the DDL assertions, see the note above.
     database = get_in_memory_db()
     requires = [User]
 
@@ -1332,7 +1328,6 @@ class TestTruncateTableSQL(ModelDatabaseTestCase):
 
 
 class TestSchemaSequenceErrors(ModelDatabaseTestCase):
-    # Fixed dialect for the DDL assertions, see the note above.
     database = get_in_memory_db()
     requires = [User]
 

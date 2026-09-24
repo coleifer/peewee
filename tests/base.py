@@ -151,9 +151,9 @@ if IS_MYSQL:
         # Needs actual MySQL - not MariaDB.
         IS_MYSQL_JSON = True
     IS_ORACLE_MYSQL = server_info[0] < 10  # MariaDB reports >= 10.
-    # The JSON value-marking flavor is now a static property of the database
-    # rather than probed from the connection, so the plain MySQLDatabase used
-    # for both servers must be told which it is talking to.
+    # The JSON flavor is a static property of the database, not probed from
+    # the connection, so the plain MySQLDatabase used for both servers must be
+    # told which it is talking to.
     IS_MARIADB = server_info[0] >= 10
     db.mariadb = IS_MARIADB
     IS_MYSQL_JSON_OVERLAPS = (server_info >= (10, 9) if IS_MARIADB

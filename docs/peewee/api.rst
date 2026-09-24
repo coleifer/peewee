@@ -2863,10 +2863,10 @@ Model
              for tweet in user.tweets:
                  print('  *', tweet.content)
 
-      **Disambiguating multi-reference subqueries.** If a subquery relates to
-      more than one previously-fetched query (for example, a ``Favorite`` row
-      that has foreign keys to both ``User`` and ``Tweet``), use the
-      ``(subquery, target_model)`` tuple form to pin the relationship:
+      If a subquery relates to more than one previously-fetched query (for
+      example, a ``Favorite`` row that has foreign keys to both ``User`` and
+      ``Tweet``), use the ``(subquery, target_model)`` tuple form to pin the
+      relationship:
 
       .. code-block:: python
 
@@ -3562,8 +3562,8 @@ Fields
 
    :param dumps: Custom JSON serializer. Defaults to ``json.dumps``.
    :param loads: Custom JSON deserializer. Defaults to ``json.loads``.
-       **Silently ignored on Postgresql**, where the driver (psycopg2 /
-       psycopg3) deserializes JSON values before peewee sees them.
+       Ignored on Postgresql, where the driver (psycopg2 / psycopg3)
+       deserializes JSON values before peewee sees them.
 
    Stores Python ``dict``, ``list``, scalar (``str``/``int``/``float``/``bool``),
    or ``None`` values as JSON. The column type used by ``CREATE TABLE`` is
@@ -3618,7 +3618,7 @@ Fields
       jsonb``) and MySQL (native ``JSON`` comparison). On SQLite and
       MariaDB the comparison is a byte-compare of the stored JSON text.
       On SQLite, peewee canonicalizes values it writes and the right-hand
-      side via ``json()`` - JSON written to the table by other tools is
+      side via ``json()``. JSON written to the table by other tools is
       compared as stored.
 
       .. code-block:: python
@@ -3628,13 +3628,10 @@ Fields
 
    .. note::
 
-      On SQLite and MariaDB, the full-document equality is a byte
-      comparison of the JSON text. Two dictionaries with the same contents
-      but different insertion order may *not* match. If you need
-      order-insensitive document equality on those backends, pass
-      ``dumps=functools.partial(json.dumps, sort_keys=True)`` so both sides
-      are canonicalized. On Postgresql and MySQL the comparison is
-      structural and key order does not matter.
+      On SQLite and MariaDB, two dictionaries with the same contents but
+      different insertion order may not match. For order-insensitive
+      equality there, canonicalize both sides by passing
+      ``dumps=functools.partial(json.dumps, sort_keys=True)``.
 
    .. method:: length()
 
@@ -3653,8 +3650,7 @@ Fields
    .. method:: update(value)
 
       Return an UPDATE-clause expression that merges ``value`` into the root
-      document. **The semantics intentionally diverge by backend** -
-      see the "update divergence" note below.
+      document. The semantics differ by backend, see the warning below.
 
       .. code-block:: python
 
@@ -3664,12 +3660,12 @@ Fields
                has_keys(key_list)
                has_any_keys(key_list)
 
-      Key-existence predicates, supported on **every** backend. Postgresql
-      uses ``?`` / ``?&`` / ``?|``, MySQL / MariaDB use ``JSON_CONTAINS_PATH``,
-      and SQLite tests ``json_type(field, path) IS NOT NULL`` per key. These
-      check for object-key existence. Postgresql's ``?`` *also* matches a
-      string against the elements of a top-level array, which the MySQL and
-      SQLite emulations do not.
+      Key-existence predicates, supported on every backend. Postgresql uses
+      ``?`` / ``?&`` / ``?|``, MySQL / MariaDB use ``JSON_CONTAINS_PATH``, and
+      SQLite tests ``json_type(field, path) IS NOT NULL`` per key. These check
+      for object-key existence. Postgresql's ``?`` also matches a string
+      against the elements of a top-level array, which the MySQL and SQLite
+      emulations do not.
 
       .. code-block:: python
 
@@ -3684,8 +3680,8 @@ Fields
       MariaDB use ``JSON_CONTAINS``. SQLite's JSON1 has no containment
       operator, so it is emulated with a registered UDF
       (``_pw_json_contains``) that deserializes and compares each candidate
-      row. That means **no index can be used - it is a full table scan**, so
-      prefer Postgresql or MySQL for containment queries over large tables.
+      row. No index can be used, so prefer Postgresql or MySQL for
+      containment queries over large tables.
 
       .. code-block:: python
 
@@ -3693,15 +3689,14 @@ Fields
 
 .. warning::
 
-   :meth:`JSONField.update` has intentionally **divergent semantics across
-   backends**:
+   :meth:`JSONField.update` has different semantics across backends:
 
-   * **SQLite, MySQL, MariaDB** - RFC-7396 deep merge via ``json_patch`` /
-     ``JSON_MERGE_PATCH``. Nested objects are merged recursively.
-     ``null`` values **delete** the key.
-   * **Postgresql** - shallow concat via the ``||`` operator. Top-level
-     keys are overwritten, **nested objects are replaced wholesale**,
-     ``null`` is stored as JSON null and does **not** delete the key.
+   * SQLite, MySQL, MariaDB: RFC-7396 deep merge via ``json_patch`` /
+     ``JSON_MERGE_PATCH``. Nested objects are merged recursively. ``null``
+     values delete the key.
+   * Postgresql: shallow concat via the ``||`` operator. Top-level keys are
+     overwritten, nested objects are replaced whole, and ``null`` is stored
+     as JSON null rather than deleting the key.
 
    Example:
 
@@ -3759,11 +3754,9 @@ Fields
 
       Pattern-matching operators (:meth:`like`, :meth:`ilike`,
       :meth:`startswith`, :meth:`endswith`, :meth:`regexp`,
-      :meth:`iregexp`) automatically apply ``as_text()`` so calling them on
-      a path does the right thing without needing ``.as_text()`` explicitly.
-      :meth:`contains` is **not** among them - on a default-mode path it
-      performs JSON structural containment. In text mode it is a substring
-      match, so for a substring test use ``.as_text().contains(...)``.
+      :meth:`iregexp`) apply ``as_text()`` automatically. :meth:`contains`
+      does not. On a default-mode path it performs JSON structural
+      containment, so for a substring test use ``.as_text().contains(...)``.
 
    .. _json-field-typed-access:
 
@@ -3807,12 +3800,12 @@ Fields
 
       In ``.as_text()`` mode the right-hand side is compared as plain text.
 
-      Comparison against ``None`` is special, see :meth:`is_null`.
+      For comparison against ``None``, see :meth:`is_null`.
 
    .. method:: is_null(is_null=True)
 
-      Path-level "is empty" check. Matches rows where the extracted value
-      is effectively absent, covering three distinct storage states:
+      Matches rows where the extracted value is absent, which covers three
+      storage states:
 
       * Underlying column is SQL ``NULL``.
       * The key is missing from the JSON document.
@@ -3837,8 +3830,8 @@ Fields
 
       On MySQL and MariaDB, extracting a stored JSON ``null`` yields the
       string ``'null'`` rather than SQL ``NULL``, so :meth:`is_null` does
-      **not** match stored JSON nulls there. Missing keys and column SQL
-      ``NULL`` are matched as documented.
+      not match stored JSON nulls there. Missing keys and column SQL ``NULL``
+      are matched as documented.
 
    .. method:: in_(rhs)
                not_in(rhs)
@@ -3860,17 +3853,17 @@ Fields
       Ordering and range comparisons. The right-hand side is canonicalized
       the same way as for equality. Per-backend behavior:
 
-      * **Postgresql** - structural ``jsonb`` ordering (type class then value).
-      * **MySQL** - JSON-typed comparison rules.
-      * **SQLite and MariaDB** - text comparison of the json-encoded value.
-        ``'10' > '2'`` is lexicographic, **which is rarely what you want**.
+      * Postgresql: structural ``jsonb`` ordering (type class then value).
+      * MySQL: JSON-typed comparison rules.
+      * SQLite and MariaDB: text comparison of the json-encoded value, so
+        ``'10'`` sorts before ``'2'``.
 
       For portable strict-numeric ordering, use :meth:`as_int` or
       :meth:`as_float` first:
 
       .. code-block:: python
 
-         # Backend-native ordering (lexicographic on SQLite!)
+         # Backend-native ordering (lexicographic on SQLite).
          Doc.select().where(Doc.data['count'] > 10)
 
          # Strict numeric ordering on every backend.
@@ -3895,7 +3888,7 @@ Fields
                endswith(rhs)
 
       Substring shortcuts that wrap the right-hand side in ``%`` wildcards.
-      Like :meth:`like`, they auto-route through ``as_text()``:
+      Like :meth:`like`, they apply ``as_text()``:
 
       .. code-block:: python
 
@@ -3903,8 +3896,9 @@ Fields
 
    .. method:: contains(rhs)
 
-      JSON structural containment - ``@>`` on Postgresql, ``JSON_CONTAINS``
-      on MySQL / MariaDB, and a full-scan ``_pw_json_contains`` UDF on SQLite.
+      JSON structural containment, using ``@>`` on Postgresql,
+      ``JSON_CONTAINS`` on MySQL / MariaDB, and a full-scan
+      ``_pw_json_contains`` UDF on SQLite.
       On a text-mode path (``.as_text()``) it is a substring ``LIKE`` instead.
 
       .. code-block:: python
@@ -3938,12 +3932,12 @@ Fields
    .. method:: insert(value)
 
       Return an UPDATE-clause expression that writes ``value`` at this path
-      **only if the path is currently absent**. A stored JSON ``null``
-      counts as "present" and is not overwritten. Uses ``json_insert`` on
-      SQLite and ``JSON_INSERT`` on MySQL / MariaDB, emulated on Postgresql
-      via ``CASE WHEN (field #> '{k}') IS NULL THEN jsonb_set(...) ELSE field
-      END`` (correct because ``#>`` returns SQL ``NULL`` for absent keys
-      and jsonb ``'null'`` for stored JSON nulls).
+      only if the path is currently absent. A stored JSON ``null`` counts as
+      present and is not overwritten. Uses ``json_insert`` on SQLite and
+      ``JSON_INSERT`` on MySQL / MariaDB, emulated on Postgresql via ``CASE
+      WHEN (field #> '{k}') IS NULL THEN jsonb_set(...) ELSE field END``
+      (``#>`` returns SQL ``NULL`` for absent keys and jsonb ``'null'`` for
+      stored JSON nulls).
 
       .. code-block:: python
 
@@ -3953,7 +3947,7 @@ Fields
    .. method:: replace(value)
 
       Return an UPDATE-clause expression that writes ``value`` at this path
-      **only if the path already exists**. Uses ``json_replace`` on SQLite,
+      only if the path already exists. Uses ``json_replace`` on SQLite,
       ``jsonb_set(..., create_missing=false)`` on Postgresql, and
       ``JSON_REPLACE`` on MySQL / MariaDB.
 
@@ -3978,12 +3972,12 @@ Fields
          Behavior when the path holds a non-array value diverges across
          backends:
 
-         * **SQLite** - silently leaves the document unchanged.
-         * **MySQL / MariaDB** - wraps the existing value into an array
-           before appending: ``{"a": 1}`` becomes ``{"a": [1, "x"]}``.
-         * **Postgresql** - silently leaves scalars unchanged, but
-           appending to an *object* inserts a literal ``"-1"`` key:
-           ``{"a": {"b": 1}}`` becomes ``{"a": {"b": 1, "-1": "x"}}``.
+         * SQLite leaves the document unchanged.
+         * MySQL / MariaDB wrap the existing value into an array before
+           appending, so ``{"a": 1}`` becomes ``{"a": [1, "x"]}``.
+         * Postgresql leaves scalars unchanged, but appending to an object
+           inserts a literal ``"-1"`` key, so ``{"a": {"b": 1}}`` becomes
+           ``{"a": {"b": 1, "-1": "x"}}``.
 
          Use only on values you know are arrays.
 
@@ -3992,9 +3986,9 @@ Fields
          Appending at a path that does not exist at all also diverges.
          SQLite creates a new single-element array. Postgresql and MySQL
          leave the document unchanged. On MariaDB ``JSON_ARRAY_APPEND``
-         returns SQL NULL for a missing path, so the update **overwrites
-         the entire column with NULL**. If the key may be missing,
-         initialize the array with :meth:`set` first.
+         returns SQL NULL for a missing path, so the update overwrites the
+         entire column with NULL. If the key may be missing, initialize the
+         array with :meth:`set` first.
 
    .. method:: remove()
 
@@ -4010,13 +4004,12 @@ Fields
       Return the array length at this path. On non-array values the result
       diverges by backend:
 
-      * **SQLite** - returns ``0`` for non-arrays.
-      * **Postgresql** - raises ``cannot get array length of a non-array``.
-      * **MySQL / MariaDB** - returns object key count for objects,
-        ``1`` for scalars.
+      * SQLite returns ``0`` for non-arrays.
+      * Postgresql raises ``cannot get array length of a non-array``.
+      * MySQL / MariaDB return the key count for objects and ``1`` for
+        scalars.
 
-      Use only on values you know are arrays, or be prepared for the
-      backend-specific semantics.
+      Use only on values you know are arrays.
 
       .. code-block:: python
 
@@ -4024,7 +4017,7 @@ Fields
 
    .. method:: contained_by(value)
 
-      Inverse of :meth:`contains` - test whether the value at this path is a
+      Inverse of :meth:`contains`. Test whether the value at this path is a
       subset of ``value``. Postgresql ``<@``, MySQL / MariaDB
       ``JSON_CONTAINS(value, lhs)``, SQLite the ``_pw_json_contains`` UDF
       (full scan).

@@ -15,7 +15,7 @@ from .base import db
 from .base import skip_if
 
 
-# CockroachDB rides PostgresqlJSONMethods (and psycopg), so it gets the
+# CockroachDB uses PostgresqlJSONMethods (and psycopg), so it gets the
 # postgres-flavored behaviors and SQL shapes in these tests.
 IS_PG_JSON = IS_POSTGRESQL or IS_CRDB
 
@@ -30,10 +30,8 @@ class TM(TestModel):
 
 
 class TestValueMatrix(ModelTestCase):
-    # For each representative value: store it, read it back (assert value AND
+    # For each representative value: store it, read it back (assert value and
     # type), then look it up via WHERE data == value (assert match).
-    # Combined matrix catches the cross-cut bug where storage works but
-    # equality doesn't (or vice versa).
     requires = [JM]
 
     VALUES = [
@@ -463,9 +461,9 @@ class TestInheritedJSONField(ModelTestCase):
     requires = []
 
     def test_inherit_json_field(self):
-        # JSONField stores a db-specific helper instance w/a db ref. Attempting
-        # to deepcopy (during inheritance) travels the graph down to the
-        # database instance's locks and connection local, which failed.
+        # JSONField stores a db-specific helper instance w/a db ref. A deepcopy
+        # (during inheritance) would travel the graph down to the database
+        # instance's locks and connection local.
         class JIBase(TestModel):
             data = JSONField(null=True)
 
@@ -586,7 +584,7 @@ class TestNullSemantics(ModelTestCase):
         else:
             type_fn = fn.json_type(JM.data, '$.k')
             json_null_marker = 'null'
-        # Rows where the key is present AND is JSON null: only r_json_null.
+        # Rows where the key is present and is JSON null: only r_json_null.
         ids = [r.id for r in JM.select().where(type_fn == json_null_marker)]
         self.assertEqual(ids, [self.r_json_null])
 
@@ -869,9 +867,8 @@ class TestMutation(ModelTestCase):
         self.assertEqual(JM.get_by_id(m.id).data, {'k': {'a': 1, 'b': [2]}})
 
     def test_set_json_null(self):
-        # set(None) stores JSON null at the path, NOT SQL NULL on the column,
-        # and on MySQL must not trigger the "any-arg-NULL wipes document"
-        # footgun.
+        # set(None) stores JSON null at the path, not SQL NULL on the column.
+        # On MySQL a NULL argument would wipe the whole document.
         m = JM.create(data={'k': 'v'})
         JM.update(data=JM.data['k'].set(None)).where(JM.id == m.id).execute()
         self.assertEqual(JM.get_by_id(m.id).data, {'k': None})
@@ -909,7 +906,7 @@ class TestMutation(ModelTestCase):
         self.assertEqual([r.L for r in rows], [3, 0])
 
     def test_length_root(self):
-        # length() on root: array length of the document IF it's an array.
+        # length() on root: array length of the document if it's an array.
         JM.create(data=['a', 'b', 'c'])
         L = JM.select(JM.data.length()).scalar()
         self.assertEqual(L, 3)
@@ -1011,8 +1008,7 @@ class TestUpdateDivergence(ModelTestCase):
 
 
 class TestDocumentedDivergences(ModelTestCase):
-    # Pin the per-backend behaviors promised in the docs, so the docs and
-    # the implementation cannot drift apart silently.
+    # Per-backend behaviors described in the JSONField docs.
     requires = [JM]
 
     def test_set_missing_parents(self):
@@ -1052,7 +1048,7 @@ class TestDocumentedDivergences(ModelTestCase):
             self.assertEqual(data, {'tags': ['x']})  # Array is created.
         elif IS_MARIADB:
             # JSON_ARRAY_APPEND returns SQL NULL for a missing path, which
-            # nulls the whole column. Documented footgun.
+            # nulls the whole column.
             self.assertIsNone(data)
         else:
             self.assertEqual(data, {})  # Ignored on PG and MySQL.

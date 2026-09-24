@@ -278,13 +278,12 @@ could declare the field with a default value:
        read_count = IntegerField(default=0)
        created = DateTimeField(default=datetime.datetime.now)
 
-For ``read_count``, Peewee uses the literal value ``0``. For ``created``,
-Peewee calls ``datetime.datetime.now`` at the moment of instantiation -
-the **function itself is passed, not its return value**.
+For ``read_count``, Peewee uses the literal value ``0``. For ``created``, the
+function itself is passed, not its return value, and Peewee calls it at the
+moment of instantiation.
 
-**Mutable defaults require a factory function.** If a default value is a mutable
-object such as a ``list`` or ``dict``, passing it directly means every model
-instance shares *the same object*. Wrap it in a function instead:
+A mutable default such as a ``list`` or ``dict`` would be shared by every model
+instance. Wrap it in a function instead:
 
 .. code-block:: python
 
@@ -621,10 +620,10 @@ NULL semantics
 A JSON document has three distinct "absent" states, all of which collapse to
 Python ``None`` when extracted:
 
-1. **Column SQL ``NULL``** - ``data=None`` was stored.
-2. **Missing key** - the document doesn't contain the path being queried.
-3. **JSON ``null``** - the path resolves to a literal JSON ``null`` value
-   (e.g., ``data={'k': None}``).
+1. Column SQL ``NULL``: ``data=None`` was stored.
+2. Missing key: the document doesn't contain the path being queried.
+3. JSON ``null``: the path resolves to a literal JSON ``null`` value (e.g.,
+   ``data={'k': None}``).
 
 Path-level queries treat all three uniformly:
 
@@ -644,13 +643,12 @@ Path-level queries treat all three uniformly:
    Doc.select().where(Doc.data['k'] != None)
 
 .. warning::
-   On MySQL and MariaDB a stored JSON ``null`` (row B) is **not** matched
-   by ``== None`` / ``is_null()`` - extraction yields the string ``'null'``
-   rather than SQL ``NULL``, so row B is treated as present. The
-   missing-key and column-``NULL`` cases (C, D) behave as documented on
-   all backends.
+   On MySQL and MariaDB a stored JSON ``null`` (row B) is not matched by
+   ``== None`` / ``is_null()``. Extraction yields the string ``'null'`` rather
+   than SQL ``NULL``, so row B is treated as present. The missing-key and
+   column-``NULL`` cases (C, D) behave as documented on all backends.
 
-Field-level NULL checks **only** match column SQL NULL:
+Field-level NULL checks match only column SQL NULL:
 
 .. code-block:: python
 
@@ -679,10 +677,10 @@ the backend's ``JSON_TYPE`` / ``jsonb_typeof`` function:
 Text mode and typed casts
 ^^^^^^^^^^^^^^^^^^^^^^^^^
 
-The default path mode returns the value in *JSON form* - JSON-encoded text
+The default path mode returns the value in JSON form: JSON-encoded text
 (SQLite/MySQL) or a deserialized Python value via the driver (Postgresql).
 Equality and ``in_`` work against this form. Relational comparisons compare
-the json *text* on SQLite and MariaDB - use :meth:`~JSONPath.as_int` /
+the json text on SQLite and MariaDB, so use :meth:`~JSONPath.as_int` /
 :meth:`~JSONPath.as_float` for portable numeric ordering.
 
 ``.as_text()`` flips the path to *text mode*, returning the raw scalar text
@@ -719,8 +717,8 @@ Method         On JSONField (root)  On JSONPath          Cross-backend?
 ``replace(v)`` -                    yes                  yes
 ``append(v)``  yes                  yes                  yes
 ``remove()``   -                    yes                  yes
-``length()``   yes                  yes                  yes (with caveats - see method)
-``update(v)``  yes                  -                    yes (**divergent semantics**)
+``length()``   yes                  yes                  yes (see method)
+``update(v)``  yes                  -                    semantics differ
 ============== ==================== ==================== =============================
 
 .. code-block:: python
@@ -746,8 +744,8 @@ Method         On JSONField (root)  On JSONPath          Cross-backend?
    # Array length.
    Doc.select(Doc.data['tags'].length())
 
-   # Document-level merge. Semantics diverge by backend - see the
-   # JSONField.update() docs.
+   # Document-level merge. Semantics differ by backend, see
+   # JSONField.update().
    Doc.update(data=Doc.data.update({'last_seen': '2026-01-01'})).execute()
 
 For mutation patterns outside this subset (path-level update,
@@ -781,8 +779,7 @@ or drop down to ``fn.*`` directly:
 Backend divergences at a glance
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-The API is portable but the underlying engines disagree on edge cases.
-This table collects every documented divergence in one place.
+The underlying engines disagree on these edge cases:
 
 .. list-table::
    :header-rows: 1
@@ -815,7 +812,7 @@ This table collects every documented divergence in one place.
    * - ``append()`` on a missing path
      - Creates a single-element array.
      - Silent no-op.
-     - MySQL: silent no-op. **MariaDB: nulls the entire column.**
+     - MySQL: silent no-op. MariaDB: nulls the entire column.
    * - ``length()`` on a non-array
      - Returns ``0``.
      - Raises an error.
@@ -835,21 +832,19 @@ This table collects every documented divergence in one place.
    * - ``is_null()`` on a stored JSON ``null``
      - Matches (treated as absent).
      - Matches (treated as absent).
-     - Does **not** match (extraction yields the string ``'null'``).
+     - Does not match (extraction yields the string ``'null'``).
 
-Use :meth:`~JSONPath.as_int` / :meth:`~JSONPath.as_float` for portable
-numeric ordering, and only call ``append()`` / ``length()`` on values you
-know are arrays. On MariaDB, initialize an array with ``set()`` before the
-first ``append()`` - appending at a missing path nulls the column there.
+Only call ``append()`` / ``length()`` on values you know are arrays. On
+MariaDB, initialize an array with ``set()`` before the first ``append()``.
 
 .. _json-field-backend-specific:
 
 Backend-specific Modules
 ^^^^^^^^^^^^^^^^^^^^^^^^
 
-This module is deliberately the portable subset. For engine-specific operators
-such as ``jsonb`` operators, ``json_each``, ``json_tree``, ``JSON_TABLE``,
-etc. use the corresponding playhouse module:
+The core field covers the portable subset. For engine-specific operators such
+as ``jsonb`` operators, ``json_each``, ``json_tree``, ``JSON_TABLE``, etc. use
+the corresponding playhouse module:
 
 * :class:`playhouse.postgres_ext.BinaryJSONField` - full ``jsonb`` operator
   surface (``jsonb_path_query*``, etc.) plus the engine-specific mutation

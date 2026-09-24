@@ -158,7 +158,7 @@ class SearchWeight(FTSModel, TestModel):
 
 
 class SearchWeight5(FTS5Model):
-    # FTS5 model with an UNINDEXED column *between* two indexed columns, so a
+    # FTS5 model with an UNINDEXED column between two indexed columns, so a
     # mis-placed weight is observable in the ranking.
     title = SearchField()
     extra = SearchField(unindexed=True)
@@ -1085,10 +1085,8 @@ class TestFullTextSearch(BaseFTSTestCase, ModelTestCase):
 
     @requires_models(SearchWeight)
     def test_search_dict_weights(self):
-        # Regression: the dict form of `weights` iterated *all* sorted_fields,
-        # so the rowid PK prepended a phantom weight and shifted every column
-        # by one (IndexError with the Python ranking UDF, silent mis-scoring
-        # with the Cython one). It must behave exactly like the list form.
+        # The dict form of `weights` must skip the rowid pk and match the list
+        # form.
         SearchWeight.create(title='alpha alpha', body='common words')  # 1
         SearchWeight.create(title='common words', body='alpha alpha')  # 2
         SearchWeight.create(title='common', body='words')              # 3
@@ -1108,8 +1106,7 @@ class TestFullTextSearch(BaseFTSTestCase, ModelTestCase):
             by_list)
         self.assertEqual(results({'title': 3., 'body': 1.}), by_list)
 
-        # Weighting the body instead flips the ranking -- proof the weights
-        # land on the intended columns rather than being shifted.
+        # Weighting the body instead flips the ranking.
         self.assertEqual(
             [rowid for rowid, _ in results({'body': 3., 'title': 1.})], [2, 1])
 
@@ -1329,11 +1326,9 @@ class TestFTS5(BaseFTSTestCase, ModelTestCase):
 
     @requires_models(SearchWeight5)
     def test_search_dict_weights_unindexed(self):
-        # Regression: FTS5 bm25() weights are positional across *all* columns,
-        # including UNINDEXED ones. The dict form skipped unindexed columns, so
-        # with `extra` UNINDEXED between `title` and `body` a weight on
-        # `body` was mis-applied to `extra`. It must behave exactly like
-        # the list form. The two rows below are rowid 1 and rowid 2.
+        # FTS5 bm25() weights are positional across all columns, including
+        # UNINDEXED ones, so a dict weight on `body` must not land on `extra`.
+        # The two rows below are rowid 1 and rowid 2.
         SearchWeight5.create(title='alpha', extra='junk', body='common')
         SearchWeight5.create(title='common', extra='junk', body='alpha')
 
@@ -1347,8 +1342,7 @@ class TestFTS5(BaseFTSTestCase, ModelTestCase):
         self.assertEqual(by_list, [2, 1])
         self.assertEqual(order({SearchWeight5.body: 5.}), by_list)
         self.assertEqual(order({'body': 5.}), by_list)
-        # Equal weights leave the default ordering (proof body-weighting above
-        # actually changed it).
+        # Equal weights leave the default ordering.
         self.assertEqual(order([1., 1., 1.]), [1, 2])
 
     @requires_models(FTS5Document)
