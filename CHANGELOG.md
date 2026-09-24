@@ -7,6 +7,10 @@ https://github.com/coleifer/peewee/releases
 
 ## master
 
+* Don't cache ``None`` on unselected FK join trees, see #3083.
+* Some fixes for edge-cases around non-unique aliases and unicode aliases,
+  see #3081 and #3078.
+
 [View commits](https://github.com/coleifer/peewee/compare/4.5.1...master)
 
 ## 4.5.1
