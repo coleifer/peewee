@@ -3670,6 +3670,7 @@ EXCEPTIONS = {
     'OperationalError': OperationalError,
     'PostgresConnectionError': OperationalError,
     'ProgrammingError': ProgrammingError,
+    'QueryCanceledError': OperationalError,
     'SyntaxOrAccessError': ProgrammingError,
     'TransactionRollbackError': OperationalError,
     'UndefinedFunction': ProgrammingError,

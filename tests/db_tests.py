@@ -1691,6 +1691,15 @@ class TestExceptionWrapper(ModelTestCase):
         if exc is None: raise Exception('expected integrity error not raised')
         self.assertTrue(exc.orig.__module__ != 'peewee')
 
+    @requires_postgresql
+    def test_statement_timeout(self):
+        self.database.execute_sql('SET statement_timeout = 10')
+        try:
+            with self.assertRaises(OperationalError):
+                self.database.execute_sql('SELECT pg_sleep(1)')
+        finally:
+            self.database.execute_sql('SET statement_timeout = 0')
+
 
 class TestModelPropertyHelper(BaseTestCase):
     def test_model_property(self):

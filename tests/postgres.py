@@ -1165,6 +1165,26 @@ class TestServerSide(ModelTestCase):
         self.assertEqual(accum, list(range(25)))
 
 
+class TestServerSideCursorsOption(ModelTestCase):
+    database = db_loader('postgres', db_class=PostgresqlExtDatabase,
+                         server_side_cursors=True)
+    requires = [Register]
+
+    def test_server_side_cursors(self):
+        cte = Register.select(Register.id).cte('ids')
+        with_cte = (Register
+                    .select()
+                    .join(cte, on=(Register.id == cte.c.id))
+                    .with_cte(cte))
+        with self.database.atomic():
+            for query in (Register.select(),
+                          with_cte,
+                          Register.select() | Register.select()):
+                curs = self.database.execute(query)
+                self.assertTrue(isinstance(curs, FetchManyCursor))
+                curs.close()
+
+
 class JDoc(TestModel):
     data = JSONField()
 
