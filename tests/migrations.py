@@ -981,6 +981,30 @@ class TestSchemaMigration(ModelTestCase):
             db.execute_sql('DROP TABLE IF EXISTS "ab"')
 
     @requires_sqlite
+    def test_rebuild_preserves_index(self):
+        db = self.database
+        db.execute_sql('DROP TABLE IF EXISTS "st"')
+        db.execute_sql('CREATE TABLE "st" ("id" INTEGER PRIMARY KEY, '
+                       '"status_code" INTEGER, "status" INTEGER)')
+        db.execute_sql('CREATE UNIQUE INDEX "st_code_status" ON "st" '
+                       '(status_code, status DESC)')
+        try:
+            db.execute_sql('INSERT INTO "st" ("status_code", "status") '
+                           'VALUES (1, 1)')
+            migrate(self.migrator.alter_column_type(
+                'st', 'status', IntegerField(null=True)))
+
+            index, = db.get_indexes('st')
+            self.assertEqual(index.sql, (
+                'CREATE UNIQUE INDEX "st_code_status" ON "st" '
+                '(status_code, status DESC)'))
+            self.assertEqual(index.columns, ['status_code', 'status'])
+            db.execute_sql('INSERT INTO "st" ("status_code", "status") '
+                           'VALUES (1, 2)')
+        finally:
+            db.execute_sql('DROP TABLE IF EXISTS "st"')
+
+    @requires_sqlite
     @requires_models(IndexModel)
     def test_index_preservation(self):
         self.reset_sql_history()
