@@ -1710,6 +1710,7 @@ def Default(value):
 
 class Function(ColumnBase):
     no_coerce_functions = set(('sum', 'count', 'avg', 'cast', 'array_agg'))
+    subquery_functions = set(('exists', 'any', 'all', 'some', 'array'))
 
     def __init__(self, name, arguments, coerce=True, python_value=None):
         self.name = name
@@ -1768,7 +1769,9 @@ class Function(ColumnBase):
                 args[-1] = NodeList((args[-1], SQL('ORDER BY'),
                                      CommaNodeList(self._order_by)))
 
-            with ctx(in_function=True, function_arg_count=len(self.arguments)):
+            bare = (len(args) == 1 and isinstance(args[0], SelectBase) and
+                    self.name.lower() in self.subquery_functions)
+            with ctx(in_function=True, bare_subquery=bare):
                 ctx.sql(EnclosedNodeList([
                     (arg if isinstance(arg, Node) else Value(arg, False))
                     for arg in args]))
@@ -1911,7 +1914,7 @@ class _InFunction(Node):
         self.in_function = in_function
 
     def __sql__(self, ctx):
-        with ctx(in_function=self.in_function, function_arg_count=0):
+        with ctx(in_function=self.in_function):
             return ctx.sql(self.node)
 
 
@@ -2415,8 +2418,8 @@ class SelectBase(_HashableSource, Source, SelectQuery):
             pass
 
     def _subquery_parens(self, ctx):
-        # Parens are unnecessary when the sole argument of a function call.
-        if ctx.state.in_function and ctx.state.function_arg_count == 1:
+        # Set by Function for its subquery_functions.
+        if ctx.state.bare_subquery:
             return False
         return ctx.subquery or (ctx.scope == SCOPE_SOURCE)
 
@@ -2542,7 +2545,7 @@ class CompoundSelectQuery(SelectBase):
         # Call parent method to handle any CTEs.
         super(CompoundSelectQuery, self).__sql__(ctx)
 
-        with ctx(parentheses=self._subquery_parens(ctx)):
+        with ctx(parentheses=self._subquery_parens(ctx), bare_subquery=False):
             # Correlated rhs refs must resolve to the enclosing aliases.
             outer_aliases = dict(ctx.alias_manager.mapping)
 
@@ -2709,6 +2712,7 @@ class Select(SelectBase):
             'in_expr': False,
             'in_function': False,
             'in_projection': False,
+            'bare_subquery': False,
             'parentheses': self._subquery_parens(ctx),
             'subquery': True,
         }

@@ -4274,6 +4274,23 @@ class TestCompoundExistsRegression(ModelTestCase):
         self.assertEqual([u.username for u in query], ['u1', 'u2'])
 
 
+class TestSubqueryInFunction(ModelTestCase):
+    requires = [Sample, SampleMeta]
+
+    def test_subquery_in_single_arg_function(self):
+        s1 = Sample.create(counter=3)
+        Sample.create(counter=-5)
+        lowest = Sample.select(fn.MIN(Sample.counter))
+
+        self.assertEqual(Sample.select(fn.ABS(lowest)).scalar(), 5)
+        self.assertEqual(
+            Sample.select(fn.SUM(Sample.counter - lowest)).scalar(), 8)
+
+        SampleMeta.create(sample=s1)
+        SampleMeta.update(value=fn.ABS(lowest)).execute()
+        self.assertEqual(SampleMeta.get().value, 5)
+
+
 class TestUnionParenthesesRegression(ModelTestCase):
     requires = [User]
 

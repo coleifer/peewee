@@ -1803,6 +1803,21 @@ class TestSelectQuery(BaseTestCase):
             'THEN (SELECT MAX("t1"."id") FROM "users" AS "t1") '
             'ELSE ? END) FROM "users" AS "t1"'), [0, 0])
 
+    def test_subquery_in_single_arg_function(self):
+        subq = User.select(fn.MIN(User.c.id))
+        self.assertSQL(User.select(fn.ABS(subq)), (
+            'SELECT ABS((SELECT MIN("t1"."id") FROM "users" AS "t1")) '
+            'FROM "users" AS "t1"'), [])
+
+        self.assertSQL(User.select(fn.SUM(User.c.id - subq)), (
+            'SELECT SUM("t1"."id" - '
+            '(SELECT MIN("t1"."id") FROM "users" AS "t1")) '
+            'FROM "users" AS "t1"'), [])
+
+        self.assertSQL(User.select(fn.MAX(Cast(subq, 'text'))), (
+            'SELECT MAX(CAST((SELECT MIN("t1"."id") FROM "users" AS "t1") '
+            'AS text)) FROM "users" AS "t1"'), [])
+
     def test_coalesce(self):
         Sample = Table('sample', ('counter', 'value'))
         query = (Sample
@@ -2177,6 +2192,12 @@ class TestUpdateQuery(BaseTestCase):
             'UPDATE "users" SET "last_tweet_id" = CAST('
             '(SELECT MAX("t1"."id") FROM "tweets" AS "t1" '
             'WHERE ("t1"."user_id" = "users"."id")) AS int)'), [])
+
+        query = User.update({User.c.last_tweet_id: fn.ABS(subquery)})
+        self.assertSQL(query, (
+            'UPDATE "users" SET "last_tweet_id" = ABS('
+            '(SELECT MAX("t1"."id") FROM "tweets" AS "t1" '
+            'WHERE ("t1"."user_id" = "users"."id")))'), [])
 
     def test_update_from_cte(self):
         cte = (Tweet

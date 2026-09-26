@@ -10,6 +10,9 @@ https://github.com/coleifer/peewee/releases
 * Don't cache ``None`` on unselected FK join trees, see #3083.
 * Some fixes for edge-cases around non-unique aliases and unicode aliases,
   see #3081 and #3078.
+* Ensure subqueries get appropriate parens inside single argument functions.
+  Functions that do not want the extra parens (exists, e.g.) will not add extra
+  parens.
 
 [View commits](https://github.com/coleifer/peewee/compare/4.5.1...master)
 

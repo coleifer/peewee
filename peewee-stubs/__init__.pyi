@@ -460,6 +460,7 @@ def Default(value) -> SQL: ...
 
 class Function(ColumnBase):
     no_coerce_functions: ClassVar[set[str]]
+    subquery_functions: ClassVar[set[str]]
     name: str | None
     arguments: tuple[Any, ...] | None  # Positional SQL function args: values, columns, or other nodes
     def __init__(self, name, arguments, coerce: bool = True, python_value=None) -> None: ...
