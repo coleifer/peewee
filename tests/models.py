@@ -4723,6 +4723,17 @@ class TestValuesListIntegration(ModelTestCase):
         self.assertEqual([(v.n, v.s) for v in query],
                          [(1, 'one'), (3, 'three')])
 
+        query = VL.select(VL.n, VL.n.in_(vl).alias('hit')).order_by(VL.n)
+        self.assertEqual([(v.n, bool(v.hit)) for v in query],
+                         [(1, True), (2, False), (3, True)])
+
+        VA = VL.alias()
+        query = (VL
+                 .select(VL.n)
+                 .join(VA, on=((VA.n == VL.n) & VA.n.in_(vl)))
+                 .order_by(VL.n))
+        self.assertEqual([v.n for v in query], [1, 3])
+
     def test_values_list(self):
         vl = ValuesList(self._data)
 

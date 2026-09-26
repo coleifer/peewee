@@ -1157,7 +1157,9 @@ class ValuesList(_HashableSource, BaseTable):
                        .sql(CommaNodeList([
                            EnclosedNodeList(row) for row in self._values])))
 
-            if ctx.scope == SCOPE_SOURCE:
+            # The SELECT list and ON clauses are SCOPE_SOURCE too.
+            is_operand = ctx.state.in_expr or ctx.state.in_projection
+            if ctx.scope == SCOPE_SOURCE and not is_operand:
                 ctx.literal(' AS ').sql(Entity(ctx.alias_manager[self]))
                 if self._columns:
                     entities = [Entity(c) for c in self._columns]

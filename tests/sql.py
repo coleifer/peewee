@@ -2881,6 +2881,21 @@ class TestValuesList(BaseTestCase):
             'SELECT "t1"."id" FROM "person" AS "t1" '
             'WHERE ("t1"."id" NOT IN (VALUES (?)))'), [1])
 
+        query = Person.select(Person.id.in_(ValuesList([(1,), (2,)])))
+        self.assertSQL(query, (
+            'SELECT ("t1"."id" IN (VALUES (?), (?))) '
+            'FROM "person" AS "t1"'), [1, 2])
+
+        Note = Table('note', ['id', 'person_id'], primary_key='id')
+        query = (Person
+                 .select(Person.id)
+                 .join(Note, on=((Note.person_id == Person.id) &
+                                 Note.id.in_(ValuesList([(1,)])))))
+        self.assertSQL(query, (
+            'SELECT "t1"."id" FROM "person" AS "t1" '
+            'INNER JOIN "note" AS "t2" ON (("t2"."person_id" = "t1"."id") '
+            'AND ("t2"."id" IN (VALUES (?))))'), [1])
+
 
 class TestCaseFunction(BaseTestCase):
     def test_case_function(self):
