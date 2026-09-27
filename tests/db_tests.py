@@ -819,6 +819,24 @@ class TestIntrospection(ModelTestCase):
         else:
             self.assertTrue(fk.name)
 
+    @requires_sqlite
+    def test_get_foreign_keys_implicit(self):
+        # Omitted columns resolve to the parent's pk, in key order.
+        self.execute('CREATE TABLE ip (a TEXT, b TEXT, PRIMARY KEY (b, a))')
+        self.execute('CREATE TABLE ic (id INTEGER PRIMARY KEY, x TEXT, '
+                     'y TEXT, p INTEGER REFERENCES ic, '
+                     'FOREIGN KEY (x, y) REFERENCES ip)')
+        try:
+            self.assertEqual(self.database.get_primary_keys('ip'), ['b', 'a'])
+            fks = self.database.get_foreign_keys('ic')
+            self.assertEqual(sorted((fk.column, fk.dest_table, fk.dest_column)
+                                    for fk in fks),
+                             [('p', 'ic', 'id'), ('x', 'ip', 'b'),
+                              ('y', 'ip', 'a')])
+        finally:
+            self.execute('DROP TABLE ic')
+            self.execute('DROP TABLE ip')
+
     def test_get_indexes_sql(self):
         indexes = {i.name: i
                    for i in self.database.get_indexes('unique_model')}

@@ -4522,15 +4522,24 @@ class SqliteDatabase(Database):
         schema = qesc(schema or 'main')
         cursor = self.execute_sql('PRAGMA "%s".table_info("%s")' %
                                   (schema, qesc(table)))
-        return [row[1] for row in filter(lambda r: r[-1], cursor.fetchall())]
+        # Order by position in the key, not in the table.
+        pks = sorted((row[5], row[1]) for row in cursor.fetchall() if row[5])
+        return [name for _, name in pks]
 
     def get_foreign_keys(self, table, schema=None):
-        schema = qesc(schema or 'main')
         cursor = self.execute_sql('PRAGMA "%s".foreign_key_list("%s")' %
-                                  (schema, qesc(table)))
-        return [ForeignKeyMetadata(row[3], row[2], row[4], table, None,
-                                   row[6], row[5])
-                for row in cursor.fetchall()]
+                                  (qesc(schema or 'main'), qesc(table)))
+        accum = []
+        for row in cursor.fetchall():
+            dest_column = row[4]
+            if dest_column is None:
+                # A bare "REFERENCES parent" means the parent's primary key.
+                pk = self.get_primary_keys(row[2], schema)
+                if row[1] < len(pk):
+                    dest_column = pk[row[1]]
+            accum.append(ForeignKeyMetadata(row[3], row[2], dest_column, table,
+                                            None, row[6], row[5]))
+        return accum
 
     def get_binary_type(self):
         return sqlite3.Binary
