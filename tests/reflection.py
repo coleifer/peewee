@@ -865,6 +865,22 @@ class TestReflectionFacets(BaseReflectionTestCase):
         finally:
             self.database.execute_sql('DROP TABLE facet_intpk')
 
+    def test_composite_pk_order(self):
+        # Key order, not table order, including the renamed fk column.
+        self.database.execute_sql('DROP TABLE IF EXISTS facet_comppk')
+        self.database.execute_sql(
+            'CREATE TABLE facet_comppk (tag VARCHAR(10) NOT NULL, '
+            'parent_id INTEGER NOT NULL, PRIMARY KEY (parent_id, tag), '
+            'FOREIGN KEY (parent_id) REFERENCES %s (id))' %
+            FacetParent._meta.table_name)
+        try:
+            models = self.introspector.generate_models(
+                table_names=['facet_comppk'])
+            pk = models['facet_comppk']._meta.primary_key
+            self.assertEqual(pk.field_names, ('parent', 'tag'))
+        finally:
+            self.database.execute_sql('DROP TABLE facet_comppk')
+
     @skip_if(IS_MYSQL, 'mysql does not support partial indexes')
     def test_partial_index_skipped(self):
         table = Facets._meta.table_name

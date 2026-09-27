@@ -128,9 +128,8 @@ def print_models(introspector, tables=None, preserve_order=False,
         if introspector.schema:
             print('        schema = \'%s\'' % introspector.schema)
         if len(primary_keys) > 1:
-            pk_field_names = sorted([
-                field.name for col, field in columns
-                if col in primary_keys])
+            pk_field_names = [database.columns[table][col].name
+                              for col in primary_keys]
             pk_list = ', '.join("'%s'" % pk for pk in pk_field_names)
             print('        primary_key = CompositeKey(%s)' % pk_list)
         elif not primary_keys:

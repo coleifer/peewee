@@ -4912,7 +4912,8 @@ class PostgresqlDatabase(Database):
             WHERE
                 tc.constraint_type = %s AND
                 tc.table_name = %s AND
-                tc.table_schema = COALESCE(%s, current_schema())"""
+                tc.table_schema = COALESCE(%s, current_schema())
+            ORDER BY kc.ordinal_position"""
         ctype = 'PRIMARY KEY'
         cursor = self.execute_sql(query, (ctype, table, schema))
         return [pk for pk, in cursor.fetchall()]

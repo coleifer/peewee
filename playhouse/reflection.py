@@ -625,7 +625,7 @@ class Introspector(object):
         # Store a mapping of table name -> dictionary of columns.
         columns = {}
 
-        # Store a mapping of table name -> set of primary key columns.
+        # Store a mapping of table name -> primary key columns, in key order.
         primary_keys = {}
 
         # Store a mapping of table -> foreign keys.
@@ -698,9 +698,8 @@ class Introspector(object):
                     table_columns[column].unique = index.unique
                     table_columns[column].index = True
 
-            primary_keys[table] = [name for name, column
-                                   in table_columns.items()
-                                   if column.primary_key]
+            primary_keys[table] = self.metadata.get_primary_keys(
+                table, self.schema)
             columns[table] = table_columns
             indexes[table] = table_indexes
 
@@ -774,11 +773,9 @@ class Introspector(object):
                     else:
                         _create_model(dest, models)
 
-            primary_keys = []
             columns = database.columns[table]
-            for column_name, column in columns.items():
-                if column.primary_key:
-                    primary_keys.append(column.name)
+            primary_keys = [columns[col].name
+                            for col in database.primary_keys[table]]
 
             multi_column_indexes = database.multi_column_indexes(table)
             column_indexes = database.column_indexes(table)
@@ -791,9 +788,7 @@ class Introspector(object):
             if not primary_keys:
                 Meta.primary_key = False
             elif len(primary_keys) > 1:
-                Meta.primary_key = CompositeKey(*[
-                    field.name for col, field in columns.items()
-                    if col in primary_keys])
+                Meta.primary_key = CompositeKey(*primary_keys)
                 composite_key = True
 
             attrs = {'Meta': Meta}
