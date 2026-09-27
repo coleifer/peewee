@@ -7,6 +7,10 @@ https://github.com/coleifer/peewee/releases
 
 ## master
 
+[View commits](https://github.com/coleifer/peewee/compare/4.5.2...master)
+
+## 4.5.2
+
 * Don't cache ``None`` on unselected FK join trees, see #3083.
 * Some fixes for edge-cases around non-unique aliases and unicode aliases,
   see #3081 and #3078.
@@ -18,7 +22,7 @@ https://github.com/coleifer/peewee/releases
   queries on MySQL that select two columns w/the same name.
 * Composite primary key columns are introspected in key-order.
 
-[View commits](https://github.com/coleifer/peewee/compare/4.5.1...master)
+[View commits](https://github.com/coleifer/peewee/compare/4.5.1...4.5.2)
 
 ## 4.5.1
 
