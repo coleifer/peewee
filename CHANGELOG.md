@@ -13,6 +13,9 @@ https://github.com/coleifer/peewee/releases
 * Ensure subqueries get appropriate parens inside single argument functions.
   Functions that do not want the extra parens (exists, e.g.) will not add extra
   parens.
+* `exists()` wraps the query in `EXISTS(...)` rather than replacing its
+  columns, fixing queries that order by or filter on a selected alias, and
+  queries on MySQL that select two columns w/the same name.
 
 [View commits](https://github.com/coleifer/peewee/compare/4.5.1...master)
 

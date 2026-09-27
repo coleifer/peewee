@@ -13,7 +13,6 @@ peewee._ModelQueryHelper.models
 
 # Wrapped with @database_required which sometimes injects the database argument
 peewee.BaseQuery.execute
-peewee.CompoundSelectQuery.exists
 peewee.SelectBase.count
 peewee.SelectBase.exists
 peewee.SelectBase.first

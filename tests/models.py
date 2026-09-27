@@ -4668,6 +4668,28 @@ class TestExistsIntegration(ModelTestCase):
         self.assertFalse(query.exists(alt_db))
         alt_db.close()
 
+    @requires_models(User, Tweet)
+    def test_exists_order_by_alias(self):
+        Tweet.create(user=User.create(username='huey'), content='meow')
+        query = (User
+                 .select(User, fn.COUNT(Tweet.id).alias('ct'))
+                 .join(Tweet)
+                 .group_by(User)
+                 .order_by(SQL('ct').desc()))
+        self.assertTrue(query.exists())
+        self.assertFalse(query.where(User.username == 'nobody').exists())
+
+    @requires_models(User, Tweet)
+    def test_exists_compound_duplicate_columns(self):
+        huey = User.create(username='huey')
+        Tweet.create(user=huey, content='meow')
+        Tweet.create(user=huey, content='purr')
+        lhs = (Tweet.select(Tweet, User).join(User)
+               .where(Tweet.content == 'meow'))
+        rhs = (Tweet.select(Tweet, User).join(User)
+               .where(Tweet.content == 'purr'))
+        self.assertTrue((lhs | rhs).exists())
+
 
 class VL(TestModel):
     n = IntegerField()

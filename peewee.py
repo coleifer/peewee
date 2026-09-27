@@ -2406,10 +2406,7 @@ class SelectBase(_HashableSource, Source, SelectQuery):
 
     @database_required
     def exists(self, database):
-        clone = self.columns(SQL('1'))
-        clone._limit = 1
-        clone._offset = None
-        return bool(clone.scalar(database))
+        return bool(Select(columns=[fn.EXISTS(self)]).scalar(database))
 
     @database_required
     def get(self, database):
@@ -2446,11 +2443,6 @@ class CompoundSelectQuery(SelectBase):
     @property
     def _returning(self):
         return self.lhs._returning
-
-    @database_required
-    def exists(self, database):
-        query = Select((self.limit(1),), (SQL('1'),)).bind(database)
-        return bool(query.scalar())
 
     def _self_wraps(self, subq):
         # An inner ORDER BY / LIMIT / OFFSET forces the member to group.
