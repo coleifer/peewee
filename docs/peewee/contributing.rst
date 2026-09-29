@@ -46,7 +46,10 @@ Questions
 If you have questions about how to do something with peewee, then I recommend
 either:
 
-* Ask on StackOverflow. I check SO just about every day for new peewee
-  questions and try to answer them. This has the benefit also of preserving the
-  question and answer for other people to find.
-* Ask on the mailing list, https://groups.google.com/group/peewee-orm
+* Open a GH issue and clearly mark it as a question. The expectation would be
+  that the question pertains to something not easily answered by consulting the
+  docs.
+* Ask in ``#peewee`` on `libera.chat <https://web.libera.chat/>`_.
+* Ask on StackOverflow. I still check SO periodically, but unfortunately since
+  early 2026 it's a ghost town. Nonetheless it works and it preserves the Q&A
+  for the next person.
