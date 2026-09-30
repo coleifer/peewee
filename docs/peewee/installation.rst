@@ -29,17 +29,7 @@ Installing from Source
 Running Tests
 -------------
 
-.. code-block:: shell
-
-   python runtests.py
-   python runtests.py --help  # Show options.
-
-To run tests against Postgres or MySQL create a database named ``peewee_test``.
-For the Postgres extension tests, enable hstore:
-
-.. code-block:: sql
-
-   CREATE EXTENSION hstore;
+See :ref:`running-tests`.
 
 Supported Drivers
 -----------------

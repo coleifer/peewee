@@ -9,6 +9,82 @@ answering questions, you are helping to make Peewee a better library.
 
 In this document I'll describe some of the ways you can help.
 
+.. _running-tests:
+
+Running the tests
+-----------------
+
+Peewee comes with a test-runner. By default, tests run against SQLite:
+
+.. code-block:: shell
+
+   git clone https://github.com/coleifer/peewee.git
+   cd peewee
+   python runtests.py
+
+Tests can also be run against the other supported databases and drivers:
+
+=============== ====================== =======================================
+Database        Driver                 Command
+=============== ====================== =======================================
+SQLite          sqlite3                ``runtests.py``
+SQLite          cysqlite               ``runtests.py -e cysqlite``
+MySQL/MariaDB   pymysql                ``runtests.py -e mysql``
+MySQL           mysql-connector-python ``runtests.py -e mysqlconnector``
+MariaDB         mariadb                ``runtests.py -e mariadb``
+Postgres        psycopg2               ``runtests.py -e postgres``
+Postgres        psycopg (3)            ``runtests.py -e psycopg3``
+=============== ====================== =======================================
+
+The asyncio tests need ``greenlet`` along with their respective drivers:
+
+* ``aiosqlite``
+* ``aiomysql``
+* ``asyncpg``
+
+The ``--help`` test-runner option lists every engine and the connection
+options. Postgres honors the ``PGHOST``, ``PGUSER`` and ``PGPASSWORD`` envvars.
+MySQL connects to localhost as the current user with no password by default.
+Use ``--mysql-user``, ``--mysql-password``, etc to specify connection details.
+
+Peewee will not create a new database in your MariaDB/MySQL/Postgres cluster,
+instead it expects to find a database named ``peewee_test``. You can do this
+setup once:
+
+.. code-block:: shell
+
+   createdb peewee_test
+   psql peewee_test -c "create extension hstore"  # Optional.
+   mysql -e 'create database `peewee_test`;'
+
+Tests for optional extensions are skipped when their dependencies are missing.
+To run everything, install what CI installs (see ``.github/workflows/tests.yaml``).
+
+To run a subset of the suite, you can specify modules, classes or individual
+test methods:
+
+.. code-block:: shell
+
+   python runtests.py models model_sql sql
+   python runtests.py models.TestModelAPIs
+   python runtests.py models.TestModelAPIs.test_pk_is_fk
+
+Test output verbosity can be configured:
+
+* ``-v2`` lists each test with its skip reason
+* ``-v3`` logs every SQL query
+
+If you change the public API in ``peewee.py``, update the type stub in
+``peewee-stubs/__init__.pyi``. The ``stubs`` job in the CI workflow shows how
+it is checked.
+
+To build the docs:
+
+.. code-block:: shell
+
+   pip install sphinx
+   make -C docs html
+
 Patches
 -------
 
