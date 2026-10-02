@@ -25,7 +25,6 @@ classes map to tables.
    db = SqliteDatabase(':memory:')
 
    class BaseModel(Model):
-       """All models inherit this to share the database connection."""
        class Meta:
            database = db
 
@@ -160,8 +159,6 @@ When the most-recent tweet was added:
 Close the Connection
 --------------------
 
-When done using the database, close the connection:
-
 .. code-block:: python
 
    db.close()
@@ -182,9 +179,6 @@ For example to generate models for a Postgres database named ``blog``:
 
 What Next
 ---------
-
-Each concept introduced above is covered in full detail in the following
-documents:
 
 * :ref:`database` - connection options, multiple backends, run-time
   configuration, connection pooling.

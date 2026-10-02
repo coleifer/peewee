@@ -12,8 +12,7 @@ boundaries efficiently.
 Model Definitions
 -----------------
 
-All examples in this document use the following three models. They will be
-defined once here and reused throughout.
+All examples in this document use the following three models.
 
 .. code-block:: python
 
@@ -124,7 +123,7 @@ resolves that ID into a full model instance on access.
    print(tweet.user_id)  # 1
 
 The ``_id`` suffix accessor is available for every foreign key field. Use it
-whenever only the ID value is needed, since it always avoids a query.
+whenever only the ID value is needed.
 
 Lazy loading
 ^^^^^^^^^^^^
@@ -145,8 +144,7 @@ than issuing a query, matching the behaviour of the ``_id`` accessor:
        ...
 
    for tweet in Tweet.select():
-       # Returns the integer ID. User instance is not fetched because this
-       # would require an additional query.
+       # Returns the integer ID.
        print(tweet.user)
 
 To retrieve the related object(s), select both sources and issue a
@@ -162,9 +160,6 @@ To retrieve the related object(s), select both sources and issue a
 
    for tweet in query:
        print(tweet.user.username)  # No extra query needed.
-
-.. seealso::
-   :ref:`nplusone` explains when and why disabling lazy loading is useful.
 
 .. _backreferences:
 
@@ -269,9 +264,6 @@ Peewee provides two complementary tools for avoiding N+1 queries:
   example fetching users with all their tweets. Peewee provides the
   :meth:`~ModelSelect.with_related` helper for this.
 
-Both are covered in the sections below. The choice between them depends on the
-shape of the query.
-
 .. _joins:
 
 Joins
@@ -316,8 +308,7 @@ equivalent for straightforward cases:
    for tweet in alice.tweets:
        print(tweet.content)
 
-The join is the better choice when filtering or joining further. The
-back-reference is more readable for simple access to related rows.
+The join is the better choice when filtering or joining further.
 
 Joining across multiple tables
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -435,9 +426,6 @@ Returning the rows as dictionaries makes this clearer:
    # {'content': 'alice-3', 'username': 'alice'}
    # {'content': 'bob-1', 'username': 'bob'}
    # {'content': 'bob-2', 'username': 'bob'}
-
-Compare these queries to the N+1 version: here, only one query is executed
-regardless of how many tweets are returned.
 
 The attribute name that Peewee uses to store the joined instance follows the
 foreign key field name (``tweet.user`` in this case). To override it, pass
@@ -791,14 +779,13 @@ attribute name used to attach the joined instance:
    for tweet in query:
        print(tweet.author.username)  # Instead of tweet.user.
 
-``attr`` is optional everywhere. Joins without a resolvable foreign key
-(a :class:`Table`, a subquery, an arbitrary expression) attach at the
-destination's default name, and ``attr`` overrides it (see
-:ref:`joining without a foreign key <joining-without-fk>`). One collision
-is rejected: aliasing a join's ``on`` expression with the ``<fk>_id``
-column name of a foreign key, e.g.
-``on=(Tweet.user == User.id).alias('user_id')``, raises
-:exc:`ValueError`, as that attribute holds the raw column value.
+Joins without a resolvable foreign key (a :class:`Table`, a subquery, an
+arbitrary expression) attach at the destination's default name, and ``attr``
+overrides it (see :ref:`joining without a foreign key <joining-without-fk>`).
+One collision is rejected: aliasing a join's ``on`` expression with the
+``<fk>_id`` column name of a foreign key, e.g.
+``on=(Tweet.user == User.id).alias('user_id')``, raises :exc:`ValueError`, as
+that attribute holds the raw column value.
 
 Directing computed columns with ``bind_to``
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -930,9 +917,6 @@ To query all students in a given course, along with when they enrolled:
    for student in query.objects():
        print(student.name, student.enrolled_on)
 
-Since all data is available via the through table model, this approach is most
-flexible and handles any querying requirement without special casing.
-
 ManyToManyField
 ^^^^^^^^^^^^^^^
 
@@ -1001,10 +985,6 @@ for *k* tables. Peewee has two APIs for this:
 * :meth:`~ModelSelect.with_related` with :class:`Load` nodes: the declarative,
   nestable form, recommended for new code.
 * :func:`prefetch`: the older flat-list form, kept for backwards compatibility.
-
-They share one execution engine and differ mainly in how the load is
-expressed. :func:`prefetch` supports the ``WHERE`` and ``JOIN`` strategies
-but rejects ``MATERIALIZE``, which is with_related-only.
 
 Eager loading with with_related
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -1163,11 +1143,9 @@ Examples:
 
 .. code-block:: python
 
-   # JOIN: filter via a join against the parent query.
    tweets = Load(User.tweets, strategy=PREFETCH_TYPE.JOIN)
    query = User.select().with_related(tweets)
 
-   # MATERIALIZE: the user ids are sent inline, with no parent subquery.
    tweets = Load(User.tweets, strategy=PREFETCH_TYPE.MATERIALIZE)
    query = User.select().with_related(tweets)
 
@@ -1233,9 +1211,7 @@ Legacy: prefetch
 ^^^^^^^^^^^^^^^^
 
 :func:`prefetch` is the original eager-loading API. It takes a flat list of
-queries and infers how they connect from the foreign keys between them. It is
-still supported, but :meth:`~ModelSelect.with_related` is preferred for new
-code.
+queries and infers how they connect from the foreign keys between them.
 
 .. code-block:: python
 
@@ -1253,8 +1229,7 @@ back-reference attribute on each instance.
 
 When a subquery relates to more than one previously-listed query (for example a
 ``Favorite`` that has foreign keys to both ``User`` and ``Tweet``), pass a
-``(query, target_model)`` tuple to choose which relationship to follow. This is
-the disambiguation that ``with_related`` avoids by naming each foreign key:
+``(query, target_model)`` tuple to choose which relationship to follow:
 
 .. code-block:: python
 

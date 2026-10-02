@@ -118,7 +118,6 @@ complex.
    * Use ``.is_null()`` instead of ``is None`` or ``== None``.
    * Use ``==`` and ``!=`` for comparing against ``True`` and ``False``, or
      you may use the implicit value of the expression.
-   * **Don't forget to wrap comparisons in parentheses when using logical operators.**
 
 For more examples, see the :ref:`expressions` section.
 
@@ -128,8 +127,7 @@ For more examples, see the :ref:`expressions` section.
    Because SQLite's ``LIKE`` operation is case-insensitive by default,
    peewee will use the SQLite ``GLOB`` operation for case-sensitive searches.
    The glob operation uses asterisks for wildcards as opposed to the usual
-   percent-sign. If you are using SQLite and want case-sensitive partial
-   string matching, remember to use asterisks for the wildcard.
+   percent-sign.
 
 Three Valued Logic
 ------------------
@@ -141,10 +139,6 @@ available for expressing:
 * ``IS NOT NULL``
 * ``IN``
 * ``NOT IN``
-
-While it would be possible to use the ``IS NULL`` and ``IN`` operators with the
-negation operator (``~``), sometimes to get the correct semantics you will need
-to explicitly use ``IS NOT NULL`` and ``NOT IN``.
 
 The simplest way to use ``IS NULL`` and ``IN`` is to use the operator
 overloads:
@@ -215,8 +209,6 @@ Now you can use these custom operators to build richer queries:
 
 Expressions
 -----------
-
-This section gives an overview of common expression types.
 
 Two common types of objects that are composed to create expressions:
 
@@ -301,8 +293,7 @@ row-values in expressions via :class:`Tuple`. For example,
    Tuple(Event.year, Event.month) == (2019, 1)
 
 The more common use for row-values is to compare against multiple columns from
-a subquery in a single expression. There are other ways to express these types
-of queries, but row-values may offer a concise and readable approach.
+a subquery in a single expression.
 
 For example, assume we have a table "EventLog" which contains an event type, an
 event source, and some metadata. We also have an "IncidentLog", which has
@@ -336,8 +327,7 @@ correlate incidents with certain events:
              .order_by(EventLog.timestamp))
 
 Other ways to express this type of query would be to use a :ref:`join <relationships>`
-or to :ref:`join on a subquery <join-subquery>`. The above example is there
-just to give you an idea how :class:`Tuple` might be used.
+or to :ref:`join on a subquery <join-subquery>`.
 
 You can also use row-values to update multiple columns in a table, when the new
 data is derived from a subquery. For an example, see `here <https://www.sqlite.org/rowvalue.html#update_multiple_columns_of_a_table_based_on_a_query>`_.
@@ -441,6 +431,5 @@ Use parameters to prevent SQL injection:
 
 .. note::
    MySQL and Postgresql use ``'%s'`` to denote parameters. SQLite, on the
-   other hand, uses ``'?'``. Be sure to use the character appropriate to your
-   database. You can also find this parameter by checking
+   other hand, uses ``'?'``. You can also find this parameter by checking
    :attr:`Database.param`.

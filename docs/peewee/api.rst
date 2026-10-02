@@ -2537,9 +2537,7 @@ Model
 
       The query is altered in-place so it is **not** possible to call
       :meth:`~ModelSelect.first` and then later iterate over the full
-      result-set using the same query object. Again, this is done to ensure
-      that multiple calls to ``first()`` will not result in multiple query
-      executions.
+      result-set using the same query object.
 
    .. method:: scalar(as_tuple=False, as_dict=False)
 
@@ -6075,9 +6073,7 @@ Queries
 
       The query is altered in-place so it is not possible to call
       :meth:`~SelectBase.first` and then later iterate over the full
-      result-set using the same query object. Again, this is done to ensure
-      that multiple calls to ``first()`` will not result in multiple query
-      executions.
+      result-set using the same query object.
 
    .. method:: scalar(database, as_tuple=False, as_dict=False)
 

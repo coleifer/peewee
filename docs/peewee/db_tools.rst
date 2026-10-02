@@ -19,8 +19,7 @@ Database URLs
 .. module:: playhouse.db_url
 
 The ``playhouse.db_url`` module lets you configure Peewee from a connection
-string, which is common in twelve-factor applications where database
-credentials live in environment variables.
+string.
 
 .. code-block:: python
 
@@ -160,8 +159,7 @@ In multi-threaded or web applications, each thread gets its own connection. The
 pool maintains up to ``max_connections`` open connections at any time. The
 application only needs to ensure that connections are *closed* when work is
 done (typically at the end of an HTTP request), so the connection can be
-returned to the pool. Closing a pooled connection returns it to the pool rather
-than actually disconnecting.
+returned to the pool.
 
 .. code-block:: python
 
@@ -172,10 +170,6 @@ than actually disconnecting.
        user='postgres',
        max_connections=32,
        stale_timeout=300)
-
-.. tip::
-   Pooled database implementations may be safely used as drop-in replacements
-   for their non-pooled counterparts.
 
 .. include:: pool-snippet.rst
 
@@ -242,15 +236,6 @@ than actually disconnecting.
 
    Pool implementation for MySQL / MariaDB databases. Extends :class:`MySQLDatabase`.
 
-Additional implementations exist for:
-
-* :class:`~playhouse.postgres_ext.PooledPostgresqlExtDatabase`
-* :class:`~playhouse.postgres_ext.PooledPsycopg3Database`
-* :class:`~playhouse.mysql_ext.PooledMySQLConnectorDatabase`
-* :class:`~playhouse.mysql_ext.PooledMariaDBConnectorDatabase`
-* :class:`~playhouse.cysqlite_ext.PooledCySqliteDatabase`
-* :class:`~playhouse.cockroachdb.PooledCockroachDatabase`
-
 
 .. _migrate:
 
@@ -262,11 +247,9 @@ Schema Migrations
 The ``playhouse.migrate`` module provides a lightweight API for making
 incremental schema changes to an existing database without writing raw SQL.
 
-The peewee migration philosophy is that tools relying on database
-introspection, versioning, and auto-detection are often brittle and
-complex. Migrations can be written as simple python scripts and executed from
-the command-line. The :ref:`runner <migration-runner>` below adds bookkeeping
-and can be used for migration generation and execution.
+Migrations can be written as simple python scripts and executed from the
+command-line. The :ref:`runner <migration-runner>` below adds bookkeeping and
+can be used for migration generation and execution.
 
 Supported schema-altering operations:
 
@@ -671,22 +654,6 @@ The ``playhouse.migrations`` module is a migration runner built using the
 applied and runs pending migrations in order. The CLI is installed as
 ``pwmigrate`` (or use ``python -m playhouse.migrations``).
 
-The following commands are available:
-
-* ``initial``: create an initial migration containing a snapshot of the
-  application models.
-* ``create``: create a bare skeleton migration file.
-* ``generate``: generate a migration based on changes detected between the
-  database schema and model definitions.
-* ``diff``: display differences between the database schema and model
-  definitions.
-* ``up``: apply any pending migrations.
-* ``down``: roll back one or more applied migrations.
-* ``fake``: record pending migrations as applied without running them.
-* ``status``: show which migrations have been applied and which are pending.
-
-The following sections show basic usage for common scenarios.
-
 New application
 ^^^^^^^^^^^^^^^
 
@@ -815,16 +782,11 @@ migration:
 1. ``diff`` shows any changes that were identified.
 2. ``generate`` writes the new migration.
 
-Both commands read the database and models module from the ``.pwmigrate``
-file set up earlier (see :ref:`pwmigrate-config-file`).
-
 .. code-block:: console
 
-   # Prints a list of differences between code and database schema.
    $ pwmigrate diff
    add column user.karma
 
-   # Generates a migration.
    $ pwmigrate generate add_karma
    migrations/0002_add_karma.py
 
@@ -1352,8 +1314,7 @@ pwiz - Model Generator
 .. module:: pwiz
 
 ``pwiz`` is a command-line tool that introspects a database and prints
-ready-to-use Peewee model code. If you have an existing database, running
-``pwiz`` saves significant time generating the initial model definitions.
+ready-to-use Peewee model code.
 
 .. code-block:: shell
 

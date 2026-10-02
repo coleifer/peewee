@@ -23,8 +23,9 @@ Implementations
    * Full-text search
    * JSON
 
-   Full-text search and JSON implementations available in
-   ``playhouse.sqlite_ext``.
+   Full-text search is implemented in ``playhouse.sqlite_ext``. For JSON use
+   the core :ref:`JSONField <json-field>`. A legacy SQLite-only
+   :ref:`JSONField <sqlite-json>` remains in ``playhouse.sqlite_ext``.
 
 :class:`~playhouse.cysqlite_ext.CySqliteDatabase` (``playhouse.cysqlite_ext``)
    Extends :class:`SqliteDatabase`, uses `cysqlite <https://cysqlite.readthedocs.io/en/latest/>`__ driver.
@@ -46,8 +47,7 @@ Implementations
 :class:`~playhouse.sqlcipher_ext.SqlCipherDatabase` (``playhouse.sqlcipher_ext``)
    Extends :class:`SqliteDatabase`, uses `sqlcipher3 <https://github.com/coleifer/sqlcipher3>`__ driver.
 
-   SQLCipher provides transparent full-database encryption using 256-bit AES,
-   ensuring data on-disk is secure.
+   SQLCipher provides transparent full-database encryption using 256-bit AES.
 
 :class:`~playhouse.sqliteq.SqliteQueueDatabase` (``playhouse.sqliteq``)
    Extends :class:`SqliteDatabase`.
@@ -101,13 +101,6 @@ method or the special properties exposed on the :class:`SqliteDatabase` object:
    Pragmas set using the :meth:`~SqliteDatabase.pragma` method are not
    re-applied when a new connection opens. To configure a pragma to be
    run whenever a new connection is opened, specify ``permanent=True``.
-
-   .. code-block:: python
-
-      db.pragma('foreign_keys', 1, permanent=True)
-
-.. seealso::
-   SQLite PRAGMA documentation: https://sqlite.org/pragma.html
 
 .. _sqlite-user-functions:
 
@@ -338,41 +331,8 @@ support for run-time loadable extensions.
 Locking Mode for Transactions
 -----------------------------
 
-SQLite transactions can be opened in three different modes:
-
-* *Deferred* (**default**) - only acquires lock when a read or write is
-  performed. The first read creates a `shared lock <https://sqlite.org/lockingv3.html#locking>`_
-  and the first write creates a `reserved lock <https://sqlite.org/lockingv3.html#locking>`_.
-  Because the acquisition of the lock is deferred until actually needed, it is
-  possible that another thread or process could create a separate transaction
-  and write to the database.
-* *Immediate* - a `reserved lock <https://sqlite.org/lockingv3.html#locking>`_
-  is acquired immediately. In this mode, no other connection may write to the
-  database or open an *immediate* or *exclusive* transaction. Other processes
-  can continue to read from the database, however.
-* *Exclusive* - opens an `exclusive lock <https://sqlite.org/lockingv3.html#locking>`_
-  which prevents all (except for read uncommitted) connections from accessing
-  the database until the transaction is complete.
-
-Example specifying the locking mode:
-
-.. code-block:: python
-
-    db = SqliteDatabase('app.db')
-
-    with db.atomic('EXCLUSIVE'):
-        read()
-        write()
-
-
-    @db.atomic('IMMEDIATE')
-    def some_other_function():
-        # This function is wrapped in an "IMMEDIATE" transaction.
-        do_something_else()
-
-For more information, see the SQLite `locking documentation <https://sqlite.org/lockingv3.html#locking>`_.
-To learn more about transactions in Peewee, see the :ref:`transactions`
-documentation.
+SQLite transactions can be opened in *deferred* (default), *immediate* or
+*exclusive* mode. See :ref:`sqlite-locking`.
 
 .. danger::
    Do not alter the ``isolation_level`` property of the ``sqlite3.Connection``
@@ -426,12 +386,6 @@ Usage:
       ``CySqliteDatabase`` extends :class:`SqliteDatabase` and inherits all
       methods for declaring user-defined functions, aggregates, window
       functions, collations, pragmas, etc.
-
-   Example:
-
-   .. code-block:: python
-
-       db = CySqliteDatabase('app.db', pragmas={'journal_mode': 'wal'})
 
    .. method:: table_function(name=None, columns=None, params=None)
 
@@ -1015,9 +969,7 @@ These field classes live in ``playhouse.sqlite_ext`` and can be used with:
 
    Subclass of :class:`DecimalField` that stores decimal values in a
    ``TEXT`` column to avoid any potential loss of precision that may occur when
-   storing in a ``REAL`` (double-precision floating point) column. SQLite does
-   not have a true numeric type, so this field ensures no precision is lost
-   when using Decimals.
+   storing in a ``REAL`` (double-precision floating point) column.
 
 .. _sqlite-json:
 
@@ -1028,7 +980,8 @@ SQLite JSON
 in SQLite using the `SQLite json functions <https://sqlite.org/json1.html>`_.
 
 .. warning::
-   This field is deprecated. New code should use the cross-backend :ref:`core JSONField <json-field>`.
+   This is the legacy SQLite-only field. New code should use the cross-backend
+   :ref:`core JSONField <json-field>`.
 
 .. class:: JSONField(json_dumps=None, json_loads=None, **kwargs)
 
@@ -1366,16 +1319,7 @@ in SQLite using the `SQLite json functions <https://sqlite.org/json1.html>`_.
       that path is treated as the top-most element.
 
       The rows returned by calls to ``tree()`` have the same attributes as
-      rows returned by calls to :meth:`~JSONField.children`:
-
-      * ``key``: the key of the current element relative to its parent.
-      * ``value``: the value of the current element.
-      * ``type``: one of the data-types (see :meth:`~JSONField.json_type`).
-      * ``atom``: the scalar value for primitive types, ``NULL`` for arrays and objects.
-      * ``id``: a unique ID referencing the current node in the tree.
-      * ``parent``: the ID of the containing node.
-      * ``fullkey``: the full path describing the current element.
-      * ``path``: the path to the container of the current row.
+      rows returned by calls to :meth:`~JSONField.children`.
 
       Internally this method uses the `json_tree <https://www.sqlite.org/json1.html#jtree>`_
       (documentation link) function from the json1 extension.

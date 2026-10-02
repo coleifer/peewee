@@ -26,8 +26,8 @@ Peewee provides alternate drivers for MySQL through ``playhouse.mysql_ext``.
 
 .. class:: MariaDBConnectorDatabase(database, **kwargs)
 
-   Database implementation using the `mariadb-connector <https://mariadb-corporation.github.io/mariadb-connector-python/>`_
-   driver.
+   Database implementation using the `mariadb
+   <https://mariadb-corporation.github.io/mariadb-connector-python/>`_ driver.
 
    .. note::
       Does **not** accept ``charset``, ``sql_mode``, or ``use_unicode``

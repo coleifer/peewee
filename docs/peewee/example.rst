@@ -24,8 +24,8 @@ Running the Example
 
 .. image:: tweepee.png
 
-After ensuring that flask is installed, ``cd`` into the twitter example
-directory and execute the ``run_example.py`` script:
+``cd`` into the twitter example directory and execute the ``run_example.py``
+script:
 
 .. code-block:: shell
 
@@ -141,11 +141,6 @@ following:
     >>> from app import *
     >>> create_tables()
 
-.. attention::
-   If you encounter an **ImportError** it means that either *flask* or *peewee*
-   was not found and may not be installed correctly. Check the :ref:`installation`
-   document for instructions on installing peewee.
-
 Every model has a :meth:`~Model.create_table` classmethod which runs a SQL
 *CREATE TABLE* statement in the database. This method will create the table,
 including:
@@ -155,8 +150,6 @@ including:
 * indexes
 * sequences
 * check constraints
-
-Usually this is something you'll only do once, when a new model is added.
 
 Peewee provides a helper method :meth:`Database.create_tables` which will
 resolve inter-model dependencies and call :meth:`~Model.create_table` on

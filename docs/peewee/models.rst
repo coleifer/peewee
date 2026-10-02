@@ -72,8 +72,7 @@ Three things to note:
 
    **BaseModel** exists only to specify the ``database`` setting in its ``Meta``
    class. Because ``Meta.database`` is inheritable, every model that extends
-   ``BaseModel`` will automatically use the same database. This pattern avoids
-   repeating the database assignment on every model class.
+   ``BaseModel`` will automatically use the same database.
 
    Model configuration lives in a namespaced :ref:`Meta <model-options>` class,
    which also exposes :ref:`many other attributes <model-options>` you can configure.
@@ -142,11 +141,6 @@ When creating a :class:`Model` class, fields are defined as class attributes:
        content = TextField()
        timestamp = DateTimeField(default=datetime.datetime.now)
        is_published = BooleanField(default=True)
-
-In the above example, no field specifies ``primary_key=True``. As a result,
-Peewee will create an auto-incrementing integer primary key named ``id``.
-Peewee uses :class:`AutoField` to signify an auto-incrementing integer primary
-key.
 
 .. _field_types_table:
 
@@ -356,34 +350,6 @@ tweets.
 
 Typically a foreign key will reference the primary key of the related model,
 but you can specify a different column by passing ``field=``.
-
-In Peewee, accessing the value of a :class:`ForeignKeyField` will return the
-entire related object:
-
-.. code-block:: python
-
-   tweets = (Tweet
-             .select(Tweet, User)
-             .join(User)
-             .order_by(Tweet.timestamp.desc()))
-
-   for tweet in tweets:
-       print(tweet.user.username, tweet.content)
-
-In the example above the ``User`` data was selected efficiently. If we did not
-select the ``User``, then an **additional query** would be needed to fetch the
-associated ``User`` data:
-
-.. code-block:: python
-
-    tweets = (Tweet
-              .select()
-              .order_by(Tweet.timestamp.desc()))
-
-    for tweet in tweets:
-        # WARNING: an additional query will be issued for EACH tweet
-        # to fetch the associated User data.
-        print(tweet.user.username, tweet.content)
 
 Sometimes you only need the associated primary key value from the foreign key
 column. Peewee allows you to access the raw foreign key value by appending
@@ -1088,7 +1054,7 @@ only for backwards compatibility with existing deployments.
    class BaseModel(Model):
        class Meta:
            database = db
-           legacy_table_names = False   # Recommended for new projects.
+           legacy_table_names = False
 
 To override the table name entirely, use ``table_name``:
 

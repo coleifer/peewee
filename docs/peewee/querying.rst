@@ -331,7 +331,7 @@ Pagination, Limiting, and Offsetting
    Tweet.select().order_by(Tweet.id).paginate(3, 20)
 
 .. attention::
-   Page numbers are 1-based. Page 1 returns the first ``items_per_page`` rows.
+   Page numbers are 1-based.
 
 
 Counting
@@ -660,10 +660,10 @@ running total of the current row and its two preceding rows:
 Technically we did not need to specify the ``end=Window.CURRENT_ROW`` because
 that is the default.
 
-Let's look at another example. In this example we will calculate the "opposite"
-of a running total, in which the total sum of all values is decreased by the
-value of the samples, ordered by ``id``. To accomplish this, we'll calculate
-the sum from the current row to the last row.
+In this example we will calculate the "opposite" of a running total, in which
+the total sum of all values is decreased by the value of the samples, ordered
+by ``id``. To accomplish this, we'll calculate the sum from the current row to
+the last row.
 
 .. code-block:: python
 
@@ -750,10 +750,8 @@ and call several window functions using that window definition:
 Multiple Window Definitions
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-In the previous example, we saw how to declare a :class:`Window` definition
-and re-use it for multiple different aggregations. You can include as many
-window definitions as you need in your queries, but it is necessary to ensure
-each window has a unique alias:
+You can include as many window definitions as you need in your queries, but it
+is necessary to ensure each window has a unique alias:
 
 .. code-block:: python
 
@@ -907,8 +905,7 @@ Peewee uses these rules for determining what frame-type to use:
 
 The :attr:`Window.GROUPS` frame type looks at the window range specification
 in terms of groups of rows, based on the ordering term(s). Using ``GROUPS``, we
-can define the frame so it covers distinct groupings of rows. Let's look at an
-example:
+can define the frame so it covers distinct groupings of rows:
 
 .. code-block:: python
 
@@ -1142,8 +1139,6 @@ recursive CTE:
 
 Data-Modifying CTE
 ^^^^^^^^^^^^^^^^^^
-
-Peewee supports data-modifying CTEs.
 
 Example of using a data-modifying CTE to move data from one table to an archive
 table, using a single query:

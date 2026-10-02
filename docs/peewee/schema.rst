@@ -113,9 +113,7 @@ Schema Migrations
 Peewee ships two layers of migration tooling in playhouse: the
 :ref:`migrate <migrate>` module, which provides a Python interface for making
 schema changes, and the :ref:`migrations runner <migration-runner>`, which
-runs versioned migration scripts. For schema changes in an existing
-deployment (adding columns, dropping columns, renaming tables, modifying
-indexes), use one of the following approaches.
+runs versioned migration scripts.
 
 Migration runner
 ^^^^^^^^^^^^^^^^
@@ -273,6 +271,3 @@ Python model definitions:
 
    pwiz -e postgresql my_database > models.py
    pwiz -e sqlite my_app.db > models.py
-
-The generated models can be used directly or as a starting point for further
-customization.

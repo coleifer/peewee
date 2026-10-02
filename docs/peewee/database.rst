@@ -76,9 +76,9 @@ The following settings are recommended for most applications:
 .. code-block:: python
 
    db = SqliteDatabase('my_app.db', pragmas={
-       'journal_mode': 'wal',  # Allow readers while writer active.
-       'cache_size': -64000,  # 64 MB page cache.
-       'foreign_keys': 1,  # Enforce FK constraints.
+       'journal_mode': 'wal',
+       'cache_size': -64000,
+       'foreign_keys': 1,
    })
 
 ======================= =================== ================================================
@@ -188,7 +188,7 @@ and :ref:`framework-integration`.
 Alternate drivers are available for both databases:
 
 * :class:`.MySQLConnectorDatabase` - uses ``mysql-connector-python``.
-* :class:`.MariaDBConnectorDatabase` - uses ``mariadb-connector-python``.
+* :class:`.MariaDBConnectorDatabase` - uses ``mariadb``.
 
 .. seealso::
    For MySQL-specific functionality and extensions, see :ref:`mysql`.
@@ -200,22 +200,9 @@ Connection Parameters
 first parameter. Subsequent keyword arguments are passed to the underlying
 database driver when establishing the connection.
 
-With Postgresql it is common to need to specify the ``host``, ``user`` and
-``password`` when creating a connection. These should be specified when
-initializing the database, and they will be passed directly back to
-``psycopg`` when creating connections:
-
-.. code-block:: python
-
-    db = PostgresqlDatabase(
-        'database_name',  # Required by Peewee.
-        user='postgres',  # Will be passed directly to psycopg.
-        password='secret',  # Ditto.
-        host='db.mysite.com')  # Ditto.
-
-As another example, the ``pymysql`` driver accepts a ``charset`` parameter
-which is not a standard Peewee :class:`Database` parameter. To set this
-value, pass in ``charset`` alongside your other settings:
+For example, the ``pymysql`` driver accepts a ``charset`` parameter which is
+not a standard Peewee :class:`Database` parameter. To set this value, pass in
+``charset`` alongside your other settings:
 
 .. code-block:: python
 
@@ -376,9 +363,6 @@ the :class:`~playhouse.shortcuts.ThreadSafeDatabaseMetadata`.
        class Meta:
            model_metadata_class = ThreadSafeDatabaseMetadata
 
-The database can now be swapped safely while running in a multi-threaded
-environment using :meth:`Database.bind` or :meth:`Database.bind_ctx`.
-
 Connecting via URL
 ------------------
 
@@ -433,13 +417,6 @@ is raised. Pass ``reuse_if_open=True`` to suppress it:
 
    >>> db.connect(reuse_if_open=True)
 
-To close a connection, use the :meth:`Database.close` method:
-
-.. code-block:: pycon
-
-   >>> db.close()
-   True
-
 Calling ``close()`` on an already-closed connection will not result in an
 exception, but will return ``False``:
 
@@ -480,9 +457,6 @@ See :ref:`framework-integration` for framework-specific examples.
    Peewee uses thread local storage to manage connection state, so this
    pattern can be used with multi-threaded or gevent applications.
 
-   Peewee's :ref:`asyncio integration <pwasyncio>` stores connection state in
-   task-local storage, so the same pattern applies.
-
 Context managers
 ^^^^^^^^^^^^^^^^
 
@@ -500,8 +474,6 @@ The database object can be used as a context manager or decorator.
 
    with db:
        User.create(username='charlie')
-       # Transaction is committed when the block exits normally,
-       # rolled back if an exception is raised.
 
 Decorator:
 
@@ -520,7 +492,6 @@ To manage the connection lifetime without an implicit transaction, use
 .. code-block:: python
 
    with db.connection_context():
-       # Connection is open, no implicit transaction.
        results = User.select()
 
 ``connection_context()`` can also decorate a function:
@@ -544,14 +515,11 @@ disabling the ``autoconnect`` behavior:
 
    db = PostgresqlDatabase('app', autoconnect=False)
 
-It is helpful to be explicit about connection lifetimes. If a connection cannot
-be opened, the exception is raised where ``connect()`` is called, rather than
-at query time.
+If a connection cannot be opened, the exception is raised where ``connect()``
+is called, rather than at query time.
 
 Thread safety
 ^^^^^^^^^^^^^
-
-Database connections and associated transactions are thread-safe.
 
 Peewee keeps track of the connection state using thread-local storage, making
 the Peewee :class:`Database` object safe to use with multiple threads. Each
@@ -640,10 +608,8 @@ context manager) so connections are returned to the pool for re-use.
 Executing SQL
 -------------
 
-SQL queries will typically be executed by calling ``execute()`` on a query
-constructed using the query-builder APIs (or by iterating over a query
-object in the case of a :class:`Select` query). For cases where you wish to
-execute SQL directly, use :meth:`Database.execute_sql`:
+For cases where you wish to execute SQL directly, use
+:meth:`Database.execute_sql`:
 
 .. code-block:: python
 
@@ -691,9 +657,6 @@ the standard library ``logging`` module:
    logging.getLogger('peewee').addHandler(logging.StreamHandler())
    logging.getLogger('peewee').setLevel(logging.DEBUG)
 
-This is the simplest way to verify what queries are being issued during
-development.
-
 .. _query-hooks:
 
 Query Hooks
@@ -715,8 +678,7 @@ Each callable in it is invoked after every query with a single
 seconds, including connection or cursor acquisition), and ``exception``, which
 is ``None`` on success. Hooks observe the query and cannot modify it. An
 exception raised by a hook propagates to the caller. Do not mutate ``params``.
-When the list is empty no timing is performed, so idle overhead is a single
-attribute check.
+When the list is empty no timing is performed.
 
 A retried query (e.g. under ``ReconnectMixin``) produces one event per
 attempt. With ``playhouse.sqliteq`` write events fire on the writer thread,
@@ -782,9 +744,6 @@ Example test-case setup:
 
            # Close connection to db.
            test_db.close()
-
-           # If we wanted, we could re-bind the models to their original
-           # database here. But for tests this is probably not necessary.
 
 Test against the same database backend as production to avoid compatibility issues.
 

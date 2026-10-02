@@ -106,8 +106,7 @@ Compound Query Resolution
 .. function:: resolve_multimodel_query(query, key='_model_identifier')
 
    Resolve rows from a compound ``UNION`` or similar query to the correct
-   model class. Useful when two tables are unioned and you need each row
-   as an instance of the appropriate model.
+   model class.
 
    :param query: A compound :class:`SelectQuery`.
    :param str key: Name of the column used to identify the model.
@@ -293,10 +292,6 @@ Any field whose ``field_type`` is not present in the map falls back to
 ``Any``, which means Pydantic will accept any value without validation. If
 you use a custom field type and want strict validation, ensure it sets a
 recognized ``field_type`` or handle the conversion yourself.
-
-When a field has ``choices`` defined, the mapped Python type above is
-**replaced** by a ``Literal`` constrained to the choice values, regardless of
-the underlying field type.
 
 Because JSON fields validate as ``Any``, an explicit ``None`` is accepted by
 the schema even for ``null=False`` columns. JSON ``null`` is itself a valid
@@ -527,8 +522,7 @@ Hybrid Attributes
 
 A *hybrid attribute* behaves differently depending on whether it is accessed
 on a model **instance** (executes Python logic) or on the model **class**
-(generates a SQL expression). This lets you write Python methods that work
-both as Python computations and as composable SQL clauses.
+(generates a SQL expression).
 
 The concept is borrowed from SQLAlchemy's `hybrid extension <https://docs.sqlalchemy.org/en/14/orm/extensions/hybrid.html>`_.
 
@@ -603,81 +597,10 @@ This query is equivalent to the following SQL:
    behaviors. Use ``@prop.expression`` to specify the SQL form when it
    differs from the Python form.
 
-   Examples:
-
-   .. code-block:: python
-
-      class Interval(Model):
-          start = IntegerField()
-          end = IntegerField()
-
-          @hybrid_property
-          def length(self):
-              return self.end - self.start
-
-          @hybrid_property
-          def radius(self):
-              return abs(self.length) / 2
-
-          @radius.expression
-          def radius(cls):
-              return fn.ABS(cls.length) / 2
-
-   When accessed on an ``Interval`` instance, the ``length`` and ``radius``
-   properties will behave as you would expect. When accessed as class
-   attributes, though, a SQL expression will be generated instead:
-
-   .. code-block:: python
-
-      query = (Interval
-               .select()
-               .where(
-                   (Interval.length > 6) &
-                   (Interval.radius >= 3)))
-
-   Would generate the following SQL:
-
-   .. code-block:: sql
-
-      SELECT "t1"."id", "t1"."start", "t1"."end"
-      FROM "interval" AS t1
-      WHERE (
-          (("t1"."end" - "t1"."start") > 6) AND
-          ((ABS("t1"."end" - "t1"."start") / 2) >= 3)
-      )
-
 .. class:: hybrid_method(func, expr=None)
 
    Decorator for defining a method with separate instance and class
    behaviors. Use ``@method.expression`` to specify the SQL form.
-
-   Example:
-
-   .. code-block:: python
-
-      class Interval(Model):
-          start = IntegerField()
-          end = IntegerField()
-
-          @hybrid_method
-          def contains(self, point):
-              return (self.start <= point) & (point < self.end)
-
-   When called with an ``Interval`` instance, the ``contains`` method will
-   behave as you would expect. When called as a classmethod, though, a SQL
-   expression will be generated:
-
-   .. code-block:: python
-
-      query = Interval.select().where(Interval.contains(2))
-
-   Would generate the following SQL:
-
-   .. code-block:: sql
-
-      SELECT "t1"."id", "t1"."start", "t1"."end"
-      FROM "interval" AS t1
-      WHERE (("t1"."start" <= 2) AND ("t1"."end" > 2))
 
 
 .. _kv:
@@ -1090,7 +1013,6 @@ Transactions:
 
 .. code-block:: python
 
-   # Transactions.
    with db.transaction() as txn:
        users.insert(name='Charlie')
 

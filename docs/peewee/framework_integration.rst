@@ -4,13 +4,7 @@ Framework Integration
 =====================
 
 For web applications, it is common to open a connection when a request is
-received, and to close the connection when the response is delivered. This
-document describes how to add hooks to your web app to ensure the database
-connection is handled properly.
-
-These steps will ensure that regardless of whether you're using a simple
-:class:`SqliteDatabase` or a :class:`~playhouse.pool.PooledPostgresqlDatabase`,
-peewee will handle the connections correctly.
+received, and to close the connection when the response is delivered.
 
 The pattern is always the same:
 
@@ -23,8 +17,7 @@ The pattern is always the same:
    if not db.is_closed():
        db.close()
 
-Every framework exposes hooks for this. The sections below show the idiomatic
-approach for each.
+Every framework exposes hooks for this.
 
 .. note::
    Applications that handle significant traffic should use a
@@ -66,28 +59,6 @@ hooks:
 
 ``teardown_request`` is called regardless of whether the request succeeded or
 raised an exception, making it the correct hook for cleanup.
-
-For applications that receive a large number of requests, a connection pool is
-recommended:
-
-.. code-block:: python
-
-   from flask import Flask
-   from playhouse.pool import PooledPostgresqlDatabase
-
-   db = PooledPostgresqlDatabase('app', host='10.8.0.1', user='postgres')
-   app = Flask(__name__)
-
-   # With the pooled backend the hooks are identical: connect() and close()
-   # acquire and release a pooled connection per request.
-   @app.before_request
-   def _db_connect():
-       db.connect()
-
-   @app.teardown_request
-   def _db_close(exc):
-       if not db.is_closed():
-           db.close()
 
 .. seealso::
    The :ref:`flask-utils` extension provides helpers for common tasks like
@@ -308,9 +279,6 @@ which runs the endpoint in a *separate task* from the middleware task. Because
 peewee's async connections are task-local, a connection opened there would not
 be the one the endpoint uses.
 
-A plain ASGI middleware shares the request task, so the db connection
-opened in the middleware is the same one the endpoint sees.
-
 Startup and shutdown are handled by ``lifespan`` (create tables when the server
 starts, shut the pool down on exit).
 
@@ -402,8 +370,7 @@ Do not manage the connection with a ``yield`` dependency or as a request hook.
 FastAPI dispatches a sync dependency's setup, the endpoint, and the teardown as
 three separate threadpool calls(!), and under load they land on different
 threads. Peewee's connection state is thread-local, so each operation may see a
-different local state. By using ``with db:`` inside the endpoint body, the
-connection will be scoped properly.
+different local state.
 
 .. _quart:
 

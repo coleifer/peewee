@@ -9,8 +9,7 @@ of them are - the database rolls back to the state it was in before the
 transaction began.
 
 Peewee operates in *autocommit mode*: every statement that runs outside an
-explicit transaction runs in its own implicit transaction. To group statements,
-use the tools described in this document.
+explicit transaction runs in its own implicit transaction.
 
 db.atomic
 ---------
@@ -53,8 +52,6 @@ savepoint - see below) is rolled back and the exception continues to propagate:
        # yet committed because we haven't left the scope of the "with" block.
 
        raise ValueError('something went wrong')
-       # This exception is unhandled - the transaction will be rolled-back and
-       # the ValueError will be raised.
 
    # User('huey') was NOT committed, the transaction rolled-back.
    # The ValueError is raised here.
@@ -110,9 +107,6 @@ Savepoints can be nested arbitrarily deep:
                do_something_risky()
                inner.rollback()   # Only the innermost work is lost.
            do_something_safe()
-
-``atomic()`` tracks the nesting depth internally. You do not need to
-manage savepoint names or transaction state manually.
 
 Explicit Transaction
 --------------------
@@ -191,8 +185,7 @@ Autocommit Mode
 
 Peewee requires the underlying driver to run in autocommit mode and manages
 transaction boundaries itself. This differs from the DB-API 2.0 default, which
-starts a transaction implicitly and requires you to commit manually. As a
-result, Peewee puts all DB-API drivers into *autocommit* mode.
+starts a transaction implicitly and requires you to commit manually.
 
 In rare cases where you need to take direct control of ``BEGIN``/``COMMIT``/
 ``ROLLBACK`` - bypassing Peewee's transaction management entirely - use
@@ -218,7 +211,7 @@ In rare cases where you need to take direct control of ``BEGIN``/``COMMIT``/
 of the block. Inside it, ``atomic()`` raises ``ValueError`` (``with db:``
 likewise), and ``transaction()`` is inert, issuing no begin, commit, or
 rollback. ``savepoint()`` works normally inside a transaction opened with
-``begin()``. This should rarely be needed in application code.
+``begin()``.
 
 .. _sqlite-locking:
 
@@ -231,20 +224,19 @@ control over read-write locking is required:
 .. code-block:: python
 
    with db.atomic('EXCLUSIVE'):
-       # No other connection can read or write until this commits.
        do_something()
 
    @db.atomic('IMMEDIATE')
    def load_data():
-       # No other writer is allowed, but readers can proceed.
        insert_records()
 
 The three modes:
 
 * ``DEFERRED`` (default) acquires the minimum necessary lock as reads and
-  writes occur. Another writer can intervene between BEGIN and your first write.
-* ``IMMEDIATE`` acquires a write reservation lock at BEGIN. Other writers are
-  blocked but readers can proceed.
+  writes occur: a shared lock on the first read, a reserved lock on the first
+  write. Another writer can intervene between BEGIN and your first write.
+* ``IMMEDIATE`` acquires a reserved lock at BEGIN. Other writers and other
+  IMMEDIATE or EXCLUSIVE transactions are blocked, but readers can proceed.
 * ``EXCLUSIVE`` acquires an exclusive lock at BEGIN. No other connection can
   read or write until the transaction completes.
 

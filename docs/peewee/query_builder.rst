@@ -4,9 +4,7 @@ Query Builder
 =============
 
 Peewee's high-level :class:`Model` and :class:`Field` APIs are built upon
-lower-level :class:`Table` and :class:`Column` counterparts. While these
-lower-level APIs are not documented in as much detail as their high-level
-counterparts, this document will present an overview with worked examples.
+lower-level :class:`Table` and :class:`Column` counterparts.
 
 We'll use the following schema:
 
@@ -72,7 +70,7 @@ To select the first three notes and print their content, we can write:
     By default, rows will be returned as dictionaries. You can use the
     :meth:`~BaseQuery.tuples`, :meth:`~BaseQuery.namedtuples` or
     :meth:`~BaseQuery.objects` methods to specify a different container for
-    the row data, if you wish.
+    the row data.
 
 Because we didn't specify any columns, all the columns we defined in the
 note's :class:`Table` constructor will be selected. ``Reminder`` declares no
@@ -174,9 +172,8 @@ associated note content:
 Insert Queries
 --------------
 
-Inserting data is straightforward. We can specify data to
-:meth:`~Table.insert` in two different ways (in both cases, the ID of the
-new row is returned):
+We can specify data to :meth:`~Table.insert` in two different ways (in both
+cases, the ID of the new row is returned):
 
 .. code-block:: python
 
@@ -244,7 +241,6 @@ count for some URL:
 
 .. code-block:: python
 
-    # Do an atomic update:
     (PageView
      .update({PageView.count: PageView.count + 1})
      .where(PageView.url == some_url)
@@ -381,6 +377,3 @@ More
 
 For a description of the various classes used to describe a SQL AST, see the
 :ref:`query builder API documentation <query-builder-api>`.
-
-If you're interested in learning more, you can also check out the `project
-source code <https://github.com/coleifer/peewee>`_.

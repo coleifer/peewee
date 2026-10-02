@@ -158,7 +158,7 @@ related rows in a fixed number of queries, no matter how many rows are shown.
 
 This fetches a page of users, each with their two most-recent tweets, and for
 each tweet the favorites with the favoriting user. That is three queries for
-the whole page, whatever the page size:
+the whole page:
 
 .. code-block:: python
 
@@ -474,8 +474,7 @@ Bulk-Loading with Explicit Primary Keys
 
 When loading relational data from an external source where primary keys are
 already assigned, use :meth:`~Model.insert_many` with the ``id`` field
-included. This avoids the ``auto_increment`` workaround that was common in
-older Peewee versions:
+included:
 
 .. code-block:: python
 
@@ -485,15 +484,11 @@ older Peewee versions:
    with db.atomic():
        User.insert_many(data, fields=fields).execute()
 
-Because ``insert_many`` never reads rows back, there is no confusion between
-INSERT and UPDATE paths.
-
 
 Custom SQLite Functions
 -----------------------
 
-SQLite can be extended with Python functions that are callable from SQL. This
-is useful for operations SQLite does not natively support.
+SQLite can be extended with Python functions that are callable from SQL.
 
 Registering a function with the ``@db.func()`` decorator makes it available
 immediately after the connection is opened:

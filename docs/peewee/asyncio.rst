@@ -51,10 +51,9 @@ this is the only thing you need to use Peewee with asyncio:
    class User(db.Model):
        name = TextField()
 
-Queries must be executed through an async execution method. This ensures that
-when blocking would occur, control is properly yielded to the event loop. The
-database context (``async with db``) acquires a connection from the pool and
-releases it on exit:
+Queries must be executed through an async execution method. The database
+context (``async with db``) acquires a connection from the pool and releases it
+on exit:
 
 .. code-block:: python
 
@@ -91,12 +90,9 @@ releases it on exit:
 
    asyncio.run(main())
 
-Every query is awaited on the asyncio event loop, in the calling task: the
-SQL is handed to the async driver (``aiosqlite``, ``asyncpg`` or
-``aiomysql``) and awaited like any other coroutine. No thread executor is
-involved. Each task acquires its own
-connection from the pool, so concurrent tasks never share connection or
-transaction state - details under `Connection Management`_ below.
+Each task acquires its own connection from the pool, so concurrent tasks never
+share connection or transaction state - details under `Connection Management`_
+below.
 
 .. _how-it-works:
 
@@ -109,10 +105,6 @@ synchronous internals can be suspended mid-call while the async driver
 performs I/O. Whenever a query executes, control switches to the event loop and
 the I/O coroutine is awaited like any other awaitable. Then the original call
 resumes with the result.
-
-This is real asyncio, not gevent-style concurrency. Nothing is
-monkey-patched, no sockets are wrapped, and the event loop is the ordinary
-asyncio loop running the rest of your application.
 
 The following example uses two internal primitives, ``greenlet_spawn`` (run sync
 code in a greenlet) and ``await_`` (suspend the sync greenlet, passing control
@@ -159,25 +151,9 @@ When this runs:
 7. At this point the greenlet running our synchronous code has finished. ``greenlet_spawn()``
    now finishes and returns the result (3) to ``main()``, which gets printed.
 
-The skeptical can verify that our synchronous callable is running
-asynchronously:
-
-.. code-block:: python
-
-   async def run_several():
-       tasks = [greenlet_spawn(synchronous) for i in range(100)]
-       print(await asyncio.gather(*tasks))
-
-   import time
-   start = time.perf_counter()
-   asyncio.run(run_several())
-   print(time.perf_counter() - start)  # 1.01...
-
 In your code you should never need to use ``greenlet_spawn()`` or ``await_()``
 directly. Peewee wraps all this in ``a``-prefixed methods and helpers so that the
-greenlet machinery remains an implementation detail. Peewee uses greenlets to
-pass coroutines out of synchronous code, so they can be ``await``-ed, at the cost
-of two lightweight context switches.
+greenlet machinery remains an implementation detail.
 
 Async Model Methods
 -------------------
@@ -266,7 +242,6 @@ a select.
 
 .. code-block:: python
 
-   # The async counterpart of execute():
    active = await User.select().where(User.is_active == True).aexecute()
    for user in active:  # Results are buffered, iteration performs no I/O.
        print(user.username)
@@ -289,14 +264,9 @@ a select.
 
 For selects, ``await query.aexecute()`` is interchangeable with
 ``await db.list(query)`` for iteration - ``aexecute()`` returns the
-buffered result wrapper while ``list()`` returns a plain list. When in
-doubt, prefer ``query.aexecute()`` and use ``db.list()`` when you want a
-plain list. ``db.iterate()`` provides streaming results using server-side
-cursors where available.
-
-``aexecute()`` is the only async method on queries. Aggregates and other
-conveniences remain database helpers (``await db.count(query)``,
-``await db.exists(query)``, and so on).
+buffered result wrapper while ``list()`` returns a plain list.
+``db.iterate()`` provides streaming results using server-side cursors where
+available.
 
 General purpose wrapper
 -----------------------
@@ -409,8 +379,8 @@ Or wrap transactional code in ``db.run()``:
 
    # Both Alice and Bob are in the database.
 
-Both approaches produce the same result. The ``db.run()`` form is often simpler
-when the transactional logic involves many inter-dependent queries.
+The ``db.run()`` form is often simpler when the transactional logic involves
+many inter-dependent queries.
 
 Connection Management
 ---------------------
@@ -542,8 +512,7 @@ Or by wrapping the access in ``db.run()``:
 For strict codebases, disable lazy-loading on the foreign-key field
 (``lazy_load=False``) and enforce selecting relations via explicit joins.
 Attribute access then returns the column value rather than performing a
-query, and ``afetch()`` on such a field raises ``ValueError`` rather than
-guessing.
+query, and ``afetch()`` on such a field raises ``ValueError``.
 
 .. code-block:: python
 
@@ -597,9 +566,6 @@ relations were eagerly loaded:
 
    data = await db.run(UserSchema.model_validate, user)
 
-Any code that triggers a database query must execute via ``db.run()``,
-``query.aexecute()``, or one of the async helper methods.
-
 Tasks spawned inside a transaction
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
@@ -607,9 +573,7 @@ Connections are task-local. A task spawned with ``asyncio.gather()`` or
 ``asyncio.create_task()`` inside an ``async with db.atomic()`` block
 acquires its *own* connection and therefore runs **outside** the
 transaction: its writes commit (or fail) independently and are not rolled
-back with the parent. This is by design - it is what makes concurrent
-tasks safe from interleaving each other's transactions - but it means
-transactional work must stay within a single task:
+back with the parent. Transactional work must stay within a single task:
 
 .. code-block:: python
 
@@ -634,15 +598,11 @@ write transaction.
 Why no ``await User.select()``?
 -------------------------------
 
-Queries are deliberately not awaitable. Making every query object awaitable
-flips ``inspect.isawaitable(query)`` to ``True`` in every installation,
-including purely synchronous ones, and parts of the ecosystem dispatch on
-exactly such checks (template engines that auto-await attribute access,
-ASGI frameworks that duck-type async iterables). A forgotten ``await`` on a
-custom awaitable is also silent: Python's "coroutine was never awaited" warning
-applies only to real coroutines, so an unawaited ``User.insert(...)`` would
-not execute. The ``a``-prefixed methods are ordinary coroutines so forgetting
-the ``await`` will trigger a Python warning.
+Queries are deliberately not awaitable. A forgotten ``await`` on a custom
+awaitable is silent: Python's "coroutine was never awaited" warning applies
+only to real coroutines, so an unawaited ``User.insert(...)`` would not
+execute. The ``a``-prefixed methods are ordinary coroutines so forgetting the
+``await`` will trigger a Python warning.
 
 API Reference
 -------------

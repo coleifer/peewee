@@ -65,8 +65,8 @@ Creating a single row
    >>> charlie.id
    1
 
-This will INSERT a new row into the database. The primary key will
-automatically be retrieved and stored on the model instance.
+The primary key will automatically be retrieved and stored on the model
+instance.
 
 Alternatively, instantiate the model and call :meth:`~Model.save`. The
 first call to ``save()`` on a new instance performs an INSERT:
@@ -186,7 +186,6 @@ get the number of rows inserted:
 
 .. code-block:: python
 
-   # How many rows were inserted?
    n = User.insert_many(data).as_rowcount().execute()
 
 .. note::
@@ -307,12 +306,6 @@ you want to update:
    charlie.username = 'charlie_v2'
    charlie.save(only=[User.username])
 
-If a model instance does not have a primary key, the first call to
-:meth:`~Model.save` will perform an INSERT query.
-
-Once a model instance has a primary key, subsequent calls to :meth:`~Model.save`
-result in an *UPDATE*.
-
 Updating multiple rows
 ^^^^^^^^^^^^^^^^^^^^^^
 
@@ -424,8 +417,6 @@ Upsert
 An *upsert* (INSERT or UPDATE) inserts a new row, or if a unique constraint
 would be violated, updates the existing row instead.
 
-Peewee provides two complementary approaches.
-
 ``on_conflict_replace`` - SQLite and MySQL
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
@@ -493,7 +484,6 @@ if the constraint had not fired. This allows conditional updates:
 
    KV.create(key='k1', value=1)
 
-   # Demonstrate usage of EXCLUDED.
    # Here we will attempt to insert a new value for a given key. If that
    # key already exists, then we will update its value with the *sum* of its
    # original value and the value we attempted to insert -- provided that
@@ -579,7 +569,6 @@ Insert the row, and silently do nothing if a constraint would be violated:
 
 .. code-block:: python
 
-   # Insert if username does not exist, otherwise do nothing.
    User.insert(username='huey').on_conflict_ignore().execute()
 
 Supported by SQLite, MySQL, and Postgresql.
@@ -661,8 +650,6 @@ Returning Clause
 
 :class:`PostgresqlDatabase` and :class:`SqliteDatabase` (3.35.0+) support a
 ``RETURNING`` clause on ``UPDATE``, ``INSERT`` and ``DELETE`` queries.
-Specifying a ``RETURNING`` clause allows you to iterate over the rows accessed
-by the query.
 
 By default, the return values upon execution of the different queries are:
 
@@ -701,12 +688,6 @@ this in a single ``UPDATE`` query with a ``RETURNING`` clause:
    for user in query.execute():
        print(f'Deleted spam user id: {user.id}')
 
-The ``RETURNING`` clause is available on:
-
-* :class:`Insert`
-* :class:`Update`
-* :class:`Delete`
-
 As another example, let's add a user and set their creation-date to the
 server-generated current timestamp. We'll create and retrieve the new user's
 ID, Email and the creation timestamp in a single query:
@@ -717,7 +698,6 @@ ID, Email and the creation timestamp in a single query:
             .insert(email='foo@bar.com', created=fn.now())
             .returning(User))  # Shorthand for all columns on User.
 
-   # When using RETURNING, execute() returns a cursor.
    cursor = query.execute()
 
    # Get the user object we just inserted and log the data:
@@ -725,7 +705,7 @@ ID, Email and the creation timestamp in a single query:
    logger.info('Created user %s (id=%s) at %s', user.email, user.id, user.created)
 
 By default the cursor will return :class:`Model` instances, but you can
-specify a different row type:
+specify a different :ref:`row type <row-types>`:
 
 .. code-block:: python
 
@@ -739,5 +719,3 @@ specify a different row type:
 
    for new_user in query.execute():
        print('Added user "%s", id=%s' % (new_user['username'], new_user['id']))
-
-Just as with :class:`Select` queries, you can specify various :ref:`result row types <row-types>`.

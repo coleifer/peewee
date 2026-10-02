@@ -33,9 +33,9 @@ Our terminal session might look like this:
    >>>
 
 The :func:`~playhouse.reflection.generate_models` function will introspect the database and
-generate model classes for all the tables that are found. This is a handy way
-to get started and can save a lot of typing. The function returns a dictionary
-keyed by the table name, with the generated model as the corresponding value:
+generate model classes for all the tables that are found. The function returns
+a dictionary keyed by the table name, with the generated model as the
+corresponding value:
 
 .. code-block:: pycon
 
@@ -61,8 +61,7 @@ data-type, we can use the :func:`~playhouse.reflection.print_model` function:
      metadata TEXT
 
 We can also generate a SQL ``CREATE TABLE`` for the introspected model, if you
-find that easier to read. This should match the actual table definition in the
-introspected database:
+find that easier to read:
 
 .. code-block:: pycon
 
@@ -98,8 +97,7 @@ For more information about these APIs and other similar reflection utilities,
 see the :ref:`reflection` documentation.
 
 To generate an actual Python module containing model definitions for an
-existing database, you can use the command-line :ref:`pwiz <pwiz>` tool. Here
-is a quick example:
+existing database, you can use the command-line :ref:`pwiz <pwiz>` tool:
 
 .. code-block:: shell
 
@@ -109,12 +107,6 @@ The ``events.py`` file will now be an import-able module containing a database
 instance (referencing the ``events.db``) along with model definitions for any
 tables found in the database. ``pwiz`` also introspects indexes and adds proper
 ``NULL``/``NOT NULL`` flags.
-
-The APIs discussed in this section:
-
-* :func:`~playhouse.reflection.generate_models`
-* :func:`~playhouse.reflection.print_model`
-* :func:`~playhouse.reflection.print_table_sql`
 
 More low-level APIs are also available on the :class:`Database` instance:
 
