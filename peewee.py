@@ -2790,6 +2790,7 @@ class _WriteQuery(Query):
         return self.handle_result(database, cursor)
 
     def execute_returning(self, database):
+        self._cursor_wrapper = None
         return super(_WriteQuery, self)._execute(database)
 
     def handle_result(self, database, cursor):

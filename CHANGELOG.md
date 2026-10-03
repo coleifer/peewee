@@ -7,6 +7,11 @@ https://github.com/coleifer/peewee/releases
 
 ## master
 
+* A write query with a `RETURNING` clause now runs again on every explicit
+  `execute()` call (like a write query without one). Iterating the query still
+  reads the result of the last execution. Previously repeated `execute()`
+  calls returned the cached result without running the query.
+
 [View commits](https://github.com/coleifer/peewee/compare/4.5.2...master)
 
 ## 4.5.2

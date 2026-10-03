@@ -6605,30 +6605,28 @@ class TestSqliteReturningConfig(ModelTestCase):
         uq = (User.update(username='c2')
               .where(User.username == 'c')
               .returning(User.id, User.username))
-        for _ in range(2):
-            self.assertEqual([u.username for u in uq.execute()], ['c2'])
-        self.assertEqual(list(uq.clone().execute()), [])
+        self.assertEqual([u.username for u in uq.execute()], ['c2'])
+        # Iterating reads the cached result, execute() runs the query again.
+        self.assertEqual([u.username for u in uq], ['c2'])
+        self.assertEqual(list(uq.execute()), [])
 
         uq = (User.update(username=User.username.concat('x'))
-              .where(~User.username.endswith('x'))  # For idempotency.
+              .where(~User.username.endswith('x'))
               .returning(User.id, User.username)
               .tuples())
-        for _ in range(2):
-            self.assertEqual(sorted(uq.execute()),
-                             [(1, 'ax'), (2, 'bx'), (3, 'c2x')])
-        self.assertEqual(list(uq.clone().execute()), [])
+        self.assertEqual(sorted(uq.execute()), [(1, 'ax'), (2, 'bx'), (3, 'c2x')])
+        self.assertEqual(sorted(uq), [(1, 'ax'), (2, 'bx'), (3, 'c2x')])
+        self.assertEqual(list(uq.execute()), [])
 
         dq = User.delete().where(User.username == 'c2x').returning(User)
-        for _ in range(2):
-            # The result is cached to support multiple iterations.
-            self.assertEqual([u.username for u in dq.execute()], ['c2x'])
-        self.assertEqual(list(dq.clone().execute()), [])
+        self.assertEqual([u.username for u in dq.execute()], ['c2x'])
+        self.assertEqual([u.username for u in dq], ['c2x'])
+        self.assertEqual(list(dq.execute()), [])
 
         dq = User.delete().returning(User).tuples()
-        for _ in range(2):
-            # The result is cached to support multiple iterations.
-            self.assertEqual(sorted(dq.execute()), [(1, 'ax'), (2, 'bx')])
-        self.assertEqual(list(dq.clone().execute()), [])
+        self.assertEqual(sorted(dq.execute()), [(1, 'ax'), (2, 'bx')])
+        self.assertEqual(sorted(dq), [(1, 'ax'), (2, 'bx')])
+        self.assertEqual(list(dq.execute()), [])
 
     def test_bulk_create_update(self):
         users = [User(username='u%s' % i) for i in range(5)]
