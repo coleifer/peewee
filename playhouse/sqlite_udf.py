@@ -126,7 +126,7 @@ def strip_tz(date_str):
     tz_idx1 = date_str.find('+')
     if tz_idx1 != -1:
         return date_str[:tz_idx1]
-    tz_idx2 = date_str.find('-')
+    tz_idx2 = date_str.rfind('-')
     if tz_idx2 > 13:
         return date_str[:tz_idx2]
     return date_str

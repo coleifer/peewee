@@ -204,7 +204,7 @@ Populate and query data:
 We can also verify that the pydantic schemas captured our Peewee model
 metadata:
 
-.. code-block:: python
+.. code-block:: pycon
 
    >>> UserCreate.model_json_schema()
    {'properties': {

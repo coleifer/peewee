@@ -372,9 +372,9 @@ switching back to ``Tweet`` in between:
 Without the call to ``.switch(Tweet)``, Peewee would attempt to join from
 ``User`` to ``Favorite`` using ``Favorite.user``, producing incorrect results.
 
-:meth:`~ModelSelect.join_from` is a more explicit alternative that names the
-join's source model directly, so no ``switch()`` is needed. ``join_from(A, B)``
-is equivalent to ``switch(A).join(B)``:
+:meth:`~ModelSelect.join_from` is a more explicit alternative that specifies
+the join's source model directly, so no ``switch()`` is needed.
+``join_from(A, B)`` is equivalent to ``switch(A).join(B)``:
 
 .. code-block:: python
 
@@ -782,7 +782,7 @@ attribute name used to attach the joined instance:
 Joins without a resolvable foreign key (a :class:`Table`, a subquery, an
 arbitrary expression) attach at the destination's default name, and ``attr``
 overrides it (see :ref:`joining without a foreign key <joining-without-fk>`).
-One collision is rejected: aliasing a join's ``on`` expression with the
+One collision is rejected. Aliasing a join's ``on`` expression with the
 ``<fk>_id`` column name of a foreign key, e.g.
 ``on=(Tweet.user == User.id).alias('user_id')``, raises :exc:`ValueError`, as
 that attribute holds the raw column value.
@@ -1097,9 +1097,9 @@ Because it is a real query it can join other tables and select from them:
    # alice-3 carol
    # bob-2 alice
 
-A relation can limit the rows fetched per parent with ``per_parent=n``: it keeps
-the first ``n`` of each parent's children using a window function, ranked by the
-relation query's ``order_by``:
+A relation can limit the rows fetched per parent with ``per_parent=n``. It
+keeps the first ``n`` of each parent's children using a window function,
+ranked by the relation query's ``order_by``:
 
 .. code-block:: python
 
@@ -1193,7 +1193,7 @@ with ``json_object``:
    # bob [{'id': 4, 'content': 'bob-1'}, {'id': 5, 'content': 'bob-2'}]
    # carol []
 
-Do not alias the column to ``tweets``: the fetched value would shadow the
+Do not alias the column to ``tweets``. The fetched value would shadow the
 ``User.tweets`` back-reference on the returned instances. This pattern is
 most useful when the database is remote and each additional query is costly.
 The function names differ by database:

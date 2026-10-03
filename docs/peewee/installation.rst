@@ -69,4 +69,5 @@ following drivers are supported out of the box:
 | Postgres (extensions) | ``psycopg`` (2 or 3)       | :class:`.PostgresqlExtDatabase`            |
 +-----------------------+----------------------------+--------------------------------------------+
 
-The bolded rows cover the majority of deployments.
+The bolded rows cover the majority of deployments. All others are
+optional. Install their drivers when needed.

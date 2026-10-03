@@ -181,7 +181,7 @@ After the database name specify additional `pymysql Connection parameters
        # ...
 
 If MySQL drops idle connections (``Error 2006: MySQL server has gone away``),
-the solution is explicit connection management: open a connection at the start
+the solution is explicit connection management. Open a connection at the start
 of each unit of work and close it when finished. See :ref:`connection-lifecycle`
 and :ref:`framework-integration`.
 
@@ -416,6 +416,7 @@ is raised. Pass ``reuse_if_open=True`` to suppress it:
 .. code-block:: pycon
 
    >>> db.connect(reuse_if_open=True)
+   False
 
 Calling ``close()`` on an already-closed connection will not result in an
 exception, but will return ``False``:
@@ -591,7 +592,7 @@ Pooled database classes are available in :ref:`playhouse.pool <pool>`:
        'my_app',
        user='postgres',
        max_connections=20,
-       stale_timeout=300,   # Recycle connections idle for 5 minutes.
+       stale_timeout=300,   # Recycle connections older than 5 minutes.
    )
 
 .. include:: pool-snippet.rst
@@ -608,8 +609,10 @@ context manager) so connections are returned to the pool for re-use.
 Executing SQL
 -------------
 
-For cases where you wish to execute SQL directly, use
-:meth:`Database.execute_sql`:
+SQL queries will typically be executed by calling ``execute()`` on a query
+constructed using the query-builder APIs (or by iterating over a query
+object in the case of a :class:`Select` query). For cases where you wish to
+execute SQL directly, use :meth:`Database.execute_sql`:
 
 .. code-block:: python
 
@@ -773,8 +776,9 @@ a connection in autocommit mode:
            return [r[0] for r in res.fetchall()]
 
 The minimum Peewee relies on from the driver is: ``Connection.cursor``,
-``Cursor.execute``, ``Cursor.description``, and ``Cursor.fetchone``. Everything
-else can be incrementally added.
+``Connection.close``, ``Cursor.execute``, ``Cursor.description``,
+``Cursor.fetchone``, ``Cursor.close``, ``Cursor.lastrowid`` and
+``Cursor.rowcount``. Everything else can be incrementally added.
 
 Other integration points on :class:`Database`:
 

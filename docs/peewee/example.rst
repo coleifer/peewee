@@ -205,7 +205,7 @@ When developing a web application, it's common to:
 2. Run your request-handler.
 3. Close the connection before returning the response.
 
-**You should always manage your connections explicitly**. For instance, if you
+You should always manage your connections explicitly. For instance, if you
 are using a :ref:`connection pool <pool>`, connections will only be recycled
 correctly if you call :meth:`~Database.connect` and :meth:`~Database.close`.
 
@@ -337,7 +337,9 @@ This code corresponds to the following SQL query:
        INNER JOIN "relationship" AS t3
            ON t2."id" = t3."to_user_id"
        WHERE t3."from_user_id" = ?
+       ORDER BY t2."username"
    )
+   ORDER BY t1."pub_date" DESC
 
 Other Topics
 ------------

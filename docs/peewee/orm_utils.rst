@@ -25,7 +25,7 @@ swapping.
 Model Serialization
 ^^^^^^^^^^^^^^^^^^^
 
-.. function:: model_to_dict(model, recurse=True, backrefs=False, only=None, exclude=None, extra_attrs=None, fields_from_query=None, max_depth=None, manytomany=False)
+.. function:: model_to_dict(model, recurse=True, backrefs=False, only=None, exclude=None, seen=None, extra_attrs=None, fields_from_query=None, max_depth=None, manytomany=False)
 
    Convert a model instance to a dictionary.
 
@@ -374,7 +374,8 @@ When you wish to embed the related object rather than just its ID, pass a
 ``relationships`` dict that maps a Peewee :class:`ForeignKeyField`
 (or backref) to the Pydantic schema that should be used for the nested object.
 
-**Nested foreign key**
+Nested foreign key
+~~~~~~~~~~~~~~~~~~
 
 .. code-block:: python
 
@@ -409,7 +410,8 @@ When you wish to embed the related object rather than just its ID, pass a
                .get())
       data = TweetResponse.model_validate(tweet)  # No additional query.
 
-**Nested back-references**
+Nested back-references
+~~~~~~~~~~~~~~~~~~~~~~
 
 Back-references work the same way, but the schema must be wrapped in
 ``List[...]`` since back-references may contain 0..n records.
@@ -687,7 +689,7 @@ database instance.
          KV.update(k1='v1', k2='v2', k3='v3')
 
          KV['k1']  # 'v1'
-         KV['kx']  # KeyError: "kx" not found
+         KV['kx']  # KeyError: 'kx'
 
          KV[KV.key > 'k1']  # ['v2', 'v3']
          KV[KV.key < 'k1']  # []
@@ -729,7 +731,7 @@ database instance.
          KV.update(k1=1, k2=2, k3=3)
 
          del KV['k1']  # Deletes "k1".
-         del KV['k1']  # KeyError: "k1" does not exist
+         del KV['k1']  # KeyError: 'k1'
 
          del KV[KV.key > 'k2']  # Deletes "k3".
          del KV[KV.key > 'k99']  # Nothing deleted, no keys match.
@@ -897,7 +899,7 @@ Signal callback signature:
 
    .. method:: connect(receiver, name=None, sender=None)
 
-      :param callable receiver: a callable that takes at least two parameters,
+      :param receiver: a callable that takes at least two parameters,
           a "sender", which is the Model subclass that triggered the signal, and
           an "instance", which is the actual model instance.
       :param str name: a short alias
@@ -916,7 +918,7 @@ Signal callback signature:
 
    .. method:: disconnect(receiver=None, name=None, sender=None)
 
-      :param callable receiver: the callback to disconnect
+      :param receiver: the callback to disconnect
       :param str name: a short alias
       :param Model sender: disconnect model-specific handler.
 
@@ -1220,7 +1222,7 @@ Extra Field Types
 
 .. class:: EnumField(enum_class, **kwargs)
 
-   Stores members of an :class:`enum.Enum` with string values in a
+   Stores members of an ``enum.Enum`` with string values in a
    :class:`CharField`, storing ``member.value`` and returning the member.
    Unknown values are rejected with a ``ValueError`` on both the write and
    comparison paths. An enum whose values are not strings is rejected at
@@ -1298,7 +1300,7 @@ Access the underlying Peewee database:
    @app.route('/transfer', methods=['POST'])
    def transfer():
        with peewee_db.atomic():
-           # ... transactional logic ...
+           ...  # Transactional logic.
        return jsonify({'ok': True})
 
 Application factory pattern:

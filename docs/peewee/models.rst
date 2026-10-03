@@ -70,12 +70,13 @@ Three things to note:
           class Meta:
               database = db
 
-   **BaseModel** exists only to specify the ``database`` setting in its ``Meta``
-   class. Because ``Meta.database`` is inheritable, every model that extends
-   ``BaseModel`` will automatically use the same database.
+   ``BaseModel`` exists only to specify the ``database`` setting in its
+   ``Meta`` class. Because ``Meta.database`` is inheritable, every model that
+   extends ``BaseModel`` will automatically use the same database.
 
-   Model configuration lives in a namespaced :ref:`Meta <model-options>` class,
-   which also exposes :ref:`many other attributes <model-options>` you can configure.
+   Model configuration goes in a namespaced :ref:`Meta <model-options>` class,
+   which also exposes :ref:`many other attributes <model-options>` you can
+   configure.
 
 3. Declare model classes and fields.
 
@@ -977,11 +978,10 @@ and more).
 .. code-block:: pycon
 
    >>> User._meta.fields
-   {'id': <peewee.AutoField object at 0x7f51a2e92750>,
-    'username': <peewee.CharField object at 0x7f51a2f0a510>}
+   {'id': <AutoField: User.id>, 'username': <CharField: User.username>}
 
    >>> User._meta.primary_key
-   <peewee.AutoField object at 0x7f51a2e92750>
+   <AutoField: User.id>
 
    >>> User._meta.database
    <peewee.SqliteDatabase object at 0x7f519bff6dd0>
@@ -1225,9 +1225,10 @@ To use a different name for the auto-incrementing primary key, declare an
 
 .. warning::
    A common mistake is writing ``id = IntegerField(primary_key=True)`` when
-   intending an auto-incrementing primary key. This declares a plain integer
-   column whose value the application must supply - the database will not
-   generate it. Use :class:`AutoField` for auto-increment behavior.
+   intending an auto-incrementing primary key. On Postgres and MySQL this
+   declares a plain integer column whose value the application must supply -
+   the database will not generate it. Use :class:`AutoField` for
+   auto-increment behavior.
 
 Non-integer primary keys
 ^^^^^^^^^^^^^^^^^^^^^^^^
@@ -1295,9 +1296,10 @@ To create a table with no primary key, set ``primary_key = False``:
        class Meta:
            primary_key = False
 
-:meth:`Model.save` and :meth:`Model.delete_instance` do not work on
-keyless models, since both require a primary key to target a specific
-row. Use :meth:`Model.insert`, :meth:`Model.update`, and :meth:`Model.delete`
+:meth:`Model.save` and :meth:`Model.delete_instance` cannot update or delete
+a row on keyless models (``save()`` always inserts, ``delete_instance()``
+deletes nothing), since both require a primary key to target a specific row.
+Use :meth:`Model.insert`, :meth:`Model.update`, and :meth:`Model.delete`
 (the class-level query methods) instead.
 
 Table Constraints

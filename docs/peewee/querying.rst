@@ -49,7 +49,7 @@ a method that forces execution.
        print(user.username)
 
 Iterating over the same query object a second time does not re-query the
-database: results are cached on the query object. To disable caching (for
+database. Results are cached on the query object. To disable caching (for
 example, when iterating over a large result set), use :meth:`~BaseQuery.iterator`:
 
 .. code-block:: python
@@ -952,7 +952,7 @@ Common Table Expressions
 A CTE factors out a subquery and gives it a name, making complex queries more
 readable and sometimes more efficient. CTEs also support recursion.
 
-Define a CTE with :meth:`~Query.cte` and include it with
+Define a CTE with :meth:`~SelectBase.cte` and include it with
 :meth:`~Query.with_cte`.
 
 Simple Example
@@ -1140,8 +1140,8 @@ recursive CTE:
 Data-Modifying CTE
 ^^^^^^^^^^^^^^^^^^
 
-Example of using a data-modifying CTE to move data from one table to an archive
-table, using a single query:
+Example of using a data-modifying CTE (Postgresql only) to move data from one
+table to an archive table, using a single query:
 
 .. code-block:: python
 

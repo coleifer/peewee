@@ -4151,6 +4151,9 @@ class Database(_callable_context_manager):
     def get_foreign_keys(self, table, schema=None):
         raise NotImplementedError
 
+    def get_views(self, schema=None):
+        raise NotImplementedError
+
     def sequence_exists(self, seq, schema=None):
         raise NotImplementedError
 
@@ -5028,7 +5031,7 @@ class MySQLDatabase(Database):
         'ILIKE': 'LIKE',
         'REGEXP': 'REGEXP BINARY',
         'IREGEXP': 'REGEXP',
-        'XOR': 'XOR'}
+        OP.XOR: 'XOR'}
     param = '%s'
     quote = '``'
     json_methods = MySQLJSONMethods

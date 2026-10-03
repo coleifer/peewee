@@ -134,7 +134,7 @@ When this runs:
 
 1. The ``greenlet_spawn`` helper is called with a sync callable as its argument.
 2. Inside ``greenlet_spawn`` we create a new greenlet to run the synchronous
-   callable. The new greenlet's parent lives in the async world. This link is
+   callable. The new greenlet's parent is in the async world. This link is
    the bridge between sync and async python. Inside the new greenlet everything
    is synchronous, but it can yield coroutines to the async-world parent, which
    then awaits them on the loop.
@@ -173,8 +173,8 @@ Models bound to an async database have ``a``-prefixed counterparts of the
 
    await huey.adelete_instance()
 
-The naming rule: methods that read or write *rows* live on the model and
-take an ``a`` prefix:
+Methods that read or write *rows* are defined on the model and take an ``a``
+prefix:
 
 * :meth:`~AsyncModelMixin.asave` and :meth:`~AsyncModelMixin.adelete_instance`
 * :meth:`~AsyncModelMixin.acreate`
@@ -484,7 +484,7 @@ been populated. Outside a greenlet context, this raises ``MissingGreenletBridge`
 
    # FAILS: triggers a SELECT outside the greenlet bridge.
    print(tweet.user.name)
-   # MissingGreenletBridge: Attempted query outside greenlet runner.
+   # MissingGreenletBridge: Attempted query outside greenlet runner: SELECT ...
 
 Fix with an explicit async fetch, which also caches the related instance so
 subsequent plain attribute access is free:
@@ -572,7 +572,7 @@ Tasks spawned inside a transaction
 Connections are task-local. A task spawned with ``asyncio.gather()`` or
 ``asyncio.create_task()`` inside an ``async with db.atomic()`` block
 acquires its *own* connection and therefore runs **outside** the
-transaction: its writes commit (or fail) independently and are not rolled
+transaction. Its writes commit (or fail) independently and are not rolled
 back with the parent. Transactional work must stay within a single task:
 
 .. code-block:: python
@@ -584,11 +584,11 @@ back with the parent. Transactional work must stay within a single task:
                                         # parent block rolls back.
        await User.acreate(name='a')     # In the transaction.
 
-Beware of lock interplay on top of the transaction semantics: on a
+Beware of lock interplay on top of the transaction semantics. On a
 single-writer database like SQLite, a task that gathers write-tasks *after*
 the parent transaction has itself written will deadlock until the busy
 timeout - the children block on the parent's write lock while the parent
-awaits the children. In-memory SQLite databases are stricter still: they
+awaits the children. In-memory SQLite databases are stricter still. They
 use a single connection, so any task gathered while the parent holds the
 connection will wait for the full ``acquire_timeout`` and then raise. If
 concurrent tasks are part of the design, keep transactions short and
@@ -599,7 +599,7 @@ Why no ``await User.select()``?
 -------------------------------
 
 Queries are deliberately not awaitable. A forgotten ``await`` on a custom
-awaitable is silent: Python's "coroutine was never awaited" warning applies
+awaitable is silent. Python's "coroutine was never awaited" warning applies
 only to real coroutines, so an unawaited ``User.insert(...)`` would not
 execute. The ``a``-prefixed methods are ordinary coroutines so forgetting the
 ``await`` will trigger a Python warning.
@@ -913,7 +913,7 @@ API Reference
          for user in await query.aexecute():
              ...
 
-   .. method:: atomic()
+   .. method:: atomic(*args, **kwargs)
 
       Return an async-aware atomic context manager. Supports both
       ``async with`` and ``with``.

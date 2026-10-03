@@ -165,7 +165,7 @@ Database
 
    .. method:: __enter__()
    .. method:: __exit__(exc_type, exc_val, exc_tb)
-   .. method:: __call__()
+   .. method:: __call__(fn)
 
       The database object can be used as a context manager or decorator.
 
@@ -503,7 +503,7 @@ Database
 
    .. method:: batch_commit(it, n)
 
-      :param iterable it: an iterable whose items will be yielded.
+      :param it: an iterable whose items will be yielded.
       :param int n: commit every *n* items.
       :return: an equivalent iterable to the one provided, with the addition
           that groups of *n* items will be yielded in a transaction.
@@ -541,9 +541,9 @@ Database
                  rows = row_data[idx:idx + 100]
                  User.insert_many(rows).execute()
 
-   .. method:: table_exists(table, schema=None)
+   .. method:: table_exists(table_name, schema=None)
 
-      :param str table: Table name.
+      :param str table_name: Table name.
       :param str schema: Schema name (optional).
       :return: ``bool`` indicating whether table exists.
 
@@ -699,7 +699,7 @@ Database
       Dependencies are resolved so that tables are created in the appropriate
       order.
 
-   .. method:: drop_tables(models, **options)
+   .. method:: drop_tables(models, **kwargs)
 
       :param list models: A list of :class:`Model` classes.
       :param kwargs: Options to specify when calling
@@ -811,10 +811,10 @@ Database
 
       :param date_field: a SQL node containing a date/time, for example
           a :class:`DateTimeField`.
-      :return: a SQL node representing the value as an integer unix
+      :return: a SQL node representing the value as a unix
           timestamp.
 
-      Backend-appropriate conversion of a datetime value to an integer
+      Backend-appropriate conversion of a datetime value to a unix
       timestamp. See also :meth:`DateTimeField.to_timestamp`, which calls
       this.
 
@@ -1084,7 +1084,7 @@ Database
 
          @db.collation('reverse')
          def collate_reverse(s1, s2):
-             return -cmp(s1, s2)
+             return (s1 < s2) - (s1 > s2)
 
          # Usage:
          Book.select().order_by(collate_reverse.collation(Book.title))
@@ -1129,7 +1129,7 @@ Database
 
       Unregister the user-defined collation.
 
-   .. method:: load_extension(extension_module)
+   .. method:: load_extension(extension)
 
       Load the given extension shared library. Extension will be loaded for the
       current connection as well as all subsequent connections.
@@ -1141,7 +1141,7 @@ Database
          # Load extension in closure.so shared library.
          db.load_extension('closure')
 
-   .. method:: unload_extension(extension_module)
+   .. method:: unload_extension(extension)
 
       Unregister extension from being automatically loaded on new connections.
 
@@ -1186,7 +1186,7 @@ Database
       specified locking strategy (default DEFERRED).
 
 
-.. class:: PostgresqlDatabase(database, register_unicode=True, encoding=None, isolation_level=None, prefer_psycopg3=False)
+.. class:: PostgresqlDatabase(database, register_unicode=True, encoding=None, isolation_level=None, prefer_psycopg3=False, **kwargs)
 
    Postgresql database implementation. Uses psycopg2 or psycopg3.
 
@@ -1839,7 +1839,7 @@ Model
 
    .. classmethod:: bulk_create(model_list, batch_size=None)
 
-      :param iterable model_list: a list or other iterable of unsaved
+      :param list model_list: a list or other iterable of unsaved
           :class:`Model` instances.
       :param int batch_size: number of rows to batch per insert. If
           unspecified, all models will be inserted in a single query.
@@ -1871,8 +1871,8 @@ Model
               User.bulk_create(user_list, batch_size=3)
 
       * The primary-key value for the newly-created models will only be
-        set if you are using Postgresql (which supports the ``RETURNING``
-        clause).
+        set when the database uses the ``RETURNING`` clause (Postgresql, or
+        SQLite with ``returning_clause=True``).
       * SQLite has a limit of bound parameters for a query, typically 999
         for Sqlite < 3.32.0, and 32766 for newer versions.
       * **Strongly recommended** that you wrap the call in a transaction
@@ -1881,11 +1881,11 @@ Model
 
    .. classmethod:: bulk_update(model_list, fields, batch_size=None)
 
-      :param iterable model_list: a list or other iterable of
+      :param list model_list: a list or other iterable of
           :class:`Model` instances.
       :param list fields: list of fields to update.
-      :param int batch_size: number of rows to batch per insert. If
-          unspecified, all models will be inserted in a single query.
+      :param int batch_size: number of rows to batch per update. If
+          unspecified, all models will be updated in a single query.
       :return: total number of rows updated.
 
       UPDATE multiple model instances in a single query by generating a
@@ -2209,7 +2209,7 @@ Model
 
       Drop the model table.
 
-   .. method:: truncate_table(restart_identity=False, cascade=False)
+   .. classmethod:: truncate_table(restart_identity=False, cascade=False)
 
       :param bool restart_identity: Restart the id sequence (postgresql-only).
       :param bool cascade: Truncate related tables as well (postgresql-only).
@@ -2261,9 +2261,9 @@ Model
          # Add index to model:
          Article.add_index(idx)
 
-   .. classmethod:: add_index(*args, **kwargs)
+   .. classmethod:: add_index(*fields, **kwargs)
 
-      :param args: a :class:`ModelIndex` instance, Field(s) to index,
+      :param fields: a :class:`ModelIndex` instance, Field(s) to index,
           or a :class:`SQL` instance that contains the SQL for creating
           the index.
       :param kwargs: Keyword arguments passed to :class:`ModelIndex`
@@ -2316,7 +2316,6 @@ Model
           foreign keys (enabled by default).
       :param bool exclude_null_children: Do not descend into the dependencies
           of models reached via a nullable foreign key.
-      :rtype: Generator expression yielding queries and foreign key fields.
 
       Generate a list of queries of dependent models. Yields a 2-tuple
       containing the query and corresponding foreign key field.  Useful for
@@ -2325,7 +2324,7 @@ Model
 
    .. method:: __iter__()
 
-      :return: a :class:`ModelSelect` for the given class.
+      :return: an iterator over a :class:`ModelSelect` for the given class.
 
       Convenience function for iterating over all instances of a model.
 
@@ -2410,7 +2409,7 @@ Model
               database = db
               table_name = 'user'
 
-      # After class-creation, Meta configuration lives here:
+      # After class-creation, Meta configuration is stored here:
       isinstance(User._meta, Metadata)  # True
       User._meta.database is db         # True
       User._meta.table_name == 'user'   # True
@@ -2481,7 +2480,7 @@ Model
           return _update
 
       # Set all models to use "schema1", e.g. "schema1.a", "schema1.b", etc.
-      # Will apply the function to every subclass of Base.
+      # Will apply the function to Base and every subclass of Base.
       Base._meta.map_models(change_schema('schema1'))
 
       # Set all models to use "schema2", e.g. "schema2.a", "schema2.b", etc.
@@ -2489,7 +2488,7 @@ Model
 
    .. method:: map_models(fn)
 
-      Apply a function to all subclasses.
+      Apply a function to the base model and all subclasses.
 
 .. seealso::
    :class:`~playhouse.shortcuts.ThreadSafeDatabaseMetadata` for a :class:`Metadata`
@@ -2729,7 +2728,7 @@ Model
       For an in-depth discussion of foreign-keys, joins and relationships
       between models, refer to :ref:`relationships`.
 
-   .. method:: join(dest, join_type='INNER', on=None, src=None, attr=None)
+   .. method:: join(dest, join_type=JOIN.INNER, on=None, src=None, attr=None)
 
       :param dest: A :class:`Model`, :class:`ModelAlias`,
           :class:`Select` query, or other object to join to.
@@ -2768,7 +2767,7 @@ Model
       For an in-depth discussion of foreign-keys, joins and relationships
       between models, refer to :ref:`relationships`.
 
-   .. method:: join_from(src, dest, join_type='INNER', on=None, attr=None)
+   .. method:: join_from(src, dest, join_type=JOIN.INNER, on=None, attr=None)
 
       :param src: Source for join.
       :param dest: Table to join to.
@@ -2884,8 +2883,8 @@ Model
 
       Eagerly load related objects described by a tree of :class:`Load` nodes.
       This is a declarative, nestable form of :meth:`prefetch`: each
-      :class:`Load` names one relationship and supplies an ordinary query to
-      fetch it. ``Load.then()`` is used to chain nested fetches.
+      :class:`Load` specifies one relationship and supplies an ordinary query
+      to fetch it. ``Load.then()`` is used to chain nested fetches.
 
       .. code-block:: python
 
@@ -3048,7 +3047,7 @@ Fields
       value to the field's underlying data-type.
 
       :param value: arbitrary data from app or backend
-      :rtype: python data type
+      :returns: the value coerced to the field's python data type
 
 .. class:: IntegerField
 
@@ -3079,7 +3078,7 @@ Fields
 
    Field class for storing auto-incrementing primary keys using 64-bits.
 
-.. class:: IdentityField(generate_always=False)
+.. class:: IdentityField(generate_always=False, **kwargs)
 
    :param bool generate_always: if specified, then the identity will always be
        generated (and specifying the value explicitly during INSERT will raise
@@ -3115,7 +3114,7 @@ Fields
     Field class for storing decimal numbers. Values are represented as
     ``decimal.Decimal`` objects.
 
-.. class:: CharField(max_length=255)
+.. class:: CharField(max_length=255, **kwargs)
 
    Field class for storing strings.
 
@@ -3125,7 +3124,7 @@ Fields
 
    Field class for storing fixed-length strings.
 
-   Values that exceed length are not truncated automatically.
+   Values that exceed length are truncated automatically.
 
 .. class:: TextField
 
@@ -3151,6 +3150,8 @@ Fields
           is_sticky = flags.flag(2)
           is_minimized = flags.flag(4)
           is_deleted = flags.flag(8)
+
+   .. code-block:: pycon
 
       >>> p = Post()
       >>> p.is_sticky = True
@@ -3297,7 +3298,7 @@ Fields
 
       Same as :meth:`~BigBitField.is_set`
 
-   .. method:: __setitem__(idx, value)
+   .. method:: __setitem__(item, value)
 
       Set the bit at ``idx`` to value (True or False).
 
@@ -3336,7 +3337,8 @@ Fields
 
    Field class for storing ``uuid.UUID`` objects. With Postgres, the
    underlying column's data-type will be *UUID*. Since SQLite and MySQL do not
-   have a native UUID type, the UUID is stored as a *VARCHAR* instead.
+   have a native UUID type, the UUID is stored as *TEXT* (SQLite) or *VARCHAR*
+   (MySQL) instead.
 
 .. class:: BinaryUUIDField
 
@@ -3418,9 +3420,9 @@ Fields
                           Event.stop.to_timestamp())
                    .order_by(Event.start))
 
-   .. method:: truncate(date_part)
+   .. method:: truncate(part)
 
-      :param str date_part: year, month, day, hour, minute or second.
+      :param str part: year, month, day, hour, minute or second.
       :return: expression node to truncate date/time to given resolution.
 
       Truncates the value in the column to the given part. This method is
@@ -3470,7 +3472,7 @@ Fields
 
       See :meth:`DateTimeField.to_timestamp`.
 
-   .. method:: truncate(date_part)
+   .. method:: truncate(part)
 
       See :meth:`DateTimeField.truncate`. Only *year*, *month*, and *day*
       are meaningful for :class:`DateField`.
@@ -4041,7 +4043,7 @@ Fields
          Doc.select().where(Doc.data.has_any_keys(['admin', 'staff']))
 
 
-.. class:: BareField(adapt=None, **kwargs)
+.. class:: BareField(adapt=None, *args, **kwargs)
 
    :param adapt: Optional function to use for converting raw values into a
        specific format.
@@ -4084,6 +4086,8 @@ Fields
       class Tweet(Model):
           user = ForeignKeyField(User, backref='tweets')
           content = TextField()
+
+   .. code-block:: pycon
 
       # "user" attribute
       >>> some_tweet.user
@@ -4254,12 +4258,14 @@ Fields
           Course.students.get_through_model()])
 
    When accessed from a model instance, the :class:`ManyToManyField`
-   exposes a :class:`ModelSelect` representing the set of related objects.
+   exposes a ``ManyToManyQuery`` (a :class:`ModelSelect` subclass with the
+   ``add()``, ``remove()`` and ``clear()`` methods below) representing the set
+   of related objects.
    Let's use the interactive shell to see how all this works:
 
    .. code-block:: pycon
 
-      >>> alice = Student.get(Student.name == 'alice')
+      >>> alice = Student.get(Student.name == 'Alice')
       >>> [course.name for course in alice.courses]
       ['English 101', 'CS 101']
 
@@ -4578,9 +4584,10 @@ Schema Manager
       :param Select query: Query whose result set will populate the new
           table.
       :param bool safe: Specify IF NOT EXISTS clause.
-      :param meta: Additional table options forwarded to the context.
+      :param meta: Table options. Only ``temporary=True`` is recognized.
 
-      Execute ``CREATE TABLE ... AS SELECT ...`` for the given model. The
+      Execute ``CREATE TABLE ... AS SELECT ...`` using the model's database.
+      The
       new table's schema and column names are derived from the SELECT
       query's result set.
 
@@ -4754,7 +4761,7 @@ Query-builder
       declares columns and no columns are provided, then by default all the
       table's defined columns will be selected.
 
-   .. method:: join(dest, join_type='INNER', on=None)
+   .. method:: join(dest, join_type=JOIN.INNER, on=None)
 
       :param Source dest: Join the table with the given destination.
       :param str join_type: Join type.
@@ -4780,28 +4787,28 @@ Query-builder
       OUTER join.
 
 
-.. class:: BaseTable()
+.. class:: BaseTable(alias=None)
 
    Base class for table-like objects, which support JOINs via operator
    overloading.
 
-   .. method:: __and__(dest)
+   .. method:: __and__(other)
 
        Perform an INNER join on ``dest``.
 
-   .. method:: __add__(dest)
+   .. method:: __add__(other)
 
        Perform a LEFT OUTER join on ``dest``.
 
-   .. method:: __sub__(dest)
+   .. method:: __sub__(other)
 
        Perform a RIGHT OUTER join on ``dest``.
 
-   .. method:: __or__(dest)
+   .. method:: __or__(other)
 
        Perform a FULL OUTER join on ``dest``.
 
-   .. method:: __mul__(dest)
+   .. method:: __mul__(other)
 
        Perform a CROSS join on ``dest``.
 
@@ -5004,7 +5011,7 @@ Query-builder
       :param columns: One or more columns to select from the CTE.
       :return: :class:`Select` query using the common table expression
 
-   .. method:: union_all(other)
+   .. method:: union_all(rhs)
 
       Used on the base-case CTE to construct the recursive term of the CTE.
 
@@ -5042,9 +5049,9 @@ Query-builder
    * ``not_in()``: ``NOT IN``
    * ``regexp()``: ``REGEXP``
    * ``is_null(True/False)``: ``IS NULL`` or ``IS NOT NULL``
-   * ``contains(s)``: ``LIKE %s%``
-   * ``startswith(s)``: ``LIKE s%``
-   * ``endswith(s)``: ``LIKE %s``
+   * ``contains(s)``: ``ILIKE %s%``
+   * ``startswith(s)``: ``ILIKE s%``
+   * ``endswith(s)``: ``ILIKE %s``
    * ``between(low, high)``: ``BETWEEN low AND high``
    * ``concat()``: ``||``
 
@@ -5188,7 +5195,7 @@ Query-builder
 
    Postgresql supports a non-standard clause ("NULLS FIRST/LAST"). Peewee will
    automatically use an equivalent ``CASE`` statement for databases that do
-   not support this (Sqlite / MySQL).
+   not support this (MySQL, and Sqlite older than 3.30).
 
    .. method:: collate(collation=None)
 
@@ -5210,7 +5217,7 @@ Query-builder
    :param lhs: Left-hand side.
    :param op: Operation.
    :param rhs: Right-hand side.
-   :param bool flat: Whether to wrap expression in parentheses.
+   :param bool flat: Whether to skip wrapping the expression in parentheses.
 
    Represent a binary expression of the form (lhs op rhs), e.g. (foo + 1).
 
@@ -5222,7 +5229,7 @@ Query-builder
    Represent a quoted entity in a query, such as a table, column, alias. The
    name may consist of multiple components, e.g. "a_table"."column_name".
 
-   .. method:: __getattr__(self, attr)
+   .. method:: __getattr__(attr)
 
       Factory method for creating sub-entities.
 
@@ -5276,7 +5283,7 @@ Query-builder
    :param tuple arguments: Arguments to function.
    :param bool coerce: Whether to coerce the function result to a particular
        data-type when reading function return values from the cursor.
-   :param callable python_value: Function to use for converting the return
+   :param python_value: Function to use for converting the return
        value from the cursor.
 
    Represent an arbitrary SQL function call.
@@ -5343,7 +5350,7 @@ Query-builder
                              end=Window.following()))  # unbounded following
                   .order_by(Sample.id))
 
-   .. method:: filter(where)
+   .. method:: filter(where=None)
 
       :param where: Expression for filtering aggregate.
 
@@ -5370,12 +5377,12 @@ Query-builder
           to a Python data-type.
 
       When coerce is ``True``, the target data-type is inferred using several
-      heuristics. Read the source for ``_resolve_model_columns`` method to see
-      how this works.
+      heuristics. Read the source for the ``_resolve_model_columns`` function
+      to see how this works.
 
    .. method:: python_value(func=None)
 
-      :param callable python_value: Function to use for converting the return
+      :param python_value: Function to use for converting the return
           value from the cursor.
 
       Specify a particular function to use when converting values returned by
@@ -5393,7 +5400,7 @@ Query-builder
 
          query = (User
                   .select(User.username, tweet_ids.alias('tweet_ids'))
-                  .join(Tweet)
+                  .join(Tweet, JOIN.LEFT_OUTER)
                   .group_by(User.username))
 
          for user in query:
@@ -5611,7 +5618,7 @@ Query-builder
    the :meth:`Model.filter` or :meth:`ModelSelect.filter` methods.
 
 
-.. class:: Tuple(*args)
+.. function:: Tuple(*args)
 
    Represent a SQL `row value <https://www.sqlite.org/rowvalue.html>`_.
    Row-values are supported by most databases.
@@ -5677,7 +5684,7 @@ Query-builder
 Queries
 -------
 
-.. class:: BaseQuery()
+.. class:: BaseQuery(_database=None, **kwargs)
 
    The parent class from which all other query classes are derived. While you
    will not deal with :class:`BaseQuery` directly in your code, it
@@ -5746,8 +5753,8 @@ Queries
       during iteration.
 
       Because rows are not cached, the query may only be iterated over
-      once. Subsequent iterations will return empty result-sets as the
-      cursor will have been consumed.
+      once. A second ``iterator()`` call on the same query raises an error,
+      as the cursor will have been consumed and closed.
 
       Example:
 
@@ -5803,53 +5810,6 @@ Queries
       Include the given common-table expressions in the query. Any previously
       specified CTEs will be overwritten. For examples of common-table
       expressions, see :ref:`cte`.
-
-   .. method:: cte(name, recursive=False, columns=None, materialized=None)
-
-      :param str name: Alias for common table expression.
-      :param bool recursive: Will this be a recursive CTE?
-      :param list columns: List of column names (as strings).
-      :param bool materialized: Specify ``MATERIALIZED`` or ``NOT MATERIALIZED``
-          clause.
-
-      Indicate that a query will be used as a common table expression. For
-      example, if we are modelling a category tree and are using a
-      parent-link foreign key, we can retrieve all categories and their
-      absolute depths using a recursive CTE:
-
-      .. code-block:: python
-
-         class Category(Model):
-             name = TextField()
-             parent = ForeignKeyField('self', backref='children', null=True)
-
-         # The base case of our recursive CTE will be categories that are at
-         # the root level -- in other words, categories without parents.
-         roots = (Category
-                  .select(Category.name, Value(0).alias('level'))
-                  .where(Category.parent.is_null())
-                  .cte(name='roots', recursive=True))
-
-         # The recursive term will select the category name and increment
-         # the depth, joining on the base term so that the recursive term
-         # consists of all children of the base category.
-         RTerm = Category.alias()
-         recursive = (RTerm
-                      .select(RTerm.name, (roots.c.level + 1).alias('level'))
-                      .join(roots, on=(RTerm.parent == roots.c.id)))
-
-         # Express <base term> UNION ALL <recursive term>.
-         cte = roots.union_all(recursive)
-
-         # Select name and level from the recursive CTE.
-         query = (cte
-                  .select_from(cte.c.name, cte.c.level)
-                  .order_by(cte.c.name))
-
-         for category in query:
-             print(category.name, category.level)
-
-      For more examples of CTEs, see :ref:`cte`.
 
    .. method:: where(*expressions)
 
@@ -5957,7 +5917,7 @@ Queries
              return render('users.html', users=query.paginate(page, 20))
 
 
-.. class:: SelectQuery()
+.. class:: SelectQuery(where=None, order_by=None, limit=None, offset=None, **kwargs)
 
    Select query helper-class that implements operator-overloads for creating
    compound queries.
@@ -6002,53 +5962,101 @@ Queries
              owner = ForeignKeyField(Owner, backref='boats')
              # ... boat-specific fields, etc ...
 
-         cars = Car.select(Car.owner)
-         motorcycles = Motorcycle.select(Motorcycle.owner)
-         boats = Boat.select(Boat.owner)
+         cars = Car.select(Car.id, Car.owner)
+         motorcycles = Motorcycle.select(Motorcycle.id, Motorcycle.owner)
+         boats = Boat.select(Boat.id, Boat.owner)
 
          union = cars | motorcycles | boats
 
          query = (union
-                  .select_from(union.c.owner, fn.COUNT(union.c.id))
-                  .group_by(union.c.owner))
+                  .select_from(union.c.owner_id, fn.COUNT(union.c.id))
+                  .group_by(union.c.owner_id))
 
-   .. method:: union_all(dest)
-
-      Create a UNION ALL query with ``dest``.
-
-   .. method:: __add__(dest)
+   .. method:: union_all(other)
 
       Create a UNION ALL query with ``dest``.
 
-   .. method:: union(dest)
+   .. method:: __add__(other)
+
+      Create a UNION ALL query with ``dest``.
+
+   .. method:: union(other)
 
       Create a UNION query with ``dest``.
 
-   .. method:: __or__(dest)
+   .. method:: __or__(other)
 
       Create a UNION query with ``dest``.
 
-   .. method:: intersect(dest)
+   .. method:: intersect(other)
 
       Create an INTERSECT query with ``dest``.
 
-   .. method:: __and__(dest)
+   .. method:: __and__(other)
 
       Create an INTERSECT query with ``dest``.
 
-   .. method:: except_(dest)
+   .. method:: except_(other)
 
       Create an EXCEPT query with ``dest``. The method name has a trailing
       "_" character since ``except`` is a Python reserved word.
 
-   .. method:: __sub__(dest)
+   .. method:: __sub__(other)
 
       Create an EXCEPT query with ``dest``.
 
 
-.. class:: SelectBase()
+.. class:: SelectBase(*args, **kwargs)
 
    Base-class for :class:`Select` and :class:`CompoundSelectQuery` queries.
+
+   .. method:: cte(name, recursive=False, columns=None, materialized=None)
+
+      :param str name: Alias for common table expression.
+      :param bool recursive: Will this be a recursive CTE?
+      :param list columns: List of column names (as strings).
+      :param bool materialized: Specify ``MATERIALIZED`` or
+          ``NOT MATERIALIZED`` clause.
+
+      Indicate that a query will be used as a common table expression. For
+      example, if we are modelling a category tree and are using a
+      parent-link foreign key, we can retrieve all categories and their
+      absolute depths using a recursive CTE:
+
+      .. code-block:: python
+
+         class Category(Model):
+             name = TextField()
+             parent = ForeignKeyField('self', backref='children', null=True)
+
+         # The base case of our recursive CTE will be categories that are at
+         # the root level -- in other words, categories without parents.
+         roots = (Category
+                  .select(Category.id, Category.name, Value(0).alias('level'))
+                  .where(Category.parent.is_null())
+                  .cte(name='roots', recursive=True))
+
+         # The recursive term will select the category name and increment
+         # the depth, joining on the base term so that the recursive term
+         # consists of all children of the base category.
+         RTerm = Category.alias()
+         recursive = (RTerm
+                      .select(RTerm.id, RTerm.name,
+                              (roots.c.level + 1).alias('level'))
+                      .join(roots, on=(RTerm.parent == roots.c.id)))
+
+         # Express <base term> UNION ALL <recursive term>.
+         cte = roots.union_all(recursive)
+
+         # Select name and level from the recursive CTE.
+         query = (cte
+                  .select_from(cte.c.name, cte.c.level)
+                  .order_by(cte.c.name))
+
+         for category in query:
+             print(category.name, category.level)
+
+      For more examples of CTEs, see :ref:`cte`.
 
    .. method:: peek(database, n=1)
 
@@ -6236,10 +6244,10 @@ Queries
          for row in query.execute(db):
              print(row['username'], '->', row['content'])
 
-   .. method:: join(dest, join_type='INNER', on=None)
+   .. method:: join(dest, join_type=JOIN.INNER, on=None)
 
       :param dest: A table or table-like object.
-      :param str join_type: Type of JOIN, default is "INNER".
+      :param str join_type: Type of JOIN, default is ``JOIN.INNER``.
       :param Expression on: Join predicate.
 
       Join type may be one of:
@@ -6264,7 +6272,7 @@ Queries
 
    .. method:: group_by(*columns)
 
-      :param values: zero or more Column-like objects to group by.
+      :param columns: zero or more Column-like objects to group by.
 
       Define the GROUP BY clause. Any previously-specified values will be
       overwritten.
@@ -6281,7 +6289,7 @@ Queries
                   .join(Tweet)
                   .group_by(User))
 
-   .. method:: group_by_extend(*columns)
+   .. method:: group_by_extend(*values)
 
       :param values: zero or more Column-like objects to group by.
 
@@ -6569,7 +6577,7 @@ Queries
          # original row (11).
 
 
-.. class:: Delete()
+.. class:: Delete(table, returning=None, **kwargs)
 
    Class representing a DELETE query.
 
@@ -6674,7 +6682,7 @@ Queries
    one relationship. The filtering, ordering and limiting for a relation live on
    its ``query``. :meth:`Load.then` nests additional relation(s) and may be chained.
 
-   .. method:: then(*loads)
+   .. method:: then(*children)
 
       Nest one or more child :class:`Load` nodes (or foreign-key / back-reference
       fields) beneath this relation.
@@ -6726,8 +6734,8 @@ Queries
 
    .. code-block:: sql
 
-      SELECT DISTINCT "tweet".* FROM "tweet"
-      INNER JOIN (SELECT "id" FROM "user") AS "u"
+      SELECT "tweet".* FROM "tweet"
+      INNER JOIN (SELECT DISTINCT "id" FROM "user") AS "u"
           ON ("u"."id" = "tweet"."user_id")
 
    ``PREFETCH_TYPE.MATERIALIZE`` takes a third approach: it skips the parent
@@ -6815,7 +6823,7 @@ Query-builder Internals
       Pop scope from the stack.
 
 
-.. class:: State(scope, parentheses=False, settings=None)
+.. class:: State(scope=SCOPE_NORMAL, parentheses=False, settings=None)
 
    Lightweight object for representing the state at a given scope. During SQL
    generation, each object visited by the :class:`Context` can inspect the
@@ -6965,9 +6973,9 @@ Constants and Helpers
 
       db.initialize(database)
 
-.. function:: chunked(iterable, n)
+.. function:: chunked(it, n)
 
-   :param iterable: an iterable that is the source of the data to be chunked.
+   :param it: the source of the data to be chunked.
    :param int n: chunk size
    :return: a new iterable that yields *n*-length chunks of the source data.
 

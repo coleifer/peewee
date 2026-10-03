@@ -153,7 +153,7 @@ accepts a list of dicts or tuples and emits a single multi-row INSERT:
    ]
    User.insert_many(data).execute()
 
-   # Tuples require an explicit field list:
+   # Tuples may take an explicit field list:
    data = [('alice',), ('bob',), ('carol',)]
    User.insert_many(data, fields=[User.username]).execute()
 
@@ -277,7 +277,7 @@ The above query is equivalent to the following SQL:
 
 .. code-block:: sql
 
-   INSERT INTO "tweet_archive" ("user_id", "content")
+   INSERT INTO "tweetarchive" ("user_id", "content")
    SELECT "user_id", "content" FROM "tweet";
 
 .. _updating-records:
@@ -510,8 +510,9 @@ There are several important concepts to understand when using ``ON CONFLICT``:
   values from the **new** data we wish to update.
 * ``update=``: if a conflict occurs, this is a mapping of data to apply to the
   pre-existing row.
-* ``EXCLUDED``: this "magic" namespace allows you to reference the new data
-  that would have been inserted if the constraint hadn't failed.
+* ``EXCLUDED``: this "magic" namespace (Postgresql and SQLite only) allows you
+  to reference the new data that would have been inserted if the constraint
+  hadn't failed.
 
 Full example:
 

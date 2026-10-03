@@ -99,7 +99,7 @@ Usage:
 
    >>> u = UserProfile(username='charlie')
    >>> u.save_optimistic()
-   True
+   1
 
    >>> u.bio = 'Python developer'
    >>> u.save_optimistic()
@@ -127,7 +127,8 @@ Get-or-Create Safely
 :meth:`~Model.get_or_create` is convenient but has a small race window
 between the SELECT and the INSERT when the row does not yet exist. Two
 concurrent processes can both fail the SELECT and both attempt the INSERT,
-causing one to fail with an ``IntegrityError``.
+causing one to hit an ``IntegrityError``, which it catches before re-running
+the SELECT.
 
 The safe pattern attempts the INSERT first and falls back to a GET on
 ``IntegrityError``:
@@ -143,7 +144,7 @@ The safe pattern attempts the INSERT first and falls back to a GET on
 
    user, created = get_or_create_user('charlie')
 
-The ``db.atomic()`` wrapper is important: it ensures that the rollback on
+The ``db.atomic()`` wrapper is important. It ensures that the rollback on
 ``IntegrityError`` affects only this operation, not any surrounding transaction.
 
 
@@ -229,8 +230,7 @@ subquery, then joins back to the tweet table on both user and timestamp:
                 (Tweet.created_date == subquery.c.max_ts) &
                 (Tweet.user == subquery.c.user_id))))
 
-SQLite and MariaDB permit a shorter form that groups by a subset of selected
-columns:
+SQLite permits a shorter form that groups by a subset of selected columns:
 
 .. code-block:: python
 
@@ -240,7 +240,7 @@ columns:
             .group_by(Tweet.user)
             .having(Tweet.created_date == fn.MAX(Tweet.created_date)))
 
-Postgresql and MySQL require the standard subquery form above.
+Postgresql, MySQL and MariaDB require the standard subquery form above.
 
 .. _top-n-per-group:
 
@@ -359,7 +359,7 @@ can instead write:
         print(tweet.username, tweet.content, tweet.created_date)
 
 The examples above populate the subquery's columns directly onto the outer
-instance. Peewee has a second lateral form: mark the subquery itself with
+instance. Peewee has a second lateral form. Mark the subquery itself with
 ``lateral()`` and join it using an ordinary join-type. This form goes through
 the regular model-graph join machinery, so the subquery is populated as a
 related instance:
@@ -432,7 +432,7 @@ used. Rows where fewer than N newer tweets exist are in the top N:
 SQLite and MySQL - self-join
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-An alternative: self-join and count newer tweets in the HAVING clause:
+An alternative is to self-join and count newer tweets in the HAVING clause:
 
 .. code-block:: python
 
@@ -448,7 +448,7 @@ An alternative: self-join and count newer tweets in the HAVING clause:
             .having(fn.COUNT(Tweet.id) <= 3))
 
 The last example uses a ``LIMIT`` clause in a correlated subquery, which is
-accepted by SQLite and MariaDB:
+accepted by SQLite and Postgresql:
 
 .. code-block:: python
 
@@ -483,6 +483,9 @@ included:
 
    with db.atomic():
        User.insert_many(data, fields=fields).execute()
+
+Because ``insert_many`` never reads rows back, there is no confusion between
+INSERT and UPDATE paths.
 
 
 Custom SQLite Functions
@@ -560,7 +563,7 @@ The schema:
        command  = TextField()
        last_run = DateTimeField()
 
-We want: tasks where ``now >= last_run + interval``.
+We want tasks where ``now >= last_run + interval``.
 
 Here is the basic form of the query:
 

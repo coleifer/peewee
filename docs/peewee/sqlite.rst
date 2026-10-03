@@ -305,8 +305,8 @@ register it the same way. The equivalent of the above:
 
        def iterate(self, idx):
            # Called for each row. Raise StopIteration when done.
-           if ((self.step > 0 and self.current > self.stop) or
-               (self.step < 0 and self.current < self.stop)):
+           if ((self.step > 0 and self.current >= self.stop) or
+               (self.step < 0 and self.current <= self.stop)):
                raise StopIteration
 
            ret, self.current = self.current, self.current + self.step
@@ -373,7 +373,7 @@ Usage:
        'foreign_keys': 1,
    })
 
-.. class:: CySqliteDatabase(database, **kwargs)
+.. class:: CySqliteDatabase(database, rank_functions=True, **kwargs)
 
    :param pragmas: A dict (or list of 2-tuples) of pragma key/value pairs to
        set every time a connection is opened.
@@ -417,8 +417,8 @@ Usage:
       :param fn: callable or ``None`` to clear the current hook.
 
       Register a callback to be executed whenever a transaction is committed
-      on the current connection. The callback accepts no parameters and the
-      return value is ignored.
+      on the current connection. The callback accepts no parameters. A truthy
+      return value aborts the commit.
 
       If the callback raises a :class:`ValueError`, the transaction is
       aborted and rolled back.
@@ -514,7 +514,7 @@ Usage:
       traced.
 
       * event: type of event, e.g. ``SQLITE_TRACE_PROFILE``.
-      * sid: memory address of statement (only ``SQLITE_TRACE_CLOSE``), else -1.
+      * sid: memory address of statement, or -1 for ``SQLITE_TRACE_CLOSE``.
       * sql: SQL string. If ``expand_sql`` then bound parameters will be
         expanded (for ``SQLITE_TRACE_CLOSE``, ``sql=None``).
       * ns: estimated number of nanoseconds the statement took to run (only
@@ -547,7 +547,7 @@ Usage:
 
       More details can be found in the `cysqlite docs <https://cysqlite.readthedocs.io/en/latest/api.html#Connection.progress>`__.
 
-   .. method:: begin(lock_type='deferred')
+   .. method:: begin(lock_type=None)
 
       Begin a transaction, optionally specifying the lock type, one of
       ``deferred``, ``immediate`` or ``exclusive``. See
@@ -809,7 +809,7 @@ Pragma configuration (e.g. increasing PBKDF2 iterations):
 SQLCipher can be configured using a number of extension PRAGMAs. The list
 of PRAGMAs and their descriptions can be found in the `SQLCipher documentation <https://www.zetetic.net/sqlcipher/sqlcipher-api/>`__.
 
-.. class:: SqlCipherDatabase(database, passphrase, **kwargs)
+.. class:: SqlCipherDatabase(database, passphrase='', **kwargs)
 
    :param str database: Path to the encrypted database file.
    :param str passphrase: Encryption passphrase. Recommend 8 characters
@@ -874,7 +874,7 @@ Stop the writer thread on application shutdown (waits for pending writes):
 Read queries work as normal. Open and close the connection per-request as you
 would with any other database. Only writes are funneled through the queue.
 
-**Transactions are not supported.** Because writes from different threads
+Transactions are not supported. Because writes from different threads
 are interleaved, there is no way to guarantee that the statements in a
 transaction from one thread execute atomically without statements from
 another thread appearing between them. The ``atomic()`` and
@@ -1230,7 +1230,7 @@ in SQLite using the `SQLite json functions <https://sqlite.org/json1.html>`_.
       For more information as well as examples, see the SQLite `json_patch() <http://sqlite.org/json1.html#jpatch>`_
       function documentation.
 
-   .. method:: remove()
+   .. method:: remove(*paths)
 
       Remove the data stored in the :class:`JSONField`.
 
@@ -1256,7 +1256,7 @@ in SQLite using the `SQLite json functions <https://sqlite.org/json1.html>`_.
       Uses the `json_type <https://www.sqlite.org/json1.html#jtype>`_
       function from the json1 extension.
 
-   .. method:: length()
+   .. method:: length(path=None)
 
       Return the length of the array stored in the column.
 
@@ -1618,11 +1618,11 @@ Because both functions rely on reading the stored text, they will return
 External content
 ~~~~~~~~~~~~~~~~
 
-If the text being indexed already lives in another table, the ``content``
+If the text being indexed is already in another table, the ``content``
 option tells SQLite to read it from there instead of storing a second copy.
 
 The ``content`` option accepts a :class:`Model` class or a table-name string.
-``content_rowid`` names the column holding the source table's primary key:
+``content_rowid`` is the column holding the source table's primary key:
 
 .. code-block:: python
    :emphasize-lines: 4, 10, 14
@@ -1650,7 +1650,7 @@ The ``content`` option accepts a :class:`Model` class or a table-name string.
 SQLite maps the content table into the FTS table **by column name**: every
 column declared on the index must exist in the content table, though the
 order does not matter. The mapping is not checked when the table is created,
-so a missing column surfaces later as a ``no such column`` error when the
+so a missing column appears later as a ``no such column`` error when the
 index is rebuilt or queried. When the names do not line up, either declare the
 search field with a matching ``column_name``, or point ``content`` at a view
 that renames the columns:
@@ -1684,7 +1684,7 @@ In peewee the command is :meth:`~FTS5Model.delete_command`:
    BlogIndex.delete_command(blog.id, content=old_content)
 
 Ordinary ``UPDATE`` and ``DELETE`` statements are also accepted, but they
-work by reading the old values out of the content table at that moment: once
+work by reading the old values out of the content table at that moment. Once
 the content row has been changed or removed they silently corrupt the index,
 as do wrong values passed to "delete".
 
@@ -1741,7 +1741,7 @@ Set the ``rowid`` explicitly so results can be tied back to a canonical table:
    # Index a note, linking the rowid back to the canonical row.
    NoteIndex.insert({'rowid': note.id, 'content': note.content}).execute()
 
-Contentless tables accept ``INSERT`` only: ``UPDATE`` and ``DELETE`` raise an
+Contentless tables accept ``INSERT`` only. ``UPDATE`` and ``DELETE`` raise an
 ``OperationalError``, because removing a row means removing the entries its
 values produced, and a contentless table no longer has the values.
 :meth:`~FTS5Model.delete_command` (the :ref:`"delete" command
@@ -1834,7 +1834,7 @@ Using both:
       :param str left: opening tag for highlight, e.g. ``'<b>'``
       :param str right: closing tag for highlight, e.g. ``'</b>'``
 
-      **FTS5 only.** Return the column's text with the terms matched by the
+      FTS5 only. Return the column's text with the terms matched by the
       search wrapped in the given delimiters:
 
       .. code-block:: python
@@ -1855,7 +1855,7 @@ Using both:
           the maximum number of tokens.
       :param int max_tokens: max tokens returned, between 1 and 64.
 
-      **FTS5 only.** Like :meth:`~SearchField.highlight`, but returns a
+      FTS5 only. Like :meth:`~SearchField.highlight`, but returns a
       short excerpt of the column containing the match rather than the whole
       value. Returns ``NULL`` for a contentless table.
 
@@ -2383,7 +2383,8 @@ Once registered, call functions via Peewee's ``fn`` namespace or raw SQL:
 Available functions
 ^^^^^^^^^^^^^^^^^^^
 
-**CONTROL_FLOW**
+CONTROL_FLOW
+~~~~~~~~~~~~
 
 .. function:: if_then_else(cond, truthy, falsey=None)
 
@@ -2391,7 +2392,8 @@ Available functions
    ``cond`` parameter, either the ``truthy`` or ``falsey`` value will be
    returned.
 
-**DATE**
+DATE
+~~~~
 
 .. function:: strip_tz(date_str)
 
@@ -2429,7 +2431,8 @@ Available functions
 
    *Aggregate*: duration from the smallest to the largest value, in seconds.
 
-**FILE**
+FILE
+~~~~
 
 .. function:: file_ext(filename)
 
@@ -2441,7 +2444,8 @@ Available functions
    :param str filename: Filename to read.
    :return: Contents of the file.
 
-**HELPER**
+HELPER
+~~~~~~
 
 .. function:: gzip(data, compression=9)
 
@@ -2492,7 +2496,8 @@ Available functions
 
    Clears all state associated with the :func:`setting` function.
 
-**MATH**
+MATH
+~~~~
 
 .. function:: randomrange(start, end=None, step=None)
 
@@ -2553,7 +2558,8 @@ Available functions
 
    .. note:: Only available if you compiled the ``_sqlite_udf`` extension.
 
-**STRING**
+STRING
+~~~~~~
 
 .. function:: substr_count(haystack, needle)
 

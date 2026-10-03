@@ -32,7 +32,7 @@ Pass additional keyword arguments in the query string:
 
 .. code-block:: python
 
-   db = connect('postgres://user:pass@host/db?max_connections=20')
+   db = connect('postgres+pool://user:pass@host/db?max_connections=20')
 
 URL format: ``scheme://user:password@host:port/dbname?option=value``
 
@@ -119,8 +119,8 @@ Alternate drivers:
    :param bool unquote_user: unquote special characters in the user.
 
    Parse a URL and return a dictionary with ``database``, ``host``,
-   ``port``, ``user``, and ``password`` keys plus any extra connect
-   parameters from the query string.
+   ``port``, ``user``, and ``password`` (``passwd`` for ``mysql``) keys plus
+   any extra connect parameters from the query string.
 
    Useful if you need to construct a database class manually:
 
@@ -185,14 +185,15 @@ returned to the pool.
    :param str database: The name of the database or database file.
    :param int max_connections: Maximum number of concurrent connections.
        Pass ``None`` for no limit.
-   :param int stale_timeout: Seconds after which an idle connection is
-       considered stale and will be discarded next time it would be reused.
+   :param int stale_timeout: Age in seconds, counted from when it was
+       opened, after which a connection is considered stale and will be
+       closed when it is next returned to or taken from the pool.
    :param int timeout: Seconds to block when all connections are in use.
        ``0`` blocks indefinitely, ``None`` (default) raises immediately.
 
    Connections will not be closed exactly when they exceed their
-   ``stale_timeout``. Instead, stale connections are only closed when a new
-   connection is requested.
+   ``stale_timeout``. Instead, stale connections are only closed when they
+   are returned to the pool or when a new connection is requested.
 
    If the pool is exhausted and no ``timeout`` is configured, a
    ``MaxConnectionsExceeded`` is raised.
@@ -284,7 +285,8 @@ Supported schema-altering operations:
 Operations
 ^^^^^^^^^^
 
-**Add columns:**
+Add columns
+~~~~~~~~~~~
 
 .. code-block:: python
 
@@ -294,8 +296,11 @@ Operations
        migrator.add_column('comment', 'body', TextField(default='')),
    )
 
-**Add a foreign key** (the column name must include the ``_id`` suffix that
-Peewee appends by default):
+Add a foreign key
+~~~~~~~~~~~~~~~~~
+
+The column name must include the ``_id`` suffix that Peewee appends by
+default:
 
 .. code-block:: python
 
@@ -304,7 +309,8 @@ Peewee appends by default):
        migrator.add_column('tweet', 'user_id', user_fk),
    )
 
-**Rename a column:**
+Rename a column
+~~~~~~~~~~~~~~~
 
 .. code-block:: python
 
@@ -313,13 +319,15 @@ Peewee appends by default):
        migrator.rename_column('story', 'mod_date', 'modified_date'),
    )
 
-**Drop a column:**
+Drop a column
+~~~~~~~~~~~~~
 
 .. code-block:: python
 
    migrate(migrator.drop_column('story', 'old_field'))
 
-**Nullable / not nullable:**
+Nullable / not nullable
+~~~~~~~~~~~~~~~~~~~~~~~
 
 .. code-block:: python
 
@@ -328,26 +336,30 @@ Peewee appends by default):
        migrator.add_not_null('story', 'modified_date'),  # Disallow NULLs.
    )
 
-**Change type:**
+Change type
+~~~~~~~~~~~
 
 .. code-block:: python
 
    # Change a VARCHAR(...) to a TEXT field.
    migrate(migrator.alter_column_type('person', 'email', TextField()))
 
-**Rename table:**
+Rename table
+~~~~~~~~~~~~
 
 .. code-block:: python
 
    migrate(migrator.rename_table('story', 'stories'))
 
-**Drop table:**
+Drop table
+~~~~~~~~~~
 
 .. code-block:: python
 
    migrate(migrator.drop_table('story', safe=True))
 
-**Add / drop indexes:**
+Add / drop indexes
+~~~~~~~~~~~~~~~~~~
 
 .. code-block:: python
 
@@ -372,7 +384,8 @@ Peewee appends by default):
    migrate(migrator.add_index('story', ('external_id',), True,
                               nulls_distinct=False))
 
-**Add / drop constraints:**
+Add / drop constraints
+~~~~~~~~~~~~~~~~~~~~~~
 
 .. code-block:: python
 
@@ -390,7 +403,8 @@ Peewee appends by default):
    # Add a UNIQUE constraint on the first and last names.
    migrate(migrator.add_unique('person', 'first_name', 'last_name'))
 
-**Column defaults:**
+Column defaults
+~~~~~~~~~~~~~~~
 
 .. code-block:: python
 
@@ -409,7 +423,8 @@ Peewee appends by default):
    # Remove a default:
    migrate(migrator.drop_column_default('entry', 'status'))
 
-**Raw SQL:**
+Raw SQL
+~~~~~~~
 
 .. code-block:: python
 
@@ -437,7 +452,7 @@ driver's own: ``%s`` for postgres and mysql, ``?`` for sqlite.
 Migration API
 ^^^^^^^^^^^^^
 
-.. function:: migrate(*operations)
+.. function:: migrate(*operations, **kwargs)
 
    Execute one or more schema-altering operations.
 
@@ -1086,7 +1101,7 @@ Generate a migration from a diff:
 
    :param str schema: schema containing the tables to be migrated, passed to
        the :class:`~playhouse.migrate.SchemaMigrator`. The history table
-       lives in the same schema, so each schema tracks its own applied set
+       is in the same schema, so each schema tracks its own applied set
        and one set of migration files can be run against any number of
        schemas (``pwmigrate up -s tenant_a``, ``pwmigrate up -s tenant_b``).
 
@@ -1094,7 +1109,7 @@ Generate a migration from a diff:
        the runner will find no history there and consider every migration
        pending. Backfill with ``fake`` first.
 
-   .. method:: up(target=None)
+   .. method:: up(target=None, fake=False)
 
       Apply all pending migrations in order, stopping after ``target`` if
       given. Returns the applied names.
@@ -1117,7 +1132,7 @@ Generate a migration from a diff:
       Record pending migrations as applied without running them, stopping
       after ``target`` if given. Returns the recorded names.
 
-   .. method:: create(name, body=None)
+   .. method:: create(name='', body=None)
 
       Write a numbered migration file (a skeleton, unless ``body`` is
       given) and return its path.
@@ -1367,7 +1382,7 @@ Valid ``-e`` values: ``sqlite``, ``mysql``, ``postgresql``, ``cockroachdb``.
    If a password is required to access your database, you will be prompted to
    enter it using a secure prompt.
 
-   **The password will be included in the output**. Specifically, at the top
+   The password will be included in the output. Specifically, at the top
    of the file a :class:`Database` will be defined along with any required
    parameters - including the password.
 

@@ -238,7 +238,8 @@ The three modes:
 * ``IMMEDIATE`` acquires a reserved lock at BEGIN. Other writers and other
   IMMEDIATE or EXCLUSIVE transactions are blocked, but readers can proceed.
 * ``EXCLUSIVE`` acquires an exclusive lock at BEGIN. No other connection can
-  read or write until the transaction completes.
+  read or write until the transaction completes, except in WAL mode, where
+  EXCLUSIVE behaves like IMMEDIATE.
 
 DEFERRED is a common source of trouble for concurrent writers, because a block
 that reads before it writes upgrades its lock late, and the resulting
@@ -289,13 +290,13 @@ The default isolation level is specified when initializing :class:`PostgresqlDat
 
    from psycopg2.extensions import ISOLATION_LEVEL_SERIALIZABLE
    db = PostgresqlDatabase(
-       ...
+       ...,
        isolation_level=ISOLATION_LEVEL_SERIALIZABLE)
 
 
    from psycopg import IsolationLevel
    db = PostgresqlDatabase(
-       ...
+       ...,
        isolation_level=IsolationLevel.SERIALIZABLE)
 
 To control the isolation-level for a transaction, you can pass the desired
