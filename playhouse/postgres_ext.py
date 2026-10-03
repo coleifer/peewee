@@ -10,6 +10,7 @@ from peewee import NodeList
 from peewee import Psycopg2Adapter
 from peewee import Psycopg3Adapter
 from peewee import SelectBase
+from peewee import ValueLiterals
 from peewee import __exception_wrapper__
 from playhouse.pool import _PooledPostgresqlDatabase
 
@@ -250,9 +251,11 @@ class HStoreField(IndexedFieldMixin, Field):
 
 
 def _path_array(parts):
-    # Build a Postgres `text[]` literal from a sequence of path components.
+    # Inline a Postgres `text[]` literal from a sequence of path components.
     # Used by the jsonb_set/jsonb_insert wrappers on JSON lookups and fields.
-    return Cast(AsIs([str(p) for p in parts], False), 'text[]')
+    parts = ['"%s"' % str(p).replace('\\', '\\\\').replace('"', '\\"')
+             for p in parts]
+    return SQL("'{%s}'::text[]" % ','.join(parts).replace("'", "''"))
 
 
 class _JsonLookupBase(_LookupNode):
@@ -394,18 +397,24 @@ class _JsonLookupBase(_LookupNode):
                                          _jsonpath(expr))
 
 
+def _key_literal(part):
+    return part if isinstance(part, Node) else ValueLiterals(part)
+
+
 class JsonLookup(_JsonLookupBase):
     def __getitem__(self, value):
         return JsonLookup(self.node, self.parts + [value], self._as_json)
 
     def __sql__(self, ctx):
+        # Keys are inlined: psycopg3 binds each occurrence of a key as a
+        # distinct parameter, which breaks GROUP BY on a lookup.
         ctx.sql(self.node)
         for part in self.parts[:-1]:
-            ctx.literal('->').sql(part)
+            ctx.literal('->').sql(_key_literal(part))
         if self.parts:
             (ctx
              .literal('->' if self._as_json else '->>')
-             .sql(self.parts[-1]))
+             .sql(_key_literal(self.parts[-1])))
 
         return ctx
 
@@ -415,7 +424,7 @@ class JsonPath(_JsonLookupBase):
         return (ctx
                 .sql(self.node)
                 .literal('#>' if self._as_json else '#>>')
-                .sql(Value('{%s}' % ','.join(map(str, self.parts)))))
+                .sql(ValueLiterals('{%s}' % ','.join(map(str, self.parts)))))
 
 
 class JSONField(FieldDatabaseHook, Field):

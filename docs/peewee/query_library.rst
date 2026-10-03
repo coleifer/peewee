@@ -1476,8 +1476,8 @@ member with no bookings gets an empty list.
     bookings = (Booking
                 .select(fn.COALESCE(
                     fn.json_agg(fn.json_build_object(
-                        'facility', Facility.name,
-                        'starttime', Booking.starttime)),
+                        Cast('facility', 'text'), Facility.name,
+                        Cast('starttime', 'text'), Booking.starttime)),
                     SQL("'[]'::json")))
                 .join(Facility)
                 .where(Booking.member == Member.memid))
@@ -1489,6 +1489,9 @@ member with no bookings gets an empty list.
 
     for row in query:
         print(row['surname'], len(row['bookings']))
+
+The keys are cast to ``text`` because psycopg3 sends a bare string parameter
+with no type and ``json_build_object`` cannot infer one.
 
 The postgres driver parses the ``json`` column, so ``row['bookings']`` is a
 list of dicts. The function names differ by database:

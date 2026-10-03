@@ -707,9 +707,9 @@ class TestSQLShapes(ModelTestCase):
             self.assertEqual(params, ['$."k"'])
         elif IS_PG_JSON:
             self.assertEqual(sql, (
-                'SELECT ("t1"."data" #> CAST(%s AS text[])) '
+                'SELECT ("t1"."data" #> \'{"k"}\'::text[]) '
                 'FROM "jm" AS "t1"'))
-            self.assertEqual(params, [['k']])
+            self.assertEqual(params, [])
         elif IS_MYSQL:
             if IS_ORACLE_MYSQL:
                 # MySQL has no JSON_COMPACT, CAST to its native json type.
@@ -731,9 +731,9 @@ class TestSQLShapes(ModelTestCase):
             self.assertEqual(params, ['$."k"'])
         elif IS_PG_JSON:
             self.assertEqual(sql, (
-                'SELECT ("t1"."data" #>> CAST(%s AS text[])) '
+                'SELECT ("t1"."data" #>> \'{"k"}\'::text[]) '
                 'FROM "jm" AS "t1"'))
-            self.assertEqual(params, [['k']])
+            self.assertEqual(params, [])
         elif IS_MYSQL:
             self.assertEqual(sql, (
                 'SELECT json_unquote(json_extract(`t1`.`data`, %s)) '

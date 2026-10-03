@@ -1404,10 +1404,10 @@ class WrappedNode(ColumnBase):
         self._converter = getattr(node, '_converter', None)
 
     def is_alias(self):
-        return self.node.is_alias()
+        return isinstance(self.node, Node) and self.node.is_alias()
 
     def unwrap(self):
-        return self.node.unwrap()
+        return self.node.unwrap() if isinstance(self.node, Node) else self.node
 
 
 class EntityFactory(object):
@@ -3427,9 +3427,11 @@ class PostgresqlJSONMethods(BaseJSONMethods):
         return jsonb_cls(value, dumps=field._dumps)
 
     def _path_array(self, keys):
-        # Build a text[] from keys for jsonb_set / #- operator.
-        parts = [str(k) for k in keys]
-        return Cast(AsIs(parts, False), 'text[]')
+        # Inline the text[] path: psycopg3 binds each occurrence of a key as
+        # a distinct parameter, which breaks GROUP BY on a json lookup.
+        parts = ['"%s"' % str(k).replace('\\', '\\\\').replace('"', '\\"')
+                 for k in keys]
+        return SQL("'{%s}'::text[]" % ','.join(parts).replace("'", "''"))
 
     def extract(self, field, keys):
         if not keys:

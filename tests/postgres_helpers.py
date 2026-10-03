@@ -124,7 +124,7 @@ class BaseJsonFieldTestCase(object):
              .where(self.M.data['foo'] == 'bar'))
         self.assertSQL(j, (
             'SELECT "t1"."id", "t1"."data" '
-            'FROM "%s" AS "t1" WHERE ("t1"."data"->>? = ?)') % table)
+            'FROM "%s" AS "t1" WHERE ("t1"."data"->>\'foo\' = ?)') % table)
 
     def assertItems(self, where, *items):
         query = (self.M

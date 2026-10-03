@@ -1199,7 +1199,8 @@ most useful when the database is remote and each additional query is costly.
 The function names differ by database:
 
 * SQLite: ``json_group_array``, ``json_object``
-* postgres: ``json_agg``, ``json_build_object``
+* postgres: ``json_agg``, ``json_build_object``. Under psycopg3 pass the keys
+  as ``Cast('id', 'text')``, since a bare string parameter is sent untyped.
 * MySQL and MariaDB: ``json_arrayagg``, ``json_object``
 
 The postgres driver returns the parsed list, so no ``json.loads()`` is

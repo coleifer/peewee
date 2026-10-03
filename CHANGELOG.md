@@ -7,6 +7,13 @@ https://github.com/coleifer/peewee/releases
 
 ## master
 
+* JSON path keys on Postgres are rendered inline (`data->>'key'`,
+  `'{"a","b"}'::text[]`) instead of as bound parameters, so `GROUP BY` and
+  `ORDER BY` on a JSON lookup work under psycopg3, which binds each occurrence
+  of a key as a distinct parameter. Applies to the core `JSONField` and to
+  `playhouse.postgres_ext`.
+* `Cast()` and other wrapped nodes over a plain value no longer break result
+  row processing.
 * A write query with a `RETURNING` clause now runs again on every explicit
   `execute()` call (like a write query without one). Iterating the query still
   reads the result of the last execution. Previously repeated `execute()`
