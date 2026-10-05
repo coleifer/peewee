@@ -6,9 +6,9 @@ Search-box grammar:
     query    := or
     or       := and (OR and)*
     and      := unary+                    # juxtaposition means AND
-    unary    := ['-'] atom                # '-' excludes matching documents
-    atom     := [colspec ':'] phrase
-              | [colspec ':'] '(' query ')'
+    unary    := ['-'] [colspec ':'] atom  # '-' excludes matching documents
+              | colspec ':' '-' atom      # same as '-' colspec ':' atom
+    atom     := phrase | '(' query ')'
     colspec  := colname | '{' colname ... '}'
     phrase   := '"' text '"' ['*'] | word ['*']
 
@@ -170,6 +170,9 @@ class _Parser:
         if self._peek() == 'col':
             colspec = self.tokens[self.pos][1]
             self.pos += 1
+            if self._peek() == 'neg':  # "col:-x" means "-col:x".
+                negate = True
+                self.pos += 1
         token = self._peek()
         if token == 'term':
             node = ('t', self.tokens[self.pos][1])

@@ -80,6 +80,7 @@ class TestWebQuery(ModelTestCase):
         ('title:(data:aa)', '"title": ("data": "aa")'),
         ('title:aa bb', '("title": "aa") AND "bb"'),
         ('aa -title:bb', '"aa" NOT ("title": "bb")'),
+        ('aa title:-bb', '"aa" NOT ("title": "bb")'),
         ('{title data}: aa', '{"title" "data"}: "aa"'),
         ('{title data}:(aa OR bb)', '{"title" "data"}: ("aa" OR "bb")'),
 
