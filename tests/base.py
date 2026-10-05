@@ -124,9 +124,9 @@ db = new_connection()
 
 
 # Database-specific feature flags.
-IS_SQLITE_30 = IS_SQLITE and sqlite3.sqlite_version_info >= (3, 30)
-IS_SQLITE_35 = IS_SQLITE and sqlite3.sqlite_version_info >= (3, 35)
-IS_SQLITE_53 = IS_SQLITE and sqlite3.sqlite_version_info >= (3, 53)
+IS_SQLITE_30 = IS_SQLITE and db.server_version >= (3, 30)
+IS_SQLITE_35 = IS_SQLITE and db.server_version >= (3, 35)
+IS_SQLITE_53 = IS_SQLITE and db.server_version >= (3, 53)
 # The stdlib driver grew create_window_function in python 3.11. This applies
 # to the in-memory sqlite databases the tests build on every backend.
 HAS_WINDOW_FUNCTION = IS_CYSQLITE or sys.version_info >= (3, 11)

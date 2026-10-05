@@ -78,7 +78,7 @@ jobs:
       - name: cysqlite
         if: ${{ matrix.peewee-backend == 'cysqlite' || matrix.peewee-backend == 'sqlite' }}
         run: |
-          pip install -e 'git+https://github.com/coleifer/cysqlite#egg=cysqlite'
+          pip install cysqlite
       - name: runtests ${{ matrix.peewee-backend }} - ${{ matrix.python-version }}
         env:
           PEEWEE_TEST_BACKEND: ${{ matrix.peewee-backend }}
