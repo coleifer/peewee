@@ -7,6 +7,10 @@ https://github.com/coleifer/peewee/releases
 
 ## master
 
+[View commits](https://github.com/coleifer/peewee/compare/4.5.3...master)
+
+## 4.5.3
+
 * JSON path keys on Postgres are rendered inline (`data->>'key'`,
   `'{"a","b"}'::text[]`) instead of as bound parameters, so `GROUP BY` and
   `ORDER BY` on a JSON lookup work under psycopg3, which binds each occurrence
@@ -20,7 +24,7 @@ https://github.com/coleifer/peewee/releases
   calls returned the cached result without running the query.
 * Fix regression in model select `.exists()`, #3086.
 
-[View commits](https://github.com/coleifer/peewee/compare/4.5.2...master)
+[View commits](https://github.com/coleifer/peewee/compare/4.5.2...4.5.3)
 
 ## 4.5.2
 
