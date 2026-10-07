@@ -8846,6 +8846,11 @@ class ModelSelect(BaseModelSelect, Select):
     def create_table(self, name, safe=True, **meta):
         return self.model._schema.create_table_as(name, self, safe, **meta)
 
+    @database_required
+    def exists(self, database):
+        query = self.select(SQL('1')) if self._is_default else self
+        return super(ModelSelect, query).exists(database)
+
     def __sql_selection__(self, ctx, is_subquery=False):
         if self._is_default and is_subquery and len(self._returning) > 1 and \
            self.model._meta.primary_key is not False:

@@ -18,6 +18,7 @@ https://github.com/coleifer/peewee/releases
   `execute()` call (like a write query without one). Iterating the query still
   reads the result of the last execution. Previously repeated `execute()`
   calls returned the cached result without running the query.
+* Fix regression in model select `.exists()`, #3086.
 
 [View commits](https://github.com/coleifer/peewee/compare/4.5.2...master)
 

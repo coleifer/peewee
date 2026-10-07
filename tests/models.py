@@ -4690,6 +4690,19 @@ class TestExistsIntegration(ModelTestCase):
                .where(Tweet.content == 'purr'))
         self.assertTrue((lhs | rhs).exists())
 
+    @requires_models(Point)
+    def test_exists_implicit_pk_not_in_table(self):
+        class PointId(TestModel):
+            x = IntegerField()
+            y = IntegerField()
+            class Meta:
+                table_name = 'point'
+
+        Point.create(x=1, y=2)
+        self.assertTrue(PointId.select().exists())
+        self.assertTrue(PointId.select().where(PointId.x == 1).exists())
+        self.assertFalse(PointId.select().where(PointId.x == 0).exists())
+
 
 class VL(TestModel):
     n = IntegerField()
