@@ -6,6 +6,7 @@ constraints.
 import calendar
 import datetime
 import json
+import operator
 import sqlite3
 import time
 import uuid
@@ -1405,6 +1406,21 @@ class TestBitFields(ModelTestCase):
         # Out-of-bounds returns False and does not extend data.
         self.assertFalse(b.data.is_set(1000))
         self.assertEqual(len(b.data), 1)
+
+    def test_bigbit_memoryview_formats(self):
+        operand = b'\x01\x82\x03\x84'
+        views = (memoryview(operand).cast('H'),
+                 memoryview(operand).cast('b'),
+                 memoryview(operand)[::2])
+        for view in views:
+            for initial in (b'\xff', b'\xff' * 5):
+                data = Bits(data=initial).data
+                for operation in (operator.and_, operator.or_, operator.xor):
+                    with self.subTest(format=view.format, initial=initial,
+                                      operation=operation):
+                        expected = operation(data, view.tobytes())
+                        self.assertEqual(operation(data, view), expected)
+                        self.assertEqual(bytes(data), initial)
 
     def test_bigbit_item_methods(self):
         b = Bits()

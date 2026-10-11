@@ -3320,6 +3320,9 @@ Fields
           or ``memoryview`` object.
       :return: bitwise ``and`` of two bitmaps.
 
+      Memoryview operands are interpreted as their byte representation,
+      including views with non-byte formats or noncontiguous slices.
+
    .. method:: __or__(other)
 
       :param other: Either :class:`BigBitField`, ``bytes``, ``bytearray``
