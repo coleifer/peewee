@@ -116,15 +116,23 @@ def select_related_objects(i):
 
 @timed
 def select_prefetch(i):
-    query = prefetch(Collection.select(), Item)
+    query = Collection.select().with_related(Load(Collection.items))
     for c in query:
         for i in c.items:
             pass
 
 @timed
 def select_prefetch_join(i):
-    query = prefetch(Collection.select(), Item,
-                     prefetch_type=PREFETCH_TYPE.JOIN)
+    query = Collection.select().with_related(
+        Load(Collection.items, strategy=PREFETCH_TYPE.JOIN))
+    for c in query:
+        for i in c.items:
+            pass
+
+@timed
+def select_prefetch_materialize(i):
+    query = Collection.select().with_related(
+        Load(Collection.items, strategy=PREFETCH_TYPE.MATERIALIZE))
     for c in query:
         for i in c.items:
             pass
@@ -151,4 +159,5 @@ if __name__ == '__main__':
     select_related_dbapi_raw()
     select_prefetch()
     select_prefetch_join()
+    select_prefetch_materialize()
     db.drop_tables([Register, Collection, Item])
