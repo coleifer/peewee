@@ -642,8 +642,8 @@ class TestTimestampField(ModelTestCase):
         self.assertEqual(m, 1)
         self.assertEqual(d, dt_utc.day)
         self.assertEqual(H, dt_utc.hour)
-        self.assertEqual(M, 4)
-        self.assertEqual(S, 5)
+        self.assertEqual(M, dt_utc.minute)
+        self.assertEqual(S, dt_utc.second)
 
     def test_timestamp_field_from_ts(self):
         dt = datetime.datetime(2019, 1, 2, 3, 4, 5)
