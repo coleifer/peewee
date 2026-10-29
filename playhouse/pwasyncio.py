@@ -1,6 +1,7 @@
 import asyncio
 import collections
 import contextvars
+import inspect
 import itertools
 import json
 import logging
@@ -236,7 +237,7 @@ class AsyncDatabaseMixin(object):
         self._closing = False  # Guard against use during shutdown.
 
     def after_commit(self, fn):
-        if asyncio.iscoroutinefunction(fn):
+        if inspect.iscoroutinefunction(fn):
             raise ValueError('after_commit() takes a plain callable, and a '
                              'coroutine would never be awaited. Schedule it '
                              'instead: after_commit(lambda: asyncio.'
