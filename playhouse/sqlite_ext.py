@@ -85,7 +85,7 @@ class JSONPath(ColumnBase):
         if isinstance(idx, int) or idx == '#':
             item = '[%s]' % idx
         else:
-            item = '."%s"' % idx.replace('"', '""')
+            item = '."%s"' % idx.replace('\\', '\\\\').replace('"', '\\"')
         return type(self)(self._field, self._path + (item,))
 
     def append(self, value, as_json=None):

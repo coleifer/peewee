@@ -425,6 +425,34 @@ class TestJSONFieldFunctions(ModelTestCase):
         self.assertRows((KeyData.data['l1'][1] == 1), ['e'])
         self.assertRows((KeyData.data['l2'][1][1] == 3), ['e'])
 
+    def test_escaped_path_keys(self):
+        KeyData = self.M
+        keys = ['a"b', 'a\\b', 'a\\".b', 'snowman-\u2603']
+        quoted_key = 'a"b'
+        supports_quotes = self.database.execute_sql(
+            'SELECT json_extract(?, ?)',
+            [json.dumps({quoted_key: 1}),
+             '$.' + json.dumps(quoted_key)]).fetchone()[0] == 1
+        for i, key in enumerate(keys):
+            with self.subTest(key=key):
+                row_key = 'special-%s' % i
+                row = KeyData.create(key=row_key, data={key: {'leaf': 1}})
+                path = KeyData.data[key]['leaf']
+                query = KeyData.select(path).where(KeyData.id == row.id)
+                self.assertEqual(query.sql()[1][0],
+                                 '$.%s."leaf"' % json.dumps(key, ensure_ascii=False))
+                if '"' in key and not supports_quotes:
+                    self.skipTest('SQLite cannot extract escaped quotes in paths')
+                self.assertEqual(query.scalar(), 1)
+
+                (KeyData.update(data=path.set(2))
+                 .where(KeyData.id == row.id).execute())
+                self.assertData(row_key, {key: {'leaf': 2}})
+
+                (KeyData.update(data=path.remove())
+                 .where(KeyData.id == row.id).execute())
+                self.assertData(row_key, {key: {}})
+
     @skip_unless(json_text_installed())
     def test_extract_text_json(self):
         KeyData = self.M
