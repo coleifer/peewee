@@ -878,7 +878,6 @@ class FTS5Model(BaseFTSModel):
 
         attrs = {c: TextField() if c in ('term', 'col') else IntegerField()
                  for c in columns}
-        attrs['rowid'] = RowIDField()
         attrs['Meta'] = Meta
 
         # Built fresh per-call: caching would pin the database bound at the
