@@ -10,6 +10,7 @@ from peewee import (
     CharField,
     Check,
     DatabaseProxy,
+    DoesNotExist,
     ForeignKeyField,
     IntegerField,
     Model,
@@ -93,6 +94,11 @@ assert_type(User.select().get_or_none(), User | None)
 # path), and the descriptor makes that a type error as well.
 assert_type(User.delete(), ModelDelete)
 User().delete()  # type: ignore
+
+# DoesNotExist is a per-model exception class the metaclass creates at runtime
+# and _dirty the set of changed field names. Neither is declared on Model.
+assert_type(User.DoesNotExist, type[DoesNotExist])
+assert_type(User()._dirty, set[str])
 
 
 # A `database=` argument accepts a real Database or a DatabaseProxy stand-in.

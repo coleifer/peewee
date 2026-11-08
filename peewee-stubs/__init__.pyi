@@ -1882,8 +1882,10 @@ class _BoundModelsContext(_callable_context_manager):
     ) -> None: ...
 
 class Model(metaclass=ModelBase):
+    DoesNotExist: ClassVar[type[DoesNotExist]]
     __data__: Incomplete
     __rel__: Incomplete
+    _dirty: set[str]
     _meta: Metadata
     def __init__(self, *args, **kwargs) -> None: ...
     @classmethod
