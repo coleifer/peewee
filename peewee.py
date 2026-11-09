@@ -2908,118 +2908,66 @@ class Insert(_WriteQuery):
                     if col != self.table._primary_key]
 
     def _generate_insert(self, insert, ctx):
-        rows_iter = iter(insert)
-        columns = self._columns
+        rows = list(insert)
+        if not rows:
+            raise self.DefaultValuesException('Error: no rows to insert.')
 
-        # Load and organize column defaults (if provided).
         defaults = self.get_default_data()
-
-        # First figure out what columns are being inserted (if they weren't
-        # specified explicitly). Resulting columns are normalized and ordered.
-        if not columns:
-            try:
-                row = next(rows_iter)
-            except StopIteration:
-                raise self.DefaultValuesException('Error: no rows to insert.')
-
-            if not isinstance(row, Mapping):
-                columns = self.get_default_columns()
-                if columns is None:
-                    raise ValueError('Bulk insert must specify columns.')
-            else:
-                # Infer column names from the dict of data being inserted.
-                accum = []
-                for column in row:
-                    if isinstance(column, str):
-                        column = getattr(self.table, column)
-                    accum.append(column)
-
-                # Add any columns present in the default data that are not
-                # accounted for by the dictionary of row data.
-                column_set = set(accum)
-                for col in (set(defaults) - column_set):
-                    accum.append(col)
-
-                columns = sorted(accum, key=lambda obj: obj.get_sort_key(ctx))
-            rows_iter = itertools.chain(iter((row,)), rows_iter)
+        sort_key = lambda column: column.get_sort_key(ctx)
+        if self._columns:
+            # Explicit columns keep the caller's order.
+            columns = [getattr(self.table, c) if isinstance(c, str) else c
+                       for c in self._columns]
+            columns.extend(sorted(set(defaults) - set(columns), key=sort_key))
+        elif isinstance(rows[0], Mapping):
+            columns = [getattr(self.table, c) if isinstance(c, str) else c
+                       for c in rows[0]]
+            columns.extend(set(defaults) - set(columns))
+            columns.sort(key=sort_key)
         else:
-            clean_columns = []
-            seen = set()
-            for column in columns:
-                if isinstance(column, str):
-                    column_obj = getattr(self.table, column)
-                else:
-                    column_obj = column
-                clean_columns.append(column_obj)
-                seen.add(column_obj)
+            columns = self.get_default_columns()
+            if columns is None:
+                raise ValueError('Bulk insert must specify columns.')
 
-            columns = clean_columns
-            for col in sorted(defaults, key=lambda obj: obj.get_sort_key(ctx)):
-                if col not in seen:
-                    columns.append(col)
-
-        fk_fields = set()
-        nullable_columns = set()
-        value_lookups = {}
+        plan = []
         for column in columns:
-            lookups = [column, column.name]
-            if isinstance(column, Field):
-                if column.name != column.column_name:
-                    lookups.append(column.column_name)
-                if column.null:
-                    nullable_columns.add(column)
-                if isinstance(column, ForeignKeyField):
-                    fk_fields.add(column)
-            value_lookups[column] = lookups
+            is_field = isinstance(column, Field)
+            is_fk = isinstance(column, ForeignKeyField)
+            # A dict row may be keyed by column, name or column name.
+            keys = [column, column.name]
+            if is_field and column.name != column.column_name:
+                keys.append(column.column_name)
+            converter = column.db_value if is_field else None
+            nullable = is_field and column.null
+            default = defaults.get(column, None if nullable else SENTINEL)
+            plan.append((column.name, keys, converter, is_fk, default))
+
+        values = []
+        for row in rows:
+            is_dict = isinstance(row, Mapping)
+            cells = []
+            for i, (name, keys, converter, is_fk, default) in enumerate(plan):
+                val = SENTINEL
+                if is_dict:
+                    for key in keys:
+                        val = row.get(key, SENTINEL)
+                        if val is not SENTINEL:
+                            break
+                elif i < len(row):
+                    val = row[i]
+                if val is SENTINEL:
+                    if default is SENTINEL:
+                        raise ValueError('Missing value for %s.' % name)
+                    val = default() if callable(default) else default
+                if not isinstance(val, Node) or (is_fk and
+                                                 isinstance(val, Model)):
+                    val = Value(val, converter=converter, unpack=False)
+                cells.append(val)
+            values.append(EnclosedNodeList(cells))
 
         ctx.sql(EnclosedNodeList(columns)).literal(' VALUES ')
-        columns_converters = [
-            (column, column.db_value if isinstance(column, Field) else None)
-            for column in columns]
-
-        all_values = []
-        for row in rows_iter:
-            values = []
-            is_dict = isinstance(row, Mapping)
-            for i, (column, converter) in enumerate(columns_converters):
-                try:
-                    if is_dict:
-                        # The logic is a bit convoluted, but in order to be
-                        # flexible in what we accept (dict keyed by
-                        # column/field, field name, or underlying column name),
-                        # we try accessing the row data dict using each
-                        # possible key. If no match is found, throw an error.
-                        for lookup in value_lookups[column]:
-                            try:
-                                val = row[lookup]
-                            except KeyError: pass
-                            else: break
-                        else:
-                            raise KeyError
-                    else:
-                        val = row[i]
-                except (KeyError, IndexError):
-                    if column in defaults:
-                        val = defaults[column]
-                        if callable_(val):
-                            val = val()
-                    elif column in nullable_columns:
-                        val = None
-                    else:
-                        raise ValueError('Missing value for %s.' % column.name)
-
-                if not isinstance(val, Node) or (isinstance(val, Model) and
-                                                 column in fk_fields):
-                    val = Value(val, converter=converter, unpack=False)
-                values.append(val)
-
-            all_values.append(EnclosedNodeList(values))
-
-        if not all_values:
-            raise self.DefaultValuesException('Error: no data to insert.')
-
         with ctx.scope_values(subquery=True):
-            return ctx.sql(CommaNodeList(all_values))
+            return ctx.sql(CommaNodeList(values))
 
     def _query_insert(self, ctx):
         if self._columns:
