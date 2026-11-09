@@ -1633,7 +1633,7 @@ class Expression(ColumnBase):
             # the equivalent boolean expression.
             op_in = self.op == OP.IN or self.op == OP.NOT_IN
             rhs = self.rhs
-            if op_in and self._is_rhs_empty(rhs, ctx):
+            if op_in and self._is_rhs_empty(rhs):
                 return ctx.literal('0 = 1' if self.op == OP.IN else '1 = 1')
             if rhs is None and (self.op == OP.IS or self.op == OP.IS_NOT):
                 rhs = SQL('NULL')
@@ -1643,13 +1643,14 @@ class Expression(ColumnBase):
                     .literal(' %s ' % op_sql)
                     .sql(rhs))
 
-    def _is_rhs_empty(self, rhs, ctx):
+    def _is_rhs_empty(self, rhs):
         if isinstance(rhs, multi_types):
-            return not bool(rhs)
+            return not rhs
         elif isinstance(rhs, Value):
-            return (rhs.multi and not rhs.values)
-        else:
-            return ctx.as_new().parse(rhs)[0] == '()'
+            return rhs.multi and not rhs.values
+        elif isinstance(rhs, NodeList):
+            return rhs.parens and not rhs.nodes
+        return False
 
 
 class StringExpression(Expression):
