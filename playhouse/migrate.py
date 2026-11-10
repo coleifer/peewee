@@ -128,7 +128,6 @@ from peewee import Node
 from peewee import NodeList
 from peewee import OP
 from peewee import ValueLiterals
-from peewee import callable_
 from peewee import sqlite3
 from peewee import _truncate_constraint_name
 try:
@@ -232,7 +231,7 @@ class SchemaMigrator(object):
     @operation
     def apply_default(self, table, column_name, field):
         default = field.default
-        if callable_(default):
+        if callable(default):
             default = default()
 
         return (self.make_context()
@@ -440,7 +439,7 @@ class SchemaMigrator(object):
     def add_column_default(self, table, column, default):
         if default is None:
             raise ValueError('`default` must be not None/NULL.')
-        if callable_(default):
+        if callable(default):
             default = default()
         # Try to handle SQL functions and string literals, otherwise pass as a
         # bound value.
@@ -992,7 +991,7 @@ class SqliteMigrator(SchemaMigrator):
     def add_column_default(self, table, column, default):
         if default is None:
             raise ValueError('`default` must be not None/NULL.')
-        if callable_(default):
+        if callable(default):
             default = default()
         if (isinstance(default, str) and not default.endswith((')', "'"))
             and not default.isdigit()):

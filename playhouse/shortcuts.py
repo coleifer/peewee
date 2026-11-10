@@ -4,7 +4,6 @@ from peewee import *
 from peewee import Alias
 from peewee import CompoundSelectQuery
 from peewee import Metadata
-from peewee import callable_
 
 
 _clone_set = lambda s: set(s) if s else set()
@@ -97,7 +96,7 @@ def model_to_dict(model, recurse=True, backrefs=False, only=None,
     if extra_attrs:
         for attr_name in extra_attrs:
             attr = getattr(model, attr_name)
-            if callable_(attr):
+            if callable(attr):
                 data[attr_name] = attr()
             else:
                 data[attr_name] = attr
@@ -201,7 +200,7 @@ def insert_where(cls, data, where=None):
     """
     for field, default in cls._meta.defaults.items():
         if field.name in data or field in data: continue
-        value = default() if callable_(default) else default
+        value = default() if callable(default) else default
         data[field] = value
     fields, values = zip(*data.items())
     sq = Select(columns=values).where(where)

@@ -1,6 +1,5 @@
 from bisect import bisect_left
 from bisect import bisect_right
-from collections.abc import Callable
 from collections.abc import Mapping
 from contextlib import contextmanager
 from copy import deepcopy
@@ -157,7 +156,6 @@ logger = logging.getLogger('peewee')
 logger.addHandler(logging.NullHandler())
 
 
-callable_ = lambda c: isinstance(c, Callable)
 multi_types = (list, tuple, frozenset, set, range, types.GeneratorType)
 
 def qesc(s, q='"'):
@@ -2581,8 +2579,6 @@ class Select(SelectBase):
                 self._simple_distinct = distinct
             else:
                 self._distinct = distinct
-
-        self._cursor_wrapper = None
 
     def clone(self):
         clone = super(Select, self).clone()
@@ -6695,7 +6691,7 @@ class ForeignKeyField(Field):
         super(ForeignKeyField, self).bind(model, name, set_attribute)
         self.safe_name = self.object_id_name
 
-        if callable_(self.declared_backref):
+        if callable(self.declared_backref):
             self.backref = self.declared_backref(self)
         else:
             self.backref, self.declared_backref = self.declared_backref, None
@@ -7460,7 +7456,7 @@ class Metadata(object):
             if field.default is not None:
                 # This optimization helps speed up model instance construction.
                 self.defaults[field] = field.default
-                if callable_(field.default):
+                if callable(field.default):
                     self._default_callable_list.append((field.name,
                                                         field.default))
                 else:
@@ -7488,7 +7484,7 @@ class Metadata(object):
 
         if original.default is not None:
             del self.defaults[original]
-            if callable_(original.default):
+            if callable(original.default):
                 self._default_callable_list.remove((field_name,
                                                     original.default))
             else:

@@ -6,10 +6,8 @@ from datetime import date, datetime, time
 from decimal import Decimal
 from types import TracebackType
 from typing import Any, ClassVar, Final, Generic, Literal, NamedTuple, TypeAlias, TypedDict, overload, type_check_only
-from typing_extensions import Self, TypeIs, TypeVar, Unpack
+from typing_extensions import Self, TypeVar, Unpack
 from uuid import UUID
-
-def callable_(c: object) -> TypeIs[Callable[..., object]]: ...
 
 multi_types: tuple[type[Incomplete], ...]
 
