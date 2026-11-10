@@ -453,6 +453,18 @@ class TestModelSQL(ModelDatabaseTestCase):
             'WHERE (("t2"."username" = ?) AND '
             '(("t2"."id" >= ?) OR ("t1"."id" < ?)))'), ['huey', 1, 5])
 
+    def test_filter_reuse_dq(self):
+        # filter() leaves the DQ tree it is given untouched.
+        dq = ((DQ(user__username='huey') | DQ(user__username='zaizee')) &
+              DQ(id__lt=5))
+        for _ in range(2):
+            query = Tweet.select(Tweet.content).filter(dq)
+            self.assertSQL(query, (
+                'SELECT "t1"."content" FROM "tweet" AS "t1" '
+                'INNER JOIN "users" AS "t2" ON ("t1"."user_id" = "t2"."id") '
+                'WHERE ((("t2"."username" = ?) OR ("t2"."username" = ?)) AND '
+                '("t1"."id" < ?))'), ['huey', 'zaizee', 5])
+
     def test_mix_filter_methods(self):
         query = (User
                  .select(User, fn.COUNT(Tweet.id).alias('count'))

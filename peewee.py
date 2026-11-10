@@ -8742,55 +8742,32 @@ class ModelSelect(BaseModelSelect, Select):
             accum.append(op(model_attr, value))
         return accum, joins
 
+    def _convert_dq(self, node, joins):
+        # Copy the expression tree, replacing each DQ with its expression.
+        if isinstance(node, DQ):
+            expressions, dq_joins = self.convert_dict_to_node(node.query)
+            joins.extend(dq_joins)
+            expression = reduce(operator.and_, expressions)
+            return Negated(expression) if node._negated else expression
+        elif isinstance(node, Expression):
+            node = node.clone()
+            node.lhs = self._convert_dq(node.lhs, joins)
+            node.rhs = self._convert_dq(node.rhs, joins)
+        return node
+
     def filter(self, *args, **kwargs):
-        # normalize args and kwargs into a new expression
-        if args and kwargs:
-            dq_node = (reduce(operator.and_, [a.clone() for a in args]) &
-                       DQ(**kwargs))
-        elif args:
-            dq_node = (reduce(operator.and_, [a.clone() for a in args]) &
-                       ColumnBase())
-        elif kwargs:
-            dq_node = DQ(**kwargs) & ColumnBase()
-        else:
+        if kwargs:
+            args += (DQ(**kwargs),)
+        if not args:
             return self.clone()
 
-        # dq_node should now be an Expression, lhs = Node(), rhs = ...
-        q = collections.deque([dq_node])
-        dq_joins = []
-        seen_joins = set()
-        while q:
-            curr = q.popleft()
-            if not isinstance(curr, Expression):
-                continue
-            for side, piece in (('lhs', curr.lhs), ('rhs', curr.rhs)):
-                if isinstance(piece, DQ):
-                    query, joins = self.convert_dict_to_node(piece.query)
-                    for join in joins:
-                        if join not in seen_joins:
-                            dq_joins.append(join)
-                            seen_joins.add(join)
-                    expression = reduce(operator.and_, query)
-                    # Apply values from the DQ object.
-                    if piece._negated:
-                        expression = Negated(expression)
-                    setattr(curr, side, expression)
-                else:
-                    q.append(piece)
-
-        if not args or not kwargs:
-            dq_node = dq_node.lhs
-
+        joins = []
+        expressions = [self._convert_dq(node, joins) for node in args]
         query = self.clone()
-        for field in dq_joins:
-            if isinstance(field, ForeignKeyField):
-                lm, rm = field.model, field.rel_model
-                field_obj = field
-            elif isinstance(field, BackrefAccessor):
-                lm, rm = field.model, field.rel_model
-                field_obj = field.field
-            query = query.ensure_join(lm, rm, field_obj)
-        return query.where(dq_node)
+        for rel in joins:
+            on = rel.field if isinstance(rel, BackrefAccessor) else rel
+            query = query.ensure_join(rel.model, rel.rel_model, on)
+        return query.where(reduce(operator.and_, expressions))
 
     def create_table(self, name, safe=True, **meta):
         return self.model._schema.create_table_as(name, self, safe, **meta)
