@@ -5414,15 +5414,9 @@ class CursorWrapper(object):
         n = n or float('Inf')
         if n < 0:
             raise ValueError('Negative values are not supported.')
-        if self.populated or n <= self.count:
-            # We've already filled the requested rows.
-            return
-
-        iterator = ResultIterator(self)
-        iterator.index = self.count
-        while not self.populated and (n > self.count):
+        while not self.populated and n > self.count:
             try:
-                iterator.next()
+                self.iterate()
             except StopIteration:
                 break
 
