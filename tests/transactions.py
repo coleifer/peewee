@@ -471,8 +471,150 @@ class TestAfterCommit(BaseTransactionTestCase):
             except ValueError:
                 pass
             self.assertEqual(self.accum, [])
-        # No savepoint granularity: 3 runs though its savepoint rolled back.
-        self.assertEqual(self.accum, [1, 2, 3])
+        # 3 was registered in a savepoint that rolled back: discarded.
+        self.assertEqual(self.accum, [1, 2])
+
+    @requires_nested
+    def test_after_commit_savepoint_explicit_rollback(self):
+        with db.atomic():
+            db.after_commit(self.hook(1))
+            with db.atomic() as sp:
+                db.after_commit(self.hook(2))
+                sp.rollback()
+                db.after_commit(self.hook(3))
+        self.assertEqual(self.accum, [1, 3])
+
+    @requires_nested
+    def test_after_commit_savepoint_release_then_rollback(self):
+        with db.atomic():
+            with db.atomic() as sp:
+                db.after_commit(self.hook(1))
+                sp.commit()  # Released: callback now belongs to the parent.
+                db.after_commit(self.hook(2))
+                sp.rollback()
+        self.assertEqual(self.accum, [1])
+
+    @requires_nested
+    def test_after_commit_deep_nesting(self):
+        with db.atomic():
+            self._save(1)
+            db.after_commit(self.hook(1))
+            try:
+                with db.atomic():
+                    self._save(2)
+                    db.after_commit(self.hook(2))
+                    with db.atomic():
+                        self._save(3)
+                        db.after_commit(self.hook(3))
+                    db.after_commit(self.hook(4))
+                    raise ValueError('middle')
+            except ValueError:
+                pass
+            with db.atomic():
+                self._save(5)
+                db.after_commit(self.hook(5))
+        self.assertEqual(self.accum, [1, 5])
+        self.assertRegister([1, 5])
+
+    def test_after_commit_callback_raises(self):
+        def boom():
+            raise ZeroDivisionError('cb')
+
+        with self.assertRaises(ZeroDivisionError):
+            with db.atomic():
+                self._save(1)
+                db.after_commit(boom)
+                db.after_commit(self.hook(1))  # Never runs.
+        self.assertFalse(db.in_transaction())
+        self.assertRegister([1])
+        self.assertEqual(self.accum, [])
+
+        with db.atomic():
+            db.after_commit(self.hook(2))
+        self.assertEqual(self.accum, [2])
+
+    def test_after_commit_explicit_commit_callback_raises(self):
+        def boom():
+            raise ZeroDivisionError('cb')
+
+        with db.atomic() as txn:
+            self._save(1)
+            db.after_commit(boom)
+            with self.assertRaises(ZeroDivisionError):
+                txn.commit()
+            # A new transaction was begun despite the failing callback.
+            self.assertTrue(db.in_transaction())
+            self._save(2)
+            txn.rollback()
+        self.assertRegister([1])
+
+    def test_after_commit_commit_failure(self):
+        real_commit = db.commit
+        calls = []
+
+        def bad_commit():
+            if not calls:
+                calls.append(1)
+                db.rollback()
+                raise OperationalError('commit failed')
+            return real_commit()
+
+        db.commit = bad_commit
+        try:
+            with self.assertRaises(OperationalError):
+                with db.atomic():
+                    self._save(1)
+                    db.after_commit(self.hook(1))
+        finally:
+            del db.commit
+        self.assertEqual(self.accum, [])
+        self.assertRegister([])
+
+        with db.atomic():
+            self._save(2)
+            db.after_commit(self.hook(2))
+        self.assertEqual(self.accum, [2])
+        self.assertRegister([2])
+
+    def test_after_commit_explicit_commit_failure(self):
+        real_commit = db.commit
+
+        def bad_commit():
+            raise OperationalError('commit failed')
+
+        with db.atomic() as txn:
+            db.after_commit(self.hook(1))
+            db.commit = bad_commit
+            try:
+                with self.assertRaises(OperationalError):
+                    txn.commit()
+            finally:
+                del db.commit
+            # The transaction is still open, the failed commit's callback
+            # must not run along with a later one.
+            db.after_commit(self.hook(2))
+        self.assertEqual(self.accum, [2])
+
+    def test_after_commit_rollback_failure(self):
+        real_rollback = db.rollback
+
+        def bad_rollback():
+            real_rollback()
+            raise OperationalError('rollback failed')
+
+        db.rollback = bad_rollback
+        try:
+            with self.assertRaises(OperationalError):
+                with db.atomic():
+                    db.after_commit(self.hook(1))
+                    raise ValueError('x')
+        finally:
+            del db.rollback
+        self.assertEqual(self.accum, [])
+
+        with db.atomic():
+            db.after_commit(self.hook(2))
+        self.assertEqual(self.accum, [2])
 
     def test_after_commit_reentrant(self):
         with db.atomic():

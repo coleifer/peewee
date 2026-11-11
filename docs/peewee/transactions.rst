@@ -167,10 +167,14 @@ enqueueing work keyed on a new row's id.
        db.after_commit(lambda: process_order(order.id))
 
 Callbacks run in registration order after the outermost block commits.
-Savepoints get no special treatment, so a callback registered in a nested block
-whose savepoint rolls back still runs if the outer transaction commits. An
-exception from a callback propagates, and later callbacks do not run. Not
-available in manual-commit mode, where peewee does not control the commit.
+A callback registered inside a savepoint (a nested ``atomic()`` block) that
+rolls back is discarded, while a released savepoint hands its callbacks to the
+parent. If the ``COMMIT`` itself fails, the pending callbacks are discarded. An
+exception from a callback propagates after the commit, without rolling back
+the committed work, and later callbacks do not run. Discarding on savepoint
+rollback does not yet apply to the asyncpg backend of ``playhouse.pwasyncio``
+or to retries in ``playhouse.cockroachdb.run_transaction()``. Not available in
+manual-commit mode, where peewee does not control the commit.
 
 With ``playhouse.pwasyncio`` callbacks run on the greenlet runner and may
 issue queries. A coroutine function is rejected, since it would never be

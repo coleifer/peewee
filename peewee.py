@@ -4041,6 +4041,12 @@ class Database(_callable_context_manager):
     def _clear_commit_callbacks(self):
         del self._state.commit_callbacks[:]
 
+    def _commit_callback_mark(self):
+        return len(self._state.commit_callbacks)
+
+    def _discard_commit_callbacks(self, mark):
+        del self._state.commit_callbacks[mark:]
+
     def atomic(self, *args, **kwargs):
         return _atomic(self, *args, **kwargs)
 
@@ -5280,15 +5286,26 @@ class _transaction(_callable_context_manager):
         args, kwargs = self._begin_args
         self.db.begin(*args, **kwargs)
 
+    def _commit(self):
+        try:
+            self.db.commit()
+        except BaseException:
+            self.db._clear_commit_callbacks()
+            raise
+
     def commit(self, begin=True):
-        self.db.commit()
-        self.db._run_commit_callbacks()
-        if begin:
-            self._begin()
+        self._commit()
+        try:
+            self.db._run_commit_callbacks()
+        finally:
+            if begin:
+                self._begin()
 
     def rollback(self, begin=True):
-        self.db.rollback()
-        self.db._clear_commit_callbacks()
+        try:
+            self.db.rollback()
+        finally:
+            self.db._clear_commit_callbacks()
         if begin:
             self._begin()
 
@@ -5305,10 +5322,12 @@ class _transaction(_callable_context_manager):
             self.rollback(False)
         elif depth == 1:
             try:
-                self.commit(False)
+                self._commit()
             except Exception:
                 self.rollback(False)
                 raise
+            # A failing callback propagates as-is, the COMMIT already ran.
+            self.db._run_commit_callbacks()
 
 
 class _savepoint(_callable_context_manager):
@@ -5322,13 +5341,17 @@ class _savepoint(_callable_context_manager):
 
     def _begin(self):
         self.db.execute_sql('SAVEPOINT %s;' % self.quoted_sid)
+        self._mark = self.db._commit_callback_mark()
 
     def commit(self, begin=True):
         self.db.execute_sql('RELEASE SAVEPOINT %s;' % self.quoted_sid)
         if begin: self._begin()
 
     def rollback(self, begin=True):
-        self.db.execute_sql('ROLLBACK TO SAVEPOINT %s;' % self.quoted_sid)
+        try:
+            self.db.execute_sql('ROLLBACK TO SAVEPOINT %s;' % self.quoted_sid)
+        finally:
+            self.db._discard_commit_callbacks(self._mark)
         if begin: self._begin()
 
     def __enter__(self):

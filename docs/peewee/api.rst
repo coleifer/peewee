@@ -404,7 +404,8 @@ Database
       :param fn: A callable taking no arguments.
 
       Register ``fn`` to run after the current transaction commits. Discarded
-      on rollback, and run immediately when no transaction is active. See
+      on rollback, including a rollback of the enclosing savepoint, and run
+      immediately when no transaction is active. See
       :ref:`transactions` for details.
 
    .. method:: manual_commit()

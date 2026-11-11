@@ -9,6 +9,15 @@ https://github.com/coleifer/peewee/releases
 
 [View commits](https://github.com/coleifer/peewee/compare/4.5.3...master)
 
+* `Database.after_commit()` callbacks registered inside a savepoint (nested
+  `atomic()` or an explicit `rollback()`) are now discarded when that savepoint
+  rolls back, instead of running when the outer transaction commits.
+* Commit callbacks are discarded if `COMMIT` or `ROLLBACK` fails, so they no
+  longer leak into a later transaction on the same connection.
+* An exception raised by a commit callback propagates as-is. Previously it
+  triggered a `ROLLBACK` after the successful `COMMIT`, which could mask the
+  callback's error.
+
 ## 4.5.3
 
 * JSON path keys on Postgres are rendered inline (`data->>'key'`,
