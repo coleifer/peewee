@@ -645,6 +645,12 @@ Migration API
    supported on any version, as sqlite's ``ADD CONSTRAINT`` does not
    extend to UNIQUE constraints.
 
+   Operations that rebuild the table re-create its triggers, rewriting column
+   references on rename. If a trigger references a column being dropped or
+   renamed in a way that cannot be rewritten safely, ``ValueError`` is raised
+   and nothing is changed. Drop the trigger first and re-create it after the
+   migration.
+
    SQLite is the one backend that does not accept a ``schema``, as the
    table-rebuild path rewrites unqualified DDL read out of ``sqlite_master``.
    ``drop_table()`` still takes one, for attached databases.

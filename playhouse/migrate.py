@@ -792,6 +792,128 @@ class SqliteMigrator(SchemaMigrator):
             ['table', table.lower()])
         return res.fetchone()
 
+    def _get_triggers(self, table):
+        # Triggers, including TEMP triggers, are dropped along with the table
+        # during a rebuild, so collect them for re-creation.
+        triggers = []
+        for master, temp in (('sqlite_master', False),
+                             ('sqlite_temp_master', True)):
+            res = self.database.execute_sql(
+                ('select name, sql from %s '
+                 'where type=? and LOWER(tbl_name)=? and sql is not null '
+                 'order by rowid') % master,
+                ['trigger', table.lower()])
+            triggers.extend((name, sql, temp) for name, sql in res.fetchall())
+        return triggers
+
+    _trigger_token_re = re.compile(r'''
+        (?P<skip>\s+|--[^\n]*|/\*.*?(?:\*/|$))
+      | (?P<literal>[xX]?'(?:[^']|'')*')
+      | (?P<quoted>"(?:[^"]|"")*"|`(?:[^`]|``)*`|\[[^\]]*\])
+      | (?P<word>[\w$]+)
+      | (?P<op>.)''', re.S | re.X)
+
+    def _trigger_column_refs(self, sql, table, column):
+        """
+        Locate references to `table`.`column` in the SQL of a trigger on
+        `table`. Returns (own, ambiguous), where `own` is a list of (start,
+        end) spans that refer to the column unambiguously (NEW.col, OLD.col,
+        table.col, UPDATE OF col) and `ambiguous` counts other references in
+        body statements that also mention `table`, which can't be attributed
+        to a table without a full SQL parser.
+        """
+        toks = [(m.lastgroup, m.group(), m.start(), m.end())
+                for m in self._trigger_token_re.finditer(sql)
+                if m.lastgroup != 'skip']
+        names = []
+        for kind, text, _, _ in toks:
+            if kind == 'quoted':
+                q = text[0]
+                text = text[1:-1] if q == '[' else \
+                    text[1:-1].replace(q * 2, q)
+            names.append(text.lower() if kind in ('word', 'quoted') else None)
+
+        def is_op(i, char):
+            return 0 <= i < len(toks) and toks[i][:2] == ('op', char)
+
+        col, tbl = column.lower(), table.lower()
+
+        def scope_mentions_table(j):
+            # Does the body statement (or WHEN clause) starting at token `j`
+            # name the table, bringing its columns into scope?
+            while j < len(toks) and not is_op(j, ';') and \
+                    not (toks[j][0] == 'word' and names[j] == 'begin'):
+                if names[j] == tbl and not (
+                        j >= 2 and is_op(j - 1, '.') and
+                        names[j - 2] in ('new', 'old')):
+                    return True
+                j += 1
+            return False
+
+        own, ambiguous = [], 0
+        in_header, in_update_of, in_when = True, False, False
+        mentions_table = False
+        for i, (kind, text, start, end) in enumerate(toks):
+            word = text.lower() if kind == 'word' else None
+            new_scope = False
+            if in_header:
+                if word == 'begin' and not in_update_of and \
+                   not is_op(i - 1, '.'):
+                    in_header = in_when = False
+                    new_scope = True
+                elif word == 'when':
+                    in_when = new_scope = True
+                elif word == 'of' and i and names[i - 1] == 'update':
+                    in_update_of = True
+                elif word == 'on':
+                    in_update_of = False
+            elif is_op(i, ';'):
+                new_scope = True
+            if new_scope:
+                mentions_table = scope_mentions_table(i + 1)
+                continue
+            if names[i] != col or is_op(i + 1, '.') or is_op(i + 1, '('):
+                continue  # Not the column, or a qualifier/table/function.
+            if is_op(i - 1, '.') and i >= 2 and \
+               names[i - 2] in ('new', 'old', tbl):
+                own.append((start, end))
+            elif in_update_of:
+                own.append((start, end))
+            elif (in_when or not in_header) and mentions_table:
+                ambiguous += 1
+        return own, ambiguous
+
+    def _fix_trigger(self, table, name, sql, temp, column_to_update,
+                     new_column):
+        # Triggers are dropped along with the original table, so re-create
+        # them once the rebuilt table is in place.
+        if new_column is None or \
+           new_column.lower() != column_to_update.lower():
+            own, ambiguous = self._trigger_column_refs(sql, table,
+                                                       column_to_update)
+            if new_column is None and (own or ambiguous):
+                # Re-creating the trigger would fail or leave it pointing at
+                # a missing column, so refuse before changing anything.
+                raise ValueError(
+                    'Cannot drop column "%s": trigger "%s" may reference it. '
+                    'Drop the trigger first and re-create it after the '
+                    'migration.' % (column_to_update, name))
+            if ambiguous:
+                raise ValueError(
+                    'Cannot rename column "%s": trigger "%s" references it '
+                    'in a statement that cannot be rewritten safely. Drop '
+                    'the trigger first and re-create it after the '
+                    'migration.' % (column_to_update, name))
+            if new_column is not None:
+                quoted = '"%s"' % new_column.replace('"', '""')
+                for start, end in reversed(own):
+                    sql = sql[:start] + quoted + sql[end:]
+        if temp:
+            # sqlite_temp_master stores the SQL without the TEMP keyword.
+            sql = re.sub(r'^\s*CREATE\s+', 'CREATE TEMP ', sql, count=1,
+                         flags=re.I)
+        return sql
+
     @operation
     def _update_column(self, table, column_to_update, fn):
         columns = set(column.name.lower()
@@ -805,6 +927,9 @@ class SqliteMigrator(SchemaMigrator):
 
         # Get the indexes and SQL to re-create indexes.
         indexes = self.database.get_indexes(table)
+
+        # Triggers are dropped with the table and must be re-created.
+        triggers = self._get_triggers(table)
 
         # Make sure the create_table does not contain any newlines or tabs,
         # allowing the regex to work correctly.
@@ -904,6 +1029,11 @@ class SqliteMigrator(SchemaMigrator):
                 sql = self._fix_index(index.sql, column_to_update, new_column)
                 if sql is not None:
                     queries.append(SQL(sql))
+
+        # Re-create triggers last, so any they touch already exist.
+        for name, sql, temp in triggers:
+            queries.append(SQL(self._fix_trigger(
+                table, name, sql, temp, column_to_update, new_column)))
 
         return queries
 

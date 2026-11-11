@@ -7,6 +7,15 @@ https://github.com/coleifer/peewee/releases
 
 ## master
 
+* `SqliteMigrator` operations that rebuild the table (legacy `drop_column()`,
+  `rename_column()`, `add_not_null()` and similar) now re-create the table's
+  triggers, including TEMP triggers. Previously the triggers were silently
+  dropped along with the original table. Column references in a trigger are
+  rewritten on `rename_column()`. Dropping or renaming a column that a trigger
+  references in a way that cannot be rewritten safely now raises `ValueError`
+  before any change is made. Drop the trigger first and re-create it after the
+  migration.
+
 [View commits](https://github.com/coleifer/peewee/compare/4.5.3...master)
 
 ## 4.5.3

@@ -41,6 +41,11 @@ except ImportError:
     pass
 
 
+TRIGGER_QUERY = ('select name, sql from %s '
+                 'where type=? and LOWER(tbl_name)=? and sql is not null '
+                 'order by rowid')
+
+
 class Tag(TestModel):
     tag = CharField()
 
@@ -964,6 +969,220 @@ class TestSchemaMigration(ModelTestCase):
         finally:
             db.execute_sql('DROP TABLE IF EXISTS "uc"')
 
+    def _setup_audit_tables(self):
+        db = self.database
+        for tbl in ('acct_audit', 'acct', 'owner'):
+            db.execute_sql('DROP TABLE IF EXISTS "%s"' % tbl)
+        db.execute_sql('CREATE TABLE "owner" ("id" INTEGER PRIMARY KEY)')
+        db.execute_sql('CREATE TABLE "acct" ("id" INTEGER PRIMARY KEY, '
+                       '"owner_id" INTEGER REFERENCES "owner" ("id"), '
+                       '"name" TEXT, "extra" TEXT)')
+        db.execute_sql('CREATE INDEX "acct_owner_id" ON "acct" ("owner_id")')
+        db.execute_sql('CREATE INDEX "acct_name" ON "acct" ("name")')
+        # The audit table shares the "name" column with "acct".
+        db.execute_sql('CREATE TABLE "acct_audit" ("acct_id" INTEGER, '
+                       '"name" TEXT, "note" TEXT)')
+        # The comment and string literal mention "extra", and the column list
+        # names acct_audit."name"; neither is a reference to acct's columns.
+        db.execute_sql(
+            'CREATE TRIGGER "acct_ai" AFTER INSERT ON "acct" BEGIN\n'
+            "  -- audit row; don't log 'extra'\n"
+            '  INSERT INTO "acct_audit" ("acct_id", "name", "note")\n'
+            "  VALUES (NEW.\"id\", NEW.name, 'insert extra');\n"
+            'END')
+        db.execute_sql(
+            'CREATE TRIGGER "acct_au" AFTER UPDATE OF "name" ON "acct" '
+            'BEGIN INSERT INTO acct_audit (acct_id, name, note) '
+            "VALUES (NEW.id, OLD.name, 'update'); END")
+        db.execute_sql('INSERT INTO "owner" ("id") VALUES (1)')
+        db.execute_sql('INSERT INTO "acct" ("owner_id", "name", "extra") '
+                       "VALUES (1, 'a', 'x')")
+
+    def _teardown_audit_tables(self):
+        for tbl in ('acct_audit', 'acct', 'owner'):
+            self.database.execute_sql('DROP TABLE IF EXISTS "%s"' % tbl)
+
+    def _audit_rows(self):
+        return self.database.execute_sql(
+            'SELECT "acct_id", "name", "note" FROM "acct_audit" '
+            'ORDER BY rowid').fetchall()
+
+    def _trigger_names(self, master='sqlite_master'):
+        return [r[0] for r in self.database.execute_sql(
+            "SELECT name FROM %s WHERE type='trigger' "
+            "AND tbl_name='acct' ORDER BY name" % master).fetchall()]
+
+    @requires_sqlite
+    def test_rebuild_preserves_triggers_drop_column(self):
+        db = self.database
+        self._setup_audit_tables()
+        try:
+            migrate(self.migrator.drop_column('acct', 'extra', legacy=True))
+            self.assertEqual(self.get_column_names('acct'),
+                             set(['id', 'owner_id', 'name']))
+            self.assertEqual(self._trigger_names(), ['acct_ai', 'acct_au'])
+
+            # Existing rows survive, new inserts still fire the trigger.
+            db.execute_sql('INSERT INTO "acct" ("owner_id", "name") '
+                           "VALUES (1, 'b')")
+            db.execute_sql('UPDATE "acct" SET "name" = \'c\' WHERE id = 1')
+            self.assertEqual(self._audit_rows(), [
+                (1, 'a', 'insert extra'),
+                (2, 'b', 'insert extra'),
+                (1, 'a', 'update')])
+
+            # Indexes and foreign keys are untouched.
+            self.assertEqual(
+                sorted((i.name, i.columns) for i in db.get_indexes('acct')),
+                [('acct_name', ['name']), ('acct_owner_id', ['owner_id'])])
+            fks = db.get_foreign_keys('acct')
+            self.assertEqual([(f.column, f.dest_table, f.dest_column)
+                              for f in fks], [('owner_id', 'owner', 'id')])
+        finally:
+            self._teardown_audit_tables()
+
+    @requires_sqlite
+    def test_rebuild_preserves_triggers_rename_column(self):
+        db = self.database
+        self._setup_audit_tables()
+        try:
+            migrate(self.migrator.rename_column('acct', 'name', 'label',
+                                                legacy=True))
+            self.assertEqual(self._trigger_names(), ['acct_ai', 'acct_au'])
+
+            # NEW./OLD. references and the UPDATE OF list follow the rename;
+            # acct_audit."name" in the INSERT column list is left alone.
+            ai_sql, = db.execute_sql(
+                "SELECT sql FROM sqlite_master WHERE name='acct_ai'"
+            ).fetchone()
+            self.assertTrue('NEW."label"' in ai_sql)
+            self.assertTrue('("acct_id", "name", "note")' in ai_sql)
+            self.assertTrue("don't log 'extra'" in ai_sql)
+
+            db.execute_sql('INSERT INTO "acct" ("owner_id", "label") '
+                           "VALUES (1, 'b')")
+            db.execute_sql('UPDATE "acct" SET "label" = \'c\' WHERE id = 1')
+            self.assertEqual(self._audit_rows(), [
+                (1, 'a', 'insert extra'),
+                (2, 'b', 'insert extra'),
+                (1, 'a', 'update')])
+            self.assertEqual(
+                sorted((i.name, i.columns) for i in db.get_indexes('acct')),
+                [('acct_name', ['label']), ('acct_owner_id', ['owner_id'])])
+        finally:
+            self._teardown_audit_tables()
+
+    @requires_sqlite
+    def test_rebuild_preserves_triggers_add_not_null(self):
+        db = self.database
+        self._setup_audit_tables()
+        try:
+            migrate(self.migrator.add_not_null('acct', 'name', legacy=True))
+            self.assertEqual(self._trigger_names(), ['acct_ai', 'acct_au'])
+            db.execute_sql('INSERT INTO "acct" ("owner_id", "name") '
+                           "VALUES (1, 'b')")
+            self.assertEqual(self._audit_rows(), [
+                (1, 'a', 'insert extra'), (2, 'b', 'insert extra')])
+        finally:
+            self._teardown_audit_tables()
+
+    @requires_sqlite
+    def test_rebuild_preserves_temp_triggers(self):
+        db = self.database
+        self._setup_audit_tables()
+        try:
+            db.execute_sql(
+                'CREATE TEMP TRIGGER "acct_tmp" AFTER INSERT ON "acct" '
+                "BEGIN INSERT INTO acct_audit (acct_id, note) "
+                "VALUES (NEW.id, 'temp'); END")
+            migrate(self.migrator.drop_column('acct', 'extra', legacy=True))
+            self.assertEqual(self._trigger_names('sqlite_temp_master'),
+                             ['acct_tmp'])
+            self.assertEqual(self._trigger_names(), ['acct_ai', 'acct_au'])
+            db.execute_sql('INSERT INTO "acct" ("owner_id", "name") '
+                           "VALUES (1, 'b')")
+            self.assertEqual(sorted(r[2] for r in self._audit_rows()),
+                             ['insert extra', 'insert extra', 'temp'])
+        finally:
+            db.execute_sql('DROP TRIGGER IF EXISTS temp."acct_tmp"')
+            self._teardown_audit_tables()
+
+    @requires_sqlite
+    def test_rebuild_rename_column_temp_trigger(self):
+        db = self.database
+        self._setup_audit_tables()
+        try:
+            db.execute_sql(
+                'CREATE TEMP TRIGGER "acct_tmp" AFTER INSERT ON "acct" '
+                "BEGIN INSERT INTO acct_audit (acct_id, note) "
+                "VALUES (NEW.id, NEW.extra); END")
+            migrate(self.migrator.rename_column('acct', 'extra', 'misc',
+                                                legacy=True))
+            self.assertEqual(self._trigger_names('sqlite_temp_master'),
+                             ['acct_tmp'])
+            db.execute_sql('INSERT INTO "acct" ("owner_id", "misc") '
+                           "VALUES (1, 'z')")
+            self.assertIn((2, None, 'z'), self._audit_rows())
+        finally:
+            db.execute_sql('DROP TRIGGER IF EXISTS temp."acct_tmp"')
+            self._teardown_audit_tables()
+
+    @requires_sqlite
+    def test_rebuild_drop_column_referenced_by_trigger(self):
+        self._setup_audit_tables()
+        try:
+            with self.assertRaises(ValueError):
+                migrate(self.migrator.drop_column('acct', 'name',
+                                                  legacy=True))
+            # Nothing changed: column and triggers are all still present.
+            self.assertEqual(self.get_column_names('acct'),
+                             set(['id', 'owner_id', 'name', 'extra']))
+            self.assertEqual(self._trigger_names(), ['acct_ai', 'acct_au'])
+        finally:
+            self._teardown_audit_tables()
+
+    @requires_sqlite
+    def test_rebuild_rename_column_ambiguous_trigger(self):
+        # A bare reference in a statement that names the table could belong
+        # to any table in the statement, so the rename refuses to guess.
+        db = self.database
+        self._setup_audit_tables()
+        try:
+            db.execute_sql(
+                'CREATE TRIGGER "acct_norm" AFTER UPDATE ON "acct" BEGIN '
+                'UPDATE "acct" SET "extra" = upper("extra") '
+                'WHERE "id" = NEW."id"; END')
+            with self.assertRaises(ValueError):
+                migrate(self.migrator.rename_column('acct', 'extra', 'misc',
+                                                    legacy=True))
+            self.assertEqual(self.get_column_names('acct'),
+                             set(['id', 'owner_id', 'name', 'extra']))
+            self.assertEqual(self._trigger_names(),
+                             ['acct_ai', 'acct_au', 'acct_norm'])
+        finally:
+            self._teardown_audit_tables()
+
+    @requires_sqlite
+    def test_rebuild_trigger_when_clause_reference(self):
+        # A subquery in the WHEN clause brings the table's columns into scope.
+        db = self.database
+        self._setup_audit_tables()
+        try:
+            db.execute_sql(
+                'CREATE TRIGGER "acct_when" AFTER INSERT ON "acct" '
+                'WHEN (SELECT count(*) FROM "acct" WHERE "extra" IS NULL) > 0 '
+                "BEGIN INSERT INTO acct_audit (note) VALUES ('w'); END")
+            for op in (self.migrator.drop_column('acct', 'extra',
+                                                 legacy=True),
+                       self.migrator.rename_column('acct', 'extra', 'misc',
+                                                   legacy=True)):
+                with self.assertRaises(ValueError):
+                    migrate(op)
+            self.assertEqual(self.get_column_names('acct'),
+                             set(['id', 'owner_id', 'name', 'extra']))
+        finally:
+            self._teardown_audit_tables()
+
     @requires_sqlite
     def test_rebuild_substring_table_name(self):
         db = self.database
@@ -1033,6 +1252,11 @@ class TestSchemaMigration(ModelTestCase):
             ('PRAGMA "main".index_info("index_model_first_name_last_name")',
              None),
 
+            # Get the triggers, which are dropped along with the table.
+            (TRIGGER_QUERY % 'sqlite_master', ['trigger', 'index_model']),
+            (TRIGGER_QUERY % 'sqlite_temp_master',
+             ['trigger', 'index_model']),
+
             # Drop any temporary table, if it exists.
             ('DROP TABLE IF EXISTS "index_model__tmp__"', []),
 
@@ -1088,6 +1312,10 @@ class TestSchemaMigration(ModelTestCase):
             ('PRAGMA "main".index_info("page_name")', None),
             ('PRAGMA "main".index_info("page_user_id")', None),
             #('PRAGMA "main".foreign_key_list("page")', None),
+
+            # Get the triggers, which are dropped along with the table.
+            (TRIGGER_QUERY % 'sqlite_master', ['trigger', 'page']),
+            (TRIGGER_QUERY % 'sqlite_temp_master', ['trigger', 'page']),
 
             # Clear out a temp table and create it w/o the user_id FK.
             ('DROP TABLE IF EXISTS "page__tmp__"', []),
