@@ -965,6 +965,25 @@ class TestSchemaMigration(ModelTestCase):
             db.execute_sql('DROP TABLE IF EXISTS "uc"')
 
     @requires_sqlite
+    def test_rebuild_preserves_triggers(self):
+        db = self.database
+        db.execute_sql('DROP TABLE IF EXISTS "tg"')
+        db.execute_sql('DROP TABLE IF EXISTS "tg_log"')
+        db.execute_sql('CREATE TABLE "tg" ("id" INTEGER PRIMARY KEY, '
+                       '"a" TEXT)')
+        db.execute_sql('CREATE TABLE "tg_log" ("a" TEXT)')
+        db.execute_sql('CREATE TRIGGER "tg_ai" AFTER INSERT ON "tg" BEGIN '
+                       'INSERT INTO "tg_log" VALUES (NEW."a"); END')
+        try:
+            migrate(self.migrator.add_column_default('tg', 'a', 'x'))
+            db.execute_sql('INSERT INTO "tg" ("id") VALUES (1)')
+            curs = db.execute_sql('SELECT "a" FROM "tg_log"')
+            self.assertEqual(curs.fetchall(), [('x',)])
+        finally:
+            db.execute_sql('DROP TABLE IF EXISTS "tg"')
+            db.execute_sql('DROP TABLE IF EXISTS "tg_log"')
+
+    @requires_sqlite
     def test_rebuild_substring_table_name(self):
         db = self.database
         db.execute_sql('DROP TABLE IF EXISTS "ab"')
@@ -1033,6 +1052,10 @@ class TestSchemaMigration(ModelTestCase):
             ('PRAGMA "main".index_info("index_model_first_name_last_name")',
              None),
 
+            # Get the triggers, which are dropped along with the table.
+            ('select sql from sqlite_master '
+             'where type=? and LOWER(tbl_name)=?', ['trigger', 'index_model']),
+
             # Drop any temporary table, if it exists.
             ('DROP TABLE IF EXISTS "index_model__tmp__"', []),
 
@@ -1088,6 +1111,8 @@ class TestSchemaMigration(ModelTestCase):
             ('PRAGMA "main".index_info("page_name")', None),
             ('PRAGMA "main".index_info("page_user_id")', None),
             #('PRAGMA "main".foreign_key_list("page")', None),
+            ('select sql from sqlite_master '
+             'where type=? and LOWER(tbl_name)=?', ['trigger', 'page']),
 
             # Clear out a temp table and create it w/o the user_id FK.
             ('DROP TABLE IF EXISTS "page__tmp__"', []),

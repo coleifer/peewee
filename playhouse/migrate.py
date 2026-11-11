@@ -806,6 +806,11 @@ class SqliteMigrator(SchemaMigrator):
         # Get the indexes and SQL to re-create indexes.
         indexes = self.database.get_indexes(table)
 
+        # Triggers are dropped along with the table.
+        triggers = self.database.execute_sql(
+            'select sql from sqlite_master where type=? and LOWER(tbl_name)=?',
+            ['trigger', table.lower()]).fetchall()
+
         # Make sure the create_table does not contain any newlines or tabs,
         # allowing the regex to work correctly.
         create_table = re.sub(r'\s+', ' ', create_table)
@@ -905,6 +910,7 @@ class SqliteMigrator(SchemaMigrator):
                 if sql is not None:
                     queries.append(SQL(sql))
 
+        queries.extend(SQL(sql) for sql, in triggers)
         return queries
 
     def _fix_index(self, sql, column_to_update, new_column):
