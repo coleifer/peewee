@@ -427,6 +427,9 @@ class TestAfterCommit(BaseTransactionTestCase):
     def hook(self, val):
         return lambda: self.accum.append(val)
 
+    def error(self):
+        raise ValueError('error')
+
     def test_after_commit(self):
         db.after_commit(self.hook(1))  # No transaction: runs immediately.
         self.assertEqual(self.accum, [1])
@@ -473,6 +476,45 @@ class TestAfterCommit(BaseTransactionTestCase):
             self.assertEqual(self.accum, [])
         # No savepoint granularity: 3 runs though its savepoint rolled back.
         self.assertEqual(self.accum, [1, 2, 3])
+
+    def test_after_commit_error(self):
+        with self.assertRaises(ValueError):
+            with db.atomic():
+                self._save(1)
+                db.after_commit(self.error)
+                db.after_commit(self.hook(1))
+        self.assertRegister([1])
+        self.assertEqual(self.accum, [])
+
+        with db.atomic():
+            db.after_commit(self.hook(2))
+        self.assertEqual(self.accum, [2])
+
+    def test_after_commit_error_explicit(self):
+        with db.atomic() as txn:
+            self._save(1)
+            db.after_commit(self.error)
+            self.assertRaises(ValueError, txn.commit)
+            self._save(2)
+            txn.rollback()
+        self.assertRegister([1])
+
+    @skip_unless(IS_SQLITE, 'requires sqlite')
+    def test_after_commit_conflict_rollback(self):
+        Register.create(id=1, value=1)
+        # Sqlite rolls back on conflict, the block's own rollback then fails.
+        with self.assertRaises(DatabaseError):
+            with db.atomic():
+                db.after_commit(self.hook(1))
+                (Register
+                 .insert(id=1, value=2)
+                 .on_conflict('rollback')
+                 .execute())
+        self.assertRegister([1])
+
+        with db.atomic():
+            db.after_commit(self.hook(2))
+        self.assertEqual(self.accum, [2])
 
     def test_after_commit_reentrant(self):
         with db.atomic():

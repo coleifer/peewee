@@ -5282,13 +5282,17 @@ class _transaction(_callable_context_manager):
 
     def commit(self, begin=True):
         self.db.commit()
-        self.db._run_commit_callbacks()
-        if begin:
-            self._begin()
+        try:
+            self.db._run_commit_callbacks()
+        finally:
+            if begin:
+                self._begin()
 
     def rollback(self, begin=True):
-        self.db.rollback()
-        self.db._clear_commit_callbacks()
+        try:
+            self.db.rollback()
+        finally:
+            self.db._clear_commit_callbacks()
         if begin:
             self._begin()
 
@@ -5307,7 +5311,10 @@ class _transaction(_callable_context_manager):
             try:
                 self.commit(False)
             except Exception:
-                self.rollback(False)
+                try:
+                    self.rollback(False)
+                except Exception:
+                    pass
                 raise
 
 
