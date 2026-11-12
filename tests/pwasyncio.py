@@ -1710,6 +1710,38 @@ class IntegrationTests(object):
         with self.assertRaises(ValueError):
             self.db.after_commit(coro_cb)
 
+    async def test_after_commit_explicit(self):
+        acc = []
+        async with self.db.atomic() as txn:
+            await self.create_record('a', 1)
+            self.db.after_commit(lambda: acc.append(1))
+            await txn.acommit()
+            self.assertEqual(acc, [1])
+            await self.create_record('b', 2)
+            self.db.after_commit(lambda: acc.append(2))
+            await txn.arollback()
+            self.db.after_commit(lambda: acc.append(3))
+        self.assertEqual(acc, [1, 3])
+        await self.assertNames(['a'])
+
+    async def test_after_commit_error(self):
+        def error():
+            raise ValueError('error')
+
+        with self.assertRaises(ValueError):
+            async with self.db.atomic():
+                await self.create_record('a', 1)
+                self.db.after_commit(error)
+
+        async with self.db.atomic() as txn:
+            await self.create_record('b', 2)
+            self.db.after_commit(error)
+            with self.assertRaises(ValueError):
+                await txn.acommit()
+            await self.create_record('c', 3)
+            await txn.arollback()
+        await self.assertNames(['a', 'b'])
+
     async def test_nested_transactions(self):
         def nested():
             with self.db.atomic():

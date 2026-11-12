@@ -212,11 +212,11 @@ class _async_transaction_helper(object):
     async def __aexit__(self, exc_typ, exc, tb):
         return await self.db.run(self.__exit__, exc_typ, exc, tb)
 
-    async def acommit(self):
-        return await self.db.run(self.commit)
+    async def acommit(self, begin=True):
+        return await self.db.run(self.commit, begin)
 
-    async def arollback(self):
-        return await self.db.run(self.rollback)
+    async def arollback(self, begin=True):
+        return await self.db.run(self.rollback, begin)
 
 
 class async_atomic(_async_transaction_helper, _atomic): pass
@@ -1135,22 +1135,47 @@ class AsyncPgAdapter(Psycopg3Adapter):
         self.jsonb_type = Json
 
 
-class AsyncPgAtomic(_callable_context_manager):
+class AsyncPgAtomic(_async_transaction_helper, _callable_context_manager):
     def __init__(self, db, *args, **kwargs):
         self.db = db
         self._begin_args = (args, kwargs)
 
+    def _begin(self):
+        a, k = self._begin_args
+        conn = await_(self.db.aconnect())
+        with __exception_wrapper__:
+            self._tx = conn.conn.transaction(*a, **k)
+            await_(self._tx.start())
+
+    def commit(self, begin=True):
+        with __exception_wrapper__:
+            await_(self._tx.commit())
+        try:
+            if self._outermost:
+                self.db._run_commit_callbacks()
+        finally:
+            if begin:
+                self._begin()
+
+    def rollback(self, begin=True):
+        try:
+            with __exception_wrapper__:
+                await_(self._tx.rollback())
+        finally:
+            if self._outermost:
+                self.db._clear_commit_callbacks()
+        if begin:
+            self._begin()
+
     def __enter__(self):
-        await_(self._abegin())
+        self._outermost = not self.db._state.transactions
+        self._begin()
         self.db._state.transactions.append(self)
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         self.db._state.transactions.pop()
-        outermost = not self.db._state.transactions
         if exc_type:
-            if outermost:
-                self.db._clear_commit_callbacks()
             self.rollback(False)
         else:
             try:
@@ -1158,47 +1183,11 @@ class AsyncPgAtomic(_callable_context_manager):
             except Exception:
                 # asyncpg marks the transaction FAILED when commit errors,
                 # making rollback raise too - don't mask the original.
-                if outermost:
-                    self.db._clear_commit_callbacks()
                 try:
                     self.rollback(False)
                 except Exception:
                     pass
                 raise
-            if outermost:
-                self.db._run_commit_callbacks()
-
-    def commit(self, begin=True):
-        await_(self.acommit(begin))
-
-    def rollback(self, begin=True):
-        await_(self.arollback(begin))
-
-    async def _abegin(self):
-        a, k = self._begin_args
-        conn = await self.db.aconnect()
-        with __exception_wrapper__:
-            self._tx = conn.conn.transaction(*a, **k)
-            await self._tx.start()
-        return self._tx
-
-    async def acommit(self, begin=True):
-        with __exception_wrapper__:
-            await self._tx.commit()
-        if begin:
-            await self._abegin()
-
-    async def arollback(self, begin=True):
-        with __exception_wrapper__:
-            await self._tx.rollback()
-        if begin:
-            await self._abegin()
-
-    async def __aenter__(self):
-        return await self.db.run(self.__enter__)
-
-    async def __aexit__(self, exc_type, exc_val, exc_tb):
-        return await self.db.run(self.__exit__, exc_type, exc_val, exc_tb)
 
 
 class AsyncPostgresqlDatabase(AsyncDatabaseMixin, PostgresqlDatabase):
