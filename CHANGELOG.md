@@ -7,6 +7,10 @@ https://github.com/coleifer/peewee/releases
 
 ## master
 
+* Clear `after_commit` callbacks registered on a savepoint if that savepoint is
+  then rolled-back.
+* Re-create triggers during sqlite migrator table rebuilds.
+
 [View commits](https://github.com/coleifer/peewee/compare/4.5.3...master)
 
 ## 4.5.3
