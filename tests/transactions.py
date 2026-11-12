@@ -474,8 +474,18 @@ class TestAfterCommit(BaseTransactionTestCase):
             except ValueError:
                 pass
             self.assertEqual(self.accum, [])
-        # No savepoint granularity: 3 runs though its savepoint rolled back.
-        self.assertEqual(self.accum, [1, 2, 3])
+        self.assertEqual(self.accum, [1, 2])
+
+    @requires_nested
+    def test_after_commit_savepoint(self):
+        with db.atomic():
+            with db.atomic() as sp:
+                db.after_commit(self.hook(1))
+                sp.commit()
+                db.after_commit(self.hook(2))
+                sp.rollback()
+                db.after_commit(self.hook(3))
+        self.assertEqual(self.accum, [1, 3])
 
     def test_after_commit_error(self):
         with self.assertRaises(ValueError):

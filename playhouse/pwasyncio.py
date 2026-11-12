@@ -1146,6 +1146,7 @@ class AsyncPgAtomic(_async_transaction_helper, _callable_context_manager):
         with __exception_wrapper__:
             self._tx = conn.conn.transaction(*a, **k)
             await_(self._tx.start())
+        self._mark = len(self.db._state.commit_callbacks)
 
     def commit(self, begin=True):
         with __exception_wrapper__:
@@ -1164,6 +1165,8 @@ class AsyncPgAtomic(_async_transaction_helper, _callable_context_manager):
         finally:
             if self._outermost:
                 self.db._clear_commit_callbacks()
+        if not self._outermost:
+            self.db._clear_commit_callbacks(self._mark)
         if begin:
             self._begin()
 

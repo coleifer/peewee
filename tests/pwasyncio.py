@@ -1710,6 +1710,20 @@ class IntegrationTests(object):
         with self.assertRaises(ValueError):
             self.db.after_commit(coro_cb)
 
+    async def test_after_commit_savepoint(self):
+        acc = []
+        async with self.db.atomic():
+            self.db.after_commit(lambda: acc.append(1))
+            async with self.db.atomic() as sp:
+                self.db.after_commit(lambda: acc.append(2))
+                await sp.arollback()
+                self.db.after_commit(lambda: acc.append(3))
+            with self.assertRaises(ValueError):
+                async with self.db.atomic():
+                    self.db.after_commit(lambda: acc.append(4))
+                    raise ValueError('fail')
+        self.assertEqual(acc, [1, 3])
+
     async def test_after_commit_explicit(self):
         acc = []
         async with self.db.atomic() as txn:

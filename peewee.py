@@ -4038,8 +4038,8 @@ class Database(_callable_context_manager):
             for fn in todo:
                 fn()
 
-    def _clear_commit_callbacks(self):
-        del self._state.commit_callbacks[:]
+    def _clear_commit_callbacks(self, start=0):
+        del self._state.commit_callbacks[start:]
 
     def atomic(self, *args, **kwargs):
         return _atomic(self, *args, **kwargs)
@@ -5329,6 +5329,7 @@ class _savepoint(_callable_context_manager):
 
     def _begin(self):
         self.db.execute_sql('SAVEPOINT %s;' % self.quoted_sid)
+        self._mark = len(self.db._state.commit_callbacks)
 
     def commit(self, begin=True):
         self.db.execute_sql('RELEASE SAVEPOINT %s;' % self.quoted_sid)
@@ -5336,6 +5337,7 @@ class _savepoint(_callable_context_manager):
 
     def rollback(self, begin=True):
         self.db.execute_sql('ROLLBACK TO SAVEPOINT %s;' % self.quoted_sid)
+        self.db._clear_commit_callbacks(self._mark)
         if begin: self._begin()
 
     def __enter__(self):
