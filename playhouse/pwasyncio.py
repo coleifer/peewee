@@ -72,7 +72,7 @@ async def greenlet_spawn(fn, *args, **kwargs):
         except BaseException as exc:
             value = g.throw(exc)
 
-    if error:
+    if error is not None:
         raise error
     return result
 

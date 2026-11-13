@@ -89,6 +89,11 @@ class JSONM(Model):
     data = JSONField(null=True)
 
 
+class FalseyError(Exception):
+    def __bool__(self):
+        return False
+
+
 class TestGreenletSpawn(unittest.IsolatedAsyncioTestCase):
     async def test_simple_function(self):
         result = await greenlet_spawn(lambda x, y: x + y, 5, 3)
@@ -119,6 +124,34 @@ class TestGreenletSpawn(unittest.IsolatedAsyncioTestCase):
             raise RuntimeError('async error')
         with self.assertRaises(RuntimeError):
             await greenlet_spawn(lambda: await_(fail()))
+
+    async def test_falsey_exception(self):
+        error = FalseyError('sync error')
+        def fail():
+            raise error
+        with self.assertRaises(FalseyError) as ctx:
+            await greenlet_spawn(fail)
+        self.assertIs(ctx.exception, error)
+
+    async def test_falsey_exception_in_awaitable(self):
+        error = FalseyError('async error')
+        async def fail():
+            await asyncio.sleep(0)
+            raise error
+        with self.assertRaises(FalseyError) as ctx:
+            await greenlet_spawn(lambda: await_(fail()))
+        self.assertIs(ctx.exception, error)
+
+    async def test_exception_truth_value_not_checked(self):
+        class UncheckedError(Exception):
+            def __bool__(self):
+                raise AssertionError('Exception truth value was checked')
+        error = UncheckedError('original error')
+        def fail():
+            raise error
+        with self.assertRaises(UncheckedError) as ctx:
+            await greenlet_spawn(fail)
+        self.assertIs(ctx.exception, error)
 
     def test_await_outside_greenlet_hint(self):
         with self.assertRaises(MissingGreenletBridge) as ctx:
@@ -867,6 +900,21 @@ class IntegrationTests(object):
     async def assertNames(self, expected):
         curs = await self.db.list(TestModel.select().order_by(TestModel.name))
         self.assertEqual([tm.name for tm in curs], expected)
+
+    async def test_falsey_exception_rolls_back_transaction(self):
+        error = FalseyError('reject operation')
+        def write_then_fail():
+            TestModel.create(name='rolled-back')
+            raise error
+        with self.assertRaises(FalseyError) as ctx:
+            async with self.db.atomic():
+                await self.db.run(write_then_fail)
+        self.assertIs(ctx.exception, error)
+        await self.assertCount(0)
+
+        async with self.db.atomic():
+            await self.create_record(name='committed')
+        await self.assertNames(['committed'])
 
     async def seed(self, n=20):
         def _seed():
