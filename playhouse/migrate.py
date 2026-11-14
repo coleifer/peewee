@@ -765,7 +765,10 @@ class SqliteMigrator(SchemaMigrator):
     """
     # Table rebuilds rewrite unqualified DDL read out of sqlite_master.
     supports_schema = False
-    column_re = re.compile(r'(.+?)\((.+)\)')
+    column_re = re.compile(r'(.+?)\((.+)\)', re.S)
+    ddl_whitespace_re = re.compile(
+        r"'(?:''|[^'])*'|\"(?:\"\"|[^\"])*\"|"
+        r'`(?:``|[^`])*`|\[[^\]]*\]|\s+')
     column_split_re = re.compile(r'(?:[^,(]|\([^)]*\))+')
     column_name_re = re.compile(r'''["`']?([\w]+)''')
     fk_re = re.compile(r'FOREIGN KEY\s+\("?([\w]+)"?\)\s+', re.I)
@@ -814,9 +817,9 @@ class SqliteMigrator(SchemaMigrator):
             'select sql from sqlite_master where type=? and LOWER(tbl_name)=?',
             ['trigger', table.lower()]).fetchall()
 
-        # Make sure the create_table does not contain any newlines or tabs,
-        # allowing the regex to work correctly.
-        create_table = re.sub(r'\s+', ' ', create_table)
+        # Normalize DDL formatting without changing quoted literals or names.
+        create_table = self.ddl_whitespace_re.sub(
+            lambda m: ' ' if m.group(0).isspace() else m.group(0), create_table)
 
         # Parse out the `CREATE TABLE` and column list portions of the query.
         raw_create, raw_columns = self.column_re.search(create_table).groups()
