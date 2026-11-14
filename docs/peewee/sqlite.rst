@@ -573,7 +573,7 @@ Usage:
          >>> db.autocommit
          True
 
-   .. method:: backup(destination, pages=None, name=None, progress=None, src_name=None)
+   .. method:: backup(destination, pages=None, name=None, progress=None)
 
       :param CySqliteDatabase destination: Database object to serve as
           destination for the backup.
@@ -584,7 +584,6 @@ Usage:
       :param progress: Progress callback, called with three parameters: the
           number of pages remaining, the total page count, and whether the
           backup is complete.
-      :param str src_name: Deprecated alias for ``name``.
 
       Example:
 
@@ -596,7 +595,7 @@ Usage:
          # Backup the contents of master to replica.
          master.backup(replica)
 
-   .. method:: backup_to_file(filename, pages=None, name=None, progress=None, src_name=None)
+   .. method:: backup_to_file(filename, pages=None, name=None, progress=None)
 
       :param filename: Filename to store the database backup.
       :param int pages: Number of pages per iteration. Default value of -1
@@ -606,7 +605,6 @@ Usage:
       :param progress: Progress callback, called with three parameters: the
           number of pages remaining, the total page count, and whether the
           backup is complete.
-      :param str src_name: Deprecated alias for ``name``.
 
       Backup the current database to a file. The backed-up data is not a
       database dump, but an actual SQLite database file.

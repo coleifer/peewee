@@ -242,23 +242,20 @@ class CySqliteDatabase(SqliteDatabase):
         return self.connection().blob_open(table, column, rowid, read_only,
                                            dbname)
 
-    def backup(self, destination, pages=None, name=None, progress=None,
-               src_name=None):
+    def backup(self, destination, pages=None, name=None, progress=None):
 
         if isinstance(destination, CySqliteDatabase):
             conn = destination.connection()
         elif isinstance(destination, cysqlite.Connection):
             conn = destination
         elif isinstance(destination, (str, Path)):
-            return self.backup_to_file(str(destination), pages, name,
-                                       progress, src_name)
+            return self.backup_to_file(str(destination), pages, name, progress)
 
-        return self.connection().backup(conn, pages, name, progress, src_name)
+        return self.connection().backup(conn, pages, name, progress)
 
-    def backup_to_file(self, filename, pages=None, name=None, progress=None,
-                       src_name=None):
+    def backup_to_file(self, filename, pages=None, name=None, progress=None):
         return self.connection().backup_to_file(filename, pages, name,
-                                                progress, src_name)
+                                                progress)
 
     # Status properties.
     memory_used = __status__(cysqlite.SQLITE_STATUS_MEMORY_USED)
