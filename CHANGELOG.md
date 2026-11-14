@@ -7,6 +7,9 @@ https://github.com/coleifer/peewee/releases
 
 ## master
 
+* Preserve whitespace in string literals when the SQLite migrator rebuilds a
+  table, so defaults and CHECK constraints retain their original values.
+
 * Clear `after_commit` callbacks registered on a savepoint if that savepoint is
   then rolled-back.
 * Re-create triggers during sqlite migrator table rebuilds.
