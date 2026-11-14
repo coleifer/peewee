@@ -1197,6 +1197,72 @@ class TestSqliteColumnNameRegression(ModelTestCase):
     database = get_in_memory_db()
     requires = [BadNames, HasChecks]
 
+    def test_rebuild_preserves_default_whitespace(self):
+        db = self.database
+        # Include both formatting outside literals and whitespace inside them.
+        for value in ('two  spaces', 'tab\tvalue', 'line\nbreak',
+                      "a  'quoted'  value", 'carriage\rreturn', 'vertical\vtab',
+                      'nonbreaking\u00a0space'):
+            with self.subTest(value=value):
+                literal = "'" + value.replace("'", "''") + "'"
+                db.execute_sql(
+                    'CREATE TABLE whitespace_default (\n'
+                    '    id INTEGER PRIMARY KEY,\n'
+                    '    label TEXT DEFAULT %s,\n'
+                    '    extra TEXT NOT NULL\n)' % literal)
+                try:
+                    db.execute_sql(
+                        "INSERT INTO whitespace_default (extra) VALUES ('x')")
+                    migrator = SqliteMigrator(db)
+                    migrate(migrator.drop_not_null(
+                        'whitespace_default', 'extra', legacy=True))
+                    db.execute_sql(
+                        'INSERT INTO whitespace_default (extra) VALUES (NULL)')
+                    self.assertEqual(db.execute_sql(
+                        'SELECT label FROM whitespace_default ORDER BY id'
+                    ).fetchall(), [(value,), (value,)])
+                finally:
+                    db.execute_sql('DROP TABLE whitespace_default')
+
+    def test_rebuild_preserves_check_literal_whitespace(self):
+        db = self.database
+        db.execute_sql(
+            "CREATE TABLE whitespace_check (id INTEGER PRIMARY KEY, "
+            "label TEXT CHECK (label = 'two  spaces'), extra TEXT NOT NULL)")
+        try:
+            migrator = SqliteMigrator(db)
+            migrate(migrator.drop_not_null(
+                'whitespace_check', 'extra', legacy=True))
+            try:
+                db.execute_sql(
+                    'INSERT INTO whitespace_check (label) VALUES (?)',
+                    ('two  spaces',))
+            except IntegrityError:
+                self.fail('Rebuild changed the CHECK string literal')
+            self.assertRaises(IntegrityError, db.execute_sql,
+                'INSERT INTO whitespace_check (label) VALUES (?)',
+                ('two spaces',))
+        finally:
+            db.execute_sql('DROP TABLE whitespace_check')
+
+    def test_rebuild_normalizes_unquoted_constraint_whitespace(self):
+        db = self.database
+        db.execute_sql('CREATE TABLE whitespace_parent (id INTEGER PRIMARY KEY)')
+        db.execute_sql(
+            'CREATE TABLE whitespace_child (id INTEGER PRIMARY KEY, '
+            'parent_id INTEGER, extra TEXT NOT NULL, '
+            'FOREIGN\nKEY (parent_id) REFERENCES whitespace_parent (id))')
+        try:
+            migrate(SqliteMigrator(db).drop_not_null(
+                'whitespace_child', 'extra', legacy=True))
+            fks = db.get_foreign_keys('whitespace_child')
+            self.assertEqual([(fk.column, fk.dest_table, fk.dest_column)
+                              for fk in fks],
+                             [('parent_id', 'whitespace_parent', 'id')])
+        finally:
+            db.execute_sql('DROP TABLE whitespace_child')
+            db.execute_sql('DROP TABLE whitespace_parent')
+
     def test_sqlite_check_constraints(self):
         HasChecks.create(key='k1', value=1)
 
