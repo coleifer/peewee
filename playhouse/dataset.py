@@ -474,6 +474,9 @@ class CSVImporter(Importer):
                 # CSV has no null, treat empty as NULL for non-text fields.
                 if value == '' and not isinstance(field, _StringField):
                     value = None
+                # bool("False") is True, so read the text csv.writer wrote.
+                elif isinstance(field, BooleanField):
+                    value = value.lower() in ('1', 't', 'true')
                 obj[field.name] = self._import_value(field, value)
 
             self.table.insert(**obj)

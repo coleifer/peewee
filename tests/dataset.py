@@ -37,7 +37,6 @@ class Bin(TestModel):
     data = BlobField()
     ts = DateTimeField()
 
-
 class TestDataSet(ModelTestCase):
     database = db
     requires = [User, Note, Category]
@@ -586,6 +585,24 @@ class TestDataSet(ModelTestCase):
             'id': 1,
             'data': b'\xff\x00\xcc',
             'ts': ts}])
+
+    def test_freeze_thaw_booleans_csv(self):
+        # A column declared BOOLEAN, as other tools create it.
+        self.database.execute_sql('CREATE TABLE "task" (id INTEGER PRIMARY '
+                                  'KEY, title TEXT, done BOOLEAN NOT NULL)')
+        self.dataset.update_cache()
+        Task = self.dataset['task']
+        Task.insert(title='a', done=False)
+        Task.insert(title='b', done=True)
+
+        buf = StringIO()
+        self.dataset.freeze(Task.all(), 'csv', file_obj=buf)
+        Task.delete()
+        buf.seek(0)
+        Task.thaw(format='csv', file_obj=buf)
+
+        self.assertEqual([(row['title'], row['done']) for row in Task.all()],
+                         [('a', False), ('b', True)])
 
     def test_table_column_creation(self):
         table = self.dataset['people']
