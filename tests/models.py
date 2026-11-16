@@ -2710,6 +2710,31 @@ class Shape(TestModel):
 class ShapeDetail(TestModel):
     shape = ForeignKeyField(Shape)
 
+class DPUser(TestModel):
+    name = TextField()
+class DPMessage(TestModel):
+    sender = ForeignKeyField(DPUser)
+    recipient = ForeignKeyField(DPUser)
+class DPAttachment(TestModel):
+    message = ForeignKeyField(DPMessage)
+class DPCustomer(TestModel):
+    name = TextField()
+class DPOrder(TestModel):
+    customer = ForeignKeyField(DPCustomer)
+class DPItem(TestModel):
+    order = ForeignKeyField(DPOrder)
+class DPReview(TestModel):
+    customer = ForeignKeyField(DPCustomer)
+    item = ForeignKeyField(DPItem)
+
+class DPOrg(TestModel):
+    name = TextField()
+class DPTeam(TestModel):
+    org = ForeignKeyField(DPOrg)
+    code = CharField(unique=True)
+class DPMember(TestModel):
+    team = ForeignKeyField(DPTeam, field=DPTeam.code)
+
 
 class TestDeleteInstanceDFS(ModelTestCase):
     @requires_models(Character, Shape, ShapeDetail)
@@ -2760,18 +2785,26 @@ class TestDeleteInstanceDFS(ModelTestCase):
 
         self.assertHistory(9, [
             ('DELETE FROM "pp" WHERE ('
-             '"pp"."ps_id" IN (SELECT "t1"."id" FROM "ps" AS "t1" WHERE ('
+             '"pp"."ps_id" IN (SELECT "t1"."id" FROM "ps" AS "t1" WHERE (('
              '"t1"."p_id" IN (SELECT "t2"."id" FROM "p" AS "t2" WHERE ('
-             '"t2"."i_id" = ?)))))', [i1.id]),
+             '"t2"."i_id" = ?))) OR ('
+             '"t1"."s_id" IN (SELECT "t3"."id" FROM "s" AS "t3" WHERE ('
+             '"t3"."i_id" = ?))))))', [i1.id, i1.id]),
             ('UPDATE "ox" SET "o_id" = ? WHERE ('
-             '"ox"."o_id" IN (SELECT "t1"."id" FROM "o" AS "t1" WHERE ('
-             '"t1"."ps_id" IN (SELECT "t2"."id" FROM "ps" AS "t2" WHERE ('
+             '"ox"."o_id" IN (SELECT "t1"."id" FROM "o" AS "t1" WHERE (('
+             '"t1"."ps_id" IN (SELECT "t2"."id" FROM "ps" AS "t2" WHERE (('
              '"t2"."p_id" IN (SELECT "t3"."id" FROM "p" AS "t3" WHERE ('
-             '"t3"."i_id" = ?)))))))', [None, i1.id]),
+             '"t3"."i_id" = ?))) OR ('
+             '"t2"."s_id" IN (SELECT "t4"."id" FROM "s" AS "t4" WHERE ('
+             '"t4"."i_id" = ?)))))) OR ('
+             '"t1"."s_id" IN (SELECT "t4"."id" FROM "s" AS "t4" WHERE ('
+             '"t4"."i_id" = ?))))))', [None, i1.id, i1.id, i1.id]),
             ('DELETE FROM "o" WHERE ('
-             '"o"."ps_id" IN (SELECT "t1"."id" FROM "ps" AS "t1" WHERE ('
+             '"o"."ps_id" IN (SELECT "t1"."id" FROM "ps" AS "t1" WHERE (('
              '"t1"."p_id" IN (SELECT "t2"."id" FROM "p" AS "t2" WHERE ('
-             '"t2"."i_id" = ?)))))', [i1.id]),
+             '"t2"."i_id" = ?))) OR ('
+             '"t1"."s_id" IN (SELECT "t3"."id" FROM "s" AS "t3" WHERE ('
+             '"t3"."i_id" = ?))))))', [i1.id, i1.id]),
             ('DELETE FROM "o" WHERE ('
              '"o"."s_id" IN (SELECT "t1"."id" FROM "s" AS "t1" WHERE ('
              '"t1"."i_id" = ?)))', [i1.id]),
@@ -2790,6 +2823,41 @@ class TestDeleteInstanceDFS(ModelTestCase):
         counts = {OX: 2}
         for m in models:
             self.assertEqual(m.select().count(), counts.get(m, 1))
+
+    @requires_models(DPUser, DPMessage, DPAttachment)
+    def test_delete_instance_two_paths(self):
+        # Attachments of messages huey sent and of messages huey received.
+        huey, zaizee = [DPUser.create(name=n) for n in ('huey', 'zaizee')]
+        for sender, recipient in ((huey, zaizee), (zaizee, huey)):
+            msg = DPMessage.create(sender=sender, recipient=recipient)
+            DPAttachment.create(message=msg)
+
+        huey.delete_instance(recursive=True)
+        self.assertEqual([u.name for u in DPUser.select()], ['zaizee'])
+        self.assertEqual(DPMessage.select().count(), 0)
+        self.assertEqual(DPAttachment.select().count(), 0)
+
+    @requires_models(DPCustomer, DPOrder, DPItem, DPReview)
+    def test_delete_instance_paths_of_different_depth(self):
+        # mickey's review of huey's item is reached through the item.
+        huey, mickey = [DPCustomer.create(name=n) for n in ('huey', 'mickey')]
+        item = DPItem.create(order=DPOrder.create(customer=huey))
+        DPReview.create(customer=mickey, item=item)
+        DPReview.create(customer=huey, item=item)
+
+        huey.delete_instance(recursive=True)
+        self.assertEqual([c.name for c in DPCustomer.select()], ['mickey'])
+        for m in (DPOrder, DPItem, DPReview):
+            self.assertEqual(m.select().count(), 0)
+
+    @requires_models(DPOrg, DPTeam, DPMember)
+    def test_delete_instance_non_pk_fk(self):
+        o1, o2 = [DPOrg.create(name=n) for n in ('o1', 'o2')]
+        DPMember.create(team=DPTeam.create(org=o1, code='red'))
+        DPMember.create(team=DPTeam.create(org=o2, code='blue'))
+
+        o1.delete_instance(recursive=True)
+        self.assertEqual([m.team_id for m in DPMember.select()], ['blue'])
 
 
 class DepParent(TestModel):

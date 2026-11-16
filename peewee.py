@@ -8067,37 +8067,39 @@ class Model(Node, metaclass=ModelBase):
         return [f.name for f in self.dirty_fields]
 
     def dependencies(self, search_nullable=True, exclude_null_children=False):
-        model_class = type(self)
-        stack = [(type(self), None)]
-        queries = {}
-        seen = set()
+        root = type(self)
+        models = set(m for _, m, _ in root._meta.model_graph(refs=False))
 
-        while stack:
-            klass, query = stack.pop()
-            if klass in seen:
-                continue
-            seen.add(klass)
-            for fk, rel_model in klass._meta.backrefs.items():
-                if rel_model is model_class or query is None:
-                    node = (fk == self.__data__[fk.rel_field.name])
+        exprs = {}
+        plan = []
+        for model in sort_models(models):
+            nodes = []
+            for fk, parent in model._meta.refs.items():
+                if fk.null and not search_nullable:
+                    continue
+                elif parent is root:
+                    node = fk == self.__data__[fk.rel_field.name]
+                elif parent in exprs:
+                    node = fk << (parent.select(fk.rel_field)
+                                  .where(exprs[parent]))
                 else:
-                    node = fk << query
-                subquery = (rel_model.select(rel_model._meta.primary_key)
-                            .where(node))
-                if not fk.null or search_nullable:
-                    queries.setdefault(rel_model, []).append((node, fk))
-                    # A nullable child is updated, not deleted, so skip its
-                    # children but leave it unseen for non-nullable paths.
-                    if not (fk.null and exclude_null_children):
-                        stack.append((rel_model, subquery))
+                    continue  # Parent loses no rows, or self-ref/cycle.
+                nodes.append((node, fk))
+            plan.append(nodes)
 
-        for m in reversed(sort_models(list(queries))):
-            for sq, q in queries.get(m, ()):
-                yield sq, q
+            deleted = [node for node, fk in nodes
+                       if not (fk.null and exclude_null_children)]
+            if deleted:
+                exprs[model] = reduce(operator.or_, deleted)
+
+        for nodes in reversed(plan):
+            for node, fk in nodes:
+                yield node, fk
 
     def delete_instance(self, recursive=False, delete_nullable=False):
         if recursive:
-            for query, fk in self.dependencies(exclude_null_children=not delete_nullable):
+            deps = self.dependencies(exclude_null_children=not delete_nullable)
+            for query, fk in deps:
                 model = fk.model
                 if fk.null and not delete_nullable:
                     model.update(**{fk.name: None}).where(query).execute()
