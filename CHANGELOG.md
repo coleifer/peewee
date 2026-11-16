@@ -11,8 +11,7 @@ https://github.com/coleifer/peewee/releases
   then rolled-back.
 * Re-create triggers during sqlite migrator table rebuilds.
 * Booleans inlined into SQL render as `TRUE` / `FALSE` instead of `1` / `0`.
-  Fixes partial indexes on a boolean under psycopg3. Also changes the output
-  of `query_to_string()`.
+  Fixes partial indexes on a boolean under psycopg3.
 * `SchemaMigrator.add_column_default()` inlines its value under psycopg3,
   which cannot bind parameters in DDL.
 
