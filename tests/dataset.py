@@ -666,6 +666,11 @@ class TestDataSet(ModelTestCase):
         row, = [r for r in self.dataset['people'].all() if r['id'] == 10]
         self.assertEqual(row['name'], 'nuggie')
 
+    def test_import_csv_blank_lines(self):
+        buf = StringIO('\nname,age\nhuey,1\n\nmickey,2\n\n')
+        count = self.dataset.thaw('people', 'csv', file_obj=buf)
+        self.assertEqual(count, 2)
+
     def test_self_referential_fk(self):
         self.dataset._database.execute_sql(
             'CREATE TABLE selfref ('

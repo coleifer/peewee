@@ -443,7 +443,7 @@ class JSONImporter(Importer):
 class CSVImporter(Importer):
     def load(self, file_obj, header=True, **kwargs):
         count = 0
-        reader = csv.reader(file_obj, **kwargs)
+        reader = (row for row in csv.reader(file_obj, **kwargs) if row)
 
         header_fields = []
         if header:
