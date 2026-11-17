@@ -448,7 +448,7 @@ class CSVImporter(Importer):
         header_fields = []
         if header:
             try:
-                header_keys = next(reader)
+                header_keys = next(row for row in reader if row)
             except StopIteration:
                 return count
 
@@ -464,6 +464,8 @@ class CSVImporter(Importer):
             return count
 
         for row in reader:
+            if not row:
+                continue  # Blank line.
             obj = {}
             for idx, name, field in header_fields:
                 value = row[idx]

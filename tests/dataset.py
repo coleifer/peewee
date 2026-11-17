@@ -666,6 +666,21 @@ class TestDataSet(ModelTestCase):
         row, = [r for r in self.dataset['people'].all() if r['id'] == 10]
         self.assertEqual(row['name'], 'nuggie')
 
+    def test_import_csv_blank_lines(self):
+        table = self.dataset['people']
+        table.insert(name='charlie')
+        table.delete(name='charlie')
+        data = '\r\nname,age\r\n\r\nhuey,1\r\n\r\nmickey,2\r\n\r\n'
+        count = self.dataset.thaw('people', 'csv', file_obj=StringIO(data))
+        self.assertEqual(count, 2)
+        rows = sorted((r['name'], r['age']) for r in table.all())
+        self.assertEqual(rows, [('huey', '1'), ('mickey', '2')])
+
+        # Without a header row, a blank line is skipped too.
+        buf = StringIO('20,zaizee,3\r\n\r\n21,nuggie,4\r\n')
+        count = self.dataset.thaw('people', 'csv', file_obj=buf, header=False)
+        self.assertEqual(count, 2)
+
     def test_self_referential_fk(self):
         self.dataset._database.execute_sql(
             'CREATE TABLE selfref ('
