@@ -106,6 +106,13 @@ class TestCursorWrapper(ModelTestCase):
             self.assertEqual(cursor[4].username, '4')
             self.assertEqual(cursor[-1].username, '4')
 
+    def test_negative_slices(self):
+        for i in range(10): User.create(username=str(i))
+        names = [str(i) for i in range(10)]
+        for key in (slice(-5, 8), slice(8, 3, -1), slice(None, 3, -1)):
+            query = User.select().order_by(User.id)
+            self.assertEqual([u.username for u in query[key]], names[key])
+
     def test_iterator(self):
         for i in range(3): User.create(username=str(i))
 

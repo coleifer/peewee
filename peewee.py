@@ -2227,14 +2227,7 @@ class BaseQuery(Node):
 
     def __getitem__(self, value):
         self._ensure_execution()
-        if isinstance(value, slice):
-            index = value.stop
-        else:
-            index = value
-        if index is not None:
-            index = index + 1 if index >= 0 else 0
-        self._cursor_wrapper.fill_cache(index)
-        return self._cursor_wrapper.row_cache[value]
+        return self._cursor_wrapper[value]
 
     def __len__(self):
         self._ensure_execution()
@@ -5376,18 +5369,17 @@ class CursorWrapper(object):
 
     def __getitem__(self, item):
         if isinstance(item, slice):
-            stop = item.stop
-            if stop is None or stop < 0:
+            start, stop, step = item.start or 0, item.stop, item.step or 1
+            if stop is None or start < 0 or stop < 0 or step < 0:
                 self.fill_cache()
-            else:
+            elif stop:
                 self.fill_cache(stop)
-            return self.row_cache[item]
         elif isinstance(item, int):
             self.fill_cache(item + 1 if item >= 0 else 0)
-            return self.row_cache[item]
         else:
             raise ValueError('CursorWrapper only supports integer and slice '
                              'indexes.')
+        return self.row_cache[item]
 
     def __len__(self):
         self.fill_cache()
