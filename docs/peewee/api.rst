@@ -5776,7 +5776,9 @@ Queries
 
       :param value: Either an integer index or a slice.
 
-      Retrieve a row or range of rows from the result-set.
+      Retrieve a row or range of rows from the result-set. Negative indexes,
+      negative slice bounds, and negative slice steps load the full result-set
+      into the row cache before applying Python's indexing or slicing rules.
 
    .. method:: __len__()
 

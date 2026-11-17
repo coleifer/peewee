@@ -106,6 +106,46 @@ class TestCursorWrapper(ModelTestCase):
             self.assertEqual(cursor[4].username, '4')
             self.assertEqual(cursor[-1].username, '4')
 
+    def test_negative_slices(self):
+        User.insert_many([{'username': str(i)} for i in range(10)]).execute()
+        cases = [
+            slice(-5, 8), slice(-3, 5), slice(None, 3, -1),
+            slice(8, 3, -1), slice(7, 1, -2), slice(-2, 2, -2),
+            slice(None, None, -1), slice(2, -2), slice(2, 5),
+        ]
+        expected = [(str(i),) for i in range(10)]
+        for route in ('select', 'raw', 'cursor'):
+            for prefill in (0, 2, 8, 10):
+                for key in cases:
+                    if route == 'raw':
+                        query = User.raw(
+                            'SELECT username FROM users ORDER BY id').tuples()
+                    else:
+                        query = User.select(User.username).order_by(
+                            User.id).tuples()
+                    cursor = query.execute()
+                    if prefill:
+                        cursor.fill_cache(prefill)
+                    target = cursor if route == 'cursor' else query
+                    with self.subTest(route=route, prefill=prefill, key=key):
+                        with self.assertQueryCount(0):
+                            self.assertEqual(target[key], expected[key])
+                            self.assertEqual(list(query), expected)
+
+    def test_bounded_positive_slice_stays_lazy(self):
+        User.insert_many([{'username': str(i)} for i in range(10)]).execute()
+        for use_cursor in (False, True):
+            query = User.select(User.username).order_by(User.id).tuples()
+            cursor = query.execute()
+            target = cursor if use_cursor else query
+            self.assertEqual(target[:0], [])
+            self.assertFalse(cursor.populated)
+            self.assertLessEqual(len(cursor.row_cache), 1)
+            self.assertEqual(target[2:5], [('2',), ('3',), ('4',)])
+            self.assertFalse(cursor.populated)
+            self.assertLessEqual(len(cursor.row_cache), 6)
+            self.assertEqual(list(query), [(str(i),) for i in range(10)])
+
     def test_iterator(self):
         for i in range(3): User.create(username=str(i))
 
