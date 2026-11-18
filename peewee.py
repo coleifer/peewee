@@ -1015,6 +1015,15 @@ class _BoundTableContext(_callable_context_manager):
             self.table._model.bind(self._orig_database)
 
 
+def _merge_column_kwargs(table, data, kwargs):
+    if kwargs:
+        data = {} if data is None else data
+        src = table if table._columns else table.c
+        for key, value in kwargs.items():
+            data[getattr(src, key)] = value
+    return data
+
+
 class Table(_HashableSource, BaseTable):
     def __init__(self, name, columns=None, primary_key=None, schema=None,
                  alias=None, _model=None, _database=None):
@@ -1069,11 +1078,7 @@ class Table(_HashableSource, BaseTable):
 
     @__bind_database__
     def insert(self, insert=None, columns=None, **kwargs):
-        if kwargs:
-            insert = {} if insert is None else insert
-            src = self if self._columns else self.c
-            for key, value in kwargs.items():
-                insert[getattr(src, key)] = value
+        insert = _merge_column_kwargs(self, insert, kwargs)
         return Insert(self, insert=insert, columns=columns)
 
     @__bind_database__
@@ -1084,12 +1089,7 @@ class Table(_HashableSource, BaseTable):
 
     @__bind_database__
     def update(self, update=None, **kwargs):
-        if kwargs:
-            update = {} if update is None else update
-            src = self if self._columns else self.c
-            for key, value in kwargs.items():
-                update[getattr(src, key)] = value
-        return Update(self, update=update)
+        return Update(self, update=_merge_column_kwargs(self, update, kwargs))
 
     @__bind_database__
     def delete(self):
@@ -3402,8 +3402,7 @@ class PostgresqlJSONMethods(BaseJSONMethods):
         # jsonb_set in a CASE.
         return Case(None, [
             (self.extract(field, keys).is_null(),
-             fn.jsonb_set(field, self._path_array(keys),
-                          self._jsonb_wrap(field, value), True))
+             self.set(field, keys, value))
         ], field)
 
     def replace(self, field, keys, value):
@@ -3539,24 +3538,23 @@ class MySQLJSONMethods(BaseJSONMethods):
         return Expression(call, OP.EQ, 1)
 
     def contained_by(self, field, keys, value):
-        lhs = self.extract(field, keys) if keys else field
-        call = fn.JSON_CONTAINS(self._contains_value(field, value), lhs)
+        call = fn.JSON_CONTAINS(self._contains_value(field, value),
+                                self.extract(field, keys))
+        return Expression(call, OP.EQ, 1)
+
+    def _contains_path(self, field, keys, key_list, one_or_all):
+        paths = [self._path(tuple(keys) + (k,)) for k in key_list]
+        call = fn.JSON_CONTAINS_PATH(field, one_or_all, *paths)
         return Expression(call, OP.EQ, 1)
 
     def has_key(self, field, keys, key):
-        path = self._path(tuple(keys) + (key,))
-        call = fn.JSON_CONTAINS_PATH(field, 'one', path)
-        return Expression(call, OP.EQ, 1)
+        return self._contains_path(field, keys, (key,), 'one')
 
     def has_keys(self, field, keys, key_list):
-        paths = [self._path(tuple(keys) + (k,)) for k in key_list]
-        call = fn.JSON_CONTAINS_PATH(field, 'all', *paths)
-        return Expression(call, OP.EQ, 1)
+        return self._contains_path(field, keys, key_list, 'all')
 
     def has_any_keys(self, field, keys, key_list):
-        paths = [self._path(tuple(keys) + (k,)) for k in key_list]
-        call = fn.JSON_CONTAINS_PATH(field, 'one', *paths)
-        return Expression(call, OP.EQ, 1)
+        return self._contains_path(field, keys, key_list, 'one')
 
 
 # DB-API 2.0 EXCEPTIONS.
@@ -4429,14 +4427,10 @@ class SqliteDatabase(Database):
         index_to_sql = dict(cursor.fetchall())
 
         # Determine which indexes have a unique constraint.
-        unique_indexes = set()
         cursor = self.execute_sql('PRAGMA "%s".index_list("%s")' %
                                   (schema, qesc(table)))
-        for row in cursor.fetchall():
-            name = row[1]
-            is_unique = int(row[2]) == 1
-            if is_unique:
-                unique_indexes.add(name)
+        unique_indexes = set(row[1] for row in cursor.fetchall()
+                             if int(row[2]) == 1)
 
         # Retrieve the indexed columns.
         index_columns = {}
@@ -5095,8 +5089,7 @@ class MySQLDatabase(Database):
         for row in cursor.fetchall():
             if not row[1]:
                 unique.add(row[2])
-            indexes.setdefault(row[2], [])
-            indexes[row[2]].append(row[4])
+            indexes.setdefault(row[2], []).append(row[4])
         return [IndexMetadata(name, None, indexes[name], name in unique, table)
                 for name in indexes]
 
@@ -5124,8 +5117,7 @@ class MySQLDatabase(Database):
     def get_primary_keys(self, table, schema=None):
         cursor = self.execute_sql('SHOW INDEX FROM %s' %
                                   self._show_index_target(table, schema))
-        return [row[4] for row in
-                filter(lambda row: row[2] == 'PRIMARY', cursor.fetchall())]
+        return [row[4] for row in cursor.fetchall() if row[2] == 'PRIMARY']
 
     def get_foreign_keys(self, table, schema=None):
         query = """
@@ -5181,11 +5173,7 @@ class MySQLDatabase(Database):
 
             for column in on_conflict._preserve:
                 entity = ensure_entity(column)
-                expression = NodeList((
-                    ensure_entity(column),
-                    SQL('='),
-                    VALUE_FN(entity)))
-                updates.append(expression)
+                updates.append(NodeList((entity, SQL('='), VALUE_FN(entity))))
 
         if on_conflict._update:
             updates.extend(self._conflict_update_items(on_conflict, query,
@@ -5996,11 +5984,8 @@ class BigBitFieldData(object):
             data = other
         else:
             raise ValueError('Incompatible data-type')
-        buf = bytearray(b'\x00' * max(len(self), len(other)))
         it = itertools.zip_longest(self._buffer, data, fillvalue=0)
-        for i, (a, b) in enumerate(it):
-            buf[i] = op(a, b)
-        return buf
+        return bytearray(op(a, b) for a, b in it)
 
     def __and__(self, other):
         return self._bitwise_op(other, operator.and_)
@@ -6237,9 +6222,7 @@ class TimeField(_BaseFormattedField):
 def _timestamp_date_part(date_part):
     def dec(self):
         db = self.model._meta.database
-        expr = ((self / Value(self.resolution, converter=False))
-                if self.resolution > 1 else self)
-        return db.extract_date(date_part, db.from_timestamp(expr))
+        return db.extract_date(date_part, self.from_timestamp())
     return dec
 
 
@@ -7557,11 +7540,7 @@ class Metadata(object):
 
     def get_database_instance(self):
         db = self.database
-        if db is None:
-            return
-        if isinstance(db, Proxy):
-            return db.obj if db.obj is not None else None
-        return db
+        return db.obj if isinstance(db, Proxy) else db
 
 
 class SubclassAwareMetadata(Metadata):
@@ -7893,12 +7872,9 @@ class Model(Node, metaclass=ModelBase):
                     if not isinstance(value, Node):
                         value = field.case_value(value)
                     accum.append((pk.to_value(model._pk), value))
-                case = Case(pk, accum)
-                update[field] = case
+                update[field] = Case(pk, accum)
 
-            n += (cls.update(update)
-                  .where(cls._meta.primary_key.in_(id_list))
-                  .execute())
+            n += cls.update(update).where(pk.in_(id_list)).execute()
         return n
 
     @classmethod
@@ -8666,8 +8642,8 @@ class ModelSelect(BaseModelSelect, Select):
                 src, dest, on, attr)
             self._join_ctx = join_ctx
             if attr:
-                self._joins.setdefault(src, [])
-                self._joins[src].append((dest, attr, constructor, join_type))
+                self._joins.setdefault(src, []).append(
+                    (dest, attr, constructor, join_type))
         elif on is not None:
             raise ValueError('Cannot specify on clause with cross join.')
 
@@ -8885,23 +8861,18 @@ class ManyToManyQuery(ModelSelect):
         src_id = getattr(self._instance, self._src_attr)
         if isinstance(value, SelectQuery):
             column = getattr(value.model, self._dest_attr)
-            subquery = value.columns(column)
-            return (self._accessor.through_model
-                    .delete()
-                    .where(
-                        (self._accessor.dest_fk << subquery) &
-                        (self._accessor.src_fk == src_id))
-                    .execute())
+            dest_ids = value.columns(column)
         else:
             value = ensure_tuple(value)
             if not value:
                 return
-            return (self._accessor.through_model
-                    .delete()
-                    .where(
-                        (self._accessor.dest_fk << self._id_list(value)) &
-                        (self._accessor.src_fk == src_id))
-                    .execute())
+            dest_ids = self._id_list(value)
+        return (self._accessor.through_model
+                .delete()
+                .where(
+                    (self._accessor.dest_fk << dest_ids) &
+                    (self._accessor.src_fk == src_id))
+                .execute())
 
     def clear(self):
         src_id = getattr(self._instance, self._src_attr)
@@ -9310,8 +9281,7 @@ class PrefetchQuery(collections.namedtuple('_PrefetchQuery', (
             if self.is_backref:
                 id_map[key] = instance
             else:
-                id_map.setdefault(key, [])
-                id_map[key].append(instance)
+                id_map.setdefault(key, []).append(instance)
 
 
 def _parent_keys(parent_query, cols):
@@ -9421,11 +9391,9 @@ def prefetch(sq, *subqueries, **kwargs):
         query_model = pq.model
         if pq.fields:
             for rel_model in pq.rel_models:
-                rel_map.setdefault(rel_model, [])
-                rel_map[rel_model].append(pq)
+                rel_map.setdefault(rel_model, []).append(pq)
 
-        deps.setdefault(query_model, {})
-        id_map = deps[query_model]
+        id_map = deps.setdefault(query_model, {})
         has_relations = bool(rel_map.get(query_model))
 
         for instance in pq.query:
