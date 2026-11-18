@@ -201,8 +201,6 @@ def get_connect_kwargs(options):
     return kwargs
 
 def main():
-    raw_argv = sys.argv
-
     parser = get_option_parser()
     options, args = parser.parse_args()
 
@@ -225,8 +223,7 @@ def main():
 
     introspector = make_introspector(engine, database, **connect)
     if options.info:
-        cmd_line = ' '.join(raw_argv[1:])
-        print_header(cmd_line, introspector)
+        print_header(' '.join(sys.argv[1:]), introspector)
 
     print_models(introspector, tables, options.preserve_order, options.views,
                  options.ignore_unknown, not options.legacy_naming)
