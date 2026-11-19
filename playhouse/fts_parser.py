@@ -151,7 +151,7 @@ class _Parser:
         if not positive:
             return None
         node = positive[0] if len(positive) == 1 else ('and', positive)
-        return ('not', node, negative) if negative else node
+        return ('not', [node] + negative) if negative else node
 
     def _parse_not(self):
         node, negate = self._parse_atom()
@@ -159,7 +159,7 @@ class _Parser:
             self.pos += 1
             right, _ = self._parse_atom()
             if node and right:
-                node = ('not', node, [right])
+                node = ('not', [node, right])
         return node, negate
 
     def _parse_atom(self):
@@ -193,15 +193,10 @@ class _Parser:
             return node[1]
         if kind == 'col':
             sql = '%s: %s' % (node[1], self._render(node[2], True))
-            return '(%s)' % sql if nested else sql
-        if kind == 'and':
-            sql = ' AND '.join(self._render(n, True) for n in node[1])
-        elif kind == 'or':
-            sql = ' OR '.join(self._render(n, True) for n in node[1])
         else:
-            sql = '%s NOT %s' % (
-                self._render(node[1], True),
-                ' NOT '.join(self._render(n, True) for n in node[2]))
+            # and / or / not all carry a list of operands.
+            glue = ' %s ' % kind.upper()
+            sql = glue.join(self._render(n, True) for n in node[1])
         return '(%s)' % sql if nested else sql
 
     def translate(self):

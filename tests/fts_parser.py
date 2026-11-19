@@ -62,11 +62,20 @@ class TestWebQuery(ModelTestCase):
         ('aa bb -cc -dd', '("aa" AND "bb") NOT "cc" NOT "dd"'),
         ('aa OR -bb', '"aa"'),
 
+        # An exclusion applies wherever it is written. A NOT whose left
+        # side is itself a NOT stays grouped.
+        ('-aa bb', '"bb" NOT "aa"'),
+        ('aa -bb cc', '("aa" AND "cc") NOT "bb"'),
+        ('aa NOT bb NOT cc', '("aa" NOT "bb") NOT "cc"'),
+        ('aa NOT bb -cc', '("aa" NOT "bb") NOT "cc"'),
+
         # Grouping. fts5 only allows implicit AND between phrases, so an
         # AND involving a group is always written out.
         ('(aa OR bb) cc', '("aa" OR "bb") AND "cc"'),
         ('(aa OR bb) NOT cc', '("aa" OR "bb") NOT "cc"'),
         ('aa OR (bb NOT cc)', '"aa" OR ("bb" NOT "cc")'),
+        ('aa (bb -cc)', '"aa" AND ("bb" NOT "cc")'),
+        ('aa -(bb OR cc)', '"aa" NOT ("bb" OR "cc")'),
         ('aa bb OR cc dd', '("aa" AND "bb") OR ("cc" AND "dd")'),
         ('((aa))', '"aa"'),
 
@@ -77,6 +86,7 @@ class TestWebQuery(ModelTestCase):
         ('title:"cc dd"', '"title": "cc dd"'),
         ('title:ba*', '"title": "ba"*'),
         ('title:(aa OR bb)', '"title": ("aa" OR "bb")'),
+        ('title:(aa -bb)', '"title": ("aa" NOT "bb")'),
         ('title:(data:aa)', '"title": ("data": "aa")'),
         ('title:aa bb', '("title": "aa") AND "bb"'),
         ('aa -title:bb', '"aa" NOT ("title": "bb")'),
@@ -178,6 +188,10 @@ class TestWebQuery(ModelTestCase):
         self.assertEqual(search('aa bb'), [1, 4])
         self.assertEqual(search('aa OR ee'), [1, 3, 4])
         self.assertEqual(search('aa -dd'), [1])
+        self.assertEqual(search('-dd aa'), [1])
+        self.assertEqual(search('dd -aa -nug'), [2, 3])
+        self.assertEqual(search('dd -(aa OR baze)'), [2])
+        self.assertEqual(search('title:(aa -foo)'), [4])
         self.assertEqual(search('"cc dd"'), [2, 3])
         self.assertEqual(search('ba*'), [2, 3])
         self.assertEqual(search('title: aa'), [1, 4])
