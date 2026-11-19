@@ -313,10 +313,7 @@ class Table(object):
         return self._query(**query).dicts()
 
     def find_one(self, **query):
-        try:
-            return self.find(**query).get()
-        except self.model_class.DoesNotExist:
-            return None
+        return self.find(**query).get_or_none()
 
     def all(self):
         return self.find()
@@ -378,7 +375,7 @@ class CSVExporter(Exporter):
         tuples = self.query.tuples().execute()
         tuples.initialize()
         if header and getattr(tuples, 'columns', None):
-            writer.writerow([column for column in tuples.columns])
+            writer.writerow(tuples.columns)
         for row in tuples:
             writer.writerow([self._export_value(value) for value in row])
 
