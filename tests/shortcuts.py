@@ -22,6 +22,9 @@ class User(TestModel):
     def name_hash(self):
         return sum(map(ord, self.username)) % 10
 
+    def name_upper(self):
+        return self.username.upper()
+
 class Tweet(TestModel):
     user = ForeignKeyField(User, backref='tweets')
     content = TextField()
@@ -465,6 +468,14 @@ class TestModelToDict(ModelTestCase):
                 'username': 'peewee',
                 'name_hash': 5})
 
+        # A method is called, and its return value used.
+        with self.assertQueryCount(0):
+            extra = ['name_upper']
+            self.assertEqual(model_to_dict(self.user, extra_attrs=extra), {
+                'id': self.user.id,
+                'username': 'peewee',
+                'name_upper': 'PEEWEE'})
+
         with self.assertQueryCount(0):
             self.assertRaises(AttributeError, model_to_dict, self.user,
                               extra_attrs=['xx'])
@@ -724,6 +735,16 @@ class TestReconnectMixin(DatabaseTestCase):
     def test_reconnect_mixin_interface_error(self):
         self.database._reset_mock()
         self.database._reconnect_exc = InterfaceError("(0, '')")
+
+        curs = self.database.execute_sql('select 1 + 1')
+        self.assertEqual(curs.fetchone(), (2,))
+        self.assertEqual(self.database._close_counter, 1)
+
+    def test_reconnect_mixin_error_case(self):
+        # Error fragments match without regard to case.
+        self.database._reset_mock()
+        self.database._reconnect_exc = OperationalError(
+            'MySQL Connection not available.')
 
         curs = self.database.execute_sql('select 1 + 1')
         self.assertEqual(curs.fetchone(), (2,))

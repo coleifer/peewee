@@ -2091,6 +2091,20 @@ class TestInsertQuery(BaseTestCase):
             '"person"."name", '
             'LENGTH("person"."name") AS "ulen"'), ['huey'])
 
+    def test_insert_data_and_kwargs(self):
+        # Keyword arguments are merged into the data, whether or not the
+        # table declares its columns.
+        query = User.insert({User.c.username: 'huey'}, admin=True)
+        self.assertSQL(query, (
+            'INSERT INTO "users" ("admin", "username") VALUES (?, ?)'),
+            [True, 'huey'])
+
+        dob = datetime.date(2000, 1, 2)
+        query = Person.insert({Person.name: 'huey'}, dob=dob)
+        self.assertSQL(query, (
+            'INSERT INTO "person" ("dob", "name") VALUES (?, ?)'),
+            [dob, 'huey'])
+
     def test_insert_where_raises(self):
         q = User.insert({User.c.username: 'huey'})
         self.assertRaises(NotImplementedError, q.where, User.c.val > 0)
@@ -2124,6 +2138,22 @@ class TestUpdateQuery(BaseTestCase):
             '"counter" = ("users"."counter" + ?), '
             '"username" = ? '
             'WHERE ("users"."username" = ?)'), [False, 1, 'nuggie', 'nugz'])
+
+    def test_update_data_and_kwargs(self):
+        query = (User
+                 .update({User.c.username: 'nuggie'}, admin=False)
+                 .where(User.c.id == 1))
+        self.assertSQL(query, (
+            'UPDATE "users" SET "admin" = ?, "username" = ? '
+            'WHERE ("users"."id" = ?)'), [False, 'nuggie', 1])
+
+        dob = datetime.date(2000, 1, 2)
+        query = (Person
+                 .update({Person.name: 'nuggie'}, dob=dob)
+                 .where(Person.id == 1))
+        self.assertSQL(query, (
+            'UPDATE "person" SET "dob" = ?, "name" = ? '
+            'WHERE ("person"."id" = ?)'), [dob, 'nuggie', 1])
 
     def test_update_subquery(self):
         count = fn.COUNT(Tweet.c.id).alias('ct')
