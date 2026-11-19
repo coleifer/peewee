@@ -70,15 +70,14 @@ SETTINGS = synchronized_dict()
 def aggregate(*groups):
     def decorator(klass):
         for group in groups:
-            AGGREGATE_COLLECTION.setdefault(group, [])
-            AGGREGATE_COLLECTION[group].append(klass)
+            AGGREGATE_COLLECTION.setdefault(group, []).append(klass)
         return klass
     return decorator
 
 def udf(group, name=None):
     def decorator(fn):
-        UDF_COLLECTION.setdefault(group, [])
-        UDF_COLLECTION[group].append((fn, name or fn.__name__))
+        UDF_COLLECTION.setdefault(group, []).append(
+            (fn, name or fn.__name__))
         return fn
     return decorator
 
@@ -180,9 +179,7 @@ def gunzip(data):
 
 @udf(HELPER)
 def hostname(url):
-    parse_result = urlparse(url)
-    if parse_result:
-        return parse_result.netloc
+    return urlparse(url).netloc
 
 @udf(HELPER)
 def toggle(key):
@@ -300,6 +297,11 @@ class _heap_agg(object):
         self.ct += 1
         heapq.heappush(self.heap, self.process(value))
 
+    def diffs(self):
+        # Differences between consecutive values, in sorted order.
+        values = [heapq.heappop(self.heap) for _ in range(len(self.heap))]
+        return [curr - prev for prev, curr in zip(values, values[1:])]
+
 class _datetime_heap_agg(_heap_agg):
     def process(self, value):
         return format_date_time_sqlite(value)
@@ -307,19 +309,9 @@ class _datetime_heap_agg(_heap_agg):
 @aggregate(DATE)
 class mintdiff(_datetime_heap_agg):
     def finalize(self):
-        dtp = min_diff = None
-        while self.heap:
-            if min_diff is None:
-                if dtp is None:
-                    dtp = heapq.heappop(self.heap)
-                    continue
-            dt = heapq.heappop(self.heap)
-            diff = dt - dtp
-            if min_diff is None or min_diff > diff:
-                min_diff = diff
-            dtp = dt
-        if min_diff is not None:
-            return min_diff.total_seconds()
+        diffs = self.diffs()
+        if diffs:
+            return min(diffs).total_seconds()
 
 @aggregate(DATE)
 class avgtdiff(_datetime_heap_agg):
@@ -329,21 +321,11 @@ class avgtdiff(_datetime_heap_agg):
         elif self.ct == 1:
             return 0
 
-        total = ct = 0
-        dtp = None
-        while self.heap:
-            if total == 0:
-                if dtp is None:
-                    dtp = heapq.heappop(self.heap)
-                    continue
-
-            dt = heapq.heappop(self.heap)
-            diff = dt - dtp
-            ct += 1
+        diffs = self.diffs()
+        total = 0
+        for diff in diffs:
             total += diff.total_seconds()
-            dtp = dt
-
-        return float(total) / ct
+        return float(total) / len(diffs)
 
 @aggregate(DATE)
 class duration(object):
@@ -383,19 +365,9 @@ class minrange(_heap_agg):
         elif self.ct == 1:
             return 0
 
-        prev = min_diff = None
-
-        while self.heap:
-            if min_diff is None:
-                if prev is None:
-                    prev = heapq.heappop(self.heap)
-                    continue
-            curr = heapq.heappop(self.heap)
-            diff = curr - prev
-            if min_diff is None or min_diff > diff:
-                min_diff = diff
-            prev = curr
-        return min_diff
+        diffs = self.diffs()
+        if diffs:
+            return min(diffs)
 
 @aggregate(MATH)
 class avgrange(_heap_agg):
@@ -405,21 +377,11 @@ class avgrange(_heap_agg):
         elif self.ct == 1:
             return 0
 
-        total = ct = 0
-        prev = None
-        while self.heap:
-            if total == 0:
-                if prev is None:
-                    prev = heapq.heappop(self.heap)
-                    continue
-
-            curr = heapq.heappop(self.heap)
-            diff = curr - prev
-            ct += 1
+        diffs = self.diffs()
+        total = 0
+        for diff in diffs:
             total += diff
-            prev = curr
-
-        return float(total) / ct
+        return float(total) / len(diffs)
 
 @aggregate(MATH)
 class _range(object):
