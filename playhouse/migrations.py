@@ -153,12 +153,10 @@ class Runner(object):
 
         self.History.create_table()
 
-        accum = []
         for name, module in plan:
             self._run(name, module, 'up', fake=fake)
-            accum.append(name)
 
-        return accum
+        return [name for name, _ in plan]
 
     def down(self, target=None):
         """
@@ -183,12 +181,10 @@ class Runner(object):
             if target is None or migration.name == target:
                 break
 
-        accum = []
         for name, module in plan:
             self._run(name, module, 'down')
-            accum.append(name)
 
-        return accum
+        return [name for name, _ in plan]
 
     def fake(self, target=None):
         """
@@ -426,10 +422,10 @@ def template(diff):
         rel = field.rel_model
         if rel in created:
             continue
-        if rel not in stubs:
-            stubs[rel] = {}  # A stub renders even when only its name is used.
+        # A stub renders even when only its name is used.
+        fields = stubs.setdefault(rel, {})
         if not _is_implicit_id(field.rel_field):
-            stubs[rel][field.rel_field.name] = field.rel_field
+            fields[field.rel_field.name] = field.rel_field
     targets = {model: model.__name__ for model in created | set(stubs)}
 
     # Build any stub models needed for FKs to resolve properly.
@@ -539,9 +535,7 @@ def _cwd_import(path):
 
 
 def _resolve_models(spec):
-    attr = None
-    if ':' in spec:
-        spec, attr = spec.split(':', 1)
+    spec, _, attr = spec.partition(':')
     module = _cwd_import(spec)
     if attr:
         obj = getattr(module, attr, None)
@@ -772,12 +766,14 @@ def _parser(config):
                    help='revert back through this migration')
     p.set_defaults(func=_cmd_down)
 
+    models_arg = dict(nargs='?', default=config.get('models'),
+                      help='models module ("app.models" or '
+                      '"app.models:MODELS")')
+
     p = sub.add_parser('initial', parents=[common],
                        help='generate the first migration, assuming an '
                        'empty database')
-    p.add_argument('models', nargs='?', default=config.get('models'),
-                   help='models module ("app.models" or '
-                   '"app.models:MODELS")')
+    p.add_argument('models', **models_arg)
     p.set_defaults(func=_cmd_initial)
 
     p = sub.add_parser('create', parents=[common],
@@ -788,9 +784,7 @@ def _parser(config):
     p = sub.add_parser('generate', parents=[common],
                        help='generate a migration from the schema diff')
     p.add_argument('name', help='migration name')
-    p.add_argument('models', nargs='?', default=config.get('models'),
-                   help='models module ("app.models" or '
-                   '"app.models:MODELS")')
+    p.add_argument('models', **models_arg)
     p.set_defaults(func=_cmd_generate)
 
     p = sub.add_parser('fake', parents=[common],
@@ -800,9 +794,7 @@ def _parser(config):
 
     p = sub.add_parser('diff', parents=[common],
                        help='print schema drift against the models')
-    p.add_argument('models', nargs='?', default=config.get('models'),
-                   help='models module ("app.models" or '
-                   '"app.models:MODELS")')
+    p.add_argument('models', **models_arg)
     p.set_defaults(func=_cmd_diff)
     return parser
 

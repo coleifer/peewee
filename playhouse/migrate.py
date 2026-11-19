@@ -961,12 +961,9 @@ class SqliteMigrator(SchemaMigrator):
     @operation
     def rename_column(self, table, old_name, new_name, legacy=False):
         if self.sqlite_version >= (3, 25, 0) and not legacy:
-            return (self
-                    ._alter_table(self.make_context(), table)
-                    .literal(' RENAME COLUMN ')
-                    .sql(Entity(old_name))
-                    .literal(' TO ')
-                    .sql(Entity(new_name)))
+            return super(SqliteMigrator, self).rename_column(
+                table, old_name, new_name)
+
         def _rename(column_name, column_def):
             # Only replace the leading column name identifier to avoid
             # corrupting type names, defaults, or constraints that happen
