@@ -50,25 +50,19 @@ def model_to_dict(model, recurse=True, backrefs=False, only=None,
     exclude |= seen
     model_class = type(model)
 
+    def to_dict(obj, **kwargs):
+        return model_to_dict(obj, recurse=recurse, backrefs=backrefs,
+                             only=only, exclude=exclude,
+                             max_depth=max_depth - 1, **kwargs)
+
     if manytomany:
         for name, m2m in model._meta.manytomany.items():
             if should_skip(m2m):
                 continue
 
             exclude.update((m2m, m2m.rel_model._meta.manytomany[m2m.backref]))
-            for fkf in m2m.through_model._meta.refs:
-                exclude.add(fkf)
-
-            accum = []
-            for rel_obj in getattr(model, name):
-                accum.append(model_to_dict(
-                    rel_obj,
-                    recurse=recurse,
-                    backrefs=backrefs,
-                    only=only,
-                    exclude=exclude,
-                    max_depth=max_depth - 1))
-            data[name] = accum
+            exclude.update(m2m.through_model._meta.refs)
+            data[name] = [to_dict(obj) for obj in getattr(model, name)]
 
     for field in model._meta.sorted_fields:
         if should_skip(field):
@@ -80,29 +74,18 @@ def model_to_dict(model, recurse=True, backrefs=False, only=None,
             rel_obj = getattr(model, field.name) \
                 if field_data is not None else None
             if rel_obj is not None:
-                field_data = model_to_dict(
-                    rel_obj,
-                    recurse=recurse,
-                    backrefs=backrefs,
-                    only=only,
-                    exclude=exclude,
-                    seen=seen | set((field,)),
-                    max_depth=max_depth - 1)
+                field_data = to_dict(rel_obj, seen=seen | set((field,)))
             else:
                 field_data = None
 
         data[field.name] = field_data
 
-    if extra_attrs:
-        for attr_name in extra_attrs:
-            attr = getattr(model, attr_name)
-            if callable(attr):
-                data[attr_name] = attr()
-            else:
-                data[attr_name] = attr
+    for attr_name in extra_attrs:
+        attr = getattr(model, attr_name)
+        data[attr_name] = attr() if callable(attr) else attr
 
     if backrefs and recurse:
-        for foreign_key, rel_model in model._meta.backrefs.items():
+        for foreign_key in model._meta.backrefs:
             if foreign_key.backref == '+': continue
             descriptor = getattr(model_class, foreign_key.backref)
             if descriptor in exclude or foreign_key in exclude:
@@ -110,20 +93,9 @@ def model_to_dict(model, recurse=True, backrefs=False, only=None,
             if only and (descriptor not in only) and (foreign_key not in only):
                 continue
 
-            accum = []
             exclude.add(foreign_key)
-            related_query = getattr(model, foreign_key.backref)
-
-            for rel_obj in related_query:
-                accum.append(model_to_dict(
-                    rel_obj,
-                    recurse=recurse,
-                    backrefs=backrefs,
-                    only=only,
-                    exclude=exclude,
-                    max_depth=max_depth - 1))
-
-            data[foreign_key.backref] = accum
+            data[foreign_key.backref] = [
+                to_dict(obj) for obj in getattr(model, foreign_key.backref)]
 
     return data
 
@@ -248,8 +220,8 @@ class ReconnectMixin(object):
         # Normalize the reconnect errors to a more efficient data-structure.
         self._reconnect_errors = {}
         for exc_class, err_fragment in self.reconnect_errors:
-            self._reconnect_errors.setdefault(exc_class, [])
-            self._reconnect_errors[exc_class].append(err_fragment.lower())
+            self._reconnect_errors.setdefault(exc_class, []).append(
+                err_fragment.lower())
 
     def execute_sql(self, sql, params=None):
         return self._reconnect(super(ReconnectMixin, self).execute_sql,
