@@ -2735,6 +2735,12 @@ class DPTeam(TestModel):
 class DPMember(TestModel):
     team = ForeignKeyField(DPTeam, field=DPTeam.code)
 
+class DPCategory(TestModel):
+    name = TextField()
+    parent = ForeignKeyField('self', null=True, backref='children')
+class DPProduct(TestModel):
+    category = ForeignKeyField(DPCategory)
+
 
 class TestDeleteInstanceDFS(ModelTestCase):
     @requires_models(Character, Shape, ShapeDetail)
@@ -2858,6 +2864,37 @@ class TestDeleteInstanceDFS(ModelTestCase):
 
         o1.delete_instance(recursive=True)
         self.assertEqual([m.team_id for m in DPMember.select()], ['blue'])
+
+    @requires_models(DPCategory, DPProduct)
+    def test_delete_instance_self_referential_tree(self):
+        # Descendants at every depth are deleted, along with their own
+        # dependents -- not just the direct children.
+        root = DPCategory.create(name='root')
+        child = DPCategory.create(name='child', parent=root)
+        grandchild = DPCategory.create(name='grandchild', parent=child)
+        great = DPCategory.create(name='great', parent=grandchild)
+        other = DPCategory.create(name='other')
+        for cat in (root, child, grandchild, great, other):
+            DPProduct.create(category=cat)
+
+        root.delete_instance(recursive=True, delete_nullable=True)
+        self.assertEqual([c.name for c in DPCategory.select()], ['other'])
+        self.assertEqual(
+            [p.category.name for p in DPProduct.select()], ['other'])
+
+    @requires_models(DPCategory, DPProduct)
+    def test_delete_instance_self_referential_nullable(self):
+        # Without delete_nullable, only the direct children are nullified;
+        # deeper descendants keep pointing at their (surviving) parents.
+        root = DPCategory.create(name='root')
+        child = DPCategory.create(name='child', parent=root)
+        grandchild = DPCategory.create(name='grandchild', parent=child)
+        DPProduct.create(category=grandchild)
+
+        root.delete_instance(recursive=True)
+        remaining = {c.name: c.parent_id for c in DPCategory.select()}
+        self.assertEqual(remaining, {'child': None, 'grandchild': child.id})
+        self.assertEqual(DPProduct.select().count(), 1)
 
 
 class DepParent(TestModel):

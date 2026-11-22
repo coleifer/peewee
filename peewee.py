@@ -8034,6 +8034,31 @@ class Model(Node, metaclass=ModelBase):
     def dirty_field_names(self):
         return [f.name for f in self.dirty_fields]
 
+    def _self_ref_delete_node(self, model, fk, seed_node):
+        # Rows deleted through a self-referential foreign key are the
+        # transitive closure of the rows matched by seed_node: deleting only
+        # the direct children would leave deeper descendants behind (or fail
+        # outright on databases that enforce the foreign key). Express the
+        # closure as a recursive CTE over the referenced field, so a single
+        # delete statement removes the whole subtree.
+        target = fk.rel_field
+        target_attr = fk_attr = None
+        for attr, field in model._meta.fields.items():
+            if field is target:
+                target_attr = attr
+            if field is fk:
+                fk_attr = attr
+        seed = model.select(target).where(seed_node)
+        cte = seed.cte('self_ref_descendants', recursive=True,
+                       columns=(target.column_name,))
+        alias = model.alias()
+        recursive = (alias
+                     .select(getattr(alias, target_attr))
+                     .join(cte, on=(getattr(alias, fk_attr) ==
+                                    cte.c[target.column_name])))
+        cte = cte.union_all(recursive)
+        return target << cte.select_from(cte.c[target.column_name])
+
     def dependencies(self, search_nullable=True, exclude_null_children=False):
         root = type(self)
         models = set(m for _, m, _ in root._meta.model_graph(refs=False))
@@ -8042,17 +8067,54 @@ class Model(Node, metaclass=ModelBase):
         plan = []
         for model in sort_models(models):
             nodes = []
+            self_refs = []
             for fk, parent in model._meta.refs.items():
                 if fk.null and not search_nullable:
                     continue
+                elif parent is model:
+                    self_refs.append(fk)
                 elif parent is root:
                     node = fk == self.__data__[fk.rel_field.name]
+                    if parent in exprs:
+                        # The root model also loses rows through a
+                        # self-referential foreign key, so dependents may
+                        # reference any deleted row, not just the instance.
+                        node = node | (fk << (parent.select(fk.rel_field)
+                                              .where(exprs[parent])))
+                    nodes.append((node, fk))
                 elif parent in exprs:
                     node = fk << (parent.select(fk.rel_field)
                                   .where(exprs[parent]))
+                    nodes.append((node, fk))
+                # Otherwise the parent loses no rows, or it is a cycle.
+
+            if self_refs:
+                # Conditions identifying rows of this model that are deleted
+                # through other models (or, for the root model, the instance
+                # itself). Children of those rows are reached through the
+                # self-referential foreign keys.
+                if model is root:
+                    seed = None
                 else:
-                    continue  # Parent loses no rows, or self-ref/cycle.
-                nodes.append((node, fk))
+                    deleted = [node for node, fk in nodes
+                               if not (fk.null and exclude_null_children)]
+                    seed = (reduce(operator.or_, deleted)
+                            if deleted else None)
+                for fk in self_refs:
+                    if model is root:
+                        child = fk == self.__data__[fk.rel_field.name]
+                    elif seed is not None:
+                        child = fk << (model.select(fk.rel_field)
+                                       .where(seed))
+                    else:
+                        continue  # No rows of this model are deleted.
+                    if fk.null and exclude_null_children:
+                        # Nullable children are kept and nullified, so only
+                        # the direct children of deleted rows are affected.
+                        nodes.append((child, fk))
+                    else:
+                        node = self._self_ref_delete_node(model, fk, child)
+                        nodes.append((node, fk))
             plan.append(nodes)
 
             deleted = [node for node, fk in nodes
