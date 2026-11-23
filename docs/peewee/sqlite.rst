@@ -2350,11 +2350,15 @@ Vector search
 .. module:: playhouse.sqlite_vec
 
 ``playhouse.sqlite_vec`` supports the `sqlite-vec <https://github.com/asg017/sqlite-vec>`_
-extension. Vectors are stored in a :class:`VectorField`, either in a ``vec0``
-virtual table (:class:`VecModel`) for k-nearest-neighbor search, or in an
-ordinary table for brute-force search.
+extension. Vectors are stored in a :class:`VectorField` and searched one of two
+ways:
 
-The extension is loaded by each connection:
+* :ref:`KNN search <sqlite-vec-knn>` on a ``vec0`` virtual table, declared with
+  :class:`VecModel`.
+* :ref:`Brute-force search <sqlite-vec-brute-force>` on an ordinary table,
+  ordering rows by :meth:`~VectorField.distance`.
+
+Every connection must load the extension:
 
 .. code-block:: python
 
@@ -2363,8 +2367,35 @@ The extension is loaded by each connection:
    db = SqliteDatabase('app.db')
    db.load_extension(sqlite_vec.loadable_path())
 
-Defining a vector table
-^^^^^^^^^^^^^^^^^^^^^^^
+Vectors
+^^^^^^^
+
+A :class:`VectorField` holds a fixed number of elements of one type:
+
+================  ==============  ======================
+``element_type``  Element         Python value
+================  ==============  ======================
+``'float'``       32-bit float    ``[0.25, -1.5, ...]``
+``'int8'``        8-bit integer   ``[12, -7, ...]``
+``'bit'``         1 bit           ``[1, 0, ...]``
+================  ==============  ======================
+
+Vectors are read back as lists. When writing, a :class:`VectorField` accepts:
+
+* A list, or any other sequence of numbers.
+* A numpy array. Pass the array itself. Its ``tobytes()`` is only valid when
+  the dtype is exactly ``float32``, or ``int8`` for an int8 vector.
+* ``bytes`` already in sqlite-vec's binary format.
+* JSON text, such as ``'[0.25, -1.5]'``, for float and int8 vectors.
+* A SQL expression, such as ``fn.vec_quantize_binary(...)``.
+
+.. _sqlite-vec-knn:
+
+KNN search
+^^^^^^^^^^
+
+Defining a table
+~~~~~~~~~~~~~~~~
 
 .. code-block:: python
 
@@ -2380,71 +2411,115 @@ Defining a vector table
        class Meta:
            database = db
 
-Each column of a ``vec0`` table plays one of four roles:
+Each declared column has one of four roles:
 
-* **Vector**: a :class:`VectorField`, searched with ``MATCH``.
-* **Metadata**: an integer, float, boolean or text field. Metadata columns may
-  filter a KNN query and cannot be ``NULL``.
-* **Partition key**: an integer or text field declared with
-  ``constraints=[SQL('PARTITION KEY')]``. The index is sharded by its value,
-  which makes filtering on it fast. A partition key cannot be updated. On a
-  table that has one, rows are updated one at a time by primary key, as
-  :meth:`~Model.save` does.
-* **Auxiliary**: a field declared ``unindexed=True``. It is stored and
-  returned, but cannot appear in the ``WHERE`` clause of a KNN query.
+* **Vector**: a :class:`VectorField`.
+* **Metadata**: an integer, float, boolean or text field. Metadata columns
+  can filter a KNN query, and can never be ``NULL``.
+* **Partition key**: an integer or text field with
+  ``constraints=[SQL('PARTITION KEY')]``. The index is split by its value,
+  which makes filtering on it fast. A partition key cannot be updated.
+* **Auxiliary**: an integer, float, boolean, text or blob field with
+  ``unindexed=True``. Auxiliary columns are stored and returned, but cannot
+  filter a KNN query.
 
 The primary key is the implicit ``rowid``, or a declared integer or text
-primary key. Secondary indexes are not supported, so a
-:class:`ForeignKeyField` needs ``index=False``.
+primary key. Every ``VecModel`` also has two hidden columns, ``distance`` and
+``k``, used by :ref:`queries <sqlite-vec-searching>`.
 
-Vectors are read and written as lists of numbers. ``bytes`` (for example
-from numpy's ``tobytes()``) and JSON text are passed through as-is:
+``vec0`` tables cannot have indexes, so a :class:`ForeignKeyField` needs
+``index=False``. Column names must be plain identifiers (letters, digits and
+underscores), because ``vec0`` cannot parse quoted names. Peewee raises
+``ImproperlyConfigured`` when the class is defined if a model declares an
+index, or a column with an unsupported type or name.
+
+Writing
+~~~~~~~
 
 .. code-block:: python
 
    Chunk.create(embedding=embed(text), user=user, genre='faq', body=text)
 
-Searching
-^^^^^^^^^
+On a table with a partition key, an ``UPDATE`` must change a single row,
+selected by primary key, and must leave the partition key alone.
+:meth:`~Model.save` follows both rules, because ``VecModel`` sets
+``Meta.only_save_dirty`` and ``save()`` writes only the changed columns. Bulk
+:meth:`~Model.update` queries fail, even when they change only metadata. Bulk
+deletes work. To move a row to another partition, delete it and insert it
+again.
 
-A KNN query needs a ``MATCH`` on a vector column plus either a ``k``
-constraint or a ``LIMIT``. :meth:`~VecModel.search` supplies both and orders
-results by the hidden ``distance`` column:
+.. warning::
+
+   sqlite-vec does not undo a failed write inside a transaction. If an insert
+   raises ``OperationalError`` (for example, on a ``NULL`` metadata value) and
+   the error is caught, the partially-written row remains. Some failures also
+   leave the table unreadable. Committing makes the damage permanent.
+
+   In autocommit mode a failed write is undone automatically. Inside a
+   transaction, give each write that may fail its own nested
+   :meth:`~Database.atomic`. On error, it rolls back to a savepoint, which
+   removes the partial row:
+
+   .. code-block:: python
+
+      with db.atomic():
+          for text in texts:
+              try:
+                  with db.atomic():
+                      Chunk.create(embedding=embed(text), ...)
+              except OperationalError:
+                  pass  # Skip the bad row.
+
+.. _sqlite-vec-searching:
+
+Searching
+~~~~~~~~~
+
+A KNN query is a ``MATCH`` on a vector column plus a constraint on ``k``, the
+number of rows to return. :meth:`~VecModel.search` builds one, nearest rows
+first:
 
 .. code-block:: python
 
    query = (Chunk
-            .search(embed('how do I reset my password'), 10)
+            .search(embed('reset my password'), 10)
             .where(Chunk.user == user, Chunk.genre == 'faq'))
 
    for chunk in query:
        print(chunk.distance, chunk.body)
 
-Metadata and partition-key filters are applied before the ``k`` nearest rows
-are chosen, so the query returns up to 10 rows that pass the filter.
+Filters on metadata and partition-key columns are applied during the search,
+so this query returns the 10 nearest rows that match the filters. ``distance``
+holds each row's distance from the query vector. Outside a KNN query it is
+``NULL``.
 
-The same query written out by hand:
+The same query without :meth:`~VecModel.search`:
 
 .. code-block:: python
 
    query = (Chunk
-            .select(Chunk.body, Chunk.distance)
-            .where(Chunk.embedding.match(vector), Chunk.k == 10)
+            .select()
+            .where(Chunk.embedding.match(vector),
+                   Chunk.k == 10,
+                   Chunk.user == user,
+                   Chunk.genre == 'faq')
             .order_by(Chunk.distance))
 
-vec0 does not accept a ``LIMIT`` alongside ``k``, nor an ``OFFSET`` alongside
-a ``LIMIT``. As a result ``get()``, ``first()``, ``limit()``, ``paginate()``
-and ``exists()`` fail on a search query. Iterate the query, or index it:
+A KNN query cannot also have a ``LIMIT``, so the query methods that add one
+fail: ``get()``, ``get_or_none()``, ``first()``, ``scalar()``, ``exists()``,
+``limit()`` and ``paginate()``. Iterate, index or slice the query instead:
 
 .. code-block:: python
 
    nearest = Chunk.search(vector, 1)[0]
 
+.. _sqlite-vec-brute-force:
+
 Brute-force search
 ^^^^^^^^^^^^^^^^^^
 
-For small tables a :class:`VectorField` on an ordinary model, compared with
-:meth:`~VectorField.distance`, avoids a separate virtual table:
+On an ordinary model, a :class:`VectorField` is a ``BLOB`` column. Order by
+:meth:`~VectorField.distance` to find the nearest rows:
 
 .. code-block:: python
 
@@ -2455,21 +2530,22 @@ For small tables a :class:`VectorField` on an ordinary model, compared with
    dist = Note.embedding.distance(vector, 'cosine')
    query = Note.select().order_by(dist).limit(10)
 
+Each query computes the distance to every row, which suits small tables. The
+``vec0`` restrictions and the warning above do not apply.
+
 API
 ^^^
 
 .. class:: VectorField(dimensions, element_type='float', distance_metric=None, **kwargs)
 
-   :param int dimensions: number of elements.
-   :param str element_type: ``'float'`` (32-bit), ``'int8'`` or ``'bit'``.
-       Bit vectors need a multiple of 8 dimensions.
-   :param str distance_metric: ``vec0`` metric, ``'l2'`` (default),
-       ``'cosine'`` or ``'l1'``. Ignored on ordinary tables, except as the
-       default for :meth:`~VectorField.distance`.
-
-   Vector column, stored as a ``BLOB`` on ordinary tables. Lists are packed
-   into the sqlite-vec binary format on write and unpacked on read. Bit
-   vectors are lists of ``0`` and ``1``.
+   :param int dimensions: number of elements. Must be a multiple of 8 for bit
+       vectors.
+   :param str element_type: ``'float'``, ``'int8'`` or ``'bit'``.
+   :param str distance_metric: ``'l2'`` (the default), ``'l1'`` or
+       ``'cosine'``. In a ``vec0`` table it is the metric for KNN search. On
+       an ordinary table it is only the default for
+       :meth:`~VectorField.distance`. Bit vectors always use Hamming distance
+       and take no metric.
 
    .. method:: match(vector)
 
@@ -2477,28 +2553,25 @@ API
 
    .. method:: distance(vector, metric=None)
 
-      :param vector: vector, or another vector column.
+      :param vector: a vector, or another vector column.
       :param str metric: ``'l2'``, ``'l1'``, ``'cosine'`` or ``'hamming'``.
-          Defaults to the field's ``distance_metric``, then ``'hamming'`` for
-          bit vectors and ``'l2'`` otherwise.
-      :return: a ``vec_distance_*()`` function call.
+          Defaults to the field's ``distance_metric``, otherwise
+          ``'hamming'`` for bit vectors and ``'l2'`` for the rest.
+      :return: a call to the matching ``vec_distance_*()`` function.
 
 .. class:: VecModel()
 
-   Model for a ``vec0`` virtual table. Declares the ``rowid`` primary key
-   and the hidden ``distance`` and ``k`` columns. Table options, such as
-   ``chunk_size``, go in ``Meta.options``.
-
-   ``Meta.only_save_dirty`` is on by default, so :meth:`Model.save` writes
-   only the changed columns.
+   Model for a ``vec0`` virtual table. Declares the ``rowid`` primary key, the
+   hidden ``distance`` and ``k`` columns, and ``Meta.only_save_dirty = True``.
+   ``vec0`` table options, such as ``chunk_size``, go in ``Meta.options``.
 
    .. classmethod:: search(vector, k, field=None)
 
-      :param vector: query vector.
-      :param int k: number of neighbors to return.
-      :param VectorField field: column to search. May be omitted if the model
-          has only one :class:`VectorField`.
-      :return: a :class:`ModelSelect` of the ``k`` nearest rows, closest
+      :param vector: the query vector.
+      :param int k: number of rows to return.
+      :param VectorField field: column to search. May be omitted when the model
+          has exactly one :class:`VectorField`.
+      :return: a :class:`ModelSelect` of the ``k`` nearest rows, nearest
           first.
 
 

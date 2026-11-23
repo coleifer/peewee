@@ -62,6 +62,15 @@ class Doc(VecModel):
         database = database
 
 
+class Flag(VecModel):
+    embedding = VectorField(2)
+    active = BooleanField()
+    seen = BooleanField(unindexed=True)
+
+    class Meta:
+        database = database
+
+
 class Item(Model):
     name = TextField()
     embedding = VectorField(3)
@@ -83,6 +92,11 @@ class TestVecSQL(BaseTestCase):
         self.assertSQL(Doc._schema._create_table(), (
             'CREATE VIRTUAL TABLE IF NOT EXISTS "doc" USING vec0 ('
             'id text PRIMARY KEY, e8 int8[4], bits bit[8])'), [])
+
+        # Booleans are integers, as metadata and as auxiliary columns.
+        self.assertSQL(Flag._schema._create_table(), (
+            'CREATE VIRTUAL TABLE IF NOT EXISTS "flag" USING vec0 ('
+            'embedding float[2], active integer, +seen integer)'), [])
 
         # Regular tables store vectors as plain blobs.
         self.assertSQL(Item._schema._create_table(), (
@@ -225,6 +239,17 @@ class TestVecModel(ModelTestCase):
         query = Doc.search([1, 1, 0, 0, 0, 0, 0, 0], 2, Doc.bits)
         self.assertEqual([(d.id, d.distance) for d in query],
                          [('b', 0.), ('a', 2.)])
+
+    @requires_models(Flag)
+    def test_boolean(self):
+        Flag.create(embedding=[1, 0], active=True, seen=False)
+        Flag.create(embedding=[0, 1], active=False, seen=True)
+        self.assertEqual([(f.active, f.seen) for f in Flag.select()],
+                         [(True, False), (False, True)])
+
+        query = Flag.search([1, 0], 2).where(Flag.active == False)
+        self.assertEqual([(f.active, f.seen) for f in query],
+                         [(False, True)])
 
     @requires_models(Item)
     def test_regular_table(self):

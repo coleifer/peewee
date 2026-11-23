@@ -31,7 +31,7 @@ VEC0_TYPES = {
     'BIGAUTO': 'integer',
     'BIGINT': 'integer',
     'BLOB': 'blob',
-    'BOOL': 'boolean',
+    'BOOL': 'integer',
     'CHAR': 'text',
     'DOUBLE': 'float',
     'FLOAT': 'float',
