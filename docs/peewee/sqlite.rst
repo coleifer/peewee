@@ -2358,13 +2358,22 @@ ways:
 * :ref:`Brute-force search <sqlite-vec-brute-force>` on an ordinary table,
   ordering rows by :meth:`~VectorField.distance`.
 
-Every connection must load the extension:
+The ``vec0`` shared library must be loaded into the database.
+:meth:`SqliteDatabase.load_extension` loads it for every connection:
 
 .. code-block:: python
 
-   import sqlite_vec
-
    db = SqliteDatabase('app.db')
+   db.load_extension('/path/to/vec0')
+
+``pip install sqlite-vec`` is one way to get the library. That package is not
+used by ``playhouse.sqlite_vec``. It bundles a compiled ``vec0`` and reports
+its path:
+
+.. code-block:: python
+
+   import sqlite_vec  # The PyPI package.
+
    db.load_extension(sqlite_vec.loadable_path())
 
 Vectors

@@ -79,6 +79,15 @@ class Item(Model):
         database = database
 
 
+class Packed(Model):
+    a = VectorField(4, 'int8')
+    b = VectorField(4, 'int8')
+    bits = VectorField(8, 'bit')
+
+    class Meta:
+        database = database
+
+
 class TestVecSQL(BaseTestCase):
     database = database
 
@@ -137,7 +146,11 @@ class TestVecSQL(BaseTestCase):
                        'vec_distance_cosine("t1"."embedding", '
                        '"t1"."embedding")', [])
         self.assertSQL(Doc.bits.distance(Doc.bits),
-                       'vec_distance_hamming("t1"."bits", "t1"."bits")', [])
+                       'vec_distance_hamming(vec_bit("t1"."bits"), '
+                       'vec_bit("t1"."bits"))', [])
+        self.assertSQL(Packed.a.distance([1, 2, 3, 4]),
+                       'vec_distance_l2(vec_int8("t1"."a"), vec_int8(?))',
+                       [b'\x01\x02\x03\x04'])
         self.assertSQL(Item.embedding.distance([1, 0, 0], 'L1'),
                        'vec_distance_l1("t1"."embedding", ?)',
                        [Item.embedding.db_value([1, 0, 0])])
@@ -240,6 +253,10 @@ class TestVecModel(ModelTestCase):
         self.assertEqual([(d.id, d.distance) for d in query],
                          [('b', 0.), ('a', 2.)])
 
+        dist = Doc.e8.distance([1, 2, 3, 4])
+        query = Doc.select(Doc.id, dist.alias('d')).order_by(dist)
+        self.assertEqual([(d.id, d.d) for d in query], [('a', 0.), ('b', 2.)])
+
     @requires_models(Flag)
     def test_boolean(self):
         Flag.create(embedding=[1, 0], active=True, seen=False)
@@ -265,3 +282,16 @@ class TestVecModel(ModelTestCase):
         query = Item.select(Item.name, dist.alias('d')).order_by(dist)
         self.assertEqual([(i.name, i.d) for i in query],
                          [('x', 0.), ('y', 1.)])
+
+    @requires_models(Packed)
+    def test_regular_table_int8_bit(self):
+        Packed.create(a=[1, 2, 3, 4], b=[1, 2, 3, 6],
+                      bits=[1, 1, 0, 0, 0, 0, 0, 0])
+
+        # A stored blob has no element type, so distance() tags the column.
+        query = Packed.select(
+            Packed.a.distance([1, 2, 3, 5]),
+            Packed.a.distance(Packed.b),
+            Packed.a.distance(Packed.b, 'l1'),
+            Packed.bits.distance([1, 0, 0, 0, 0, 0, 0, 0]))
+        self.assertEqual(query.tuples().get(), (1., 2., 2., 1.))

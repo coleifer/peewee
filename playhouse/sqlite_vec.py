@@ -1,10 +1,9 @@
 """
 Vector search with the sqlite-vec extension: https://github.com/asg017/sqlite-vec
 
-The extension must be loaded by each connection:
+The vec0 shared library must be loaded into the database:
 
-    import sqlite_vec
-    db.load_extension(sqlite_vec.loadable_path())
+    db.load_extension('/path/to/vec0')
 """
 import array
 import re
@@ -80,16 +79,22 @@ class VectorField(Field):
         self.distance_metric = distance_metric
         super(VectorField, self).__init__(**kwargs)
 
+    def _tag(self, node):
+        # sqlite-vec reads an untagged blob as float32. This applies to stored
+        # columns of a regular table as well as to parameters.
+        _, tag = VECTOR_TYPES[self.element_type]
+        return tag(node) if tag is not None else node
+
     def db_value(self, value):
         if value is None or isinstance(value, Node):
             return value
-        typecode, tag = VECTOR_TYPES[self.element_type]
+        typecode, _ = VECTOR_TYPES[self.element_type]
         if not isinstance(value, (bytes, bytearray, memoryview, str)):
             if typecode is None:
                 value = _pack_bits(value)
             else:
                 value = array.array(typecode, value).tobytes()
-        return tag(value) if tag is not None else value
+        return self._tag(value)
 
     def python_value(self, value):
         if not isinstance(value, bytes):
@@ -109,7 +114,11 @@ class VectorField(Field):
             metric = self.distance_metric or (
                 'hamming' if self.element_type == 'bit' else 'l2')
         func = getattr(fn, 'vec_distance_%s' % metric.lower())
-        return func(self, self.to_value(vector), coerce=False)
+        if isinstance(vector, VectorField):
+            vector = vector._tag(vector)
+        else:
+            vector = self.to_value(vector)
+        return func(self._tag(self), vector, coerce=False)
 
 
 class Vec0SchemaManager(VirtualTableSchemaManager):
