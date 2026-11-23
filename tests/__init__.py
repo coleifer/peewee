@@ -109,6 +109,8 @@ try:
     MODULES.append(sqlite_changelog)
 except ImportError:
     print('Unable to import sqlite changelog tests, skipping.')
+from . import sqlite_vec
+MODULES.append(sqlite_vec)
 from . import sqliteq
 MODULES.append(sqliteq)
 from . import sqlite_udf

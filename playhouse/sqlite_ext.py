@@ -337,14 +337,7 @@ class VirtualTableSchemaManager(SchemaManager):
         if meta.prefix_arguments:
             arguments.extend([SQL(a) for a in meta.prefix_arguments])
 
-        # Constraints, data-types, foreign and primary keys are all omitted.
-        for field in meta.sorted_fields:
-            if isinstance(field, (RowIDField)) or field._hidden:
-                continue
-            field_def = [Entity(field.column_name)]
-            if field.unindexed:
-                field_def.append(SQL('UNINDEXED'))
-            arguments.append(NodeList(field_def))
+        arguments.extend(self._virtual_columns())
 
         if meta.arguments:
             arguments.extend([SQL(a) for a in meta.arguments])
@@ -352,6 +345,18 @@ class VirtualTableSchemaManager(SchemaManager):
         if options:
             arguments.extend(self._create_table_option_sql(options))
         return ctx.sql(EnclosedNodeList(arguments))
+
+    def _virtual_columns(self):
+        return [self._virtual_column_def(field)
+                for field in self.model._meta.sorted_fields
+                if not (isinstance(field, RowIDField) or field._hidden)]
+
+    def _virtual_column_def(self, field):
+        # Constraints, data-types, foreign and primary keys are all omitted.
+        field_def = [Entity(field.column_name)]
+        if field.unindexed:
+            field_def.append(SQL('UNINDEXED'))
+        return NodeList(field_def)
 
     def _create_table(self, safe=True, **options):
         if issubclass(self.model, VirtualModel):
