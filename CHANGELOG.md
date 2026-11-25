@@ -7,6 +7,9 @@ https://github.com/coleifer/peewee/releases
 
 ## master
 
+* Implementations for [pgvector](https://docs.peewee-orm.com/en/latest/peewee/postgres.html#pgvector)
+  and [sqlite-vec](https://docs.peewee-orm.com/en/latest/peewee/sqlite.html#sqlite-vec)
+  extensions.
 * Clear `after_commit` callbacks registered on a savepoint if that savepoint is
   then rolled-back.
 * Re-create triggers during sqlite migrator table rebuilds.
