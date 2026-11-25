@@ -216,6 +216,10 @@ class SchemaMigrator(object):
                 raise ValueError('Database proxy is uninitialized.')
             database = database.obj
 
+        migrator_class = getattr(database, 'schema_migrator_class', None)
+        if migrator_class is not None:
+            return migrator_class(database, schema=schema)
+
         if CockroachDatabase and isinstance(database, CockroachDatabase):
             migrator = CockroachDBMigrator
         elif isinstance(database, PostgresqlDatabase):

@@ -2301,6 +2301,9 @@ class Query(BaseQuery):
             (ctx
              .literal(' ORDER BY ')
              .sql(CommaNodeList(self._order_by)))
+        pagination = getattr(ctx.state, 'pagination', None)
+        if pagination is not None and pagination(self, ctx):
+            return ctx
         if self._limit is not None or (self._offset is not None and
                                        ctx.state.limit_max):
             limit = ctx.state.limit_max if self._limit is None else self._limit

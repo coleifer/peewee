@@ -556,6 +556,10 @@ class Introspector(object):
             if database.obj is None:
                 raise ValueError('Cannot introspect an uninitialized Proxy.')
             database = database.obj  # Reference the proxied db obj.
+        if cls is Introspector:
+            introspector_class = getattr(database, 'introspector_class', None)
+            if introspector_class is not None:
+                return introspector_class.from_database(database, schema=schema)
         if CockroachDatabase and isinstance(database, CockroachDatabase):
             metadata = CockroachDBMetadata(database)
         elif isinstance(database, PostgresqlDatabase):
