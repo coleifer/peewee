@@ -2379,7 +2379,7 @@ its path:
 Vectors
 ^^^^^^^
 
-A :class:`VectorField` holds a fixed number of elements of one type:
+A :class:`VectorField` stores a fixed number of elements of one type:
 
 ================  ==============  ======================
 ``element_type``  Element         Python value
@@ -2499,7 +2499,7 @@ first:
 
 Filters on metadata and partition-key columns are applied during the search,
 so this query returns the 10 nearest rows that match the filters. ``distance``
-holds each row's distance from the query vector. Outside a KNN query it is
+is each row's distance from the query vector. Outside a KNN query it is
 ``NULL``.
 
 The same query without :meth:`~VecModel.search`:

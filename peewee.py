@@ -3055,7 +3055,7 @@ class Delete(_WriteQuery):
 
 class Index(Node):
     def __init__(self, name, table, expressions, unique=False, safe=False,
-                 where=None, using=None, nulls_distinct=None):
+                 where=None, using=None, nulls_distinct=None, options=None):
         self._name = name
         self._table = Entity(table) if not isinstance(table, Table) else table
         self._expressions = expressions
@@ -3064,6 +3064,7 @@ class Index(Node):
         self._safe = safe
         self._using = using
         self._nulls_distinct = nulls_distinct
+        self._options = options
         if self._nulls_distinct is not None and not self._unique:
             raise ValueError('NULLS DISTINCT is only available with UNIQUE.')
 
@@ -3084,6 +3085,10 @@ class Index(Node):
         if nulls_distinct is not None and not self._unique:
             raise ValueError('NULLS DISTINCT is only available with UNIQUE.')
         self._nulls_distinct = nulls_distinct
+
+    @Node.copy
+    def options(self, _options=None):
+        self._options = _options
 
     def __sql__(self, ctx):
         statement = 'CREATE UNIQUE INDEX ' if self._unique else 'CREATE INDEX '
@@ -3123,6 +3128,11 @@ class Index(Node):
             if self._nulls_distinct is not None:
                 ctx.literal(' NULLS DISTINCT' if self._nulls_distinct else
                             ' NULLS NOT DISTINCT')
+            if self._options:
+                # Storage parameters, e.g. fillfactor (Postgres).
+                options = sorted(self._options.items())
+                ctx.literal(' WITH (%s)' % ', '.join(
+                    '%s=%s' % option for option in options))
             if self._where is not None:
                 ctx.literal(' WHERE ').sql(self._where)
 
@@ -3131,7 +3141,7 @@ class Index(Node):
 
 class ModelIndex(Index):
     def __init__(self, model, fields, unique=False, safe=True, where=None,
-                 using=None, name=None, nulls_distinct=None):
+                 using=None, name=None, nulls_distinct=None, options=None):
         self._model = model
         if name is None:
             name = self._generate_name_from_fields(model, fields)
@@ -3147,7 +3157,8 @@ class ModelIndex(Index):
             safe=safe,
             where=where,
             using=using,
-            nulls_distinct=nulls_distinct)
+            nulls_distinct=nulls_distinct,
+            options=options)
 
     def _generate_name_from_fields(self, model, fields):
         accum = []
@@ -5667,6 +5678,10 @@ class Field(ColumnBase):
     def get_modifiers(self):
         pass
 
+    def get_index(self):
+        return ModelIndex(self.model, (self,), unique=self.unique,
+                          using=self.index_type)
+
     def ddl_datatype(self, ctx):
         if ctx and ctx.state.field_types:
             column_type = ctx.state.field_types.get(self.field_type,
@@ -7180,8 +7195,7 @@ class SchemaManager(object):
         if field is None and index is None:
             raise ValueError('field or index must be specified.')
         elif field:
-            index = ModelIndex(self.model, (field,), unique=field.unique,
-                               using=field.index_type)
+            index = field.get_index()
         return self.database.execute(self._drop_index(index, safe=safe))
 
     def drop_indexes(self, safe=True):
@@ -7500,8 +7514,7 @@ class Metadata(object):
             if f.primary_key:
                 continue
             if f.index or f.unique:
-                indexes.append(ModelIndex(self.model, (f,), unique=f.unique,
-                                          using=f.index_type))
+                indexes.append(f.get_index())
 
         for index_obj in self.indexes:
             if isinstance(index_obj, Node):

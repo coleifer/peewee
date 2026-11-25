@@ -1060,6 +1060,201 @@ For more granular control or to close the cursor explicitly:
    Iterate ``select_query`` using a named server-side cursor via
    :meth:`~BaseQuery.iterator` (disables row caching).
 
+.. _pgvector:
+
+Vector search
+-------------
+
+.. module:: playhouse.pgvector
+
+``playhouse.pgvector`` supports the `pgvector <https://github.com/pgvector/pgvector>`_
+extension. The vector types, distance operators, index types and settings
+named here are described in pgvector's documentation.
+
+The extension is created as a one-time setup in your database. Turning on
+:ref:`iterative index scans <pgvector-filtering>` at the same time is
+recommended:
+
+.. code-block:: python
+
+   db = PostgresqlDatabase('app')
+   db.execute_sql('CREATE EXTENSION IF NOT EXISTS vector')
+   db.execute_sql('ALTER DATABASE app SET hnsw.iterative_scan = relaxed_order')
+
+Usage:
+
+.. code-block:: python
+
+   from playhouse.pgvector import VectorField
+
+   class Chunk(Model):
+       body = TextField()
+       embedding = VectorField(384, distance_metric='cosine', index=True)
+
+       class Meta:
+           database = db
+
+   Chunk.create(body=text, embedding=vector)
+
+Vectors
+^^^^^^^
+
+:class:`VectorField` stores elements of one type:
+
+================  =============  ========================
+``element_type``  Column type    Python value
+================  =============  ========================
+``'float'``       ``vector``     ``[0.25, -1.5, ...]``
+``'half'``        ``halfvec``    ``[0.25, -1.5, ...]``
+``'bit'``         ``bit``        ``[1, 0, ...]``
+``'sparse'``      ``sparsevec``  ``{3: 0.25, 90: -1.5}``
+================  =============  ========================
+
+Sparse vectors are read as a dict keyed by position (0-based), and can be
+written as either a dict or a list.
+
+When writing, a :class:`VectorField` accepts:
+
+* A list, or any other sequence of numbers, including a numpy array.
+* A string in pgvector's text format, such as ``'[0.25,-1.5]'``.
+* A SQL expression, such as ``fn.l2_normalize(...)``.
+
+Searching
+^^^^^^^^^
+
+:meth:`~VectorField.distance` compares the column with a vector:
+
+.. code-block:: python
+
+   dist = Chunk.embedding.distance(vector)
+   query = (Chunk
+            .select(Chunk, dist.alias('distance'))
+            .where(Chunk.user == user, dist < 0.5)
+            .order_by(dist)
+            .limit(10))
+
+   # Rows nearest to a stored row.
+   row = Chunk.select(Chunk.embedding).where(Chunk.id == 42)
+   query = Chunk.select().order_by(Chunk.embedding.distance(row)).limit(5)
+
+With an index, the ``WHERE`` clause in the first query can leave fewer than 10
+rows. See :ref:`pgvector-filtering`.
+
+Each metric is one of pgvector's operators:
+
+=============  ========
+Metric         Operator
+=============  ========
+``'l2'``       ``<->``
+``'ip'``       ``<#>``
+``'cosine'``   ``<=>``
+``'l1'``       ``<+>``
+``'hamming'``  ``<~>``
+``'jaccard'``  ``<%>``
+=============  ========
+
+By default ``l2`` is used, except for bit vectors which default to ``hamming``.
+The distance metric can be provided as part of the field definition, or in the
+individual call. Examples:
+
+.. code-block:: python
+
+   embedding = VectorField(384, distance_metric='cosine')
+
+   Chunk.embedding.distance(vector)        # Cosine, from the field.
+   Chunk.embedding.distance(vector, 'ip')  # Inner product, for this call.
+
+Indexes
+^^^^^^^
+
+``index=True`` declares an HNSW index for the field's ``distance_metric``.
+pgvector only uses an index for a query that orders by the same metric and
+has a ``LIMIT``:
+
+.. code-block:: python
+
+   # USING hnsw ("embedding" vector_cosine_ops)
+   embedding = VectorField(384, distance_metric='cosine', index=True)
+
+   # USING ivfflat ("embedding" vector_l2_ops) WITH (lists=500)
+   embedding = VectorField(384, index=True, index_type='ivfflat',
+                           index_options={'lists': 500})
+
+Any other index is added with :meth:`Model.add_index`:
+
+.. code-block:: python
+
+   Chunk.add_index('embedding vector_ip_ops', using='hnsw',
+                   name='chunk_embedding_ip', options={'m': 24})
+
+.. _pgvector-filtering:
+
+Filtering with an index
+^^^^^^^^^^^^^^^^^^^^^^^
+
+An HNSW index scan stops after ``hnsw.ef_search`` candidates, 40 by default.
+The ``WHERE`` clause and ``LIMIT`` apply to those candidates only, so an
+indexed query can return fewer rows than its ``LIMIT``.
+
+Raising ``hnsw.ef_search`` (up to 1,000) widens the candidate set, which only
+helps when enough matching rows fall inside it. Iterative index scans
+(pgvector 0.8+) instead keep reading the index until the ``LIMIT`` is met.
+The ``ALTER DATABASE`` statement in the setup above turns them on for new
+connections, or ``SET LOCAL`` turns them on for one transaction:
+
+.. code-block:: python
+
+   with db.atomic():
+       db.execute_sql('SET LOCAL hnsw.iterative_scan = relaxed_order')
+       chunks = list(query)
+
+``relaxed_order`` can return rows slightly out of distance order.
+``strict_order`` keeps the order and may read more of the index. An iterative
+scan reads up to ``hnsw.max_scan_tuples`` rows (20,000 by default), so a
+very selective filter can still come up short, and can be slower than reading
+the whole table. IVFFlat indexes have the equivalent ``ivfflat.probes`` and
+``ivfflat.iterative_scan`` settings.
+
+A partial index stores only the rows that match a fixed condition, so every
+candidate passes the filter. The planner uses it for queries with the same
+condition:
+
+.. code-block:: python
+
+   Chunk.add_index('embedding vector_cosine_ops', using='hnsw',
+                   where=(Chunk.genre == 'faq'),
+                   name='chunk_embedding_faq')
+
+API
+^^^
+
+.. class:: VectorField(dimensions, element_type='float', distance_metric=None, index_options=None, **kwargs)
+
+   :param int dimensions: number of elements.
+   :param str element_type: ``'float'``, ``'half'``, ``'bit'`` or
+       ``'sparse'``.
+   :param str distance_metric: default metric for
+       :meth:`~VectorField.distance`, and the metric of the field's index.
+   :param dict index_options: storage parameters for the field's index, such
+       as ``m``, ``ef_construction`` or ``lists``.
+   :param str index_type: ``'hnsw'`` (the default) or ``'ivfflat'``.
+
+   ``==`` and ``!=`` compare whole vectors. ``fn.avg()`` and ``fn.sum()``
+   return a list when asked to convert their result:
+
+   .. code-block:: python
+
+      mean = Chunk.select(fn.avg(Chunk.embedding).coerce(True)).scalar()
+
+   .. method:: distance(vector, metric=None)
+
+      :param vector: a vector, another vector column, or a subquery.
+      :param str metric: ``'l2'``, ``'ip'``, ``'cosine'``, ``'l1'``,
+          ``'hamming'`` or ``'jaccard'``. Defaults to the field's
+          ``distance_metric``.
+      :return: an :class:`Expression` that is smaller for nearer vectors.
+
+
 .. _crdb:
 
 CockroachDB

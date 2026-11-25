@@ -4605,7 +4605,7 @@ Schema Manager
       is a no-op. Called implicitly by :meth:`drop_all`.
 
 
-.. class:: Index(name, table, expressions, unique=False, safe=False, where=None, using=None, nulls_distinct=None)
+.. class:: Index(name, table, expressions, unique=False, safe=False, where=None, using=None, nulls_distinct=None, options=None)
 
    :param str name: Index name.
    :param Table table: Table to create index on.
@@ -4617,6 +4617,8 @@ Schema Manager
    :param bool nulls_distinct: Postgres-only - specify True (NULLS DISTINCT)
        or False (NULLS NOT DISTINCT) - controls handling of NULL in unique
        indexes.
+   :param dict options: Postgres-only - storage parameters for the WITH
+       clause, e.g. ``{'fillfactor': 70}``.
 
    .. method:: safe(_safe=True)
 
@@ -4644,8 +4646,15 @@ Schema Manager
 
       Control handling of NULL values in unique indexes.
 
+   .. method:: options(_options=None)
 
-.. class:: ModelIndex(model, fields, unique=False, safe=True, where=None, using=None, name=None, nulls_distinct=None)
+      :param dict _options: storage parameters for the WITH clause, e.g.
+          ``{'fillfactor': 70}``.
+
+      Postgres-only. Set the index's storage parameters.
+
+
+.. class:: ModelIndex(model, fields, unique=False, safe=True, where=None, using=None, name=None, nulls_distinct=None, options=None)
 
    :param Model model: Model class to create index on.
    :param list fields: Fields to index.
@@ -4657,6 +4666,8 @@ Schema Manager
    :param bool nulls_distinct: Postgres-only - specify True (NULLS DISTINCT)
        or False (NULLS NOT DISTINCT) - controls handling of NULL in unique
        indexes.
+   :param dict options: Postgres-only - storage parameters for the WITH
+       clause, e.g. ``{'fillfactor': 70}``.
 
    Expressive method for declaring an index on a model.
 
@@ -7077,6 +7088,8 @@ Playhouse Reference
 | playhouse.sqlcipher_ext               | :ref:`sqlcipher`          |
 +---------------------------------------+---------------------------+
 | playhouse.postgres_ext                | :ref:`postgresql`         |
++---------------------------------------+---------------------------+
+| playhouse.pgvector                    | :ref:`pgvector`           |
 +---------------------------------------+---------------------------+
 | playhouse.cockroachdb                 | :ref:`crdb`               |
 +---------------------------------------+---------------------------+

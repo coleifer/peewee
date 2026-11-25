@@ -264,6 +264,29 @@ class TestModelDDL(ModelDatabaseTestCase):
             'USING BRIN ON "event" ("timestamp")'), [],
             index_using_precedes_table=True)
 
+    def test_field_get_index(self):
+        # A field builds the index for index=True or unique=True.
+        class DescField(TextField):
+            def get_index(self):
+                return ModelIndex(self.model, (self.desc(),),
+                                  unique=self.unique,
+                                  options={'fillfactor': 70})
+
+        class Note(TestModel):
+            content = DescField(index=True)
+            key = DescField(unique=True)
+            class Meta:
+                database = self.database
+
+        self.assertIndexes(Note, [
+            ('CREATE INDEX "note_content" ON "note" ("content" DESC) '
+             'WITH (fillfactor=70)', []),
+            ('CREATE UNIQUE INDEX "note_key" ON "note" ("key" DESC) '
+             'WITH (fillfactor=70)', [])])
+
+        self.assertSQL(Note._schema._drop_index(Note.key.get_index(), True),
+                       'DROP INDEX IF EXISTS "note_key"', [])
+
     def test_model_indexes_custom_tablename(self):
         class KV(TestModel):
             key = TextField()
@@ -422,6 +445,14 @@ class TestModelDDL(ModelDatabaseTestCase):
         self.assertSQL(aidx, (
             'CREATE INDEX IF NOT EXISTS "article_name_timestamp" ON "article" '
             '("name", "timestamp") '
+            'WHERE ("status" = ?)'), [1])
+
+        # Storage parameters precede the WHERE clause.
+        aidx = aidx.options({'fillfactor': 70, 'deduplicate_items': 'off'})
+        self.assertSQL(aidx, (
+            'CREATE INDEX IF NOT EXISTS "article_name_timestamp" ON "article" '
+            '("name", "timestamp") '
+            'WITH (deduplicate_items=off, fillfactor=70) '
             'WHERE ("status" = ?)'), [1])
 
         aidx = ModelIndex(Article, (Article.timestamp.desc(),

@@ -74,6 +74,8 @@ from . import migrations
 MODULES.append(migrations)
 from . import mysql_ext
 MODULES.append(mysql_ext)
+from . import pgvector
+MODULES.append(pgvector)
 from . import pool
 MODULES.append(pool)
 from . import schema_diff
