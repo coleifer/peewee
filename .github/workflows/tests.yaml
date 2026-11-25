@@ -21,7 +21,7 @@ jobs:
         ports:
           - 3307:3306
       postgres:
-        image: postgres
+        image: pgvector/pgvector:pg19
         env:
           POSTGRES_USER: postgres
           POSTGRES_PASSWORD: peewee
@@ -58,9 +58,10 @@ jobs:
         run: |
           sudo apt-get install libsqlite3-dev
           pip install setuptools psycopg2-binary cython pymysql 'apsw' mysql-connector-python sqlcipher3 pysqlite3 'psycopg[binary]' gevent
-          pip install greenlet aiosqlite aiomysql asyncpg pydantic flask
+          pip install greenlet aiosqlite aiomysql asyncpg pydantic flask sqlite-vec
           python setup.py build_ext -i
           psql peewee_test -c 'CREATE EXTENSION hstore;'
+          psql peewee_test -c 'CREATE EXTENSION vector;'
       - name: crdb
         if: ${{ matrix.peewee-backend == 'cockroachdb' }}
         run: |
