@@ -435,6 +435,40 @@ class TestModelAPIs(ModelTestCase):
             ('f3', 'l3-z'),
             ('f4', 'l4')])
 
+    @requires_models(Person)
+    def test_bulk_update_empty(self):
+        data = [('f%s' % i, 'l%s' % i, datetime.date(1980, i, i))
+                for i in range(1, 3)]
+        Person.insert_many(data).execute()
+
+        # Nothing to update, so no query is run, with or without batches.
+        with self.assertQueryCount(0):
+            self.assertEqual(Person.bulk_update([], ['first']), 0)
+            self.assertEqual(Person.bulk_update([], ['first'], 2), 0)
+            self.assertEqual(Person.bulk_update(iter([]), ['first']), 0)
+
+        query = Person.select().order_by(Person.id)
+        self.assertEqual([p.first for p in query], ['f1', 'f2'])
+
+    @requires_models(Person)
+    def test_bulk_update_iterator(self):
+        data = [('f%s' % i, 'l%s' % i, datetime.date(1980, i, i))
+                for i in range(1, 4)]
+        Person.insert_many(data).execute()
+
+        people = list(Person.select().order_by(Person.id))
+        for p in people:
+            p.first = p.first + '-x'
+
+        # The docs allow any iterable of models, not only a list.
+        with self.assertQueryCount(1):
+            n = Person.bulk_update(iter(people), ['first'])
+            self.assertEqual(n, 3)
+
+        query = Person.select().order_by(Person.id)
+        self.assertEqual([p.first for p in query],
+                         ['f1-x', 'f2-x', 'f3-x'])
+
     @requires_models(User, Tweet)
     def test_bulk_update_foreign_key(self):
         for username in ('charlie', 'huey', 'zaizee'):

@@ -7857,7 +7857,10 @@ class Model(Node, metaclass=ModelBase):
         if batch_size is not None:
             batches = chunked(model_list, batch_size)
         else:
-            batches = [model_list]
+            # The batch is iterated more than once, so an iterator is read
+            # into a list. With nothing to update there is no batch at all.
+            model_list = list(model_list)
+            batches = [model_list] if model_list else []
 
         n = 0
         pk = cls._meta.primary_key
