@@ -723,17 +723,36 @@ class Delete(_WriteQuery):
 
 class Index(Node):
     def __init__(
-        self, name, table, expressions, unique: bool = False, safe: bool = False, where=None, using=None, nulls_distinct=None
+        self,
+        name,
+        table,
+        expressions,
+        unique: bool = False,
+        safe: bool = False,
+        where=None,
+        using=None,
+        nulls_distinct=None,
+        options=None,
     ) -> None: ...
     def safe(self, _safe: bool = True) -> Self: ...
     def where(self, *expressions) -> Self: ...
     def using(self, _using=None) -> Self: ...
     def nulls_distinct(self, nulls_distinct=None) -> Self: ...
+    def options(self, _options=None) -> Self: ...
     def __sql__(self, ctx): ...
 
 class ModelIndex(Index):
     def __init__(
-        self, model, fields, unique: bool = False, safe: bool = True, where=None, using=None, name=None, nulls_distinct=None
+        self,
+        model,
+        fields,
+        unique: bool = False,
+        safe: bool = True,
+        where=None,
+        using=None,
+        name=None,
+        nulls_distinct=None,
+        options=None,
     ) -> None: ...
 
 class PeeweeException(Exception):
@@ -1265,6 +1284,7 @@ class Field(ColumnBase, Generic[_V]):
     def get_sort_key(self, ctx) -> tuple[Incomplete, ...]: ...
     def __sql__(self, ctx): ...
     def get_modifiers(self) -> list[int] | None: ...
+    def get_index(self) -> ModelIndex: ...
     def ddl_datatype(self, ctx) -> SQL: ...
     def ddl(self, ctx) -> NodeList: ...
 
