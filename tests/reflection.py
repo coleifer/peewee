@@ -8,6 +8,7 @@ from playhouse.reflection import *
 from .base import IS_CRDB
 from .base import IS_CYSQLITE
 from .base import IS_MYSQL
+from .base import IS_KINGBASE_MYSQL
 from .base import IS_ORACLE_MYSQL
 from .base import IS_SQLITE
 from .base import ModelTestCase
@@ -194,7 +195,8 @@ class TestReflection(BaseReflectionTestCase):
             models = self.introspector.generate_models(table_names=['rj'])
             field = models['rj']._meta.fields['data']
             self.assertTrue(isinstance(field, JSONField))
-            self.assertFalse(self.introspector.metadata.requires_extension)
+            self.assertEqual(self.introspector.metadata.requires_extension,
+                             IS_KINGBASE_MYSQL)
         finally:
             self.database.execute_sql('drop table rj')
 

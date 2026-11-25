@@ -2,6 +2,7 @@ from peewee import *
 from playhouse import signals
 
 from .base import IS_MYSQL
+from .base import IS_KINGBASE_MYSQL
 from .base import ModelTestCase
 
 
@@ -39,7 +40,7 @@ class TestSignals(ModelTestCase):
         self.assertEqual(state, [(A, a, None, True)])
 
         # MySQL reports changed rows, so a save that changes nothing is 0.
-        self.assertEqual(a.save(), 0 if IS_MYSQL else 1)
+        self.assertEqual(a.save(), 0 if IS_MYSQL and not IS_KINGBASE_MYSQL else 1)
         self.assertTrue(a.id is not None)
         self.assertEqual(len(state), 2)
         self.assertEqual(state[-1], (A, a, a.id, False))

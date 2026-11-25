@@ -22,6 +22,7 @@ from playhouse.hybrid import *
 from .base import BaseTestCase
 from .base import IS_CRDB
 from .base import IS_MYSQL
+from .base import IS_KINGBASE_SQLSERVER
 from .base import IS_ORACLE_MYSQL
 from .base import IS_POSTGRESQL
 from .base import IS_SQLITE
@@ -1599,7 +1600,7 @@ class TestSQLFunctionDBValue(ModelTestCase):
         # If we nest the field in a function, the conversion is not applied.
         # MySQL's ci collation matches 'Z' = 'z' either way, so the probe
         # cannot tell the two cases apart there.
-        if not IS_MYSQL:
+        if not (IS_MYSQL or IS_KINGBASE_SQLSERVER):
             expr = fn.SUBSTR(UpperModel.name, 1, 1) == 'z'
             self.assertRaises(UpperModel.DoesNotExist, UpperModel.get, expr)
 

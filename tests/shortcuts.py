@@ -3,12 +3,15 @@ import threading
 
 from peewee import *
 from playhouse.shortcuts import *
+from playhouse.kingbase_reconnect import ReconnectKingbaseMySQLDatabase
 
 from .base import BaseTestCase
 from .base import DatabaseTestCase
 from .base import ModelTestCase
 from .base import TestModel
 from .base import db_loader
+from .base import IS_KINGBASE_MYSQL
+from .base import new_connection
 from .base import get_in_memory_db
 from .base import requires_models
 from .base import requires_mysql
@@ -704,9 +707,38 @@ class ReconnectMySQLDatabase(ReconnectMixin, MySQLDatabase):
         self._reconnect_exc = OperationalError('2006')
 
 
+class _KingbaseFailureCursor:
+    def __init__(self, cursor):
+        self._cursor = cursor
+
+    def execute(self, *args):
+        raise OperationalError('2006')
+
+    def __getattr__(self, name):
+        return getattr(self._cursor, name)
+
+
+class ReconnectKingbaseMySQLTestDatabase(ReconnectKingbaseMySQLDatabase):
+    def cursor(self, named_cursor=None):
+        cursor = super().cursor(named_cursor)
+        counter = getattr(self, '_query_counter', 0)
+        self._query_counter = counter + 1
+        return cursor if counter == 1 else _KingbaseFailureCursor(cursor)
+
+    def close(self):
+        self._close_counter = getattr(self, '_close_counter', 0) + 1
+        return super().close()
+
+    def _reset_mock(self):
+        self._close_counter = 0
+        self._query_counter = 0
+
+
 @requires_mysql
 class TestReconnectMixin(DatabaseTestCase):
-    database = db_loader('mysql', db_class=ReconnectMySQLDatabase)
+    database = (new_connection(db_class=ReconnectKingbaseMySQLTestDatabase)
+                if IS_KINGBASE_MYSQL else
+                db_loader('mysql', db_class=ReconnectMySQLDatabase))
 
     def test_reconnect_mixin_execute_sql(self):
         # Verify initial state.

@@ -13,6 +13,7 @@ from .base import DatabaseTestCase
 from .base import IS_CRDB
 from .base import IS_CRDB_NESTED_TX
 from .base import IS_MYSQL
+from .base import IS_KINGBASE_MYSQL
 from .base import IS_POSTGRESQL
 from .base import IS_SQLITE
 from .base import ModelTestCase
@@ -843,7 +844,8 @@ class TestTransactionIsolationLevel(BaseTransactionTestCase):
         with db2.atomic(isolation_level='READ UNCOMMITTED'):
             with db.atomic():
                 self._save(3)
-                self.assertDB2(db2, [1, 2, 3])
+                self.assertDB2(db2, [1, 2] if IS_KINGBASE_MYSQL
+                               else [1, 2, 3])
             self.assertDB2(db2, [1, 2, 3])
         self.assertDB2(db2, [1, 2, 3])
 

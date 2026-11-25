@@ -9,15 +9,18 @@ from peewee import _savepoint
 from peewee import _transaction
 from playhouse.cockroachdb import PooledCockroachDatabase
 from playhouse.pool import *
+from playhouse.kingbase_pool import PooledKingbaseMySQLDatabase
 
 from .base import BACKEND
 from .base import BaseTestCase
 from .base import IS_CRDB
 from .base import IS_CRDB_NESTED_TX
 from .base import IS_MYSQL
+from .base import IS_KINGBASE_MYSQL
 from .base import IS_POSTGRESQL
 from .base import ModelTestCase
 from .base import db_loader
+from .base import db
 from .base import requires_mysql
 from .base import requires_postgresql
 from .base import skip_if
@@ -699,7 +702,9 @@ class TestPooledDatabaseIntegration(ModelTestCase):
 
     def setUp(self):
         params = {}
-        if IS_MYSQL:
+        if IS_KINGBASE_MYSQL:
+            db_class = PooledKingbaseMySQLDatabase
+        elif IS_MYSQL:
             db_class = PooledMySQLDatabase
         elif IS_POSTGRESQL:
             db_class = PooledPostgresqlDatabase
@@ -708,7 +713,8 @@ class TestPooledDatabaseIntegration(ModelTestCase):
         else:
             db_class = PooledSqliteDatabase
             params['check_same_thread'] = False
-        self.database = db_loader(BACKEND, db_class=db_class, **params)
+        self.database = db_loader(BACKEND, name=db.database,
+                                  db_class=db_class, **params)
         super(TestPooledDatabaseIntegration, self).setUp()
 
     def tearDown(self):
@@ -888,12 +894,17 @@ class TestPooledDatabaseIntegration(ModelTestCase):
     @requires_mysql
     def test_dead_conn_discarded(self):
         conn = self.database.connection()
-        curs = self.database.execute_sql('SELECT CONNECTION_ID()')
+        curs = self.database.execute_sql(
+            'SELECT pg_backend_pid()' if IS_KINGBASE_MYSQL else
+            'SELECT CONNECTION_ID()')
         conn_id = curs.fetchone()[0]
         self.database.close()
 
-        killer = db_loader(BACKEND)
-        killer.execute_sql('KILL %s' % conn_id)
+        killer = db_loader(BACKEND, name=db.database)
+        if IS_KINGBASE_MYSQL:
+            killer.execute_sql('SELECT pg_terminate_backend(%s)', (conn_id,))
+        else:
+            killer.execute_sql('KILL %s' % conn_id)
         killer.close()
 
         # The killed conn is discarded at checkout, not silently revived.

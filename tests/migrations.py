@@ -18,6 +18,9 @@ from .base import BaseTestCase
 from .base import DatabaseTestCase
 from .base import IS_CRDB
 from .base import IS_MYSQL
+from .base import IS_KINGBASE_MYSQL
+from .base import IS_KINGBASE_ORACLE
+from .base import IS_KINGBASE_SQLSERVER
 from .base import IS_POSTGRESQL
 from .base import IS_SQLITE
 from .base import IS_SQLITE_35
@@ -826,16 +829,20 @@ class TestSchemaMigration(ModelTestCase):
         migrate(self.migrator.alter_column_type('tag', 'tag', field))
         _, tag = self.database.get_columns('tag')
         # name, type, null?, primary-key?, table, default.
-        data_type = 'TEXT' if IS_SQLITE else 'text'
+        data_type = ('TEXT' if IS_SQLITE else
+                     'varchar' if IS_KINGBASE_SQLSERVER else 'text')
+        full_type = ('varchar(max)' if IS_KINGBASE_SQLSERVER else data_type)
         self.assertEqual(tag, ('tag', data_type, False, False, 'tag', None,
-                               data_type, False))
+                               full_type, False))
 
         # Convert date to datetime.
         field = DateTimeField()
         migrate(self.migrator.alter_column_type('person', 'dob', field))
         _, _, _, dob = self.database.get_columns('person')
-        if IS_POSTGRESQL or IS_CRDB:
+        if IS_POSTGRESQL or IS_CRDB or IS_KINGBASE_ORACLE:
             self.assertTrue(dob.data_type.startswith('timestamp'))
+        elif IS_KINGBASE_SQLSERVER:
+            self.assertEqual(dob.data_type.lower(), 'datetime2')
         else:
             self.assertEqual(dob.data_type.lower(), 'datetime')
 
@@ -846,8 +853,10 @@ class TestSchemaMigration(ModelTestCase):
         _, tag = self.database.get_columns('tag')
         if IS_SQLITE:
             d = 'INTEGER'
-        elif IS_MYSQL:
+        elif (IS_MYSQL and not IS_KINGBASE_MYSQL) or IS_KINGBASE_SQLSERVER:
             d = 'int'
+        elif IS_KINGBASE_ORACLE:
+            d = 'int4'
         else:
             d = 'integer'
         self.assertEqual(tag[:6], ('tag', d, False, False, 'tag', None))
@@ -1397,7 +1406,8 @@ class TestMigratorSchema(DatabaseTestCase):
             self.assertRaises(ValueError, op.run)
 
 
-@skip_unless(IS_MYSQL)
+@skip_unless(IS_MYSQL and not IS_KINGBASE_MYSQL,
+             'native MySQL cross-database schema fixture')
 class TestMySQLMigratorSchema(DatabaseTestCase):
     """A MySQL schema is a database, unqualified names use the connection's."""
     target = 'peewee_test_ms'

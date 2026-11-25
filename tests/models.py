@@ -24,6 +24,9 @@ from .base import skip_unless
 from .base import BaseTestCase
 from .base import IS_CRDB
 from .base import IS_MYSQL
+from .base import IS_KINGBASE_MYSQL
+from .base import IS_KINGBASE_ORACLE
+from .base import IS_KINGBASE_SQLSERVER
 from .base import IS_MYSQL_CONNECTOR
 from .base import IS_MYSQL_ADVANCED_FEATURES
 from .base import IS_ORACLE_MYSQL
@@ -410,7 +413,7 @@ class TestModelAPIs(ModelTestCase):
 
         with self.assertQueryCount(1):
             n = Person.bulk_update([p1, p2, p3, p4], ['first', 'last'])
-            self.assertEqual(n, 3 if IS_MYSQL else 4)
+            self.assertEqual(n, 3 if IS_MYSQL and not IS_KINGBASE_MYSQL else 4)
 
         query = Person.select().order_by(Person.id)
         self.assertEqual([(p.first, p.last) for p in query], [
@@ -426,7 +429,7 @@ class TestModelAPIs(ModelTestCase):
         p3.last = 'f3-z2'
         with self.assertQueryCount(2):  # Two batches, so two queries.
             n = Person.bulk_update([p1, p2, p3, p4], [Person.first], 2)
-            self.assertEqual(n, 2 if IS_MYSQL else 4)
+            self.assertEqual(n, 2 if IS_MYSQL and not IS_KINGBASE_MYSQL else 4)
 
         query = Person.select().order_by(Person.id)
         self.assertEqual([(p.first, p.last) for p in query], [
@@ -4548,8 +4551,11 @@ class TestColumnNameStripping(ModelTestCase):
         p1 = Person.create(first='f1', last='l1', dob=d1)
         p2 = Person.create(first='f2', last='l2', dob=d2)
 
+        minimum = fn.MIN(Person.dob)
+        if IS_KINGBASE_MYSQL or IS_KINGBASE_ORACLE or IS_KINGBASE_SQLSERVER:
+            minimum = minimum.alias('dob')
         query = Person.select(
-            fn.MIN(Person.dob),
+            minimum,
             fn.MAX(Person.dob).alias('mdob'))
         # Sqlite and mysql return 'MIN("t1"."dob")', which peewee strips to
         # "dob". Postgres names the column "min", so nothing needs stripping.
@@ -4669,9 +4675,15 @@ class TestScalarIntegration(ModelTestCase):
             User.create(username=u)
         query = User.select(User.username).order_by(User.username.desc())
         self.assertEqual(query.scalar(), 'zaizee')
-        self.assertHistory(1, [
-            ('SELECT "t1"."username" FROM "users" AS "t1" '
-             'ORDER BY "t1"."username" DESC LIMIT ?', [1])])
+        if IS_KINGBASE_ORACLE or IS_KINGBASE_SQLSERVER:
+            self.assertHistory(1, [
+                ('SELECT "t1"."username" FROM "users" AS "t1" '
+                 'ORDER BY "t1"."username" DESC '
+                 'OFFSET ? ROWS FETCH NEXT ? ROWS ONLY', [0, 1])])
+        else:
+            self.assertHistory(1, [
+                ('SELECT "t1"."username" FROM "users" AS "t1" '
+                 'ORDER BY "t1"."username" DESC LIMIT ?', [1])])
 
         # The limit is applied to an internal clone, not the query itself.
         self.assertEqual([u.username for u in query],
@@ -4992,8 +5004,9 @@ class TestCTEIntegration(ModelTestCase):
             C1 = Category.alias()
             C2 = Category.alias()
 
-            int_type = 'SIGNED' if IS_MYSQL else 'integer'
-            str_type = 'CHAR' if IS_MYSQL else 'text'
+            int_type = ('bigint' if IS_KINGBASE_MYSQL else
+                        'SIGNED' if IS_MYSQL else 'integer')
+            str_type = 'CHAR' if IS_MYSQL and not IS_KINGBASE_MYSQL else 'text'
             level = SQL('1').cast(int_type).alias('level')
             path = C1.name.cast(str_type).alias('path')
 
@@ -5053,8 +5066,10 @@ class TestCTEIntegration(ModelTestCase):
     @skip_if((IS_MYSQL and not IS_MYSQL_ADVANCED_FEATURES)
              or IS_CRDB, 'requires recursive cte')
     def test_recursive_cte2(self):
+        base_level = (Value(0).cast('bigint') if IS_KINGBASE_MYSQL
+                      else Value(0))
         hierarchy = (Category
-                     .select(Category.name, Value(0).alias('level'))
+                     .select(Category.name, base_level.alias('level'))
                      .where(Category.parent.is_null(True))
                      .cte(name='hierarchy', recursive=True))
 
@@ -5081,8 +5096,9 @@ class TestCTEIntegration(ModelTestCase):
     def test_recursive_cte_docs_example(self):
         # Base case: categories with a null parent.
         Base = Category.alias()
-        int_type = 'SIGNED' if IS_MYSQL else 'integer'
-        str_type = 'CHAR' if IS_MYSQL else 'text'
+        int_type = ('bigint' if IS_KINGBASE_MYSQL else
+                    'SIGNED' if IS_MYSQL else 'integer')
+        str_type = 'CHAR' if IS_MYSQL and not IS_KINGBASE_MYSQL else 'text'
         level = Value(1).cast(int_type).alias('level')
         path = Base.name.cast(str_type).alias('path')
         base_case = (Base
@@ -7913,7 +7929,7 @@ class TestMixModelsTables(ModelTestCase):
             # mariadb connector enables RETURNING on server >= 10.5.
             self.assertTrue(rowid is None)
         else:
-            self.assertEqual(rowid, 1)
+            self.assertEqual(rowid, 0 if IS_KINGBASE_MYSQL else 1)
 
         huey = Tbl.select(User.username).get()
         self.assertEqual(huey, {'username': 'huey'})

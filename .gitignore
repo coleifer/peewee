@@ -9,6 +9,9 @@ playhouse/tests/peewee_test.db
 .idea/
 MANIFEST
 peewee_test.db
+tests/kingbase/.env*.local
+tests/kingbase/results/
+tests/kingbase/*.log
 closure.so
 lsm.so
 regexp.so

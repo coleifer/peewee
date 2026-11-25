@@ -16,6 +16,7 @@ from playhouse.schema_diff import diff_models
 
 from .base import IS_CRDB
 from .base import IS_MYSQL
+from .base import IS_KINGBASE_MYSQL
 from .base import ModelTestCase
 from .base import TestModel
 from .base import requires_models
@@ -170,7 +171,7 @@ class TestSchemaDiff(ModelTestCase):
                          diff.add_indexes or diff.drop_indexes)
 
     def test_stray_index_dropped(self):
-        if IS_MYSQL:  # Mysql requires a prefix length to index TEXT.
+        if IS_MYSQL and not IS_KINGBASE_MYSQL:  # Mysql needs a TEXT prefix.
             self.database.execute_sql(
                 'CREATE INDEX sd_extra ON sd_tweet (content(16))')
         else:
@@ -185,7 +186,7 @@ class TestSchemaDiff(ModelTestCase):
 
     def test_unique_flag_mismatch(self):
         # Same columns but different uniqueness: reported as add + drop.
-        if IS_MYSQL:
+        if IS_MYSQL and not IS_KINGBASE_MYSQL:
             self.database.execute_sql(
                 'DROP INDEX sd_tweet_user_id_flags ON sd_tweet')
         else:
@@ -642,7 +643,7 @@ class TestTemplate(ModelTestCase):
         self.assertEqual(strip_header(body), PARTIAL_TODO_BODY)
 
     def test_dropped_index_restored_by_name(self):
-        if IS_MYSQL:  # Mysql requires a prefix length to index TEXT.
+        if IS_MYSQL and not IS_KINGBASE_MYSQL:  # Mysql needs a TEXT prefix.
             self.database.execute_sql(
                 'CREATE INDEX sd_extra ON sd_tweet (content(16))')
         else:

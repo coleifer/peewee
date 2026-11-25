@@ -1,3 +1,4 @@
+import sqlite3
 import unittest
 
 from peewee import ImproperlyConfigured
@@ -104,11 +105,14 @@ try:
     MODULES.append(sqlite)
 except ImportError:
     print('Unable to import sqlite extension tests, skipping.')
-try:
-    from . import sqlite_changelog
-    MODULES.append(sqlite_changelog)
-except ImportError:
-    print('Unable to import sqlite changelog tests, skipping.')
+if sqlite3.sqlite_version_info >= (3, 38, 0):
+    try:
+        from . import sqlite_changelog
+        MODULES.append(sqlite_changelog)
+    except (ImportError, NotSupportedError):
+        print('Unable to import sqlite changelog tests, skipping.')
+else:
+    print('Unable to run sqlite changelog tests, requires sqlite >= 3.38.')
 from . import sqliteq
 MODULES.append(sqliteq)
 from . import sqlite_udf

@@ -4,6 +4,8 @@ from .base import ModelTestCase
 from .base import TestModel
 from .base import get_in_memory_db
 from .base import IS_POSTGRESQL
+from .base import IS_KINGBASE_ORACLE
+from .base import IS_KINGBASE_SQLSERVER
 from .base import skip_if
 from .base import skip_unless
 from .base_models import Package
@@ -293,14 +295,18 @@ class TestWithRelated(ModelTestCase):
                 ('huey', ['hiss', 'meow', 'purr']),
                 ('mickey', ['bark', 'woof'])])
             if pt == PREFETCH_TYPE.WHERE:
+                kes_offset_fetch = IS_KINGBASE_ORACLE or IS_KINGBASE_SQLSERVER
+                pagination = ('OFFSET ? ROWS FETCH NEXT ? ROWS ONLY'
+                              if kes_offset_fetch else 'LIMIT ? OFFSET ?')
+                params = [0, 2] if kes_offset_fetch else [2, 0]
                 self.assertHistory(1, [
                     ('SELECT "t1"."id", "t1"."user_id", "t1"."content", '
                      '"t1"."published", "t1"."timestamp" '
                      'FROM "tweet" AS "t1" WHERE ("t1"."user_id" IN '
                      '(SELECT "_limited"."id" FROM '
                      '(SELECT "t2"."id" FROM "user" AS "t2" '
-                     'ORDER BY "t2"."username" LIMIT ? OFFSET ?) '
-                     'AS "_limited"))', [2, 0])])
+                     'ORDER BY "t2"."username" ' + pagination + ') '
+                     'AS "_limited"))', params)])
 
     def test_get_with_load_tree(self):
         # get() paginates the parent. The load survives the implicit LIMIT.

@@ -3,6 +3,8 @@ import json
 from peewee import *
 
 from .base import IS_CRDB
+from .base import IS_KINGBASE_ORACLE
+from .base import IS_KINGBASE_SQLSERVER
 from .base import IS_MARIADB
 from .base import IS_MYSQL
 from .base import IS_ORACLE_MYSQL
@@ -17,7 +19,8 @@ from .base import skip_if
 
 # CockroachDB uses PostgresqlJSONMethods (and psycopg), so it gets the
 # postgres-flavored behaviors and SQL shapes in these tests.
-IS_PG_JSON = IS_POSTGRESQL or IS_CRDB
+IS_PG_JSON = (IS_POSTGRESQL or IS_CRDB or IS_KINGBASE_ORACLE or
+              IS_KINGBASE_SQLSERVER)
 
 
 class JM(TestModel):
@@ -689,6 +692,10 @@ class TestSQLShapes(ModelTestCase):
             self.assertEqual(ddl, (
                 'CREATE TABLE IF NOT EXISTS "jm" ("id" INTEGER NOT NULL '
                 'PRIMARY KEY, "data" TEXT, "ident" TEXT)'))
+        elif IS_KINGBASE_SQLSERVER:
+            self.assertEqual(ddl, (
+                'CREATE TABLE IF NOT EXISTS "jm" ("id" INTEGER IDENTITY(1,1) '
+                'NOT NULL PRIMARY KEY, "data" JSONB, "ident" VARCHAR(MAX))'))
         elif IS_PG_JSON:
             self.assertEqual(ddl, (
                 'CREATE TABLE IF NOT EXISTS "jm" ("id" SERIAL NOT NULL '
@@ -705,6 +712,10 @@ class TestSQLShapes(ModelTestCase):
             self.assertEqual(sql, (
                 'SELECT ("t1"."data" -> ?) FROM "jm" AS "t1"'))
             self.assertEqual(params, ['$."k"'])
+        elif IS_KINGBASE_SQLSERVER:
+            self.assertEqual(sql, (
+                'SELECT ("t1"."data" #> %s) FROM "jm" AS "t1"'))
+            self.assertEqual(params, ['{"k"}'])
         elif IS_PG_JSON:
             self.assertEqual(sql, (
                 'SELECT ("t1"."data" #> \'{"k"}\'::text[]) '
@@ -729,6 +740,10 @@ class TestSQLShapes(ModelTestCase):
             self.assertEqual(sql, (
                 'SELECT ("t1"."data" ->> ?) FROM "jm" AS "t1"'))
             self.assertEqual(params, ['$."k"'])
+        elif IS_KINGBASE_SQLSERVER:
+            self.assertEqual(sql, (
+                'SELECT ("t1"."data" #>> %s) FROM "jm" AS "t1"'))
+            self.assertEqual(params, ['{"k"}'])
         elif IS_PG_JSON:
             self.assertEqual(sql, (
                 'SELECT ("t1"."data" #>> \'{"k"}\'::text[]) '
