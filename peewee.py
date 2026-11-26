@@ -7830,7 +7830,8 @@ class Model(Node, metaclass=ModelBase):
         if batch_size is not None:
             batches = chunked(model_list, batch_size)
         else:
-            batches = [model_list]
+            model_list = list(model_list)
+            batches = [model_list] if model_list else []
 
         field_names = list(cls._meta.sorted_field_names)
         if cls._meta.auto_increment:
@@ -7870,7 +7871,8 @@ class Model(Node, metaclass=ModelBase):
         if batch_size is not None:
             batches = chunked(model_list, batch_size)
         else:
-            batches = [model_list]
+            model_list = list(model_list)
+            batches = [model_list] if model_list else []
 
         n = 0
         pk = cls._meta.primary_key

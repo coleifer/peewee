@@ -435,6 +435,18 @@ class TestModelAPIs(ModelTestCase):
             ('f3', 'l3-z'),
             ('f4', 'l4')])
 
+    @requires_models(User)
+    def test_bulk_update_empty_or_iterator(self):
+        with self.assertQueryCount(0):
+            self.assertEqual(User.bulk_update([], ['username']), 0)
+
+        users = [User.create(username='u%s' % i) for i in range(3)]
+        for user in users:
+            user.username += 'x'
+        self.assertEqual(User.bulk_update(iter(users), ['username']), 3)
+        self.assertEqual([u.username for u in User.select().order_by(User.id)],
+                         ['u0x', 'u1x', 'u2x'])
+
     @requires_models(User, Tweet)
     def test_bulk_update_foreign_key(self):
         for username in ('charlie', 'huey', 'zaizee'):
@@ -6727,6 +6739,11 @@ class TestSqliteReturningConfig(ModelTestCase):
 
         self.assertEqual(sorted(User.select().tuples()), [
             (1, 'u0x'), (2, 'u1'), (3, 'u2x'), (4, 'u3'), (5, 'u4x')])
+
+    def test_bulk_create_iterator(self):
+        users = [User(username='u%s' % i) for i in range(3)]
+        User.bulk_create(iter(users))
+        self.assertEqual([user.id for user in users], [1, 2, 3])
 
     @requires_models(User, Tweet)
     def test_fk_set_correctly(self):
